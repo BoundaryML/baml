@@ -1178,15 +1178,11 @@ impl<'a> Parser<'a> {
         self.parse_prefix();
 
         // Parse infix operators
-        loop {
-            let op = if let Some(token) = self.current() {
-                token.kind
-            } else {
-                break;
-            };
+        while let Some(token) = self.current() {
+            let op = token.kind;
 
             // Check if this is an infix operator
-            if let Some((left_bp, right_bp)) = self.infix_binding_power(op) {
+            if let Some((left_bp, right_bp)) = Self::infix_binding_power(op) {
                 if left_bp < min_bp {
                     break;
                 }
@@ -1235,7 +1231,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Find the start of the most recent complete expression, but not before min_index
+    /// Find the start of the most recent complete expression, but not before `min_index`
     /// This walks backward through events to find where the last expression began
     fn find_previous_expr_start_after(&self, min_index: usize) -> usize {
         let mut depth = 0;
@@ -1263,7 +1259,7 @@ impl<'a> Parser<'a> {
         min_index
     }
 
-    /// Wrap events from start_index onwards in a new node
+    /// Wrap events from `start_index` onwards in a new node
     /// This allows us to retroactively wrap parsed expressions.
     ///
     /// For example, in an expression like `a + b`, the parser will
@@ -1368,9 +1364,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Get infix operator binding power (precedence)
-    /// Returns (left_bp, right_bp) for left and right associativity
-    fn infix_binding_power(&self, op: TokenKind) -> Option<(u8, u8)> {
-        use TokenKind::*;
+    /// Returns (`left_bp`, `right_bp`) for left and right associativity
+    fn infix_binding_power(op: TokenKind) -> Option<(u8, u8)> {
+        use TokenKind::{
+            And, AndAnd, AndEquals, Caret, CaretEquals, Equals, EqualsEquals, Greater,
+            GreaterEquals, GreaterGreater, GreaterGreaterEquals, Less, LessEquals, LessLess,
+            LessLessEquals, Minus, MinusEquals, NotEquals, OrOr, Percent, PercentEquals, Pipe,
+            PipeEquals, Plus, PlusEquals, Slash, SlashEquals, Star, StarEquals,
+        };
 
         Some(match op {
             // Assignment operators (right associative)
