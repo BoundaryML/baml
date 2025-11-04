@@ -7,17 +7,83 @@ use baml_parser::syntax_tree;
 use baml_workspace::project_files;
 
 mod ids;
+mod pretty_print;
 mod types;
 
 pub use ids::*;
+pub use pretty_print::*;
 pub use types::*;
 
 /// Tracked: get all items defined in a file
 #[salsa::tracked]
 pub fn file_items(db: &dyn salsa::Database, file: SourceFile) -> Vec<ItemId> {
-    // TODO: Extract items from syntax tree
-    let _tree = syntax_tree(db, file);
-    vec![]
+    let tree = syntax_tree(db, file);
+    let file_id = file.file_id(db);
+    let mut items = Vec::new();
+
+    // Walk top-level nodes in the syntax tree
+    // Note: syntax_tree returns a GreenNode, so we need to look at it correctly
+    use baml_syntax::SyntaxKind;
+
+    // Iterate children_with_tokens and filter to only SyntaxNodes
+    for element in tree.children_with_tokens() {
+        // Only process SyntaxNode elements (not tokens)
+        if let Some(child) = element.into_node() {
+            match child.kind() {
+                SyntaxKind::FUNCTION_DEF => {
+                    // Extract function name - WORD is a token, not a node
+                    for element in child.children_with_tokens() {
+                        if let Some(token) = element.into_token() {
+                            if token.kind() == SyntaxKind::WORD {
+                                let name_text = token.text().to_string();
+                                let name = Name::new(&name_text);
+                                items.push(ItemId::Function(FunctionId {
+                                    file: file_id,
+                                    name,
+                                }));
+                                break;
+                            }
+                        }
+                    }
+                }
+                SyntaxKind::CLASS_DEF => {
+                    // Extract class name - WORD is a token, not a node
+                    for element in child.children_with_tokens() {
+                        if let Some(token) = element.into_token() {
+                            if token.kind() == SyntaxKind::WORD {
+                                let name_text = token.text().to_string();
+                                let name = Name::new(&name_text);
+                                items.push(ItemId::Class(ClassId {
+                                    file: file_id,
+                                    name,
+                                }));
+                                break;
+                            }
+                        }
+                    }
+                }
+                SyntaxKind::ENUM_DEF => {
+                    // Extract enum name - WORD is a token, not a node
+                    for element in child.children_with_tokens() {
+                        if let Some(token) = element.into_token() {
+                            if token.kind() == SyntaxKind::WORD {
+                                let name_text = token.text().to_string();
+                                let name = Name::new(&name_text);
+                                items.push(ItemId::Enum(EnumId {
+                                    file: file_id,
+                                    name,
+                                }));
+                                break;
+                            }
+                        }
+                    }
+                }
+                _ => {} // Skip other nodes
+            }
+        }
+    }
+
+    items
 }
 
 /// Tracked: get all items in the entire project

@@ -1,0 +1,189 @@
+# BAML Onionskin Usage Guide
+
+## Quick Start
+
+```bash
+# From the workspace root
+cargo run --bin baml_onionskin -- --from crates/baml_onionskin/examples/demo.baml
+
+# Or after building
+./target/debug/baml_onionskin --from path/to/file.baml
+```
+
+## UI Layout
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ BAML Onionskin: path/to/file.baml                           │
+└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ Lexer | Parser | HIR | THIR | Diagnostics | Codegen         │
+│  (← → to navigate)                                           │
+└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                                                              │
+│  Compiler output appears here                               │
+│  - Updates automatically when file changes                  │
+│  - Press 's' to snapshot (onion skin)                       │
+│  - After snapshot, split view shows diff                    │
+│  - Navigate phases: both panes update!                      │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ [s] Create Snapshot | [q] Quit | [Ctrl+C] Exit              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Onion Skin Diff View
+
+After pressing 's', the view changes to show differences (like animation onion skinning):
+
+```
+┌──────────────────────────┬──────────────────────────┐
+│ Snapshot (Previous)      │ Current (New Frame)      │
+│                          │                          │
+│   (unchanged line)       │   (unchanged line)       │
+│ - (removed line)         │                          │
+│                          │ + (added line)           │
+│   (unchanged line)       │   (unchanged line)       │
+│                          │                          │
+└──────────────────────────┴──────────────────────────┘
+```
+
+Colors:
+- Red (-) = Removed in current version
+- Green (+) = Added in current version
+- White ( ) = Unchanged
+
+## Example Session
+
+1. **Start the TUI:**
+   ```bash
+   cargo run --bin baml_onionskin -- --from test.baml
+   ```
+
+2. **View Lexer tokens (default):**
+   - See all tokens from the file
+   - Non-whitespace tokens are shown with their text
+
+3. **Navigate to Parser (press →):**
+   - See the syntax tree structure
+   - Parse errors shown at the bottom
+
+4. **Create onion skin snapshot (press s):**
+   - Current state is saved for all phases
+
+5. **Edit the file in your editor:**
+   - Add a new field to a class
+   - Save the file
+
+6. **Watch the diff appear automatically:**
+   - Left column shows snapshot
+   - Right column shows current state
+   - Differences are highlighted
+
+7. **Navigate to other phases (← →):**
+   - **Both panes update!** This is the key feature
+   - HIR: See high-level intermediate representation diff
+   - THIR: See type inference diff
+   - Diagnostics: See how errors changed
+   - Codegen: See bytecode diff
+
+8. **Scroll through output (↑↓ or mouse wheel):**
+   - Both panes scroll together in sync
+   - Use PgUp/PgDn for page scrolling
+   - Press Home to jump to top
+   - Scroll resets when changing phases
+
+9. **Update snapshot (press s):**
+   - Snapshot updates to current state
+   - Diff disappears until next change
+
+10. **Delete snapshot (press Shift+S):**
+   - Removes the snapshot completely
+   - Returns to single-pane view
+   - Useful when you're done comparing
+
+## Tips
+
+- **Incremental Development**: Use onion skin mode to verify your changes only affect what you expect
+- **Cross-Phase Analysis**: Navigate phases while in snapshot mode to see how one change ripples through the entire pipeline
+- **Debugging**: Create snapshot, break something, navigate phases to see where it fails
+- **Learning**: Watch how syntax changes propagate through compiler phases
+- **Testing**: Compare snapshots before/after refactoring across all phases
+
+## Compiler Phase Details
+
+### Lexer (Tokens)
+Shows tokenized output, e.g.:
+```
+Class "class"
+Word "User"
+LBrace "{"
+Word "name"
+Word "string"
+...
+```
+
+### Parser (CST/AST)
+Shows syntax tree structure:
+```
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "User"
+    L_BRACE "{"
+    ...
+=== ERRORS ===
+None
+```
+
+### HIR (High-level IR)
+Shows project items:
+```
+=== HIR ITEMS ===
+  Class(ClassId(...))
+  Function(FunctionId(...))
+```
+
+### THIR (Typed IR)
+Shows type inference:
+```
+=== TYPE INFERENCE ===
+  Function FunctionId(...):
+    Return: User
+    Errors: (none)
+```
+
+### Diagnostics
+Shows all errors:
+```
+=== DIAGNOSTICS ===
+  [parse] Expected type, found ...
+```
+
+### Codegen (Bytecode)
+Shows generated bytecode:
+```
+=== BYTECODE ===
+Instructions: 42 bytes
+Constants: 3
+
+First instructions:
+  [0] ...
+  [1] ...
+```
+
+## What Makes This "Onion Skinning"?
+
+In traditional animation, onion skinning lets you see multiple frames at once:
+- Previous frames appear as ghosted underlays
+- Current frame is fully visible
+- You can see exactly how things change frame-by-frame
+
+BAML Onionskin applies this to compiler development:
+- Snapshot is your "previous frame"
+- Current output is your "new frame"  
+- The diff view shows exactly what changed
+- Navigate phases to see changes across the entire "animation" of compilation
