@@ -1270,7 +1270,13 @@ impl<'a> Parser<'a> {
     }
 
     /// Wrap events from start_index onwards in a new node
-    /// This allows us to retroactively wrap parsed expressions
+    /// This allows us to retroactively wrap parsed expressions.
+    ///
+    /// For example, in an expression like `a + b`, the parser will
+    /// parse `a` before seeing the binary operator that triggers
+    /// binary expression parsing, so we need this function to
+    /// reassociate the event from that previous expression into
+    /// the binary expression node.
     fn wrap_events_in_node(&mut self, start_index: usize, kind: SyntaxKind) {
         // Insert StartNode at the beginning
         self.events.insert(start_index, Event::StartNode { kind });
