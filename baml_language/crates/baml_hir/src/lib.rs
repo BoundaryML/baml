@@ -4,6 +4,7 @@
 
 use baml_base::{Name, SourceFile};
 use baml_parser::syntax_tree;
+use baml_syntax::SyntaxKind;
 use baml_workspace::project_files;
 
 mod ids;
@@ -23,7 +24,6 @@ pub fn file_items(db: &dyn salsa::Database, file: SourceFile) -> Vec<ItemId> {
 
     // Walk top-level nodes in the syntax tree
     // Note: syntax_tree returns a GreenNode, so we need to look at it correctly
-    use baml_syntax::SyntaxKind;
 
     // Iterate children_with_tokens and filter to only SyntaxNodes
     for element in tree.children_with_tokens() {

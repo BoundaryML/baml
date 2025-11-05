@@ -14,9 +14,6 @@ license = { workspace = true }
 name = "baml_onionskin"
 path = "src/main.rs"
 
-[lints]
-workspace = true
-
 [dependencies]
 baml_db = { workspace = true }
 baml_lexer = { workspace = true }
@@ -52,3 +49,7 @@ anyhow = "1.0"
 # Standard library
 text-size = { workspace = true }
 
+
+[lints.clippy]
+print_stdout = "allow"
+print_stderr = "allow"

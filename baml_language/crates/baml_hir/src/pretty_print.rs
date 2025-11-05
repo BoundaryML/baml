@@ -1,14 +1,15 @@
 //! Pretty printing for HIR items.
 
+use std::{fmt, fmt::Write};
+
 use crate::{ClassId, EnumId, FunctionId, ItemId};
-use std::fmt;
 
 impl fmt::Display for ItemId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ItemId::Function(func) => write!(f, "{}", func),
-            ItemId::Class(class) => write!(f, "{}", class),
-            ItemId::Enum(enum_) => write!(f, "{}", enum_),
+            ItemId::Function(func) => write!(f, "{func}"),
+            ItemId::Class(class) => write!(f, "{class}"),
+            ItemId::Enum(enum_) => write!(f, "{enum_}"),
         }
     }
 }
@@ -36,7 +37,8 @@ pub fn format_items(items: &[ItemId]) -> String {
     let mut output = String::new();
 
     for item in items {
-        output.push_str(&format!("  {}\n", item));
+        write!(output, "  {item}").unwrap();
+        // output.push_str(&format!("  {item}\n"));
     }
 
     if output.is_empty() {
@@ -63,31 +65,31 @@ pub fn format_items_grouped(items: &[ItemId]) -> String {
     let mut output = String::new();
 
     if !functions.is_empty() {
-        output.push_str("Functions:\n");
+        writeln!(output, "Functions:").unwrap();
         for func in functions {
-            output.push_str(&format!("  {}\n", func));
+            writeln!(output, "  {func}").unwrap();
         }
-        output.push('\n');
+        writeln!(output).unwrap();
     }
 
     if !classes.is_empty() {
-        output.push_str("Classes:\n");
+        writeln!(output, "Classes:").unwrap();
         for class in classes {
-            output.push_str(&format!("  {}\n", class));
+            writeln!(output, "  {class}").unwrap();
         }
-        output.push('\n');
+        writeln!(output).unwrap();
     }
 
     if !enums.is_empty() {
-        output.push_str("Enums:\n");
+        writeln!(output, "Enums:").unwrap();
         for enum_ in enums {
-            output.push_str(&format!("  {}\n", enum_));
+            writeln!(output, "  {enum_}").unwrap();
         }
-        output.push('\n');
+        writeln!(output).unwrap();
     }
 
     if output.is_empty() {
-        output.push_str("(no items)\n");
+        writeln!(output, "(no items)").unwrap();
     }
 
     output

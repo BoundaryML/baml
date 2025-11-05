@@ -3,9 +3,10 @@ mod compiler;
 mod ui;
 mod watcher;
 
+use std::path::{Path, PathBuf};
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(name = "baml_onionskin")]
@@ -38,7 +39,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     match args.command {
-        Some(Command::Increment { before, after }) => run_increment_test(before, after),
+        Some(Command::Increment { before, after }) => run_increment_test(&before, &after),
         None => {
             let path = args
                 .path
@@ -64,7 +65,10 @@ fn main() -> Result<()> {
     }
 }
 
-fn run_increment_test(before: PathBuf, after: PathBuf) -> Result<()> {
+/// Run the compiler in headless mode (no TUI), and dump the results to the console.
+/// Since there is no TUI no file watching cycle, we need to point to two separate
+/// directories representing the before and after states.
+fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
     use compiler::{CompilerPhase, CompilerRunner, read_files_from_disk};
 
     if !before.is_dir() || !after.is_dir() {
@@ -80,18 +84,18 @@ fn run_increment_test(before: PathBuf, after: PathBuf) -> Result<()> {
     // Step 1: Read "before" files (snapshot)
     println!("Step 1: Fresh compilation (BEFORE state)");
     println!("----------------------------------------");
-    let before_files = read_files_from_disk(&before)?;
+    let before_files = read_files_from_disk(before)?;
 
-    let mut compiler = CompilerRunner::new(&before);
-    compiler.compile_from_filesystem(&before_files, None)?;
+    let mut compiler = CompilerRunner::new(before);
+    compiler.compile_from_filesystem(&before_files, None);
 
-    let before_metrics = compiler.get_metrics_output()?;
-    println!("{}\n", before_metrics);
+    let before_metrics = compiler.get_metrics_output();
+    println!("{before_metrics}\n");
 
     // Step 2: Read "after" files
     println!("Step 2: Simulating file changes");
     println!("--------------------------------");
-    let after_files = read_files_from_disk(&after)?;
+    let after_files = read_files_from_disk(after)?;
 
     // Find changed files
     for (path, after_content) in &after_files {
@@ -108,10 +112,10 @@ fn run_increment_test(before: PathBuf, after: PathBuf) -> Result<()> {
     // Step 3: Compile "after" state using "before" as snapshot
     println!("Step 3: Incremental compilation (AFTER modification on same DB)");
     println!("----------------------------------------------------------------");
-    compiler.compile_from_filesystem(&after_files, Some(&before_files))?;
+    compiler.compile_from_filesystem(&after_files, Some(&before_files));
 
-    let after_metrics = compiler.get_metrics_output()?;
-    println!("{}\n", after_metrics);
+    let after_metrics = compiler.get_metrics_output();
+    println!("{after_metrics}\n");
 
     // Step 4: Show annotated compiler outputs
     println!("Step 4: Compiler Output with Cache Status (Lexer + Parser only)");
@@ -132,7 +136,7 @@ fn run_increment_test(before: PathBuf, after: PathBuf) -> Result<()> {
                 compiler::LineStatus::Cached => "(green)",
                 compiler::LineStatus::Unknown => "(white)",
             };
-            println!("{} {}", marker, line);
+            println!("{marker} {line}");
         }
     }
 

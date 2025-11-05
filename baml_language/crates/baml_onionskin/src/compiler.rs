@@ -1,14 +1,24 @@
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    fmt::Write,
+    ops::Deref,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
+
 use anyhow::Result;
-use baml_db::*;
+use baml_db::{
+    RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
+    baml_workspace,
+};
 use regex::Regex;
+use rowan::GreenNode;
+use rowan::NodeCache;
 use salsa::{Event, EventKind, Setter};
-use std::collections::{HashMap, HashSet};
-use std::fmt::Write;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CompilerPhase {
+pub(crate) enum CompilerPhase {
     Lexer,
     Parser,
     Hir,
@@ -19,7 +29,7 @@ pub enum CompilerPhase {
 }
 
 impl CompilerPhase {
-    pub const ALL: &'static [CompilerPhase] = &[
+    pub(crate) const ALL: &'static [CompilerPhase] = &[
         CompilerPhase::Lexer,
         CompilerPhase::Parser,
         CompilerPhase::Hir,
@@ -29,7 +39,7 @@ impl CompilerPhase {
         CompilerPhase::Metrics,
     ];
 
-    pub fn name(&self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             CompilerPhase::Lexer => "Lexer (Tokens)",
             CompilerPhase::Parser => "Parser (CST/AST)",
@@ -41,7 +51,7 @@ impl CompilerPhase {
         }
     }
 
-    pub fn next(&self) -> CompilerPhase {
+    pub(crate) fn next(self) -> CompilerPhase {
         match self {
             CompilerPhase::Lexer => CompilerPhase::Parser,
             CompilerPhase::Parser => CompilerPhase::Hir,
@@ -53,7 +63,7 @@ impl CompilerPhase {
         }
     }
 
-    pub fn prev(&self) -> CompilerPhase {
+    pub(crate) fn prev(self) -> CompilerPhase {
         match self {
             CompilerPhase::Lexer => CompilerPhase::Metrics,
             CompilerPhase::Parser => CompilerPhase::Lexer,
@@ -66,11 +76,11 @@ impl CompilerPhase {
     }
 }
 
-pub struct CompilerRunner {
+pub(crate) struct CompilerRunner {
     db: RootDatabase,
     project_root: baml_workspace::ProjectRoot,
     is_directory: bool,
-    /// Source files currently in the database (path -> SourceFile)
+    /// Source files currently in the database (path -> `SourceFile`)
     source_files: HashMap<PathBuf, SourceFile>,
     phase_outputs: HashMap<CompilerPhase, String>,
     phase_outputs_annotated: HashMap<CompilerPhase, Vec<(String, LineStatus)>>,
@@ -79,17 +89,19 @@ pub struct CompilerRunner {
     cached_queries: Arc<Mutex<HashSet<String>>>,
     // Track which files were modified in the last compilation
     modified_files: HashSet<PathBuf>,
+    node_cache: NodeCache,
+    parser_cached_elements: HashMap<PathBuf, HashSet<GreenElementId>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LineStatus {
+pub(crate) enum LineStatus {
     Recomputed,
     Cached,
     Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VisualizationMode {
+pub(crate) enum VisualizationMode {
     /// Show which files changed (diff-based coloring)
     Diff,
     /// Show which Salsa queries were recomputed vs cached
@@ -97,7 +109,7 @@ pub enum VisualizationMode {
 }
 
 impl CompilerRunner {
-    pub fn new(path: impl AsRef<Path>) -> Self {
+    pub(crate) fn new(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref();
         let is_directory = path.is_dir();
 
@@ -115,13 +127,13 @@ impl CompilerRunner {
                     recomputed_clone
                         .lock()
                         .unwrap()
-                        .insert(format!("{:?}", database_key));
+                        .insert(format!("{database_key:?}"));
                 }
                 EventKind::DidValidateMemoizedValue { database_key } => {
                     cached_clone
                         .lock()
                         .unwrap()
-                        .insert(format!("{:?}", database_key));
+                        .insert(format!("{database_key:?}"));
                 }
                 _ => {}
             }));
@@ -136,19 +148,22 @@ impl CompilerRunner {
             recomputed_queries,
             cached_queries,
             modified_files: HashSet::new(),
+            node_cache: NodeCache::default(),
+            parser_cached_elements: HashMap::new(),
         }
     }
 
-    /// Compile files from a "fake filesystem" (HashMap of path -> content)
-    /// If snapshot_files is provided, we:
+    /// Compile files from a "fake filesystem" (`HashMap` of path -> content)
+    /// If `snapshot_files` is provided, we:
     ///   1. Add snapshot files to DB first
-    ///   2. Use .set_text() to update to current_files
+    ///   2. Use .`set_text()` to update to `current_files`
+    ///
     /// This allows Salsa to see what changed vs what's cached
-    pub fn compile_from_filesystem(
+    pub(crate) fn compile_from_filesystem(
         &mut self,
         current_files: &HashMap<PathBuf, String>,
         snapshot_files: Option<&HashMap<PathBuf, String>>,
-    ) -> Result<()> {
+    ) {
         // Clear event tracking
         self.recomputed_queries.lock().unwrap().clear();
         self.cached_queries.lock().unwrap().clear();
@@ -163,13 +178,13 @@ impl CompilerRunner {
                     recomputed_clone
                         .lock()
                         .unwrap()
-                        .insert(format!("{:?}", database_key));
+                        .insert(format!("{database_key:?}"));
                 }
                 EventKind::DidValidateMemoizedValue { database_key } => {
                     cached_clone
                         .lock()
                         .unwrap()
-                        .insert(format!("{:?}", database_key));
+                        .insert(format!("{database_key:?}"));
                 }
                 _ => {}
             }));
@@ -193,6 +208,8 @@ impl CompilerRunner {
         // Clear the source files list and modified tracking
         self.source_files.clear();
         self.modified_files.clear();
+        self.parser_cached_elements
+            .retain(|path, _| current_files.contains_key(path));
 
         // If snapshot_files provided, use the "fake filesystem" approach
         if let Some(snapshot) = snapshot_files {
@@ -236,10 +253,10 @@ impl CompilerRunner {
         }
 
         // Run all compiler phases
-        self.run_all_phases()
+        self.run_all_phases();
     }
 
-    fn run_all_phases(&mut self) -> Result<()> {
+    fn run_all_phases(&mut self) {
         self.phase_outputs.clear();
         self.phase_outputs_annotated.clear();
 
@@ -251,15 +268,13 @@ impl CompilerRunner {
             CompilerPhase::Diagnostics,
             CompilerPhase::Codegen,
         ] {
-            self.run_single_phase(phase)?;
+            self.run_single_phase(phase);
         }
 
-        self.run_single_phase(CompilerPhase::Metrics)?;
-
-        Ok(())
+        self.run_single_phase(CompilerPhase::Metrics);
     }
 
-    fn run_single_phase(&mut self, phase: CompilerPhase) -> Result<()> {
+    fn run_single_phase(&mut self, phase: CompilerPhase) {
         match phase {
             CompilerPhase::Lexer => self.run_lexer(),
             CompilerPhase::Parser => self.run_parser(),
@@ -271,7 +286,7 @@ impl CompilerRunner {
         }
     }
 
-    fn run_lexer(&mut self) -> Result<()> {
+    fn run_lexer(&mut self) {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
@@ -284,9 +299,9 @@ impl CompilerRunner {
             // Check if THIS specific file was modified
             let file_recomputed = self.modified_files.contains(path);
 
-            writeln!(output, "File: {}", file_path).ok();
+            writeln!(output, "File: {file_path}").ok();
             output_annotated.push((
-                format!("File: {}", file_path),
+                format!("File: {file_path}"),
                 if file_recomputed {
                     LineStatus::Recomputed
                 } else {
@@ -297,7 +312,7 @@ impl CompilerRunner {
             let tokens = baml_lexer::lex_file(&self.db, *source_file);
             for token in tokens {
                 let line = format!("{:?} {:?}", token.kind, token.text);
-                writeln!(output, "{}", line).ok();
+                writeln!(output, "{line}").ok();
                 output_annotated.push((
                     line,
                     if file_recomputed {
@@ -314,10 +329,9 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Lexer, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Lexer, output_annotated);
-        Ok(())
     }
 
-    fn run_parser(&mut self) -> Result<()> {
+    fn run_parser(&mut self) {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
@@ -330,9 +344,9 @@ impl CompilerRunner {
             // Check if THIS specific file was modified
             let file_recomputed = self.modified_files.contains(path);
 
-            writeln!(output, "File: {}", file_path).ok();
+            writeln!(output, "File: {file_path}").ok();
             output_annotated.push((
-                format!("File: {}", file_path),
+                format!("File: {file_path}"),
                 if file_recomputed {
                     LineStatus::Recomputed
                 } else {
@@ -343,11 +357,11 @@ impl CompilerRunner {
             let green = baml_parser::parse_green(&self.db, *source_file);
             // Build a red tree (SyntaxNode) from the green tree
             let syntax_tree = baml_syntax::SyntaxNode::new_root(green);
-            let tree_text = format!("{:#?}", syntax_tree);
+            let tree_text = format!("{syntax_tree:#?}");
             // Remove span ranges like @0..69 from the output
             let tree_text = remove_span_ranges(&tree_text);
             for line in tree_text.lines() {
-                writeln!(output, "{}", line).ok();
+                writeln!(output, "{line}").ok();
                 output_annotated.push((
                     line.to_string(),
                     if file_recomputed {
@@ -364,10 +378,9 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Parser, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Parser, output_annotated);
-        Ok(())
     }
 
-    fn run_hir(&mut self) -> Result<()> {
+    fn run_hir(&mut self) {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
@@ -384,14 +397,14 @@ impl CompilerRunner {
             // Check if THIS specific file was modified
             let file_recomputed = self.modified_files.contains(path);
 
-            writeln!(output, "File: {}", file_path).ok();
-            output_annotated.push((format!("File: {}", file_path), LineStatus::Unknown));
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
 
             // Show real HIR items
             if !items.is_empty() {
                 for item in &items {
-                    let item_line = format!("  {}", item);
-                    writeln!(output, "{}", item_line).ok();
+                    let item_line = format!("  {item}");
+                    writeln!(output, "{item_line}").ok();
                     output_annotated.push((
                         item_line,
                         if file_recomputed {
@@ -403,7 +416,7 @@ impl CompilerRunner {
                 }
             } else {
                 let no_items = "  (no items)".to_string();
-                writeln!(output, "{}", no_items).ok();
+                writeln!(output, "{no_items}").ok();
                 output_annotated.push((
                     no_items,
                     if file_recomputed {
@@ -421,10 +434,9 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Hir, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Hir, output_annotated);
-        Ok(())
     }
 
-    fn run_thir(&mut self) -> Result<()> {
+    fn run_thir(&mut self) {
         // THIR not yet implemented as a tracked function
         let output = "THIR not yet implemented".to_string();
 
@@ -436,10 +448,9 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Thir, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Thir, output_annotated);
-        Ok(())
     }
 
-    fn run_diagnostics(&mut self) -> Result<()> {
+    fn run_diagnostics(&mut self) {
         // Diagnostics not yet implemented as a tracked function
         let output = "Diagnostics not yet implemented".to_string();
 
@@ -452,14 +463,13 @@ impl CompilerRunner {
             .insert(CompilerPhase::Diagnostics, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Diagnostics, output_annotated);
-        Ok(())
     }
 
-    fn run_codegen(&mut self) -> Result<()> {
+    fn run_codegen(&mut self) {
         let bytecode = baml_codegen::generate_project_bytecode(&self.db, self.project_root);
-        let output = format!("{:#?}", bytecode);
+        let output = format!("{bytecode:#?}");
 
-        let file_recomputed = self.was_query_recomputed(&format!("generate_project_bytecode("));
+        let file_recomputed = self.was_query_recomputed("generate_project_bytecode(");
         let output_annotated: Vec<_> = output
             .lines()
             .map(|line| {
@@ -477,10 +487,9 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Codegen, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Codegen, output_annotated);
-        Ok(())
     }
 
-    fn run_metrics(&mut self) -> Result<()> {
+    fn run_metrics(&mut self) {
         let mut output = String::new();
 
         let recomputed = self.recomputed_queries.lock().unwrap();
@@ -493,7 +502,7 @@ impl CompilerRunner {
         if !recomputed.is_empty() {
             writeln!(output, "Recomputed:").ok();
             for query in recomputed.iter() {
-                writeln!(output, "  • {}", query).ok();
+                writeln!(output, "  • {query}").ok();
             }
             writeln!(output).ok();
         }
@@ -501,7 +510,7 @@ impl CompilerRunner {
         if !cached.is_empty() {
             writeln!(output, "Cached:").ok();
             for query in cached.iter() {
-                writeln!(output, "  • {}", query).ok();
+                writeln!(output, "  • {query}").ok();
             }
         }
 
@@ -513,7 +522,6 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Metrics, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Metrics, output_annotated);
-        Ok(())
     }
 
     fn was_query_recomputed(&self, query_pattern: &str) -> bool {
@@ -524,20 +532,22 @@ impl CompilerRunner {
             .any(|q| q.contains(query_pattern))
     }
 
-    pub fn get_phase_output(&self, phase: CompilerPhase) -> Option<&str> {
-        self.phase_outputs.get(&phase).map(|s| s.as_str())
+    pub(crate) fn get_phase_output(&self, phase: CompilerPhase) -> Option<&str> {
+        self.phase_outputs
+            .get(&phase)
+            .map(std::string::String::as_str)
     }
 
-    pub fn get_phase_output_annotated(
+    pub(crate) fn get_phase_output_annotated(
         &self,
         phase: CompilerPhase,
     ) -> Option<&[(String, LineStatus)]> {
         self.phase_outputs_annotated
             .get(&phase)
-            .map(|v| v.as_slice())
+            .map(std::vec::Vec::as_slice)
     }
 
-    pub fn get_recomputation_status(&self, _phase: CompilerPhase) -> RecomputationStatus {
+    pub(crate) fn get_recomputation_status(&self, _phase: CompilerPhase) -> RecomputationStatus {
         let recomputed_count = self.recomputed_queries.lock().unwrap().len();
         let cached_count = self.cached_queries.lock().unwrap().len();
         RecomputationStatus::Summary {
@@ -546,7 +556,7 @@ impl CompilerRunner {
         }
     }
 
-    pub fn get_annotated_output(&self, phase: CompilerPhase) -> Vec<(String, LineStatus)> {
+    pub(crate) fn get_annotated_output(&self, phase: CompilerPhase) -> Vec<(String, LineStatus)> {
         self.phase_outputs_annotated
             .get(&phase)
             .cloned()
@@ -554,7 +564,7 @@ impl CompilerRunner {
     }
 
     /// Get annotated output with mode-specific coloring
-    pub fn get_annotated_output_with_mode(
+    pub(crate) fn get_annotated_output_with_mode(
         &self,
         phase: CompilerPhase,
         mode: VisualizationMode,
@@ -587,22 +597,17 @@ impl CompilerRunner {
         }
     }
 
-    pub fn get_metrics_output(&mut self) -> Result<String> {
-        if let Some(output) = self.phase_outputs.get(&CompilerPhase::Metrics) {
-            Ok(output.clone())
-        } else {
-            self.run_metrics()?;
-            Ok(self
-                .phase_outputs
-                .get(&CompilerPhase::Metrics)
-                .cloned()
-                .unwrap_or_default())
-        }
+    pub(crate) fn get_metrics_output(&mut self) -> String {
+        self.run_metrics();
+        self.phase_outputs
+            .get(&CompilerPhase::Metrics)
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum RecomputationStatus {
+pub(crate) enum RecomputationStatus {
     Summary {
         recomputed_count: usize,
         cached_count: usize,
@@ -610,7 +615,7 @@ pub enum RecomputationStatus {
 }
 
 impl RecomputationStatus {
-    pub fn recomputed_count(&self) -> usize {
+    pub(crate) fn recomputed_count(&self) -> usize {
         match self {
             RecomputationStatus::Summary {
                 recomputed_count, ..
@@ -618,7 +623,7 @@ impl RecomputationStatus {
         }
     }
 
-    pub fn cached_count(&self) -> usize {
+    pub(crate) fn cached_count(&self) -> usize {
         match self {
             RecomputationStatus::Summary { cached_count, .. } => *cached_count,
         }
@@ -631,8 +636,8 @@ fn remove_span_ranges(text: &str) -> String {
     re.replace_all(text, "").to_string()
 }
 
-/// Helper to read files from disk into a HashMap
-pub fn read_files_from_disk(path: &Path) -> Result<HashMap<PathBuf, String>> {
+/// Helper to read files from disk into a `HashMap`
+pub(crate) fn read_files_from_disk(path: &Path) -> Result<HashMap<PathBuf, String>> {
     let mut files = HashMap::new();
 
     if path.is_dir() {

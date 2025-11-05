@@ -1,22 +1,26 @@
-use crate::app::App;
-use crate::compiler::{CompilerPhase, LineStatus};
+use std::io::{self, Stdout};
+
 use anyhow::Result;
 use crossterm::{
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
-    Frame, Terminal,
 };
 use similar::{ChangeTag, TextDiff};
-use std::io::{self, Stdout};
 
-pub fn init_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
+use crate::{
+    app::App,
+    compiler::{CompilerPhase, LineStatus},
+};
+
+pub(crate) fn init_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(
@@ -29,7 +33,7 @@ pub fn init_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
     Ok(terminal)
 }
 
-pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
+pub(crate) fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -40,7 +44,7 @@ pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Re
     Ok(())
 }
 
-pub fn draw(frame: &mut Frame, app: &App) {
+pub(crate) fn draw(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -75,10 +79,15 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
         "File"
     };
 
-    let title = format!("BAML Onionskin [{}]: {}{}",
+    let title = format!(
+        "BAML Onionskin [{}]: {}{}",
         mode,
         app.file_path().display(),
-        if app.has_snapshot() { " | Snapshot: ON" } else { "" }
+        if app.has_snapshot() {
+            " | Snapshot: ON"
+        } else {
+            ""
+        }
     );
     let block = Block::default()
         .borders(Borders::ALL)
@@ -106,32 +115,36 @@ fn draw_phase_tabs(frame: &mut Frame, area: Rect, app: &App) {
 
             // Choose color based on recomputation status for selected tab
             let color = match status {
-                RecomputationStatus::Summary { recomputed_count, cached_count } => {
+                RecomputationStatus::Summary {
+                    recomputed_count,
+                    cached_count,
+                } => {
                     if recomputed_count > 0 && cached_count == 0 {
-                        Color::Red  // All recomputed
+                        Color::Red // All recomputed
                     } else if recomputed_count > 0 && cached_count > 0 {
-                        Color::Yellow  // Mixed
+                        Color::Yellow // Mixed
                     } else {
-                        Color::Green  // All cached
+                        Color::Green // All cached
                     }
                 }
             };
 
-            Style::default().fg(color).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+            Style::default()
+                .fg(color)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
         } else {
             Style::default().fg(Color::White)
         };
 
         spans.push(Span::styled(phase.name(), style));
     }
-    
+
     let line = Line::from(spans);
-    let paragraph = Paragraph::new(line)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Compiler Phase"),
-        );
+    let paragraph = Paragraph::new(line).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Compiler Phase"),
+    );
 
     frame.render_widget(paragraph, area);
 }
@@ -174,13 +187,13 @@ fn draw_diff_view(frame: &mut Frame, area: Rect, app: &App) {
         let sign = match change.tag() {
             ChangeTag::Delete => "-",
             ChangeTag::Equal => " ",
-            _ => continue, // Skip insertions in snapshot view
+            ChangeTag::Insert => continue, // Skip insertions in snapshot view
         };
 
         let style = match change.tag() {
             ChangeTag::Delete => Style::default().fg(Color::Red),
             ChangeTag::Equal => Style::default(),
-            _ => Style::default(),
+            ChangeTag::Insert => Style::default(),
         };
 
         let line = format!("{} {}", sign, change.value().trim_end());
@@ -193,13 +206,13 @@ fn draw_diff_view(frame: &mut Frame, area: Rect, app: &App) {
         let sign = match change.tag() {
             ChangeTag::Insert => "+",
             ChangeTag::Equal => " ",
-            _ => continue, // Skip deletions in current view
+            ChangeTag::Delete => continue, // Skip deletions in current view
         };
 
         let style = match change.tag() {
             ChangeTag::Insert => Style::default().fg(Color::Green),
             ChangeTag::Equal => Style::default(),
-            _ => Style::default(),
+            ChangeTag::Delete => Style::default(),
         };
 
         let line = format!("{} {}", sign, change.value().trim_end());
@@ -240,18 +253,32 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         "[s] Create"
     };
 
-    let line1 = format!("Snapshot: {}  |  [r] Recompile  |  [m] Mode: {}  |  [Tab] Next File",
+    let line1 = format!(
+        "Snapshot: {}  |  [r] Recompile  |  [m] Mode: {}  |  [Tab] Next File",
         snapshot_help,
         app.visualization_mode_name()
     );
     let line2 = "Navigate: [←→] Phases  [↑↓] Scroll  [PgUp/PgDn] Page  [Home] Top  [Wheel] Mouse  |  [q/Ctrl+C] Quit";
     let line3_parts = vec![
         Span::raw("Phase Colors: "),
-        Span::styled("Red", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Red",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
         Span::raw("=Recomputed  "),
-        Span::styled("Yellow", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Yellow",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("=Partial  "),
-        Span::styled("Green", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Green",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("=Cached  "),
         Span::styled("Gray", Style::default().fg(Color::Gray)),
         Span::raw("=Headers"),
@@ -264,9 +291,12 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
     ];
 
     let paragraph = Paragraph::new(text)
-        .block(Block::default().borders(Borders::ALL).title("Keyboard Shortcuts"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Keyboard Shortcuts"),
+        )
         .style(Style::default().fg(Color::Gray));
 
     frame.render_widget(paragraph, area);
 }
-

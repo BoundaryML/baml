@@ -4,7 +4,7 @@
 
 use baml_lexer::{Token, TokenKind};
 use baml_syntax::SyntaxKind;
-use rowan::{GreenNode, GreenNodeBuilder};
+use rowan::{GreenNode, GreenNodeBuilder, NodeCache};
 use text_size::TextRange;
 
 use crate::ParseError;
@@ -276,7 +276,7 @@ impl<'a> Parser<'a> {
         self.is_block_comment_at(self.current)
     }
 
-    /// Consume a line comment (//) as a single LINE_COMMENT token
+    /// Consume a line comment (//) as a single `LINE_COMMENT` token
     fn consume_line_comment(&mut self) {
         // Consume both slashes
         let mut text = String::new();
@@ -302,7 +302,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Consume a block comment (/* ... */) as a single BLOCK_COMMENT token
+    /// Consume a block comment (/* ... */) as a single `BLOCK_COMMENT` token
     fn consume_block_comment(&mut self) {
         // Consume /* and everything until */
         let mut text = String::new();
@@ -460,8 +460,10 @@ impl<'a> Parser<'a> {
 
     // ============ Building the Tree ============
 
-    fn build_tree(self) -> (GreenNode, Vec<ParseError>) {
-        let mut builder = GreenNodeBuilder::new();
+    fn build_tree(self, cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
+        let mut builder = cache
+            .map(GreenNodeBuilder::with_cache)
+            .unwrap_or_else(GreenNodeBuilder::new);
         let mut errors = Vec::new();
 
         for event in self.events {
@@ -2093,7 +2095,7 @@ impl<'a> Parser<'a> {
 /// Parse tokens into a green tree.
 ///
 /// Returns the green tree and any parse errors encountered.
-pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
+fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
     let mut parser = Parser::new(tokens);
 
     parser.start_node(SyntaxKind::SOURCE_FILE);
@@ -2119,14 +2121,11 @@ pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
         {
             parser.parse_type_alias();
         } else {
-            // Unknown top-level item - error recovery
             parser.error("Expected top-level declaration".to_string());
             parser.bump(); // Skip unknown token
         }
     }
 
-    // Consume any remaining trailing trivia (whitespace, comments, newlines)
-    // at_end() skips trivia, so we need to explicitly consume it for lossless parsing
     while parser.current < parser.tokens.len() {
         let token = &parser.tokens[parser.current];
         let kind = token_kind_to_syntax_kind(token.kind);
@@ -2139,5 +2138,18 @@ pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
 
     parser.finish_node();
 
-    parser.build_tree()
+    parser.build_tree(cache)
+}
+
+pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
+    parse_impl(tokens, None)
+}
+
+/// Parse tokens using a caller-provided [`NodeCache`] so that identical
+/// subtrees from previous parses can be reused.
+pub fn parse_file_with_cache(
+    tokens: &[Token],
+    cache: &mut NodeCache,
+) -> (GreenNode, Vec<ParseError>) {
+    parse_impl(tokens, Some(cache))
 }

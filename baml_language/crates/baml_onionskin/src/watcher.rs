@@ -1,17 +1,20 @@
+use std::{
+    path::Path,
+    sync::mpsc::{Receiver, channel},
+    time::Duration,
+};
+
 use anyhow::Result;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcher};
-use std::path::Path;
-use std::sync::mpsc::{channel, Receiver};
-use std::time::Duration;
 
-pub struct FileWatcher {
+pub(crate) struct FileWatcher {
     #[allow(dead_code)]
     watcher: RecommendedWatcher,
     receiver: Receiver<notify::Result<notify::Event>>,
 }
 
 impl FileWatcher {
-    pub fn new(path: impl AsRef<Path>) -> Result<Self> {
+    pub(crate) fn new(path: impl AsRef<Path>) -> Result<Self> {
         let (tx, rx) = channel();
 
         let mut watcher = notify::recommended_watcher(move |res| {
@@ -33,7 +36,7 @@ impl FileWatcher {
         })
     }
 
-    pub fn check_for_changes(&self) -> bool {
+    pub(crate) fn check_for_changes(&self) -> bool {
         // Simple event detection - just check if any events arrived
         self.receiver
             .try_recv()
@@ -41,11 +44,10 @@ impl FileWatcher {
             .unwrap_or(false)
     }
 
-    pub fn wait_for_change(&self, timeout: Duration) -> bool {
+    pub(crate) fn wait_for_change(&self, timeout: Duration) -> bool {
         match self.receiver.recv_timeout(timeout) {
             Ok(result) => result.is_ok(),
             Err(_) => false,
         }
     }
 }
-

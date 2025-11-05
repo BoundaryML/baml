@@ -1,15 +1,16 @@
-use crate::compiler::{CompilerPhase, CompilerRunner, VisualizationMode, read_files_from_disk};
-use crate::ui;
-use crate::watcher::FileWatcher;
+use std::{collections::HashMap, path::PathBuf, time::Duration};
+
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::time::Duration;
+use ratatui::{Terminal, backend::CrosstermBackend};
 
-pub struct App {
+use crate::{
+    compiler::{CompilerPhase, CompilerRunner, VisualizationMode, read_files_from_disk},
+    ui,
+    watcher::FileWatcher,
+};
+
+pub(crate) struct App {
     file_path: PathBuf,
     /// Which tab is shown in the TUI.
     current_phase: CompilerPhase,
@@ -28,7 +29,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(path: PathBuf) -> Result<Self> {
+    pub(crate) fn new(path: PathBuf) -> Result<Self> {
         let watcher = FileWatcher::new(&path)?;
         let mut compiler = CompilerRunner::new(&path);
 
@@ -36,7 +37,7 @@ impl App {
         let current_files = read_files_from_disk(&path)?;
 
         // Initial compilation (no snapshot)
-        compiler.compile_from_filesystem(&current_files, None)?;
+        compiler.compile_from_filesystem(&current_files, None);
 
         Ok(Self {
             file_path: path,
@@ -52,7 +53,7 @@ impl App {
         })
     }
 
-    pub fn run(
+    pub(crate) fn run(
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     ) -> Result<()> {
@@ -68,8 +69,8 @@ impl App {
             // Handle input with timeout
             if event::poll(Duration::from_millis(100))? {
                 match event::read()? {
-                    Event::Key(key) => self.handle_key_event(key)?,
-                    Event::Mouse(mouse) => self.handle_mouse_event(mouse)?,
+                    Event::Key(key) => self.handle_key_event(key),
+                    Event::Mouse(mouse) => self.handle_mouse_event(mouse),
                     _ => {}
                 }
             }
@@ -84,20 +85,18 @@ impl App {
 
         // Compile: if snapshot exists, use it; otherwise compile fresh
         self.compiler
-            .compile_from_filesystem(&self.current_files, self.snapshot_files.as_ref())?;
-
+            .compile_from_filesystem(&self.current_files, self.snapshot_files.as_ref());
         Ok(())
     }
 
-    fn recompile(&mut self) -> Result<()> {
+    fn recompile(&mut self) {
         // Recompile without snapshot (fresh DB)
         // This simulates restarting the compiler
         self.compiler
-            .compile_from_filesystem(&self.current_files, None)?;
-        Ok(())
+            .compile_from_filesystem(&self.current_files, None);
     }
 
-    fn handle_key_event(&mut self, key: KeyEvent) -> Result<()> {
+    fn handle_key_event(&mut self, key: KeyEvent) {
         match (key.code, key.modifiers) {
             // Quit on Ctrl+C or 'q'
             (KeyCode::Char('c'), KeyModifiers::CONTROL)
@@ -106,7 +105,7 @@ impl App {
             }
             // Toggle snapshot on 's'
             (KeyCode::Char('s'), KeyModifiers::NONE) => {
-                self.toggle_snapshot()?;
+                self.toggle_snapshot();
             }
             // Delete snapshot on Shift+S
             (KeyCode::Char('S'), KeyModifiers::SHIFT) => {
@@ -114,11 +113,11 @@ impl App {
                 self.snapshot_compiler = None;
                 self.scroll_offset = 0;
                 // Recompile without snapshot
-                self.recompile()?;
+                self.recompile();
             }
             // Manual recompile on 'r'
             (KeyCode::Char('r'), KeyModifiers::NONE) => {
-                self.recompile()?;
+                self.recompile();
             }
             // Navigate phases with left/right arrow keys
             (KeyCode::Left, _) => {
@@ -152,8 +151,6 @@ impl App {
             }
             _ => {}
         }
-
-        Ok(())
     }
 
     fn toggle_visualization_mode(&mut self) {
@@ -163,7 +160,7 @@ impl App {
         };
     }
 
-    fn handle_mouse_event(&mut self, mouse: crossterm::event::MouseEvent) -> Result<()> {
+    fn handle_mouse_event(&mut self, mouse: crossterm::event::MouseEvent) {
         match mouse.kind {
             MouseEventKind::ScrollUp => {
                 self.scroll_offset = self.scroll_offset.saturating_sub(3);
@@ -173,62 +170,59 @@ impl App {
             }
             _ => {}
         }
-        Ok(())
     }
 
-    fn toggle_snapshot(&mut self) -> Result<()> {
+    fn toggle_snapshot(&mut self) {
         // Save current files as snapshot (the "before" state)
         self.snapshot_files = Some(self.current_files.clone());
 
         // Create a separate compiler for the snapshot panel (fresh DB)
         let mut snapshot_compiler = CompilerRunner::new(&self.file_path);
-        snapshot_compiler.compile_from_filesystem(&self.current_files, None)?;
+        snapshot_compiler.compile_from_filesystem(&self.current_files, None);
         self.snapshot_compiler = Some(snapshot_compiler);
 
         // Recompile current with snapshot as base - this will show everything as "cached"
         // because snapshot and current are identical at this moment
         self.compiler
-            .compile_from_filesystem(&self.current_files, self.snapshot_files.as_ref())?;
-
-        Ok(())
+            .compile_from_filesystem(&self.current_files, self.snapshot_files.as_ref());
     }
 
-    pub fn current_phase(&self) -> CompilerPhase {
+    pub(crate) fn current_phase(&self) -> CompilerPhase {
         self.current_phase
     }
 
-    pub fn current_output(&self) -> &str {
+    pub(crate) fn current_output(&self) -> &str {
         self.compiler
             .get_phase_output(self.current_phase)
             .unwrap_or("No output available")
     }
 
-    pub fn snapshot_output(&self) -> Option<&str> {
+    pub(crate) fn snapshot_output(&self) -> Option<&str> {
         self.snapshot_compiler
             .as_ref()
             .and_then(|c| c.get_phase_output(self.current_phase))
     }
 
-    pub fn file_path(&self) -> &PathBuf {
+    pub(crate) fn file_path(&self) -> &PathBuf {
         &self.file_path
     }
 
-    pub fn has_snapshot(&self) -> bool {
+    pub(crate) fn has_snapshot(&self) -> bool {
         self.snapshot_compiler.is_some()
     }
 
-    pub fn scroll_offset(&self) -> u16 {
+    pub(crate) fn scroll_offset(&self) -> u16 {
         self.scroll_offset
     }
 
-    pub fn get_recomputation_status(
+    pub(crate) fn get_recomputation_status(
         &self,
         phase: CompilerPhase,
     ) -> crate::compiler::RecomputationStatus {
         self.compiler.get_recomputation_status(phase)
     }
 
-    pub fn get_snapshot_recomputation_status(
+    pub(crate) fn get_snapshot_recomputation_status(
         &self,
         phase: CompilerPhase,
     ) -> Option<crate::compiler::RecomputationStatus> {
@@ -237,7 +231,7 @@ impl App {
             .map(|c| c.get_recomputation_status(phase))
     }
 
-    pub fn get_output_annotated(
+    pub(crate) fn get_output_annotated(
         &self,
         phase: CompilerPhase,
     ) -> Vec<(String, crate::compiler::LineStatus)> {
@@ -245,7 +239,7 @@ impl App {
             .get_annotated_output_with_mode(phase, self.visualization_mode)
     }
 
-    pub fn get_snapshot_output_annotated(
+    pub(crate) fn get_snapshot_output_annotated(
         &self,
         phase: CompilerPhase,
     ) -> Option<Vec<(String, crate::compiler::LineStatus)>> {
@@ -255,11 +249,11 @@ impl App {
         })
     }
 
-    pub fn visualization_mode(&self) -> VisualizationMode {
+    pub(crate) fn visualization_mode(&self) -> VisualizationMode {
         self.visualization_mode
     }
 
-    pub fn visualization_mode_name(&self) -> &'static str {
+    pub(crate) fn visualization_mode_name(&self) -> &'static str {
         match self.visualization_mode {
             VisualizationMode::Diff => "Diff",
             VisualizationMode::Salsa => "Salsa",

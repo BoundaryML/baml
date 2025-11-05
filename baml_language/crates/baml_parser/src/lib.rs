@@ -8,7 +8,7 @@ use baml_syntax::SyntaxNode;
 use rowan::GreenNode;
 
 mod parser;
-pub use parser::parse_file;
+pub use parser::{parse_file, parse_file_with_cache};
 
 /// Parse errors that can occur during parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
