@@ -1,7 +1,7 @@
-fn Sum(xs: int[]) -> int {
+function Sum(xs: int[]) -> int {
 	let result = 0;
 
-	for (x in xs) {
+	for (let x in xs) {
 		result += x;
 	}
 
@@ -15,14 +15,4 @@ fn Sum(xs: int[]) -> int {
 //   }
 //
 //   result
-// }
-//
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
-// }
-//
-// enum std::HttpMethod {
-//   Get
 // }

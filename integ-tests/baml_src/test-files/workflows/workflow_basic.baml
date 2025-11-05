@@ -3,7 +3,7 @@ function LLMEcho(input: string) -> string {
     prompt #"Echo exactly the input: {{input}}"#
 }
 
-fn EchoWorkflow() -> string {
+function EchoWorkflow() -> string {
     let input = "Hello, world!";
     LLMEcho(input)
 }

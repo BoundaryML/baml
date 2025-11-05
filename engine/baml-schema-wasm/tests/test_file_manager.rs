@@ -2,8 +2,7 @@
 // wasm-pack test --node
 // and make sure to set rust-analyzer target in vscode settings to:   "rust-analyzer.cargo.target": "wasm32-unknown-unknown",
 #[cfg(target_arch = "wasm32")]
-#[cfg(test)]
-mod tests {
+pub mod tests {
     use std::collections::HashMap;
 
     use baml_schema_build::runtime_wasm::WasmProject;
@@ -102,7 +101,7 @@ mod tests {
         // Update BAML file
         let updated_content = "// A COMMENT".to_string();
         project.update_file("main.baml", Some(updated_content.clone()));
-        let project_files = project.files();
+        let _project_files = project.files();
         assert!(project
             .files()
             .contains(&"main.bamlBAML_PATH_SPLTTER// A COMMENT".to_string()));

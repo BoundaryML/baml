@@ -1,0 +1,426 @@
+---
+title: Comparing OpenAI SDK
+---
+
+[OpenAI SDK](https://github.com/openai/openai-python) now supports structured outputs natively, making it easier than ever to get typed responses from GPT models.
+
+Let's explore how this works in practice and where you might hit limitations.
+
+### Why working with LLMs requires more than just OpenAI SDK
+
+OpenAI's structured outputs look fantastic at first:
+
+```python
+from pydantic import BaseModel
+from openai import OpenAI
+
+class Resume(BaseModel):
+    name: str
+    skills: list[str]
+
+client = OpenAI()
+completion = client.beta.chat.completions.parse(
+    model="gpt-4o",
+    messages=[
+        {"role": "user", "content": "John Doe, Python, Rust"}
+    ],
+    response_format=Resume,
+)
+resume = completion.choices[0].message.parsed
+```
+
+Simple and type-safe! Let's add education to make it more realistic:
+
+```diff
++class Education(BaseModel):
++    school: str
++    degree: str
++    year: int
+
+class Resume(BaseModel):
+    name: str
+    skills: list[str]
++    education: list[Education]
+
+completion = client.beta.chat.completions.parse(
+    model="gpt-4o",
+    messages=[
+        {"role": "user", "content": """John Doe
+Python, Rust
+University of California, Berkeley, B.S. in Computer Science, 2020"""}
+    ],
+    response_format=Resume,
+)
+```
+
+Still works! But let's dig deeper...
+
+### The prompt mystery
+
+Your extraction works 90% of the time, but fails on certain resumes. You need to debug:
+
+```python
+# What prompt is actually being sent?
+completion = client.beta.chat.completions.parse(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": resume_text}],
+    response_format=Resume,
+)
+
+# You can't see:
+# - How the schema is formatted
+# - What instructions the model receives
+# - Why certain fields are misunderstood
+```
+
+You start experimenting with system messages:
+
+```python
+completion = client.beta.chat.completions.parse(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": "Extract resume information accurately."},
+        {"role": "user", "content": resume_text}
+    ],
+    response_format=Resume,
+)
+
+# But what if you need more specific instructions?
+# How do you tell it to handle edge cases?
+```
+
+### Classification without context
+
+Now you need to classify resumes by seniority:
+
+```python
+from enum import Enum
+
+class SeniorityLevel(str, Enum):
+    JUNIOR = "junior"
+    MID = "mid"
+    SENIOR = "senior"
+    STAFF = "staff"
+
+class Resume(BaseModel):
+    name: str
+    skills: list[str]
+    education: list[Education]
+    seniority: SeniorityLevel
+```
+
+But the model doesn't know what these levels mean! You try adding a docstring:
+
+```python
+class Resume(BaseModel):
+    """Resume with seniority classification.
+    
+    Seniority levels:
+    - junior: 0-2 years experience
+    - mid: 2-5 years experience
+    - senior: 5-10 years experience
+    - staff: 10+ years experience
+    """
+    name: str
+    skills: list[str]
+    education: list[Education]
+    seniority: SeniorityLevel
+```
+
+But docstrings aren't sent to the model. So you resort to prompt engineering:
+
+```python
+messages = [
+    {"role": "system", "content": """Extract resume information.
+    
+Classify seniority as:
+- junior: 0-2 years experience
+- mid: 2-5 years experience  
+- senior: 5-10 years experience
+- staff: 10+ years experience"""},
+    {"role": "user", "content": resume_text}
+]
+```
+
+Now your business logic is split between types and prompts...
+
+### The vendor lock-in problem
+
+Your team wants to experiment with Claude for better reasoning:
+
+```python
+# With OpenAI SDK, you're stuck with OpenAI
+from openai import OpenAI
+client = OpenAI()
+
+# Want to try Claude? Start over with a different SDK
+from anthropic import Anthropic
+anthropic_client = Anthropic()
+
+# Completely different API
+message = anthropic_client.messages.create(
+    model="claude-3-opus-20240229",
+    messages=[{"role": "user", "content": resume_text}],
+    # No structured outputs support!
+)
+
+# Now you need custom parsing
+import json
+resume_data = json.loads(message.content)
+resume = Resume(**resume_data)  # Hope it matches!
+```
+
+### Testing and token tracking
+
+You want to test your extraction and track costs:
+
+```python
+# How do you test without burning tokens?
+def test_resume_extraction():
+    completion = client.beta.chat.completions.parse(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": test_resume}],
+        response_format=Resume,
+    )
+    # This costs money every time!
+
+# Mock the OpenAI client?
+from unittest.mock import Mock
+mock_client = Mock()
+mock_client.beta.chat.completions.parse.return_value = ...
+# You're not really testing the extraction logic
+
+# Track token usage?
+completion = client.beta.chat.completions.parse(...)
+print(completion.usage.total_tokens)  # At least this exists!
+
+# But how many tokens does the schema formatting use?
+# Could you optimize it?
+```
+
+### Production complexity creep
+
+As your app scales, you need:
+- Retry logic for rate limits
+- Fallback to GPT-3.5 when GPT-4 is down  
+- A/B testing different prompts
+- Structured logging for debugging
+
+Your code evolves:
+
+```python
+class ResumeExtractor:
+    def __init__(self):
+        self.client = OpenAI()
+        self.fallback_client = OpenAI()  # Different API key?
+        
+    def extract_with_retries(self, text: str, max_retries: int = 3):
+        for attempt in range(max_retries):
+            try:
+                return self._extract(text, model="gpt-4o")
+            except RateLimitError:
+                if attempt == max_retries - 1:
+                    # Try fallback model
+                    return self._extract(text, model="gpt-3.5-turbo")
+                time.sleep(2 ** attempt)
+                
+    def _extract(self, text: str, model: str):
+        messages = self._build_messages(text)
+        
+        completion = self.client.beta.chat.completions.parse(
+            model=model,
+            messages=messages,
+            response_format=Resume,
+        )
+        
+        self._log_usage(completion, model)
+        return completion.choices[0].message.parsed
+        
+    # ... more infrastructure code
+```
+
+The simple API is now buried in error handling and logging.
+
+## Enter BAML
+
+BAML was built for real-world LLM applications. Here's the same resume extraction:
+
+```baml
+class Education {
+  school string
+  degree string  
+  year int
+}
+
+enum SeniorityLevel {
+  JUNIOR @description("0-2 years of experience")
+  MID @description("2-5 years of experience")
+  SENIOR @description("5-10 years of experience")  
+  STAFF @description("10+ years of experience, technical leadership")
+}
+
+class Resume {
+  name string
+  skills string[]
+  education Education[]
+  seniority SeniorityLevel
+}
+
+function ExtractResume(resume_text: string) -> Resume {
+  client GPT4
+  prompt #"
+    Extract structured information from this resume.
+    
+    When determining seniority, use these guidelines:
+    {{ ctx.output_format.seniority }}
+    
+    Resume:
+    ---
+    {{ resume_text }}
+    ---
+    
+    Output format:
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+See the difference?
+1. **The prompt is explicit** - No guessing what's sent
+2. **Enums have descriptions** - Built into the type system
+3. **One place for everything** - Types and prompts together
+
+### Multi-model freedom
+
+```baml
+// Define all your models
+client<llm> GPT4 {
+  provider openai
+  options {
+    model "gpt-4o"
+    temperature 0.1
+  }
+}
+
+client<llm> GPT35 {
+  provider openai
+  options {
+    model "gpt-3.5-turbo"
+    temperature 0.1
+  }
+}
+
+client<llm> Claude {
+  provider anthropic
+  options {
+    model "claude-3-opus-20240229"
+  }
+}
+
+client<llm> Llama {
+  provider ollama
+  options {
+    model "llama3"
+  }
+}
+
+// Use ANY model with the SAME function
+function ExtractResume(resume_text: string) -> Resume {
+  client GPT4  // Just change this line!
+  prompt #"..."#
+}
+```
+
+In Python:
+```python
+from baml_client import baml as b
+
+# Default model
+resume = await b.ExtractResume(resume_text)
+
+# Use different models for different scenarios
+cheap_extraction = await b.ExtractResume(simple_text, {"client": "GPT35"})
+quality_extraction = await b.ExtractResume(complex_text, {"client": "Claude"})
+private_extraction = await b.ExtractResume(sensitive_text, {"client": "Llama"})
+
+# Same interface, same types, different models!
+```
+
+### Testing without burning money
+
+With BAML's VSCode extension:
+
+<img src="/assets/vscode/playground-preview.png" alt="BAML VSCode playground with instant testing" />
+
+1. **Write your test cases** - Visual interface for test data
+2. **See the exact prompt** - No hidden abstractions
+3. **Test instantly** without API calls
+4. **Iterate until perfect** - Instant feedback loop
+5. **Save test cases** for CI/CD
+
+<img src="/assets/vscode/open-playground.png" alt="Opening BAML playground from VSCode" />
+
+*No mocking, no token costs, real testing.*
+
+### Built for production
+
+```baml
+// Retry configuration
+client<llm> GPT4WithRetries {
+  provider openai
+  options {
+    model "gpt-4o"
+    temperature 0.1
+  }
+  retry_policy {
+    max_retries 3
+    strategy exponential_backoff
+  }
+}
+
+// Fallback chains
+client<llm> SmartRouter {
+  provider fallback
+  options {
+    clients ["GPT4", "Claude", "GPT35"]
+  }
+}
+```
+
+All the production concerns handled declaratively.
+
+### The bottom line
+
+OpenAI's structured outputs are great if you:
+- Only use OpenAI models
+- Don't need prompt customization
+- Have simple extraction needs
+
+**But production LLM applications need more:**
+
+**BAML's advantages over OpenAI SDK:**
+- **Model flexibility** - Works with GPT, Claude, Gemini, Llama, and any future model
+- **Prompt transparency** - See and optimize exactly what's sent to the LLM
+- **Real testing** - Test in VSCode without burning tokens or API calls
+- **Production features** - Built-in retries, fallbacks, and smart routing
+- **Cost optimization** - Understand token usage and optimize prompts
+- **Schema-Aligned Parsing** - Get structured outputs from any model, not just OpenAI
+- **Streaming + Structure** - Stream structured data with loading bars
+
+**Why this matters:**
+- **Future-proof** - Never get locked into one model provider
+- **Faster development** - Instant testing and iteration in your editor
+- **Better reliability** - Built-in error handling and fallback strategies
+- **Team productivity** - Prompts are versioned, testable code
+- **Cost control** - Optimize token usage across different models
+
+With BAML, you get all the benefits of OpenAI's structured outputs plus the flexibility and control needed for production applications.
+
+### Limitations of BAML
+
+BAML has some limitations:
+1. It's a new language (though easy to learn)
+2. Best experience needs VSCode
+3. Focused on structured extraction
+
+If you're building a simple OpenAI-only prototype, the OpenAI SDK is fine. If you're building production LLM features that need to scale, [try BAML](https://docs.boundaryml.com).

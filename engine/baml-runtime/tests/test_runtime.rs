@@ -110,13 +110,14 @@ mod internal_tests {
                 None,
                 None,
                 HashMap::new(),
+                None,
                 TripWire::new(None),
             )
             .await;
 
         // runtime.get_test_params(function_name, test_name, ctx);
 
-        // runtime.internal().render_prompt(function_name, ctx, params, node_index)
+        // runtime.render_prompt(function_name, ctx, params, node_index)
 
         assert!(res.is_ok(), "Result: {:#?}", res.err());
 
@@ -178,7 +179,7 @@ mod internal_tests {
         )?;
         log::info!("Runtime:");
 
-        let missing_env_vars = runtime.internal().ir().required_env_vars();
+        let missing_env_vars = runtime.ir.required_env_vars();
 
         let ctx = runtime
             .create_ctx_manager(BamlValue::String("test".to_string()), None)
@@ -186,10 +187,7 @@ mod internal_tests {
 
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
 
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, Some(0));
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, Some(0));
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
@@ -262,10 +260,7 @@ mod internal_tests {
 
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
 
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, Some(0));
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, Some(0));
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
@@ -276,6 +271,56 @@ mod internal_tests {
         //     .map_err(|e| anyhow::anyhow!("Error rendering prompt: {:#?}", e))?;
 
         log::info!("Prompt: {prompt:#?}");
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn test_class_with_block_description() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = make_test_runtime(
+            r##"
+        class User {
+          name string @description("Full name")
+          email string
+
+          @@description("Represents a system user")
+        }
+
+        function GetUser(input: string) -> User {
+          client "openai/gpt-4o"
+          prompt #"
+            Extract user info:
+            {{ ctx.output_format }}
+          "#
+        }
+
+        test TestUser {
+          functions [GetUser]
+          args {
+            input "John Doe john@example.com"
+          }
+        }
+        "##,
+        )?;
+
+        let ctx = runtime
+            .create_ctx_manager(BamlValue::String("test".to_string()), None)
+            .create_ctx_with_default();
+
+        let params = runtime.get_test_params("GetUser", "TestUser", &ctx, true)?;
+        let render_prompt_future = runtime.render_prompt("GetUser", &ctx, &params, Some(0));
+        let (prompt, _scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
+
+        // Verify the rendered prompt contains the class description
+        let prompt_str = prompt.to_string();
+        assert!(
+            prompt_str.contains("// Represents a system user"),
+            "Missing class description"
+        );
+        assert!(
+            prompt_str.contains("// Full name"),
+            "Missing field description"
+        );
 
         Ok(())
     }
@@ -349,10 +394,7 @@ test ImageReceiptTest {
         let function_name = "ExtractReceipt";
         let test_name = "ImageReceiptTest";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -430,10 +472,7 @@ test TestName {
         let function_name = "Bot";
         let test_name = "TestName";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -498,10 +537,7 @@ test TestTree {
         let function_name = "BuildTree";
         let test_name = "TestTree";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -552,10 +588,7 @@ test RunFoo2Test {
         let function_name = "RunFoo2";
         let test_name = "RunFoo2Test";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -600,10 +633,7 @@ test RecursiveAliasCycle {
         let function_name = "RecursiveAliasCycle";
         let test_name = "RecursiveAliasCycle";
         let params = runtime.get_test_params(function_name, test_name, &ctx, true)?;
-        let render_prompt_future =
-            runtime
-                .internal()
-                .render_prompt(function_name, &ctx, &params, None);
+        let render_prompt_future = runtime.render_prompt(function_name, &ctx, &params, None);
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
         Ok(())
@@ -638,8 +668,10 @@ test RecursiveAliasCycle {
             on_event,
             None,
             HashMap::new(),
+            None,
             TripWire::new(None),
             on_tick,
+            None,
         );
         let (res, call) = runtime.async_runtime.block_on(run_test_future);
 
@@ -1084,8 +1116,10 @@ test RecursiveAliasCycle {
             on_event,
             None,
             HashMap::new(),
+            None,
             TripWire::new(None),
             on_tick,
+            None,
         );
         let (res1, _) = runtime.async_runtime.block_on(run_test_future);
         // Get the first client instance
@@ -1101,8 +1135,10 @@ test RecursiveAliasCycle {
             on_event,
             None,
             env_vars2.clone(),
+            None,
             TripWire::new(None),
             on_tick,
+            None,
         );
         let (res2, _) = runtime.async_runtime.block_on(run_test_future);
         let client2 = runtime.llm_provider_from_function(

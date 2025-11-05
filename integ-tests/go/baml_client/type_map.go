@@ -21,6 +21,8 @@ import (
 )
 
 var typeMap = map[string]reflect.Type{
+	"TYPES.AddTodoItem":                          reflect.TypeOf(types.AddTodoItem{}),
+	"STREAM_TYPES.AddTodoItem":                   reflect.TypeOf(stream_types.AddTodoItem{}),
 	"TYPES.AnotherObject":                        reflect.TypeOf(types.AnotherObject{}),
 	"STREAM_TYPES.AnotherObject":                 reflect.TypeOf(stream_types.AnotherObject{}),
 	"TYPES.BigNumbers":                           reflect.TypeOf(types.BigNumbers{}),
@@ -63,6 +65,10 @@ var typeMap = map[string]reflect.Type{
 	"STREAM_TYPES.CustomTaskResult":              reflect.TypeOf(stream_types.CustomTaskResult{}),
 	"TYPES.Document1559":                         reflect.TypeOf(types.Document1559{}),
 	"STREAM_TYPES.Document1559":                  reflect.TypeOf(stream_types.Document1559{}),
+	"TYPES.DummyJsonTodo":                        reflect.TypeOf(types.DummyJsonTodo{}),
+	"STREAM_TYPES.DummyJsonTodo":                 reflect.TypeOf(stream_types.DummyJsonTodo{}),
+	"TYPES.DummyJsonTodoUpdate":                  reflect.TypeOf(types.DummyJsonTodoUpdate{}),
+	"STREAM_TYPES.DummyJsonTodoUpdate":           reflect.TypeOf(stream_types.DummyJsonTodoUpdate{}),
 	"TYPES.DummyOutput":                          reflect.TypeOf(types.DummyOutput{}),
 	"STREAM_TYPES.DummyOutput":                   reflect.TypeOf(stream_types.DummyOutput{}),
 	"TYPES.DynInputOutput":                       reflect.TypeOf(types.DynInputOutput{}),
@@ -209,6 +215,8 @@ var typeMap = map[string]reflect.Type{
 	"STREAM_TYPES.TestMemoryOutput":              reflect.TypeOf(stream_types.TestMemoryOutput{}),
 	"TYPES.TestOutputClass":                      reflect.TypeOf(types.TestOutputClass{}),
 	"STREAM_TYPES.TestOutputClass":               reflect.TypeOf(stream_types.TestOutputClass{}),
+	"TYPES.TodoMessageToUser":                    reflect.TypeOf(types.TodoMessageToUser{}),
+	"STREAM_TYPES.TodoMessageToUser":             reflect.TypeOf(stream_types.TodoMessageToUser{}),
 	"TYPES.Tree":                                 reflect.TypeOf(types.Tree{}),
 	"STREAM_TYPES.Tree":                          reflect.TypeOf(stream_types.Tree{}),
 	"TYPES.TwoStoriesOneTitle":                   reflect.TypeOf(types.TwoStoriesOneTitle{}),
@@ -246,6 +254,7 @@ var typeMap = map[string]reflect.Type{
 	"TYPES.Tag":                       reflect.TypeOf(types.Tag("")),
 	"TYPES.TestEnum":                  reflect.TypeOf(types.TestEnum("")),
 
+	"TYPES.Union__AddTodoItem__TodoMessageToUser":                                   reflect.TypeOf(types.Union2AddTodoItemOrTodoMessageToUser{}),
 	"TYPES.Union__bool__float":                                                      reflect.TypeOf(types.Union2BoolOrFloat{}),
 	"TYPES.Union__bool__string":                                                     reflect.TypeOf(types.Union2BoolOrString{}),
 	"TYPES.Union__Earthling__Martian":                                               reflect.TypeOf(types.Union2EarthlingOrMartian{}),
@@ -274,6 +283,7 @@ var typeMap = map[string]reflect.Type{
 	"TYPES.Union__JsonArray__JsonObject__bool__float__int__string":                  reflect.TypeOf(types.Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString{}),
 	"TYPES.Union__List__string__Map__string_List__string__bool__float__int__string": reflect.TypeOf(types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString{}),
 
+	"STREAM_TYPES.Union__AddTodoItem__TodoMessageToUser":                   reflect.TypeOf(stream_types.Union2AddTodoItemOrTodoMessageToUser{}),
 	"STREAM_TYPES.Union__Earthling__Martian":                               reflect.TypeOf(stream_types.Union2EarthlingOrMartian{}),
 	"STREAM_TYPES.Union__EmailAddress__PhoneNumber":                        reflect.TypeOf(stream_types.Union2EmailAddressOrPhoneNumber{}),
 	"STREAM_TYPES.Union__Event__Resume":                                    reflect.TypeOf(stream_types.Union2EventOrResume{}),
@@ -307,6 +317,7 @@ var typeMap = map[string]reflect.Type{
 	"TYPES.RecursiveListAlias": reflect.TypeOf([]any{}),
 	"TYPES.RecursiveMapAlias":  reflect.TypeOf(map[string]any{}),
 	"TYPES.RecursiveUnion":     reflect.TypeOf(types.Union2MapStringKeyRecursiveUnionValueOrString{}),
+	"TYPES.TodoTool":           reflect.TypeOf(types.Union2AddTodoItemOrTodoMessageToUser{}),
 
 	"STREAM_TYPES.Amount":             reflect.TypeOf((*int64)(nil)),
 	"STREAM_TYPES.Combination":        reflect.TypeOf((*types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)(nil)),
@@ -328,4 +339,5 @@ var typeMap = map[string]reflect.Type{
 	"STREAM_TYPES.RecursiveListAlias": reflect.TypeOf([]any{}),
 	"STREAM_TYPES.RecursiveMapAlias":  reflect.TypeOf(map[string]any{}),
 	"STREAM_TYPES.RecursiveUnion":     reflect.TypeOf((*stream_types.Union2MapStringKeyRecursiveUnionValueOrString)(nil)),
+	"STREAM_TYPES.TodoTool":           reflect.TypeOf((*stream_types.Union2AddTodoItemOrTodoMessageToUser)(nil)),
 }

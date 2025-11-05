@@ -28,6 +28,9 @@ pub(crate) enum Commands {
     #[command(about = "Runs all generators in the baml_src directory")]
     Generate(baml_runtime::cli::generate::GenerateArgs),
 
+    #[command(about = "Checks for errors and warnings in the baml_src directory")]
+    Check(baml_runtime::cli::check::CheckArgs),
+
     #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     Serve(baml_runtime::cli::serve::ServeArgs),
 
@@ -98,6 +101,16 @@ impl RuntimeCli {
 
         match &mut self.command {
             Commands::Generate(args) => {
+                args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
+                match args.run(defaults, feature_flags.clone()) {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        Ok(crate::ExitCode::Other)
+                    }
+                }
+            }
+            Commands::Check(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 match args.run(defaults, feature_flags.clone()) {
                     Ok(()) => Ok(crate::ExitCode::Success),

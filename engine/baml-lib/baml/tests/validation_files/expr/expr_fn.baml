@@ -3,7 +3,7 @@ function Foo(x: int) -> int {
     x
 }
 
-fn Bar(x: int) -> int {
+function Bar(x: int) -> int {
     // test
     let y = x;
     x

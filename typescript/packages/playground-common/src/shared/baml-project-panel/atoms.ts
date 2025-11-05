@@ -1,5 +1,6 @@
-import { atom, useAtomValue } from 'jotai';
+import { atom, getDefaultStore, useAtomValue, useSetAtom } from 'jotai';
 import { atomFamily, atomWithStorage } from 'jotai/utils';
+import { useEffect } from 'react';
 
 import type {
   WasmDiagnosticError,
@@ -14,10 +15,92 @@ import { vscode } from './vscode';
 import { apiKeysAtom } from '../../components/api-keys-dialog/atoms';
 import { standaloneFeatureFlagsAtom, isVSCodeEnvironment } from './feature-flags';
 
+// ============================================================================
+// WASM Panic Handling
+// ============================================================================
+
+export interface WasmPanicState {
+  msg: string;
+  timestamp: number;
+}
+
+// Atom to track WASM panics
+export const wasmPanicAtom = atom<WasmPanicState | null>(null);
+
+// Global setter function that will be wired up by useWasmPanicHandler
+let globalSetPanic: ((msg: string) => void) | null = null;
+
+// Set up the global panic handler BEFORE WASM loads
+// This must be defined before wasmAtomAsync is evaluated
+if (typeof window !== 'undefined') {
+  (window as any).__onWasmPanic = (msg: string) => {
+    console.error('[WASM Panic]', msg);
+
+    // Call the setter if it's been wired up
+    if (globalSetPanic) {
+      globalSetPanic(msg);
+    } else {
+      console.warn('[WASM Panic] Handler called but atom setter not yet initialized');
+    }
+  };
+}
+
+/**
+ * Hook to wire up the WASM panic handler to the Jotai atom.
+ * Call this once in your root component to enable panic state tracking.
+ *
+ * @example
+ * ```tsx
+ * function App() {
+ *   useWasmPanicHandler();
+ *   return <YourApp />;
+ * }
+ * ```
+ */
+export const useWasmPanicHandler = () => {
+  const setPanic = useSetAtom(wasmPanicAtom);
+
+  useEffect(() => {
+    // Wire up the global setter with telemetry
+    globalSetPanic = (msg: string) => {
+      const timestamp = Date.now();
+      setPanic({ msg, timestamp });
+
+      // Send telemetry about the panic
+      vscode.sendTelemetry({
+        action: 'wasm_panic',
+        data: {
+          panic_message: msg,
+          timestamp,
+          during_test_execution: false, // Will be overridden in test-runner if during test
+        },
+      });
+    };
+
+    // Cleanup on unmount
+    return () => {
+      globalSetPanic = null;
+    };
+  }, [setPanic]);
+};
+
+/**
+ * Hook to clear panic state.
+ * Use this to dismiss panic notifications in your UI.
+ */
+export const useClearWasmPanic = () => {
+  const setPanic = useSetAtom(wasmPanicAtom);
+  return () => setPanic(null);
+};
+
+// ============================================================================
+// Feature Flags & Runtime
+// ============================================================================
+
 // Unified beta feature atom that works in both VS Code and standalone environments
 export const betaFeatureEnabledAtom = atom((get) => {
   const isInVSCode = isVSCodeEnvironment();
-  
+
   if (isInVSCode) {
     // In VSCode: try vscodeSettingsAtom, then bamlConfig fallback
     const vscodeSettings = get(vscodeSettingsAtom);
@@ -34,12 +117,18 @@ export const betaFeatureEnabledAtom = atom((get) => {
   }
 });
 
-const wasmAtomAsync = atom(async () => {
+
+let wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build');
   // Enable WASM logging for debugging
   wasm.init_js_callback_bridge(vscode.loadAwsCreds, vscode.loadGcpCreds);
   return wasm;
-});
+},
+
+  async (_get, set, newValue: null) => {
+    set(wasmAtomAsync, null)
+  }
+);
 
 export const wasmAtom = unwrap(wasmAtomAsync);
 
@@ -105,7 +194,7 @@ export const runtimeAtom = atom<{
     // Determine environment and get appropriate feature flags
     const isInVSCode = isVSCodeEnvironment();
     let featureFlags: string[];
-    
+
     if (isInVSCode) {
       // In VSCode: try vscodeSettingsAtom, then bamlConfig fallback
       const vscodeSettings = get(vscodeSettingsAtom);

@@ -133,6 +133,41 @@ impl Type {
         }
     }
 
+    /// Used for type narrowing.
+    ///
+    /// Basic example:
+    ///
+    /// ```ignore
+    /// class UserMessage {
+    ///     kind "user_message"
+    ///     user_message String
+    /// }
+    ///
+    /// class AssistantMessage {
+    ///     kind "assistant_message"
+    ///     assistant_message String
+    /// }
+    /// ```
+    ///
+    /// Now on narrowing:
+    ///
+    /// ```ignore
+    /// {% if message.kind == "user_message" %}
+    /// ```
+    pub fn equals_ignoring_literal_values(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Type::Literal(left), Type::Literal(right)) => matches!(
+                (left, right),
+                (LiteralValue::Int(_), LiteralValue::Int(_))
+                    | (LiteralValue::Bool(_), LiteralValue::Bool(_))
+                    | (LiteralValue::String(_), LiteralValue::String(_))
+            ),
+
+            // Fallback to PartialEq
+            _ => self == other,
+        }
+    }
+
     // pub fn matches(&self, r: &Self) -> bool {
     //     match (self, r) {
     //         (Self::Unknown, Self::Unknown) => true,

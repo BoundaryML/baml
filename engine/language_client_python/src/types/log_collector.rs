@@ -31,6 +31,11 @@ impl Collector {
         }
     }
 
+    /// Clear all tracked logs from this collector
+    pub fn clear(&self) {
+        self.inner.clear();
+    }
+
     /// For Python: `repr(log_collector)`
     fn __repr__(&self) -> String {
         let logs = self.logs();
@@ -88,7 +93,7 @@ impl Collector {
     #[staticmethod]
     pub fn __print_storage() {
         let tracer = BAML_TRACER.lock().unwrap();
-        println!("Storage: {tracer:#?}");
+        eprintln!("Storage: {tracer:#?}");
     }
 }
 
@@ -184,6 +189,17 @@ impl FunctionLog {
         let dict = PyDict::new(py);
         for (k, v) in meta.iter() {
             // Convert each value to a PyObject as appropriate
+            dict.set_item(k, serde_value_to_py(py, v)?)?;
+        }
+        Ok(dict.into())
+    }
+
+    /// pyi: @property def tags -> Dict[str, Any]
+    #[getter]
+    pub fn tags<'py>(&self, py: Python<'py>) -> PyResult<PyObject> {
+        let tags = self.inner.lock().unwrap().tags();
+        let dict = PyDict::new(py);
+        for (k, v) in tags.iter() {
             dict.set_item(k, serde_value_to_py(py, v)?)?;
         }
         Ok(dict.into())

@@ -1,4 +1,4 @@
-fn Factorial(limit: int) -> int {
+function Factorial(limit: int) -> int {
 
 	let result = 1;
 
@@ -14,14 +14,14 @@ fn Factorial(limit: int) -> int {
 	result
 }
 
-fn OutsideLoop() -> int {
+function OutsideLoop() -> int {
 
     break;
 
     3
 }
 
-fn Nested() -> int {
+function Nested() -> int {
     let a = 5;
     while (true) {
         while (true) {

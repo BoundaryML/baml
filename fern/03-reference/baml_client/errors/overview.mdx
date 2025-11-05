@@ -24,6 +24,7 @@ class BamlValidationError extends Error {
   message: string
   prompt: string
   raw_output: string
+  detailed_message: string
 }
 
 class BamlClientFinishReasonError extends Error {
@@ -31,12 +32,14 @@ class BamlClientFinishReasonError extends Error {
   message: string
   prompt: string
   raw_output: string
+  detailed_message: string
 }
 
 class BamlAbortError extends Error {
   type: 'BamlAbortError'
   message: string
   reason?: any
+  detailed_message: string
 }
 ```
 </CodeBlocks>
@@ -51,6 +54,16 @@ Thrown when an LLM terminates with a disallowed finish reason. Includes the orig
 
 ### [BamlAbortError](./baml-abort-error)
 Thrown when a BAML operation is cancelled via an abort controller. Contains an optional reason for the cancellation.
+
+## Fallback Error Aggregation
+
+When using [fallback clients](/ref/llm-client-strategies/fallback) or clients with [retry policies](/ref/llm-client-strategies/retry-policy), BAML attempts multiple client calls before finally failing. In these cases:
+
+- The error **type** corresponds to the final (last) failed attempt
+- The `message` field contains the error message from the final attempt
+- The `detailed_message` field contains the **complete history** of all failed attempts
+
+This allows you to debug the entire fallback chain while still getting a specific error type for the final failure.
 
 ## Type Guards
 
@@ -88,6 +101,13 @@ All BAML error classes include:
   type="string"
 >
   Human-readable error message describing the failure.
+</ParamField>
+
+<ParamField
+  path="detailed_message"
+  type="string"
+>
+  Comprehensive error information that includes the complete history of all failed attempts when using fallback clients or retry policies. For single attempts, this typically contains the same information as `message` but may include additional debugging details.
 </ParamField>
 
 For detailed information about each error type, refer to their individual reference pages.

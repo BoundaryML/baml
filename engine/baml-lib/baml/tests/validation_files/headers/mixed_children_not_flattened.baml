@@ -1,13 +1,10 @@
-# Parent
-fn MixedChildrenNotFlattened() -> string {
-    ## MD Child
+//# Parent
+function MixedChildrenNotFlattened() -> string {
+    //## MD Child
     let items = [42];
-    for (item in items) {
-        ### Loop Child
-        ### And stuff
+    for (let item in items) {
+        //# Loop Child
         item
     }
     "done"
 }
-
-

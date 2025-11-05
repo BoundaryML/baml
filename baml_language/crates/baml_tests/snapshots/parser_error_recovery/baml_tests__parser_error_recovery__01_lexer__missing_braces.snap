@@ -1,0 +1,15 @@
+---
+source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+expression: output
+---
+Word "class"
+Word "User"
+LBrace "{"
+Word "name"
+Word "string"
+Word "class"
+Word "Another"
+LBrace "{"
+Word "field"
+Word "int"
+RBrace "}"

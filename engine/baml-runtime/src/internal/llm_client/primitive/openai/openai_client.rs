@@ -26,7 +26,7 @@ use crate::{
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
         ModelFeatures, ResolveMediaUrls,
     },
-    request::create_client,
+    request::{create_client, create_http_client},
     RuntimeContext,
 };
 
@@ -147,12 +147,23 @@ impl ProviderStrategy {
                                         .iter()
                                         .map(|part| match part {
                                             ChatMessagePart::Text(text) => {
+                                                let content_type = if msg.role == "assistant" {
+                                                    "output_text"
+                                                } else {
+                                                    "input_text"
+                                                };
                                                 Ok(json!({
-                                                    "type": if msg.role == "assistant" { "output_text" } else { "input_text" },
+                                                    "type": content_type,
                                                     "text": text
                                                 }))
                                             }
                                             ChatMessagePart::Media(media) => {
+                                                // For assistant role, we only support text outputs in Responses API
+                                                if msg.role == "assistant" {
+                                                    anyhow::bail!(
+                                                        "BAML internal error (openai-responses): assistant messages must be text; media not supported for assistant in Responses API"
+                                                    );
+                                                }
                                                 match media.media_type {
                                                     baml_types::BamlMediaType::Image => {
                                                         let image_url = match &media.content {
@@ -165,7 +176,8 @@ impl ProviderStrategy {
                                                             }
                                                         };
                                                         Ok(json!({
-                                                            "type": if msg.role == "assistant" { "output_image" } else { "input_image" },
+                                                            "type": "input_image",
+                                                            "detail": "auto",
                                                             "image_url": image_url
                                                         }))
                                                     }
@@ -177,7 +189,7 @@ impl ProviderStrategy {
                                                                     .strip_prefix("audio/")
                                                                     .unwrap_or(&mime_type);
                                                                 Ok(json!({
-                                                                    "type": if msg.role == "assistant" { "output_audio" } else { "input_audio" },
+                                                                    "type": "input_audio",
                                                                     "input_audio": {
                                                                         "data": b64_media.base64,
                                                                         "format": format
@@ -193,8 +205,9 @@ impl ProviderStrategy {
                                                         match &media.content {
                                                             baml_types::BamlMediaContent::Url(url_content) => {
                                                                 Ok(json!({
-                                                                    "type": if msg.role == "assistant" { "output_file" } else { "input_file" },
-                                                                    "file_url": url_content.url
+                                                                    "type": "input_file",
+                                                                    "file_url": url_content.url,
+                                                                    "filename": "document.pdf"
                                                                 }))
                                                             }
                                                             baml_types::BamlMediaContent::File(file_content) => {
@@ -202,8 +215,9 @@ impl ProviderStrategy {
                                                             }
                                                             baml_types::BamlMediaContent::Base64(b64_media) => {
                                                                 Ok(json!({
-                                                                    "type": if msg.role == "assistant" { "output_file" } else { "input_file" },
-                                                                    "file_url": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                                                                    "type": "input_file",
+                                                                    "file_data": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64),
+                                                                    "filename": "document.pdf"
                                                                 }))
                                                             }
                                                         }
@@ -217,13 +231,23 @@ impl ProviderStrategy {
                                                 // Recursively handle the inner part, ignoring metadata for now
                                                 match inner_part.as_ref() {
                                                     ChatMessagePart::Text(text) => {
+                                                        let content_type = if msg.role == "assistant" {
+                                                            "output_text"
+                                                        } else {
+                                                            "input_text"
+                                                        };
                                                         Ok(json!({
-                                                            "type": if msg.role == "assistant" { "output_text" } else { "input_text" },
+                                                            "type": content_type,
                                                             "text": text
                                                         }))
                                                     }
                                                     ChatMessagePart::Media(media) => {
                                                         // Handle media same as above - could refactor into helper function
+                                                        if msg.role == "assistant" {
+                                                            anyhow::bail!(
+                                                                "BAML internal error (openai-responses): assistant messages must be text; media not supported for assistant in Responses API"
+                                                            );
+                                                        }
                                                         match media.media_type {
                                                             baml_types::BamlMediaType::Image => {
                                                                 let image_url = match &media.content {
@@ -236,7 +260,8 @@ impl ProviderStrategy {
                                                                     }
                                                                 };
                                                                 Ok(json!({
-                                                                    "type": if msg.role == "assistant" { "output_image" } else { "input_image" },
+                                                                    "type": "input_image",
+                                                                    "detail": "auto",
                                                                     "image_url": image_url
                                                                 }))
                                                             }
@@ -405,6 +430,15 @@ impl RequestBuilder for OpenAIClient {
 
         let mut req = self.client.post(endpoint);
 
+        // Apply request timeout if configured
+        // Defaults were already applied during client creation
+        if let Some(ms) = self.properties.http_config.request_timeout_ms {
+            if ms > 0 {
+                req = req.timeout(std::time::Duration::from_millis(ms));
+            }
+            // If ms == 0, don't set timeout (infinite timeout)
+        }
+
         if !self.properties.query_params.is_empty() {
             req = req.query(&self.properties.query_params);
         }
@@ -431,6 +465,10 @@ impl RequestBuilder for OpenAIClient {
 
     fn request_options(&self) -> &BamlMap<String, serde_json::Value> {
         &self.properties.properties
+    }
+
+    fn http_config(&self) -> &internal_llm_client::HttpConfig {
+        &self.properties.http_config
     }
 }
 
@@ -459,11 +497,7 @@ impl WithStreamChat for OpenAIClient {
 
 macro_rules! make_openai_client {
     ($client:ident, $properties:ident, $provider:expr, dynamic) => {{
-        let resolve_pdf_urls = if $provider == "openai-responses" {
-            ResolveMediaUrls::Never
-        } else {
-            ResolveMediaUrls::Always
-        };
+        let http_client = create_http_client(&$properties.http_config)?;
         Ok(Self {
             name: $client.name.clone(),
             provider: $provider.into(),
@@ -479,23 +513,35 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: $properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_image_urls: $properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_pdf_urls: $properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_video_urls: $properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
             properties: $properties,
             retry_policy: $client.retry_policy.clone(),
-            client: create_client()?,
+            client: http_client,
         })
     }};
     ($client:ident, $properties:ident, $provider:expr) => {{
-        let resolve_pdf_urls = if $provider == "openai-responses" {
-            ResolveMediaUrls::Never
-        } else {
-            ResolveMediaUrls::Always
-        };
+        let http_client = create_http_client(&$properties.http_config)?;
         Ok(Self {
             name: $client.name().into(),
             provider: $provider.into(),
@@ -511,10 +557,26 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: $properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendBase64),
+                resolve_image_urls: $properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_pdf_urls: $properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_video_urls: $properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
             properties: $properties,
@@ -523,7 +585,7 @@ macro_rules! make_openai_client {
                 .retry_policy_id
                 .as_ref()
                 .map(|s| s.to_string()),
-            client: create_client()?,
+            client: http_client,
         })
     }};
 }
@@ -673,10 +735,28 @@ impl ToProviderMessage for OpenAIClient {
                             }),
                         );
                     }
-                    BamlMediaContent::Url(_) => {
-                        anyhow::bail!(
-                            "BAML internal error (openai): Audio content is a URL. Expected Base64 for '{}' type due to client's ResolveMediaUrls::Always setting. The URL should have been resolved to base64 before this stage.",
-                            type_value
+                    BamlMediaContent::Url(url_content) => {
+                        // note: openai only supports mp3/wav for audio input
+                        // but we can still send other formats and allow openai to handle
+                        // the conversion
+                        let extension = url_content.url.split('.').next_back();
+
+                        // use mime type if it exists otherwise use extension, otherwise error.
+                        let extension = match media.mime_type.as_deref() {
+                            Some(mime) => mime,
+                            None => match extension {
+                                Some(ext) => ext,
+                                None => anyhow::bail!("BAML internal error (openai): audio url has no extension and no mime type"),
+                            },
+                        };
+
+                        let format_str = match extension {
+                            "mpeg" => "mp3",
+                            other => other,
+                        };
+                        content.insert(
+                            payload_key.into(),
+                            json!({ "data": url_content.url, "format": format_str }),
                         );
                     }
                     BamlMediaContent::File(_) => {
@@ -698,7 +778,8 @@ impl ToProviderMessage for OpenAIClient {
                             payload_key.into(),
                             json!({
                                 "type": "input_file",
-                                "file_url": url_content.url
+                                "file_url": url_content.url,
+                                "filename": "document.pdf"
                             }),
                         );
                     }
@@ -787,7 +868,7 @@ fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, se
 mod tests {
     use indexmap::IndexMap;
     use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
-    use internal_llm_client::{RolesSelection, SupportedRequestModes};
+    use internal_llm_client::{openai, RolesSelection, SupportedRequestModes};
 
     use super::*;
 
@@ -810,10 +891,10 @@ mod tests {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::SendBase64,
+                resolve_image_urls: ResolveMediaUrls::SendUrl,
+                resolve_pdf_urls: ResolveMediaUrls::SendUrl,
+                resolve_video_urls: ResolveMediaUrls::SendUrl,
                 allowed_metadata: AllowedRoleMetadata::All,
             },
             properties: ResolvedOpenAI {
@@ -828,6 +909,8 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAIResponses,
+                media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -862,10 +945,10 @@ mod tests {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_audio_urls: ResolveMediaUrls::Always,
-                resolve_image_urls: ResolveMediaUrls::Never,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::SendBase64,
+                resolve_image_urls: ResolveMediaUrls::SendUrl,
+                resolve_pdf_urls: ResolveMediaUrls::SendUrl,
+                resolve_video_urls: ResolveMediaUrls::SendUrl,
                 allowed_metadata: AllowedRoleMetadata::All,
             },
             properties: ResolvedOpenAI {
@@ -880,6 +963,8 @@ mod tests {
                 proxy_url: None,
                 finish_reason_filter: FinishReasonFilter::All,
                 client_response_type: ResponseType::OpenAI,
+                media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
             },
             client: reqwest::Client::new(),
         };
@@ -915,5 +1000,105 @@ mod tests {
         // Test completions endpoint
         let endpoint = strategy.get_endpoint("https://api.openai.com/v1", true);
         assert_eq!(endpoint, "https://api.openai.com/v1/completions");
+    }
+
+    #[test]
+    fn test_responses_api_builds_input_message_with_text_and_file() {
+        let strategy = ProviderStrategy::ResponsesApi;
+
+        // Properties include model
+        let mut props = BamlMap::new();
+        props.insert("model".into(), json!("gpt-5-mini"));
+
+        // Build a user message with text and file (PDF url)
+        let msg = RenderedChatMessage {
+            role: "user".to_string(),
+            allow_duplicate_role: false,
+            parts: vec![
+                ChatMessagePart::Text("what is in this file?".to_string()),
+                ChatMessagePart::Media(baml_types::BamlMedia::url(
+                    BamlMediaType::Pdf,
+                    "https://www.berkshirehathaway.com/letters/2024ltr.pdf".to_string(),
+                    Some("application/pdf".to_string()),
+                )),
+            ],
+        };
+
+        // chat_converter is not used in ResponsesApi branch; construct a minimal client
+        let responses_client = OpenAIClient {
+            name: "test".to_string(),
+            provider: "openai-responses".to_string(),
+            retry_policy: None,
+            context: RenderContext_Client {
+                name: "test".to_string(),
+                provider: "openai-responses".to_string(),
+                default_role: "user".to_string(),
+                allowed_roles: vec!["user".to_string(), "assistant".to_string()],
+                remap_role: HashMap::new(),
+                options: IndexMap::new(),
+            },
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                max_one_system_prompt: false,
+                resolve_audio_urls: ResolveMediaUrls::SendBase64,
+                resolve_image_urls: ResolveMediaUrls::SendUrl,
+                resolve_pdf_urls: ResolveMediaUrls::SendUrl,
+                resolve_video_urls: ResolveMediaUrls::SendUrl,
+                allowed_metadata: AllowedRoleMetadata::All,
+            },
+            properties: ResolvedOpenAI {
+                base_url: "https://api.openai.com/v1".to_string(),
+                api_key: None,
+                role_selection: RolesSelection::default(),
+                allowed_metadata: AllowedRoleMetadata::All,
+                supported_request_modes: SupportedRequestModes::default(),
+                headers: IndexMap::new(),
+                properties: BamlMap::new(),
+                query_params: IndexMap::new(),
+                proxy_url: None,
+                finish_reason_filter: FinishReasonFilter::All,
+                client_response_type: ResponseType::OpenAIResponses,
+                media_url_handler: internal_llm_client::MediaUrlHandler::default(),
+                http_config: Default::default(),
+            },
+            client: reqwest::Client::new(),
+        };
+
+        let body_value = strategy
+            .build_body(either::Either::Right(&[msg]), &props, &responses_client)
+            .expect("should build body");
+
+        let obj = body_value.as_object().expect("body should be an object");
+        assert_eq!(obj.get("model"), Some(&json!("gpt-5-mini")));
+
+        let input = obj
+            .get("input")
+            .and_then(|v| v.as_array())
+            .expect("input should be array");
+        assert_eq!(input.len(), 1);
+
+        let first_msg = input[0].as_object().expect("message should be object");
+        assert_eq!(first_msg.get("role"), Some(&json!("user")));
+        let content = first_msg
+            .get("content")
+            .and_then(|v| v.as_array())
+            .expect("content should be array");
+        assert_eq!(content.len(), 2);
+
+        // Validate text part
+        let t = content[0].as_object().expect("text part object");
+        assert_eq!(t.get("type"), Some(&json!("input_text")));
+        assert_eq!(t.get("text"), Some(&json!("what is in this file?")));
+
+        // Validate file part
+        let f = content[1].as_object().expect("file part object");
+        assert_eq!(f.get("type"), Some(&json!("input_file")));
+        assert_eq!(
+            f.get("file_url"),
+            Some(&json!(
+                "https://www.berkshirehathaway.com/letters/2024ltr.pdf"
+            ))
+        );
     }
 }

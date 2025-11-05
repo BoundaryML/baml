@@ -3,9 +3,13 @@
 use baml_types::ir_type::TypeIR;
 use pretty::RcDoc;
 
-use crate::hir::{
-    AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant, ExprFunction,
-    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg, UnaryOperator,
+use crate::{
+    hir::{
+        AssignOp, BinaryOperator, Block, Class, ClassConstructorField, Enum, EnumVariant,
+        ExprFunction, Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg,
+        UnaryOperator,
+    },
+    watch::{WatchSpec, WatchWhen},
 };
 
 impl Hir {
@@ -20,13 +24,17 @@ impl Hir {
         for func in &self.llm_functions {
             docs.push(func.to_doc());
         }
-        // Add classes
+        // Add classes (excluding builtins)
         for class in &self.classes {
-            docs.push(class.to_doc());
+            if !crate::builtin::is_builtin_class(&class.name) {
+                docs.push(class.to_doc());
+            }
         }
-        // Add enums
+        // Add enums (excluding builtins)
         for enum_def in &self.enums {
-            docs.push(enum_def.to_doc());
+            if !crate::builtin::is_builtin_enum(&enum_def.name) {
+                docs.push(enum_def.to_doc());
+            }
         }
         if docs.is_empty() {
             RcDoc::nil()
@@ -124,13 +132,39 @@ impl TypeDocumentRender for TypeIR {
 impl Statement {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         match self {
-            Statement::Let { name, value, .. } => RcDoc::text("let")
+            Statement::AnnotatedStatement { headers, statement } => {
+                let mut doc = RcDoc::text("//#")
+                    .append(RcDoc::intersperse(
+                        headers.iter().map(|h| RcDoc::text(h.clone())),
+                        RcDoc::text(" "),
+                    ))
+                    .append(RcDoc::text("#//"));
+                if let Some(statement) = statement {
+                    doc = doc.append(statement.to_doc().nest(2));
+                }
+                doc
+            }
+            Statement::Let {
+                name,
+                value,
+                annotated_type,
+                watch,
+                ..
+            } => RcDoc::text("let")
                 .append(RcDoc::space())
                 .append(RcDoc::text(name.clone()))
+                .append(match annotated_type {
+                    Some(t) => RcDoc::text(": ").append(t.to_doc()),
+                    None => RcDoc::nil(),
+                })
                 .append(RcDoc::space())
                 .append(RcDoc::text("="))
                 .append(RcDoc::space())
                 .append(value.to_doc())
+                .append(match watch {
+                    Some(watch) => watch.to_doc(),
+                    None => RcDoc::nil(),
+                })
                 .append(RcDoc::text(";")),
             Statement::Declare { name, .. } => RcDoc::text("var")
                 .append(RcDoc::space())
@@ -155,13 +189,27 @@ impl Statement {
                 .append(RcDoc::space())
                 .append(value.to_doc())
                 .append(RcDoc::text(";")),
-            Statement::DeclareAndAssign { name, value, .. } => RcDoc::text("let")
+            Statement::DeclareAndAssign {
+                name,
+                value,
+                annotated_type,
+                watch,
+                ..
+            } => RcDoc::text("let")
                 .append(RcDoc::space())
                 .append(RcDoc::text(name.clone()))
+                .append(match annotated_type {
+                    Some(t) => RcDoc::text(": ").append(t.to_doc()),
+                    None => RcDoc::nil(),
+                })
                 .append(RcDoc::space())
                 .append(RcDoc::text("="))
                 .append(RcDoc::space())
                 .append(value.to_doc())
+                .append(match watch {
+                    Some(watch) => watch.to_doc(),
+                    None => RcDoc::nil(),
+                })
                 .append(RcDoc::text(";")),
             Statement::Return { expr, .. } => RcDoc::text("return")
                 .append(RcDoc::space())
@@ -237,6 +285,32 @@ impl Statement {
                     .append(RcDoc::space())
                     .append(block)
                     .append(RcDoc::text("}"))
+            }
+            Statement::WatchOptions {
+                variable,
+                channel,
+                when,
+                ..
+            } => {
+                let mut doc = RcDoc::text(variable.clone()).append(RcDoc::text(".$watch.options("));
+
+                let mut parts = vec![];
+                if let Some(n) = channel {
+                    parts.push(
+                        RcDoc::text("name: \"")
+                            .append(RcDoc::text(n.clone()))
+                            .append(RcDoc::text("\"")),
+                    );
+                }
+                if let Some(w) = when {
+                    parts.push(RcDoc::text("when: ").append(RcDoc::text("when")));
+                }
+
+                doc = doc.append(RcDoc::intersperse(parts, RcDoc::text(", ")));
+                doc.append(RcDoc::text(");"))
+            }
+            Statement::WatchNotify { variable, .. } => {
+                RcDoc::text(variable.clone()).append(RcDoc::text(".$watch.notify();"))
             }
         }
     }
@@ -657,5 +731,25 @@ impl UnaryOperator {
 impl AssignOp {
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
         RcDoc::text(self.to_string())
+    }
+}
+
+impl WatchSpec {
+    pub fn to_doc(&self) -> RcDoc<'static, ()> {
+        let mut args: Vec<String> = Vec::new();
+        match &self.when {
+            WatchWhen::Manual => args.push("when=manual".to_string()),
+            WatchWhen::Auto => {}
+            WatchWhen::Never => args.push("when=never".to_string()),
+            WatchWhen::FunctionName(fn_name) => args.push(format!("when={fn_name}")),
+        }
+        args.push(format!("name={}", self.name));
+        let args_doc = RcDoc::intersperse(args.iter().cloned().map(RcDoc::text), RcDoc::text(", "));
+        let doc = RcDoc::space().append(RcDoc::text("@watch"));
+        if args.is_empty() {
+            doc
+        } else {
+            doc.append(RcDoc::text("(").append(args_doc).append(RcDoc::text(")")))
+        }
     }
 }

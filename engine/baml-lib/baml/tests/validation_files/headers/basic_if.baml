@@ -1,18 +1,16 @@
 
-# Basic test
-fn BasicIf() -> string {
+//# Basic test
+function BasicIf() -> string {
     let x = 1;
 
-    # This is a named statement
+    //# This is a named statement
     let z = if (true) {
-        # Then Statement
+        //# Then Statement
         12
     } else {
-        # Else Statement
+        //# Else Statement
         13
     };
 
     z
 }
-
-

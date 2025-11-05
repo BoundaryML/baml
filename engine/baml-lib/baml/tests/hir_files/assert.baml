@@ -1,11 +1,11 @@
-fn assertOk() -> int {
+function assertOk() -> int {
 
 	assert 2 + 2 == 4;
 
 	3
 }
 
-fn assertNotOk() -> int {
+function assertNotOk() -> int {
 	assert 3 == 1;
 
 	2
@@ -21,14 +21,4 @@ fn assertNotOk() -> int {
 //   assert 3 == 1;
 //
 //   2
-// }
-//
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
-// }
-//
-// enum std::HttpMethod {
-//   Get
 // }

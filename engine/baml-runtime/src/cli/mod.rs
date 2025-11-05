@@ -1,3 +1,4 @@
+pub mod check;
 pub mod dev;
 mod dotenv;
 pub mod dump_intermediate;

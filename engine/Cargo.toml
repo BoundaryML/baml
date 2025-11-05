@@ -12,7 +12,6 @@ members = [
   "bstd",
   "cli",
   "tools",
-  "language_client_codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
@@ -42,9 +41,7 @@ default-members = [
   "bstd",
   "cli",
   "language_client_cffi",
-  "language_client_codegen",
   "language_client_python",
-  "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
   "language_server",
   "generators/utils/*",
@@ -67,7 +64,7 @@ bytes = "1.6.0"
 cfg-if = "1.0.0"
 chrono = "0.4.38"
 clap = { version = "4.4.6", features = ["cargo", "derive"] }
-colored = { version = "2.1.0", default-features = true }
+colored = { version = "2.1.0" }
 console_log = "1"
 cowstr = { version = "1.3.0", features = ["serde"] }
 dashmap = "5.5.3"
@@ -84,11 +81,11 @@ eventsource-stream = "0.2.3"
 expect-test = "1.5.0"
 filetime = "0.2.25"
 futures = { version = "0.3.30", features = ["executor"] }
+google-cloud-auth = "1.0.0"
 http = "1.1.0"
 http-body = "1.0.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.5"
-internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
 playground-server = { path = "playground-server" }
@@ -161,19 +158,37 @@ pin-project-lite = "0.2.14"
 url = "2.5.2"
 uuid = { version = "1.8.0", features = ["v4", "v7", "serde"] }
 walkdir = "2.5.0"
-wasm-bindgen-test = "0.3.45"
-web-time = "1.1.0"
 tokio = { version = "1", default-features = false, features = [
   "macros",
   "time",
 ] }
 
+js-sys = "=0.3.78"
+wasm-bindgen = "=0.2.101"
+wasm-bindgen-futures = "0.4.42"
+wasm-bindgen-test = "0.3.45"
+web-sys = { version = "0.3.78", features = [
+  "Crypto",
+  "CryptoKey",
+  "Headers",
+  "Request",
+  "RequestInit",
+  "Response",
+  "RequestMode",
+  "SubtleCrypto",
+  "Window",
+] }
+web-time = "1.1.0"
+
 [workspace.package]
-version = "0.207.1"
+version = "0.212.0"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"
 license-file = "LICENSE"
+
+[workspace.metadata.crane]
+name = "baml-workspace"
 
 [workspace.metadata.workspaces]
 allow_branch = "canary"

@@ -260,7 +260,16 @@ impl SerializeType for TypeTS {
             TypeTS::TypeAlias { package, name, .. } => {
                 format!("{}{}", package.relative_from(pkg), name)
             }
-            TypeTS::Union { .. } => self.default_name_within_union(),
+            TypeTS::Union { variants, .. } => {
+                let mut parts: Vec<String> = Vec::with_capacity(variants.len());
+                for variant in variants.iter() {
+                    let rendered = variant.serialize_type(pkg);
+                    if !parts.contains(&rendered) {
+                        parts.push(rendered);
+                    }
+                }
+                parts.join(" | ")
+            }
             TypeTS::Enum {
                 package,
                 name,
@@ -274,7 +283,7 @@ impl SerializeType for TypeTS {
                 }
             }
             TypeTS::List(inner, _) => match &**inner {
-                TypeTS::Union { .. } => format!("({})[]", inner.default_name_within_union()),
+                TypeTS::Union { .. } => format!("({})[]", inner.serialize_type(pkg)),
                 _ => {
                     if inner.meta().is_optional() {
                         format!("({})[]", inner.serialize_type(pkg))

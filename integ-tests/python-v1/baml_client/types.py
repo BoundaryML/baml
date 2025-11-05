@@ -154,8 +154,16 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (101)
+# Generated classes (105)
 # #########################################################################
+
+class AddTodoItem(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    type: typing_extensions.Literal['add_todo_item']
+    item: str
+    time: str
+    description: str
 
 class AnotherObject(BaseModel):
     class Config:
@@ -295,6 +303,21 @@ class Document1559(BaseModel):
         arbitrary_types_allowed = True
     client_details: "ClientDetails1559"
     notes: typing.List["Note1599"]
+
+class DummyJsonTodo(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    id: int
+    todo: str
+    completed: bool
+    userId: int
+
+class DummyJsonTodoUpdate(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    todo: str
+    completed: bool
+    userId: int
 
 class DummyOutput(BaseModel):
     class Config:
@@ -769,6 +792,12 @@ class TestOutputClass(BaseModel):
     prop1: str
     prop2: int
 
+class TodoMessageToUser(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    type: typing_extensions.Literal['todo_message_to_user']
+    message: str
+
 class Tree(BaseModel):
     class Config:
         arbitrary_types_allowed = True
@@ -815,7 +844,7 @@ class WithReasoning(BaseModel):
     reasoning: str
 
 # #########################################################################
-# Generated type aliases (20)
+# Generated type aliases (21)
 # #########################################################################
 
 
@@ -877,3 +906,6 @@ RecursiveMapAlias: typing_extensions.TypeAlias = typing.Dict[str, "RecursiveMapA
 
 
 RecursiveUnion: typing_extensions.TypeAlias = typing.Union[str, typing.Dict[str, "RecursiveUnion"]]
+
+
+TodoTool: typing_extensions.TypeAlias = typing.Union["AddTodoItem", "TodoMessageToUser"]

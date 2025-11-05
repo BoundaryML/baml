@@ -175,6 +175,8 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
+        tags: Optional[Dict[str, str]] = None,
+        abort_controller: Optional[AbortController] = None,
     ) -> FunctionResult: ...
     def call_function_sync(
         self,
@@ -185,6 +187,8 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
+        tags: Optional[Dict[str, str]] = None,
+        abort_controller: Optional[AbortController] = None,
     ) -> FunctionResult: ...
     @staticmethod
     def from_files(
@@ -203,7 +207,8 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
-        on_tick: Optional[Callable[[], None]],
+        tags: Optional[Dict[str, str]] = None,
+        on_tick: Optional[Callable[[], None]] = None,
     ) -> FunctionResultStream: ...
     def stream_function_sync(
         self,
@@ -215,7 +220,8 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
         env_vars: Dict[str, str],
-        on_tick: Optional[Callable[[], None]],
+        tags: Optional[Dict[str, str]] = None,
+        on_tick: Optional[Callable[[], None]] = None,
     ) -> SyncFunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...
@@ -335,6 +341,7 @@ class Collector:
     @property
     def usage(self) -> Usage: ...
     def id(self, function_log_id: str) -> Optional[FunctionLog]: ...
+    def clear(self) -> None: ...
     # For debugging
     @staticmethod
     def __function_call_count() -> int: ...
@@ -362,6 +369,8 @@ class FunctionLog:
     def raw_llm_response(self) -> Optional[str]: ...
     @property
     def metadata(self) -> Dict[str, Any]: ...
+    @property
+    def tags(self) -> Dict[str, Any]: ...
     @property
     def selected_call(self) -> Optional[Union[LLMCall, LLMStreamCall]]: ...
 
@@ -409,8 +418,7 @@ class LLMStreamCall:
     def http_response(self) -> Optional[HTTPResponse]: ...
     @property
     def usage(self) -> Usage: ...
-    @property
-    def timing(self) -> Timing: ...
+
     @property
     def provider(self) -> str: ...
 
@@ -551,5 +559,10 @@ class BamlClientError(BamlError):
 
 class BamlClientHttpError(BamlClientError):
     """Raised for HTTP-related client errors."""
+
+    ...
+
+class BamlAbortError(BamlError):
+    """Raised when a BAML operation is cancelled (abort)."""
 
     ...

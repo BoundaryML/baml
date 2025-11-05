@@ -1,0 +1,28 @@
+# Ignore everything by default
+**/*
+
+# Include only what we need
+!integ-tests/go/**
+!engine/language_client_go/**
+
+# But exclude build artifacts and caches
+integ-tests/go/manual_abort_demo
+integ-tests/go/node_modules/
+engine/language_client_go/.turbo/
+engine/language_client_go/checksums/
+
+# Also need go.mod for the BAML package
+!engine/language_client_go/go.mod
+!engine/language_client_go/go.sum
+!engine/language_client_go/package.json
+
+# Need the baml_go source
+!engine/language_client_go/baml_go/**
+!engine/language_client_go/pkg/**
+
+# Exclude compiled binaries and libraries
+**/*.dylib
+**/*.so
+**/*.dll
+**/*.a
+engine/language_client_go/main

@@ -13,6 +13,7 @@ impl std::fmt::Display for Line {
 }
 
 /// Taken from https://github.com/mitsuhiko/similar/blob/main/examples/terminal-inline.rs
+#[allow(clippy::print_stdout)]
 pub(crate) fn print_diff(prev: &str, new: &str) {
     let diff = TextDiff::from_lines(prev, new);
 

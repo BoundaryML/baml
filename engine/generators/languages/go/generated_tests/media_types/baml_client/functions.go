@@ -46,6 +46,10 @@ func TestMediaArrayInputs(ctx context.Context, imageArray []types.Image, textInp
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)
@@ -106,6 +110,10 @@ func TestMediaInput(ctx context.Context, media types.Union4AudioOrImageOrPDFOrVi
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

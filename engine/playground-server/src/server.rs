@@ -1,32 +1,45 @@
 use std::{io::Cursor, path::PathBuf, time::Duration};
 
 use anyhow::Context;
-use axum::{routing::get, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 use tar::Archive;
 use tokio::{net::TcpListener, sync::broadcast};
 use tower_http::services::ServeDir;
 
-use crate::definitions::{LangServerToWasmMessage, PreLangServerToWasmMessage};
+use crate::definitions::{WebviewCommand, WebviewRouterMessage};
 
-#[derive(Debug)]
-pub struct AppState {
-    pub broadcast_rx: broadcast::Receiver<LangServerToWasmMessage>,
-    pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
-    pub playground_port: u16,
-    pub proxy_port: u16,
+#[derive(Debug, Clone)]
+/// Wraps a broadcast::Sender but bans access to send(). This is effectively a weak pointer
+/// to the receiver.
+///
+/// It's important we use this instead of passing around a broadcast::Receiver that we
+/// clone, because every unused Receiver will fill the broadcast buffer and cause
+/// hard-to-reproduce lost-message bugs.
+pub struct ReceiverProvider(broadcast::Sender<WebviewCommand>);
+
+impl From<broadcast::Sender<WebviewCommand>> for ReceiverProvider {
+    fn from(sender: broadcast::Sender<WebviewCommand>) -> Self {
+        Self(sender)
+    }
 }
 
-impl Clone for AppState {
-    fn clone(&self) -> Self {
-        Self {
-            broadcast_rx: self.broadcast_rx.resubscribe(),
-            playground_tx: self.playground_tx.clone(),
-            playground_port: self.playground_port,
-            proxy_port: self.proxy_port,
-        }
+impl ReceiverProvider {
+    pub fn subscribe(&self) -> broadcast::Receiver<WebviewCommand> {
+        self.0.subscribe()
     }
+}
+#[derive(Debug, Clone)]
+pub struct AppState {
+    pub webview_router_to_websocket_rx_provider: ReceiverProvider,
+    pub to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+    pub playground_port: u16,
+    pub proxy_port: u16,
+    pub editor_config: crate::config::SharedConfig,
 }
 
 pub struct PlaygroundServer {
@@ -40,13 +53,21 @@ impl PlaygroundServer {
         let app = Router::new()
             .route("/ping", get(crate::handlers::ping_handler))
             .route("/ws", get(crate::handlers::ws_handler))
-            .route("/rpc", get(crate::handlers::ws_rpc_handler))
+            // commands proxied to the IDE
+            .route(
+                "/webview/{command}",
+                post(crate::handlers::webview_rpc_handler),
+            )
+            // proxied commands from the IDE to the webview
             .fallback_service(ServeDir::new(dist_dir))
             .with_state(self.app_state);
 
         tracing::info!(
             "Starting Playground server on {}",
-            listener.local_addr().unwrap()
+            listener
+                .local_addr()
+                .map(|addr| addr.to_string())
+                .unwrap_or_else(|_| "unknown address".to_string())
         );
         axum::serve(listener, app)
             .await
@@ -63,13 +84,15 @@ async fn playground_static_assets() -> anyhow::Result<PathBuf> {
         // Use cargo-relative path for local dist
         let local_dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../typescript/apps/playground/dist");
-        tracing::info!(
+        eprintln!(
             "VSCODE_DEBUG_MODE is set. Using local playground dist at {}",
             local_dist.display()
         );
         Ok(local_dist)
     } else {
         let version = env!("CARGO_PKG_VERSION");
+
+        eprintln!("Loading playground dist for version: {}", version);
 
         match get_playground_dist(GITHUB_REPO, version).await {
             Ok(dir) => Ok(std::path::PathBuf::from(dir)),

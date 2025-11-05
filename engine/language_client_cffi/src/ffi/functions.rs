@@ -70,6 +70,7 @@ fn call_function_from_c_inner(
         env_vars,
         collectors,
         type_builder,
+        tags,
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
@@ -91,6 +92,7 @@ fn call_function_from_c_inner(
                 client_registry.as_ref(),
                 collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
                 env_vars,
+                Some(&tags),
                 tripwire.clone(),
             )
             .await;
@@ -132,6 +134,7 @@ fn call_function_parse_from_c_inner(
         env_vars,
         collectors,
         type_builder,
+        tags: _,
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
@@ -240,6 +243,7 @@ fn call_function_stream_from_c_inner(
         env_vars,
         collectors,
         type_builder,
+        tags,
     } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
 
     let tripwire = trip_wire::make_trip_wire(id);
@@ -255,6 +259,7 @@ fn call_function_stream_from_c_inner(
         collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
         env_vars,
         tripwire,
+        Some(&tags),
     ) {
         Ok(stream) => stream,
         Err(e) => {

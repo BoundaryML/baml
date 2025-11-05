@@ -2,6 +2,165 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.212.0](https://github.com/boundaryml/baml/compare/0.211.2..0.212.0) - 2025-10-27
+
+### Bug Fixes
+
+- Fix issue where a test would stay stuck in running if there was a wasm panic (#2601) - ([ac0ede8](https://github.com/boundaryml/baml/commit/ac0ede85306c6dada5423faeb651aa0288497410)) - aaronvg
+- Move class descriptions inside braces for better formatting (#2646) - ([71cc0fa](https://github.com/boundaryml/baml/commit/71cc0fa7c7db0f9243dc248ac847835652f44c57)) - hellovai
+- fix literal return values (#2663)
+- actually emit the version when opening baml file to make LSP switch versions (#2612) - ([700bd39](https://github.com/boundaryml/baml/commit/700bd39b22c7265905b8385e09fed595a9735e19)) - aaronvg
+
+Fixes several typechecker subsumption bugs - ([716b7b1](https://github.com/boundaryml/baml/commit/716b7b120e91c9735bdd68bc7a6580318c3d7000)) - Greg Hale
+
+### Features
+- Configurable timeouts (#2628) - ([276f878](https://github.com/boundaryml/baml/commit/276f878e9517037580ca5b6a9306a2189295795d)) - Greg Hale
+- Add configurable media URL resolution via media_url_resolver (#2578) - ([8530e7f](https://github.com/boundaryml/baml/commit/8530e7fb39cfe36647bf7a61ccaee0591e4efb28)) - hellovai
+- Add Windows support for Go BAML client (#2619) - ([5430aa6](https://github.com/boundaryml/baml/commit/5430aa61c22727a6f43d392e30fd9e75d905c18c)) - hellovai
+- Add placeholder API keys for new VSCode playground users (#2640) - ([cc995c2](https://github.com/boundaryml/baml/commit/cc995c21a903dab74581efee8ee78976a13e287d)) - hellovai
+- Add block-level @@description for BAML classes (#2643) - ([bbe489a](https://github.com/boundaryml/baml/commit/bbe489a7623c31077320e9fa5d4c54d8e1b803e9)) - hellovai
+- Add type narrowing for instanceof checks in BAML (#2656) - ([46c3266](https://github.com/boundaryml/baml/commit/46c32663fe42d40ef96402b298b2f05c75c696fc)) - hellovai
+
+### Miscellaneous Chores
+- **(zed)** get zed release working again (#2625) - ([5be2647](https://github.com/boundaryml/baml/commit/5be2647c08782d1e411a56aa22b675dee4d89568)) - Sam Lijin
+- set up sync path for engine/zed to zed-industries/extensions (#2626) - ([8f85ba7](https://github.com/boundaryml/baml/commit/8f85ba70c001196e01c6c683dbe247119113e132)) - Sam Lijin
+- ban println to prevent lsp crashes, since it uses stdio to communicate (#2659) - ([7f9e749](https://github.com/boundaryml/baml/commit/7f9e749f7f990a8f49b9ffd8e78f175ee834b5e5)) - aaronvg
+- Evaluation tests suite (#2660) - ([ce250d4](https://github.com/boundaryml/baml/commit/ce250d468cf2eadb023293412d887318f471e138)) - Greg Hale
+- Bump version to 0.212.0 - ([d6975ea](https://github.com/boundaryml/baml/commit/d6975eafdf74fec1de68ce9e1813a95a9607ed5c)) - Aaron Villalpando
+
+## [0.211.2](https://github.com/boundaryml/baml/compare/0.211.1..0.211.2) - 2025-10-12
+
+### Bug Fixes
+- Fix emit ts codegen bug (#2603) - ([39b1cf6](https://github.com/boundaryml/baml/commit/39b1cf6299b5080234e282367fdec238864c9df4)) - Greg Hale
+
+## [0.211.1](https://github.com/boundaryml/baml/compare/0.211.0..0.211.1) - 2025-10-10
+
+### Docs
+
+- fix TypeScript tool call example (#2550) - ([73bc201](https://github.com/boundaryml/baml/commit/73bc201230fddc410ddcf9547b41d11039eebce1)) - Eric Winer
+- Fix variable name of LLM response in modular-api.mdx docs (#2579) - ([8074499](https://github.com/boundaryml/baml/commit/8074499cc1413e36d37318f00936d4997922b06e)) - Caio Lang
+
+### Features
+
+- added endpoint_url to amazon bedrock (#2555) - ([10fd013](https://github.com/boundaryml/baml/commit/10fd0132bbac6a57f1b9540ac38262286356a744)) - Roey Ben Chaim
+
+## [0.211.0](https://github.com/boundaryml/baml/compare/0.210.0..0.211.0) - 2025-10-07
+
+### Bug Fixes
+
+- **(compiler)** duplicate diagnostics when typechecking (#2535) - ([5a8de50](https://github.com/boundaryml/baml/commit/5a8de50aaf42dc9cdac77e02374c8ad1396b3765)) - José Rafael Oses
+- Properly leave the secondary screen after non-erroring baml-cli init (#2565) - ([b911a19](https://github.com/boundaryml/baml/commit/b911a1927046b7a36d43fdaee1b25ebbfbc37f31)) - Greg Hale
+- Fix json parser in cases where it would output intermediate representations (#2572) - ([c1a0b0e](https://github.com/boundaryml/baml/commit/c1a0b0e15fa36745a4a59d6a322f182cef034a6e)) - aaronvg
+- **(python)** export set_log_max_message_length config for baml logs (#2553) - ([2c689dc](https://github.com/boundaryml/baml/commit/2c689dc3341b1f8ef4030b397b5e93f46cb25b2e)) - Samuel Lijin
+- Add specific error for missing required env vars in clients (#2570) - ([5ea6adb](https://github.com/boundaryml/baml/commit/5ea6adb02f6e4246dd53cd626189ec1578d69b69)) - Antonio Sarosi
+- [Promptfiddle] fix play button disappearing (#2571) - ([7d31c37](https://github.com/boundaryml/baml/commit/7d31c37142d89758ccff805853db0855af2bd318)) - aaronvg
+- Lots of tracing improvements for Boundary Studio [#2576](https://github.com/BoundaryML/baml/pull/2576)
+
+### Documentation
+
+- fix @description documentation (#2544) - ([32aec21](https://github.com/boundaryml/baml/commit/32aec21f10840d28e837216f14ffed116e9bc377)) - Samuel Lijin
+- Document Next.js version 15 requirement (#2540) - ([c1ce2ab](https://github.com/boundaryml/baml/commit/c1ce2abab0bddb42a84e492ef300a4dc14129a0a)) - Greg Hale
+
+
+## [0.210.0](https://github.com/boundaryml/baml/compare/0.209.0..0.210.0) - 2025-09-30
+
+### Bug Fixes
+- Fix document name for PDF inference on Bedrock (#2545) - ([109612a](https://github.com/BoundaryML/baml/commit/109612ace4d5a1d4a37a8b392e55dc6bfb74997b)) - Greg Hale
+- Fix regression in union streaming codegen (#2533) - ([0a7b396](https://github.com/BoundaryML/baml/commit/0a7b39652a940de679025c6044bc4ed51812b5a3)) - Greg Hale
+- Jetbrains: avoid using deprecated java 18 api (#2541) - ([ec4f339](https://github.com/BoundaryML/baml/commit/ec4f339b628e34d2e6d0dd04df685929149830ed)) - Sam Lijin
+
+### Features
+- Enable "Citations" PDF analysis model for Claude on Bedrock (#2547) - ([219e53f](https://github.com/BoundaryML/baml/commit/219e53f9b3d9f538350c433b26ff68d95ae8324e)) - Greg Hale
+- Add type narrowing for discriminated unions in Jinja (#2539) - ([7a395a9](https://github.com/BoundaryML/baml/commit/87e95fe818b596ab2580cd87fd4a26a32a058dd8)) - Antonio Sarosi
+
+### Docs
+- Document BAML tag setting and retrieval (#2534) - ([d90e7a3](https://github.com/BoundaryML/baml/commit/d90e7a35c6e43e308ab841b24e69b635ef514f8f)) - aaronvg
+
+## [0.209.0](https://github.com/boundaryml/baml/compare/0.208.5..0.209.0) - 2025-09-28
+
+
+### Bug Fixes
+- Make Studio trace uploads 6x more efficient, and fix flushing logic (#2531)
+- Fix an issue where we wouldn't parse a stream until the end of the stream, fix openai responses pdf input, and vertex-anthropic streaming. (#2530) - ([4bb2f33](https://github.com/boundaryml/baml/commit/4bb2f33ff908ff6a2f97fca222bc7afb5a12e8f3)) - aaronvg
+- **(language-server)** handle non-baml-src baml files gracefully (#2506) - ([613df6b](https://github.com/boundaryml/baml/commit/613df6b9398d2921b5551be4f54db4cb285ba32f)) - Samuel Lijin
+- **(playground)** make vertex work in the vscode playground (#2525) - ([6a5fa73](https://github.com/boundaryml/baml/commit/6a5fa73253da89952d698cac16514d1673d84a48)) - Samuel Lijin
+
+### Features
+- Bedrock modular api support (#2526) - ([42dfef3](https://github.com/boundaryml/baml/commit/42dfef3a1e66b265858b42600fc759e330ea0f56)) - Greg Hale
+- Expose tags in the collector. Allow passing tags via baml function baml_options (#2528) - ([27f0694](https://github.com/boundaryml/baml/commit/27f06945727cd5354421516f9fe7183e86a6e298)) - aaronvg
+
+
+### Docs
+- Update vertex ai provider docs with api key info (#2519) - ([f146914](https://github.com/boundaryml/baml/commit/f1469143472c041521b6c8774a01e2670397977b)) - aaronvg
+- Bump version to 0.209.0 - ([ca4cf4d](https://github.com/boundaryml/baml/commit/ca4cf4d2091be8f7561a80ca1dbc3c21ada35011)) - Aaron Villalpando
+
+
+## [0.208.5](https://github.com/boundaryml/baml/compare/0.208.4..0.208.5) - 2025-09-24
+
+### Bugfix
+
+- Allow using clients using vertex api keys in the playground (#2516) - ([0ae357e](https://github.com/boundaryml/baml/commit/0ae357ed295b8f2f4f9ec17fad9ce17d3775bc12)) - aaronvg
+- Bump version to 0.208.5 - ([9bb4778](https://github.com/boundaryml/baml/commit/9bb4778c6e45d95d33e0156c6a9fa4de4234ef4f)) - Aaron Villalpando
+
+## [0.208.4](https://github.com/boundaryml/baml/compare/0.208.3..0.208.4) - 2025-09-24
+
+### Features
+
+- baml-cli check command (#2508) - ([a4afaed](https://github.com/boundaryml/baml/commit/a4afaed88265d0029c7ee0a5b91c1681424e16d2)) - José Rafael Oses
+- add vertex api key auth (#2512) - ([a0a83fe](https://github.com/boundaryml/baml/commit/a0a83fe40c407b139ad62f2c431012470c750dcf)) - aaronvg
+
+
+## [0.208.3](https://github.com/boundaryml/baml/compare/0.208.2..0.208.3) - 2025-09-23
+
+### Bug Fixes
+
+- **(lang-server)** handle non-baml-src baml files (#2486) - ([6bf3299](https://github.com/boundaryml/baml/commit/6bf32994d9411eddd2384552822a3e50a84f790f)) - Samuel Lijin
+- Fix wasm integ tests, fix playground not streaming (#2504) - ([f892440](https://github.com/boundaryml/baml/commit/f892440721dca21c53b57e3521176bb8dc03bb38)) - aaronvg
+
+- Bump version to 0.208.3 - ([f983b84](https://github.com/boundaryml/baml/commit/f983b8463db412ff469944acc16a031aa027f89d)) - Aaron Villalpando
+
+## [0.208.2](https://github.com/boundaryml/baml/compare/0.208.0..0.208.2) - 2025-09-23
+
+
+### Bugfixes
+- Add mcp types (#2500) - ([0501d6d](https://github.com/boundaryml/baml/commit/0501d6db3c66cd21b02f88e2316d0bda167d56a5)) - aaronvg
+- Bump version to 0.208.2 - ([1624f6c](https://github.com/boundaryml/baml/commit/1624f6c60c1874ff92ae6b02366f19769c0cb9df)) - Aaron Villalpando
+
+## [0.208.1](https://github.com/boundaryml/baml/compare/0.208.0..0.208.1) - 2025-09-22
+
+
+### Bugfixes
+- Autosave changes on Import .env click (#2488) - ([11d8a69](https://github.com/boundaryml/baml/commit/11d8a69bd40fda20d73d3031c7acc7e88d18bf50)) - Antonio Sarosi
+- Slightly more lenient set of keywords (#2495) - ([9a98c3f](https://github.com/boundaryml/baml/commit/9a98c3ffeedf8147e72ef8c66e841ea847e6de90)) - Greg Hale
+- Bump version to 0.208.1 - ([8def010](https://github.com/boundaryml/baml/commit/8def0105d257952233ed62f8cefef31c2d199335)) - Aaron Villalpando
+
+## [0.208.0](https://github.com/boundaryml/baml/compare/0.207.1..0.208.0) - 2025-09-21
+
+### Features
+
+- **(jetbrains)** get closer to feature parity with vscode (#2447) - ([0efb169](https://github.com/boundaryml/baml/commit/0efb169a13b5bc14d20438e960ba3dfa530a0f29)) - Samuel Lijin
+- **(sdk)** errors now expose fallback history in detailed_message (#2449) - ([11a131f](https://github.com/boundaryml/baml/commit/11a131fae96ad05f49a429bc4ca845863a61f9c6)) - Samuel Lijin
+- Improve streaming latencies in case parsing ever takes too long (#2467) - ([84bd606](https://github.com/boundaryml/baml/commit/84bd60622bc74ba5452c24c7046b6fb8704af76b)) - aaronvg
+- BAML warns you if you use a template string without '()' (#2476) - ([a3b8c57](https://github.com/boundaryml/baml/commit/a3b8c576a594774bf3b47e68d4efa042b1ee567c)) - aaronvg
+- Implement collector clear() and update docs (#2478) - ([13e7e13](https://github.com/boundaryml/baml/commit/13e7e1361fc0f99c08876c9b24cc6d783b2458d3)) - aaronvg
+
+
+### Bugs
+- Fix vertical scroll on `PromptView` component (#2462) - ([5eb3381](https://github.com/boundaryml/baml/commit/5eb3381b2c715d70538ebaf129a010e90ae40215)) - Antonio Sarosi
+- Fix pdf input as base64url in openai-responses (#2464) - ([2fad7cd](https://github.com/boundaryml/baml/commit/2fad7cd57b432ff3f70c46ef3b137039b987c15e)) - aaronvg
+- Fix colons in config maps (#2475) - ([9736532](https://github.com/boundaryml/baml/commit/9736532b2f07eec2a4b87e3975bb83624452f4e2)) - Greg Hale
+- Fix deep config object parsing and env var redaction (#2485) - ([9e35412](https://github.com/boundaryml/baml/commit/9e35412a4c2a942d9c301553575dd61b47a4359c)) - Greg Hale
+
+
+### Docs
+- Add vercel ai gateway to docs (#2453) - ([a2e98a5](https://github.com/boundaryml/baml/commit/a2e98a584cf5601ea07c3abf777257de4953bf61)) - aaronvg
+- Update pdf testing documentation in playground (#2457) - ([66e449c](https://github.com/boundaryml/baml/commit/66e449c64aef2356a6ee6de627429e9952172233)) - aaronvg
+- Fix LLM Parse Fixup recipe in docs (#2459) - ([80db51a](https://github.com/boundaryml/baml/commit/80db51a3bda096f90c48f033e321fdf7835d9145)) - Greg Hale
+- Update documentation and examples to use latest 2025 AI models (#2460) - ([0b1bc44](https://github.com/boundaryml/baml/commit/0b1bc44131aad61199cf5b583eb0ef9f2b113ef2)) - hellovai
+- Add `on_generate` option to other languages (#2461) - ([d7853bd](https://github.com/boundaryml/baml/commit/d7853bded81f034a8d3dadb0bb9acd3180c436b9)) - Antonio Sarosi
+- remove fn keyword (#2468) - ([8557ab4](https://github.com/boundaryml/baml/commit/8557ab466c878d7515e952fb062455b8e3bc2b86)) - Greg Hale
+- Bump version to 0.208.0 - ([c1630f5](https://github.com/boundaryml/baml/commit/c1630f556a8bc90c17dc1f97229884714a6937b1)) - Aaron Villalpando
+
 ## [0.207.1](https://github.com/boundaryml/baml/compare/0.207.0..0.207.1) - 2025-09-13
 
 ### Bug Fixes
@@ -244,7 +403,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bugfixes
 - Fix fatal log line showing up with publisher not started (#2038) - ([e02c30a](https://github.com/boundaryml/baml/commit/e02c30abf8aecfdccbd28386d0bc4049d017bc8c)) - aaronvg
-  
+
 ## [0.90.0](https://github.com/boundaryml/baml/compare/0.89.0..0.90.0) - 2025-06-14
 
 ### Bug Fixes
@@ -723,7 +882,7 @@ We added a new NextJS generator and deep support for Typebuilder!! Read the docs
 - Update README with better details (#1380) - ([02d1950](https://github.com/boundaryml/baml/commit/02d19503759986c0dba3b022afb03f45a52c31ad)) - hellovai
 - Semantic Streaming (#1293) - ([e30bdd5](https://github.com/boundaryml/baml/commit/e30bdd526910f11a6a9057cc4df90cf302939666)) - Greg Hale
 
-  
+
 ### Bugfixes
 - Drop unnecessary jsonwebtoken dep in wasm build (#1381) - ([7b85c71](https://github.com/boundaryml/baml/commit/7b85c715e07be8f908ee114c50b85bd784cf567b)) - Greg Hale
 - Removing broken links (#1388) - ([e4b0b5b](https://github.com/boundaryml/baml/commit/e4b0b5ba390d3449247bfebb1f24013df69b6068)) - hellovai
@@ -1596,4 +1755,3 @@ The default base URL for the Gemini provider has been updated to v1beta. This ch
 ### Vscode
 
 - check for updates on the hour (#434) - ([c70a3b3](https://github.com/boundaryml/baml/commit/c70a3b373cb2346a0df9a1eba0ebacb74d59b53e)) - Samuel Lijin
-

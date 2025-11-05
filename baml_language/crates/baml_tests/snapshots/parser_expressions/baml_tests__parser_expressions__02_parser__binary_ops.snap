@@ -1,0 +1,16 @@
+---
+source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE "function Calculate() -> int {
+  let a = 1 + 2
+  let b = a * 3
+  let c = b / 2 - 1
+  let d = (a + b) * c
+  return d
+}
+"
+
+=== ERRORS ===
+None

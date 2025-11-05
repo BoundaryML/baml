@@ -29,7 +29,7 @@ describe("OpenAI Provider", () => {
 
   it("should support o1 model with explicit max_completion_tokens", async () => {
     const res = await b.TestOpenAIO1WithMaxCompletionTokens("Donkey Kong");
-    expect(res.toLowerCase()).toContain("donkey");
+    expect(res.toLowerCase()).toContain("jungle");
   });
 
   it("should support openai with null max_tokens", async () => {

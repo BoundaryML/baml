@@ -67,11 +67,14 @@ impl HotReloader {
 
     async fn replay_stdin(&self, process: &mut TokioChild) -> Result<()> {
         if let Some(stdin) = process.stdin.as_mut() {
-            let buffer = self.stdin_buffer.lock().unwrap();
+            // Clone messages to avoid holding lock across await
+            let messages: Vec<StdinMessage> = {
+                let buffer = self.stdin_buffer.lock().unwrap();
+                info!("Replaying {} stdin messages", buffer.len());
+                buffer.iter().cloned().collect()
+            };
 
-            info!("Replaying {} stdin messages", buffer.len());
-
-            for message in buffer.iter() {
+            for message in messages.iter() {
                 if let Err(e) = stdin.write_all(&message.data).await {
                     warn!("Failed to replay stdin message: {}", e);
                     break;
@@ -221,15 +224,12 @@ impl HotReloader {
             }
 
             if let Some(ref mut child) = self.current_process {
-                match child.try_wait()? {
-                    Some(status) => {
-                        info!("Process exited with status: {}", status);
-                        if !status.success() {
-                            info!("Process failed, waiting for binary update...");
-                            self.current_process = None;
-                        }
+                if let Some(status) = child.try_wait()? {
+                    info!("Process exited with status: {}", status);
+                    if !status.success() {
+                        info!("Process failed, waiting for binary update...");
+                        self.current_process = None;
                     }
-                    None => {}
                 }
             }
         }

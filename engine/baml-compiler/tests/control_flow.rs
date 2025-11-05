@@ -1,6 +1,9 @@
 //! Compiler tests for control flow statements (if/else, while loops, break, continue, returns).
 
-use baml_vm::{BinOp, CmpOp, GlobalIndex, Instruction};
+use baml_vm::{
+    test::{Instruction, Value},
+    BinOp, CmpOp,
+};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -10,20 +13,20 @@ use common::{assert_compiles, Program};
 fn if_else_return_expr() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(b: bool) -> int {
+            function main(b: bool) -> int {
                 if (b) { 1 } else { 2 }
             }
         ",
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
-                Instruction::LoadConst(0),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::Jump(3),
                 Instruction::Pop(1),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::Return,
             ],
         )],
@@ -34,7 +37,7 @@ fn if_else_return_expr() -> anyhow::Result<()> {
 fn if_else_return_expr_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(b: bool) -> int {
+            function main(b: bool) -> int {
                 if (b) {
                     let a = 1;
                     a
@@ -47,16 +50,16 @@ fn if_else_return_expr_with_locals() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::JumpIfFalse(6),
                 Instruction::Pop(1),
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(2),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::PopReplace(1),
                 Instruction::Jump(5),
                 Instruction::Pop(1),
-                Instruction::LoadConst(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::PopReplace(1),
                 Instruction::Return,
             ],
@@ -68,7 +71,7 @@ fn if_else_return_expr_with_locals() -> anyhow::Result<()> {
 fn if_else_assignment() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(b: bool) -> int {
+            function main(b: bool) -> int {
                 let i = if (b) { 1 } else { 2 };
                 i
             }
@@ -76,14 +79,14 @@ fn if_else_assignment() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
-                Instruction::LoadConst(0),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::Jump(3),
                 Instruction::Pop(1),
-                Instruction::LoadConst(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadVar("i".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -94,7 +97,7 @@ fn if_else_assignment() -> anyhow::Result<()> {
 fn if_else_assignment_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(b: bool) -> int {
+            function main(b: bool) -> int {
                 let i = if (b) {
                     let a = 1;
                     a
@@ -109,18 +112,18 @@ fn if_else_assignment_with_locals() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::JumpIfFalse(6),
                 Instruction::Pop(1),
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(2),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::PopReplace(1),
                 Instruction::Jump(5),
                 Instruction::Pop(1),
-                Instruction::LoadConst(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::PopReplace(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("i".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -131,11 +134,11 @@ fn if_else_assignment_with_locals() -> anyhow::Result<()> {
 fn if_else_normal_statement() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn identity(i: int) -> int {
+            function identity(i: int) -> int {
                 i
             }
 
-            fn main(b: bool) -> int {
+            function main(b: bool) -> int {
                 let a = 1;
 
                 if (b) {
@@ -154,27 +157,27 @@ fn if_else_normal_statement() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::JumpIfFalse(10),
                 Instruction::Pop(1),
-                Instruction::LoadConst(1),
-                Instruction::LoadConst(2),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadGlobal(Value::function("identity")),
+                Instruction::LoadVar("x".to_string()),
                 Instruction::Call(1),
                 Instruction::Pop(1),
                 Instruction::Pop(2),
                 Instruction::Jump(9),
                 Instruction::Pop(1),
-                Instruction::LoadConst(3),
-                Instruction::LoadConst(4),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
-                Instruction::LoadVar(4),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::LoadConst(Value::Int(4)),
+                Instruction::LoadGlobal(Value::function("identity")),
+                Instruction::LoadVar("y".to_string()),
                 Instruction::Call(1),
                 Instruction::Pop(1),
                 Instruction::Pop(2),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -185,7 +188,7 @@ fn if_else_normal_statement() -> anyhow::Result<()> {
 fn else_if_return_expr() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(a: bool, b: bool) -> int {
+            function main(a: bool, b: bool) -> int {
                 if (a) {
                     1
                 } else if (b) {
@@ -198,19 +201,19 @@ fn else_if_return_expr() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
-                Instruction::LoadConst(0),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::Jump(9),
                 Instruction::Pop(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::Jump(3),
                 Instruction::Pop(1),
-                Instruction::LoadConst(2),
+                Instruction::LoadConst(Value::Int(3)),
                 Instruction::Return,
             ],
         )],
@@ -221,7 +224,7 @@ fn else_if_return_expr() -> anyhow::Result<()> {
 fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(a: bool, b: bool) -> int {
+            function main(a: bool, b: bool) -> int {
                 if (a) {
                     let x = 1;
                     x
@@ -237,24 +240,24 @@ fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::JumpIfFalse(6),
                 Instruction::Pop(1),
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("x".to_string()),
                 Instruction::PopReplace(1),
                 Instruction::Jump(13),
                 Instruction::Pop(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::JumpIfFalse(6),
                 Instruction::Pop(1),
-                Instruction::LoadConst(1),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadVar("y".to_string()),
                 Instruction::PopReplace(1),
                 Instruction::Jump(5),
                 Instruction::Pop(1),
-                Instruction::LoadConst(2),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::LoadVar("z".to_string()),
                 Instruction::PopReplace(1),
                 Instruction::Return,
             ],
@@ -266,7 +269,7 @@ fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
 fn else_if_assignment() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(a: bool, b: bool) -> int {
+            function main(a: bool, b: bool) -> int {
                 let result = if (a) {
                     1
                 } else if (b) {
@@ -281,20 +284,20 @@ fn else_if_assignment() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
-                Instruction::LoadConst(0),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::Jump(9),
                 Instruction::Pop(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::Jump(3),
                 Instruction::Pop(1),
-                Instruction::LoadConst(2),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -305,7 +308,7 @@ fn else_if_assignment() -> anyhow::Result<()> {
 fn else_if_assignment_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main(a: bool, b: bool) -> int {
+            function main(a: bool, b: bool) -> int {
                 let result = if (a) {
                     let x = 1;
                     x
@@ -323,26 +326,26 @@ fn else_if_assignment_with_locals() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::JumpIfFalse(6),
                 Instruction::Pop(1),
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("x".to_string()),
                 Instruction::PopReplace(1),
                 Instruction::Jump(13),
                 Instruction::Pop(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::JumpIfFalse(6),
                 Instruction::Pop(1),
-                Instruction::LoadConst(1),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadVar("y".to_string()),
                 Instruction::PopReplace(1),
                 Instruction::Jump(5),
                 Instruction::Pop(1),
-                Instruction::LoadConst(2),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::LoadVar("z".to_string()),
                 Instruction::PopReplace(1),
-                Instruction::LoadVar(3),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -353,7 +356,7 @@ fn else_if_assignment_with_locals() -> anyhow::Result<()> {
 fn while_loop_gcd() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn GCD(a: int, b: int) -> int {
+            function GCD(a: int, b: int) -> int {
                 while (a != b) {
                     if (a > b) {
                         a = a - b;
@@ -368,29 +371,29 @@ fn while_loop_gcd() -> anyhow::Result<()> {
         expected: vec![(
             "GCD",
             vec![
-                Instruction::LoadVar(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::JumpIfFalse(18),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::CmpOp(CmpOp::Gt),
                 Instruction::JumpIfFalse(7),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::BinOp(BinOp::Sub),
-                Instruction::StoreVar(1),
+                Instruction::StoreVar("a".to_string()),
                 Instruction::Jump(6),
                 Instruction::Pop(1),
-                Instruction::LoadVar(2),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("b".to_string()),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::BinOp(BinOp::Sub),
-                Instruction::StoreVar(2),
+                Instruction::StoreVar("b".to_string()),
                 Instruction::Jump(-20),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -403,7 +406,7 @@ fn while_loop_gcd() -> anyhow::Result<()> {
 fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main() -> int {
+            function main() -> int {
                 let a = 1;
 
                 {
@@ -422,24 +425,24 @@ fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadConst(1),
-                Instruction::LoadConst(2),
-                Instruction::LoadVar(2),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::LoadVar("b".to_string()),
+                Instruction::LoadVar("c".to_string()),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(1),
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(3),
+                Instruction::StoreVar("a".to_string()),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::JumpIfFalse(5),
                 Instruction::Pop(1),
-                Instruction::LoadConst(4),
-                Instruction::StoreVar(1),
+                Instruction::LoadConst(Value::Int(10)),
+                Instruction::StoreVar("a".to_string()),
                 Instruction::Jump(2),
                 Instruction::Pop(1),
                 Instruction::Pop(2),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -452,7 +455,7 @@ fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
 fn while_loop_with_ending_if() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main() -> int {
+            function main() -> int {
                 let a = 1;
 
                 while (a < 5) {
@@ -469,18 +472,18 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(15),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(2),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(1),
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(3),
+                Instruction::StoreVar("a".to_string()),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
@@ -489,7 +492,7 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
                 Instruction::Pop(1),
                 Instruction::Jump(-17),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -500,7 +503,7 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
 fn break_factorial() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Factorial(limit: int) -> int {
+            function Factorial(limit: int) -> int {
                 let result = 1;
 
                 while (true) {
@@ -518,14 +521,14 @@ fn break_factorial() -> anyhow::Result<()> {
             "Factorial",
             vec![
                 // let result = 1;
-                Instruction::LoadConst(0),
+                Instruction::LoadConst(Value::Int(1)),
                 // while true { ... }
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(19),
                 Instruction::Pop(1),
                 // if limit == 0 { break; }
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(2),
+                Instruction::LoadVar("limit".to_string()),
+                Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
@@ -533,20 +536,20 @@ fn break_factorial() -> anyhow::Result<()> {
                 Instruction::Jump(2),
                 Instruction::Pop(1),
                 // result = result * limit;
-                Instruction::LoadVar(2),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("result".to_string()),
+                Instruction::LoadVar("limit".to_string()),
                 Instruction::BinOp(BinOp::Mul),
-                Instruction::StoreVar(2),
+                Instruction::StoreVar("result".to_string()),
                 // limit = limit - 1;
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(3),
+                Instruction::LoadVar("limit".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Sub),
-                Instruction::StoreVar(1),
+                Instruction::StoreVar("limit".to_string()),
                 // loop back and exit
                 Instruction::Jump(-19),
                 Instruction::Pop(1),
                 // return result
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -557,7 +560,7 @@ fn break_factorial() -> anyhow::Result<()> {
 fn continue_factorial() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Factorial(limit: int) -> int {
+            function Factorial(limit: int) -> int {
                 let result = 1;
 
                 // used to make the loop break without relying on `break` implementation.
@@ -580,38 +583,38 @@ fn continue_factorial() -> anyhow::Result<()> {
             "Factorial",
             vec![
                 // let result = 1;
-                Instruction::LoadConst(0),
+                Instruction::LoadConst(Value::Int(1)),
                 // let should_continue = true;
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Bool(true)),
                 // while should_continue { ... }
-                Instruction::LoadVar(3),
+                Instruction::LoadVar("should_continue".to_string()),
                 Instruction::JumpIfFalse(21),
                 Instruction::Pop(1),
                 // result = result * limit;
-                Instruction::LoadVar(2),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("result".to_string()),
+                Instruction::LoadVar("limit".to_string()),
                 Instruction::BinOp(BinOp::Mul),
-                Instruction::StoreVar(2),
+                Instruction::StoreVar("result".to_string()),
                 // limit = limit - 1;
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(2),
+                Instruction::LoadVar("limit".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Sub),
-                Instruction::StoreVar(1),
+                Instruction::StoreVar("limit".to_string()),
                 // if limit != 0 { continue; } else { should_continue = false; }
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(3),
+                Instruction::LoadVar("limit".to_string()),
+                Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
                 Instruction::Jump(5),
                 Instruction::Jump(4),
                 Instruction::Pop(1),
-                Instruction::LoadConst(4),
-                Instruction::StoreVar(3),
+                Instruction::LoadConst(Value::Bool(false)),
+                Instruction::StoreVar("should_continue".to_string()),
                 Instruction::Jump(-21),
                 Instruction::Pop(1),
                 // return result
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -622,7 +625,7 @@ fn continue_factorial() -> anyhow::Result<()> {
 fn continue_nested() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Nested() -> int {
+            function Nested() -> int {
                 while (true) {
                     while (false) {
                         continue;
@@ -637,16 +640,16 @@ fn continue_nested() -> anyhow::Result<()> {
         expected: vec![(
             "Nested",
             vec![
-                Instruction::LoadConst(0),
+                Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(15),
                 Instruction::Pop(1),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Bool(false)),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
                 Instruction::Jump(1),
                 Instruction::Jump(-4),
                 Instruction::Pop(1),
-                Instruction::LoadConst(2),
+                Instruction::LoadConst(Value::Bool(false)),
                 Instruction::JumpIfFalse(4),
                 Instruction::Pop(1),
                 Instruction::Jump(3),
@@ -654,7 +657,7 @@ fn continue_nested() -> anyhow::Result<()> {
                 Instruction::Pop(1),
                 Instruction::Jump(-15),
                 Instruction::Pop(1),
-                Instruction::LoadConst(3),
+                Instruction::LoadConst(Value::Int(5)),
                 Instruction::Return,
             ],
         )],
@@ -665,7 +668,7 @@ fn continue_nested() -> anyhow::Result<()> {
 fn break_nested() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Nested() -> int {
+            function Nested() -> int {
                 let a = 5;
                 while (true) {
                     while (true) {
@@ -681,28 +684,28 @@ fn break_nested() -> anyhow::Result<()> {
         expected: vec![(
             "Nested",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Int(5)),
+                Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(18),
                 Instruction::Pop(1),
-                Instruction::LoadConst(2),
+                Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(8),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(3),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(1),
+                Instruction::StoreVar("a".to_string()),
                 Instruction::Jump(3),
                 Instruction::Jump(-8),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
-                Instruction::LoadConst(4),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(1),
+                Instruction::StoreVar("a".to_string()),
                 Instruction::Jump(3),
                 Instruction::Jump(-18),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -714,7 +717,7 @@ fn break_nested() -> anyhow::Result<()> {
 fn block_expr() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn main() -> int {
+            function main() -> int {
                 let a = {
                     let b = 1;
                     b
@@ -726,10 +729,10 @@ fn block_expr() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::PopReplace(1),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -741,7 +744,7 @@ fn block_expr() -> anyhow::Result<()> {
 fn early_return() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn EarlyReturn(x: int) -> int {
+            function EarlyReturn(x: int) -> int {
               if (x == 42) { return 1; }
 
               x + 5
@@ -750,17 +753,17 @@ fn early_return() -> anyhow::Result<()> {
         expected: vec![(
             "EarlyReturn",
             vec![
-                Instruction::LoadVar(1),   // x
-                Instruction::LoadConst(0), // 42
+                Instruction::LoadVar("x".to_string()),  // x
+                Instruction::LoadConst(Value::Int(42)), // 42
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::JumpIfFalse(5), // to 8
                 Instruction::Pop(1),
-                Instruction::LoadConst(1), // 1
+                Instruction::LoadConst(Value::Int(1)), // 1
                 Instruction::Return,
                 Instruction::Jump(2), // to 9
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),   // x
-                Instruction::LoadConst(2), // 5
+                Instruction::LoadVar("x".to_string()), // x
+                Instruction::LoadConst(Value::Int(5)), // 5
                 Instruction::BinOp(BinOp::Add),
                 Instruction::Return,
             ],
@@ -772,7 +775,7 @@ fn early_return() -> anyhow::Result<()> {
 fn return_with_stack() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn WithStack(x: int) -> int {
+            function WithStack(x: int) -> int {
               let a = 1;
 
               // NOTE: currently there's no empty returns.
@@ -802,45 +805,45 @@ fn return_with_stack() -> anyhow::Result<()> {
         expected: vec![(
             "WithStack",
             vec![
-                Instruction::LoadConst(0), // 1
-                Instruction::LoadVar(2),   // a
-                Instruction::LoadConst(1), // 0
+                Instruction::LoadConst(Value::Int(1)), // 1
+                Instruction::LoadVar("a".to_string()), // a
+                Instruction::LoadConst(Value::Int(0)), // 0
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::JumpIfFalse(5), // to 9
                 Instruction::Pop(1),
-                Instruction::LoadConst(2), // 0
+                Instruction::LoadConst(Value::Int(0)), // 0
                 Instruction::Return,
                 Instruction::Jump(2), // to 10
                 Instruction::Pop(1),
-                Instruction::LoadConst(3), // 1
-                Instruction::LoadVar(2),   // a
-                Instruction::LoadVar(3),   // b
+                Instruction::LoadConst(Value::Int(1)), // 1
+                Instruction::LoadVar("a".to_string()), // a
+                Instruction::LoadVar("b".to_string()), // b
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::JumpIfFalse(5), // to 19
                 Instruction::Pop(1),
-                Instruction::LoadConst(4), // 0
+                Instruction::LoadConst(Value::Int(0)), // 0
                 Instruction::Return,
                 Instruction::Jump(2), // to 20
                 Instruction::Pop(1),
                 Instruction::Pop(1),
-                Instruction::LoadConst(5), // 2
-                Instruction::LoadConst(6), // 3
-                Instruction::LoadVar(4),   // b
-                Instruction::LoadVar(3),   // c
+                Instruction::LoadConst(Value::Int(2)), // 2
+                Instruction::LoadConst(Value::Int(3)), // 3
+                Instruction::LoadVar("b".to_string()), // b
+                Instruction::LoadVar("c".to_string()), // c
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::JumpIfFalse(10), // to 36
                 Instruction::Pop(1),
-                Instruction::LoadConst(7),   // true
-                Instruction::JumpIfFalse(5), // to 34
+                Instruction::LoadConst(Value::Bool(true)), // true
+                Instruction::JumpIfFalse(5),               // to 34
                 Instruction::Pop(1),
-                Instruction::LoadConst(8), // 0
+                Instruction::LoadConst(Value::Int(0)), // 0
                 Instruction::Return,
                 Instruction::Jump(2), // to 35
                 Instruction::Pop(1),
                 Instruction::Jump(-12), // to 23
                 Instruction::Pop(1),
                 Instruction::Pop(2),
-                Instruction::LoadConst(9), // 7
+                Instruction::LoadConst(Value::Int(7)), // 7
                 Instruction::Return,
             ],
         )],
@@ -852,10 +855,10 @@ fn return_with_stack() -> anyhow::Result<()> {
 fn for_loop_sum() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn Sum(xs: int[]) -> int {
+            function Sum(xs: int[]) -> int {
                 let result = 0;
 
-                for (x in xs) {
+                for (let x in xs) {
                     result += x;
                 }
 
@@ -865,33 +868,33 @@ fn for_loop_sum() -> anyhow::Result<()> {
         expected: vec![(
             "Sum",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::LoadVar("xs".to_string()),
+                Instruction::LoadGlobal(Value::function("baml.Array.length")),
+                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
                 Instruction::Call(1),
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(5),
-                Instruction::LoadVar(4),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("__baml for loop array length 0".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(15),
                 Instruction::Pop(1),
-                Instruction::LoadVar(3),
-                Instruction::LoadVar(5),
+                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
                 Instruction::LoadArrayElement,
-                Instruction::LoadVar(5),
-                Instruction::LoadConst(1),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(5),
-                Instruction::LoadVar(2),
-                Instruction::LoadVar(6),
+                Instruction::StoreVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("result".to_string()),
+                Instruction::LoadVar("x".to_string()),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(2),
+                Instruction::StoreVar("result".to_string()),
                 Instruction::Pop(1),
                 Instruction::Jump(-17),
                 Instruction::Pop(1),
                 Instruction::Pop(3),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -902,10 +905,10 @@ fn for_loop_sum() -> anyhow::Result<()> {
 fn for_with_break() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn ForWithBreak(xs: int[]) -> int {
+            function ForWithBreak(xs: int[]) -> int {
                 let result = 0;
 
-                for (x in xs) {
+                for (let x in xs) {
                     if (x > 10) {
                         break;
                     }
@@ -918,26 +921,26 @@ fn for_with_break() -> anyhow::Result<()> {
         expected: vec![(
             "ForWithBreak",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::LoadVar("xs".to_string()),
+                Instruction::LoadGlobal(Value::function("baml.Array.length")),
+                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
                 Instruction::Call(1),
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(5),
-                Instruction::LoadVar(4),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("__baml for loop array length 0".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(24),
                 Instruction::Pop(1),
-                Instruction::LoadVar(3),
-                Instruction::LoadVar(5),
+                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
                 Instruction::LoadArrayElement,
-                Instruction::LoadVar(5),
-                Instruction::LoadConst(1),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(5),
-                Instruction::LoadVar(6),
-                Instruction::LoadConst(2),
+                Instruction::StoreVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Gt),
                 Instruction::JumpIfFalse(5),
                 Instruction::Pop(1),
@@ -945,15 +948,15 @@ fn for_with_break() -> anyhow::Result<()> {
                 Instruction::Jump(10),
                 Instruction::Jump(2),
                 Instruction::Pop(1),
-                Instruction::LoadVar(2),
-                Instruction::LoadVar(6),
+                Instruction::LoadVar("result".to_string()),
+                Instruction::LoadVar("x".to_string()),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(2),
+                Instruction::StoreVar("result".to_string()),
                 Instruction::Pop(1),
                 Instruction::Jump(-26),
                 Instruction::Pop(1),
                 Instruction::Pop(3),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -964,10 +967,10 @@ fn for_with_break() -> anyhow::Result<()> {
 fn for_with_continue() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn ForWithContinue(xs: int[]) -> int {
+            function ForWithContinue(xs: int[]) -> int {
                 let result = 0;
 
-                for (x in xs) {
+                for (let x in xs) {
                     if (x > 10) {
                         continue;
                     }
@@ -980,26 +983,26 @@ fn for_with_continue() -> anyhow::Result<()> {
         expected: vec![(
             "ForWithContinue",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
-                Instruction::LoadVar(3),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::LoadVar("xs".to_string()),
+                Instruction::LoadGlobal(Value::function("baml.Array.length")),
+                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
                 Instruction::Call(1),
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(5),
-                Instruction::LoadVar(4),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("__baml for loop array length 0".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(24),
                 Instruction::Pop(1),
-                Instruction::LoadVar(3),
-                Instruction::LoadVar(5),
+                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
                 Instruction::LoadArrayElement,
-                Instruction::LoadVar(5),
-                Instruction::LoadConst(1),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(5),
-                Instruction::LoadVar(6),
-                Instruction::LoadConst(2),
+                Instruction::StoreVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Gt),
                 Instruction::JumpIfFalse(5),
                 Instruction::Pop(1),
@@ -1007,15 +1010,15 @@ fn for_with_continue() -> anyhow::Result<()> {
                 Instruction::Jump(8),
                 Instruction::Jump(2),
                 Instruction::Pop(1),
-                Instruction::LoadVar(2),
-                Instruction::LoadVar(6),
+                Instruction::LoadVar("result".to_string()),
+                Instruction::LoadVar("x".to_string()),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(2),
+                Instruction::StoreVar("result".to_string()),
                 Instruction::Pop(1),
                 Instruction::Jump(-26),
                 Instruction::Pop(1),
                 Instruction::Pop(3),
-                Instruction::LoadVar(2),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -1026,12 +1029,12 @@ fn for_with_continue() -> anyhow::Result<()> {
 fn for_nested() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            fn NestedFor(as: int[], bs: int[]) -> int {
+            function NestedFor(as: int[], bs: int[]) -> int {
 
                 let result = 0;
 
-                for (a in as) {
-                    for (b in bs) {
+                for (let a in as) {
+                    for (let b in bs) {
                         result += a * b;
                     }
                 }
@@ -1042,47 +1045,47 @@ fn for_nested() -> anyhow::Result<()> {
         expected: vec![(
             "NestedFor",
             vec![
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
-                Instruction::LoadVar(4),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::LoadVar("as".to_string()),
+                Instruction::LoadGlobal(Value::function("baml.Array.length")),
+                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
                 Instruction::Call(1),
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(6),
-                Instruction::LoadVar(5),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("__baml for loop array length 0".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(38),
                 Instruction::Pop(1),
-                Instruction::LoadVar(4),
-                Instruction::LoadVar(6),
+                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
                 Instruction::LoadArrayElement,
-                Instruction::LoadVar(6),
-                Instruction::LoadConst(1),
+                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(6),
-                Instruction::LoadVar(2),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(3)),
-                Instruction::LoadVar(8),
+                Instruction::StoreVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("bs".to_string()),
+                Instruction::LoadGlobal(Value::function("baml.Array.length")),
+                Instruction::LoadVar("__baml for loop iterated array 1".to_string()),
                 Instruction::Call(1),
-                Instruction::LoadConst(0),
-                Instruction::LoadVar(10),
-                Instruction::LoadVar(9),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::LoadVar("__baml for loop index 1".to_string()),
+                Instruction::LoadVar("__baml for loop array length 1".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(17),
                 Instruction::Pop(1),
-                Instruction::LoadVar(8),
-                Instruction::LoadVar(10),
+                Instruction::LoadVar("__baml for loop iterated array 1".to_string()),
+                Instruction::LoadVar("__baml for loop index 1".to_string()),
                 Instruction::LoadArrayElement,
-                Instruction::LoadVar(10),
-                Instruction::LoadConst(1),
+                Instruction::LoadVar("__baml for loop index 1".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(10),
-                Instruction::LoadVar(3),
-                Instruction::LoadVar(7),
-                Instruction::LoadVar(11),
+                Instruction::StoreVar("__baml for loop index 1".to_string()),
+                Instruction::LoadVar("result".to_string()),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadVar("b".to_string()),
                 Instruction::BinOp(BinOp::Mul),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar(3),
+                Instruction::StoreVar("result".to_string()),
                 Instruction::Pop(1),
                 Instruction::Jump(-19),
                 Instruction::Pop(1),
@@ -1091,7 +1094,7 @@ fn for_nested() -> anyhow::Result<()> {
                 Instruction::Jump(-40),
                 Instruction::Pop(1),
                 Instruction::Pop(3),
-                Instruction::LoadVar(3),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
         )],

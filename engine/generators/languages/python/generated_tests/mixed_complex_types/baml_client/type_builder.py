@@ -1895,7 +1895,7 @@ class WidgetAst:
     def __init__(self, tb: type_builder.TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
         self._bldr = _tb.class_("Widget")
-        self._properties: typing.Set[str] = set([  "type",  "button",  "text",  "image",  "container",  ])
+        self._properties: typing.Set[str] = set([  "type",  "button",  "text",  "img",  "container",  ])
         self._props = WidgetProperties(self._bldr, self._properties)
 
     def type(self) -> baml_py.FieldType:
@@ -1936,8 +1936,8 @@ class WidgetProperties:
         return type_builder.ClassPropertyViewer(self.__bldr.property("text"))
     
     @property
-    def image(self) -> type_builder.ClassPropertyViewer:
-        return type_builder.ClassPropertyViewer(self.__bldr.property("image"))
+    def img(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("img"))
     
     @property
     def container(self) -> type_builder.ClassPropertyViewer:

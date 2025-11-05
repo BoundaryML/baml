@@ -1,0 +1,16 @@
+---
+source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+expression: output
+---
+Word "class"
+Word "Broken"
+LBrace "{"
+Word "field"
+Word "int"
+Word "function"
+Integer "123"
+Word "Invalid"
+LParen "("
+RParen ")"
+LBrace "{"
+RBrace "}"

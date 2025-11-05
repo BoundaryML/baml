@@ -29,7 +29,9 @@ class BamlLanguageServer(private val project: Project) : OSProcessStreamConnecti
     init {
         if (BamlIdeConfig.shouldUseLocalLanguageServerBuild()) {
             // Kill any orphaned baml-cli processes before starting
-            val pkillProcess = Runtime.getRuntime().exec("pkill -f target/debug/baml-cli")
+            val pkillProcess = ProcessBuilder("sh", "-c", "pkill -f target/debug/baml-cli")
+                .redirectErrorStream(true)
+                .start()
             pkillProcess.waitFor()
             log.info("pkill'd the old baml-cli processes")
 

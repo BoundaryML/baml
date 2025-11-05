@@ -92,12 +92,27 @@ pub enum ResolveMediaUrls {
     // google: supports b64 w mime, url if its a google file uri (gs://)
     // openai: supports URLs w/o mime (b64 data URLs also work here)
     // vertex: supports URLs w/ mime, b64 w/ mime
-    Always,
-    IfMatchesGoogleFileUri,
-    // EnsureMime: always add the mime type to the request (which means if it's a url, we may need to resolve it to find the mime type)
-    EnsureMime,
-    // Never: don't resolve media urls
-    Never,
+    SendBase64,
+    SendBase64UnlessGoogleUrl,
+    // SendUrlAddMimeType: always add the mime type to the request (which means if it's a url, we may need to resolve it to find the mime type)
+    SendUrlAddMimeType,
+    // SendUrl: don't resolve media urls
+    SendUrl,
+}
+
+impl From<internal_llm_client::ResolveMediaUrls> for ResolveMediaUrls {
+    fn from(value: internal_llm_client::ResolveMediaUrls) -> Self {
+        match value {
+            internal_llm_client::ResolveMediaUrls::SendBase64 => ResolveMediaUrls::SendBase64,
+            internal_llm_client::ResolveMediaUrls::SendBase64UnlessGoogleUrl => {
+                ResolveMediaUrls::SendBase64UnlessGoogleUrl
+            }
+            internal_llm_client::ResolveMediaUrls::SendUrlAddMimeType => {
+                ResolveMediaUrls::SendUrlAddMimeType
+            }
+            internal_llm_client::ResolveMediaUrls::SendUrl => ResolveMediaUrls::SendUrl,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -216,6 +231,7 @@ pub enum ErrorCode {
     RateLimited,           // 429
     ServerError,           // 500
     ServiceUnavailable,    // 503
+    Timeout,               // Request timeout
 
     // We failed to parse the response
     UnsupportedResponse(u16),
@@ -232,6 +248,7 @@ impl std::fmt::Display for ErrorCode {
             ErrorCode::RateLimited => f.write_str("RateLimited (429)"),
             ErrorCode::ServerError => f.write_str("ServerError (500)"),
             ErrorCode::ServiceUnavailable => f.write_str("ServiceUnavailable (503)"),
+            ErrorCode::Timeout => f.write_str("Timeout (408)"),
             ErrorCode::UnsupportedResponse(code) => write!(f, "BadResponse {code}"),
             ErrorCode::Other(code) => write!(f, "Unspecified error code: {code}"),
         }
@@ -268,6 +285,7 @@ impl ErrorCode {
             ErrorCode::RateLimited => 429,
             ErrorCode::ServerError => 500,
             ErrorCode::ServiceUnavailable => 503,
+            ErrorCode::Timeout => 408, // HTTP 408 Request Timeout
             ErrorCode::UnsupportedResponse(code) => *code,
             ErrorCode::Other(code) => *code,
         }

@@ -1,12 +1,15 @@
 'use client';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useRef, useCallback } from 'react';
 import mermaid from 'mermaid';
 import { Button } from '@baml/ui/button';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-import svgPanZoom from 'svg-pan-zoom';
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import { functionGraphAtom } from '../../../atoms-orch-graph';
 import { vscode } from '../../../../vscode';
+import { flashRangesAtom } from '../../../atoms';
+import { highlightedBlocksAtom } from '../atoms';
 
 // === BAML Mermaid CSS Override (media-like styling) ===
 // This CSS is injected into the generated Mermaid SVG so it overrides Mermaid's defaults.
@@ -40,7 +43,7 @@ const MERMAID_CSS_OVERRIDE = `
   #bamlMermaidSvg foreignObject div,
   #bamlMermaidSvg foreignObject span,
   #bamlMermaidSvg foreignObject p {
-    font-family: inherit !important;
+    font-family: var(--font-sans) !important;
     font-size: 1em !important;
     line-height: 1.4;
   }
@@ -90,6 +93,18 @@ const MERMAID_CSS_OVERRIDE = `
     // stroke-linejoin: round !important;
   }
 
+  /* Highlighted node state driven by watch notifications */
+  #bamlMermaidSvg .baml-mermaid-highlight rect,
+  #bamlMermaidSvg .baml-mermaid-highlight circle,
+  #bamlMermaidSvg .baml-mermaid-highlight ellipse,
+  #bamlMermaidSvg .baml-mermaid-highlight polygon,
+  #bamlMermaidSvg .baml-mermaid-highlight path {
+    fill: color-mix(in oklab, var(--vscode-focusBorder, var(--ring)) 50%, transparent) !important;
+    stroke: var(--vscode-focusBorder) !important;
+    stroke-width: 6.3px !important;
+    filter: drop-shadow(0 0 0.45rem rgba(124, 93, 255, 0.45));
+  }
+
   /* Normalize Mermaid thickness utility classes to our desired thickness */
   #bamlMermaidSvg .edge-thickness-normal { stroke-width: 5.7px !important; }
   #bamlMermaidSvg .edge-thickness-thick { stroke-width: 6.9px !important; }
@@ -125,24 +140,142 @@ const MermaidHeader: React.FC = () => {
 
 export const MermaidGraphView: React.FC = () => {
   const { graph } = useAtomValue(functionGraphAtom);
+  const highlightedBlocks = useAtomValue(highlightedBlocksAtom);
   const mermaidRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const panZoomRef = useRef<ReturnType<typeof svgPanZoom> | null>(null);
+  const transformRef = useRef<ReactZoomPanPinchRef | null>(null);
+  const setFlashRanges = useSetAtom(flashRangesAtom);
+  const labelNodeMapRef = useRef<Map<string, SVGElement[]>>(new Map());
+  const highlightedNodesRef = useRef<Set<SVGElement>>(new Set());
+  const pendingLabelsRef = useRef<Set<string>>(new Set());
+
+  const normalizeLabel = useCallback((label: string) => label.replace(/\s+/g, ' ').trim().toLowerCase(), []);
+
+  const clearAllHighlights = useCallback(() => {
+    highlightedNodesRef.current.forEach((node) => {
+      node.classList.remove('baml-mermaid-highlight');
+    });
+    highlightedNodesRef.current.clear();
+  }, []);
+
+  const findNodesForLabel = useCallback(
+    (label: string, map: Map<string, SVGElement[]>) => {
+      const normalized = normalizeLabel(label);
+      const directMatches = map.get(normalized);
+      if (directMatches && directMatches.length > 0) {
+        return directMatches;
+      }
+
+      const partialMatches: SVGElement[] = [];
+      map.forEach((nodes, key) => {
+        if (key.includes(normalized)) {
+          partialMatches.push(...nodes);
+        }
+      });
+      return partialMatches;
+    },
+    [normalizeLabel],
+  );
+
+  const applyHighlightSet = useCallback(
+    (labels: Iterable<string>) => {
+      const map = labelNodeMapRef.current;
+      const labelArray = Array.from(labels);
+
+      if (!map || map.size === 0) {
+        pendingLabelsRef.current = new Set(labelArray);
+        clearAllHighlights();
+        return;
+      }
+
+      if (labelArray.length === 0) {
+        clearAllHighlights();
+        pendingLabelsRef.current.clear();
+        return;
+      }
+
+      const nextNodes = new Set<SVGElement>();
+      labelArray.forEach((label) => {
+        const nodes = findNodesForLabel(label, map);
+        nodes.forEach((node) => {
+          nextNodes.add(node);
+        });
+      });
+
+      highlightedNodesRef.current.forEach((node) => {
+        if (!nextNodes.has(node)) {
+          node.classList.remove('baml-mermaid-highlight');
+        }
+      });
+
+      nextNodes.forEach((node) => {
+        if (!highlightedNodesRef.current.has(node)) {
+          node.classList.add('baml-mermaid-highlight');
+        }
+      });
+
+      highlightedNodesRef.current = nextNodes;
+      pendingLabelsRef.current = new Set(labelArray);
+    },
+    [clearAllHighlights, findNodesForLabel],
+  );
+
+  const computeFitScale = useCallback(() => {
+    const containerEl = containerRef.current;
+    const svgEl = svgRef.current;
+    if (!containerEl || !svgEl) return 1;
+
+    const containerRect = containerEl.getBoundingClientRect();
+    if (containerRect.width <= 0 || containerRect.height <= 0) return 1;
+
+    let bbox: DOMRect | null = null;
+    try {
+      const rawBox = svgEl.getBBox();
+      if (rawBox.width > 0 && rawBox.height > 0) {
+        bbox = rawBox as DOMRect;
+      }
+    } catch {
+      // getBBox may throw if SVG isn't in the DOM yet; fall back to client rect
+    }
+
+    const targetBox = bbox ?? svgEl.getBoundingClientRect();
+    const svgWidth = targetBox.width;
+    const svgHeight = targetBox.height;
+    if (svgWidth <= 0 || svgHeight <= 0) return 1;
+
+    const PADDING = 32;
+    const availableWidth = Math.max(containerRect.width - PADDING, 1);
+    const availableHeight = Math.max(containerRect.height - PADDING, 1);
+    const widthRatio = availableWidth / svgWidth;
+    const heightRatio = availableHeight / svgHeight;
+    const fitScale = Math.min(widthRatio, heightRatio);
+    if (!Number.isFinite(fitScale) || fitScale <= 0) return 1;
+    return Math.min(1, fitScale);
+  }, []);
 
   const zoomIn = useCallback(() => {
-    panZoomRef.current?.zoomBy(1.2);
+    transformRef.current?.zoomIn(0.2);
   }, []);
   const zoomOut = useCallback(() => {
-    panZoomRef.current?.zoomBy(1 / 1.2);
+    transformRef.current?.zoomOut(0.2);
   }, []);
+  const centerGraph = useCallback((scale?: number, animationTime = 0) => {
+    const instance = transformRef.current;
+    if (!instance) return;
+    const fallbackScale = computeFitScale();
+    const nextScale = typeof scale === 'number' ? scale : fallbackScale;
+    if (!Number.isFinite(nextScale)) return;
+    instance.centerView(nextScale, animationTime);
+  }, [computeFitScale]);
   const resetView = useCallback(() => {
-    if (!panZoomRef.current) return;
-    panZoomRef.current.resetZoom();
-    panZoomRef.current.resize();
-    panZoomRef.current.fit();
-    panZoomRef.current.center();
-  }, []);
+    const instance = transformRef.current;
+    if (!instance) return;
+    requestAnimationFrame(() => {
+      const initialScale = computeFitScale();
+      centerGraph(initialScale, 200);
+    });
+  }, [centerGraph, computeFitScale]);
 
   useEffect(() => {
     if (!graph || !mermaidRef.current) return;
@@ -153,13 +286,10 @@ export const MermaidGraphView: React.FC = () => {
     // Raw graph string for debugging
     try {
       console.log('[MermaidGraphView] raw graph string:', graph);
-    } catch {}
+    } catch { }
 
     const onResize = () => {
-      if (!panZoomRef.current) return;
-      panZoomRef.current.resize();
-      panZoomRef.current.fit();
-      panZoomRef.current.center();
+      requestAnimationFrame(() => centerGraph());
     };
     window.addEventListener('resize', onResize);
 
@@ -204,32 +334,23 @@ export const MermaidGraphView: React.FC = () => {
               return;
             }
             console.log('[MermaidGraphView] triggerSpan', { nodeId, span });
-            vscode.postMessage?.({
-              command: 'jumpToFile',
-              span: {
-                start: span.start,
-                end: span.end,
-                source_file: span.file_path,
-                value: `${(span.file_path.split('/').pop() || '<file>.baml')}:${span.start_line + 1}`,
-              },
-            });
-            window.postMessage(
-              {
-                command: 'set_flashing_regions',
-                content: {
-                  spans: [
-                    {
-                      file_path: span.file_path,
-                      start_line: span.start_line,
-                      start: span.start,
-                      end_line: span.end_line,
-                      end: span.end,
-                    },
-                  ],
-                },
-              },
-              '*',
-            );
+            vscode.jumpToFile(span);
+
+            vscode.setFlashingRegions([{
+              file_path: span.file_path,
+              start_line: span.start_line,
+              start: span.start,
+              end_line: span.end_line,
+              end: span.end,
+            }]);
+            setFlashRanges([{
+              filePath: span.file_path,
+              startLine: span.start_line,
+              startCol: span.start,
+              endLine: span.end_line,
+              endCol: span.end,
+            }]);
+
           } catch (err) {
             console.error('[MermaidGraphView] error in triggerSpan', err);
           }
@@ -244,22 +365,35 @@ export const MermaidGraphView: React.FC = () => {
         const { svg } = await mermaid.render('bamlMermaidSvg', graph);
         if (isCancelled || !mermaidRef.current) return;
 
-        const normalizedSvg = svg
-          .replace(/[ ]*max-width:[ 0-9\.]*px;/i, '')
-          .replace(/width="[0-9\.]+px"/i, '')
-          .replace(/height="[0-9\.]+px"/i, '');
+        const normalizedSvg = svg.replace(/[ ]*max-width:[ 0-9\.]*px;/i, '');
         mermaidRef.current.innerHTML = normalizedSvg;
 
         const svgEl = mermaidRef.current.querySelector('#bamlMermaidSvg') as SVGSVGElement | null;
         if (!svgEl) return;
         svgRef.current = svgEl;
-        // Make the SVG fill the container
-        svgEl.setAttribute('width', '100%');
-        svgEl.setAttribute('height', '100%');
+        // Ensure the SVG keeps its natural size while preserving aspect ratio
         svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        svgEl.style.width = '100%';
-        svgEl.style.height = '100%';
-        svgEl.style.display = 'block';
+
+        // Rebuild label ↔︎ node lookup for highlighting
+        const labelNodeMap = new Map<string, SVGElement[]>();
+        svgEl.querySelectorAll('g.node').forEach((node) => {
+          const textContent = node.textContent;
+          if (!textContent) return;
+          const normalized = normalizeLabel(textContent);
+          if (!normalized) return;
+          const existing = labelNodeMap.get(normalized);
+          if (existing) {
+            existing.push(node as SVGElement);
+          } else {
+            labelNodeMap.set(normalized, [node as SVGElement]);
+          }
+        });
+        labelNodeMapRef.current = labelNodeMap;
+        const pendingLabels = pendingLabelsRef.current;
+        clearAllHighlights();
+        if (pendingLabels.size > 0) {
+          applyHighlightSet(pendingLabels);
+        }
 
         // Inject CSS override so it takes precedence over Mermaid defaults inside the SVG
         try {
@@ -267,7 +401,7 @@ export const MermaidGraphView: React.FC = () => {
           styleEl.setAttribute('data-baml', 'mermaid-css-override');
           styleEl.textContent = MERMAID_CSS_OVERRIDE;
           svgEl.appendChild(styleEl);
-        } catch {}
+        } catch { }
 
         // Programmatically round rect corners (CSS cannot set rx/ry reliably on SVG rects)
         try {
@@ -275,7 +409,7 @@ export const MermaidGraphView: React.FC = () => {
             (el as SVGRectElement).setAttribute('rx', '10');
             (el as SVGRectElement).setAttribute('ry', '10');
           });
-        } catch {}
+        } catch { }
 
         // Expand cluster label foreignObjects to fit content after font/styling changes
         try {
@@ -293,34 +427,13 @@ export const MermaidGraphView: React.FC = () => {
               if (rect.height > 0) fo.setAttribute('height', String(rect.height));
             }
           });
-        } catch {}
+        } catch { }
 
         // Keep arrowhead markers near default sizing (no scaling), only color is overridden via CSS
-
-        // Initialize svg-pan-zoom on the generated SVG
-        panZoomRef.current = svgPanZoom(svgEl as unknown as SVGElement, {
-          panEnabled: true,
-          zoomEnabled: true,
-          controlIconsEnabled: false,
-          fit: true,
-          center: true,
-          minZoom: 0.25,
-          maxZoom: 4,
-          zoomScaleSensitivity: 0.3,
-          preventMouseEventsDefault: false,
+        requestAnimationFrame(() => {
+          const initialScale = computeFitScale();
+          centerGraph(initialScale);
         });
-
-        // After init, ensure proper fit/center
-        panZoomRef.current.resize();
-        panZoomRef.current.fit();
-        panZoomRef.current.center();
-
-        // Prevent wheel from scrolling parent while zooming/panning
-        const wheelPreventer = (e: WheelEvent) => {
-          e.preventDefault();
-        };
-        // Attach to the container hosting the SVG
-        svgEl.addEventListener('wheel', wheelPreventer, { passive: false });
 
         // Parse span map from a special mermaid comment emitted at the end
         // Look for a comment node like %%__BAML_SPANMAP__={...}
@@ -360,7 +473,7 @@ export const MermaidGraphView: React.FC = () => {
               .find((el) => !!el);
             if (!target) return;
             target.style.cursor = 'pointer';
-            try { target.setAttribute('data-baml-node-id', nodeId); } catch {}
+            try { target.setAttribute('data-baml-node-id', nodeId); } catch { }
             const onClick = (ev: Event) => {
               ev.stopPropagation();
               console.log('[MermaidGraphView] node click (manual handler)', { nodeId, span, target: (ev.target as Element)?.tagName });
@@ -420,10 +533,7 @@ export const MermaidGraphView: React.FC = () => {
         // Observe container size changes (ResizablePanel drags)
         if (containerRef.current && typeof ResizeObserver !== 'undefined') {
           resizeObserver = new ResizeObserver(() => {
-            if (!panZoomRef.current) return;
-            panZoomRef.current.resize();
-            panZoomRef.current.fit();
-            panZoomRef.current.center();
+            requestAnimationFrame(() => centerGraph());
           });
           resizeObserver.observe(containerRef.current);
         }
@@ -436,36 +546,55 @@ export const MermaidGraphView: React.FC = () => {
       isCancelled = true;
       window.removeEventListener('resize', onResize);
       if (resizeObserver) resizeObserver.disconnect();
-      panZoomRef.current?.destroy();
-      panZoomRef.current = null;
       try {
         const svgEl = svgRef.current;
-        if (svgEl) {
-          svgEl.removeEventListener('wheel', (e: any) => e.preventDefault());
-        }
         if ((window as any).__bamlCleanupListeners) {
           (window as any).__bamlCleanupListeners();
           delete (window as any).__bamlCleanupListeners;
         }
-      } catch {}
+      } catch { }
     };
-  }, [graph]);
+  }, [graph, centerGraph, computeFitScale, normalizeLabel, clearAllHighlights, applyHighlightSet]);
+
+  useEffect(() => {
+    applyHighlightSet(highlightedBlocks);
+  }, [highlightedBlocks, applyHighlightSet]);
 
   return (
     <div className="flex flex-col w-full h-full min-h-0">
       <MermaidHeader />
       <div
         ref={containerRef}
-        className="relative flex-1 min-h-0 overflow-hidden border rounded bg-transparent"
+        className="relative overflow-hidden border rounded bg-transparent"
         style={{
           borderColor: 'var(--vscode-panel-border)',
           backgroundColor: 'transparent',
+          height: '70%',
         }}
       >
-        <div
-          ref={mermaidRef}
-          className="absolute inset-0 overflow-hidden p-2"
-        />
+        <div className="h-full w-full">
+          <TransformWrapper
+            ref={transformRef}
+            minScale={0.1}
+            maxScale={6}
+            initialScale={1}
+            wheel={{ step: 0.15, smoothStep: 0.05 }}
+            doubleClick={{ disabled: true }}
+            pinch={{ disabled: false }}
+            panning={{ velocityDisabled: true }}
+          >
+            <TransformComponent
+              wrapperStyle={{ width: '100%', height: '100%' }}
+            >
+              <div className="flex h-full w-full items-center justify-center">
+                <div
+                  ref={mermaidRef}
+                  className="overflow-hidden p-2"
+                />
+              </div>
+            </TransformComponent>
+          </TransformWrapper>
+        </div>
 
         {/* Controls overlay */}
         <div className="absolute top-2 right-2 z-10">
@@ -485,5 +614,3 @@ export const MermaidGraphView: React.FC = () => {
     </div>
   );
 };
-
-

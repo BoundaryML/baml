@@ -111,9 +111,17 @@ ForStatement {
 }
 ForInLoop { IdentifierDecl InKeyword FunctionValueExpr }
 ForCLoop { CForInit? ";" CForCondition? ";" CForUpdate? }
-CForInit { LetKeyword IdentifierDecl "=" FunctionValueExpr }
+CForInit { 
+  LetKeyword IdentifierDecl "=" FunctionValueExpr |
+  IdentifierDecl AssignmentOperator FunctionValueExpr |
+  IdentifierDecl "(" FunctionArgs ")"
+}
 CForCondition { FunctionValueExpr }  
-CForUpdate { IdentifierDecl "++" }
+CForUpdate { 
+  IdentifierDecl "++" |
+  IdentifierDecl AssignmentOperator FunctionValueExpr |
+  IdentifierDecl "(" FunctionArgs ")"
+}
 
 AssignmentStatement { IdentifierDecl AssignmentOperator FunctionValueExpr ";"? }
 AssignmentOperator { "+=" | "-=" | "*=" | "/=" | "=" }

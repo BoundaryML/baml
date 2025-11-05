@@ -1,9 +1,6 @@
 //! Instruction set and bytecode representation.
 
-use crate::{
-    vm::{indexable::GlobalIndex, Value},
-    ObjectIndex,
-};
+use crate::{types::Value, GlobalIndex, ObjectIndex};
 
 /// Individual bytecode instruction.
 ///
@@ -33,6 +30,7 @@ use crate::{
 ///
 /// Instead store the state or complex structure in the [`crate::Vm`] struct and
 /// find a way to reference it with very simple instructions.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Instruction {
     /// Loads a constant from the bytecode's constant pool.
@@ -43,14 +41,14 @@ pub enum Instruction {
 
     /// Loads a variable from the frame's local variable slots.
     ///
-    /// Format: `LOAD_VAR i` where `i` is the index of the variable in the
-    /// [`crate::Frame::locals`] array.
+    /// Format: `LOAD_VAR i` where `i` is the relative index of the variable in
+    /// [`crate::Vm::stack`] array.
     LoadVar(usize),
 
     /// Stores a value in the frame's local variable slots.
     ///
-    /// Format: `STORE_VAR i` where `i` is the index of the variable in the
-    /// [`crate::Frame::locals`] array.
+    /// Format: `STORE_VAR i` where `i` is the relative index of the variable in
+    /// [`crate::Vm::stack`] array.
     StoreVar(usize),
 
     /// Load a global variable from the [`crate::Vm::globals`] array.
@@ -210,6 +208,15 @@ pub enum Instruction {
     /// control flow to the embedder and doesn't care about anything else.
     Await,
 
+    /// Creates a watched var and tracks its state.
+    ///
+    /// Format: `WATCH i` where `i` is the relative index of the variable in the
+    /// [`crate::Vm::stack`] array.
+    Watch(usize),
+
+    /// Manually triggers notifications for a watched variable.
+    Notify(usize),
+
     /// Call a function.
     ///
     /// Format: `CALL n` where `n` is the number of arguments passed to the
@@ -230,6 +237,32 @@ pub enum Instruction {
     ///
     /// Format: `ASSERT`
     Assert,
+
+    /// Notifies about entering or exiting a block.
+    ///
+    /// Format: `NOTIFY_BLOCK block_index` where `block_index` is the index
+    /// into the current function's block_notifications array.
+    NotifyBlock(usize),
+}
+
+/// Block notification metadata stored in the Function struct.
+/// The function_name field is populated at runtime from the Function containing this notification.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlockNotification {
+    pub function_name: String, // Populated at runtime from Function::name
+    pub block_name: String,
+    pub level: usize,
+    pub block_type: BlockNotificationType,
+    pub is_enter: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BlockNotificationType {
+    Statement,
+    If,
+    While,
+    For,
+    Function,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -334,6 +367,11 @@ impl std::fmt::Display for Instruction {
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
+            Instruction::Watch(i) => write!(f, "WATCH {i}"),
+            Instruction::NotifyBlock(block_index) => {
+                write!(f, "NOTIFY_BLOCK {block_index}")
+            }
+            Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
         }
     }
 }

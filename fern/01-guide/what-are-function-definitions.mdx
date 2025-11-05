@@ -8,8 +8,7 @@ The best way to understand BAML and its developer experience is to see it live i
 ### Demo video
 Here we write a BAML function definition, and then call it from a Python script.
 
-<iframe src="https://fast.wistia.net/embed/iframe/5fxpquglde?seo=false&videoFoam=false" title="BAML Demo Video" allow="autoplay; fullscreen" allowtransparency="true" frameborder="0" scrolling="no" class="wistia_embed" name="wistia_embed" msallowfullscreen width="640" height="352"></iframe>
-<script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
+<iframe src="https://www.youtube.com/embed/gxckvkNg6KM?si=8Zj8x_tsvZES8asd" title="BAML Demo Video" allow="autoplay; fullscreen" allowtransparency="true" frameborder="0" scrolling="no"  msallowfullscreen width="640" height="352"></iframe>
 
 ### Examples
 - [Interactive NextJS app with streaming](https://baml-examples.vercel.app/examples/stream-object)
@@ -26,7 +25,7 @@ class WeatherAPI {
 }
 
 function UseTool(user_message: string) -> WeatherAPI {
-  client "openai/gpt-4o"
+  client "openai-responses/gpt-5-mini"
   prompt #"
     Extract.... {# we will explain the rest in the guides #}
   "#

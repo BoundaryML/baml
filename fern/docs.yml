@@ -63,7 +63,7 @@ ai-chat:
     // Functions define inputs, outputs and prompts
     // function name is always PascalCase
     function MyFunction(input: MyObject) -> string {
-      client "openai/gpt-4o"
+      client "openai-responses/gpt-5-mini"
       // prompt with jinja syntax inside here. with double curly braces for variables.
       // make sure to include: {{ ctx.output_format }} in the prompt, which prints the output schema instructions so the LLM returns the output in the correct format (json or string, etc.). DO NOT write the output schema manually.
       prompt #"
@@ -73,10 +73,10 @@ ai-chat:
 
     <LLMClients>
       You can use any of the following if you write a baml function example:
-      - openai/gpt-4o
-      - openai/gpt-4o-mini
-      - anthropic/claude-3-5-sonnet-latest (note the "3-5")
-      - anthropic/claude-3-5-haiku-latest
+      - openai-responses/gpt-5
+      - openai-responses/gpt-5-mini
+      - anthropic/claude-sonnet-4-20250514
+      - anthropic/claude-3-5-haiku-20241022
 
       If the user mentions an open-source model like "llama3" or "r1", search the docs for "OpenRouter" or "openai-generic" to see how to use it.
     </LLMClients>
@@ -97,7 +97,7 @@ ai-chat:
       }
 
       function ClassifyTweets(tweets: string[]) -> TweetAnalysis[] {
-        client "openai/gpt-4o-mini"
+        client "openai-responses/gpt-5-mini"
         prompt #"
           Analyze each of the following tweets and classify them.
 
@@ -285,6 +285,9 @@ navigation:
           - page: What is BAML?
             icon: fa-regular fa-question-circle
             path: 01-guide/what-are-function-definitions.mdx
+          - page: Why BAML?
+            icon: fa-regular fa-lightbulb
+            path: 01-guide/why-baml.mdx
           - page: What's the baml_src folder
             icon: fa-regular fa-folder
             path: 01-guide/what-is-baml_src.mdx
@@ -380,10 +383,13 @@ navigation:
           - page: Error Handling
             icon: fa-regular fa-triangle-exclamation
             path: 01-guide/04-baml-basics/error-handling.mdx
+          - page: Configuring Timeouts
+            icon: fa-regular fa-stopwatch
+            path: 01-guide/04-baml-basics/timeouts.mdx
           - page: Concurrent Calls
             icon: fa-regular fa-clock-rotate-left
             path: 01-guide/04-baml-basics/concurrent-calls.mdx
-          - page: AbortSignal / Timeouts
+          - page: AbortSignal / Cancellation
             slug: abort-signal
             icon: fa-regular fa-stop-circle
             path: 01-guide/04-baml-basics/abort-signal.mdx
@@ -431,9 +437,18 @@ navigation:
                 path: 01-guide/07-observability/studio.mdx
       - section: Comparisons
         contents:
+          - page: BAML vs Langchain
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/langchain.mdx
           - page: BAML vs Marvin
             icon: fa-solid fa-magnifying-glass
             path: 01-guide/09-comparisons/marvin.mdx
+          - page: BAML vs Ai-SDK
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/ai-sdk.mdx
+          - page: BAML vs OpenAI SDK
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/openai-sdk.mdx
           - page: BAML vs Pydantic
             icon: fa-solid fa-magnifying-glass
             path: 01-guide/09-comparisons/pydantic.mdx
@@ -670,7 +685,7 @@ navigation:
         contents:
           - page: with_options(..)
             path: 03-reference/baml_client/with_options.mdx
-          - page: AbortSignal / Timeouts
+          - page: AbortSignal / Cancellation
             slug: abort-signal
             path: 03-reference/baml_client/abort-signal.mdx
           - page: Collector
@@ -793,6 +808,9 @@ navigation:
           - page: "OpenRouter (openai-generic)"
             slug: openrouter
             path: 03-reference/baml/clients/providers/openrouter.mdx
+          - page: "Vercel AI Gateway (openai-generic)"
+            slug: vercel-ai-gateway
+            path: 03-reference/baml/clients/providers/vercel-ai-gateway.mdx
           - page: "Tinfoil (openai-generic)"
             slug: tinfoil
             path: 03-reference/baml/clients/providers/tinfoil.mdx
@@ -807,6 +825,9 @@ navigation:
             path: 03-reference/baml/clients/providers/vllm.mdx
       - section: LLM Client Strategies
         contents:
+          - page: "Timeout Configuration"
+            slug: timeouts
+            path: 03-reference/baml/clients/timeouts.mdx
           - page: "Retry Policy"
             path: 03-reference/baml/clients/strategy/retry.mdx
           - page: "Fallback"
@@ -964,6 +985,9 @@ layout:
   searchbar-placement: header
   header-height: 54px
   tabs-placement: header
+settings:
+  dark-mode-code: true
+  http-snippets: false
 
 typography:
   bodyFont:
@@ -1156,6 +1180,8 @@ redirects:
     destination: "/ref/llm-client-providers/ollama"
   - source: "/ref/llm-client-providers/openai-generic-openrouter"
     destination: "/ref/llm-client-providers/openrouter"
+  - source: "/ref/llm-client-providers/openai-generic-vercel-ai-gateway"
+    destination: "/ref/llm-client-providers/vercel-ai-gateway"
   - source: "/ref/llm-client-providers/openai-generic-togetherai"
     destination: "/ref/llm-client-providers/together"
   - source: "/ref/llm-client-providers/openai-generic-unify-ai"

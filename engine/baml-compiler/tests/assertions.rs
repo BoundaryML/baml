@@ -1,6 +1,9 @@
 //! Compiler tests for assert statements.
 
-use baml_vm::{BinOp, CmpOp, Instruction};
+use baml_vm::{
+    test::{Instruction, Value},
+    BinOp, CmpOp,
+};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -9,7 +12,7 @@ use common::{assert_compiles, Program};
 fn assert_statement_ok() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn assertOk() -> int {
+            function assertOk() -> int {
                 assert 2 + 2 == 4;
                 3
             }
@@ -17,13 +20,13 @@ fn assert_statement_ok() -> anyhow::Result<()> {
         expected: vec![(
             "assertOk",
             vec![
-                Instruction::LoadConst(0), // 2
-                Instruction::LoadConst(1), // 2
+                Instruction::LoadConst(Value::Int(2)), // 2
+                Instruction::LoadConst(Value::Int(2)), // 2
                 Instruction::BinOp(BinOp::Add),
-                Instruction::LoadConst(2), // 4
+                Instruction::LoadConst(Value::Int(4)), // 4
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::Assert,
-                Instruction::LoadConst(3), // 3
+                Instruction::LoadConst(Value::Int(3)), // 3
                 Instruction::Return,
             ],
         )],
@@ -34,7 +37,7 @@ fn assert_statement_ok() -> anyhow::Result<()> {
 fn assert_statement_not_ok() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
-            fn assertNotOk() -> int {
+            function assertNotOk() -> int {
                 assert 3 == 1;
                 2
             }
@@ -42,11 +45,11 @@ fn assert_statement_not_ok() -> anyhow::Result<()> {
         expected: vec![(
             "assertNotOk",
             vec![
-                Instruction::LoadConst(0), // 3
-                Instruction::LoadConst(1), // 1
+                Instruction::LoadConst(Value::Int(3)), // 3
+                Instruction::LoadConst(Value::Int(1)), // 1
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::Assert,
-                Instruction::LoadConst(2), // 2
+                Instruction::LoadConst(Value::Int(2)), // 2
                 Instruction::Return,
             ],
         )],

@@ -245,7 +245,7 @@ class Widget(BaseModel):
     type: typing.Union[typing_extensions.Literal['button'], typing_extensions.Literal['text'], typing_extensions.Literal['image'], typing_extensions.Literal['container']]
     button: typing.Optional["ButtonWidget"] = None
     text: typing.Optional["TextWidget"] = None
-    image: typing.Optional["ImageWidget"] = None
+    img: typing.Optional["ImageWidget"] = None
     container: typing.Optional["ContainerWidget"] = None
 
 # #########################################################################

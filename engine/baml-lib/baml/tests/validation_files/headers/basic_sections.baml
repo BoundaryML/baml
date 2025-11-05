@@ -1,17 +1,17 @@
-fn BasicSections() -> string {
-    # Main Processing
+function BasicSections() -> string {
+    //# Main Processing
     let title = "hello";
-    
-    ## Generate Summary
+
+    //## Generate Summary
     let summary = "world";
-    
-    ## Make Space
+
+    //## Make Space
     let space = " ";
 
-    ### Prepare Final Output
+    //### Prepare Final Output
     let something = "something";
 
-    ### Final Output
+    //### Final Output
     title + space + summary
 }
 
@@ -21,5 +21,3 @@ fn BasicSections() -> string {
 //    | 
 //  1 | function BasicSections() -> string {
 //    | 
-
-

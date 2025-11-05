@@ -1,7 +1,7 @@
 import { SidebarMenuButton } from '@baml/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { useAtomValue } from 'jotai';
-import { CheckCircle2, FunctionSquare, XCircle } from 'lucide-react';
+import { FunctionSquare } from 'lucide-react';
 import * as React from 'react';
 import { vscode } from '../../vscode';
 import { functionObjectAtom } from '../atoms';
@@ -11,18 +11,6 @@ import {
   testHistoryAtom,
 } from '../prompt-preview/test-panel/atoms';
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils';
-
-const createSpan = (span: {
-  start: number;
-  end: number;
-  file_path: string;
-  start_line: number;
-}) => ({
-  start: span.start,
-  end: span.end,
-  source_file: span.file_path,
-  value: `${span.file_path.split('/').pop() ?? '<file>.baml'}:${span.start_line + 1}`,
-});
 
 interface FunctionItemProps {
   functionName: string;
@@ -155,7 +143,7 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (fn?.span) {
-      vscode.postMessage({ command: 'jumpToFile', span: createSpan(fn.span) });
+      vscode.jumpToFile(fn.span);
     }
   };
 

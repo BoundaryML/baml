@@ -1,0 +1,21 @@
+---
+source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE "function HelloWorld(name: string) -> string {
+  client GPT4
+  prompt #"
+    Say hello to {{name}}
+  "#
+}
+
+class User {
+  name string
+  age int
+}// Added comment
+// Test comment
+"
+
+=== ERRORS ===
+None

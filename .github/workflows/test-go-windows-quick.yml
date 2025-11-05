@@ -1,0 +1,89 @@
+name: Quick Test - Go Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run with debug logging'
+        required: false
+        default: true
+
+jobs:
+  test-windows-quick:
+    name: Quick Windows Test
+    runs-on: windows-2022
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Setup Protoc (Windows - Quick)
+        shell: bash
+        run: |
+          # Download protoc directly to avoid rate limiting
+          PROTOC_VERSION="27.1"
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-win64.zip"
+          unzip -q protoc-${PROTOC_VERSION}-win64.zip -d $HOME/.local
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          rm protoc-${PROTOC_VERSION}-win64.zip
+
+      - name: Install protoc-gen-go
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1
+        shell: bash
+
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            engine/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-
+
+      - name: Build CFFI Library (Debug mode for speed)
+        run: cargo build -p baml_cffi
+        working-directory: engine
+        shell: bash
+
+      - name: Run Windows-specific Go Tests
+        run: |
+          $env:BAML_LIBRARY_PATH = "${{ github.workspace }}\engine\target\debug\baml_cffi.dll"
+          if ("${{ inputs.debug_enabled }}" -eq "true") {
+            $env:BAML_LOG = "DEBUG"
+          }
+          go test -v -run "TestWindows" ./...
+        working-directory: engine/language_client_go
+        shell: powershell
+
+      - name: Run All Go Tests
+        if: success()
+        run: |
+          $env:BAML_LIBRARY_PATH = "${{ github.workspace }}\engine\target\debug\baml_cffi.dll"
+          go test -v ./...
+        working-directory: engine/language_client_go
+        shell: powershell
+
+      - name: Verify DLL Naming
+        run: |
+          Write-Host "Checking DLL naming convention..."
+          $dll = Get-Item "${{ github.workspace }}\engine\target\debug\baml_cffi.dll"
+          if ($dll.Name -match '^lib') {
+            Write-Error "Windows DLL should not have 'lib' prefix"
+            exit 1
+          }
+          Write-Host "✓ DLL naming is correct: $($dll.Name)"
+        shell: powershell

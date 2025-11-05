@@ -1,0 +1,7 @@
+function Calculate() -> int {
+  let a = 1 + 2
+  let b = a * 3
+  let c = b / 2 - 1
+  let d = (a + b) * c
+  return d
+}

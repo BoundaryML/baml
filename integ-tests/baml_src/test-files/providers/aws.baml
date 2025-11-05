@@ -5,6 +5,17 @@ function TestAws(input: string) -> string {
   "#
 }
 
+function TestAwsVideoDescribe(video_input: video) -> string {
+  client AwsBedrock
+  prompt #"
+    {{ _.role("user") }}
+
+    Describe the following video in one sentence.
+
+    {{ video_input }}
+  "#
+}
+
 /// my docs
 class UniverseQuestion {
   question string
@@ -32,6 +43,13 @@ function TestUniverseQuestion(question: UniverseQuestionInput) -> UniverseQuesti
 
 function TestAwsInvalidRegion(input: string) -> string {
   client AwsBedrockInvalidRegion
+  prompt #"
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
+  "#
+}
+
+function TestAwsInvalidEndpoint(input: string) -> string {
+  client AwsBedrockInvalidEndpoint
   prompt #"
     Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#

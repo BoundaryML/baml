@@ -21,7 +21,7 @@ pub struct BamlSourceBundle {
 pub struct BamlSourceCode {
     pub project_id: String,
     pub file_blake3_hash: String,
-    pub content: Vec<u8>,
+    pub content: String,
     pub mime_type: String,
     #[ts(type = "number", optional)]
     pub uploaded_at: Option<EpochMsTimestamp>,
@@ -32,7 +32,7 @@ pub struct BamlSourceCode {
 pub struct AstNodeDefinition {
     pub project_id: String,
     pub ast_node_id: String,
-    #[ts(type = "any")]
+    #[ts(type = "unknown")]
     pub ast_node_definition: serde_json::Value,
     pub flattened_dependencies_ast_nodes: Vec<String>,
     pub baml_src_node_ids: Vec<String>,

@@ -22,7 +22,23 @@ class BamlLanguageServerFactory : LanguageServerFactory {
     }
 
     override fun createClientFeatures(): LSPClientFeatures {
-        val features = LSPClientFeatures()
+        val features = object : LSPClientFeatures() {
+            override fun initializeParams(params: org.eclipse.lsp4j.InitializeParams) {
+                // Add initialization options for BAML settings
+                params.initializationOptions = mapOf(
+                    "settings" to mapOf(
+                        "featureFlags" to listOf("beta"),
+                        "generateCodeOnSave" to "always",
+                        "lspMethodsToForwardToWebview" to listOf(
+                            "runtime_updated",
+                            "baml_settings_updated",
+                            "workspace/executeCommand",
+                        )
+                    )
+                )
+            }
+        }
+        
         features.setServerInstaller(BamlLanguageServerInstaller()) // customize language server installer
         return features
     }

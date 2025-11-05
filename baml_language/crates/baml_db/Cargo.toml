@@ -1,0 +1,33 @@
+[package]
+name = "baml_db"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+salsa = { workspace = true }
+
+# All compiler crates
+baml_base = { workspace = true }
+baml_workspace = { workspace = true }
+baml_lexer = { workspace = true }
+baml_syntax = { workspace = true }
+baml_parser = { workspace = true }
+baml_hir = { workspace = true }
+baml_thir = { workspace = true }
+baml_codegen = { workspace = true }
+baml_diagnostics = { workspace = true }
+
+# No dev-dependencies needed anymore!

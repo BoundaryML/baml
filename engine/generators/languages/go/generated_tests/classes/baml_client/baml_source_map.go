@@ -15,7 +15,7 @@ package baml_client
 
 var file_map = map[string]string{
 
-	"baml_src/main.baml": "class SimpleClass {\n    digits int\n    words string  @stream.with_state\n}\n\nfunction MakeSimpleClass() -> SimpleClass {\n    client \"openai/gpt-4o-mini\"\n    prompt #\"\n        {{ ctx.output_format }}\n    \"#\n}\n\nfunction ConsumeSimpleClass(item: SimpleClass) -> SimpleClass {\n    client \"openai/gpt-4o-mini\"\n    prompt #\"\n        Return back to me verbatim:\n\n        {{ item }}\n    \"#\n}\n\ntest MakeSimpleClassTest {\n    functions [MakeSimpleClass]\n    args {\n        class_1:\n            digits: 123\n            words: \"hello\"\n    }\n}\n",
+	"baml_src/main.baml": "class SimpleClass {\n    digits int\n    words string  @stream.with_state\n}\n\nfunction MakeSimpleClass() -> SimpleClass {\n    client \"openai/gpt-4o-mini\"\n    prompt #\"\n        {{ ctx.output_format }}\n    \"#\n}\n\nfunction ConsumeSimpleClass(item: SimpleClass) -> SimpleClass {\n    client \"openai/gpt-4o-mini\"\n    prompt #\"\n        Return back to me verbatim:\n\n        {{ item }}\n    \"#\n}\n\ntest MakeSimpleClassTest {\n    functions [MakeSimpleClass]\n    args {}\n}\n",
 }
 
 func getBamlFiles() map[string]string {

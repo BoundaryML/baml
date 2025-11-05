@@ -6,8 +6,8 @@ use std::{
 
 use baml_rpc::runtime_api::baml_value::{BamlValue, MediaValue, ValueContent};
 use base64::{engine::general_purpose, Engine as _};
+use blake3;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
 use crate::tracingv2::publisher::publisher::BlobUploaderMessage;
@@ -82,11 +82,10 @@ impl BlobRefCache {
         }
     }
 
-    /// Generate a hash for a blob
+    /// Generate a hash for a blob using BLAKE3
     pub fn hash_blob(content: &[u8]) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(content);
-        format!("{:x}", hasher.finalize())
+        let hash = blake3::hash(content);
+        hash.to_hex().to_string()
     }
 
     /// Store a blob (as base64 string) and associate it with a function_call_id
@@ -124,7 +123,7 @@ impl BlobRefCache {
                 // Create the message using a different approach to avoid circular imports
                 match upload_tx.send(BlobUploaderMessage::QueueBlob(blob_with_content)) {
                     Ok(_) => {
-                        log::info!("Queued blob {blob_hash} for immediate upload");
+                        log::info!("Queued blob {blob_hash} for upload");
                     }
                     Err(e) => {
                         log::warn!("Failed to queue blob for upload: {e}");
@@ -167,7 +166,7 @@ impl BlobRefCache {
 
         // Actually perform the removals
         for hash in to_remove {
-            log::info!("Removing blob {hash} from cache (no active references)");
+            // log::info!("Removing blob {hash} from cache (no active references)");
             blobs.remove(&hash);
         }
     }

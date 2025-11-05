@@ -7,7 +7,7 @@ import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
 import { ctxAtom, diagnosticsAtom, filesAtom, runtimeAtom } from '../../atoms';
 import { areTestsRunningAtom, selectionAtom } from '../atoms';
 import { Loader } from './components';
-import { findMediaFile } from './media-utils';
+import { vscode } from '../../vscode';
 import { RenderPrompt } from './render-prompt';
 import { EnhancedErrorRenderer } from './test-panel/components/EnhancedErrorRenderer';
 
@@ -34,16 +34,34 @@ export const PromptPreviewContent = () => {
       ) {
         return;
       }
-      const newPreview = await selectedFn.render_prompt_for_test(
-        rt,
-        selectedTc.name,
-        ctx,
-        findMediaFile,
-        apiKeys,
-      );
-      setLastKnownPreview(newPreview);
-      setPromptData(newPreview);
-      return newPreview;
+      console.log('[PromptPreview] Attempt render_prompt_for_test', {
+        functionName: selectedFn.name,
+        testCaseName: selectedTc.name,
+        hasExprTests: selectedFn.test_cases?.length ?? 0,
+      });
+      try {
+        const newPreview = await selectedFn.render_prompt_for_test(
+          rt,
+          selectedTc.name,
+          ctx,
+          vscode.loadMediaFile,
+          apiKeys,
+        );
+        console.log('[PromptPreview] render_prompt_for_test success', {
+          functionName: selectedFn.name,
+          testCaseName: selectedTc.name,
+        });
+        setLastKnownPreview(newPreview);
+        setPromptData(newPreview);
+        return newPreview;
+      } catch (error) {
+        console.error('[PromptPreview] render_prompt_for_test failed', {
+          functionName: selectedFn.name,
+          testCaseName: selectedTc.name,
+          error,
+        });
+        throw error;
+      }
     },
     [rt, ctx, selectedFn, selectedTc, apiKeys, files, setPromptData],
   );
@@ -60,12 +78,12 @@ export const PromptPreviewContent = () => {
     // Include file content in the key so updates trigger when typing
     rt && ctx && selectedFn && selectedTc
       ? [
-          'prompt-preview',
-          selectedFn.name,
-          selectedTc.name,
-          JSON.stringify(apiKeys),
-          JSON.stringify(files), // Add file content to trigger updates on typing
-        ]
+        'prompt-preview',
+        selectedFn.name,
+        selectedTc.name,
+        JSON.stringify(apiKeys),
+        JSON.stringify(files), // Add file content to trigger updates on typing
+      ]
       : null,
     generatePreview,
     {

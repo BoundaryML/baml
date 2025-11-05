@@ -8,15 +8,15 @@ use super::repr::{Class, Enum, EnumValue, ExprFunction, Field, Node, NodeAttribu
 use crate::{ir::repr::IntermediateRepr, Configuration};
 
 pub mod functions {
-    pub const FETCH_VALUE: &str = "std::fetch_value";
+    pub const FETCH_AS: &str = "baml.fetch_as";
 }
 
 pub mod classes {
-    pub const REQUEST: &str = "std::Request";
+    pub const REQUEST: &str = "baml.HttpRequest";
 }
 
 pub mod enums {
-    pub const HTTP_METHOD: &str = "std::HttpMethod";
+    pub const HTTP_METHOD: &str = "baml.HttpMethod";
 }
 
 /// Builtins are exposed through a separate IR, which can be combined with
@@ -125,7 +125,7 @@ pub fn builtin_enums() -> Vec<Node<Enum>> {
 /// when actual user defined generics are introduced.
 pub fn builtin_generic_fn(f: Builtin, return_type: TypeIR) -> Expr<ExprMetadata> {
     let signature = match f {
-        // fn fetch_value<T>(request: std::Request) -> T
+        // fn fetch_value<T>(request: baml.HttpRequest) -> T
         Builtin::FetchValue => TypeIR::arrow(vec![TypeIR::class(classes::REQUEST)], return_type),
     };
 

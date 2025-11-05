@@ -86,7 +86,7 @@ jobs:
 
       - name: Run Rust lint (Clippy)
         if: matrix.check == 'rust-lint'
-        run: RUSTFLAGS="-A unused -D warnings" cargo clippy
+        run: RUSTFLAGS="-A unused -D warnings" cargo clippy --workspace -- -D clippy::print_stdout
         working-directory: engine
 
       - name: Run Rust lint WASM (Clippy)
@@ -172,16 +172,17 @@ jobs:
 
       - name: Test Generators (1 of 3)
         run: |
-          pnpm generate --force --filter=@boundaryml/baml || (echo "::error:: merge canary and run codegen again" && exit 1)
+          pnpm build:debug && pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
+        working-directory: integ-tests/typescript
 
       - name: Ensure No Changes (1 of 3)
         run: |
           git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
 
-
       - name: Test Generators (2 of 3)
         run: |
-          pnpm generate --force --filter=@boundaryml/baml || (echo "::error:: merge canary and run codegen again" && exit 1)
+          pnpm build:debug && pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
+        working-directory: integ-tests/typescript
 
       - name: Ensure No Changes (2 of 3)
         run: |
@@ -189,7 +190,8 @@ jobs:
 
       - name: Test Generators (3 of 3)
         run: |
-          pnpm generate --force --filter=@boundaryml/baml || (echo "::error:: merge canary and run codegen again" && exit 1)
+          pnpm build:debug && pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
+        working-directory: integ-tests/typescript
 
       - name: Ensure No Changes (3 of 3)
         run: |
@@ -235,8 +237,14 @@ jobs:
           export LD_LIBRARY_PATH="${RUBY_LIB_PATH}:${LD_LIBRARY_PATH}"
           # Build baml_cffi shared library
           cargo build --package baml_cffi
+          echo "Listing release directory:"
+          ls -la engine/target/release/libbaml_cffi.* || true
+          ls -la engine/target/release/baml_cffi.* || true
+
+          export BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/debug/libbaml_cffi.so
           # Run tests
-          cargo test --features skip-integ-tests
+          echo "BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/debug/libbaml_cffi.so" >> $GITHUB_ENV
+          cargo test --features skip-integ-tests --verbose -- --nocapture
         working-directory: engine
 
       - name: Run Python integration tests
@@ -284,6 +292,8 @@ jobs:
 
   # Sync Zed extension to separate repository
   sync-zed-repository:
+    environment:
+      name: ${{ github.ref == 'refs/heads/canary' && 'boundary-tools-prod' || 'boundary-tools-dev' }}
     runs-on: ubuntu-latest
     # Only run on pushes to canary branch or manual dispatch
     if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')

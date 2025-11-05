@@ -15,10 +15,12 @@ description: "Error thrown when a BAML operation is cancelled"
     export class BamlAbortError extends Error {
       public readonly name: string = 'BamlAbortError'
       public readonly reason?: any
+      public readonly detailed_message: string
       
-      constructor(message: string, reason?: any) {
+      constructor(message: string, reason?: any, detailed_message: string = '') {
         super(message)
         this.reason = reason
+        this.detailed_message = detailed_message
       }
     }
     ```
@@ -29,9 +31,10 @@ description: "Error thrown when a BAML operation is cancelled"
     class BamlAbortError(Exception):
         """Error raised when a BAML operation is aborted"""
         
-        def __init__(self, message: str, reason: Any = None):
+        def __init__(self, message: str, reason: Any = None, detailed_message: str = ''):
             super().__init__(message)
             self.reason = reason
+            self.detailed_message = detailed_message
             self.name = 'BamlAbortError'
     ```
   </Tab>
@@ -58,11 +61,12 @@ description: "Error thrown when a BAML operation is cancelled"
     ```ruby
     module Baml
       class AbortError < StandardError
-        attr_reader :reason
+        attr_reader :reason, :detailed_message
         
-        def initialize(message, reason = nil)
+        def initialize(message, reason = nil, detailed_message = '')
           super(message)
           @reason = reason
+          @detailed_message = detailed_message
         end
       end
     end
@@ -86,6 +90,11 @@ Optional additional context about the cancellation. This can be any value provid
 **Type**: `string`
 
 Always returns `"BamlAbortError"` for easy error type identification.
+
+### `detailed_message`
+**Type**: `string`
+
+Comprehensive error information that includes the complete history of all failed attempts when using fallback clients or retry policies. For abort errors, this typically contains the same information as `message` but may include additional debugging details about the cancellation context.
 
 ## Error Detection
 

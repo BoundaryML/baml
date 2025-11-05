@@ -1511,8 +1511,8 @@ func (t *WidgetClassView) PropertyText() (ClassPropertyView, error) {
 	return t.inner.Property("text")
 }
 
-func (t *WidgetClassView) PropertyImage() (ClassPropertyView, error) {
-	return t.inner.Property("image")
+func (t *WidgetClassView) PropertyImg() (ClassPropertyView, error) {
+	return t.inner.Property("img")
 }
 
 func (t *WidgetClassView) PropertyContainer() (ClassPropertyView, error) {

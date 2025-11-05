@@ -33,16 +33,16 @@ impl DumpIntermediateArgs {
 
         match dump_type {
             DumpType::HIR => {
-                println!("=== HIGH-LEVEL INTERMEDIATE REPRESENTATION (HIR) ===");
-                println!("Source directory: {:?}", self.from);
-                println!();
+                eprintln!("=== HIGH-LEVEL INTERMEDIATE REPRESENTATION (HIR) ===");
+                eprintln!("Source directory: {:?}", self.from);
+                eprintln!();
 
                 self.dump_hir(&validated_schema)?;
             }
             DumpType::Bytecode => {
-                println!("=== BYTECODE ===");
-                println!("Source directory: {:?}", self.from);
-                println!();
+                eprintln!("=== BYTECODE ===");
+                eprintln!("Source directory: {:?}", self.from);
+                eprintln!();
 
                 self.dump_bytecode(&validated_schema)?;
             }
@@ -91,13 +91,14 @@ impl DumpIntermediateArgs {
     }
 
     fn dump_hir(&self, validated_schema: &ValidatedSchema) -> Result<()> {
-        // Convert to HIR
+        // Convert to HIR (filtering is done in to_doc())
         let hir = Hir::from_ast(&validated_schema.db.ast);
+
         let mut w = Vec::new();
         hir.to_doc()
             .render(78, &mut w)
             .expect("Rendering should succeed");
-        println!(
+        eprintln!(
             "{}",
             String::from_utf8(w).expect("UTF-8 conversion should succeed")
         );
@@ -108,28 +109,40 @@ impl DumpIntermediateArgs {
     fn dump_bytecode(&self, validated_schema: &ValidatedSchema) -> Result<()> {
         let program = compile(&validated_schema.db)?;
 
-        // Create a map of function name to function for easy lookup
-        let functions: std::collections::HashMap<&str, &baml_vm::Function> = program
-            .objects
-            .iter()
-            .filter_map(|obj| match obj {
-                Object::Function(f) => Some((f.name.as_str(), f)),
-                _ => None,
-            })
-            .collect();
-
-        for (name, function) in functions {
-            println!("{name}");
-            println!(
-                "{}",
-                baml_vm::debug::display_bytecode(
-                    function,
-                    &EvalStack::default(),
-                    &program.objects,
-                    &program.globals,
-                    true
-                )
-            );
+        // Filter and display objects, excluding builtins
+        for obj in &program.objects {
+            match obj {
+                Object::Function(f) => {
+                    // Skip builtin functions (though we don't have any compiled as bytecode currently)
+                    if baml_compiler::builtin::is_builtin_identifier(&f.name) {
+                        continue;
+                    }
+                    eprintln!("{}", f.name);
+                    eprintln!(
+                        "{}",
+                        baml_vm::debug::display_bytecode(
+                            f,
+                            &EvalStack::new(),
+                            &program.objects,
+                            &program.globals,
+                            true
+                        )
+                    );
+                }
+                Object::Class(c) => {
+                    if !baml_compiler::builtin::is_builtin_class(&c.name) {
+                        eprintln!("Class: {} with {} fields", c.name, c.field_names.len());
+                    }
+                }
+                Object::Enum(e) => {
+                    if !baml_compiler::builtin::is_builtin_enum(&e.name) {
+                        eprintln!("Enum {}", e.name);
+                    }
+                }
+                _ => {
+                    // Skip other object types (Instance, etc.)
+                }
+            }
         }
 
         Ok(())

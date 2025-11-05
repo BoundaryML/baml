@@ -1,4 +1,5 @@
 import { b } from "../test-setup";
+import { ClientRegistry } from "../test-setup";
 
 describe("Azure Provider", () => {
   it("should support azure with default max_tokens", async () => {
@@ -44,6 +45,8 @@ describe("Azure Provider", () => {
     const final = await stream.getFinalResponse();
     expect(final.length).toBeGreaterThan(0);
   });
+
+
 
   // it('should fail if azure is not configured streaming', async () => {
   //   const stream = b.stream.TestAzureFailure('Donkey Kong')

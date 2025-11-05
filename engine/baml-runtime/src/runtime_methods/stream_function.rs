@@ -33,15 +33,15 @@ use crate::{
         },
         prompt_renderer::PromptRenderer,
     },
-    runtime_interface::{InternalClientLookup, RuntimeConstructor},
+    runtime_interface::RuntimeConstructor,
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, FunctionResultStream, InternalBamlRuntime, InternalRuntimeInterface,
+    BamlRuntime, FunctionResult, FunctionResultStream, InternalRuntimeInterface,
     RenderCurlSettings, RuntimeContext, RuntimeContextManager, TripWire,
 };
 
-impl InternalBamlRuntime {
+impl BamlRuntime {
     pub(crate) fn stream_function_impl(
         &self,
         function_name: String,
@@ -51,6 +51,7 @@ impl InternalBamlRuntime {
         #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
         collectors: Vec<Arc<Collector>>,
         cancel_tripwire: Arc<TripWire>,
+        tags: Option<&HashMap<String, String>>,
     ) -> Result<FunctionResultStream> {
         let is_expr_fn = self.get_expr_function(&function_name, &ctx).is_ok();
         if is_expr_fn {
@@ -84,6 +85,7 @@ impl InternalBamlRuntime {
                 #[cfg(not(target_arch = "wasm32"))]
                 tokio_runtime,
                 collectors,
+                tags: tags.cloned(),
                 cancel_tripwire,
             })
         } else {
@@ -92,7 +94,10 @@ impl InternalBamlRuntime {
                 .map_err(|e| e.into_error())?;
 
             // let func = self.get_function(&function_name)?;
-            let renderer = PromptRenderer::from_function(&prepared.func, self.ir(), &ctx)?;
+            let func = prepared.func.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Cannot stream expr function through this code path")
+            })?;
+            let renderer = PromptRenderer::from_function(func, self.ir(), &ctx)?;
             let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
             Ok(FunctionResultStream {
                 function_name: prepared.function_name,
@@ -104,6 +109,7 @@ impl InternalBamlRuntime {
                 #[cfg(not(target_arch = "wasm32"))]
                 tokio_runtime,
                 collectors,
+                tags: tags.cloned(),
                 cancel_tripwire,
             })
         }

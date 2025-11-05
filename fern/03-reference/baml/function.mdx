@@ -33,7 +33,7 @@ function name(parameters) -> return_type {
 - `name`: The function identifier (must start with a capital letter!)
 - `parameters`: One or more typed parameters (e.g., `text: string`, `data: CustomType`)
 - `return_type`: The type that the function guarantees to return (e.g., `string | MyType`)
-- `llm_specification`: The LLM to use (e.g., `"openai/gpt-4o-mini"`, `GPT4Turbo`, `Claude2`)
+- `llm_specification`: The LLM to use (e.g., `"openai/gpt-5-mini"`, `GPT5`, `Claude4`)
 - `block_string_specification`: The prompt template using Jinja syntax
 
 ## Type System
@@ -129,7 +129,7 @@ class Contact {
 }
 
 function ParsePerson(data: string) -> Person {
-    client "openai/gpt-4o"
+    client "openai/gpt-5"
     prompt #"
         {{ ctx.output_format }}
         

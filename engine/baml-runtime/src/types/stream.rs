@@ -37,6 +37,7 @@ pub struct FunctionResultStream {
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
     pub(crate) collectors: Vec<Arc<Collector>>,
+    pub(crate) tags: Option<HashMap<String, String>>,
     pub(crate) cancel_tripwire: Arc<TripWire>,
 }
 
@@ -109,6 +110,7 @@ impl FunctionResultStream {
             true,
             true,
             (!self.collectors.is_empty()).then(|| self.collectors.clone()),
+            self.tags.as_ref(),
         );
         let rctx = ctx.create_ctx(tb, cb, env_vars, call.new_call_id_stack.clone());
         let res = match rctx {
@@ -151,9 +153,12 @@ impl FunctionResultStream {
         let trace_event = TraceEvent::new_function_end(
             call_stack,
             match &res {
-                Ok(result) => Ok(baml_types::BamlValueWithMeta::<TypeNonStreaming>::Null(
-                    TypeNonStreaming::null(),
-                )),
+                Ok(result) => match result.result_with_constraints_content() {
+                    Ok(value) => Ok(value
+                        .0
+                        .map_meta(|f| f.3.to_non_streaming_type(self.ir.as_ref()))),
+                    Err(e) => Err((&e).to_baml_error()),
+                },
                 Err(e) => Err(e.to_baml_error()),
             },
         );

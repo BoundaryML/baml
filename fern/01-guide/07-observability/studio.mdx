@@ -178,3 +178,175 @@ async def pre_process_text(text):
     set_tags(**tags_dict) # "**" unpacks the dictionary
     return text.replace("\n", " ")
 ```
+
+### Tags on BAML calls and retrieving them with the Collector
+
+You can also set tags directly on a BAML function call and then retrieve them from the `Collector`. Tags from a parent trace are inherited by the BAML function call and merged with any function-specific tags you pass.
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_client.tracing import trace, set_tags
+from baml_py import Collector
+
+@trace
+async def parent_fn(msg: str):
+    # Set tags on the parent trace (these propagate to child BAML calls)
+    set_tags(parent_id="p123", run="xyz")
+
+    collector = Collector(name="tags-collector")
+
+    # You can also set per-call tags via baml_options
+    await b.TestOpenAIGPT4oMini(
+        msg,
+        baml_options={
+            "collector": collector,
+            "tags": {"call_id": "first", "version": "v1"},
+        },
+    )
+
+    # Retrieve tags from the last function log
+    log = collector.last
+    assert log is not None
+    print(log.tags)  # {"parent_id": "p123", "run": "xyz", "call_id": "first", "version": "v1"}
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from "baml_client";
+import { Collector } from "@boundaryml/baml";
+import { traceAsync, setTags } from "../baml_client/tracing";
+
+const parent = traceAsync("parentTS", async (msg: string) => {
+  setTags({ parentId: "p123", run: "xyz" });
+
+  const collector = new Collector("tags-collector");
+
+  await b.TestOpenAIGPT4oMini(msg, {
+    collector,
+    tags: { callId: "first", version: "v1" },
+  });
+
+  const log = collector.last!;
+  const tags = log.tags;
+  console.log(tags); // { parentId: "p123", run: "xyz", callId: "first", version: "v1" }
+});
+
+await parent("hi");
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    b "example.com/integ-tests/baml_client"
+)
+
+func run() error {
+    ctx := context.Background()
+
+    collector, err := b.NewCollector("tags-collector")
+    if err != nil {
+        return err
+    }
+
+    // Set per-call tags using WithTags
+    tags := map[string]string{
+        "callId":  "first",
+        "version": "v1",
+    }
+    _, err = b.TestOpenAIGPT4oMini(ctx, "hello", b.WithCollector(collector), b.WithTags(tags))
+    if err != nil {
+        return err
+    }
+
+    logs, err := collector.Logs()
+    if err != nil {
+        return err
+    }
+    if len(logs) > 0 {
+        t, err := logs[0].Tags()
+        if err != nil {
+            return err
+        }
+        fmt.Printf("Tags: %+v\n", t)
+    }
+    return nil
+}
+```
+</Tab>
+</Tabs>
+
+Notes:
+- Tags from `set_tags`/`setTags` on a parent `trace` are merged into the BAML function's tags.
+- Per-call tags are provided via `baml_options` in Python and the options object in TypeScript; in Go use `b.WithTags(map[string]string)`.
+- Retrieve tags from a `FunctionLog` using `log.tags` (Python/TypeScript) or `log.Tags()` (Go).
+
+### Tracing with ThreadPoolExecutor (Python)
+
+When using Python's `concurrent.futures.ThreadPoolExecutor`, traced functions submitted to the thread pool will start with **fresh, independent tracing contexts**. This is by design and differs from async/await execution.
+
+#### Expected Behavior
+
+<CodeGroup>
+```python Python
+from concurrent.futures import ThreadPoolExecutor
+from baml_client.tracing import trace
+
+@trace
+def parent_function():
+    with ThreadPoolExecutor() as executor:
+        # Submit worker to thread pool
+        future = executor.submit(worker_function, "data")
+        result = future.result()
+
+@trace
+def worker_function(data):
+    # This will be an independent root trace
+    # NOT a child of parent_function
+    process_data(data)
+
+@trace
+def process_data(data):
+    # This WILL be a child of worker_function
+    # (same thread execution)
+    return data.upper()
+```
+</CodeGroup>
+
+In the trace hierarchy, you'll see:
+- `parent_function` as a root trace (depth 1)
+- `worker_function` as an **independent root** trace (depth 1) - not a child
+- `process_data` as a child of `worker_function` (depth 2)
+
+#### Why This Happens
+
+Python's `contextvars` (used for tracing context) don't automatically propagate to thread pool threads. Each worker thread starts with a fresh context to:
+- Avoid complexity with context sharing across threads
+- Prevent potential race conditions
+- Maintain clear thread boundaries
+
+#### Best Practices
+
+1. **Use async/await for related work**: If you need to maintain parent-child relationships for parallel execution, use `asyncio` instead of thread pools:
+
+```python
+@trace
+async def parent_async():
+    # These will maintain parent-child relationship
+    results = await asyncio.gather(
+        async_worker("task1"),
+        async_worker("task2")
+    )
+```
+
+2. **Understand the trace hierarchy**: When debugging, remember that thread pool workers appear as separate root traces in your observability dashboard.
+
+3. **Tags don't propagate**: Tags set in the parent function won't automatically appear in thread pool workers since they have independent contexts.
+

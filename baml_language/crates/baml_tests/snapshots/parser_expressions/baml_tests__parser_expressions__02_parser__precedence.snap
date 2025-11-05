@@ -1,0 +1,21 @@
+---
+source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE "function TestPrecedence() -> bool {
+  // Multiplication before addition
+  let a = 2 + 3 * 4  // Should be 14, not 20
+  
+  // Comparison after arithmetic
+  let b = a > 10 + 2  // Should be a > 12
+  
+  // Logical operators
+  let c = true || false && false  // Should be true (AND before OR)
+  
+  return c
+}
+"
+
+=== ERRORS ===
+None

@@ -1,5 +1,5 @@
 schema = {
-    SOI ~ (mdx_header | expr_fn | top_level_assignment | value_expression_block | type_expression_block | template_declaration | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
+    SOI ~ (expr_fn | top_level_assignment | value_expression_block | type_expression_block | template_declaration | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
 }
 
 // ######################################
@@ -27,7 +27,7 @@ field_type_with_attr = { field_type ~ (NEWLINE? ~ (field_attribute | trailing_co
 value_expression_keyword  = { FUNCTION_KEYWORD | TEST_KEYWORD | CLIENT_KEYWORD | RETRY_POLICY_KEYWORD | GENERATOR_KEYWORD }
 value_expression_block    = { value_expression_keyword ~ identifier ~ named_argument_list? ~ ARROW? ~ field_type_chain? ~ SPACER_TEXT ~ BLOCK_OPEN ~ value_expression_contents ~ BLOCK_CLOSE }
 value_expression_contents = {
-    (mdx_header | stmt | type_builder_block | value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+    (type_builder_block | value_expression | comment_block | block_attribute | empty_lines)*
 }
 value_expression          = { identifier ~ config_expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
 
@@ -85,7 +85,7 @@ parenthesized_type = { openParen ~ field_type_with_attr ~ closeParen }
 
 path_identifier       =  { single_word ~ ("." ~ single_word)+ }
 identifier            =  { namespaced_identifier | single_word }
-single_word           = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+single_word           = @{ DOLLAR? ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
 namespaced_identifier = ${ single_word ~ ("::" ~ single_word)+ }
 
 // ######################################
@@ -130,7 +130,7 @@ prefix_operator = _{ NOT | NEG }
 
 array_accessor = { "[" ~ expression ~ "]" }
 field_accessor = { "." ~ identifier }
-method_call    = { "." ~ fn_app }
+method_call    = { "." ~ (generic_fn_app | fn_app) }
 
 primary_expression = {
     if_expression |
@@ -161,16 +161,21 @@ config_expression = { config_primary_expression }
 config_primary_expression = {
     jinja_expression |
     config_map_expression |
-    array_expression |
+    config_array_expression |
     numeric_literal |
     string_literal |
     identifier
 }
 
 config_map_key   = { identifier | quoted_string_literal }
-config_map_entry = { (comment_block | empty_lines)* ~ config_map_key ~ (config_expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
+// Allow an optional colon between key and value. Without this, a leading ':'
+// could be captured into the value token (e.g., ": env.MY_KEY").
+config_map_entry = { (comment_block | empty_lines)* ~ config_map_key ~ COLON? ~ (config_expression | ENTRY_CATCH_ALL)? ~ trailing_comment? }
 
 config_map_expression    =  { "{" ~ empty_lines? ~ (config_map_entry ~ (splitter ~ config_map_entry)*)? ~ (comment_block | empty_lines)* ~ "}" }
+
+// Array expression that nests config expressions for elements
+config_array_expression  =  { "[" ~ empty_lines? ~ ((config_expression | ARRAY_CATCH_ALL) ~ trailing_comment? ~ (splitter ~ (comment_block | empty_lines)* ~ (config_expression | ARRAY_CATCH_ALL) ~ trailing_comment?)*)? ~ (comment_block | empty_lines)* ~ splitter? ~ "]" }
 
 // ######################################
 // Literals / Values
@@ -260,6 +265,7 @@ CONTINUE_KEYWORD     = { "continue" }
 SEMICOLON = { ";" }
 COLON = { ":" }
 COMMA = { "," }
+DOLLAR = { "$" }
 INVALID_STMT_STARTING_CHAR = { !ASCII_ALPHA ~ !WHITESPACE ~ !NEWLINE ~ !BLOCK_OPEN ~ !comment ~ ANY }
 
 // #################################################
@@ -330,10 +336,10 @@ top_level_stmt = {
 // function foo(x:int, y: bool?) -> string {
 //   go(x,y)
 // }
-expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
+expr_fn = { "function" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ SPACER_TEXT? ~ expr_block }
 
 // Body of a function (including curly brackets).
-expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (mdx_header | expr_body_stmt | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
+expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (expr_body_stmt | stmt | comment_block | empty_lines)* ~ expression? ~ (comment_block | empty_lines)* ~ BLOCK_CLOSE }
 
 // More forgiving statement rule for function bodies - only for statements that commonly miss semicolons
 expr_body_stmt = {
@@ -341,6 +347,8 @@ expr_body_stmt = {
         INVALID_STMT_STARTING_CHAR* ~
         (
             let_expr
+            | watch_options_stmt
+            | watch_notify_stmt
             | assign_op_stmt
             | assign_stmt
         )
@@ -350,16 +358,14 @@ expr_body_stmt = {
     ~ NEWLINE?
 }
 
-// Headers can include any characters except a newline; do not use unquoted_string_literal restrictions
-mdx_header = { WHITESPACE* ~ "#"+ ~ WHITESPACE* ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
 
 // Statement.
 stmt = {
     INVALID_STMT_STARTING_CHAR* ~
     (
-        for_loop
-        | while_loop
-        | if_expression
+        (for_loop ~ SEMICOLON?)
+        | (while_loop ~ SEMICOLON?)
+        | (if_expression ~ SEMICOLON?)
         | (
             (
                 BREAK_KEYWORD
@@ -367,6 +373,8 @@ stmt = {
                 | let_expr
                 | return_stmt
                 | assert_stmt
+                | watch_options_stmt
+                | watch_notify_stmt
                 | assign_op_stmt
                 | assign_stmt
                 | expression
@@ -379,8 +387,12 @@ stmt = {
     ~ NEWLINE?
 }
 
-// Let-binding statement.
-let_expr = { "let" ~ identifier ~ "=" ~ expression }
+// Let-binding statement with optional type annotation.
+// e.g. `let x: int|float = 10.0;` or `let x = 10.0;`
+// Watch-binding statement for watched variables (watch keyword comes before let).
+// e.g. `watch let x: int = 10;`
+let_type_annotation = { COLON ~ field_type_chain }
+let_expr = { WATCH_KEYWORD? ~ "let" ~ identifier ~ let_type_annotation? ~ "=" ~ expression }
 
 // NOTE: Needs to supports things like `object.getter().field[x + y] = value`,
 // so can't be just `identifier ~ "=" ~ expression`.
@@ -395,6 +407,15 @@ let_expr = { "let" ~ identifier ~ "=" ~ expression }
 // assignable_expression = { prefix_operator* ~ primary_expression ~ postfix_operator* }
 assign_stmt = { expression ~ "=" ~ expression }
 assign_op_stmt = { expression ~ assign_op ~ expression }
+
+// Special syntax for configuring watch options on a watched variable
+// e.g. variable.$watch.options(baml.WatchOptions{name: "channel", when: FilterFunc})
+// Note: .$watch.options is a special method, but baml.WatchOptions is a real struct
+watch_options_stmt = { identifier ~ ".$watch.options" ~ "(" ~ expression ~ ")" }
+
+// Special syntax for manually notifying watchers of a variable
+// e.g. variable.$watch.notify()
+watch_notify_stmt = { identifier ~ ".$watch.notify" ~ "(" ~ ")" }
 
 assign_op = _{ BIT_SHL_ASSIGN | BIT_SHR_ASSIGN | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN | BIT_AND_ASSIGN | BIT_OR_ASSIGN | BIT_XOR_ASSIGN }
 
@@ -435,7 +456,10 @@ while_loop = { "while" ~ condition_and_block }
 //   ExtractResume(x)
 // }
 for_loop = { "for" ~ openParen? ~ (iterator_for_loop | c_for_loop) ~ closeParen? ~ expr_block }
-iterator_for_loop = { identifier ~ "in" ~ block_aware_tail_expression }
+// Allow optional `let` before the loop variable in iterator-style for loops
+LET_KEYWORD = { "let" }
+WATCH_KEYWORD = { "watch" }
+iterator_for_loop = { (LET_KEYWORD ~ identifier | identifier) ~ "in" ~ block_aware_tail_expression }
 c_for_loop = { c_for_init_stmt? ~ ";" ~ expression? ~ ";" ~ c_for_after_stmt?  }
 // NOTE: let_expr ... list copied from `stmt` rule, discarding nonsensical stmts
 c_for_init_stmt = { let_expr | assign_op_stmt | assign_stmt | fn_app | generic_fn_app }
@@ -454,9 +478,9 @@ assert_stmt = { "assert" ~ expression }
 lambda = { named_argument_list ~ "=>" ~ expression }
 
 // Class constructors.
-// e.g. `new MyClass { x = 1, y = 2 }`.
+// e.g. `new MyClass { x = 1, y = 2 }` or `baml.MyClass { x = 1, y = 2 }`.
 //
-class_constructor = { identifier ~ "{" ~ NEWLINE? ~ (class_field_value_pair ~ COMMA? ~ NEWLINE?)* ~ NEWLINE? ~ "}" }
+class_constructor = { (path_identifier | identifier) ~ "{" ~ NEWLINE? ~ (class_field_value_pair ~ COMMA? ~ NEWLINE?)* ~ NEWLINE? ~ "}" }
 
 // A single field in a class constructor.
 class_field_value_pair = { (identifier ~ COLON ~ expression) | struct_spread }
@@ -465,7 +489,7 @@ class_field_value_pair = { (identifier ~ COLON ~ expression) | struct_spread }
 // e.g. `..other_struct`
 // Used in constructors to initialize fields of a new struct from some other struct.
 // e.g. `new MyClass { a: 1, b: 2, ..other_struct }`
-struct_spread = { ".." ~ expression }
+struct_spread = { "..." ~ expression }
 
 // No whitespaces for "func_call<", needs to be atomic.
 // Actually "compound atomic" because of Pest stuff, read here:

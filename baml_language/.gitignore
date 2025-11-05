@@ -1,0 +1,4 @@
+# Additional target directories that don't invalidate the main compile cache when changing linker settings,
+# e.g. `CARGO_TARGET_DIR=target-maturin maturin build --release --strip` or
+# `CARGO_TARGET_DIR=target-llvm-lines RUSTFLAGS="-Csymbol-mangling-version=v0" cargo llvm-lines -p ruff --lib`
+/target*

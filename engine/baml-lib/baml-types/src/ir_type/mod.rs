@@ -1647,4 +1647,38 @@ mod tests {
         );
         assert_eq!(alias.to_streaming_type(&TestLookup), expected);
     }
+
+    #[test]
+    fn partialize_mixed_done_union() {
+        let mut done_variant = TypeIR::class("FooDone");
+        done_variant.meta_mut().streaming_behavior.done = true;
+
+        let streamable_variant = TypeIR::class("MessageToUser");
+        let union = TypeIR::Union(
+            unsafe { UnionTypeGeneric::new_unsafe(vec![done_variant, streamable_variant]) },
+            Default::default(),
+        );
+        let streaming_type = union.to_streaming_type(&TestLookup);
+        let streaming_type_variants: Vec<TypeStreaming> = match streaming_type {
+            TypeStreaming::Union(union, _) => union.view().flatten(),
+            _ => panic!("Expected union"),
+        };
+        assert_eq!(streaming_type_variants.len(), 3);
+
+        let mut expected_first_variant = TypeStreaming::class("FooDone");
+        expected_first_variant.meta_mut().streaming_behavior.done = true;
+
+        let expected_second_variant = TypeStreaming::Class {
+            name: "MessageToUser".to_string(),
+            mode: StreamingMode::Streaming,
+            dynamic: false,
+            meta: Default::default(),
+        };
+
+        dbg!(&streaming_type_variants[0]);
+        dbg!(&streaming_type_variants[1]);
+        dbg!(&streaming_type_variants[2]);
+        assert_eq!(streaming_type_variants[0], expected_first_variant);
+        assert_eq!(streaming_type_variants[1], expected_second_variant);
+    }
 }

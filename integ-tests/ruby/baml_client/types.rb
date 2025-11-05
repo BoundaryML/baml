@@ -207,8 +207,17 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated classes (101)
+  # Generated classes (105)
   # #########################################################################
+
+
+  class AddTodoItem < T::Struct
+      include Baml::Sorbet::Struct
+      const :type, String
+      const :item, String
+      const :time, String
+      const :description, String
+  end
 
 
   class AnotherObject < T::Struct
@@ -368,6 +377,23 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :client_details, ClientDetails1559
       const :notes, T::Array[Note1599]
+  end
+
+
+  class DummyJsonTodo < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, Integer
+      const :todo, String
+      const :completed, T::Boolean
+      const :userId, Integer
+  end
+
+
+  class DummyJsonTodoUpdate < T::Struct
+      include Baml::Sorbet::Struct
+      const :todo, String
+      const :completed, T::Boolean
+      const :userId, Integer
   end
 
 
@@ -906,6 +932,13 @@ module BamlClient
   end
 
 
+  class TodoMessageToUser < T::Struct
+      include Baml::Sorbet::Struct
+      const :type, String
+      const :message, String
+  end
+
+
   class Tree < T::Struct
       include Baml::Sorbet::Struct
       const :data, Integer
@@ -958,7 +991,7 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated type aliases (20)
+  # Generated type aliases (21)
   # #########################################################################
 
 
@@ -1020,6 +1053,9 @@ module BamlClient
 
 
   RecursiveUnion = T.type_alias{ T.any(String, T::Hash[String, T.anything]) }
+
+
+  TodoTool = T.type_alias{ T.any(AddTodoItem, TodoMessageToUser) }
 
 
   end

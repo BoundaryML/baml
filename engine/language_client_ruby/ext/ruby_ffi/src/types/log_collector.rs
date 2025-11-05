@@ -85,6 +85,10 @@ impl Collector {
         })
     }
 
+    pub fn clear(&self) {
+        let _ = self.inner.clear();
+    }
+
     pub fn logs(&self) -> RArray {
         let function_logs = self.inner.function_logs();
         function_logs
@@ -134,7 +138,7 @@ impl Collector {
 
     pub fn __print_storage() {
         let tracer = BAML_TRACER.lock().unwrap();
-        println!("Storage: {tracer:#?}");
+        eprintln!("Storage: {tracer:#?}");
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
@@ -145,6 +149,7 @@ impl Collector {
         cls.define_method("last", method!(Collector::last, 0))?;
         cls.define_method("id", method!(Collector::id, 1))?;
         cls.define_method("usage", method!(Collector::usage, 0))?;
+        cls.define_method("clear", method!(Collector::clear, 0))?;
         cls.define_method("to_s", method!(Collector::to_s, 0))?;
         cls.define_singleton_method(
             "__function_call_count",
@@ -263,6 +268,21 @@ impl FunctionLog {
         self.inner.lock().unwrap().raw_llm_response()
     }
 
+    pub fn tags(&self) -> std::collections::HashMap<String, String> {
+        let mut guard = self.inner.lock().unwrap();
+        guard
+            .tags()
+            .into_iter()
+            .map(|(k, v)| {
+                let string_value = match v {
+                    serde_json::Value::String(s) => s,
+                    _ => v.to_string(),
+                };
+                (k, string_value)
+            })
+            .collect()
+    }
+
     pub fn selected_call(ruby: &Ruby, rb_self: &Self) -> Option<Value> {
         let calls = rb_self.inner.lock().unwrap().calls();
         calls.into_iter().find_map(|call| match call {
@@ -307,6 +327,7 @@ impl FunctionLog {
             method!(FunctionLog::raw_llm_response, 0),
         )?;
         cls.define_method("selected_call", method!(FunctionLog::selected_call, 0))?;
+        cls.define_method("tags", method!(FunctionLog::tags, 0))?;
 
         Ok(())
     }

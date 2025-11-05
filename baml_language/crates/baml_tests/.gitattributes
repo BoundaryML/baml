@@ -1,0 +1,10 @@
+# Snapshot test files
+*.snap linguist-generated=true
+*.snap -diff
+*.snap merge=ours
+
+# Alternative: treat as binary (more aggressive, hides content entirely)
+# *.snap binary
+
+# Mark snapshots directory as generated
+snapshots/** linguist-generated=true

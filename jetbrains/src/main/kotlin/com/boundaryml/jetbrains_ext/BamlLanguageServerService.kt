@@ -7,7 +7,11 @@ import com.intellij.openapi.components.ComponentManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.event.CaretEvent
+import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.extensions.PluginId
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.util.messages.Topic
 
@@ -31,6 +35,8 @@ class BamlLanguageServerService() {
             plugin?.version ?: "0.207.0"
         }
     }
+
+
 
     // Existing port functionality (preserve exactly)
     @Volatile
@@ -73,5 +79,26 @@ class BamlLanguageServerService() {
     // Listener interfaces
     fun interface PortListener {
         fun onPort(port: Int)
+    }
+
+
+    /**
+     * Handle cursor position changes in editors
+     */
+    private fun handleCursorChange(event: CaretEvent) {
+        val editor = event.editor
+        val document = editor.document
+        val file = FileDocumentManager.getInstance().getFile(document)
+
+        // Only process .baml files
+        if (file?.extension != "baml") return
+
+        val position = event.newPosition
+        val fileName = file.path
+        val fileText = document.text
+        val line = position.line + 1  // Convert to 1-based
+        val column = position.column  // Keep 0-based
+
+        log.debug("Cursor changed in BAML file: $fileName at line $line, column $column")
     }
 }

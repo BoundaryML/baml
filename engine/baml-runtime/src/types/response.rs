@@ -117,29 +117,107 @@ impl FunctionResult {
             .as_ref()
             .map(|res| match res {
                 Ok(val) => Ok(val),
-                Err(err) => Err(anyhow::anyhow!(self.format_err(err))),
+                Err(err) => Err(anyhow::anyhow!(self.format_last_error_with_details(err))),
             })
-            .unwrap_or_else(|| Err(anyhow::anyhow!(self.llm_response().clone())))
+            .unwrap_or_else(|| {
+                // If we don't have a parsed result, check if we have an LLMFailure
+                match self.llm_response() {
+                    LLMResponse::LLMFailure(err) => {
+                        // Convert LLMFailure to appropriate error type
+                        match &err.code {
+                            crate::internal::llm_client::ErrorCode::Timeout => {
+                                Err(anyhow::anyhow!(crate::errors::ExposedError::TimeoutError {
+                                    client_name: err.client.clone(),
+                                    message: err.message.clone(),
+                                }))
+                            }
+                            crate::internal::llm_client::ErrorCode::Other(2) => {
+                                Err(anyhow::anyhow!(err.message.clone()))
+                            }
+                            _ => Err(anyhow::anyhow!(
+                                crate::errors::ExposedError::ClientHttpError {
+                                    client_name: err.client.clone(),
+                                    message: err.message.clone(),
+                                    status_code: err.code.clone(),
+                                    detailed_message: err.message.clone(),
+                                }
+                            )),
+                        }
+                    }
+                    LLMResponse::UserFailure(message) => {
+                        Err(anyhow::anyhow!("User Failure: {message}.\nPlease report this error to our team with BAML_LOG=info enabled so we can catch this error earlier and improve your development experience."))
+                    }
+                    LLMResponse::InternalFailure(message) => {
+                        Err(anyhow::anyhow!("Internal Failure: {message}.\nThis should not happen - please report this error to our team with BAML_LOG=info enabled so we can catch this error earlier and improve your development experience."))
+                    }
+                    LLMResponse::Cancelled(message) => {
+                        Err(anyhow::anyhow!(crate::errors::ExposedError::AbortError {
+                            detailed_message: message.clone(),
+                        }))
+                    }
+                    LLMResponse::Success(_) => {
+                        Err(anyhow::anyhow!("This should never happen - Please report this error to our team with BAML_LOG=info enabled so we can improve this error message"))
+                    }
+                }
+            })
     }
 
-    fn format_err(&self, err: &anyhow::Error) -> ExposedError {
+    fn format_last_error_with_details(&self, last_error: &anyhow::Error) -> ExposedError {
+        let detailed_message = self.create_detailed_message();
+
+        if let Some(exposed_error) = last_error.downcast_ref::<ExposedError>() {
+            return self.add_detailed_message_to_exposed(exposed_error.clone(), detailed_message);
+        }
+
+        self.add_detailed_message_to_exposed(self.format_single_error(last_error), detailed_message)
+    }
+
+    fn format_single_error(&self, err: &anyhow::Error) -> ExposedError {
         if let Some(exposed_error) = err.downcast_ref::<ExposedError>() {
             return exposed_error.clone();
         }
+
         // Capture the actual error to preserve its details
         let actual_error = err.to_string();
+
         // TODO: HACK! Figure out why now connection errors dont get converted into ExposedError. Instead of converting to a validation error, check for connection errors here. We probably are missing a lot of other connection failures that should NOT be validation errors.
-        if actual_error.to_lowercase().contains("connecterror") {
+        if actual_error.to_lowercase().contains("connecterror")
+            || actual_error
+                .to_lowercase()
+                .contains("profilefile provider could not be built")
+            || actual_error
+                .to_lowercase()
+                .contains("session token not found")
+        {
             return ExposedError::ClientHttpError {
                 client_name: match self.llm_response() {
                     LLMResponse::Success(resp) => resp.client.clone(),
                     LLMResponse::LLMFailure(err) => err.client.clone(),
                     _ => "unknown".to_string(),
                 },
+                detailed_message: actual_error.clone(),
                 message: actual_error,
                 status_code: ErrorCode::ServiceUnavailable,
             };
         }
+        let message = match self.llm_response() {
+            LLMResponse::Success(_) => {
+                format!("Failed to parse LLM response: {actual_error}")
+            }
+            LLMResponse::LLMFailure(err) => format!(
+                "LLM Failure: {} ({}) - {}",
+                err.message, err.code, actual_error
+            ),
+            LLMResponse::UserFailure(err) => {
+                format!("User Failure: {err} - {actual_error}")
+            }
+            LLMResponse::InternalFailure(err) => {
+                format!("Internal Failure: {err} - {actual_error}")
+            }
+            LLMResponse::Cancelled(err) => {
+                format!("Operation Cancelled: {err} - {actual_error}")
+            }
+        };
         ExposedError::ValidationError {
             prompt: match self.llm_response() {
                 LLMResponse::Success(resp) => resp.prompt.to_string(),
@@ -153,38 +231,104 @@ impl FunctionResult {
                 .to_string(),
             // The only branch that should be hit is LLMResponse::Success(_) since we
             // only call this function when we have a successful response.
-            message: match self.llm_response() {
-                LLMResponse::Success(_) => {
-                    format!("Failed to parse LLM response: {actual_error}")
-                }
-                LLMResponse::LLMFailure(err) => format!(
-                    "LLM Failure: {} ({}) - {}",
-                    err.message, err.code, actual_error
-                ),
-                LLMResponse::UserFailure(err) => {
-                    format!("User Failure: {err} - {actual_error}")
-                }
-                LLMResponse::InternalFailure(err) => {
-                    format!("Internal Failure: {err} - {actual_error}")
-                }
-                LLMResponse::Cancelled(err) => {
-                    format!("Operation Cancelled: {err} - {actual_error}")
-                }
-            },
+            detailed_message: message.clone(),
+            message,
         }
+    }
+
+    fn create_detailed_message(&self) -> String {
+        let error_vec = self
+            .event_chain
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (_, _, parse_result))| {
+                let Some(Err(err)) = parse_result else {
+                    return None;
+                };
+                Some(self.format_single_error(err).to_string())
+            })
+            .collect::<Vec<String>>();
+
+        match error_vec.len() {
+            0 => String::new(),
+            1 => error_vec[0].clone(),
+            _ => format!(
+                "{} failed attempts:\n\n{}",
+                error_vec.len(),
+                error_vec
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, error)| format!(
+                        "Attempt {}: {}",
+                        index,
+                        error.replace("\n", "\n    ")
+                    ))
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            ),
+        }
+    }
+
+    fn add_detailed_message_to_exposed(
+        &self,
+        mut error: ExposedError,
+        detail: String,
+    ) -> ExposedError {
+        match &mut error {
+            ExposedError::ValidationError {
+                detailed_message: ref mut prev,
+                ..
+            } => *prev = detail,
+            ExposedError::FinishReasonError {
+                detailed_message: ref mut prev,
+                ..
+            } => *prev = detail,
+            ExposedError::ClientHttpError {
+                detailed_message: ref mut prev,
+                ..
+            } => *prev = detail,
+            ExposedError::TimeoutError { .. } => {
+                // TimeoutError doesn't have a detailed_message field, so we can't update it
+                // We would need to redesign TimeoutError to include a detailed_message field if needed
+            }
+            ExposedError::AbortError {
+                detailed_message: ref mut prev,
+            } => *prev = detail,
+        }
+        error
     }
 }
 
 #[derive(Debug)]
 pub struct TestResponse {
-    pub function_response: FunctionResult,
+    pub function_response: Option<FunctionResult>,
+    pub expr_function_response: Option<Result<ResponseBamlValue>>,
     pub function_call: baml_ids::FunctionCallId,
     pub constraints_result: TestConstraintsResult,
 }
 
 impl std::fmt::Display for TestResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}", self.function_response)
+        if let Some(func_response) = &self.function_response {
+            writeln!(f, "{func_response}")
+        } else if let Some(expr_response) = &self.expr_function_response {
+            match expr_response {
+                Ok(val) => {
+                    writeln!(
+                        f,
+                        "{}",
+                        format!("---Parsed Response ({})---", val.0.r#type()).blue()
+                    )?;
+                    write!(f, "{:#}", serde_json::json!(val.serialize_partial()))
+                }
+                Err(e) => {
+                    writeln!(f, "{}", "---Parsed Response---".blue())?;
+                    write!(f, "{}", e.to_string().red())
+                }
+            }
+        } else {
+            write!(f, "No response")
+        }
     }
 }
 
@@ -249,9 +393,9 @@ impl Eq for TestFailReason<'_> {}
 
 impl TestResponse {
     pub fn status(&self) -> TestStatus<'_> {
-        let func_res = &self.function_response;
-        if let Some(parsed) = func_res.result_with_constraints() {
-            if parsed.is_ok() {
+        // Handle expr function response
+        if let Some(expr_res) = &self.expr_function_response {
+            return if expr_res.is_ok() {
                 match self.constraints_result.clone() {
                     TestConstraintsResult::InternalError { details } => {
                         TestStatus::Fail(TestFailReason::TestUnspecified(anyhow::anyhow!(details)))
@@ -273,16 +417,52 @@ impl TestResponse {
                     }
                 }
             } else {
-                let err = parsed.as_ref().unwrap_err();
-                match err.downcast_ref::<crate::errors::ExposedError>() {
-                    Some(ExposedError::FinishReasonError { .. }) => {
-                        TestStatus::Fail(TestFailReason::TestFinishReasonFailed(err))
+                TestStatus::Fail(TestFailReason::TestParseFailure(
+                    expr_res.as_ref().unwrap_err(),
+                ))
+            };
+        }
+
+        // Handle LLM function response
+        if let Some(func_res) = &self.function_response {
+            if let Some(parsed) = func_res.result_with_constraints() {
+                if parsed.is_ok() {
+                    match self.constraints_result.clone() {
+                        TestConstraintsResult::InternalError { details } => TestStatus::Fail(
+                            TestFailReason::TestUnspecified(anyhow::anyhow!(details)),
+                        ),
+                        TestConstraintsResult::Completed {
+                            checks,
+                            failed_assert,
+                        } => {
+                            let n_failed_checks: usize =
+                                checks.iter().filter(|(_, pass)| !pass).count();
+                            if failed_assert.is_some() || n_failed_checks > 0 {
+                                TestStatus::Fail(TestFailReason::TestConstraintsFailure {
+                                    checks,
+                                    failed_assert,
+                                })
+                            } else {
+                                TestStatus::Pass
+                            }
+                        }
                     }
-                    _ => TestStatus::Fail(TestFailReason::TestParseFailure(err)),
+                } else {
+                    let err = parsed.as_ref().unwrap_err();
+                    match err.downcast_ref::<crate::errors::ExposedError>() {
+                        Some(ExposedError::FinishReasonError { .. }) => {
+                            TestStatus::Fail(TestFailReason::TestFinishReasonFailed(err))
+                        }
+                        _ => TestStatus::Fail(TestFailReason::TestParseFailure(err)),
+                    }
                 }
+            } else {
+                TestStatus::Fail(TestFailReason::TestLLMFailure(func_res.llm_response()))
             }
         } else {
-            TestStatus::Fail(TestFailReason::TestLLMFailure(func_res.llm_response()))
+            TestStatus::Fail(TestFailReason::TestUnspecified(anyhow::anyhow!(
+                "No response"
+            )))
         }
     }
 }

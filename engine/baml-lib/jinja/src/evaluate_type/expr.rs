@@ -596,16 +596,11 @@ fn tracker_visit_expr(
                         Type::Unknown
                     }
                 },
-                Type::Unknown => Type::Unknown,
-                t => {
-                    state.errors.push(TypeError::new_invalid_type(
-                        &expr.expr,
-                        t,
-                        "class",
-                        expr.span(),
-                    ));
-                    Type::Unknown
+                Type::Union(_) | Type::Alias { .. } => {
+                    typecheck_attr_access_on_union(&parent, expr, types, state)
                 }
+                Type::Unknown => Type::Unknown,
+                other => expected_class_got(other, expr, state),
             }
         }
         ast::Expr::GetItem(_expr) => Type::Unknown,
@@ -700,6 +695,17 @@ fn infer_const_type(v: &minijinja::value::Value) -> Type {
 
 pub fn evaluate_type(expr: &ast::Expr, types: &PredefinedTypes) -> Result<Type, Vec<TypeError>> {
     let mut state = ScopeTracker::new();
+    // Lint: bare function reference without call, e.g. `{{ MyTemplateString }}` vs `{{ MyTemplateString() }}`
+    if let ast::Expr::Var(var) = expr {
+        if let Some((_, _)) = types.as_function(var.id) {
+            state
+                .errors
+                .push(TypeError::new_function_reference_without_call(
+                    var.id,
+                    var.span(),
+                ));
+        }
+    }
     let result = tracker_visit_expr(expr, &mut state, types);
 
     if state.errors.is_empty() {
@@ -707,4 +713,109 @@ pub fn evaluate_type(expr: &ast::Expr, types: &PredefinedTypes) -> Result<Type, 
     } else {
         Err(state.errors)
     }
+}
+
+/// Verifies that an attribute is present in all items of a union.
+///
+/// This is used especially for if statements like `if v.kind == "X"` where v
+/// is a union of types and we need to check that `kind` is present in all of
+/// the types, thus making the attr access valid in every case, therefore not
+/// a type error.
+///
+/// This functions returns the type of the attr if present in all items.
+/// Otherwise, it returns [`Type::Unknown`] and pushes a type error to the
+/// `state` param.
+///
+/// TODO: This function is very similar to `narrow_attr_access_on_union_var` in
+/// `stmt.rs`. Reusing the code is not straightforward though (at least if we
+/// want it to be readable), but we should try something because this is kind of
+/// error prone if we add more types that need to be covered.
+fn typecheck_attr_access_on_union(
+    union_type: &Type,
+    get_attr: &ast::Spanned<ast::GetAttr<'_>>,
+    types: &PredefinedTypes,
+    state: &mut ScopeTracker,
+) -> Type {
+    // Resolve items.
+    let union_items = match union_type {
+        Type::Union(items) => items,
+        Type::Alias { resolved, .. } => match resolved.as_ref() {
+            Type::Union(items) => items,
+            _ => return expected_class_got(union_type, get_attr, state),
+        },
+        _ => {
+            return expected_class_got(union_type, get_attr, state);
+        }
+    };
+
+    // Attribute must be present on all items of the union and also have the
+    // same type.
+    let mut attr_type = None;
+
+    // Search recursively for all types in the union to check
+    // if they all contain the property.
+    let mut stack = Vec::from_iter(union_items.iter());
+
+    while let Some(union_item_type) = stack.pop() {
+        match union_item_type {
+            Type::ClassRef(class_name) => {
+                // Get type of prop
+                let (class_prop_type, err) = types.check_class_property(
+                    &pretty_print(&get_attr.expr),
+                    class_name,
+                    get_attr.name,
+                    get_attr.span(),
+                );
+
+                // Prop not found in one of the types is a type error.
+                if err.is_some() {
+                    return expected_class_got(union_type, get_attr, state);
+                }
+
+                // Check if previous type matches the current one
+                match &attr_type {
+                    None => attr_type = Some(class_prop_type),
+
+                    Some(prev_type) => {
+                        // Found two distinct types for the same prop.
+                        if !class_prop_type.equals_ignoring_literal_values(prev_type) {
+                            return expected_class_got(union_type, get_attr, state);
+                        }
+                    }
+                }
+            }
+
+            // Resolve aliases.
+            Type::Alias { resolved, .. } => stack.push(resolved),
+
+            // Recurse into nested unions
+            Type::Union(nested) => stack.extend(nested.iter()),
+
+            // Found a type that's not a class, stop here.
+            _ => {
+                return expected_class_got(union_type, get_attr, state);
+            }
+        }
+    }
+
+    match attr_type {
+        Some(attr_type) => attr_type,
+        None => expected_class_got(union_type, get_attr, state),
+    }
+}
+
+/// Helper for [`typecheck_attr_access_on_union`].
+fn expected_class_got(
+    got: &Type,
+    get_attr: &ast::Spanned<ast::GetAttr<'_>>,
+    state: &mut ScopeTracker,
+) -> Type {
+    state.errors.push(TypeError::new_invalid_type(
+        &get_attr.expr,
+        got,
+        "class",
+        get_attr.span(),
+    ));
+
+    Type::Unknown
 }

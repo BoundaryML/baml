@@ -108,6 +108,18 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BuildTree", llm_response=llm_response, mode="request")
         return typing.cast(types.Tree, result)
 
+    def CheckWordEquality(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="CheckWordEquality", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
+
+    def ChooseTodoTools(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ChooseTodoTools", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[typing.Union["types.AddTodoItem", "types.TodoMessageToUser"]], result)
+
     def ClassThatPointsToRecursiveClassThroughAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ClassToRecAlias:
@@ -294,6 +306,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractResume2", llm_response=llm_response, mode="request")
         return typing.cast(types.Resume, result)
 
+    def FnAlwaysFails(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="FnAlwaysFails", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def FnClassOptionalOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional["types.ClassOptionalOutput"]:
@@ -328,6 +346,12 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnFailRetryExponentialDelay", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def FnFallbackAlwaysFails(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="FnFallbackAlwaysFails", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
     def FnLiteralClassInputOutput(
@@ -545,6 +569,12 @@ class LlmResponseParser:
     ) -> types.ClassForNullLiteral:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NullLiteralClassHello", llm_response=llm_response, mode="request")
         return typing.cast(types.ClassForNullLiteral, result)
+
+    def OpenAIGPT4oMissingBaseUrlEnvVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
 
     def OpenAIWithAnthropicResponseHello(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -810,6 +840,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidAccessKey", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestAwsInvalidEndpoint(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidEndpoint", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestAwsInvalidProfile(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -826,6 +862,12 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidSessionToken", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestAwsVideoDescribe(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsVideoDescribe", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
     def TestAzure(
@@ -1236,6 +1278,18 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenRouterMistralSmall3_1_24b", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestOpenaiResponsesPdfs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenaiResponsesPdfs", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestRequestTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestRequestTimeout", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestRetryConstant(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -1260,11 +1314,29 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestSingleFallbackClient", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def TestStreamingTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestStreamingTimeout", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
     def TestThinking(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.CustomStory:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestThinking", llm_response=llm_response, mode="request")
         return typing.cast(types.CustomStory, result)
+
+    def TestTimeoutError(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTimeoutError", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestTimeoutFallback(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTimeoutFallback", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
 
     def TestUniverseQuestion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1288,6 +1360,12 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestVertexWithSystemInstructions", llm_response=llm_response, mode="request")
+        return typing.cast(str, result)
+
+    def TestZeroTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestZeroTimeout", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
     def UnionTest_Function(
@@ -1344,6 +1422,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def AnotherTakedown(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="AnotherTakedown", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
     def AssignElseIfExpr(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1386,6 +1470,42 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
         return typing.cast(str, result)
 
+    def ExecFetchAs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="request")
+        return typing.cast(types.DummyJsonTodo, result)
+
+    def ExecFetchAsWithHttpPostRequest(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPostRequest", llm_response=llm_response, mode="request")
+        return typing.cast(types.DummyJsonTodo, result)
+
+    def ExecFetchAsWithHttpPutRequestAndClassJson(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.DummyJsonTodo:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", llm_response=llm_response, mode="request")
+        return typing.cast(types.DummyJsonTodo, result)
+
+    def HomeEnvVarIsEmpty(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="HomeEnvVarIsEmpty", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
+
+    def IsTargetWord(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="IsTargetWord", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
+
+    def IsTargetWord2(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="IsTargetWord2", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
+
     def IterativeFibonacci(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1397,6 +1517,12 @@ class LlmResponseParser:
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NormalElseIfStmt", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
+
+    def NotEmpty(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="NotEmpty", llm_response=llm_response, mode="request")
+        return typing.cast(bool, result)
 
     def ReturnCategory(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1434,6 +1560,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
+    def SimpleWatchWithFilter(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="SimpleWatchWithFilter", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
     def StoreFnCallInLocalVar(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1456,6 +1588,24 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="SumFromTo", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def WorkflowWatch(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatch", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def WorkflowWatchChild(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchChild", llm_response=llm_response, mode="request")
+        return typing.cast(int, result)
+
+    def WorkflowWatchWithFilter(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchWithFilter", llm_response=llm_response, mode="request")
         return typing.cast(int, result)
 
     
@@ -1549,6 +1699,18 @@ class LlmStreamParser:
     ) -> stream_types.Tree:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BuildTree", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.Tree, result)
+
+    def CheckWordEquality(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> bool:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="CheckWordEquality", llm_response=llm_response, mode="stream")
+        return typing.cast(bool, result)
+
+    def ChooseTodoTools(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.List[typing.Union["types.AddTodoItem", "stream_types.TodoMessageToUser"]]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ChooseTodoTools", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[typing.Union["types.AddTodoItem", "stream_types.TodoMessageToUser"]], result)
 
     def ClassThatPointsToRecursiveClassThroughAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1736,6 +1898,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractResume2", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.Resume, result)
 
+    def FnAlwaysFails(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="FnAlwaysFails", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def FnClassOptionalOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional["stream_types.ClassOptionalOutput"]:
@@ -1770,6 +1938,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnFailRetryExponentialDelay", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def FnFallbackAlwaysFails(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="FnFallbackAlwaysFails", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def FnLiteralClassInputOutput(
@@ -1987,6 +2161,12 @@ class LlmStreamParser:
     ) -> stream_types.ClassForNullLiteral:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NullLiteralClassHello", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.ClassForNullLiteral, result)
+
+    def OpenAIGPT4oMissingBaseUrlEnvVar(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="OpenAIGPT4oMissingBaseUrlEnvVar", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     def OpenAIWithAnthropicResponseHello(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2252,6 +2432,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidAccessKey", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
+    def TestAwsInvalidEndpoint(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidEndpoint", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def TestAwsInvalidProfile(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2268,6 +2454,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidSessionToken", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestAwsVideoDescribe(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsVideoDescribe", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def TestAzure(
@@ -2678,6 +2870,18 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenRouterMistralSmall3_1_24b", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
+    def TestOpenaiResponsesPdfs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenaiResponsesPdfs", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestRequestTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestRequestTimeout", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def TestRetryConstant(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2702,11 +2906,29 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestSingleFallbackClient", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
+    def TestStreamingTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestStreamingTimeout", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
     def TestThinking(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.CustomStory:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestThinking", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.CustomStory, result)
+
+    def TestTimeoutError(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTimeoutError", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestTimeoutFallback(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTimeoutFallback", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
 
     def TestUniverseQuestion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2730,6 +2952,12 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestVertexWithSystemInstructions", llm_response=llm_response, mode="stream")
+        return typing.cast(str, result)
+
+    def TestZeroTimeout(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestZeroTimeout", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
     def UnionTest_Function(
@@ -2786,6 +3014,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="stream")
         return typing.cast(str, result)
 
+    def AnotherTakedown(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="AnotherTakedown", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
     def AssignElseIfExpr(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
@@ -2828,6 +3062,42 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[str], result)
 
+    def ExecFetchAs(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
+
+    def ExecFetchAsWithHttpPostRequest(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPostRequest", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
+
+    def ExecFetchAsWithHttpPutRequestAndClassJson(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], result)
+
+    def HomeEnvVarIsEmpty(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[bool]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="HomeEnvVarIsEmpty", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[bool], result)
+
+    def IsTargetWord(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[bool]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="IsTargetWord", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[bool], result)
+
+    def IsTargetWord2(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[bool]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="IsTargetWord2", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[bool], result)
+
     def IterativeFibonacci(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
@@ -2839,6 +3109,12 @@ class LlmStreamParser:
     ) -> typing.Optional[int]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NormalElseIfStmt", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
+
+    def NotEmpty(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[bool]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="NotEmpty", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[bool], result)
 
     def ReturnCategory(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2876,6 +3152,12 @@ class LlmStreamParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
+    def SimpleWatchWithFilter(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="SimpleWatchWithFilter", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
     def StoreFnCallInLocalVar(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
@@ -2898,6 +3180,24 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="SumFromTo", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def WorkflowWatch(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatch", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def WorkflowWatchChild(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchChild", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], result)
+
+    def WorkflowWatchWithFilter(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchWithFilter", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], result)
 
     

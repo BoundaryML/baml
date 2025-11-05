@@ -146,7 +146,7 @@ export const StatusBar: React.FC = () => {
         {bamlCliVersion && (
           <div className="text-muted-foreground">baml-cli {bamlCliVersion}</div>
         )}
-        <div className="text-muted-foreground">VSCode Runtime: {version}</div>
+        <div className="text-muted-foreground">BAML playground: {version}</div>
 
         <ErrorCount onClick={() => setShowDialog(true)} />
         <ErrorWarningDialog open={showDialog} onOpenChange={setShowDialog} />

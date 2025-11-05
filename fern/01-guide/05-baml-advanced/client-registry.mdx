@@ -16,7 +16,7 @@ async def run():
     cr = ClientRegistry()
     # Creates a new client
     cr.add_llm_client(name='MyAmazingClient', provider='openai', options={
-        "model": "gpt-4o",
+        "model": "gpt-5-mini",
         "temperature": 0.7,
         "api_key": os.environ.get('OPENAI_API_KEY')
     })
@@ -44,7 +44,7 @@ async function run() {
     const cr = new ClientRegistry()
     // Creates a new client
     cr.addLlmClient('MyAmazingClient', 'openai', {
-        model: "gpt-4o",
+        model: "gpt-5-mini",
         temperature: 0.7,
         api_key: process.env.OPENAI_API_KEY
     })
@@ -77,7 +77,7 @@ def run
     'MyAmazingClient',
     'openai',
     {
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       temperature: 0.7,
       api_key: ENV['OPENAI_API_KEY']
     }
@@ -126,7 +126,7 @@ func main() {
     
     // Creates a new client
     err := cr.AddLLMClient("MyAmazingClient", "openai", map[string]interface{}{
-        "model":       "gpt-4o",
+        "model":       "gpt-5-mini",
         "temperature": 0.7,
         "api_key":     os.Getenv("OPENAI_API_KEY"),
     })
@@ -174,7 +174,7 @@ Example request body:
                     "provider": "openai",
                     "retry_policy": null,
                     "options": {
-                        "model": "gpt-4o-mini",
+                        "model": "gpt-5-mini",
                         "api_key": "sk-..."
                     }
                 },

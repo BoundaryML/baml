@@ -2,7 +2,7 @@
 //!
 //! This files contains the convertions between Baml AST nodes to HIR nodes.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use baml_types::{
     type_meta::{self, base::StreamingBehavior},
@@ -10,9 +10,12 @@ use baml_types::{
 };
 use internal_baml_ast::ast::{self, App, AssertStmt, Attribute, ReturnStmt, WithName, WithSpan};
 
-use crate::hir::{
-    self, Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant, ExprFunction,
-    Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg,
+use crate::{
+    hir::{
+        self, Block, Class, ClassConstructor, ClassConstructorField, Enum, EnumVariant,
+        ExprFunction, Expression, Field, Hir, LlmFunction, Parameter, Statement, TypeArg,
+    },
+    watch::{WatchSpec, WatchWhen},
 };
 
 impl Hir {
@@ -43,8 +46,15 @@ impl Hir {
                 ast::Top::TopLevelAssignment(assignment) => {
                     // Add toplevel assignments to global_assignments for HIR typechecking
                     let value = Expression::from_ast(&assignment.stmt.expr);
-                    hir.global_assignments
-                        .insert(assignment.stmt.identifier.to_string(), value);
+                    let annotated_type = assignment.stmt.annotation.as_ref().map(type_ir_from_ast);
+                    hir.global_assignments.insert(
+                        assignment.stmt.identifier.to_string(),
+                        crate::hir::GlobalAssignment {
+                            value,
+                            annotated_type,
+                            span: assignment.stmt.span.clone(),
+                        },
+                    );
                 }
                 _ => {}
             }
@@ -84,6 +94,13 @@ impl Hir {
 
         hir
     }
+
+    #[cfg(test)]
+    /// Test helper to generate HIR from BAML source.
+    pub fn from_source(source: &'static str) -> Self {
+        let parser_db = crate::test::ast(source).unwrap_or_else(|e| panic!("{}", e));
+        Hir::from_ast(&parser_db.ast)
+    }
 }
 
 pub fn type_ir_from_ast_optional(r#type: Option<&ast::FieldType>) -> TypeIR {
@@ -109,7 +126,9 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
                 };
 
                 // Extract label and expression from arguments
-                let arguments: Vec<&ast::Expression> = attr.arguments.arguments
+                let arguments: Vec<&ast::Expression> = attr
+                    .arguments
+                    .arguments
                     .iter()
                     .map(|arg| &arg.value)
                     .collect();
@@ -120,9 +139,10 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
                         (None, Some(jinja_expr.clone()))
                     }
                     // Two arguments: label and expression
-                    [ast::Expression::Identifier(label_id), ast::Expression::JinjaExpressionValue(jinja_expr, _)] => {
-                        (Some(label_id.to_string()), Some(jinja_expr.clone()))
-                    }
+                    [
+                        ast::Expression::Identifier(label_id),
+                        ast::Expression::JinjaExpressionValue(jinja_expr, _),
+                    ] => (Some(label_id.to_string()), Some(jinja_expr.clone())),
                     _ => {
                         // Skip invalid constraint formats
                         (None, None)
@@ -158,40 +178,64 @@ pub fn type_ir_from_ast(type_: &ast::FieldType) -> TypeIR {
         streaming_behavior,
     };
 
-    match type_ {
-        ast::FieldType::Symbol(_, name, _) => TypeIR::Class {
-            name: name.name().to_string(),
-            mode: baml_types::ir_type::StreamingMode::NonStreaming,
-            dynamic: false,
-            meta,
-        },
-        ast::FieldType::Primitive(_, prim, _, _) => TypeIR::Primitive(*prim, meta),
-        ast::FieldType::List(_, inner, dims, _, _) => {
+    let base_type = match type_ {
+        ast::FieldType::Symbol(arity, name, _) => {
+            let base = TypeIR::Class {
+                name: name.name().to_string(),
+                mode: baml_types::ir_type::StreamingMode::NonStreaming,
+                dynamic: false,
+                meta,
+            };
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
+        }
+        ast::FieldType::Primitive(arity, prim, _, _) => {
+            let base = TypeIR::Primitive(*prim, meta);
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
+        }
+        ast::FieldType::List(arity, inner, dims, _, _) => {
             // Respect multi-dimensional arrays (e.g., int[][] has dims=2)
             let mut lowered_inner = type_ir_from_ast(inner);
             for _ in 0..*dims {
                 lowered_inner = TypeIR::List(Box::new(lowered_inner), meta.clone());
             }
-            lowered_inner
-        }
-        ast::FieldType::Map(_, box_pair, _, _) => TypeIR::Map(
-            Box::new(type_ir_from_ast(&box_pair.0)),
-            Box::new(type_ir_from_ast(&box_pair.1)),
-            meta,
-        ),
-        ast::FieldType::Union(_, types, _, _) => {
-            let union_types: Vec<TypeIR> = types.iter().map(type_ir_from_ast).collect();
-            // For now, create a simple union by taking the first type if only one
-            if union_types.len() == 1 {
-                union_types.into_iter().next().unwrap()
+            if arity.is_optional() {
+                TypeIR::optional(lowered_inner)
             } else {
-                // Create a union - we'll use unsafe new_unsafe if available
-                // or fall back to a simpler approach
-                TypeIR::Primitive(baml_types::TypeValue::String, meta) // Fallback
+                lowered_inner
+            }
+        }
+        ast::FieldType::Map(arity, box_pair, _, _) => {
+            let base = TypeIR::Map(
+                Box::new(type_ir_from_ast(&box_pair.0)),
+                Box::new(type_ir_from_ast(&box_pair.1)),
+                meta,
+            );
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
+            }
+        }
+        ast::FieldType::Union(arity, types, _, _) => {
+            let union_types: Vec<TypeIR> = types.iter().map(type_ir_from_ast).collect();
+            let base = TypeIR::union_with_meta(union_types, meta);
+            if arity.is_optional() {
+                TypeIR::optional(base)
+            } else {
+                base
             }
         }
         _ => TypeIR::Primitive(TypeValue::String, meta), // Default case for other variants
-    }
+    };
+    base_type
 }
 
 /// Is the type complex enough that it should be parenthesized if it's not
@@ -288,21 +332,135 @@ impl ExprFunction {
     }
 }
 
+/// Extract name and when fields from a WatchOptions class constructor expression.
+/// Expected expression: baml.WatchOptions{name: "value", when: FunctionName}
+fn extract_watch_options_fields(expr: &ast::Expression) -> (Option<String>, Option<WatchWhen>) {
+    use ast::Expression;
+
+    // The expression should be a class constructor
+    if let Expression::ClassConstructor(class_ctor, _) = expr {
+        let mut name = None;
+        let mut when = None;
+
+        // Extract field values
+        for field in &class_ctor.fields {
+            if let ast::ClassConstructorField::Named(field_name, field_value) = field {
+                match field_name.name() {
+                    "channel" => {
+                        // name should be a string value
+                        if let Expression::StringValue(s, _) = field_value {
+                            name = Some(s.clone());
+                        } else if let Expression::RawStringValue(raw) = field_value {
+                            name = Some(raw.value().to_string());
+                        }
+                    }
+                    "when" => {
+                        // when should be an identifier (function name) or string "manual"
+                        match field_value {
+                            Expression::Identifier(id) => {
+                                when = Some(WatchWhen::FunctionName(id.clone()));
+                            }
+                            Expression::StringValue(s, _) if s == "manual" => {
+                                when = Some(WatchWhen::Manual);
+                            }
+                            Expression::StringValue(s, _) if s == "never" => {
+                                when = Some(WatchWhen::Never);
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {} // Ignore unknown fields
+                }
+            }
+        }
+
+        (name, when)
+    } else {
+        // If not a class constructor, return empty options
+        (None, None)
+    }
+}
+
 impl Block {
     /// Lower an expression block into HIR for expression blocks.
     pub fn from_expr_block(block: &ast::ExpressionBlock) -> Self {
+        // First pass: collect all WatchOptions statements into a map
+        let mut watch_options_map: HashMap<String, (Option<String>, Option<WatchWhen>)> =
+            HashMap::new();
+        for stmt in &block.stmts {
+            if let ast::Stmt::WatchOptions(ast::WatchOptionsStmt {
+                variable,
+                options_expr,
+                ..
+            }) = stmt
+            {
+                // Extract name and when from the WatchOptions class constructor expression
+                let (channel, when) = extract_watch_options_fields(options_expr);
+                watch_options_map.insert(variable.to_string(), (channel, when));
+            }
+        }
+
+        // Second pass: lower statements, applying watch options to watch specs
+        let mut statements: Vec<Statement> = block
+            .stmts
+            .iter()
+            .map(|stmt| lower_stmt_with_options(stmt, &watch_options_map))
+            .collect();
+
+        let trailing_expr = block
+            .expr
+            .as_deref()
+            .map(Expression::from_ast)
+            .map(Box::new);
+
+        if !block.expr_headers.is_empty() {
+            eprintln!(
+                "Annotated!: {}",
+                trailing_expr
+                    .as_ref()
+                    .map(|f| f.to_doc().pretty(80).to_string())
+                    .unwrap_or_else(|| "<..>".to_string())
+            );
+            statements.push(Statement::AnnotatedStatement {
+                headers: block.expr_headers.iter().map(|h| h.title.clone()).collect(),
+                statement: None,
+            });
+        }
+
         Block {
-            statements: block.stmts.iter().map(lower_stmt).collect(),
-            trailing_expr: block
-                .expr
-                .as_deref()
-                .map(Expression::from_ast)
-                .map(Box::new),
+            statements,
+            trailing_expr,
         }
     }
 }
 
 fn lower_stmt(stmt: &ast::Stmt) -> Statement {
+    lower_stmt_with_options(stmt, &HashMap::new())
+}
+
+#[allow(clippy::ptr_arg)]
+fn maybe_annotated_statement(
+    stmt: Statement,
+    annotated_comments: &Vec<std::sync::Arc<ast::Header>>,
+) -> Statement {
+    if annotated_comments.is_empty() {
+        stmt
+    } else {
+        eprintln!("Annotated!: {}", stmt.to_doc().pretty(80));
+        Statement::AnnotatedStatement {
+            headers: annotated_comments
+                .iter()
+                .map(|a| a.title.to_string())
+                .collect(),
+            statement: Some(Box::new(stmt)),
+        }
+    }
+}
+
+fn lower_stmt_with_options(
+    stmt: &ast::Stmt,
+    watch_options: &HashMap<String, (Option<String>, Option<WatchWhen>)>,
+) -> Statement {
     match stmt {
         ast::Stmt::CForLoop(stmt) => {
             // we'll add  a block if we an init statement, otherwise we'll just
@@ -330,7 +488,7 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                 },
             };
 
-            match init {
+            let statement = match init {
                 Some(init) => {
                     // use a block
                     Statement::Expression {
@@ -346,14 +504,23 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
                 }
                 // just inner loop
                 None => inner_loop,
-            }
+            };
+
+            maybe_annotated_statement(statement, &stmt.annotations)
         }
-        ast::Stmt::Break(span) => Statement::Break(span.clone()),
-        ast::Stmt::Continue(span) => Statement::Continue(span.clone()),
+        ast::Stmt::Break(ast::BreakStmt { span, annotations }) => {
+            let statement = Statement::Break(span.clone());
+            maybe_annotated_statement(statement, annotations)
+        }
+        ast::Stmt::Continue(ast::ContinueStmt { span, annotations }) => {
+            let statement = Statement::Continue(span.clone());
+            maybe_annotated_statement(statement, annotations)
+        }
         ast::Stmt::WhileLoop(ast::WhileStmt {
             condition,
             body,
             span,
+            annotations,
         }) => {
             // lowering to HIR is trivial, since HIR maps 1:1 with this.
 
@@ -361,96 +528,185 @@ fn lower_stmt(stmt: &ast::Stmt) -> Statement {
 
             let body = Block::from_expr_block(body);
 
-            Statement::While {
+            let statement = Statement::While {
                 condition,
                 block: body,
                 span: span.clone(),
-            }
+            };
+            maybe_annotated_statement(statement, annotations)
         }
-        ast::Stmt::Assign(ast::AssignStmt { left, expr, span }) => Statement::Assign {
-            left: Expression::from_ast(left),
-            value: Expression::from_ast(expr),
-            span: span.clone(),
-        },
+        ast::Stmt::Assign(ast::AssignStmt {
+            left,
+            expr,
+            span,
+            annotations,
+        }) => {
+            let statement = Statement::Assign {
+                left: Expression::from_ast(left),
+                value: Expression::from_ast(expr),
+                span: span.clone(),
+            };
+            maybe_annotated_statement(statement, annotations)
+        }
         ast::Stmt::AssignOp(ast::AssignOpStmt {
             left,
             assign_op,
             expr,
             span,
-        }) => Statement::AssignOp {
-            left: Expression::from_ast(left),
-            assign_op: match assign_op {
-                ast::AssignOp::AddAssign => hir::AssignOp::AddAssign,
-                ast::AssignOp::SubAssign => hir::AssignOp::SubAssign,
-                ast::AssignOp::MulAssign => hir::AssignOp::MulAssign,
-                ast::AssignOp::DivAssign => hir::AssignOp::DivAssign,
-                ast::AssignOp::ModAssign => hir::AssignOp::ModAssign,
-                ast::AssignOp::BitXorAssign => hir::AssignOp::BitXorAssign,
-                ast::AssignOp::BitAndAssign => hir::AssignOp::BitAndAssign,
-                ast::AssignOp::BitOrAssign => hir::AssignOp::BitOrAssign,
-                ast::AssignOp::ShlAssign => hir::AssignOp::ShlAssign,
-                ast::AssignOp::ShrAssign => hir::AssignOp::ShrAssign,
-            },
-            value: Expression::from_ast(expr),
-            span: span.clone(),
-        },
+            annotations,
+        }) => {
+            let statement = Statement::AssignOp {
+                left: Expression::from_ast(left),
+                assign_op: match assign_op {
+                    ast::AssignOp::AddAssign => hir::AssignOp::AddAssign,
+                    ast::AssignOp::SubAssign => hir::AssignOp::SubAssign,
+                    ast::AssignOp::MulAssign => hir::AssignOp::MulAssign,
+                    ast::AssignOp::DivAssign => hir::AssignOp::DivAssign,
+                    ast::AssignOp::ModAssign => hir::AssignOp::ModAssign,
+                    ast::AssignOp::BitXorAssign => hir::AssignOp::BitXorAssign,
+                    ast::AssignOp::BitAndAssign => hir::AssignOp::BitAndAssign,
+                    ast::AssignOp::BitOrAssign => hir::AssignOp::BitOrAssign,
+                    ast::AssignOp::ShlAssign => hir::AssignOp::ShlAssign,
+                    ast::AssignOp::ShrAssign => hir::AssignOp::ShrAssign,
+                },
+                value: Expression::from_ast(expr),
+                span: span.clone(),
+            };
+            maybe_annotated_statement(statement, annotations)
+        }
         ast::Stmt::Let(ast::LetStmt {
             identifier,
             is_mutable,
+            annotation,
             expr,
             span,
-            annotations: _,
+            annotations: annotated_comments,
+            is_watched,
         }) => {
             let lifted_expr = Expression::from_ast(expr);
+            let annotated_type = annotation.as_ref().map(type_ir_from_ast);
 
-            if *is_mutable {
+            let watch_spec = if *is_watched {
+                let var_name = identifier.to_string();
+                // Create default watch spec - runtime WatchOptions statements will modify it
+                let spec = WatchSpec::default_for_variable(var_name.clone(), span.clone());
+                Some(spec)
+            } else {
+                None
+            };
+
+            let statement = if *is_mutable {
                 Statement::DeclareAndAssign {
                     name: identifier.to_string(),
                     value: lifted_expr,
+                    annotated_type,
+                    watch: watch_spec,
                     span: span.clone(),
                 }
             } else {
                 Statement::Let {
                     name: identifier.to_string(),
                     value: lifted_expr,
+                    annotated_type,
+                    watch: watch_spec,
                     span: span.clone(),
                 }
-            }
+            };
+
+            maybe_annotated_statement(statement, annotated_comments)
         }
         ast::Stmt::ForLoop(ast::ForLoopStmt {
             identifier,
             iterator,
             body,
             span,
-            annotations: _,
+            has_let: _,
+            annotations: annotated_comments,
         }) => {
             // Lower for loop to HIR
             let lifted_iterator = Expression::from_ast(iterator);
 
             // Add the for loop statement
-            Statement::ForLoop {
+            let statement = Statement::ForLoop {
                 identifier: identifier.name().to_string(),
                 iterator: Box::new(lifted_iterator),
                 block: Block::from_expr_block(body),
                 span: span.clone(),
-            }
+            };
+
+            maybe_annotated_statement(statement, annotated_comments)
         }
-        ast::Stmt::Expression(expr) => Statement::Expression {
-            expr: Expression::from_ast(&expr.expr),
-            span: expr.span.clone(),
-        },
-        ast::Stmt::Semicolon(expr) => Statement::Semicolon {
-            expr: Expression::from_ast(expr),
-            span: expr.span().clone(),
-        },
-        ast::Stmt::Return(ReturnStmt { value, span }) => Statement::Return {
-            expr: Expression::from_ast(value),
-            span: span.clone(),
-        },
-        ast::Stmt::Assert(AssertStmt { value, span }) => Statement::Assert {
-            condition: Expression::from_ast(value),
-            span: span.clone(),
-        },
+        ast::Stmt::Expression(ast::ExprStmt {
+            expr,
+            span,
+            annotations: annotated_comments,
+        }) => {
+            let statement = Statement::Expression {
+                expr: Expression::from_ast(expr),
+                span: span.clone(),
+            };
+            maybe_annotated_statement(statement, annotated_comments)
+        }
+        ast::Stmt::Semicolon(ast::ExprStmt {
+            expr,
+            span,
+            annotations: annotated_comments,
+        }) => {
+            let statement = Statement::Semicolon {
+                expr: Expression::from_ast(expr),
+                span: span.clone(),
+            };
+            maybe_annotated_statement(statement, annotated_comments)
+        }
+        ast::Stmt::Return(ReturnStmt {
+            value,
+            span,
+            annotations,
+        }) => {
+            let statement = Statement::Return {
+                expr: Expression::from_ast(value),
+                span: span.clone(),
+            };
+            maybe_annotated_statement(statement, annotations)
+        }
+        ast::Stmt::Assert(AssertStmt {
+            value,
+            span,
+            annotations,
+        }) => {
+            let statement = Statement::Assert {
+                condition: Expression::from_ast(value),
+                span: span.clone(),
+            };
+            maybe_annotated_statement(statement, annotations)
+        }
+        ast::Stmt::WatchOptions(ast::WatchOptionsStmt {
+            variable,
+            options_expr,
+            span,
+            annotations,
+        }) => {
+            // Extract name and when from the WatchOptions expression
+            let (channel, when) = extract_watch_options_fields(options_expr);
+            let statement = Statement::WatchOptions {
+                variable: variable.to_string(),
+                channel,
+                when,
+                span: span.clone(),
+            };
+            maybe_annotated_statement(statement, annotations)
+        }
+        ast::Stmt::WatchNotify(ast::WatchNotifyStmt {
+            variable,
+            span,
+            annotations,
+        }) => {
+            let statement = Statement::WatchNotify {
+                variable: variable.to_string(),
+                span: span.clone(),
+            };
+            maybe_annotated_statement(statement, annotations)
+        }
     }
 }
 
@@ -467,20 +723,44 @@ impl Expression {
                 index: Box::new(Self::from_ast(index)),
                 span: span.clone(),
             },
-            ast::Expression::FieldAccess(base, field, span) => Expression::FieldAccess {
-                base: Box::new(Self::from_ast(base)),
-                field: field.to_string(),
-                span: span.clone(),
-            },
+            ast::Expression::FieldAccess(base, field, span) => {
+                if let ast::Expression::Identifier(identifier) = base.as_ref() {
+                    if identifier.name() == "env" {
+                        return Expression::Call {
+                            function: Box::new(Expression::Identifier(
+                                "env.get".to_string(),
+                                identifier.span().clone(),
+                            )),
+                            type_args: vec![],
+                            args: vec![Expression::StringValue(
+                                field.name().to_string(),
+                                field.span().clone(),
+                            )],
+                            span: span.clone(),
+                        };
+                    }
+                }
+
+                Expression::FieldAccess {
+                    base: Box::new(Self::from_ast(base)),
+                    field: field.to_string(),
+                    span: span.clone(),
+                }
+            }
             ast::Expression::MethodCall {
                 receiver,
                 method,
                 args,
+                type_args,
                 span,
             } => Expression::MethodCall {
                 receiver: Box::new(Self::from_ast(receiver)),
                 method: method.to_string(),
                 args: args.iter().map(Self::from_ast).collect(),
+                type_args: type_args
+                    .iter()
+                    .map(|arg| TypeArg::Type(type_ir_from_ast(arg)))
+                    .collect(),
                 span: span.clone(),
             },
             ast::Expression::BoolValue(value, span) => Expression::BoolValue(*value, span.clone()),
@@ -505,7 +785,6 @@ impl Expression {
                 type_args,
                 args,
                 span,
-                ..
             }) => {
                 // Note: AST function calls are always just names next to argument lists.
                 // Later, we will be able to call any expression that is a function.
@@ -694,7 +973,7 @@ mod tests {
     use super::*;
 
     /// Test helper to generate HIR from BAML source
-    fn hir_from_source(source: &'static str) -> String {
+    fn pretty_hir_from_source(source: &'static str) -> String {
         let parser_db = crate::test::ast(source).unwrap_or_else(|e| panic!("{}", e));
         let hir = Hir::from_ast(&parser_db.ast);
         hir.pretty_print()
@@ -712,7 +991,7 @@ mod tests {
               result
           }
 
-          fn add(x: int, y: int) -> int {
+          function add(x: int, y: int) -> int {
               x
           }
       "#;
@@ -742,7 +1021,7 @@ mod tests {
               Foo { a: if true { 1 } else { 0 }, b: { let y = 1; y } }
           }
       "#;
-        let result = hir_from_source(source);
+        let result = pretty_hir_from_source(source);
         // The if expression in field 'a' should get lifted to temporary variables
         // The expression block in field 'b' should work correctly.
         let expected = r#"function TestConstructor() {

@@ -219,6 +219,8 @@ impl InitUI {
         let height = self.steps.len() as u16 + 4; // Steps + title + spacing
         execute!(io::stdout(), crossterm::cursor::MoveDown(height))?;
 
+        execute!(io::stdout(), LeaveAlternateScreen)?;
+
         Ok(())
     }
 }
@@ -283,6 +285,7 @@ impl InitUIContext {
         }
     }
 
+    #[allow(clippy::print_stdout)]
     pub fn finish(self) -> Result<()> {
         if let Some(ui) = self.ui {
             // Show final state for a moment

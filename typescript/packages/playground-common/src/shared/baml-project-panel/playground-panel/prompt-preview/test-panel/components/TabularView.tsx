@@ -3,7 +3,7 @@ import { Label } from '@baml/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@baml/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@baml/ui/table'
 import { useAtom, useAtomValue } from 'jotai'
-import { Check, Copy, Play } from 'lucide-react'
+import { Check, Copy, Play, Square } from 'lucide-react'
 import * as React from 'react'
 
 import { cn } from '@baml/ui/lib/utils'
@@ -117,7 +117,7 @@ const ResponseContent = ({
 
 export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
   const [config, setConfig] = useAtom(tabularViewConfigAtom)
-  const { runTests: runBamlTests } = useRunBamlTests()
+  const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
   const [selectedItem, setSelectedItem] = useAtom(selectedItemAtom)
 
   const toggleConfig = (key: keyof typeof config) => {
@@ -139,13 +139,6 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
     [selectedItem],
   )
   const tc = useAtomValue(testAtom)
-
-  const createSpan = (span: { start: number; end: number; file_path: string; start_line: number }) => ({
-    start: span.start,
-    end: span.end,
-    source_file: span.file_path,
-    value: `${span.file_path.split('/').pop() ?? '<file>.baml'}:${span.start_line + 1}`,
-  })
 
   const selectedRowRef = React.useRef<HTMLTableRowElement>(null)
 
@@ -236,13 +229,14 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
         <TableBody>
           {currentRun?.tests.map((test, index) => {
             const isSelected = selectedItem?.[0] === test.functionName && selectedItem?.[1] === test.testName
+            const isThisTestRunning = test.response.status === 'running'
 
             return (
               <TableRow
                 key={index}
                 ref={isSelected ? selectedRowRef : null}
                 className={cn(
-                  'relative cursor-pointer transition-colors hover:bg-muted/70',
+                  'relative cursor-pointer transition-colors hover:bg-muted/70 ',
                   isSelected && 'border-purple-500/20 shadow-sm dark:border-purple-900/30 dark:bg-muted/90',
                 )}
                 onClick={() => setSelectedItem(test.functionName, test.testName)}
@@ -254,23 +248,31 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                       size='icon'
                       onClick={(e) => {
                         e.stopPropagation() // Prevent row selection when clicking the button
-                        runBamlTests([
-                          {
-                            functionName: test.functionName,
-                            testName: test.testName,
-                          },
-                        ])
+                        if (isThisTestRunning) {
+                          cancelTests()
+                        } else {
+                          runBamlTests([
+                            {
+                              functionName: test.functionName,
+                              testName: test.testName,
+                            },
+                          ])
+                        }
                       }}
                       className='w-6 h-6'
                     >
-                      <Play className='w-4 h-4 text-purple-400' />
+                      {isThisTestRunning ? (
+                        <Square className='w-4 h-4 fill-red-500 stroke-red-500' />
+                      ) : (
+                        <Play className='w-4 h-4 text-purple-400' />
+                      )}
                     </Button>
                     <span
                       className='text-xs truncate whitespace-pre-wrap break-all cursor-pointer text-muted-foreground hover:text-primary'
                       onClick={(e) => {
                         e.stopPropagation()
                         if (!tc?.span) return
-                        vscode.postMessage({ command: 'jumpToFile', span: createSpan(tc.span) })
+                        vscode.jumpToFile(tc.span);
                       }}
                     >
                       {test.testName}

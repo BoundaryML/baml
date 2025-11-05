@@ -33,18 +33,18 @@ use crate::{
         },
         prompt_renderer::PromptRenderer,
     },
-    runtime::InternalBamlRuntime,
-    runtime_interface::{InternalClientLookup, RuntimeConstructor},
+    runtime_interface::RuntimeConstructor,
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RenderCurlSettings,
-    RuntimeContext, RuntimeContextManager,
+    BamlRuntime, FunctionResult, FunctionResultStream, InternalRuntimeInterface,
+    RenderCurlSettings, RuntimeContext, RuntimeContextManager,
 };
 
 pub(crate) struct PreparedFunction<'ir> {
     pub function_name: String,
-    pub func: FunctionWalker<'ir>,
+    /// If the function is an expr_fn, it won't have a `FunctionWalker`.
+    pub func: Option<FunctionWalker<'ir>>,
     pub baml_args: PreparedFunctionArgs,
 }
 
@@ -98,7 +98,7 @@ impl From<PrepareFunctionError> for Result<FunctionResult> {
     }
 }
 
-impl InternalBamlRuntime {
+impl BamlRuntime {
     // TODO: this is introduced so that tracing can hook into function calls
     // _after_ prepare_function but before call_function_impl, which is why
     // `prepare_function` is not used in `FunctionResultStream`.  We should try
@@ -108,13 +108,52 @@ impl InternalBamlRuntime {
         function_name: String,
         params: &BamlMap<String, BamlValue>,
     ) -> Result<PreparedFunction<'_>, PrepareFunctionError> {
+        // Try LLM function first
         let func = match self.get_function(&function_name) {
             Ok(func) => func,
-            Err(error) => {
-                return Err(PrepareFunctionError::FunctionNotFound {
-                    function_name,
-                    error,
-                });
+            Err(llm_error) => {
+                // Try expr function
+                match self.ir().find_expr_fn(&function_name) {
+                    Ok(expr_fn) => {
+                        // For expr functions, validate params and return
+                        let baml_args = match self.ir().check_function_params(
+                            expr_fn.inputs(),
+                            params,
+                            ArgCoercer {
+                                span_path: None,
+                                allow_implicit_cast_to_string: false,
+                            },
+                        ) {
+                            Ok(baml_args) => baml_args,
+                            Err(error) => {
+                                return Err(PrepareFunctionError::InvalidParams {
+                                    function_name,
+                                    error,
+                                });
+                            }
+                        };
+
+                        // For expr functions, return PreparedFunction with None for func
+                        return Ok(PreparedFunction {
+                            function_name,
+                            func: None,
+                            baml_args: PreparedFunctionArgs {
+                                value: baml_args
+                                    .clone()
+                                    .into_iter()
+                                    .map(|(k, v)| (k, v.value()))
+                                    .collect(),
+                                value2: baml_args,
+                            },
+                        });
+                    }
+                    Err(_) => {
+                        return Err(PrepareFunctionError::FunctionNotFound {
+                            function_name,
+                            error: llm_error,
+                        });
+                    }
+                }
             }
         };
 
@@ -137,7 +176,7 @@ impl InternalBamlRuntime {
 
         Ok(PreparedFunction {
             function_name,
-            func,
+            func: Some(func),
             baml_args: PreparedFunctionArgs {
                 value: baml_args
                     .clone()

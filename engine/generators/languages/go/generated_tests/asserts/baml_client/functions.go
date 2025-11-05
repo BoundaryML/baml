@@ -46,6 +46,10 @@ func PersonTest(ctx context.Context, opts ...CallOptionFunc) (types.Person, erro
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		panic(err)

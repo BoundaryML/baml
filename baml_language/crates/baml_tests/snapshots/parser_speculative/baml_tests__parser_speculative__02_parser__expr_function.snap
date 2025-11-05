@@ -1,0 +1,21 @@
+---
+source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE "class JsonData {
+  field1 int
+  field2 int
+}
+
+function ProcessData(data JsonData) -> string {
+  let result = data.field1 + data.field2
+  if result > 100 {
+    return "high"
+  }
+  return "low"
+}
+"
+
+=== ERRORS ===
+None

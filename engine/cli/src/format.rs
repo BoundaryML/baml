@@ -26,6 +26,7 @@ pub struct FormatArgs {
 }
 
 impl FormatArgs {
+    #[allow(clippy::print_stdout)]
     pub fn run(&self) -> Result<()> {
         let paths = if self.paths.is_empty() {
             // Usually this is done in commands.rs, but fmt is a special case

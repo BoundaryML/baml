@@ -50,8 +50,8 @@ indexmap.workspace = true
 indicatif = "0.17.8"
 indicatif-log-bridge = "0.2.3"
 indoc.workspace = true
-internal-baml-codegen.workspace = true
 internal-baml-core.workspace = true
+generators-lib = { path = "../generators/utils/generators_lib" }
 log.workspace = true
 open = "5.3.0"
 pathdiff = "0.1.0"

@@ -33,16 +33,15 @@ use crate::{
         },
         prompt_renderer::PromptRenderer,
     },
-    runtime::InternalBamlRuntime,
-    runtime_interface::{InternalClientLookup, RuntimeConstructor},
+    runtime_interface::RuntimeConstructor,
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RenderCurlSettings,
-    RuntimeContext, RuntimeContextManager, TripWire,
+    BamlRuntime, FunctionResult, FunctionResultStream, InternalRuntimeInterface,
+    RenderCurlSettings, RuntimeContext, RuntimeContextManager, TripWire,
 };
 
-impl InternalBamlRuntime {
+impl BamlRuntime {
     pub(crate) async fn call_function_impl<'ir>(
         &'ir self,
         prepared_func_call: PreparedFunction<'ir>,
@@ -50,8 +49,10 @@ impl InternalBamlRuntime {
         cancel_tripwire: Arc<TripWire>,
     ) -> Result<crate::FunctionResult> {
         let future = async {
-            let renderer =
-                PromptRenderer::from_function(&prepared_func_call.func, self.ir(), &ctx)?;
+            let func = prepared_func_call.func.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Cannot call expr function through call_function_impl")
+            })?;
+            let renderer = PromptRenderer::from_function(func, self.ir(), &ctx)?;
             let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
 
             let baml_args = BamlValue::Map(prepared_func_call.baml_args.value);

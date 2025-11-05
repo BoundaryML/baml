@@ -1,0 +1,26 @@
+[package]
+name = "baml_tests"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+build = "build.rs"
+
+[lib]
+doctest = false
+
+[dependencies]
+baml_db = { workspace = true }
+
+insta.workspace = true
+
+[build-dependencies]
+walkdir = { workspace = true }
+
+[dev-dependencies]
+# For benchmarks
+divan = { package = "codspeed-divan-compat", workspace = true }
+
+[[bench]]
+name = "compiler_benchmark"
+harness = false

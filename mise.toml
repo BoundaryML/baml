@@ -2,11 +2,10 @@
 
 [tools]
 # Core languages
-rust = "1.88.0"
 go = "1.23.11"
-python = "3.13"  # Will use uv for Python package management
+python = "3.13"     # Will use uv for Python package management
 ruby = "3.2.2"
-node = "lts"     # For pnpm
+node = "lts"        # For pnpm
 java = "temurin-23"
 
 # Rust tools
@@ -14,6 +13,7 @@ java = "temurin-23"
 "cargo:cross" = "latest"
 "cargo:cargo-watch" = "latest"
 "cargo:wasm-pack" = "0.13.1"
+"cargo:ripgrep" = "latest"
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml

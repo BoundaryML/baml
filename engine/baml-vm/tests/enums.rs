@@ -1,110 +1,77 @@
 //! VM tests for enum variants.
 
-use baml_vm::{ObjectIndex, Value, VmExecState};
-
 mod common;
-use common::{assert_vm_executes_with_inspection, Program};
+use common::{assert_vm_executes, ExecState, Program, Value};
+
+use crate::common::{Object, Variant};
 
 #[test]
 fn return_enum_variant() -> anyhow::Result<()> {
-    assert_vm_executes_with_inspection(
-        Program {
-            source: r#"
-                enum Shape {
-                    Square
-                    Rectangle
-                    Circle
-                }
+    assert_vm_executes(Program {
+        source: r#"
+            enum Shape {
+                Square
+                Rectangle
+                Circle
+            }
 
-                fn main() -> Shape {
-                    Shape.Rectangle
-                }
-            "#,
-            function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
-        },
-        |vm| {
-            let baml_vm::Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(35)] else {
-                panic!(
-                    "expected Variant, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(35)]
-                );
-            };
-
-            assert_eq!(variant.index, 1);
-
-            Ok(())
-        },
-    )
+            function main() -> Shape {
+                Shape.Rectangle
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Variant(Variant {
+            enm: String::from("Shape"),
+            variant: String::from("Rectangle"),
+        }))),
+    })
 }
 
 #[test]
 fn assign_enum_variant() -> anyhow::Result<()> {
-    assert_vm_executes_with_inspection(
-        Program {
-            source: r#"
-                enum Shape {
-                    Square
-                    Rectangle
-                    Circle
-                }
+    assert_vm_executes(Program {
+        source: r#"
+            enum Shape {
+                Square
+                Rectangle
+                Circle
+            }
 
-                fn main() -> Shape {
-                    let s = Shape.Rectangle;
-                    s
-                }
-            "#,
-            function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(35))),
-        },
-        |vm| {
-            let baml_vm::Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(35)] else {
-                panic!(
-                    "expected Variant, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(35)]
-                );
-            };
-
-            assert_eq!(variant.index, 1);
-
-            Ok(())
-        },
-    )
+            function main() -> Shape {
+                let s = Shape.Rectangle;
+                s
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Variant(Variant {
+            enm: String::from("Shape"),
+            variant: String::from("Rectangle"),
+        }))),
+    })
 }
 
 #[test]
 fn take_and_return_enum_variant() -> anyhow::Result<()> {
-    assert_vm_executes_with_inspection(
-        Program {
-            source: r#"
-                enum Shape {
-                    Square
-                    Rectangle
-                    Circle
-                }
+    assert_vm_executes(Program {
+        source: r#"
+            enum Shape {
+                Square
+                Rectangle
+                Circle
+            }
 
-                function return_shape(shape: Shape) -> Shape {
-                    shape
-                }
+            function return_shape(shape: Shape) -> Shape {
+                shape
+            }
 
-                fn main() -> Shape {
-                    return_shape(Shape.Rectangle)
-                }
-            "#,
-            function: "main",
-            expected: VmExecState::Complete(Value::Object(ObjectIndex::from_raw(36))),
-        },
-        |vm| {
-            let baml_vm::Object::Variant(variant) = &vm.objects[ObjectIndex::from_raw(36)] else {
-                panic!(
-                    "expected Variant, got {:?}",
-                    &vm.objects[ObjectIndex::from_raw(36)]
-                );
-            };
-
-            assert_eq!(variant.index, 1);
-
-            Ok(())
-        },
-    )
+            function main() -> Shape {
+                return_shape(Shape.Rectangle)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Variant(Variant {
+            enm: String::from("Shape"),
+            variant: String::from("Rectangle"),
+        }))),
+    })
 }

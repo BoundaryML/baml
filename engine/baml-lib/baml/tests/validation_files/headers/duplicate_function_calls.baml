@@ -1,15 +1,13 @@
-# Pipeline
-fn CallsDedup() -> string {
-    ## Step A
+//# Pipeline
+function CallsDedup() -> string {
+    //## Step A
     let a = Foo();
 
-    ## Step B
+    //## Step B
     let b = Foo();
 
-    ## Step C
+    //## Step C
     let c = Foo();
 
     a + b
 }
-
-

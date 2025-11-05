@@ -30,7 +30,7 @@ Next, we'll create a function that uses GPT-4 to classify text. Add this to your
 
 ```baml
 function ClassifyText(input: string) -> MessageType {
-  client "openai/gpt-4o-mini"
+  client "openai/gpt-5-mini"
   prompt #"
     Classify the message. 
 
@@ -45,7 +45,7 @@ function ClassifyText(input: string) -> MessageType {
 
 Let's break down what this function does:
 - Takes an input as a string
-- Uses the `gpt-4o-mini` model
+- Uses the `gpt-5-mini` model
 - Provides clear guidelines for classification in the prompt
 - Returns a MessageType
 
@@ -131,7 +131,7 @@ Add the classification function to your `ticket_classifier.baml` file:
 
 ```baml
 function ClassifyTicket(ticket: string) -> TicketClassification {
-  client "openai/gpt-4o-mini"
+  client "openai/gpt-5-mini"
   prompt #"
     You are a support agent at a tech company. Analyze the support ticket and select all applicable labels.
 

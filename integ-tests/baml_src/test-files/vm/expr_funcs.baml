@@ -87,7 +87,7 @@ function IterativeFibonacci(n: int) -> int {
 
 function SumArray(arr: int[]) -> int {
     let sum = 0;
-    for (a in arr) {
+    for (let a in arr) {
         sum += a;
     }
     sum
@@ -109,6 +109,11 @@ function ReturnCategory(category: Category) -> Category {
 
 function ReturnImageFromUrl(url: string) -> image {
     image.from_url(url)
+}
+
+function HomeEnvVarIsEmpty() -> bool {
+    let home = env.HOME;
+    home == ""
 }
 
 // --------------------------------
@@ -138,4 +143,58 @@ function StoreLlmCallInLocalVar(n: int) -> int {
 
 function BoolToIntWithIfElseCallingLlm(b: bool) -> int {
     if (b) { LlmReturnNumber(1) } else { LlmReturnNumber(0) }
+}
+
+/// Other builtins
+
+class DummyJsonTodo {
+    id int
+    todo string
+    completed bool
+    userId int
+}
+
+function ExecFetchAs(url: string) -> DummyJsonTodo {
+    let todo = baml.fetch_as<DummyJsonTodo>(url);
+
+    todo
+}
+
+function ExecFetchAsWithHttpPostRequest() -> DummyJsonTodo {
+    baml.fetch_as<DummyJsonTodo>(baml.HttpRequest {
+        method: baml.HttpMethod.Post,
+        url: "https://dummyjson.com/todos/add",
+        json: {
+            "todo": "Buy milk",
+            "completed": false,
+            "userId": 5
+        },
+    })
+}
+
+// No ID cause API fails
+class DummyJsonTodoUpdate {
+    todo string
+    completed bool
+    userId int
+}
+
+function ExecFetchAsWithHttpPutRequestAndClassJson() -> DummyJsonTodo {
+    let updated_todo = DummyJsonTodoUpdate {
+        todo: "Buy milk",
+        completed: false,
+        userId: 5
+    };
+
+    baml.fetch_as<DummyJsonTodo>(baml.HttpRequest {
+        method: baml.HttpMethod.Put,
+        url: "https://dummyjson.com/todos/1",
+        json: updated_todo,
+    })
+}
+
+test Fib5() {
+  functions [IterativeFibonacci]
+  args { n 5 }
+  @@assert( {{ this == 5 }} )
 }

@@ -2262,7 +2262,7 @@ type Widget struct {
 	Type      *types.Union4KbuttonOrKcontainerOrKimageOrKtext `json:"type"`
 	Button    *ButtonWidget                                   `json:"button"`
 	Text      *TextWidget                                     `json:"text"`
-	Image     *ImageWidget                                    `json:"image"`
+	Img       *ImageWidget                                    `json:"img"`
 	Container *ContainerWidget                                `json:"container"`
 }
 
@@ -2289,8 +2289,8 @@ func (c *Widget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		case "text":
 			c.Text = baml.Decode(valueHolder).Interface().(*TextWidget)
 
-		case "image":
-			c.Image = baml.Decode(valueHolder).Interface().(*ImageWidget)
+		case "img":
+			c.Img = baml.Decode(valueHolder).Interface().(*ImageWidget)
 
 		case "container":
 			c.Container = baml.Decode(valueHolder).Interface().(*ContainerWidget)
@@ -2313,7 +2313,7 @@ func (c Widget) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["text"] = c.Text
 
-	fields["image"] = c.Image
+	fields["img"] = c.Img
 
 	fields["container"] = c.Container
 

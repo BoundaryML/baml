@@ -88,11 +88,6 @@
         ]
       }
     ],
-    "workbench.colorCustomizations": {
-      "activityBar.background": "#630001",
-      "titleBar.activeBackground": "#8B0002",
-      "titleBar.activeForeground": "#FFFBFB"
-    },
     "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome",
     "terminal.integrated.scrollback": 1e6
   },

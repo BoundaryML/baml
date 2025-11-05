@@ -170,7 +170,7 @@ func TestCollectorClearAPI(t *testing.T) {
 	t.Logf("Initial logs count: %d", len(logs))
 
 	// Test Clear method
-	count, err := collector.Clear()
+  count, err := collector.Clear()
 	if err != nil {
 		t.Errorf("Failed to clear collector: %v", err)
 	}

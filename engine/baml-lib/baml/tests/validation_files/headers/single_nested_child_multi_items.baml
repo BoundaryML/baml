@@ -1,16 +1,14 @@
-# Parent
-fn SingleNestedChildMultiItems() -> string {
+//# Parent
+function SingleNestedChildMultiItems() -> string {
     let items = [1, 2, 3];
 
-    for (item in items) {
-        ## First
+    for (let item in items) {
+        //## First
         let x = item;
 
-        ## Second
+        //## Second
         x
     }
 
     "done"
 }
-
-

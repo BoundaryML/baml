@@ -1,19 +1,21 @@
 "use strict";
 // NOTE: Don't take a dependency on ./native here, it will break the browser code
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BamlAbortError = exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = void 0;
+exports.BamlTimeoutError = exports.BamlAbortError = exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = void 0;
 exports.isBamlError = isBamlError;
 exports.toBamlError = toBamlError;
 class BamlClientFinishReasonError extends Error {
     prompt;
     raw_output;
     finish_reason;
-    constructor(prompt, raw_output, message, finish_reason) {
+    detailed_message;
+    constructor(prompt, raw_output, message, finish_reason, detailed_message) {
         super(message);
-        this.name = 'BamlClientFinishReasonError';
+        this.name = "BamlClientFinishReasonError";
         this.prompt = prompt;
         this.raw_output = raw_output;
         this.finish_reason = finish_reason;
+        this.detailed_message = detailed_message;
         Object.setPrototypeOf(this, BamlClientFinishReasonError.prototype);
     }
     toJSON() {
@@ -23,18 +25,19 @@ class BamlClientFinishReasonError extends Error {
             raw_output: this.raw_output,
             prompt: this.prompt,
             finish_reason: this.finish_reason,
+            detailed_message: this.detailed_message,
         }, null, 2);
     }
     static from(error) {
-        if (error.message.includes('BamlClientFinishReasonError')) {
+        if (error.message.includes("BamlClientFinishReasonError")) {
             try {
                 const errorData = JSON.parse(error.message);
-                if (errorData.type === 'BamlClientFinishReasonError') {
-                    return new BamlClientFinishReasonError(errorData.prompt || '', errorData.raw_output || '', errorData.message || error.message, errorData.finish_reason);
+                if (errorData.type === "BamlClientFinishReasonError") {
+                    return new BamlClientFinishReasonError(errorData.prompt || "", errorData.raw_output || "", errorData.message || error.message, errorData.finish_reason, errorData.detailed_message || "");
                 }
             }
             catch (parseError) {
-                console.warn('Failed to parse BamlClientFinishReasonError:', parseError);
+                console.warn("Failed to parse BamlClientFinishReasonError:", parseError);
             }
         }
         return undefined;
@@ -44,11 +47,13 @@ exports.BamlClientFinishReasonError = BamlClientFinishReasonError;
 class BamlValidationError extends Error {
     prompt;
     raw_output;
-    constructor(prompt, raw_output, message) {
+    detailed_message;
+    constructor(prompt, raw_output, message, detailed_message) {
         super(message);
-        this.name = 'BamlValidationError';
+        this.name = "BamlValidationError";
         this.prompt = prompt;
         this.raw_output = raw_output;
+        this.detailed_message = detailed_message;
         Object.setPrototypeOf(this, BamlValidationError.prototype);
     }
     toJSON() {
@@ -57,18 +62,19 @@ class BamlValidationError extends Error {
             message: this.message,
             raw_output: this.raw_output,
             prompt: this.prompt,
+            detailed_message: this.detailed_message,
         }, null, 2);
     }
     static from(error) {
-        if (error.message.includes('BamlValidationError')) {
+        if (error.message.includes("BamlValidationError")) {
             try {
                 const errorData = JSON.parse(error.message);
-                if (errorData.type === 'BamlValidationError') {
-                    return new BamlValidationError(errorData.prompt || '', errorData.raw_output || '', errorData.message || error.message);
+                if (errorData.type === "BamlValidationError") {
+                    return new BamlValidationError(errorData.prompt || "", errorData.raw_output || "", errorData.message || error.message, errorData.detailed_message || "");
                 }
             }
             catch (parseError) {
-                console.warn('Failed to parse BamlValidationError:', parseError);
+                console.warn("Failed to parse BamlValidationError:", parseError);
             }
         }
         return undefined;
@@ -78,11 +84,13 @@ exports.BamlValidationError = BamlValidationError;
 class BamlClientHttpError extends Error {
     client_name;
     status_code;
-    constructor(client_name, message, status_code) {
+    detailed_message;
+    constructor(client_name, message, status_code, detailed_message) {
         super(message);
-        this.name = 'BamlClientHttpError';
+        this.name = "BamlClientHttpError";
         this.client_name = client_name;
         this.status_code = status_code;
+        this.detailed_message = detailed_message;
         Object.setPrototypeOf(this, BamlClientHttpError.prototype);
     }
     toJSON() {
@@ -91,18 +99,19 @@ class BamlClientHttpError extends Error {
             message: this.message,
             status_code: this.status_code,
             client_name: this.client_name,
+            detailed_message: this.detailed_message,
         });
     }
     static from(error) {
-        if (error.message.includes('BamlClientHttpError')) {
+        if (error.message.includes("BamlClientHttpError")) {
             try {
                 const errorData = JSON.parse(error.message);
-                if (errorData.type === 'BamlClientHttpError') {
-                    return new BamlClientHttpError(errorData.client_name || '', errorData.message || error.message, errorData.status_code || -100);
+                if (errorData.type === "BamlClientHttpError") {
+                    return new BamlClientHttpError(errorData.client_name || "", errorData.message || error.message, errorData.status_code || -100, errorData.detailed_message || "");
                 }
             }
             catch (parseError) {
-                console.warn('Failed to parse BamlClientHttpError:', parseError);
+                console.warn("Failed to parse BamlClientHttpError:", parseError);
             }
         }
         return undefined;
@@ -111,10 +120,12 @@ class BamlClientHttpError extends Error {
 exports.BamlClientHttpError = BamlClientHttpError;
 class BamlAbortError extends Error {
     reason;
-    constructor(message, reason) {
+    detailed_message;
+    constructor(message, reason, detailed_message = "") {
         super(message);
-        this.name = 'BamlAbortError';
+        this.name = "BamlAbortError";
         this.reason = reason;
+        this.detailed_message = detailed_message;
         Object.setPrototypeOf(this, BamlAbortError.prototype);
     }
     toJSON() {
@@ -122,18 +133,48 @@ class BamlAbortError extends Error {
             name: this.name,
             message: this.message,
             reason: this.reason,
+            detailed_message: this.detailed_message,
         }, null, 2);
     }
     static from(error) {
-        if (error.message.includes('BamlAbortError') || error.message.includes('Operation was aborted') || error.message.includes('Operation cancelled')) {
-            return new BamlAbortError(error.message);
+        if (error.message.includes("BamlAbortError") ||
+            error.message.includes("Operation was aborted") ||
+            error.message.includes("Operation cancelled")) {
+            return new BamlAbortError(error.message, undefined, "");
         }
         return undefined;
     }
 }
 exports.BamlAbortError = BamlAbortError;
+class BamlTimeoutError extends BamlClientHttpError {
+    constructor(client_name, message) {
+        super(client_name, message, 408, ""); // HTTP 408 Request Timeout
+        this.name = "BamlTimeoutError";
+        Object.setPrototypeOf(this, BamlTimeoutError.prototype);
+    }
+    static from(error) {
+        if (error.message.includes("BamlTimeoutError") ||
+            error.message.includes("timed out")) {
+            try {
+                const errorData = JSON.parse(error.message);
+                if (errorData.type === "BamlTimeoutError") {
+                    return new BamlTimeoutError(errorData.client_name || "", errorData.message || error.message);
+                }
+            }
+            catch (parseError) {
+                // If parsing fails, check for timeout in message
+                if (error.message.includes("timed out")) {
+                    return new BamlTimeoutError("", error.message);
+                }
+                console.warn("Failed to parse BamlTimeoutError:", parseError);
+            }
+        }
+        return undefined;
+    }
+}
+exports.BamlTimeoutError = BamlTimeoutError;
 function isError(error) {
-    if (typeof error === 'string') {
+    if (typeof error === "string") {
         return false;
     }
     if (error.message) {
@@ -153,6 +194,10 @@ function createBamlErrorUnsafe(error) {
     if (bamlAbortError) {
         return bamlAbortError;
     }
+    const bamlTimeoutError = BamlTimeoutError.from(error);
+    if (bamlTimeoutError) {
+        return bamlTimeoutError;
+    }
     const bamlClientHttpError = BamlClientHttpError.from(error);
     if (bamlClientHttpError) {
         return bamlClientHttpError;
@@ -169,22 +214,25 @@ function createBamlErrorUnsafe(error) {
     return error;
 }
 function isBamlError(error) {
-    if (error.type === 'BamlClientHttpError' ||
-        error.type === 'BamlValidationError' ||
-        error.type === 'BamlClientFinishReasonError' ||
-        error.type === 'BamlAbortError') {
+    if (error.type === "BamlClientHttpError" ||
+        error.type === "BamlValidationError" ||
+        error.type === "BamlClientFinishReasonError" ||
+        error.type === "BamlAbortError" ||
+        error.type === "BamlTimeoutError") {
         return true;
     }
-    if (error.name === 'BamlClientHttpError' ||
-        error.name === 'BamlValidationError' ||
-        error.name === 'BamlClientFinishReasonError' ||
-        error.name === 'BamlAbortError') {
+    if (error.name === "BamlClientHttpError" ||
+        error.name === "BamlValidationError" ||
+        error.name === "BamlClientFinishReasonError" ||
+        error.name === "BamlAbortError" ||
+        error.name === "BamlTimeoutError") {
         return true;
     }
     return (error instanceof BamlClientHttpError ||
         error instanceof BamlValidationError ||
         error instanceof BamlClientFinishReasonError ||
-        error instanceof BamlAbortError);
+        error instanceof BamlAbortError ||
+        error instanceof BamlTimeoutError);
 }
 function toBamlError(error) {
     try {

@@ -1,0 +1,376 @@
+---
+title: Comparing AI SDK
+---
+
+[AI SDK](https://sdk.vercel.ai/) by Vercel is a powerful toolkit for building AI-powered applications in TypeScript. It's particularly popular for Next.js and React developers.
+
+Let's explore how AI SDK handles structured extraction and where the complexity creeps in.
+
+### Why working with LLMs requires more than just AI SDK
+
+AI SDK makes structured data generation look elegant at first:
+
+```typescript
+import { generateObject } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
+
+const Resume = z.object({
+  name: z.string(),
+  skills: z.array(z.string())
+});
+
+const { object } = await generateObject({
+  model: openai('gpt-4o'),
+  schema: Resume,
+  prompt: 'John Doe, Python, Rust'
+});
+```
+
+Clean and simple! But let's make it more realistic by adding education:
+
+```diff
++const Education = z.object({
++  school: z.string(),
++  degree: z.string(),
++  year: z.number()
++});
+
+const Resume = z.object({
+  name: z.string(),
+  skills: z.array(z.string()),
++  education: z.array(Education)
+});
+
+const { object } = await generateObject({
+  model: openai('gpt-4o'),
+  schema: Resume,
+  prompt: `John Doe
+Python, Rust
+University of California, Berkeley, B.S. in Computer Science, 2020`
+});
+```
+
+Still works! But... what's the actual prompt being sent? How many tokens is this costing?
+
+### The visibility problem
+
+Your manager asks: "Why did the extraction fail for this particular resume?" 
+
+```typescript
+// How do you debug what went wrong?
+const { object } = await generateObject({
+  model: openai('gpt-4o'),
+  schema: Resume,
+  prompt: complexResumeText
+});
+
+// You can't see:
+// - The actual prompt sent to the model
+// - The schema format used
+// - Why certain fields were missed
+```
+
+You start digging through the AI SDK source code to understand the prompt construction...
+
+### Classification challenges
+
+Now your PM wants to classify resumes by seniority level:
+
+```typescript
+const SeniorityLevel = z.enum(['junior', 'mid', 'senior', 'staff']);
+
+const Resume = z.object({
+  name: z.string(),
+  skills: z.array(z.string()),
+  education: z.array(Education),
+  seniority: SeniorityLevel
+});
+```
+
+But wait... how do you tell the model what "junior" vs "senior" means? Zod enums are just string literals:
+
+```typescript
+// You can't add descriptions to enum values!
+// How does the model know junior = 0-2 years experience?
+
+// You try adding a comment...
+const SeniorityLevel = z.enum([
+  'junior',  // 0-2 years
+  'mid',     // 2-5 years  
+  'senior',  // 5-10 years
+  'staff'    // 10+ years
+]);
+// But comments aren't sent to the model!
+
+// So you end up doing this hack:
+const { object } = await generateObject({
+  model: openai('gpt-4o'),
+  schema: Resume,
+  prompt: `Extract resume information.
+  
+Seniority levels:
+- junior: 0-2 years experience
+- mid: 2-5 years experience
+- senior: 5-10 years experience  
+- staff: 10+ years experience
+
+Resume:
+${resumeText}`
+});
+```
+
+Your clean abstraction is leaking...
+
+### Multi-provider pain
+
+Your company wants to use different models for different use cases:
+
+```typescript
+// First, install a bunch of packages
+npm install @ai-sdk/openai @ai-sdk/anthropic @ai-sdk/google @ai-sdk/mistral
+
+// Import from different packages
+import { openai } from '@ai-sdk/openai';
+import { anthropic } from '@ai-sdk/anthropic';
+import { google } from '@ai-sdk/google';
+
+// Now you need provider detection logic
+function getModel(provider: string) {
+  switch(provider) {
+    case 'openai': return openai('gpt-4o');
+    case 'anthropic': return anthropic('claude-3-opus-20240229');
+    case 'google': return google('gemini-pro');
+    // Don't forget to handle errors...
+  }
+}
+
+// And manage different API keys
+const providers = {
+  openai: process.env.OPENAI_API_KEY,
+  anthropic: process.env.ANTHROPIC_API_KEY,
+  google: process.env.GOOGLE_API_KEY,
+  // More environment variables to manage...
+};
+```
+
+### Testing without burning money
+
+You want to test your extraction logic:
+
+```typescript
+// How do you test this without API calls?
+const { object } = await generateObject({
+  model: openai('gpt-4o'),
+  schema: Resume,
+  prompt: testResumeText
+});
+
+// Mock the entire AI SDK?
+jest.mock('ai', () => ({
+  generateObject: jest.fn().mockResolvedValue({
+    object: { name: 'Test', skills: ['JS'] }
+  })
+}));
+
+// But you're not testing your schema or prompt...
+// Just that your mocks return the right shape
+```
+
+### The real-world spiral
+
+As your app grows, you need:
+- Custom extraction strategies for different document types
+- Retry logic for flaky models
+- Token usage tracking for cost control
+- Prompt versioning for A/B testing
+
+Your code evolves into:
+
+```typescript
+class ResumeExtractor {
+  private tokenCounter: TokenCounter;
+  private promptTemplates: Map<string, string>;
+  private retryConfig: RetryConfig;
+  
+  async extract(text: string, options?: ExtractOptions) {
+    const model = this.selectModel(options);
+    const prompt = this.buildPrompt(text, options);
+    
+    return this.withRetry(async () => {
+      const start = Date.now();
+      const tokens = this.tokenCounter.estimate(prompt);
+      
+      try {
+        const result = await generateObject({
+          model,
+          schema: Resume,
+          prompt
+        });
+        
+        this.logUsage({ tokens, duration: Date.now() - start });
+        return result;
+      } catch (error) {
+        this.handleError(error);
+      }
+    });
+  }
+  
+  // ... dozens more methods
+}
+```
+
+The simple AI SDK call is now buried in layers of infrastructure code.
+
+## Enter BAML
+
+BAML was designed for the reality of production LLM applications. Here's the same resume extraction:
+
+```baml
+class Education {
+  school string
+  degree string
+  year int
+}
+
+enum SeniorityLevel {
+  JUNIOR @description("0-2 years of experience")
+  MID @description("2-5 years of experience")
+  SENIOR @description("5-10 years of experience")
+  STAFF @description("10+ years of experience, technical leadership")
+}
+
+class Resume {
+  name string
+  skills string[]
+  education Education[]
+  seniority SeniorityLevel
+}
+
+function ExtractResume(resume_text: string) -> Resume {
+  client GPT4
+  prompt #"
+    Extract the following information from the resume.
+    
+    Pay attention to the seniority descriptions:
+    {{ ctx.output_format.seniority }}
+    
+    Resume:
+    ---
+    {{ resume_text }}
+    ---
+    
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+Notice what you get immediately:
+1. **The prompt is right there** - No digging through source code
+2. **Enums with descriptions** - The model knows what each value means
+3. **Type definitions that become prompts** - Less tokens, clearer instructions
+
+### Multi-model made simple
+
+```baml
+// All providers in one place
+client<llm> GPT4 {
+  provider openai
+  options {
+    model "gpt-4o"
+    temperature 0.1
+  }
+}
+
+client<llm> Claude {
+  provider anthropic  
+  options {
+    model "claude-3-opus-20240229"
+    temperature 0.1
+  }
+}
+
+client<llm> Gemini {
+  provider google
+  options {
+    model "gemini-pro"
+  }
+}
+
+client<llm> Llama {
+  provider ollama
+  options {
+    model "llama3"
+  }
+}
+
+// Same function, any model
+function ExtractResume(resume_text: string) -> Resume {
+  client GPT4  // Just change this
+  prompt #"..."#
+}
+```
+
+Use it in TypeScript:
+```typescript
+import { baml } from '@/baml_client';
+
+// Use default model
+const resume = await baml.ExtractResume(resumeText);
+
+// Switch models based on your needs
+const complexResume = await baml.ExtractResume(complexText, { client: "Claude" });
+const simpleResume = await baml.ExtractResume(simpleText, { client: "Llama" });
+
+// Everything is fully typed!
+console.log(resume.seniority); // TypeScript knows this is SeniorityLevel
+```
+
+### Testing that actually tests
+
+With BAML's VSCode extension, you can:
+
+<img src="/assets/vscode/dev-tools.png" alt="BAML development tools in VSCode" />
+
+1. **Test prompts without API calls** - Instant feedback
+2. **See exactly what will be sent** - Full transparency
+3. **Iterate on prompts instantly** - No deploy cycles
+4. **Save test cases** for regression testing
+
+<img src="/assets/vscode/code-lens.png" alt="BAML code lens showing test options" />
+
+*No mocking required - you're testing the actual prompt and parsing logic.*
+
+### The bottom line
+
+AI SDK is fantastic for building streaming AI applications in Next.js. But for structured extraction, you end up fighting the abstractions.
+
+**BAML's advantages over AI SDK:**
+- **Prompt transparency** - See and control exactly what's sent to the LLM
+- **Purpose-built types** - Enums with descriptions, aliases, better schema format
+- **Unified model interface** - All providers work the same way, switch with one line
+- **Real testing** - Test in VSCode without API calls or burning tokens
+- **Schema-Aligned Parsing** - Get structured outputs from any model
+- **Better token efficiency** - Optimized schema format uses fewer tokens
+- **Production features** - Built-in retries, fallbacks, and error handling
+
+**What this means for your TypeScript apps:**
+- **Faster development** - Test prompts instantly without running Next.js
+- **Better debugging** - Know exactly why extraction failed
+- **Cost optimization** - See token usage and optimize prompts
+- **Model flexibility** - Never get locked into one provider
+- **Cleaner code** - No wrapper classes or infrastructure code needed
+
+**AI SDK is great for:** Streaming UI, Next.js integration, rapid prototyping
+**BAML is great for:** Production structured extraction, multi-model apps, cost optimization
+
+We built BAML because we were tired of elegant APIs that fall apart when you need production reliability and control.
+
+### Limitations of BAML
+
+BAML does have some limitations:
+1. It's a new language (but learning takes < 10 minutes)
+2. Best experience requires VSCode
+3. Focused on structured extraction, not general AI features
+
+If you're building a Next.js app with streaming UI, use AI SDK. If you want bulletproof structured extraction with full control, [try BAML](https://docs.boundaryml.com).

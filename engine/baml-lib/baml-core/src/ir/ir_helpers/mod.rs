@@ -450,7 +450,7 @@ fn get_dummy_value(
             }
         }
         TypeIR::Literal(literal_value, _) => match literal_value {
-            LiteralValue::String(s) => format!("\"{}\"", s),
+            LiteralValue::String(s) => format!("\"{s}\""),
             LiteralValue::Int(i) => i.to_string(),
             LiteralValue::Bool(b) => b.to_string(),
         },
@@ -667,8 +667,9 @@ impl IRHelper for IntermediateRepr {
             Some(f) => Ok(f),
 
             None => {
-                // Get best match.
-                let functions = self.walk_functions().map(|f| f.name()).collect::<Vec<_>>();
+                // Get best match from both LLM functions and expr functions
+                let mut functions = self.walk_functions().map(|f| f.name()).collect::<Vec<_>>();
+                functions.extend(self.walk_expr_fns().map(|f| f.item.elem.name.as_str()));
                 error_not_found!("function", function_name, &functions)
             }
         }
@@ -686,11 +687,12 @@ impl IRHelper for IntermediateRepr {
             Some(f) => Ok(f),
 
             None => {
-                // Get best match.
-                let functions = self
+                // Get best match from both expr functions and LLM functions
+                let mut functions = self
                     .walk_expr_fns()
                     .map(|f| f.item.elem.name.clone())
                     .collect::<Vec<_>>();
+                functions.extend(self.walk_functions().map(|f| f.name().to_string()));
                 error_not_found!("function", function_name, &functions)
             }
         }
@@ -1908,7 +1910,7 @@ mod subtype_tests {
         assert!(result.contains("0.5")); // float value
         assert!(result.contains("name") && result.contains("age")); // Person class fields
 
-        println!("Generated dummy args:\n{}", result);
+        println!("Generated dummy args:\n{result}");
     }
 
     #[test]

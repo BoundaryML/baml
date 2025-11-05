@@ -106,18 +106,30 @@ requestType = await b.ClassifyRequest("Reset my password")
 assert requestType == RequestType.ACCOUNT
 ```
 
-The prompt string may be more wordy, but with BAML you now have
-1. Fully typed responses, guaranteed
-1. Full transparency and flexibility of the prompt string
-1. Full freedom for what model to use
-1. Helper functions to manipulate types in prompts (print_enum)
-1. Testing capabilities using the VSCode playground
-1. Analytics in the Boundary Dashboard
-1. Support for TypeScript
-1. A better understanding of how prompt engineering works
+### The bottom line
 
+Marvin was a big source of inspiration for us -- their approach is simple and elegant for quick Python prototypes.
 
-Marvin was a big source of inspiration for us -- their approach is simple and elegant. We recommend checking out Marvin if you're just starting out with prompt engineering or want to do a one-off simple task in Python. But if you'd like a whole added set of features, we'd love for you to give BAML a try and let us know what you think.
+**BAML's advantages over Marvin:**
+- **Prompt transparency** - See and control exactly what's sent to the LLM
+- **Multi-language support** - Python, TypeScript, Java, Go, not just Python
+- **Model flexibility** - Use any provider (OpenAI, Claude, Gemini, open-source)
+- **Real testing** - Test in VSCode without API calls or burning tokens
+- **Production features** - Built-in retries, fallbacks, streaming, error handling
+- **Better type system** - Enums with descriptions, aliases, complex nested types
+- **Cost optimization** - See token usage and optimize prompts
+
+**What this means for your applications:**
+- **Faster development** - Test and iterate on prompts instantly
+- **Better reliability** - Handle edge cases and model failures automatically
+- **Multi-language teams** - Same logic works in Python, TypeScript, and more
+- **Production readiness** - Built-in observability and error handling
+- **Model independence** - Never get locked into one provider
+
+**Marvin is great for:** Quick Python prototypes, simple one-off tasks
+**BAML is great for:** Production applications, multi-language teams, complex workflows
+
+We recommend checking out Marvin if you're just starting with prompt engineering or need a quick Python solution. But if you're building production applications that need reliability, observability, and multi-language support, [try BAML](https://docs.boundaryml.com).
 
 ### Limitations of BAML
 

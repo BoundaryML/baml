@@ -1,4 +1,4 @@
-fn Factorial(limit: int) -> int {
+function Factorial(limit: int) -> int {
 
 	let result = 1;
 
@@ -20,7 +20,7 @@ fn Factorial(limit: int) -> int {
 	result
 }
 
-fn ContinueNested() -> int {
+function ContinueNested() -> int {
     while (true) {
         while (true) {
             continue;
@@ -50,14 +50,4 @@ fn ContinueNested() -> int {
 //     continue;
 //     }
 //   }
-// }
-//
-// class std::Request {
-//   base_url: string
-//   headers: map<string, string>
-//   query_params: map<string, string>
-// }
-//
-// enum std::HttpMethod {
-//   Get
 // }

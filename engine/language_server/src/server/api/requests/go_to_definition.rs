@@ -4,7 +4,7 @@ use lsp_types::{
     self, request as req, GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range,
     Url,
 };
-use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
+use playground_server::WebviewRouterMessage;
 
 use crate::{
     baml_project::{position_utils::get_word_at_position, trim_line, BamlRuntimeExt},
@@ -37,16 +37,13 @@ impl SyncRequestHandler for GotoDefinition {
             .text_document
             .uri
             .clone();
-        if !url.to_string().contains("baml_src") {
-            return Ok(None);
-        }
-
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        let project = session
-            .get_or_create_project(&path)
-            .expect("Ensured that a project db exists");
+        let Ok(project) = session.get_or_create_project(&path) else {
+            return Ok(None);
+        };
+
         {
             let default_flags = vec!["beta".to_string()];
             project.lock().update_runtime(
@@ -105,27 +102,6 @@ impl SyncRequestHandler for GotoDefinition {
                     uri: target_uri,
                     range,
                 });
-
-                // Broadcast function change to playground clients
-                if let Some(function) = guard
-                    .list_functions()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .find(|f| f.span.file_path == document_key.path().to_string_lossy())
-                {
-                    if let Err(e) =
-                        session
-                            .playground_tx
-                            .send(PreLangServerToWasmMessage::FrontendMessage(
-                                FrontendMessage::select_function {
-                                    root_path: guard.root_path().to_string_lossy().to_string(),
-                                    function_name: function.name.clone(),
-                                },
-                            ))
-                    {
-                        tracing::warn!("Error forwarding function change to playground: {}", e);
-                    }
-                }
 
                 Ok(Some(goto_definition_response))
             }
