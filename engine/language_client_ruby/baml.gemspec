@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name = "baml"
-  spec.version = "0.212.0"
+  spec.version = "0.213.0"
   spec.authors = ["BoundaryML"]
   spec.email = ["contact@boundaryml.com"]
 
