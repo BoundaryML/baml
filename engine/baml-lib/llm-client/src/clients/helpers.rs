@@ -732,7 +732,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                             http_config.connect_timeout_ms = Some(10_000); // 10s default
                         }
                         if http_config.request_timeout_ms.is_none() {
-                            http_config.request_timeout_ms = Some(30_000); // 30s default
+                            http_config.request_timeout_ms = Some(60_000 * 5); // 5 minutes default
                         }
                         // Streaming timeouts have no defaults - they're opt-in
                     }
