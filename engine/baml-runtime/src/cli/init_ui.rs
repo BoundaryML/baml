@@ -236,13 +236,7 @@ impl InitUIContext {
             // Check if stdout is a TTY before attempting to create UI
             if io::stdout().is_terminal() {
                 // Try to create the UI, but gracefully fallback if it fails
-                match InitUI::new() {
-                    Ok(ui) => Some(ui),
-                    Err(_) => {
-                        // Failed to create UI, fallback to non-interactive mode
-                        None
-                    }
-                }
+                InitUI::new().ok()
             } else {
                 // Not a TTY, use non-interactive mode
                 None
