@@ -749,7 +749,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                     let mut http_config = HttpConfig::default();
                     if provider_type != "fallback" && provider_type != "round-robin" {
                         http_config.connect_timeout_ms = Some(10_000);
-                        http_config.request_timeout_ms = Some(30_000);
+                        http_config.request_timeout_ms = Some(60_000 * 5); // 5 minutes
                     }
                     http_config
                 }
@@ -759,7 +759,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
             let mut http_config = HttpConfig::default();
             if provider_type != "fallback" && provider_type != "round-robin" {
                 http_config.connect_timeout_ms = Some(10_000);
-                http_config.request_timeout_ms = Some(30_000);
+                http_config.request_timeout_ms = Some(60_000 * 5); // 5 minutes
             }
             http_config
         }
