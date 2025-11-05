@@ -2329,6 +2329,21 @@ class BamlAsyncClient:
                 "input": input,"not_cached": not_cached,
             })
             return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestDefaultStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.TestDefaultStreamingTimeout(input=input,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestDefaultStreamingTimeout", args={
+                "input": input,
+            })
+            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestFallbackClient(self, 
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -5848,6 +5863,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def TestDefaultStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestDefaultStreamingTimeout", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          result,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def TestFallbackClient(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
@@ -8274,6 +8301,13 @@ class BamlHttpRequestClient:
             "input": input,"not_cached": not_cached,
         }, mode="request")
         return result
+    async def TestDefaultStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestDefaultStreamingTimeout", args={
+            "input": input,
+        }, mode="request")
+        return result
     async def TestFallbackClient(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10128,6 +10162,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestCaching", args={
             "input": input,"not_cached": not_cached,
+        }, mode="stream")
+        return result
+    async def TestDefaultStreamingTimeout(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestDefaultStreamingTimeout", args={
+            "input": input,
         }, mode="stream")
         return result
     async def TestFallbackClient(self, 

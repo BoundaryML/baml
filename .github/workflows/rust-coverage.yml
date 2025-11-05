@@ -1,10 +1,13 @@
 name: Rust Coverage
 
+# Workflow disabled - uncomment to re-enable
+# on:
+#   push:
+#     branches: [canary]
+#   pull_request:
+#     branches: [canary]
 on:
-  push:
-    branches: [canary]
-  pull_request:
-    branches: [canary]
+  workflow_dispatch:  # Only allow manual triggering
 
 env:
   UV_SYSTEM_PYTHON: 1
