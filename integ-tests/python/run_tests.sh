@@ -25,4 +25,4 @@ uv run pytest "$@" \
     --ignore=tests/test_emit.py \
     --ignore=tests/test_timeouts.py \
     --ignore=tests/test_tracing.py \
-    --ignore=tests/test_aws_video_request.py \
+    --ignore=tests/providers/test_aws_video_request.py \
