@@ -1,5 +1,5 @@
 use std::{
-    io,
+    io::{self, IsTerminal},
     time::{Duration, Instant},
 };
 
@@ -232,17 +232,38 @@ pub struct InitUIContext {
 
 impl InitUIContext {
     pub fn new(use_ui: bool) -> Result<Self> {
-        let ui = if use_ui { Some(InitUI::new()?) } else { None };
+        let ui = if use_ui {
+            // Check if stdout is a TTY before attempting to create UI
+            if io::stdout().is_terminal() {
+                // Try to create the UI, but gracefully fallback if it fails
+                match InitUI::new() {
+                    Ok(ui) => Some(ui),
+                    Err(_) => {
+                        // Failed to create UI, fallback to non-interactive mode
+                        None
+                    }
+                }
+            } else {
+                // Not a TTY, use non-interactive mode
+                None
+            }
+        } else {
+            None
+        };
         Ok(Self {
             ui,
             current_step: 0,
         })
     }
 
+    #[allow(clippy::print_stdout)]
     pub fn add_step(&mut self, message: &str) {
         if let Some(ui) = &mut self.ui {
             ui.add_step(message.to_string());
             let _ = ui.render();
+        } else {
+            // Non-interactive mode: just print the step
+            println!("  {}", message);
         }
     }
 
@@ -259,12 +280,16 @@ impl InitUIContext {
         }
     }
 
+    #[allow(clippy::print_stdout)]
     pub fn complete_step(&mut self) {
         if let Some(ui) = &mut self.ui {
             ui.update_step(self.current_step, StepStatus::Completed);
             let _ = ui.render();
             // Add a small delay to show the completion animation
             std::thread::sleep(Duration::from_millis(300));
+        } else {
+            // Non-interactive mode: print completion
+            println!("  ✓ Done");
         }
         self.current_step += 1;
     }
@@ -277,11 +302,15 @@ impl InitUIContext {
         self.current_step += 1;
     }
 
+    #[allow(clippy::print_stdout)]
     pub fn add_completion_message(&mut self, message: &str) {
         if let Some(ui) = &mut self.ui {
             ui.add_step(message.to_string());
             ui.update_step(ui.steps.len() - 1, StepStatus::Completed);
             let _ = ui.render();
+        } else {
+            // Non-interactive mode: just print the message
+            println!("\n{}", message);
         }
     }
 
@@ -298,7 +327,27 @@ impl InitUIContext {
     }
 }
 
+#[allow(clippy::print_stderr)]
 pub fn show_error(message: &str) -> Result<()> {
+    // Check if we're in a TTY before attempting to create a fancy error UI
+    if !io::stdout().is_terminal() {
+        // Non-interactive mode: just print the error to stderr
+        eprintln!("Error: {}", message);
+        return Ok(());
+    }
+
+    // Try to create the fancy error UI, but fallback gracefully if it fails
+    match show_error_ui(message) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            // Failed to create UI, fallback to simple error message
+            eprintln!("Error: {}", message);
+            Ok(())
+        }
+    }
+}
+
+fn show_error_ui(message: &str) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
