@@ -1,5 +1,5 @@
 use std::{
-    io,
+    io::{self, IsTerminal},
     time::{Duration, Instant},
 };
 
@@ -48,18 +48,29 @@ const DOT_ANIMATION: &[&str] = &["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐"
 impl InitUI {
     pub fn new() -> Result<Self> {
         enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen)?;
-        let backend = CrosstermBackend::new(stdout);
-        let terminal = Terminal::new(backend)?;
 
-        Ok(Self {
-            steps: Vec::new(),
-            terminal,
-            animation_state: 0,
-            dot_animation_state: 0,
-            last_update: Instant::now(),
-        })
+        // Try to create the UI, but clean up raw mode if anything fails
+        let result = (|| {
+            let mut stdout = io::stdout();
+            execute!(stdout, EnterAlternateScreen)?;
+            let backend = CrosstermBackend::new(stdout);
+            let terminal = Terminal::new(backend)?;
+
+            Ok(Self {
+                steps: Vec::new(),
+                terminal,
+                animation_state: 0,
+                dot_animation_state: 0,
+                last_update: Instant::now(),
+            })
+        })();
+
+        // If anything failed, disable raw mode before returning the error
+        if result.is_err() {
+            let _ = disable_raw_mode();
+        }
+
+        result
     }
 
     pub fn add_step(&mut self, message: String) {
@@ -232,17 +243,32 @@ pub struct InitUIContext {
 
 impl InitUIContext {
     pub fn new(use_ui: bool) -> Result<Self> {
-        let ui = if use_ui { Some(InitUI::new()?) } else { None };
+        let ui = if use_ui {
+            // Check if stdout is a TTY before attempting to create UI
+            if io::stdout().is_terminal() {
+                // Try to create the UI, but gracefully fallback if it fails
+                InitUI::new().ok()
+            } else {
+                // Not a TTY, use non-interactive mode
+                None
+            }
+        } else {
+            None
+        };
         Ok(Self {
             ui,
             current_step: 0,
         })
     }
 
+    #[allow(clippy::print_stdout)]
     pub fn add_step(&mut self, message: &str) {
         if let Some(ui) = &mut self.ui {
             ui.add_step(message.to_string());
             let _ = ui.render();
+        } else {
+            // Non-interactive mode: just print the step
+            println!("  {}", message);
         }
     }
 
@@ -259,29 +285,41 @@ impl InitUIContext {
         }
     }
 
+    #[allow(clippy::print_stdout)]
     pub fn complete_step(&mut self) {
         if let Some(ui) = &mut self.ui {
             ui.update_step(self.current_step, StepStatus::Completed);
             let _ = ui.render();
             // Add a small delay to show the completion animation
             std::thread::sleep(Duration::from_millis(300));
+        } else {
+            // Non-interactive mode: print completion
+            println!("  ✓ Done");
         }
         self.current_step += 1;
     }
 
+    #[allow(clippy::print_stderr)]
     pub fn fail_step(&mut self) {
         if let Some(ui) = &mut self.ui {
             ui.update_step(self.current_step, StepStatus::Failed);
             let _ = ui.render();
+        } else {
+            // Non-interactive mode: print failure to stderr
+            eprintln!("  ✗ Failed");
         }
         self.current_step += 1;
     }
 
+    #[allow(clippy::print_stdout)]
     pub fn add_completion_message(&mut self, message: &str) {
         if let Some(ui) = &mut self.ui {
             ui.add_step(message.to_string());
             ui.update_step(ui.steps.len() - 1, StepStatus::Completed);
             let _ = ui.render();
+        } else {
+            // Non-interactive mode: just print the message
+            println!("\n{}", message);
         }
     }
 
@@ -298,79 +336,106 @@ impl InitUIContext {
     }
 }
 
+#[allow(clippy::print_stderr)]
 pub fn show_error(message: &str) -> Result<()> {
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    terminal.draw(|f| {
-        let area = f.area();
-
-        // Calculate popup size
-        let popup_width = message.len().min(60) as u16 + 4;
-        let popup_height = 7;
-
-        let popup_area = Rect {
-            x: (area.width.saturating_sub(popup_width)) / 2,
-            y: (area.height.saturating_sub(popup_height)) / 2,
-            width: popup_width,
-            height: popup_height,
-        };
-
-        // Clear the area first
-        f.render_widget(Clear, popup_area);
-
-        // Error box
-        let error_block = Block::default()
-            .title(" ⚠️  Error ")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Red))
-            .border_type(BorderType::Rounded)
-            .style(Style::default().bg(Color::Black));
-
-        let inner = error_block.inner(popup_area);
-        f.render_widget(error_block, popup_area);
-
-        // Error message
-        let error_text = vec![
-            Line::from(""),
-            Line::from(vec![
-                Span::raw("  "),
-                Span::styled(
-                    message,
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                ),
-            ]),
-            Line::from(""),
-            Line::from(vec![
-                Span::raw("  "),
-                Span::styled(
-                    "Press any key to exit",
-                    Style::default()
-                        .fg(Color::Gray)
-                        .add_modifier(Modifier::ITALIC),
-                ),
-            ]),
-        ];
-
-        let paragraph = Paragraph::new(error_text)
-            .alignment(Alignment::Left)
-            .wrap(Wrap { trim: true });
-
-        f.render_widget(paragraph, inner);
-    })?;
-
-    // Wait for user input
-    loop {
-        if let Event::Key(_) = event::read()? {
-            break;
-        }
+    // Check if we're in a TTY before attempting to create a fancy error UI
+    if !io::stdout().is_terminal() {
+        // Non-interactive mode: just print the error to stderr
+        eprintln!("Error: {}", message);
+        return Ok(());
     }
 
-    disable_raw_mode()?;
-    execute!(io::stdout(), LeaveAlternateScreen)?;
+    // Try to create the fancy error UI, but fallback gracefully if it fails
+    match show_error_ui(message) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            // Failed to create UI, fallback to simple error message
+            eprintln!("Error: {}", message);
+            Ok(())
+        }
+    }
+}
 
-    Ok(())
+fn show_error_ui(message: &str) -> Result<()> {
+    enable_raw_mode()?;
+
+    // Ensure cleanup happens regardless of success or failure
+    let result = (|| {
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen)?;
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
+
+        terminal.draw(|f| {
+            let area = f.area();
+
+            // Calculate popup size
+            let popup_width = message.len().min(60) as u16 + 4;
+            let popup_height = 7;
+
+            let popup_area = Rect {
+                x: (area.width.saturating_sub(popup_width)) / 2,
+                y: (area.height.saturating_sub(popup_height)) / 2,
+                width: popup_width,
+                height: popup_height,
+            };
+
+            // Clear the area first
+            f.render_widget(Clear, popup_area);
+
+            // Error box
+            let error_block = Block::default()
+                .title(" ⚠️  Error ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Red))
+                .border_type(BorderType::Rounded)
+                .style(Style::default().bg(Color::Black));
+
+            let inner = error_block.inner(popup_area);
+            f.render_widget(error_block, popup_area);
+
+            // Error message
+            let error_text = vec![
+                Line::from(""),
+                Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        message,
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "Press any key to exit",
+                        Style::default()
+                            .fg(Color::Gray)
+                            .add_modifier(Modifier::ITALIC),
+                    ),
+                ]),
+            ];
+
+            let paragraph = Paragraph::new(error_text)
+                .alignment(Alignment::Left)
+                .wrap(Wrap { trim: true });
+
+            f.render_widget(paragraph, inner);
+        })?;
+
+        // Wait for user input
+        loop {
+            if let Event::Key(_) = event::read()? {
+                break;
+            }
+        }
+
+        Ok(())
+    })();
+
+    // Always clean up terminal state
+    let _ = disable_raw_mode();
+    let _ = execute!(io::stdout(), LeaveAlternateScreen);
+
+    result
 }
