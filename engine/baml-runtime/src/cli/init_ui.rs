@@ -288,10 +288,14 @@ impl InitUIContext {
         self.current_step += 1;
     }
 
+    #[allow(clippy::print_stderr)]
     pub fn fail_step(&mut self) {
         if let Some(ui) = &mut self.ui {
             ui.update_step(self.current_step, StepStatus::Failed);
             let _ = ui.render();
+        } else {
+            // Non-interactive mode: print failure to stderr
+            eprintln!("  ✗ Failed");
         }
         self.current_step += 1;
     }
