@@ -48,18 +48,29 @@ const DOT_ANIMATION: &[&str] = &["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐"
 impl InitUI {
     pub fn new() -> Result<Self> {
         enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen)?;
-        let backend = CrosstermBackend::new(stdout);
-        let terminal = Terminal::new(backend)?;
 
-        Ok(Self {
-            steps: Vec::new(),
-            terminal,
-            animation_state: 0,
-            dot_animation_state: 0,
-            last_update: Instant::now(),
-        })
+        // Try to create the UI, but clean up raw mode if anything fails
+        let result = (|| {
+            let mut stdout = io::stdout();
+            execute!(stdout, EnterAlternateScreen)?;
+            let backend = CrosstermBackend::new(stdout);
+            let terminal = Terminal::new(backend)?;
+
+            Ok(Self {
+                steps: Vec::new(),
+                terminal,
+                animation_state: 0,
+                dot_animation_state: 0,
+                last_update: Instant::now(),
+            })
+        })();
+
+        // If anything failed, disable raw mode before returning the error
+        if result.is_err() {
+            let _ = disable_raw_mode();
+        }
+
+        result
     }
 
     pub fn add_step(&mut self, message: String) {
@@ -347,77 +358,84 @@ pub fn show_error(message: &str) -> Result<()> {
 
 fn show_error_ui(message: &str) -> Result<()> {
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
 
-    terminal.draw(|f| {
-        let area = f.area();
+    // Ensure cleanup happens regardless of success or failure
+    let result = (|| {
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen)?;
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
 
-        // Calculate popup size
-        let popup_width = message.len().min(60) as u16 + 4;
-        let popup_height = 7;
+        terminal.draw(|f| {
+            let area = f.area();
 
-        let popup_area = Rect {
-            x: (area.width.saturating_sub(popup_width)) / 2,
-            y: (area.height.saturating_sub(popup_height)) / 2,
-            width: popup_width,
-            height: popup_height,
-        };
+            // Calculate popup size
+            let popup_width = message.len().min(60) as u16 + 4;
+            let popup_height = 7;
 
-        // Clear the area first
-        f.render_widget(Clear, popup_area);
+            let popup_area = Rect {
+                x: (area.width.saturating_sub(popup_width)) / 2,
+                y: (area.height.saturating_sub(popup_height)) / 2,
+                width: popup_width,
+                height: popup_height,
+            };
 
-        // Error box
-        let error_block = Block::default()
-            .title(" ⚠️  Error ")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Red))
-            .border_type(BorderType::Rounded)
-            .style(Style::default().bg(Color::Black));
+            // Clear the area first
+            f.render_widget(Clear, popup_area);
 
-        let inner = error_block.inner(popup_area);
-        f.render_widget(error_block, popup_area);
+            // Error box
+            let error_block = Block::default()
+                .title(" ⚠️  Error ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Red))
+                .border_type(BorderType::Rounded)
+                .style(Style::default().bg(Color::Black));
 
-        // Error message
-        let error_text = vec![
-            Line::from(""),
-            Line::from(vec![
-                Span::raw("  "),
-                Span::styled(
-                    message,
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                ),
-            ]),
-            Line::from(""),
-            Line::from(vec![
-                Span::raw("  "),
-                Span::styled(
-                    "Press any key to exit",
-                    Style::default()
-                        .fg(Color::Gray)
-                        .add_modifier(Modifier::ITALIC),
-                ),
-            ]),
-        ];
+            let inner = error_block.inner(popup_area);
+            f.render_widget(error_block, popup_area);
 
-        let paragraph = Paragraph::new(error_text)
-            .alignment(Alignment::Left)
-            .wrap(Wrap { trim: true });
+            // Error message
+            let error_text = vec![
+                Line::from(""),
+                Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        message,
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        "Press any key to exit",
+                        Style::default()
+                            .fg(Color::Gray)
+                            .add_modifier(Modifier::ITALIC),
+                    ),
+                ]),
+            ];
 
-        f.render_widget(paragraph, inner);
-    })?;
+            let paragraph = Paragraph::new(error_text)
+                .alignment(Alignment::Left)
+                .wrap(Wrap { trim: true });
 
-    // Wait for user input
-    loop {
-        if let Event::Key(_) = event::read()? {
-            break;
+            f.render_widget(paragraph, inner);
+        })?;
+
+        // Wait for user input
+        loop {
+            if let Event::Key(_) = event::read()? {
+                break;
+            }
         }
-    }
 
-    disable_raw_mode()?;
-    execute!(io::stdout(), LeaveAlternateScreen)?;
+        Ok(())
+    })();
 
-    Ok(())
+    // Always clean up terminal state
+    let _ = disable_raw_mode();
+    let _ = execute!(io::stdout(), LeaveAlternateScreen);
+
+    result
 }
