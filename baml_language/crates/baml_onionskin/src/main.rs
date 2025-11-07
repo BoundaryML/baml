@@ -69,7 +69,9 @@ fn main() -> Result<()> {
 /// Since there is no TUI no file watching cycle, we need to point to two separate
 /// directories representing the before and after states.
 fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
-    use compiler::{CompilerPhase, CompilerRunner, read_files_from_disk};
+    use compiler::{
+        CompilerPhase, CompilerRunner, normalize_files_to_virtual_root, read_files_from_disk,
+    };
 
     if !before.is_dir() || !after.is_dir() {
         anyhow::bail!("Both --before and --after must be directories for increment testing");
@@ -84,7 +86,8 @@ fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
     // Step 1: Read "before" files (snapshot)
     println!("Step 1: Fresh compilation (BEFORE state)");
     println!("----------------------------------------");
-    let before_files = read_files_from_disk(before)?;
+    let before_files =
+        normalize_files_to_virtual_root(read_files_from_disk(before)?, before);
 
     let mut compiler = CompilerRunner::new(before);
     compiler.compile_from_filesystem(&before_files, None);
@@ -95,7 +98,8 @@ fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
     // Step 2: Read "after" files
     println!("Step 2: Simulating file changes");
     println!("--------------------------------");
-    let after_files = read_files_from_disk(after)?;
+    let after_files =
+        normalize_files_to_virtual_root(read_files_from_disk(after)?, after);
 
     // Find changed files
     for (path, after_content) in &after_files {

@@ -17,7 +17,7 @@ use similar::{ChangeTag, TextDiff};
 
 use crate::{
     app::App,
-    compiler::{CompilerPhase, LineStatus},
+    compiler::{CompilerPhase, LineStatus, VisualizationMode},
 };
 
 pub(crate) fn init_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
@@ -150,7 +150,30 @@ fn draw_phase_tabs(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_single_view(frame: &mut Frame, area: Rect, app: &App) {
-    // In Diff mode, show white text by default (no snapshot to diff against)
+    let phase = app.current_phase();
+    if app.visualization_mode() == VisualizationMode::Incremental
+        && phase == CompilerPhase::Parser
+    {
+        let annotated = app.get_output_annotated(phase);
+        if !annotated.is_empty() {
+            let paragraph = Paragraph::new(annotated_lines_to_text(
+                &annotated,
+                app.visualization_mode(),
+            ))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Output")
+                        .style(Style::default()),
+                )
+                .scroll((app.scroll_offset(), 0))
+                .wrap(Wrap { trim: false });
+
+            frame.render_widget(paragraph, area);
+            return;
+        }
+    }
+
     let output = app.current_output();
     let paragraph = Paragraph::new(output)
         .block(
@@ -299,4 +322,32 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         .style(Style::default().fg(Color::Gray));
 
     frame.render_widget(paragraph, area);
+}
+
+fn annotated_lines_to_text(lines: &[(String, LineStatus)], mode: VisualizationMode) -> Text<'_> {
+    let styled_lines: Vec<Line> = lines
+        .iter()
+        .map(|(text, status)| {
+            Line::from(Span::styled(
+                text.clone(),
+                style_for_status(*status, mode),
+            ))
+        })
+        .collect();
+    Text::from(styled_lines)
+}
+
+fn style_for_status(status: LineStatus, mode: VisualizationMode) -> Style {
+    match mode {
+        VisualizationMode::Incremental => match status {
+            LineStatus::Recomputed => Style::default().fg(Color::Yellow),
+            LineStatus::Cached => Style::default().fg(Color::Blue),
+            LineStatus::Unknown => Style::default().fg(Color::DarkGray),
+        },
+        VisualizationMode::Diff => match status {
+            LineStatus::Recomputed => Style::default().fg(Color::Red),
+            LineStatus::Cached => Style::default().fg(Color::Green),
+            LineStatus::Unknown => Style::default().fg(Color::DarkGray),
+        },
+    }
 }

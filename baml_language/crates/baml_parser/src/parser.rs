@@ -461,9 +461,11 @@ impl<'a> Parser<'a> {
     // ============ Building the Tree ============
 
     fn build_tree(self, cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
-        let mut builder = cache
-            .map(GreenNodeBuilder::with_cache)
-            .unwrap_or_else(GreenNodeBuilder::new);
+        let mut builder = if let Some(cache) = cache {
+            GreenNodeBuilder::with_cache(cache)
+        } else {
+            GreenNodeBuilder::new()
+        };
         let mut errors = Vec::new();
 
         for event in self.events {

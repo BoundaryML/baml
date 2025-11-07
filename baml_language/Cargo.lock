@@ -181,6 +181,7 @@ dependencies = [
  "notify",
  "ratatui",
  "regex",
+ "rowan",
  "salsa",
  "similar",
  "text-size",

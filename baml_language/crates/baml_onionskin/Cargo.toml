@@ -23,6 +23,7 @@ baml_thir = { workspace = true }
 baml_codegen = { workspace = true }
 baml_diagnostics = { workspace = true }
 baml_workspace = { workspace = true }
+rowan = { workspace = true }
 
 # Salsa for event system
 salsa = { workspace = true }

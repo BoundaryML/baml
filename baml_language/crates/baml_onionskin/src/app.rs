@@ -24,7 +24,7 @@ pub(crate) struct App {
     watcher: FileWatcher,
     should_quit: bool,
     scroll_offset: u16,
-    /// Visualization mode: Diff or Salsa
+    /// Visualization mode: Diff or Incremental
     visualization_mode: VisualizationMode,
 }
 
@@ -155,8 +155,8 @@ impl App {
 
     fn toggle_visualization_mode(&mut self) {
         self.visualization_mode = match self.visualization_mode {
-            VisualizationMode::Diff => VisualizationMode::Salsa,
-            VisualizationMode::Salsa => VisualizationMode::Diff,
+            VisualizationMode::Diff => VisualizationMode::Incremental,
+            VisualizationMode::Incremental => VisualizationMode::Diff,
         };
     }
 
@@ -256,7 +256,7 @@ impl App {
     pub(crate) fn visualization_mode_name(&self) -> &'static str {
         match self.visualization_mode {
             VisualizationMode::Diff => "Diff",
-            VisualizationMode::Salsa => "Salsa",
+            VisualizationMode::Incremental => "Incremental",
         }
     }
 }

@@ -12,6 +12,7 @@ use baml_db::{
     RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
     baml_workspace,
 };
+use baml_syntax::{SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent};
 use regex::Regex;
 use rowan::GreenNode;
 use rowan::NodeCache;
@@ -104,8 +105,8 @@ pub(crate) enum LineStatus {
 pub(crate) enum VisualizationMode {
     /// Show which files changed (diff-based coloring)
     Diff,
-    /// Show which Salsa queries were recomputed vs cached
-    Salsa,
+    /// Show which incremental queries were recomputed vs cached
+    Incremental,
 }
 
 impl CompilerRunner {
@@ -334,6 +335,7 @@ impl CompilerRunner {
     fn run_parser(&mut self) {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
+        let mut next_cached_elements: HashMap<PathBuf, HashSet<GreenElementId>> = HashMap::new();
 
         // Sort files alphabetically by path
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -341,7 +343,6 @@ impl CompilerRunner {
 
         for (path, source_file) in sorted_files {
             let file_path = path.display().to_string();
-            // Check if THIS specific file was modified
             let file_recomputed = self.modified_files.contains(path);
 
             writeln!(output, "File: {file_path}").ok();
@@ -354,26 +355,27 @@ impl CompilerRunner {
                 },
             ));
 
-            let green = baml_parser::parse_green(&self.db, *source_file);
-            // Build a red tree (SyntaxNode) from the green tree
-            let syntax_tree = baml_syntax::SyntaxNode::new_root(green);
-            let tree_text = format!("{syntax_tree:#?}");
-            // Remove span ranges like @0..69 from the output
-            let tree_text = remove_span_ranges(&tree_text);
-            for line in tree_text.lines() {
+            let tokens = baml_lexer::lex_file(&self.db, *source_file);
+            let (green, _errors) =
+                baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
+            let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());
+
+            let (formatted_lines, cached_ids) = format_syntax_tree_with_cache(
+                &syntax_tree,
+                self.parser_cached_elements.get(path),
+            );
+            next_cached_elements.insert(path.clone(), cached_ids);
+
+            for (line, status) in formatted_lines {
                 writeln!(output, "{line}").ok();
-                output_annotated.push((
-                    line.to_string(),
-                    if file_recomputed {
-                        LineStatus::Recomputed
-                    } else {
-                        LineStatus::Cached
-                    },
-                ));
+                output_annotated.push((line, status));
             }
+
             writeln!(output).ok();
             output_annotated.push((String::new(), LineStatus::Unknown));
         }
+
+        self.parser_cached_elements = next_cached_elements;
 
         self.phase_outputs.insert(CompilerPhase::Parser, output);
         self.phase_outputs_annotated
@@ -570,29 +572,54 @@ impl CompilerRunner {
         mode: VisualizationMode,
     ) -> Vec<(String, LineStatus)> {
         match mode {
-            VisualizationMode::Salsa => {
-                // In Salsa mode, use the original annotations (recomputed vs cached)
+            VisualizationMode::Incremental => {
+                // In incremental mode, use the original annotations (recomputed vs cached)
                 self.get_annotated_output(phase)
             }
             VisualizationMode::Diff => {
-                // In Diff mode, ALL lines from modified files are red, all from unmodified are green
-                self.phase_outputs_annotated
-                    .get(&phase)
-                    .map(|lines| {
+                if let Some(lines) = self.phase_outputs_annotated.get(&phase) {
+                    let mut current_file_modified = false;
+                    let mut saw_file_header = false;
+                    let mut diff_lines = Vec::with_capacity(lines.len());
+
+                    for (text, _status) in lines {
+                        if let Some(path_str) = text.strip_prefix("File: ") {
+                            saw_file_header = true;
+                            let path = PathBuf::from(path_str);
+                            current_file_modified = self.modified_files.contains(&path);
+                            let header_status = if current_file_modified {
+                                LineStatus::Recomputed
+                            } else {
+                                LineStatus::Unknown
+                            };
+                            diff_lines.push((text.clone(), header_status));
+                            continue;
+                        }
+
+                        if text.is_empty() {
+                            diff_lines.push((text.clone(), LineStatus::Unknown));
+                            continue;
+                        }
+
+                        let status = if current_file_modified {
+                            LineStatus::Recomputed
+                        } else {
+                            LineStatus::Cached
+                        };
+                        diff_lines.push((text.clone(), status));
+                    }
+
+                    if saw_file_header {
+                        diff_lines
+                    } else {
                         lines
                             .iter()
-                            .map(|(text, status)| {
-                                // Convert status: Recomputed->Red, Cached->Green, Unknown stays Unknown
-                                let diff_status = match status {
-                                    LineStatus::Recomputed => LineStatus::Recomputed, // File was modified
-                                    LineStatus::Cached => LineStatus::Cached, // File unchanged
-                                    LineStatus::Unknown => LineStatus::Unknown, // Headers, etc.
-                                };
-                                (text.clone(), diff_status)
-                            })
+                            .map(|(text, status)| (text.clone(), *status))
                             .collect()
-                    })
-                    .unwrap_or_default()
+                    }
+                } else {
+                    Vec::new()
+                }
             }
         }
     }
@@ -603,6 +630,56 @@ impl CompilerRunner {
             .get(&CompilerPhase::Metrics)
             .cloned()
             .unwrap_or_default()
+    }
+}
+
+fn format_syntax_tree_with_cache(
+    syntax_tree: &SyntaxNode,
+    previous: Option<&HashSet<GreenElementId>>,
+) -> (Vec<(String, LineStatus)>, HashSet<GreenElementId>) {
+    let mut indent_level = 0usize;
+    let mut lines = Vec::new();
+    let mut current_ids = HashSet::new();
+    let mut owned_nodes: Vec<GreenNode> = Vec::new();
+
+    for event in syntax_tree.preorder_with_tokens() {
+        match event {
+            WalkEvent::Enter(element) => {
+                let indent = "  ".repeat(indent_level);
+                match element {
+                    SyntaxElement::Node(node) => {
+                        let id = GreenElementId::from_node(&node, &mut owned_nodes);
+                        let status = line_status_for(&id, previous);
+                        current_ids.insert(id);
+                        let raw_line = format!("{indent}{:?}", node);
+                        let line = remove_span_ranges(&raw_line);
+                        lines.push((line, status));
+                    }
+                    SyntaxElement::Token(token) => {
+                        let id = GreenElementId::from_token(&token);
+                        let status = line_status_for(&id, previous);
+                        current_ids.insert(id);
+                        let raw_line = format!("{indent}{:?}", token);
+                        let line = remove_span_ranges(&raw_line);
+                        lines.push((line, status));
+                    }
+                }
+                indent_level += 1;
+            }
+            WalkEvent::Leave(_) => {
+                indent_level = indent_level.saturating_sub(1);
+            }
+        }
+    }
+
+    (lines, current_ids)
+}
+
+fn line_status_for(id: &GreenElementId, previous: Option<&HashSet<GreenElementId>>) -> LineStatus {
+    if previous.map_or(false, |set| set.contains(id)) {
+        LineStatus::Cached
+    } else {
+        LineStatus::Recomputed
     }
 }
 
@@ -630,6 +707,47 @@ impl RecomputationStatus {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct GreenElementId {
+    ptr: *const (),
+    kind: GreenElementKind,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum GreenElementKind {
+    Node,
+    Token,
+}
+
+impl GreenElementId {
+    fn from_node(node: &SyntaxNode, owned_nodes: &mut Vec<GreenNode>) -> Self {
+        match node.green() {
+            Cow::Borrowed(data) => Self {
+                ptr: data as *const _ as *const (),
+                kind: GreenElementKind::Node,
+            },
+            Cow::Owned(green) => {
+                owned_nodes.push(green);
+                let data = owned_nodes
+                    .last()
+                    .map(|node| node.deref() as *const _ as *const ())
+                    .unwrap();
+                Self {
+                    ptr: data,
+                    kind: GreenElementKind::Node,
+                }
+            }
+        }
+    }
+
+    fn from_token(token: &SyntaxToken) -> Self {
+        Self {
+            ptr: token.green() as *const _ as *const (),
+            kind: GreenElementKind::Token,
+        }
+    }
+}
+
 /// Helper to remove span ranges like @0..69 from CST output
 fn remove_span_ranges(text: &str) -> String {
     let re = Regex::new(r"@\d+\.\.\d+").unwrap();
@@ -653,4 +771,36 @@ pub(crate) fn read_files_from_disk(path: &Path) -> Result<HashMap<PathBuf, Strin
     }
 
     Ok(files)
+}
+
+pub(crate) fn normalize_files_to_virtual_root(
+    files: HashMap<PathBuf, String>,
+    root: &Path,
+) -> HashMap<PathBuf, String> {
+    let virtual_root = Path::new("/baml_src");
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+
+    files
+        .into_iter()
+        .map(|(path, contents)| {
+            let relative = if let Ok(rel) = path.strip_prefix(root) {
+                rel.to_path_buf()
+            } else if let Ok(canonical_path) = path.canonicalize() {
+                canonical_path
+                    .strip_prefix(&canonical_root)
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| {
+                        path.file_name()
+                            .map(PathBuf::from)
+                            .unwrap_or_else(|| PathBuf::from("unknown.baml"))
+                    })
+            } else {
+                path.file_name()
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| PathBuf::from("unknown.baml"))
+            };
+
+            (virtual_root.join(relative), contents)
+        })
+        .collect()
 }
