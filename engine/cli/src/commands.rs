@@ -97,7 +97,7 @@ impl RuntimeCli {
             Err(err) => err.exit(),
         };
 
-        let mut cli = match RuntimeCli::from_arg_matches(&mut matches) {
+        let mut cli = match RuntimeCli::from_arg_matches(&matches) {
             Ok(cli) => cli,
             Err(err) => err.exit(),
         };
