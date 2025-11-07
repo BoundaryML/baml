@@ -1,6 +1,6 @@
 use anyhow::Result;
 use baml_runtime::{cli::RuntimeCliDefaults, BamlRuntime};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
@@ -55,20 +55,49 @@ pub(crate) enum Commands {
     #[command(about = "Run BAML tests")]
     Test(baml_runtime::cli::testing::TestArgs),
 
-    #[command(about = "Print HIR from BAML files")]
+    #[command(about = "(internal-only) Print HIR from BAML files", hide = true)]
     DumpHIR(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
 
-    #[command(about = "Print Bytecode from BAML files")]
+    #[command(about = "(internal-only) Print Bytecode from BAML files", hide = true)]
     DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
 
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
 
-    #[command(about = "Start an interactive REPL for BAML expressions")]
+    #[command(about = "(internal-only) Start an interactive REPL for BAML expressions", hide = true)]
     Repl(baml_runtime::cli::repl::ReplArgs),
 }
 
 impl RuntimeCli {
+    /// Parse CLI arguments, unhiding all subcommands if the BAML_INTERNAL environment variable is set.
+    ///
+    /// This should be used for CLI invocations instead of `RuntimeCli::parse_from`.
+    pub fn smart_parse_from(argv: Vec<String>) -> Self {
+        use clap::FromArgMatches;
+
+        let mut command = RuntimeCli::command();
+
+        if baml_internal_env_is_truthy() {
+            unhide_all_subcommands(&mut command);
+        }
+
+        let mut matches = match command.try_get_matches_from_mut(argv) {
+            Ok(matches) => matches,
+            Err(err) => err.exit(),
+        };
+
+        let mut cli = match RuntimeCli::from_arg_matches(&mut matches) {
+            Ok(cli) => cli,
+            Err(err) => err.exit(),
+        };
+
+        if let Err(err) = RuntimeCli::update_from_arg_matches(&mut cli, &matches) {
+            err.exit();
+        }
+
+        cli
+    }
+
     pub fn run(&mut self, defaults: RuntimeCliDefaults) -> Result<crate::ExitCode> {
         use internal_baml_core::feature_flags::FeatureFlags;
 
@@ -238,5 +267,19 @@ impl RuntimeCli {
                 }
             },
         }
+    }
+}
+
+fn baml_internal_env_is_truthy() -> bool {
+    std::env::var("BAML_INTERNAL")
+        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
+        .unwrap_or(false)
+}
+
+fn unhide_all_subcommands(command: &mut clap::Command) {
+    for subcommand in command.get_subcommands_mut() {
+        let mut visible_subcommand = std::mem::take(subcommand).hide(false);
+        unhide_all_subcommands(&mut visible_subcommand);
+        *subcommand = visible_subcommand;
     }
 }
