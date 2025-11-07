@@ -83,9 +83,8 @@ impl App {
         // Read current files from disk into fake filesystem
         self.current_files = read_files_from_disk(&self.file_path)?;
 
-        // Compile: if snapshot exists, use it; otherwise compile fresh
-        self.compiler
-            .compile_from_filesystem(&self.current_files, self.snapshot_files.as_ref());
+        // Compile using the existing compiler (reusing the same NodeCache)
+        self.recompile_current();
         Ok(())
     }
 
@@ -112,8 +111,7 @@ impl App {
                 self.snapshot_files = None;
                 self.snapshot_compiler = None;
                 self.scroll_offset = 0;
-                // Recompile without snapshot
-                self.recompile();
+                self.rebuild_current_compiler();
             }
             // Manual recompile on 'r'
             (KeyCode::Char('r'), KeyModifiers::NONE) => {
@@ -174,17 +172,16 @@ impl App {
 
     fn toggle_snapshot(&mut self) {
         // Save current files as snapshot (the "before" state)
-        self.snapshot_files = Some(self.current_files.clone());
+        let snapshot_files = self.current_files.clone();
 
-        // Create a separate compiler for the snapshot panel (fresh DB)
-        let mut snapshot_compiler = CompilerRunner::new(&self.file_path);
-        snapshot_compiler.compile_from_filesystem(&self.current_files, None);
+        // Create a separate compiler for the snapshot panel (fresh DB + new NodeCache)
+        let snapshot_compiler = self.build_compiler_from_files(&snapshot_files, None);
         self.snapshot_compiler = Some(snapshot_compiler);
 
-        // Recompile current with snapshot as base - this will show everything as "cached"
-        // because snapshot and current are identical at this moment
-        self.compiler
-            .compile_from_filesystem(&self.current_files, self.snapshot_files.as_ref());
+        self.snapshot_files = Some(snapshot_files);
+
+        // Rebuild the current compiler so its NodeCache represents the new snapshot baseline
+        self.rebuild_current_compiler();
     }
 
     pub(crate) fn current_phase(&self) -> CompilerPhase {
@@ -243,10 +240,9 @@ impl App {
         &self,
         phase: CompilerPhase,
     ) -> Option<Vec<(String, crate::compiler::LineStatus)>> {
-        self.snapshot_compiler.as_ref().map(|c| {
-            // Snapshot always uses Diff mode (showing what changed from initial state)
-            c.get_annotated_output_with_mode(phase, VisualizationMode::Diff)
-        })
+        self.snapshot_compiler
+            .as_ref()
+            .map(|c| c.get_annotated_output_with_mode(phase, self.visualization_mode))
     }
 
     pub(crate) fn visualization_mode(&self) -> VisualizationMode {
@@ -258,5 +254,25 @@ impl App {
             VisualizationMode::Diff => "Diff",
             VisualizationMode::Incremental => "Incremental",
         }
+    }
+
+    fn recompile_current(&mut self) {
+        self.compiler
+            .compile_from_filesystem(&self.current_files, self.snapshot_files.as_ref());
+    }
+
+    fn rebuild_current_compiler(&mut self) {
+        self.compiler =
+            self.build_compiler_from_files(&self.current_files, self.snapshot_files.as_ref());
+    }
+
+    fn build_compiler_from_files(
+        &self,
+        files: &HashMap<PathBuf, String>,
+        snapshot: Option<&HashMap<PathBuf, String>>,
+    ) -> CompilerRunner {
+        let mut compiler = CompilerRunner::new(&self.file_path);
+        compiler.compile_from_filesystem(files, snapshot);
+        compiler
     }
 }

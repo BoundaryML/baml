@@ -1,3 +1,7 @@
 class A {
- name a
+ name ass
+}
+
+class B {
+ name b
 }

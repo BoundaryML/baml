@@ -189,6 +189,47 @@ fn draw_single_view(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_diff_view(frame: &mut Frame, area: Rect, app: &App) {
+    let phase = app.current_phase();
+    let mode = app.visualization_mode();
+
+    if mode == VisualizationMode::Incremental {
+        let current_lines = app.get_output_annotated(phase);
+        if let Some(snapshot_lines) = app.get_snapshot_output_annotated(phase) {
+            // Split area
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(area);
+
+            let snapshot_paragraph = Paragraph::new(annotated_lines_to_text(
+                &snapshot_lines,
+                mode,
+            ))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Snapshot")
+                    .style(Style::default()),
+            )
+            .scroll((app.scroll_offset(), 0))
+            .wrap(Wrap { trim: false });
+            frame.render_widget(snapshot_paragraph, chunks[0]);
+
+            let current_paragraph =
+                Paragraph::new(annotated_lines_to_text(&current_lines, mode))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                    .title("Current")
+                    .style(Style::default()),
+            )
+            .scroll((app.scroll_offset(), 0))
+            .wrap(Wrap { trim: false });
+            frame.render_widget(current_paragraph, chunks[1]);
+            return;
+        }
+    }
+
     let Some(snapshot_output) = app.snapshot_output() else {
         // Fallback to single view if no snapshot
         draw_single_view(frame, area, app);

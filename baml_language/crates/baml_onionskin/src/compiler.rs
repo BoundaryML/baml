@@ -540,6 +540,7 @@ impl CompilerRunner {
             .map(std::string::String::as_str)
     }
 
+
     pub(crate) fn get_phase_output_annotated(
         &self,
         phase: CompilerPhase,
