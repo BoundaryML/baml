@@ -16,7 +16,13 @@ runs:
         # from https://carlosbecker.com/posts/github-actions-disk-space/ and
         # https://github.com/marketplace/actions/maximize-build-disk-space-only-remove-unwanted-software
         # frees up about ~20G space
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        # we use rsync instead of rm -rf for faster deletion
+        set -euxo pipefail
+        mkdir /tmp/empty
+        sudo rsync -a --delete /tmp/empty /usr/share/dotnet
+        sudo rsync -a --delete /tmp/empty /usr/local/lib/android
+        sudo rsync -a --delete /tmp/empty /opt/ghc
+        sudo rsync -a --delete /tmp/empty /opt/hostedtoolcache/CodeQL
     - name: Setup mise
       uses: jdx/mise-action@v2
       with:
