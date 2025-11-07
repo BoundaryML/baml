@@ -11,6 +11,7 @@ runs:
   using: "composite"
   steps:
     - name: Remove unused tools
+      shell: bash
       run: |
         # from https://carlosbecker.com/posts/github-actions-disk-space/ and
         # https://github.com/marketplace/actions/maximize-build-disk-space-only-remove-unwanted-software
