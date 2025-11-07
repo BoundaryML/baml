@@ -62,7 +62,7 @@ pub fn run_cli(
     argv: Vec<String>,
     caller_type: baml_runtime::RuntimeCliDefaults,
 ) -> Result<ExitCode> {
-    let mut cli = commands::RuntimeCli::smart_parse_from(argv);
+    let mut cli = commands::RuntimeCli::parse_from_smart(argv);
     if !matches!(cli.command, commands::Commands::Test(_)) {
         // We only need to set the exit handlers if we're not running tests
         // and the caller is Python.

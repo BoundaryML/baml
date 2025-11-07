@@ -55,16 +55,16 @@ pub(crate) enum Commands {
     #[command(about = "Run BAML tests")]
     Test(baml_runtime::cli::testing::TestArgs),
 
-    #[command(about = "(internal-only) Print HIR from BAML files", hide = true)]
+    #[command(about = "Print HIR from BAML files", hide = true)]
     DumpHIR(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
 
-    #[command(about = "(internal-only) Print Bytecode from BAML files", hide = true)]
+    #[command(about = "Print Bytecode from BAML files", hide = true)]
     DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
 
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
 
-    #[command(about = "(internal-only) Start an interactive REPL for BAML expressions", hide = true)]
+    #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     Repl(baml_runtime::cli::repl::ReplArgs),
 }
 
@@ -72,13 +72,24 @@ impl RuntimeCli {
     /// Parse CLI arguments, unhiding all subcommands if the BAML_INTERNAL environment variable is set.
     ///
     /// This should be used for CLI invocations instead of `RuntimeCli::parse_from`.
-    pub fn smart_parse_from(argv: Vec<String>) -> Self {
+    pub fn parse_from_smart(argv: Vec<String>) -> Self {
         use clap::FromArgMatches;
 
         let mut command = RuntimeCli::command();
 
         if baml_internal_env_is_truthy() {
-            unhide_all_subcommands(&mut command);
+            for subcommand in command
+                .get_subcommands_mut()
+                .filter(|subcommand| subcommand.is_hide_set())
+            {
+                let mut new_subcommand = std::mem::take(subcommand);
+                new_subcommand = new_subcommand.hide(false);
+                if let Some(about) = new_subcommand.get_about() {
+                    let new_about = format!("(internal-only) {about}");
+                    new_subcommand = new_subcommand.about(new_about);
+                }
+                *subcommand = new_subcommand;
+            }
         }
 
         let mut matches = match command.try_get_matches_from_mut(argv) {
@@ -276,10 +287,38 @@ fn baml_internal_env_is_truthy() -> bool {
         .unwrap_or(false)
 }
 
-fn unhide_all_subcommands(command: &mut clap::Command) {
-    for subcommand in command.get_subcommands_mut() {
-        let mut visible_subcommand = std::mem::take(subcommand).hide(false);
-        unhide_all_subcommands(&mut visible_subcommand);
-        *subcommand = visible_subcommand;
-    }
-}
+// const INTERNAL_ONLY_SUBCOMMANDS: &[&str] = &["dump-hir", "dump-bytecode", "repl"];
+
+// fn unhide_all_subcommands(command: &mut clap::Command) {
+//     for subcommand in command.get_subcommands_mut() {
+//         let mut visible_subcommand = std::mem::take(subcommand).hide(false);
+//         prepend_internal_only_tag_if_needed(&mut visible_subcommand);
+//         unhide_all_subcommands(&mut visible_subcommand);
+//         *subcommand = visible_subcommand;
+//     }
+// }
+
+// fn prepend_internal_only_tag_if_needed(command: &mut clap::Command) {
+//     if !INTERNAL_ONLY_SUBCOMMANDS.contains(&command.get_name()) {
+//         return;
+//     }
+
+//     let about_text = command.get_about().map(|styled| styled.to_string());
+//     let needs_prefix = match &about_text {
+//         Some(text) => !text.trim_start().starts_with("(internal-only)"),
+//         None => true,
+//     };
+
+//     if !needs_prefix {
+//         return;
+//     }
+
+//     let new_about = match about_text {
+//         Some(text) if !text.trim().is_empty() => format!("(internal-only) {text}"),
+//         _ => "(internal-only)".to_string(),
+//     };
+
+//     let mut command_owned = std::mem::take(command);
+//     command_owned = command_owned.about(new_about);
+//     *command = command_owned;
+// }
