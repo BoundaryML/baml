@@ -9,6 +9,40 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use clap::Args;
+
+#[derive(Args, Clone, Debug)]
+pub struct DotenvArgs {
+    #[arg(
+        long,
+        help = "Load environment variables from a .env file",
+        default_value_t = true
+    )]
+    pub dotenv: bool,
+
+    #[arg(long, help = "Custom path to a .env file")]
+    pub dotenv_path: Option<PathBuf>,
+}
+
+impl DotenvArgs {
+    pub fn load(&self) -> Result<()> {
+        match (self.dotenv, self.dotenv_path.as_ref()) {
+            (true, _) => {
+                baml_log::warn!("Loading environment variables from .env file");
+                dotenv(self.dotenv_path.clone())?;
+                Ok(())
+            }
+            (false, None) => Ok(()),
+            (false, Some(dotenv_path)) => {
+                baml_log::warn!(
+                    "--dotenv was set to false, skipping environment variable loading from {}",
+                    dotenv_path.display()
+                );
+                Ok(())
+            }
+        }
+    }
+}
 
 /// Loads environment variables from a .env file
 ///
@@ -246,7 +280,6 @@ fn load_env_from_common_locations() -> Result<Option<(HashMap<String, String>, P
     Ok(None)
 }
 
-// TODO: Is this even being used?
 /// Loads and applies environment variables to the current process
 pub fn dotenv(path: Option<PathBuf>) -> Result<Option<PathBuf>> {
     let (env_vars, path) = match path {

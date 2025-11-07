@@ -38,8 +38,9 @@ use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
 
 use crate::{
-    client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
-    BamlRuntime, FunctionResult, RuntimeContextManager, TripWire,
+    cli::dotenv::DotenvArgs, client_registry::ClientRegistry, errors::ExposedError,
+    internal::llm_client::LLMResponse, BamlRuntime, FunctionResult, RuntimeContextManager,
+    TripWire,
 };
 
 #[derive(clap::Args, Clone, Debug)]
@@ -54,6 +55,8 @@ pub struct ServeArgs {
         default_value_t = false
     )]
     no_version_check: bool,
+    #[command(flatten)]
+    dotenv: DotenvArgs,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -84,6 +87,8 @@ impl ServeArgs {
         &self,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<()> {
+        self.dotenv.load()?;
+
         let t: Arc<tokio::runtime::Runtime> = BamlRuntime::get_tokio_singleton()?;
 
         let (server, tcp_listener) =
