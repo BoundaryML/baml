@@ -286,39 +286,3 @@ fn baml_internal_env_is_truthy() -> bool {
         .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
         .unwrap_or(false)
 }
-
-// const INTERNAL_ONLY_SUBCOMMANDS: &[&str] = &["dump-hir", "dump-bytecode", "repl"];
-
-// fn unhide_all_subcommands(command: &mut clap::Command) {
-//     for subcommand in command.get_subcommands_mut() {
-//         let mut visible_subcommand = std::mem::take(subcommand).hide(false);
-//         prepend_internal_only_tag_if_needed(&mut visible_subcommand);
-//         unhide_all_subcommands(&mut visible_subcommand);
-//         *subcommand = visible_subcommand;
-//     }
-// }
-
-// fn prepend_internal_only_tag_if_needed(command: &mut clap::Command) {
-//     if !INTERNAL_ONLY_SUBCOMMANDS.contains(&command.get_name()) {
-//         return;
-//     }
-
-//     let about_text = command.get_about().map(|styled| styled.to_string());
-//     let needs_prefix = match &about_text {
-//         Some(text) => !text.trim_start().starts_with("(internal-only)"),
-//         None => true,
-//     };
-
-//     if !needs_prefix {
-//         return;
-//     }
-
-//     let new_about = match about_text {
-//         Some(text) if !text.trim().is_empty() => format!("(internal-only) {text}"),
-//         _ => "(internal-only)".to_string(),
-//     };
-
-//     let mut command_owned = std::mem::take(command);
-//     command_owned = command_owned.about(new_about);
-//     *command = command_owned;
-// }
