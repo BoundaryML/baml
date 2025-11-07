@@ -10,6 +10,12 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Remove unused tools
+      run: |
+        # from https://carlosbecker.com/posts/github-actions-disk-space/ and
+        # https://github.com/marketplace/actions/maximize-build-disk-space-only-remove-unwanted-software
+        # frees up about ~20G space
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
     - name: Setup mise
       uses: jdx/mise-action@v2
       with:
