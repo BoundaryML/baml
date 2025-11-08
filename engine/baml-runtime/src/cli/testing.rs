@@ -75,11 +75,8 @@ pub struct TestArgs {
     #[arg(long, help = "JUnit XML output file, example: --junit-path=junit-report.xml", default_value_t = String::from("junit-report.xml"), hide = true)]
     junit_path: String,
 
-    #[arg(long, default_value_t = true)]
-    dotenv: bool,
-
-    #[arg(long)]
-    dotenv_path: Option<PathBuf>,
+    #[command(flatten)]
+    dotenv: dotenv::DotenvArgs,
 }
 
 #[derive(Clone, Debug)]
@@ -124,11 +121,7 @@ impl TestArgs {
     ) -> Result<TestRunResult> {
         let from = BamlRuntime::parse_baml_src_path(&self.from)?;
 
-        if self.dotenv {
-            if let Some(env_path) = dotenv::dotenv(self.dotenv_path.clone())? {
-                baml_log::warn!("Loading environment variables from {}", env_path.display());
-            }
-        }
+        self.dotenv.load()?;
 
         let env_vars = std::env::vars().collect::<HashMap<String, String>>();
         let runtime = BamlRuntime::from_directory(&from, env_vars.clone(), feature_flags)?;

@@ -1,7 +1,10 @@
 name: Publish Zed Release
 
 on:
-  workflow_call: {}
+  workflow_call:
+    secrets:
+      SAM_BAML_ZED_GITHUB_TOKEN:
+        required: true
 
 permissions: {}
 

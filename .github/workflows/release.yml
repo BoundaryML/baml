@@ -333,3 +333,5 @@ jobs:
   publish-to-zed-extensions:
     needs: [all-builds]
     uses: ./.github/workflows/publish-zed-release.reusable.yaml
+    secrets:
+      SAM_BAML_ZED_GITHUB_TOKEN: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}

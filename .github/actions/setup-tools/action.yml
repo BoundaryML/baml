@@ -10,6 +10,20 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Remove unused tools
+      shell: bash
+      run: |
+        # from https://carlosbecker.com/posts/github-actions-disk-space/ and
+        # https://github.com/marketplace/actions/maximize-build-disk-space-only-remove-unwanted-software
+        # frees up about ~20G space
+        # we use rsync instead of rm -rf for faster deletion
+        set -euxo pipefail
+        mkdir -p /tmp/empty
+        sudo rsync -a --delete /tmp/empty/ /usr/share/dotnet/
+        sudo rsync -a --delete /tmp/empty/ /usr/local/lib/android/
+        sudo rsync -a --delete /tmp/empty/ /opt/ghc/
+        sudo rsync -a --delete /tmp/empty/ /opt/hostedtoolcache/CodeQL/
+        df -h /
     - name: Setup mise
       uses: jdx/mise-action@v2
       with:
