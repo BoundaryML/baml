@@ -2098,6 +2098,7 @@ impl<'a> Parser<'a> {
 ///
 /// Returns the green tree and any parse errors encountered.
 fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
+    return (GreenNode::new(SyntaxKind::AND.into(), vec![]), vec![]);
     let mut parser = Parser::new(tokens);
 
     parser.start_node(SyntaxKind::SOURCE_FILE);

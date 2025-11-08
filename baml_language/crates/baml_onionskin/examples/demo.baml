@@ -1,19 +1,10 @@
-class A {
- name ass
+// Some class
+class Foo {
+  name string
 }
+// Foo
 
-class B {
- name bss
- }
-
-class C {
-  name c
-}
-
-enum D {
-  name
-}
-
-function foo() -> int {
-  4
+// Another class
+class Bar {
+  name string
 }

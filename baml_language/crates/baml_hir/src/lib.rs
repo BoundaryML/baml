@@ -18,6 +18,7 @@ pub use types::*;
 /// Tracked: get all items defined in a file
 #[salsa::tracked]
 pub fn file_items(db: &dyn salsa::Database, file: SourceFile) -> Vec<ItemId> {
+    return vec![];
     let tree = syntax_tree(db, file);
     let file_id = file.file_id(db);
     let mut items = Vec::new();

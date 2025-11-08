@@ -660,11 +660,15 @@ fn format_syntax_tree_with_cache(
                 let indent = "  ".repeat(indent_level);
                 match element {
                     SyntaxElement::Node(node) => {
-                        let id = GreenElementId::from_node(&node, &mut owned_nodes);
+                        let (id, was_borrowed) =
+                            GreenElementId::from_node(&node, &mut owned_nodes);
                         let status = line_status_for(&id, previous);
                         current_ids.insert(id);
                         let raw_line = format!("{indent}{:?}", node);
-                        let line = remove_span_ranges(&raw_line);
+                        let mut line = remove_span_ranges(&raw_line);
+                        if !was_borrowed {
+                            line.push_str("  /* owned */");
+                        }
                         lines.push((line, status));
                     }
                     SyntaxElement::Token(token) => {
@@ -732,22 +736,28 @@ enum GreenElementKind {
 }
 
 impl GreenElementId {
-    fn from_node(node: &SyntaxNode, owned_nodes: &mut Vec<GreenNode>) -> Self {
+    fn from_node(node: &SyntaxNode, owned_nodes: &mut Vec<GreenNode>) -> (Self, bool) {
         match node.green() {
-            Cow::Borrowed(data) => Self {
-                ptr: data as *const _ as *const (),
-                kind: GreenElementKind::Node,
-            },
+            Cow::Borrowed(data) => (
+                Self {
+                    ptr: data as *const _ as *const (),
+                    kind: GreenElementKind::Node,
+                },
+                true,
+            ),
             Cow::Owned(green) => {
                 owned_nodes.push(green);
                 let data = owned_nodes
                     .last()
                     .map(|node| node.deref() as *const _ as *const ())
                     .unwrap();
-                Self {
-                    ptr: data,
-                    kind: GreenElementKind::Node,
-                }
+                (
+                    Self {
+                        ptr: data,
+                        kind: GreenElementKind::Node,
+                    },
+                    false,
+                )
             }
         }
     }
