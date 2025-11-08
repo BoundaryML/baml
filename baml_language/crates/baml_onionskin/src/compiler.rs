@@ -540,6 +540,17 @@ impl CompilerRunner {
             .map(std::string::String::as_str)
     }
 
+    pub(crate) fn parser_cache_snapshot(&self) -> HashMap<PathBuf, HashSet<GreenElementId>> {
+        self.parser_cached_elements.clone()
+    }
+
+    pub(crate) fn set_parser_cache_baseline(
+        &mut self,
+        baseline: &HashMap<PathBuf, HashSet<GreenElementId>>,
+    ) {
+        self.parser_cached_elements = baseline.clone();
+    }
+
 
     pub(crate) fn get_phase_output_annotated(
         &self,
@@ -709,7 +720,7 @@ impl RecomputationStatus {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct GreenElementId {
+pub(crate) struct GreenElementId {
     ptr: *const (),
     kind: GreenElementKind,
 }

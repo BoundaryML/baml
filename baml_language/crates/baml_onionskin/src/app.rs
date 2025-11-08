@@ -1,11 +1,17 @@
-use std::{collections::HashMap, path::PathBuf, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    time::Duration,
+};
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{
-    compiler::{CompilerPhase, CompilerRunner, VisualizationMode, read_files_from_disk},
+    compiler::{
+        CompilerPhase, CompilerRunner, GreenElementId, VisualizationMode, read_files_from_disk,
+    },
     ui,
     watcher::FileWatcher,
 };
@@ -20,12 +26,14 @@ pub(crate) struct App {
     snapshot_files: Option<HashMap<PathBuf, String>>,
     /// Snapshot compiler (separate instance for the snapshot panel)
     snapshot_compiler: Option<CompilerRunner>,
+    snapshot_parser_cache: Option<HashMap<PathBuf, HashSet<GreenElementId>>>,
     compiler: CompilerRunner,
     watcher: FileWatcher,
     should_quit: bool,
     scroll_offset: u16,
     /// Visualization mode: Diff or Incremental
     visualization_mode: VisualizationMode,
+    last_compiled_files: HashMap<PathBuf, String>,
 }
 
 impl App {
@@ -35,6 +43,7 @@ impl App {
 
         // Read initial files from disk
         let current_files = read_files_from_disk(&path)?;
+        let initial_files = current_files.clone();
 
         // Initial compilation (no snapshot)
         compiler.compile_from_filesystem(&current_files, None);
@@ -45,11 +54,13 @@ impl App {
             current_files,
             snapshot_files: None,
             snapshot_compiler: None,
+            snapshot_parser_cache: None,
             compiler,
             watcher,
             should_quit: false,
             scroll_offset: 0,
             visualization_mode: VisualizationMode::Diff, // Start in Diff mode
+            last_compiled_files: initial_files,
         })
     }
 
@@ -83,16 +94,12 @@ impl App {
         // Read current files from disk into fake filesystem
         self.current_files = read_files_from_disk(&self.file_path)?;
 
-        // Compile using the existing compiler (reusing the same NodeCache)
-        self.recompile_current();
+        self.compile_current_state();
         Ok(())
     }
 
     fn recompile(&mut self) {
-        // Recompile without snapshot (fresh DB)
-        // This simulates restarting the compiler
-        self.compiler
-            .compile_from_filesystem(&self.current_files, None);
+        self.compile_current_state();
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) {
@@ -110,8 +117,10 @@ impl App {
             (KeyCode::Char('S'), KeyModifiers::SHIFT) => {
                 self.snapshot_files = None;
                 self.snapshot_compiler = None;
+                self.snapshot_parser_cache = None;
                 self.scroll_offset = 0;
-                self.rebuild_current_compiler();
+                self.last_compiled_files.clear();
+                self.compile_current_state();
             }
             // Manual recompile on 'r'
             (KeyCode::Char('r'), KeyModifiers::NONE) => {
@@ -174,14 +183,18 @@ impl App {
         // Save current files as snapshot (the "before" state)
         let snapshot_files = self.current_files.clone();
 
+        // Capture the parser cache so we can compare against it on future compilations
+        self.snapshot_parser_cache = Some(self.compiler.parser_cache_snapshot());
+
         // Create a separate compiler for the snapshot panel (fresh DB + new NodeCache)
         let snapshot_compiler = self.build_compiler_from_files(&snapshot_files, None);
         self.snapshot_compiler = Some(snapshot_compiler);
 
         self.snapshot_files = Some(snapshot_files);
 
-        // Rebuild the current compiler so its NodeCache represents the new snapshot baseline
-        self.rebuild_current_compiler();
+        // Force a recompilation so incremental mode immediately reflects snapshot baseline
+        self.last_compiled_files.clear();
+        self.compile_current_state();
     }
 
     pub(crate) fn current_phase(&self) -> CompilerPhase {
@@ -256,14 +269,29 @@ impl App {
         }
     }
 
-    fn recompile_current(&mut self) {
-        self.compiler
-            .compile_from_filesystem(&self.current_files, self.snapshot_files.as_ref());
-    }
+    fn compile_current_state(&mut self) {
+        if self.current_files == self.last_compiled_files {
+            return;
+        }
 
-    fn rebuild_current_compiler(&mut self) {
-        self.compiler =
-            self.build_compiler_from_files(&self.current_files, self.snapshot_files.as_ref());
+        if let Some(snapshot_cache) = &self.snapshot_parser_cache {
+            // Compare current filesystem against the frozen snapshot baseline
+            self.compiler
+                .set_parser_cache_baseline(snapshot_cache);
+            self.compiler.compile_from_filesystem(
+                &self.current_files,
+                self.snapshot_files.as_ref(),
+            );
+            // Restore baseline so the next run still uses the snapshot cache
+            self.compiler
+                .set_parser_cache_baseline(snapshot_cache);
+        } else {
+            // No snapshot: keep reusing the same compiler/NodeCache to accumulate reuse info
+            self.compiler
+                .compile_from_filesystem(&self.current_files, None);
+        }
+
+        self.last_compiled_files = self.current_files.clone();
     }
 
     fn build_compiler_from_files(

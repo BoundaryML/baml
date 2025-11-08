@@ -3,5 +3,17 @@ class A {
 }
 
 class B {
- name b
+ name bss
+ }
+
+class C {
+  name c
+}
+
+enum D {
+  name
+}
+
+function foo() -> int {
+  4
 }
