@@ -7,7 +7,7 @@
 
 import { useEffect } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { activeCodeClickAtom } from '../../../sdk/atoms/core.atoms';
+import { activeCodeClickAtom, selectedFunctionNameAtom } from '../../../sdk/atoms/core.atoms';
 import { useBAMLSDK } from '../../../sdk/provider';
 import {
   determineNavigationAction,
@@ -57,6 +57,7 @@ export function useCodeNavigation() {
         console.log('🔄 Switching to workflow:', action.workflowId);
         const targetWorkflow = sdk.workflows.getById(action.workflowId);
         if (targetWorkflow) {
+
           setUnifiedSelection((prev) => ({
             ...prev,
             functionName: action.workflowId,
@@ -64,6 +65,7 @@ export function useCodeNavigation() {
             activeWorkflowId: action.workflowId,
             selectedNodeId: null,
           }));
+
           setActiveTab('graph');
         } else {
           console.error(`❌ Cannot switch to workflow: "${action.workflowId}" not found`);
@@ -207,7 +209,7 @@ export function useCodeNavigation() {
       case 'empty-state':
         console.log('📭 Empty state:', action.reason, action.functionName);
         setUnifiedSelection({
-          functionName: null,
+          functionName: action.functionName,
           testName: null,
           activeWorkflowId: null,
           selectedNodeId: null,
