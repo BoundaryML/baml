@@ -346,6 +346,16 @@ impl<'a> Parser<'a> {
     /// Consume current token, including all trivia before it (whitespace, newlines, comments).
     /// This is used for normal top-level parsing.
     fn bump(&mut self) {
+        static BUMP_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let count = BUMP_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count % 1000 == 0 {
+            eprintln!(
+                "[BUMP] Called {} times, pos {}/{}",
+                count,
+                self.current,
+                self.tokens.len()
+            );
+        }
         self.bump_impl(true);
     }
 
@@ -358,8 +368,25 @@ impl<'a> Parser<'a> {
 
     /// Internal: Consume current token with optional comment pattern recognition
     fn bump_impl(&mut self, recognize_comments: bool) {
+        static BUMP_IMPL_COUNT: std::sync::atomic::AtomicUsize =
+            std::sync::atomic::AtomicUsize::new(0);
+        let count = BUMP_IMPL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count % 5000 == 0 {
+            eprintln!("[BUMP_IMPL] Called {} times", count);
+        }
+
         // Emit all trivia before the token
+        let mut loop_count = 0;
         while self.current < self.tokens.len() {
+            loop_count += 1;
+            if loop_count > 10000 {
+                eprintln!(
+                    "[BUMP_IMPL] ERROR: Inner loop exceeded 10000 iterations at pos {}/{}",
+                    self.current,
+                    self.tokens.len()
+                );
+                break;
+            }
             // Recognize and assemble comment patterns if requested
             if recognize_comments {
                 if self.at_line_comment_start() {
@@ -461,6 +488,7 @@ impl<'a> Parser<'a> {
     // ============ Building the Tree ============
 
     fn build_tree(self, cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
+        eprintln!("[BUILD_TREE] Starting with {} events", self.events.len());
         let mut builder = if let Some(cache) = cache {
             GreenNodeBuilder::with_cache(cache)
         } else {
@@ -468,7 +496,16 @@ impl<'a> Parser<'a> {
         };
         let mut errors = Vec::new();
 
+        let mut event_count = 0;
+        let n_events = self.events.len();
         for event in self.events {
+            event_count += 1;
+            if event_count % 10000 == 0 {
+                eprintln!(
+                    "[BUILD_TREE] Processing event {}/{}",
+                    event_count, &n_events
+                );
+            }
             match event {
                 Event::StartNode { kind } => {
                     builder.start_node(kind.into());
@@ -567,6 +604,7 @@ impl<'a> Parser<'a> {
     /// Lexer emits: Quote, (content tokens), Quote
     /// Parser assembles: `STRING_LITERAL` node
     pub(crate) fn parse_string(&mut self) -> bool {
+        eprintln!("[PARSE_STRING] Starting at pos {}", self.current);
         if !self.at(TokenKind::Quote) {
             return false;
         }
@@ -575,9 +613,27 @@ impl<'a> Parser<'a> {
             p.bump(); // Opening quote
 
             // Collect all tokens until closing quote
+            let mut loop_counter = 0;
             while !p.at_end() {
+                loop_counter += 1;
+                if loop_counter > 100000 {
+                    eprintln!("[PARSE_STRING] ERROR: Loop exceeded 100000 iterations!");
+                    p.error("String parsing exceeded iteration limit".to_string());
+                    return;
+                }
+
+                if loop_counter % 10000 == 0 {
+                    eprintln!(
+                        "[PARSE_STRING] Loop iteration {}, pos {}/{}",
+                        loop_counter,
+                        p.current,
+                        p.tokens.len()
+                    );
+                }
+
                 // Check if next token is the closing quote
                 if p.at(TokenKind::Quote) {
+                    eprintln!("[PARSE_STRING] Found closing quote");
                     p.bump(); // Consume closing quote
                     return;
                 }
@@ -587,6 +643,7 @@ impl<'a> Parser<'a> {
             }
 
             // If we get here, we reached EOF without finding closing quote
+            eprintln!("[PARSE_STRING] Reached EOF without closing quote");
             p.error("Unclosed string literal".to_string());
         });
 
@@ -597,12 +654,14 @@ impl<'a> Parser<'a> {
     /// Lexer emits: Hash+, Quote, (content tokens), Quote, Hash+
     /// Parser assembles and validates matching hash counts
     pub(crate) fn parse_raw_string(&mut self) -> bool {
+        eprintln!("[PARSE_RAW_STRING] Starting at pos {}", self.current);
         if !self.at(TokenKind::Hash) {
             return false;
         }
 
         // Count opening hashes
         let opening_hashes = self.count_consecutive_hashes();
+        eprintln!("[PARSE_RAW_STRING] Found {} opening hashes", opening_hashes);
         if opening_hashes == 0 {
             return false;
         }
@@ -623,8 +682,21 @@ impl<'a> Parser<'a> {
             p.bump(); // Opening "
 
             // Collect content until we find Quote followed by same number of hashes
+            let mut loop_counter = 0;
             loop {
+                loop_counter += 1;
+                if loop_counter > 100000 {
+                    eprintln!("[PARSE_RAW_STRING] ERROR: Loop exceeded 100000 iterations! Likely infinite loop.");
+                    p.error("Raw string parsing exceeded iteration limit".to_string());
+                    break;
+                }
+
+                if loop_counter % 10000 == 0 {
+                    eprintln!("[PARSE_RAW_STRING] Loop iteration {}, pos {}/{}", loop_counter, p.current, p.tokens.len());
+                }
+
                 if p.at_end() {
+                    eprintln!("[PARSE_RAW_STRING] Reached end without finding closing delimiter");
                     p.error(format!(
                         "Unclosed raw string (expected \"{}\")",
                         "#".repeat(opening_hashes)
@@ -635,12 +707,14 @@ impl<'a> Parser<'a> {
                 if p.at(TokenKind::Quote) {
                     // Check if followed by correct number of hashes
                     let closing_hashes = p.count_consecutive_hashes_after_quote();
+                    eprintln!("[PARSE_RAW_STRING] Found quote with {} closing hashes (need {})", closing_hashes, opening_hashes);
                     if closing_hashes == opening_hashes {
                         // Found matching closing delimiter
                         p.bump(); // Closing "
                         for _ in 0..closing_hashes {
                             p.bump(); // #
                         }
+                        eprintln!("[PARSE_RAW_STRING] Successfully closed raw string");
                         break;
                     }
                 }
@@ -2098,14 +2172,32 @@ impl<'a> Parser<'a> {
 ///
 /// Returns the green tree and any parse errors encountered.
 fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
-    return (GreenNode::new(SyntaxKind::AND.into(), vec![]), vec![]);
+    eprintln!("[PARSE_IMPL] Starting with {} tokens", tokens.len());
     let mut parser = Parser::new(tokens);
 
     parser.start_node(SyntaxKind::SOURCE_FILE);
 
     // Parse top-level declarations
+    let mut item_count = 0;
     while !parser.at_end() {
+        item_count += 1;
+        eprintln!(
+            "[PARSE_IMPL] Item #{}, pos {}/{}, current token: {:?}",
+            item_count,
+            parser.current,
+            parser.tokens.len(),
+            parser
+                .current()
+                .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
+        );
+
+        if item_count > 100 {
+            eprintln!("[PARSE_IMPL] ERROR: More than 100 items, possible infinite loop!");
+            break;
+        }
+
         if parser.at(TokenKind::Enum) {
+            eprintln!("[PARSE_IMPL] -> parse_enum");
             parser.parse_enum();
         } else if parser.at(TokenKind::Class) {
             parser.parse_class();
@@ -2141,7 +2233,13 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
 
     parser.finish_node();
 
-    parser.build_tree(cache)
+    eprintln!(
+        "[PARSE_IMPL] Finished parsing, building tree with {} events",
+        parser.events.len()
+    );
+    let result = parser.build_tree(cache);
+    eprintln!("[PARSE_IMPL] Tree built successfully");
+    result
 }
 
 pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
