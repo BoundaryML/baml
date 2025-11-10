@@ -252,6 +252,22 @@ impl<'a> Parser<'a> {
         matches!(kind, TokenKind::Whitespace | TokenKind::Newline)
     }
 
+    /// Check if there's a newline before the next non-trivia token
+    fn has_newline_ahead(&self) -> bool {
+        let mut i = self.current;
+        while i < self.tokens.len() {
+            let kind = self.tokens[i].kind;
+            if kind == TokenKind::Newline {
+                return true;
+            }
+            if !self.is_basic_trivia(kind) {
+                return false;
+            }
+            i += 1;
+        }
+        false
+    }
+
     /// Check if position i starts a line comment (//)
     fn is_line_comment_at(&self, i: usize) -> bool {
         i + 1 < self.tokens.len()
@@ -349,12 +365,12 @@ impl<'a> Parser<'a> {
         static BUMP_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let count = BUMP_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if count % 1000 == 0 {
-            eprintln!(
-                "[BUMP] Called {} times, pos {}/{}",
-                count,
-                self.current,
-                self.tokens.len()
-            );
+            // eprintln!(
+            //     "[BUMP] Called {} times, pos {}/{}",
+            //     count,
+            //     self.current,
+            //     self.tokens.len()
+            // );
         }
         self.bump_impl(true);
     }
@@ -372,7 +388,7 @@ impl<'a> Parser<'a> {
             std::sync::atomic::AtomicUsize::new(0);
         let count = BUMP_IMPL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if count % 5000 == 0 {
-            eprintln!("[BUMP_IMPL] Called {} times", count);
+            // eprintln!("[BUMP_IMPL] Called {} times", count);
         }
 
         // Emit all trivia before the token
@@ -488,7 +504,7 @@ impl<'a> Parser<'a> {
     // ============ Building the Tree ============
 
     fn build_tree(self, cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
-        eprintln!("[BUILD_TREE] Starting with {} events", self.events.len());
+        // eprintln!("[BUILD_TREE] Starting with {} events", self.events.len());
         let mut builder = if let Some(cache) = cache {
             GreenNodeBuilder::with_cache(cache)
         } else {
@@ -501,10 +517,10 @@ impl<'a> Parser<'a> {
         for event in self.events {
             event_count += 1;
             if event_count % 10000 == 0 {
-                eprintln!(
-                    "[BUILD_TREE] Processing event {}/{}",
-                    event_count, &n_events
-                );
+                // eprintln!(
+                //     "[BUILD_TREE] Processing event {}/{}",
+                //     event_count, &n_events
+                // );
             }
             match event {
                 Event::StartNode { kind } => {
@@ -604,7 +620,7 @@ impl<'a> Parser<'a> {
     /// Lexer emits: Quote, (content tokens), Quote
     /// Parser assembles: `STRING_LITERAL` node
     pub(crate) fn parse_string(&mut self) -> bool {
-        eprintln!("[PARSE_STRING] Starting at pos {}", self.current);
+        // eprintln!("[PARSE_STRING] Starting at pos {}", self.current);
         if !self.at(TokenKind::Quote) {
             return false;
         }
@@ -633,7 +649,7 @@ impl<'a> Parser<'a> {
 
                 // Check if next token is the closing quote
                 if p.at(TokenKind::Quote) {
-                    eprintln!("[PARSE_STRING] Found closing quote");
+                    // eprintln!("[PARSE_STRING] Found closing quote");
                     p.bump(); // Consume closing quote
                     return;
                 }
@@ -643,7 +659,7 @@ impl<'a> Parser<'a> {
             }
 
             // If we get here, we reached EOF without finding closing quote
-            eprintln!("[PARSE_STRING] Reached EOF without closing quote");
+            // eprintln!("[PARSE_STRING] Reached EOF without closing quote");
             p.error("Unclosed string literal".to_string());
         });
 
@@ -654,14 +670,14 @@ impl<'a> Parser<'a> {
     /// Lexer emits: Hash+, Quote, (content tokens), Quote, Hash+
     /// Parser assembles and validates matching hash counts
     pub(crate) fn parse_raw_string(&mut self) -> bool {
-        eprintln!("[PARSE_RAW_STRING] Starting at pos {}", self.current);
+        // eprintln!("[PARSE_RAW_STRING] Starting at pos {}", self.current);
         if !self.at(TokenKind::Hash) {
             return false;
         }
 
         // Count opening hashes
         let opening_hashes = self.count_consecutive_hashes();
-        eprintln!("[PARSE_RAW_STRING] Found {} opening hashes", opening_hashes);
+        // eprintln!("[PARSE_RAW_STRING] Found {} opening hashes", opening_hashes);
         if opening_hashes == 0 {
             return false;
         }
@@ -707,7 +723,7 @@ impl<'a> Parser<'a> {
                 if p.at(TokenKind::Quote) {
                     // Check if followed by correct number of hashes
                     let closing_hashes = p.count_consecutive_hashes_after_quote();
-                    eprintln!("[PARSE_RAW_STRING] Found quote with {} closing hashes (need {})", closing_hashes, opening_hashes);
+                    // eprintln!("[PARSE_RAW_STRING] Found quote with {} closing hashes (need {})", closing_hashes, opening_hashes);
                     if closing_hashes == opening_hashes {
                         // Found matching closing delimiter
                         p.bump(); // Closing "
@@ -2003,26 +2019,26 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_config_block(&mut self) {
-        eprintln!("[PARSE_CONFIG_BLOCK] Starting at pos {}", self.current);
+        // eprintln!("[PARSE_CONFIG_BLOCK] Starting at pos {}", self.current);
         self.with_node(SyntaxKind::CONFIG_BLOCK, |p| {
             p.expect(TokenKind::LBrace);
 
             let mut config_item_count = 0;
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 config_item_count += 1;
-                eprintln!(
-                    "[PARSE_CONFIG_BLOCK] Item #{}, pos {}/{}, current: {:?}",
-                    config_item_count,
-                    p.current,
-                    p.tokens.len(),
-                    p.current()
-                        .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
-                );
+                // eprintln!(
+                //     "[PARSE_CONFIG_BLOCK] Item #{}, pos {}/{}, current: {:?}",
+                //     config_item_count,
+                //     p.current,
+                //     p.tokens.len(),
+                //     p.current()
+                //         .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
+                // );
 
                 if config_item_count > 1000 {
-                    eprintln!(
-                        "[PARSE_CONFIG_BLOCK] ERROR: More than 1000 config items! Infinite loop!"
-                    );
+                    // eprintln!(
+                    //     "[PARSE_CONFIG_BLOCK] ERROR: More than 1000 config items! Infinite loop!"
+                    // );
                     p.error("Config block parsing exceeded item limit".to_string());
                     break;
                 }
@@ -2035,42 +2051,46 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_config_item(&mut self) {
-        eprintln!(
-            "[PARSE_CONFIG_ITEM] Starting at pos {}, token: {:?}",
-            self.current,
-            self.current()
-                .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
-        );
+        // eprintln!(
+        //     "[PARSE_CONFIG_ITEM] Starting at pos {}, token: {:?}",
+        //     self.current,
+        //     self.current()
+        //         .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
+        // );
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
             // Config key (identifier)
             if p.at(TokenKind::Word) {
-                eprintln!("[PARSE_CONFIG_ITEM] Found config key");
+                // eprintln!("[PARSE_CONFIG_ITEM] Found config key");
                 p.bump();
             } else {
-                eprintln!(
-                    "[PARSE_CONFIG_ITEM] ERROR: Expected config key, got {:?}",
-                    p.current().map(|t| t.kind)
-                );
+                // eprintln!(
+                //     "[PARSE_CONFIG_ITEM] ERROR: Expected config key, got {:?}",
+                //     p.current().map(|t| t.kind)
+                // );
                 p.error("Expected config key".to_string());
+                if !p.at_end() {
+                    // eprintln!("[PARSE_CONFIG_ITEM] Consuming bad token to advance");
+                    p.bump();
+                }
                 return;
             }
 
             // Config value - can be nested block or simple value
             if p.at(TokenKind::LBrace) {
-                eprintln!("[PARSE_CONFIG_ITEM] Parsing nested config block");
+                // eprintln!("[PARSE_CONFIG_ITEM] Parsing nested config block");
                 // Nested config block
                 p.parse_config_block();
             } else {
-                eprintln!("[PARSE_CONFIG_ITEM] Parsing config value");
+                // eprintln!("[PARSE_CONFIG_ITEM] Parsing config value");
                 // Simple value - unquoted string or other expression
                 p.parse_config_value();
             }
-            eprintln!("[PARSE_CONFIG_ITEM] Finished, now at pos {}", p.current);
+            // eprintln!("[PARSE_CONFIG_ITEM] Finished, now at pos {}", p.current);
         });
     }
 
     fn parse_config_value(&mut self) {
-        eprintln!("[PARSE_CONFIG_VALUE] Starting at pos {}", self.current);
+        // eprintln!("[PARSE_CONFIG_VALUE] Starting at pos {}", self.current);
         self.with_node(SyntaxKind::CONFIG_VALUE, |p| {
             // Config values can be:
             // - Strings: "value"
@@ -2079,47 +2099,38 @@ impl<'a> Parser<'a> {
             // - Numbers: 123, 3.14
 
             if p.parse_any_string() {
-                eprintln!("[PARSE_CONFIG_VALUE] Parsed as string");
+                // eprintln!("[PARSE_CONFIG_VALUE] Parsed as string");
                 // String value
                 return;
             }
 
-            eprintln!("[PARSE_CONFIG_VALUE] Parsing as unquoted value");
+            // eprintln!("[PARSE_CONFIG_VALUE] Parsing as unquoted value");
             // Parse unquoted string - consume tokens until newline, comma, or brace
             let mut loop_counter = 0;
             while !p.at_end() {
                 loop_counter += 1;
                 if loop_counter > 10000 {
-                    eprintln!("[PARSE_CONFIG_VALUE] ERROR: Loop exceeded 10000 iterations!");
+                    // eprintln!("[PARSE_CONFIG_VALUE] ERROR: Loop exceeded 10000 iterations!");
                     p.error("Config value parsing exceeded iteration limit".to_string());
                     break;
                 }
 
-                if loop_counter % 1000 == 0 {
-                    eprintln!(
-                        "[PARSE_CONFIG_VALUE] Loop iteration {}, pos {}/{}, token: {:?}",
-                        loop_counter,
-                        p.current,
-                        p.tokens.len(),
-                        p.current()
-                            .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
-                    );
-                }
-
-                if p.at(TokenKind::Newline)
-                    || p.at(TokenKind::Comma)
-                    || p.at(TokenKind::RBrace)
+                // Check if we should stop - at brace/comma OR newline is ahead
+                if p.at(TokenKind::RBrace)
                     || p.at(TokenKind::LBrace)
+                    || p.at(TokenKind::Comma)
+                    || p.has_newline_ahead()
                 {
-                    eprintln!(
-                        "[PARSE_CONFIG_VALUE] Breaking on token: {:?}",
-                        p.current().map(|t| t.kind)
-                    );
+                    // eprintln!(
+                    //     "[PARSE_CONFIG_VALUE] Breaking - at end of line or brace, pos {}, has_newline_ahead: {}",
+                    //     p.current,
+                    //     p.has_newline_ahead()
+                    // );
                     break;
                 }
                 p.bump();
             }
-            eprintln!("[PARSE_CONFIG_VALUE] Finished at pos {}", p.current);
+            // eprintln!("[PARSE_CONFIG_VALUE] Finished at pos {}", p.current);
         });
     }
 
@@ -2233,7 +2244,7 @@ impl<'a> Parser<'a> {
 ///
 /// Returns the green tree and any parse errors encountered.
 fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
-    eprintln!("[PARSE_IMPL] Starting with {} tokens", tokens.len());
+    // eprintln!("[PARSE_IMPL] Starting with {} tokens", tokens.len());
     let mut parser = Parser::new(tokens);
 
     parser.start_node(SyntaxKind::SOURCE_FILE);
@@ -2242,23 +2253,17 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
     let mut item_count = 0;
     while !parser.at_end() {
         item_count += 1;
-        eprintln!(
-            "[PARSE_IMPL] Item #{}, pos {}/{}, current token: {:?}",
-            item_count,
-            parser.current,
-            parser.tokens.len(),
-            parser
-                .current()
-                .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
-        );
-
-        if item_count > 100 {
-            eprintln!("[PARSE_IMPL] ERROR: More than 100 items, possible infinite loop!");
-            break;
-        }
+        // eprintln!(
+        //     "[PARSE_IMPL] Item #{}, pos {}/{}, current token: {:?}",
+        //     item_count,
+        //     parser.current,
+        //     parser.tokens.len(),
+        //     parser
+        //         .current()
+        //         .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
+        // );
 
         if parser.at(TokenKind::Enum) {
-            eprintln!("[PARSE_IMPL] -> parse_enum");
             parser.parse_enum();
         } else if parser.at(TokenKind::Class) {
             parser.parse_class();
@@ -2294,12 +2299,11 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
 
     parser.finish_node();
 
-    eprintln!(
-        "[PARSE_IMPL] Finished parsing, building tree with {} events",
-        parser.events.len()
-    );
+    // eprintln!(
+    //     "[PARSE_IMPL] Finished parsing, building tree with {} events",
+    //     parser.events.len()
+    // );
     let result = parser.build_tree(cache);
-    eprintln!("[PARSE_IMPL] Tree built successfully");
     result
 }
 
@@ -2314,4 +2318,150 @@ pub fn parse_file_with_cache(
     cache: &mut NodeCache,
 ) -> (GreenNode, Vec<ParseError>) {
     parse_impl(tokens, Some(cache))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use baml_base::FileId;
+    use baml_lexer::lex_lossless;
+
+    #[test]
+    fn test_parse_retry_policy() {
+        let input = r#"retry_policy TestPolicy {
+  max_retries 3
+  strategy {
+    type exponential_backoff
+  }
+}"#;
+
+        eprintln!("\n=== Testing retry_policy parsing ===");
+        eprintln!("Input:\n{}\n", input);
+
+        // Tokenize
+        let file_id = FileId::new(0);
+        let tokens = lex_lossless(input, file_id);
+        eprintln!("Tokens: {} total", tokens.len());
+        for (i, token) in tokens.iter().enumerate() {
+            eprintln!("  [{}] {:?} = {:?}", i, token.kind, &token.text[..]);
+        }
+
+        // Parse
+        eprintln!("\nParsing...");
+        let (green, errors) = parse_file(&tokens);
+
+        eprintln!("\nParse complete!");
+        eprintln!("Errors: {}", errors.len());
+        for err in &errors {
+            eprintln!("  - {:?}", err);
+        }
+
+        // Create red tree for printing
+        let syntax = baml_syntax::SyntaxNode::new_root(green);
+        let output = format!("{:#?}", syntax);
+
+        eprintln!("\nSyntax Tree:");
+        eprintln!("{}", output);
+
+        // Expected output (initially empty to see what we get)
+        let expected = "";
+
+        if expected.is_empty() {
+            eprintln!("\n=== ACTUAL OUTPUT (copy this to expected if correct) ===");
+            eprintln!("{}", output);
+            eprintln!("=== END OUTPUT ===\n");
+        } else {
+            assert_eq!(output, expected, "Syntax tree mismatch");
+        }
+    }
+
+    #[test]
+    fn test_parse_raw_string() {
+        // Test raw string in a valid context - as a prompt in a function
+        let input = r##"function TestFunc(input: string) -> string {
+  client GPT4
+  prompt #"test content"#
+}"##;
+
+        eprintln!("\n=== Testing raw string parsing ===");
+        eprintln!("Input: {}", input);
+
+        // Tokenize
+        let file_id = FileId::new(0);
+        let tokens = lex_lossless(input, file_id);
+        eprintln!("\nTokens: {} total", tokens.len());
+        for (i, token) in tokens.iter().enumerate() {
+            eprintln!("  [{}] {:?} = {:?}", i, token.kind, &token.text[..]);
+        }
+
+        // Parse
+        eprintln!("\nParsing...");
+        let (green, errors) = parse_file(&tokens);
+
+        eprintln!("\nParse complete!");
+        eprintln!("Errors: {}", errors.len());
+        for err in &errors {
+            eprintln!("  - {:?}", err);
+        }
+
+        // Create red tree for printing
+        let syntax = baml_syntax::SyntaxNode::new_root(green);
+        let output = format!("{:#?}", syntax);
+
+        eprintln!("\nSyntax Tree:");
+        eprintln!("{}", output);
+
+        // Check that we have a RAW_STRING_LITERAL node
+        let tree_str = format!("{:#?}", syntax);
+        assert!(
+            tree_str.contains("RAW_STRING_LITERAL"),
+            "Expected to find RAW_STRING_LITERAL in tree, got:\n{}",
+            tree_str
+        );
+    }
+
+    #[test]
+    fn test_parse_raw_string_nested() {
+        // Test with nested quotes that shouldn't close the string
+        let input = r###"function TestFunc(input: string) -> string {
+  client GPT4
+  prompt ##"test "quoted" content"##
+}"###;
+
+        eprintln!("\n=== Testing nested raw string parsing ===");
+        eprintln!("Input: {}", input);
+
+        // Tokenize
+        let file_id = FileId::new(0);
+        let tokens = lex_lossless(input, file_id);
+        eprintln!("\nTokens: {} total", tokens.len());
+        for (i, token) in tokens.iter().enumerate() {
+            eprintln!("  [{}] {:?} = {:?}", i, token.kind, &token.text[..]);
+        }
+
+        // Parse
+        eprintln!("\nParsing...");
+        let (green, errors) = parse_file(&tokens);
+
+        eprintln!("\nParse complete!");
+        eprintln!("Errors: {}", errors.len());
+        for err in &errors {
+            eprintln!("  - {:?}", err);
+        }
+
+        // Create red tree for printing
+        let syntax = baml_syntax::SyntaxNode::new_root(green);
+        let output = format!("{:#?}", syntax);
+
+        eprintln!("\nSyntax Tree:");
+        eprintln!("{}", output);
+
+        // Check that we have a RAW_STRING_LITERAL node
+        let tree_str = format!("{:#?}", syntax);
+        assert!(
+            tree_str.contains("RAW_STRING_LITERAL"),
+            "Expected to find RAW_STRING_LITERAL in tree, got:\n{}",
+            tree_str
+        );
+    }
 }

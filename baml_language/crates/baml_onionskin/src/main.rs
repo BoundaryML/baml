@@ -29,7 +29,7 @@ enum Command {
         #[arg(long)]
         before: PathBuf,
 
-        /// Path to the "after" state directory/file  
+        /// Path to the "after" state directory/file
         #[arg(long)]
         after: PathBuf,
     },
@@ -86,20 +86,20 @@ fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
     // Step 1: Read "before" files (snapshot)
     println!("Step 1: Fresh compilation (BEFORE state)");
     println!("----------------------------------------");
-    let before_files =
-        normalize_files_to_virtual_root(read_files_from_disk(before)?, before);
+    let start = std::time::Instant::now();
+    let before_files = normalize_files_to_virtual_root(read_files_from_disk(before)?, before);
 
     let mut compiler = CompilerRunner::new(before);
     compiler.compile_from_filesystem(&before_files, None);
 
     let before_metrics = compiler.get_metrics_output();
-    println!("{before_metrics}\n");
+    println!("{before_metrics}");
+    eprintln!("[TIMING] Step 1 total: {:?}\n", start.elapsed());
 
     // Step 2: Read "after" files
     println!("Step 2: Simulating file changes");
     println!("--------------------------------");
-    let after_files =
-        normalize_files_to_virtual_root(read_files_from_disk(after)?, after);
+    let after_files = normalize_files_to_virtual_root(read_files_from_disk(after)?, after);
 
     // Find changed files
     for (path, after_content) in &after_files {
@@ -116,10 +116,12 @@ fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
     // Step 3: Compile "after" state using "before" as snapshot
     println!("Step 3: Incremental compilation (AFTER modification on same DB)");
     println!("----------------------------------------------------------------");
+    let start = std::time::Instant::now();
     compiler.compile_from_filesystem(&after_files, Some(&before_files));
 
     let after_metrics = compiler.get_metrics_output();
-    println!("{after_metrics}\n");
+    println!("{after_metrics}");
+    eprintln!("[TIMING] Step 3 total: {:?}\n", start.elapsed());
 
     // Step 4: Show annotated compiler outputs
     println!("Step 4: Compiler Output with Cache Status (Lexer + Parser only)");

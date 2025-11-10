@@ -276,6 +276,7 @@ impl CompilerRunner {
     }
 
     fn run_single_phase(&mut self, phase: CompilerPhase) {
+        let start = std::time::Instant::now();
         match phase {
             CompilerPhase::Lexer => self.run_lexer(),
             CompilerPhase::Parser => self.run_parser(),
@@ -285,6 +286,8 @@ impl CompilerRunner {
             CompilerPhase::Codegen => self.run_codegen(),
             CompilerPhase::Metrics => self.run_metrics(),
         }
+        let elapsed = start.elapsed();
+        eprintln!("[TIMING] {} took {:?}", phase.name(), elapsed);
     }
 
     fn run_lexer(&mut self) {
@@ -360,10 +363,8 @@ impl CompilerRunner {
                 baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
             let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());
 
-            let (formatted_lines, cached_ids) = format_syntax_tree_with_cache(
-                &syntax_tree,
-                self.parser_cached_elements.get(path),
-            );
+            let (formatted_lines, cached_ids) =
+                format_syntax_tree_with_cache(&syntax_tree, self.parser_cached_elements.get(path));
             next_cached_elements.insert(path.clone(), cached_ids);
 
             for (line, status) in formatted_lines {
@@ -551,7 +552,6 @@ impl CompilerRunner {
         self.parser_cached_elements = baseline.clone();
     }
 
-
     pub(crate) fn get_phase_output_annotated(
         &self,
         phase: CompilerPhase,
@@ -660,8 +660,7 @@ fn format_syntax_tree_with_cache(
                 let indent = "  ".repeat(indent_level);
                 match element {
                     SyntaxElement::Node(node) => {
-                        let (id, was_borrowed) =
-                            GreenElementId::from_node(&node, &mut owned_nodes);
+                        let (id, was_borrowed) = GreenElementId::from_node(&node, &mut owned_nodes);
                         let status = line_status_for(&id, previous);
                         current_ids.insert(id);
                         let raw_line = format!("{indent}{:?}", node);
@@ -772,7 +771,9 @@ impl GreenElementId {
 
 /// Helper to remove span ranges like @0..69 from CST output
 fn remove_span_ranges(text: &str) -> String {
-    let re = Regex::new(r"@\d+\.\.\d+").unwrap();
+    use std::sync::OnceLock;
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| Regex::new(r"@\d+\.\.\d+").unwrap());
     re.replace_all(text, "").to_string()
 }
 
