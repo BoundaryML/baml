@@ -9,6 +9,11 @@ authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
 # https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license
 license = "Apache-2.0"
 
+[project.urls]
+Homepage = "https://www.boundaryml.com"
+Repository = "https://github.com/BoundaryML/baml"
+Documentation = "https://docs.boundaryml.com"
+
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
