@@ -2003,10 +2003,30 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_config_block(&mut self) {
+        eprintln!("[PARSE_CONFIG_BLOCK] Starting at pos {}", self.current);
         self.with_node(SyntaxKind::CONFIG_BLOCK, |p| {
             p.expect(TokenKind::LBrace);
 
+            let mut config_item_count = 0;
             while !p.at(TokenKind::RBrace) && !p.at_end() {
+                config_item_count += 1;
+                eprintln!(
+                    "[PARSE_CONFIG_BLOCK] Item #{}, pos {}/{}, current: {:?}",
+                    config_item_count,
+                    p.current,
+                    p.tokens.len(),
+                    p.current()
+                        .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
+                );
+
+                if config_item_count > 1000 {
+                    eprintln!(
+                        "[PARSE_CONFIG_BLOCK] ERROR: More than 1000 config items! Infinite loop!"
+                    );
+                    p.error("Config block parsing exceeded item limit".to_string());
+                    break;
+                }
+
                 p.parse_config_item();
             }
 
@@ -2015,27 +2035,42 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_config_item(&mut self) {
+        eprintln!(
+            "[PARSE_CONFIG_ITEM] Starting at pos {}, token: {:?}",
+            self.current,
+            self.current()
+                .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
+        );
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
             // Config key (identifier)
             if p.at(TokenKind::Word) {
+                eprintln!("[PARSE_CONFIG_ITEM] Found config key");
                 p.bump();
             } else {
+                eprintln!(
+                    "[PARSE_CONFIG_ITEM] ERROR: Expected config key, got {:?}",
+                    p.current().map(|t| t.kind)
+                );
                 p.error("Expected config key".to_string());
                 return;
             }
 
             // Config value - can be nested block or simple value
             if p.at(TokenKind::LBrace) {
+                eprintln!("[PARSE_CONFIG_ITEM] Parsing nested config block");
                 // Nested config block
                 p.parse_config_block();
             } else {
+                eprintln!("[PARSE_CONFIG_ITEM] Parsing config value");
                 // Simple value - unquoted string or other expression
                 p.parse_config_value();
             }
+            eprintln!("[PARSE_CONFIG_ITEM] Finished, now at pos {}", p.current);
         });
     }
 
     fn parse_config_value(&mut self) {
+        eprintln!("[PARSE_CONFIG_VALUE] Starting at pos {}", self.current);
         self.with_node(SyntaxKind::CONFIG_VALUE, |p| {
             // Config values can be:
             // - Strings: "value"
@@ -2044,21 +2079,47 @@ impl<'a> Parser<'a> {
             // - Numbers: 123, 3.14
 
             if p.parse_any_string() {
+                eprintln!("[PARSE_CONFIG_VALUE] Parsed as string");
                 // String value
                 return;
             }
 
+            eprintln!("[PARSE_CONFIG_VALUE] Parsing as unquoted value");
             // Parse unquoted string - consume tokens until newline, comma, or brace
+            let mut loop_counter = 0;
             while !p.at_end() {
+                loop_counter += 1;
+                if loop_counter > 10000 {
+                    eprintln!("[PARSE_CONFIG_VALUE] ERROR: Loop exceeded 10000 iterations!");
+                    p.error("Config value parsing exceeded iteration limit".to_string());
+                    break;
+                }
+
+                if loop_counter % 1000 == 0 {
+                    eprintln!(
+                        "[PARSE_CONFIG_VALUE] Loop iteration {}, pos {}/{}, token: {:?}",
+                        loop_counter,
+                        p.current,
+                        p.tokens.len(),
+                        p.current()
+                            .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
+                    );
+                }
+
                 if p.at(TokenKind::Newline)
                     || p.at(TokenKind::Comma)
                     || p.at(TokenKind::RBrace)
                     || p.at(TokenKind::LBrace)
                 {
+                    eprintln!(
+                        "[PARSE_CONFIG_VALUE] Breaking on token: {:?}",
+                        p.current().map(|t| t.kind)
+                    );
                     break;
                 }
                 p.bump();
             }
+            eprintln!("[PARSE_CONFIG_VALUE] Finished at pos {}", p.current);
         });
     }
 
