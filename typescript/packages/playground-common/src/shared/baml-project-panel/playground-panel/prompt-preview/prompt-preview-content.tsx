@@ -29,8 +29,8 @@ export const PromptPreviewContent = () => {
     () => async () => {
       if (
         runtime === null ||
-        selectedFn === undefined ||
-        selectedTc === undefined
+        selectedFn === null ||
+        selectedTc === null
       ) {
         console.log('[PromptPreview] no runtime or selectedFn or selectedTc');
         return;
@@ -98,7 +98,7 @@ export const PromptPreviewContent = () => {
   if (isLoading && !preview) {
     if (lastKnownPreview) {
       console.log('[PromptPreview] Rendering last known preview');
-      return <RenderPrompt prompt={lastKnownPreview} testCase={selectedTc} />;
+      return <RenderPrompt prompt={lastKnownPreview} testCase={selectedTc ?? undefined} />;
     }
     return <Loader message="Loading..." />;
   }
@@ -130,5 +130,5 @@ export const PromptPreviewContent = () => {
     );
   }
 
-  return <RenderPrompt prompt={preview} testCase={selectedTc} />;
+  return <RenderPrompt prompt={preview} testCase={selectedTc ?? undefined} />;
 };

@@ -61,23 +61,23 @@ export function TestItem({
     (t) => t.functionName === functionName && t.testName === label,
   );
 
-  // Only show stop button if THIS specific test is running
-  const isThisTestRunning = testResult?.response.status === 'running';
+  // Only show stop button if THIS specific test is running or queued
+  const isThisTestRunning = testResult?.response.status === 'running' || testResult?.response.status === 'queued';
 
   const getStatusIcon = () => {
-    if (!testResult) return <FlaskConical className="size-4" />;
+    if (!testResult) return <FlaskConical className="size-3" />;
     const status = testResult.response.status;
     const finalState = getStatus(testResult.response);
-    if (status === 'running') return <Loader className="size-4" />;
-    if (status === 'error') return <XCircle className="size-4 text-red-500" />;
+    if (status === 'running') return <Loader className="size-3" />;
+    if (status === 'error') return <XCircle className="size-3 text-red-500" />;
     if (status === 'done') {
       if (finalState === 'passed')
-        return <CheckCircle2 className="size-4 text-green-500" />;
+        return <CheckCircle2 className="size-3 text-green-500" />;
       if (finalState === 'constraints_failed')
-        return <AlertTriangle className="size-4 text-yellow-500" />;
-      return <XCircle className="size-4 text-red-500" />;
+        return <AlertTriangle className="size-3 text-yellow-500" />;
+      return <XCircle className="size-3 text-red-500" />;
     }
-    return <FlaskConical className="size-4" />;
+    return <FlaskConical className="size-3" />;
   };
 
   const handleClick = (e: React.MouseEvent) => {
@@ -109,14 +109,14 @@ export function TestItem({
       <SidebarMenuButton
         onClick={handleClick}
         isActive={isSelected}
-        className="flex justify-between items-center w-full"
+        className="flex justify-between items-center w-full text-[10px] py-0.5 h-6"
       >
-        <div className="flex items-center min-w-0">
+        <div className="flex items-center min-w-0 gap-1.5">
           {getStatusIcon()}
-          <Tooltip>
+          <Tooltip delayDuration={500}>
             <TooltipTrigger asChild>
               <span
-                className="ml-1 text-sm truncate cursor-pointer hover:text-primary hover:underline"
+                className="truncate cursor-pointer hover:text-primary hover:underline"
                 onClick={handleJumpToFile}
               >
                 {highlightText(label, searchTerm)}
@@ -133,13 +133,12 @@ export function TestItem({
                   <div className="space-y-1 text-xs">
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Status:</span>
-                      <span className={`capitalize ${
-                        testResult.response.status === 'running' ? 'text-blue-500' :
+                      <span className={`capitalize ${testResult.response.status === 'running' ? 'text-blue-500' :
                         testResult.response.status === 'error' ? 'text-red-500' :
-                        getStatus(testResult.response) === 'passed' ? 'text-green-500' :
-                        getStatus(testResult.response) === 'constraints_failed' ? 'text-yellow-500' :
-                        'text-red-500'
-                      }`}>
+                          getStatus(testResult.response) === 'passed' ? 'text-green-500' :
+                            getStatus(testResult.response) === 'constraints_failed' ? 'text-yellow-500' :
+                              'text-red-500'
+                        }`}>
                         {testResult.response.status === 'done' ? getStatus(testResult.response) : testResult.response.status}
                       </span>
                     </div>
@@ -202,13 +201,13 @@ export function TestItem({
           </Tooltip>
         </div>
         <SidebarMenuAction
-          className="cursor-pointer"
+          className="cursor-pointer size-[9px] items-center justify-center pt-0.5"
           onClick={handleRunTest}
         >
           {isThisTestRunning ? (
-            <Square className="size-4 fill-red-500 stroke-red-500" />
+            <Square className="!size-3 fill-red-500 stroke-red-500" />
           ) : (
-            <Play className="size-4" />
+            <Play className="!size-3" />
           )}
         </SidebarMenuAction>
       </SidebarMenuButton>

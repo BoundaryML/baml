@@ -77,8 +77,10 @@ export const PromptPreview = () => {
 
   console.log('viewMode', viewMode);
   console.log('selectedTc', selectedTc);
-  const shouldRenderGraphLayout = viewMode.showGraphTab || !!selectedTc;
-  console.log('shouldRenderGraphLayout', shouldRenderGraphLayout);
+  // Check if we have content to render (tests or graph) vs showing "no tests" empty state
+  const hasContentToRender = viewMode.showGraphTab || !!selectedTc;
+  console.log('hasContentToRender', hasContentToRender);
+  console.log('detailPanelState', detailPanelState);
 
   return (
     <>
@@ -93,7 +95,7 @@ export const PromptPreview = () => {
 
             {/* Resizable Layout - Main Content + Bottom Panel */}
             <div className="flex-1 min-h-0">
-              {shouldRenderGraphLayout ? (
+              {hasContentToRender ? (
                 <ResizablePanelGroup direction="vertical" id="unified-layout">
                   {/* Main Panel - Unified Prompt Preview with tabs */}
                   <ResizablePanel defaultSize={detailPanelState.isOpen ? 60 : 100} minSize={30}>
@@ -105,9 +107,11 @@ export const PromptPreview = () => {
                   {/* Bottom Panel - Adaptive (TestPanel or DetailPanel) */}
                   {detailPanelState.isOpen && (
                     <>
-                      <ResizableHandle />
+                      <ResizableHandle className="hover:bg-blue-500 hover:h-1 transition-all" />
                       <ResizablePanel defaultSize={40} minSize={20} maxSize={70}>
-                        <AdaptiveBottomPanel />
+                        <div className="h-full overflow-y-auto px-1">
+                          <AdaptiveBottomPanel />
+                        </div>
                       </ResizablePanel>
                     </>
                   )}

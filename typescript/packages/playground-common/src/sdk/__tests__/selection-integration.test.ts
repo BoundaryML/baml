@@ -16,6 +16,7 @@ import {
   selectedTestCaseNameAtom,
   activeWorkflowIdAtom,
   selectedNodeIdAtom,
+  unifiedSelectionStateAtom,
 } from '../atoms/core.atoms';
 import { determineNavigationAction, type NavigationState, type NavigationAction } from '../navigationHeuristic';
 import type { CodeClickEvent } from '../types';
@@ -90,51 +91,58 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
 
   describe('Navigation Heuristic with real runtime data', () => {
     const resetSelectionAtoms = () => {
-      store.set(selectedFunctionNameAtom, null);
-      store.set(selectedTestCaseNameAtom, null);
-      store.set(activeWorkflowIdAtom, null);
-      store.set(selectedNodeIdAtom, null);
+      store.set(unifiedSelectionStateAtom, {
+        functionName: null,
+        testName: null,
+        activeWorkflowId: null,
+        selectedNodeId: null,
+      });
     };
 
-    const getSelectionSnapshot = () => ({
-      functionName: store.get(selectedFunctionNameAtom),
-      testName: store.get(selectedTestCaseNameAtom),
-      activeWorkflowId: store.get(activeWorkflowIdAtom),
-      selectedNodeId: store.get(selectedNodeIdAtom),
-    });
+    const getSelectionSnapshot = () => store.get(unifiedSelectionStateAtom);
 
     const applyNavigationAction = (action: NavigationAction) => {
       switch (action.type) {
         case 'switch-workflow':
-          store.set(selectedFunctionNameAtom, action.workflowId);
-          store.set(selectedTestCaseNameAtom, null);
-          store.set(activeWorkflowIdAtom, action.workflowId);
-          store.set(selectedNodeIdAtom, null);
+          store.set(unifiedSelectionStateAtom, {
+            functionName: action.workflowId,
+            testName: null,
+            activeWorkflowId: action.workflowId,
+            selectedNodeId: null,
+          });
           break;
         case 'switch-and-select':
-          store.set(selectedFunctionNameAtom, action.nodeId);
-          store.set(selectedTestCaseNameAtom, action.testId ?? null);
-          store.set(activeWorkflowIdAtom, action.workflowId);
-          store.set(selectedNodeIdAtom, action.nodeId);
+          store.set(unifiedSelectionStateAtom, {
+            functionName: action.nodeId,
+            testName: action.testId ?? null,
+            activeWorkflowId: action.workflowId,
+            selectedNodeId: action.nodeId,
+          });
           break;
         case 'select-node':
-          store.set(selectedFunctionNameAtom, action.nodeId);
-          store.set(selectedTestCaseNameAtom, action.testId ?? store.get(selectedTestCaseNameAtom));
-          store.set(activeWorkflowIdAtom, action.workflowId);
-          store.set(selectedNodeIdAtom, action.nodeId);
+          store.set(unifiedSelectionStateAtom, (prev) => ({
+            functionName: action.nodeId,
+            testName: action.testId ?? prev.testName,
+            activeWorkflowId: action.workflowId,
+            selectedNodeId: action.nodeId,
+          }));
           break;
         case 'show-function-tests':
-          store.set(selectedFunctionNameAtom, action.functionName);
-          store.set(selectedTestCaseNameAtom, action.tests[0] ?? null);
-          store.set(activeWorkflowIdAtom, null);
-          store.set(selectedNodeIdAtom, action.functionName);
+          store.set(unifiedSelectionStateAtom, {
+            functionName: action.functionName,
+            testName: action.tests[0] ?? null,
+            activeWorkflowId: null,
+            selectedNodeId: action.functionName,
+          });
           break;
         case 'empty-state':
         default:
-          store.set(selectedFunctionNameAtom, null);
-          store.set(selectedTestCaseNameAtom, null);
-          store.set(activeWorkflowIdAtom, null);
-          store.set(selectedNodeIdAtom, null);
+          store.set(unifiedSelectionStateAtom, {
+            functionName: null,
+            testName: null,
+            activeWorkflowId: null,
+            selectedNodeId: null,
+          });
           break;
       }
     };

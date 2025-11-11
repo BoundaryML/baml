@@ -8,10 +8,8 @@
 import { atom } from 'jotai';
 import { selectionAtom as originalSelectionAtom } from './atoms';
 import {
-  selectedFunctionNameAtom,
-  selectedTestCaseNameAtom,
-  activeWorkflowIdAtom,
-  selectedNodeIdAtom,
+  unifiedSelectionStateAtom,
+  type UnifiedSelectionState,
   activeWorkflowAtom,
 } from '../../../sdk/atoms/core.atoms';
 
@@ -21,38 +19,18 @@ import {
 
 /**
  * Unified selection state - single source of truth for all selection
+ * Re-exported from SDK for backward compatibility
  */
-export interface UnifiedSelection {
-  // Function-level selection (for the toolbar, running tests)
-  functionName: string | null;
-  testName: string | null;
-
-  // Workflow context (null if viewing standalone function)
-  activeWorkflowId: string | null;
-
-  // Graph node selection (null if not in graph view or no node selected)
-  selectedNodeId: string | null;
-}
+export type UnifiedSelection = UnifiedSelectionState;
 
 /**
- * Unified selection atom - syncs with SDK atoms
- * When you update this atom, it also updates the SDK selectedFunctionNameAtom and selectedTestCaseNameAtom
+ * Unified selection atom - directly uses the SDK unified state atom
+ * This is now just an alias for the SDK atom
  */
 export const unifiedSelectionAtom = atom(
-  (get): UnifiedSelection => ({
-    functionName: get(selectedFunctionNameAtom),
-    testName: get(selectedTestCaseNameAtom),
-    activeWorkflowId: get(activeWorkflowIdAtom),
-    selectedNodeId: get(selectedNodeIdAtom),
-  }),
+  (get): UnifiedSelection => get(unifiedSelectionStateAtom),
   (get, set, update: UnifiedSelection | ((prev: UnifiedSelection) => UnifiedSelection)) => {
-    const current: UnifiedSelection = {
-      functionName: get(selectedFunctionNameAtom),
-      testName: get(selectedTestCaseNameAtom),
-      activeWorkflowId: get(activeWorkflowIdAtom),
-      selectedNodeId: get(selectedNodeIdAtom),
-    };
-
+    const current = get(unifiedSelectionStateAtom);
     const next = typeof update === 'function' ? update(current) : update;
     const finalValue: UnifiedSelection = {
       ...current,
@@ -60,11 +38,7 @@ export const unifiedSelectionAtom = atom(
     };
 
     console.log('📝 Unified Selection Updated:', finalValue);
-
-    set(selectedFunctionNameAtom, finalValue.functionName);
-    set(selectedTestCaseNameAtom, finalValue.testName);
-    set(activeWorkflowIdAtom, finalValue.activeWorkflowId);
-    set(selectedNodeIdAtom, finalValue.selectedNodeId);
+    set(unifiedSelectionStateAtom, finalValue);
   }
 );
 
@@ -127,7 +101,8 @@ export const bottomPanelModeAtom = atom<BottomPanelMode>((get) => {
   // Show DetailPanel when:
   // - On Graph tab, OR
   // - A graph node is selected (even if on other tabs)
-  if (activeTab === 'graph' || selection.selectedNodeId !== null) {
+  console.log('bottomPanelModeAtom', activeTab, selection);
+  if (activeTab === 'graph' || selection.activeWorkflowId !== null) {
     return 'detail-panel';
   }
 

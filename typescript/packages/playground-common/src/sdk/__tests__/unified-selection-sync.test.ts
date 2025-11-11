@@ -7,6 +7,7 @@ import {
   activeWorkflowIdAtom,
   selectedNodeIdAtom,
   runtimeInstanceAtom,
+  unifiedSelectionStateAtom,
 } from '../atoms/core.atoms';
 import {
   unifiedSelectionAtom,
@@ -55,7 +56,10 @@ describe('unifiedSelectionAtom', () => {
   it('reflects external atom changes when read', () => {
     const store = createStore();
 
-    store.set(selectedFunctionNameAtom, 'ExternalFunction');
+    store.set(unifiedSelectionStateAtom, (prev) => ({
+      ...prev,
+      functionName: 'ExternalFunction',
+    }));
     const selection = store.get(unifiedSelectionAtom);
 
     expect(selection.functionName).toBe('ExternalFunction');

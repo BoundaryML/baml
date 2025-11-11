@@ -32,6 +32,7 @@ import {
   activeNodeInputsAtom,
   inputsDirtyAtom,
   allFunctionsMapAtom,
+  unifiedSelectionStateAtom,
   // New atoms from migration
   diagnosticsAtom,
   numErrorsAtom,
@@ -66,25 +67,26 @@ export function useWorkflows() {
  * Get and set the active workflow
  */
 export function useActiveWorkflow() {
-  const [activeWorkflowId, setActiveWorkflowId] = useAtom(activeWorkflowIdAtom);
+  const activeWorkflowId = useAtomValue(activeWorkflowIdAtom);
   const activeWorkflow = useAtomValue(activeWorkflowAtom);
   const workflows = useAtomValue(workflowsAtom);
+  const [, setUnifiedSelection] = useAtom(unifiedSelectionStateAtom);
 
   const setActive = useCallback(
     (workflowId: string | null) => {
       if (workflowId === null) {
-        setActiveWorkflowId(null);
+        setUnifiedSelection((prev) => ({ ...prev, activeWorkflowId: null }));
         return;
       }
 
       const workflow = workflows.find((w) => w.id === workflowId);
       if (workflow) {
-        setActiveWorkflowId(workflowId);
+        setUnifiedSelection((prev) => ({ ...prev, activeWorkflowId: workflowId }));
       } else {
         console.warn(`⚠️ Cannot set active workflow: "${workflowId}" not found`);
       }
     },
-    [workflows, setActiveWorkflowId]
+    [workflows, setUnifiedSelection]
   );
 
   return {
@@ -189,7 +191,17 @@ export function useViewMode() {
  * Get and set selected node
  */
 export function useSelectedNode() {
-  return useAtom(selectedNodeIdAtom);
+  const selectedNodeId = useAtomValue(selectedNodeIdAtom);
+  const [, setUnifiedSelection] = useAtom(unifiedSelectionStateAtom);
+
+  const setSelectedNodeId = useCallback(
+    (nodeId: string | null) => {
+      setUnifiedSelection((prev) => ({ ...prev, selectedNodeId: nodeId }));
+    },
+    [setUnifiedSelection]
+  );
+
+  return [selectedNodeId, setSelectedNodeId] as const;
 }
 
 /**

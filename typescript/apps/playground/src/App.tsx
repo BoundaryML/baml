@@ -44,7 +44,7 @@ function AppContent() {
               <PromptPreview />
 
               {/* Debug panel - only shown in debug mode */}
-              {debugMode && <DebugPanel />}
+              {/* {debugMode && <DebugPanel />} */}
             </div>
 
             {/* Background event handler (no UI) */}

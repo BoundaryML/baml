@@ -39,6 +39,7 @@ import {
   playgroundPortAtom,
   selectedFunctionNameAtom,
   selectedTestCaseNameAtom,
+  unifiedSelectionStateAtom,
 } from '../atoms/core.atoms';
 
 import type {
@@ -105,7 +106,8 @@ export class JotaiStorage implements SDKStorage {
   }
 
   setActiveWorkflowId(id: string | null) {
-    this.store.set(activeWorkflowIdAtom, id);
+    const current = this.store.get(unifiedSelectionStateAtom);
+    this.store.set(unifiedSelectionStateAtom, { ...current, activeWorkflowId: id });
   }
 
   getActiveWorkflowId() {
@@ -350,7 +352,8 @@ export class JotaiStorage implements SDKStorage {
   // ============================================================================
 
   setSelectedFunctionName(name: string | null) {
-    this.store.set(selectedFunctionNameAtom, name);
+    const current = this.store.get(unifiedSelectionStateAtom);
+    this.store.set(unifiedSelectionStateAtom, { ...current, functionName: name });
   }
 
   getSelectedFunctionName() {
@@ -358,7 +361,8 @@ export class JotaiStorage implements SDKStorage {
   }
 
   setSelectedTestCaseName(name: string | null) {
-    this.store.set(selectedTestCaseNameAtom, name);
+    const current = this.store.get(unifiedSelectionStateAtom);
+    this.store.set(unifiedSelectionStateAtom, { ...current, testName: name });
   }
 
   getSelectedTestCaseName() {

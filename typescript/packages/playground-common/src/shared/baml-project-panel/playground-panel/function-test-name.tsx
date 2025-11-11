@@ -25,7 +25,7 @@ import {
   selectedItemAtom,
   testcaseObjectAtom,
 } from './atoms';
-import { runtimeStateAtom } from '../../atoms';
+import { functionsAtom as sdkFunctionsAtom } from '../../../sdk/atoms/core.atoms';
 
 interface FunctionTestNameProps {
   functionName: string;
@@ -34,11 +34,8 @@ interface FunctionTestNameProps {
 }
 
 const functionsAtom = atom((get) => {
-  const runtimeState = get(runtimeStateAtom);
-  if (!runtimeState) {
-    return [];
-  }
-  return runtimeState.functions.map((f) => ({
+  const functions = get(sdkFunctionsAtom);
+  return functions.map((f) => ({
     name: f.name,
     tests: f.testCases.map((t) => t.name),
   }));

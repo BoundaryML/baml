@@ -1,7 +1,7 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { vscode } from '../../vscode';
-import { runtimeStateAtom } from '../../../atoms';
+import { functionsAtom as sdkFunctionsAtom, runtimeAtom } from '../../../../sdk/atoms/core.atoms';
 import { sessionStore } from '../../../../baml_wasm_web/JotaiProvider';
 
 const getIsEmbed = () => {
@@ -10,16 +10,17 @@ const getIsEmbed = () => {
 };
 
 export const functionsAtom = atom((get) => {
-  const runtimeState = get(runtimeStateAtom);
-  return runtimeState.functions.map((f) => ({
+  const functions = get(sdkFunctionsAtom);
+  return functions.map((f) => ({
     name: f.name,
     tests: f.testCases?.map((t) => t.name) || [],
   }));
 });
 
 export const functionsAreStaleAtom = atom((get) => {
-  const runtimeState = get(runtimeStateAtom);
-  return runtimeState.stale;
+  const runtime = get(runtimeAtom);
+  // Runtime is stale if there's no current runtime but there is a last valid one
+  return !runtime.rt && !!runtime.lastValidRt;
 });
 
 export const isSidebarOpenAtom = atomWithStorage(

@@ -9,7 +9,8 @@
       "Bash(do sed -i '' \"s|from [''''\"\"]\\./atoms[''''\"\"]|from ''''../../atoms''''|g\" \"$file\" sed -i '' \"s|from [''''\"\"]\\.\\./ atoms[''''\"\"]|from ''''../../../atoms''''|g\" \"$file\" sed -i '' \"s|from [''''\"\"]\\.\\./../atoms[''''\"\"]|from ''''../../../../atoms''''|g\" \"$file\" done echo \"Updated imports\")",
       "Bash(pnpm add:*)",
       "Bash(xargs sed:*)",
-      "Bash(pnpm test:*)"
+      "Bash(pnpm test:*)",
+      "Bash(pnpm --filter playground-common typecheck)"
     ],
     "deny": [],
     "ask": []

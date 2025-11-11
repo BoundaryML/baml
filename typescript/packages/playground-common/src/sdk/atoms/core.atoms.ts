@@ -28,6 +28,27 @@ import type { WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_buil
 export const runtimeInstanceAtom = atom<BamlRuntimeInterface | null>(null);
 
 /**
+ * Unified selection state interface
+ */
+export interface UnifiedSelectionState {
+  functionName: string | null;
+  testName: string | null;
+  activeWorkflowId: string | null;
+  selectedNodeId: string | null;
+}
+
+/**
+ * Unified selection state - SINGLE SOURCE OF TRUTH for all selection
+ * All other selection atoms derive from this
+ */
+export const unifiedSelectionStateAtom = atom<UnifiedSelectionState>({
+  functionName: null,
+  testName: null,
+  activeWorkflowId: null,
+  selectedNodeId: null,
+});
+
+/**
  * All available workflows (derived from runtime)
  */
 export const workflowsAtom = atom((get) => {
@@ -38,9 +59,10 @@ export const workflowsAtom = atom((get) => {
 });
 
 /**
- * Currently active workflow ID
+ * Currently active workflow ID (derived - read-only)
+ * This is part of the unified selection state
  */
-export const activeWorkflowIdAtom = atom<string | null>(null);
+export const activeWorkflowIdAtom = atom((get) => get(unifiedSelectionStateAtom).activeWorkflowId);
 
 /**
  * Executions stored per workflow using atomFamily
@@ -150,9 +172,10 @@ export const viewModeAtom = atom<{ mode: 'editor' | 'execution' }>({
 });
 
 /**
- * Selected node ID
+ * Selected node ID (derived - read-only)
+ * This is part of the unified selection state
  */
-export const selectedNodeIdAtom = atom<string | null>(null);
+export const selectedNodeIdAtom = atom((get) => get(unifiedSelectionStateAtom).selectedNodeId);
 
 /**
  * Detail panel state
@@ -306,14 +329,14 @@ export const allFunctionsMapAtom = atom((get): Map<string, FunctionWithCallGraph
 // ============================================================================
 
 /**
- * Currently selected function name
+ * Currently selected function name (derived - read-only from unified selection state)
  */
-export const selectedFunctionNameAtom = atom<string | null>(null);
+export const selectedFunctionNameAtom = atom((get) => get(unifiedSelectionStateAtom).functionName);
 
 /**
- * Currently selected test case name
+ * Currently selected test case name (derived - read-only from unified selection state)
  */
-export const selectedTestCaseNameAtom = atom<string | null>(null);
+export const selectedTestCaseNameAtom = atom((get) => get(unifiedSelectionStateAtom).testName);
 
 /**
  * Selected function object (derived from bamlFilesAtom + selectedFunctionNameAtom)
@@ -357,11 +380,12 @@ export const updateSelectionAtom = atom(
   (get, set, update: { functionName: string | null; testCaseName?: string | null }) => {
     console.log('[updateSelection]', update);
 
-    // Set function name
-    set(selectedFunctionNameAtom, update.functionName);
-
-    // Set test case name (or null if not provided)
-    set(selectedTestCaseNameAtom, update.testCaseName ?? null);
+    const current = get(unifiedSelectionStateAtom);
+    set(unifiedSelectionStateAtom, {
+      ...current,
+      functionName: update.functionName,
+      testName: update.testCaseName ?? null,
+    });
   }
 );
 

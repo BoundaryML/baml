@@ -52,32 +52,9 @@ import {
   selectedFunctionNameAtom,
   selectedTestCaseNameAtom,
   updateSelectionAtom,
+  unifiedSelectionStateAtom,
+  functionsAtom,
 } from '../../../sdk/atoms/core.atoms';
-
-// Import runtimeStateAtom for accessing WASM functions
-import { runtimeStateAtom } from '../../atoms';
-
-// ============================================================================
-// Selection Atoms - Adapter to SDK atoms
-// ============================================================================
-
-/**
- * Adapter atoms to convert between SDK (null) and local (undefined) conventions
- * These write to SDK atoms to ensure consistent state
- */
-export const selectedFunctionAtom = atom(
-  (get) => get(selectedFunctionNameAtom) ?? undefined,
-  (get, set, value: string | undefined) => {
-    set(selectedFunctionNameAtom, value ?? null);
-  }
-);
-
-export const selectedTestcaseAtom = atom(
-  (get) => get(selectedTestCaseNameAtom) ?? undefined,
-  (get, set, value: string | undefined) => {
-    set(selectedTestCaseNameAtom, value ?? null);
-  }
-);
 
 export const graphControlsTipDismissedAtom = atomWithStorage(
   'playground:graphControlsTipDismissed',
@@ -92,8 +69,8 @@ export const selectedItemAtom = atom(
   (get) => {
     const selected = get(selectionAtom);
     if (
-      selected.selectedFn === undefined ||
-      selected.selectedTc === undefined
+      selected.selectedFn === null ||
+      selected.selectedTc === null
     ) {
       return undefined;
     }
@@ -102,9 +79,15 @@ export const selectedItemAtom = atom(
       string,
     ];
   },
-  (_, set, functionName: string, testcaseName: string | undefined) => {
-    set(selectedFunctionAtom, functionName);
-    set(selectedTestcaseAtom, testcaseName);
+  (get, set, functionName: string, testcaseName: string | undefined) => {
+    // When selecting a function directly (e.g., from sidebar), clear workflow/node context
+    // This ensures standalone functions show TestPanel instead of DetailPanel
+    set(unifiedSelectionStateAtom, {
+      functionName,
+      testName: testcaseName ?? null,
+      activeWorkflowId: null,
+      selectedNodeId: null,
+    });
   },
 );
 
@@ -114,7 +97,7 @@ export const selectedItemAtom = atom(
 
 export const functionObjectAtom = atomFamily((functionName: string) =>
   atom((get) => {
-    const { functions } = get(runtimeStateAtom);
+    const functions = get(functionsAtom);
     const fn = functions.find((f) => f.name === functionName);
     if (!fn) {
       return undefined;
@@ -126,7 +109,7 @@ export const functionObjectAtom = atomFamily((functionName: string) =>
 export const testcaseObjectAtom = atomFamily(
   (params: { functionName: string; testcaseName?: string | null }) =>
     atom((get) => {
-      const { functions } = get(runtimeStateAtom);
+      const functions = get(functionsAtom);
       const fn = functions.find((f) => f.name === params.functionName);
       if (!fn) {
         return undefined;
@@ -181,7 +164,7 @@ export const updateCursorAtom = atom(
 
     const selectedFunc = runtime.get_function_at_position(
       fileName,
-      get(selectedFunctionAtom) ?? '',
+      get(selectedFunctionNameAtom) ?? '',
       cursorIdx,
     );
 
@@ -219,14 +202,14 @@ export const updateCursorAtom = atom(
 // ============================================================================
 
 export const selectionAtom = atom((get) => {
-  const selectedFunction = get(selectedFunctionAtom);
-  const selectedTestcase = get(selectedTestcaseAtom);
+  const selectedFunction = get(selectedFunctionNameAtom);
+  const selectedTestcase = get(selectedTestCaseNameAtom);
 
-  const { functions } = get(runtimeStateAtom);
+  const functions = get(functionsAtom);
 
   type FunctionType = (typeof functions)[number];
-  let selectedFn: FunctionType | undefined = undefined;
-  if (selectedFunction !== undefined) {
+  let selectedFn: FunctionType | null = null;
+  if (selectedFunction !== null) {
     const foundFn = functions.find((f) => f.name === selectedFunction);
     if (foundFn) {
       selectedFn = foundFn;
@@ -236,9 +219,9 @@ export const selectionAtom = atom((get) => {
   }
 
   type TestType = FunctionType['testCases'][number];
-  let selectedTc: TestType | undefined = undefined;
-  if (selectedFn && selectedTestcase !== undefined) {
-    selectedTc = selectedFn.testCases?.find((tc) => tc.name === selectedTestcase);
+  let selectedTc: TestType | null = null;
+  if (selectedFn && selectedTestcase !== null) {
+    selectedTc = selectedFn.testCases?.find((tc) => tc.name === selectedTestcase) ?? null;
     if (!selectedTc) {
       console.warn('Testcase not found', selectedTestcase);
     }
@@ -272,7 +255,7 @@ export type DoneTestStatusType =
 export const testCaseAtom = atomFamily(
   (params: { functionName: string; testName: string }) =>
     atom((get) => {
-      const { functions } = get(runtimeStateAtom);
+      const functions = get(functionsAtom);
       const fn = functions.find((f) => f.name === params.functionName);
       const tc = fn?.testCases?.find((tc) => tc.name === params.testName);
       if (!fn || !tc) {
@@ -284,7 +267,7 @@ export const testCaseAtom = atomFamily(
 
 export const functionTestSnippetAtom = atomFamily((functionName: string) =>
   atom((get) => {
-    const { functions } = get(runtimeStateAtom);
+    const functions = get(functionsAtom);
     const fn = functions.find((f) => f.name === functionName);
     if (!fn) {
       return undefined;

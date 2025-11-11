@@ -138,10 +138,10 @@ export function PreviewToolbar() {
       <div
         className={cn(
           'flex flex-row gap-1 items-center min-w-0 w-full',
-          selectedFn === undefined ? 'justify-end' : 'justify-between',
+          selectedFn === null ? 'justify-end' : 'justify-between',
         )}
       >
-        {selectedFn !== undefined && (
+        {selectedFn !== null && (
           <div className="flex flex-col gap-1 min-w-0 flex-1 overflow-hidden">
             <div className="flex flex-row items-center gap-2 min-w-0">
               <div className="min-w-0 flex-1 overflow-hidden">

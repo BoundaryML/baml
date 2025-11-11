@@ -154,22 +154,22 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
 
   return (
     <SidebarMenuButton
-      className="flex justify-between items-center w-full pl-8 cursor-pointer"
+      className="flex justify-between items-center w-full pl-8 cursor-pointer text-[10px] py-0.5 h-6"
       onClick={handleClick}
     >
-      <Tooltip>
+      <Tooltip delayDuration={500}>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-2 truncate cursor-pointer">
+          <div className="flex items-center gap-1.5 truncate cursor-pointer">
             {/* {functionTestsStatus.hasRunning ? (
-              <Loader className="size-4" />
+              <Loader className="size-3" />
             ) : functionTestsStatus.allPassed ? (
-              <CheckCircle2 className="size-4 text-green-500" />
+              <CheckCircle2 className="size-3 text-green-500" />
             ) : functionTestsStatus.anyFailed ? (
-              <XCircle className="size-4 text-red-500" />
+              <XCircle className="size-3 text-red-500" />
             ) : (
-              <FunctionSquare className="size-4" />
+              <FunctionSquare className="size-3" />
             )} */}
-            <FunctionSquare className="size-4" />
+            <FunctionSquare className="size-3" />
             <span className="truncate hover:text-primary hover:underline">
               {functionName}
             </span>

@@ -120,22 +120,6 @@ export const testCaseResponseAtom = atom((get) => {
 //   };
 // });
 
-/**
- * @deprecated Use SDK functionsAtom instead
- * This is a compatibility shim for old code that returns unified FunctionWithCallGraph[] types
- */
-export const runtimeStateAtom = atom((get) => {
-  const runtime = get(runtimeAtom);
-  const functions = get(functionsAtom);
-
-  // Determine if runtime is stale (has errors but last valid runtime exists)
-  const hasErrors = !runtime.rt && !!runtime.lastValidRt;
-
-  return {
-    functions, // FunctionWithCallGraph[] from unified types
-    stale: hasErrors
-  };
-});
 
 /**
  * Current BAML files atom
@@ -143,11 +127,3 @@ export const runtimeStateAtom = atom((get) => {
  */
 export { filesAtom } from '../sdk/atoms/core.atoms';
 
-/**
- * Cursor update atom for CodeMirror navigation
- * @deprecated This should be handled through SDK navigation API
- */
-export const updateCursorAtom = atom(null, (_get, _set, _update: any) => {
-  console.debug('[updateCursorAtom] Cursor update (deprecated)');
-  // This is a no-op for compatibility - actual cursor updates should use SDK navigation API
-});
