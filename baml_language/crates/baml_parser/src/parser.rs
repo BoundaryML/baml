@@ -599,8 +599,15 @@ impl<'a> Parser<'a> {
     /// Count Hash tokens immediately after current Quote token (skipping basic trivia only)
     fn count_consecutive_hashes_after_quote(&self) -> usize {
         let mut count = 0;
-        let mut i = self.current + 1;
+        // First, find the actual position of the current token (skipping trivia from self.current)
+        let mut i = self.current;
+        while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
+            i += 1;
+        }
+        // Now i is at the Quote token, move past it
+        i += 1;
 
+        // Count consecutive hashes after the quote
         while i < self.tokens.len() {
             let token = &self.tokens[i];
             if token.kind == TokenKind::Hash {
@@ -670,14 +677,12 @@ impl<'a> Parser<'a> {
     /// Lexer emits: Hash+, Quote, (content tokens), Quote, Hash+
     /// Parser assembles and validates matching hash counts
     pub(crate) fn parse_raw_string(&mut self) -> bool {
-        // eprintln!("[PARSE_RAW_STRING] Starting at pos {}", self.current);
         if !self.at(TokenKind::Hash) {
             return false;
         }
 
         // Count opening hashes
         let opening_hashes = self.count_consecutive_hashes();
-        // eprintln!("[PARSE_RAW_STRING] Found {} opening hashes", opening_hashes);
         if opening_hashes == 0 {
             return false;
         }
@@ -712,7 +717,6 @@ impl<'a> Parser<'a> {
                 }
 
                 if p.at_end() {
-                    eprintln!("[PARSE_RAW_STRING] Reached end without finding closing delimiter");
                     p.error(format!(
                         "Unclosed raw string (expected \"{}\")",
                         "#".repeat(opening_hashes)
@@ -723,14 +727,12 @@ impl<'a> Parser<'a> {
                 if p.at(TokenKind::Quote) {
                     // Check if followed by correct number of hashes
                     let closing_hashes = p.count_consecutive_hashes_after_quote();
-                    // eprintln!("[PARSE_RAW_STRING] Found quote with {} closing hashes (need {})", closing_hashes, opening_hashes);
                     if closing_hashes == opening_hashes {
                         // Found matching closing delimiter
                         p.bump(); // Closing "
                         for _ in 0..closing_hashes {
                             p.bump(); // #
                         }
-                        eprintln!("[PARSE_RAW_STRING] Successfully closed raw string");
                         break;
                     }
                 }
@@ -2462,6 +2464,67 @@ mod tests {
             tree_str.contains("RAW_STRING_LITERAL"),
             "Expected to find RAW_STRING_LITERAL in tree, got:\n{}",
             tree_str
+        );
+    }
+
+    #[test]
+    fn test_parse_raw_string_multiline() {
+        // Test multi-line raw string like in everything.baml
+        let input = r##"function GenerateUser() -> User {
+  client ResilientClient
+  prompt #"
+    {{ _.role("system") }}
+    You are a helpful assistant.
+
+    {{ _.role("user") }}
+    Generate a user profile.
+  "#
+}"##;
+
+        eprintln!("\n=== Testing multi-line raw string parsing ===");
+        eprintln!("Input:\n{}\n", input);
+
+        // Tokenize
+        let file_id = FileId::new(0);
+        let tokens = lex_lossless(input, file_id);
+        eprintln!("Tokens: {} total", tokens.len());
+        for (i, token) in tokens.iter().enumerate() {
+            eprintln!("  [{}] {:?} = {:?}", i, token.kind, &token.text[..]);
+        }
+
+        // Parse
+        eprintln!("\nParsing...");
+        let (green, errors) = parse_file(&tokens);
+
+        eprintln!("\nParse complete!");
+        eprintln!("Errors: {}", errors.len());
+        for err in &errors {
+            eprintln!("  - {:?}", err);
+        }
+
+        // Create red tree for printing
+        let syntax = baml_syntax::SyntaxNode::new_root(green);
+        let output = format!("{:#?}", syntax);
+
+        eprintln!("\nSyntax Tree:");
+        eprintln!("{}", output);
+
+        // Check that we have a RAW_STRING_LITERAL node and no errors
+        let tree_str = format!("{:#?}", syntax);
+        assert!(
+            tree_str.contains("RAW_STRING_LITERAL"),
+            "Expected to find RAW_STRING_LITERAL in tree, got:\n{}",
+            tree_str
+        );
+
+        // Should not have "Unclosed raw string" error
+        let has_unclosed_error = errors
+            .iter()
+            .any(|e| format!("{:?}", e).contains("Unclosed raw string"));
+        assert!(
+            !has_unclosed_error,
+            "Found unclosed raw string error: {:?}",
+            errors
         );
     }
 }

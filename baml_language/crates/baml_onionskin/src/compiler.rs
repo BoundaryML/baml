@@ -287,7 +287,7 @@ impl CompilerRunner {
             CompilerPhase::Metrics => self.run_metrics(),
         }
         let elapsed = start.elapsed();
-        eprintln!("[TIMING] {} took {:?}", phase.name(), elapsed);
+        // eprintln!("[TIMING] {} took {:?}", phase.name(), elapsed);
     }
 
     fn run_lexer(&mut self) {
