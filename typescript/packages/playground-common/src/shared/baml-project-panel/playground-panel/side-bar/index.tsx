@@ -138,9 +138,9 @@ export function TestingSidebar() {
             </div>
           )}
           {filteredFunctions.length > 0 && (
-            <SidebarGroup>
-              <SidebarMenu className="gap-0">
-                <SidebarMenuItem>
+            <SidebarGroup className="pl-0">
+              <SidebarMenu className="gap-0 pl-0">
+                <SidebarMenuItem className="pl-0">
                   <SidebarMenuButton
                     onClick={() => {
                       if (areTestsRunning) {
@@ -163,7 +163,7 @@ export function TestingSidebar() {
             </SidebarGroup>
           )}
           {filteredFunctions.length > 0 && <SidebarSeparator />}
-          <SidebarGroup>
+          <SidebarGroup className="pl-0">
             <SidebarMenu className="gap-0.5">
               {filteredFunctions.length > 0 && (
                 <SidebarMenuItem>
@@ -230,7 +230,7 @@ export function TestingSidebar() {
                       )}
                       {func.tests?.length ? (
                         <CollapsibleContent>
-                          <SidebarMenuSub className="pl-8 pr-0 mr-0 space-y-0">
+                          <SidebarMenuSub className="pl-6 pr-0 mr-0 space-y-0">
                             {func.tests.map((test) => (
                               <TestItem
                                 key={test}
