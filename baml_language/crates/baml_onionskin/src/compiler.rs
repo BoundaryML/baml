@@ -12,16 +12,19 @@ use baml_db::{
     RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
     baml_workspace,
 };
+use baml_syntax::ast::{Item, SourceFile as AstSourceFile};
 use baml_syntax::{SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent};
 use regex::Regex;
 use rowan::GreenNode;
 use rowan::NodeCache;
+use rowan::ast::AstNode;
 use salsa::{Event, EventKind, Setter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum CompilerPhase {
     Lexer,
     Parser,
+    Ast,
     Hir,
     Thir,
     Diagnostics,
@@ -33,6 +36,7 @@ impl CompilerPhase {
     pub(crate) const ALL: &'static [CompilerPhase] = &[
         CompilerPhase::Lexer,
         CompilerPhase::Parser,
+        CompilerPhase::Ast,
         CompilerPhase::Hir,
         CompilerPhase::Thir,
         CompilerPhase::Diagnostics,
@@ -43,7 +47,8 @@ impl CompilerPhase {
     pub(crate) fn name(self) -> &'static str {
         match self {
             CompilerPhase::Lexer => "Lexer (Tokens)",
-            CompilerPhase::Parser => "Parser (CST/AST)",
+            CompilerPhase::Parser => "Parser (CST)",
+            CompilerPhase::Ast => "AST (Typed Nodes)",
             CompilerPhase::Hir => "HIR (High-level IR)",
             CompilerPhase::Thir => "THIR (Typed IR)",
             CompilerPhase::Diagnostics => "Diagnostics",
@@ -55,7 +60,8 @@ impl CompilerPhase {
     pub(crate) fn next(self) -> CompilerPhase {
         match self {
             CompilerPhase::Lexer => CompilerPhase::Parser,
-            CompilerPhase::Parser => CompilerPhase::Hir,
+            CompilerPhase::Parser => CompilerPhase::Ast,
+            CompilerPhase::Ast => CompilerPhase::Hir,
             CompilerPhase::Hir => CompilerPhase::Thir,
             CompilerPhase::Thir => CompilerPhase::Diagnostics,
             CompilerPhase::Diagnostics => CompilerPhase::Codegen,
@@ -68,7 +74,8 @@ impl CompilerPhase {
         match self {
             CompilerPhase::Lexer => CompilerPhase::Metrics,
             CompilerPhase::Parser => CompilerPhase::Lexer,
-            CompilerPhase::Hir => CompilerPhase::Parser,
+            CompilerPhase::Ast => CompilerPhase::Parser,
+            CompilerPhase::Hir => CompilerPhase::Ast,
             CompilerPhase::Thir => CompilerPhase::Hir,
             CompilerPhase::Diagnostics => CompilerPhase::Thir,
             CompilerPhase::Codegen => CompilerPhase::Diagnostics,
@@ -264,6 +271,7 @@ impl CompilerRunner {
         for &phase in &[
             CompilerPhase::Lexer,
             CompilerPhase::Parser,
+            CompilerPhase::Ast,
             CompilerPhase::Hir,
             CompilerPhase::Thir,
             CompilerPhase::Diagnostics,
@@ -280,6 +288,7 @@ impl CompilerRunner {
         match phase {
             CompilerPhase::Lexer => self.run_lexer(),
             CompilerPhase::Parser => self.run_parser(),
+            CompilerPhase::Ast => self.run_ast(),
             CompilerPhase::Hir => self.run_hir(),
             CompilerPhase::Thir => self.run_thir(),
             CompilerPhase::Diagnostics => self.run_diagnostics(),
@@ -383,6 +392,71 @@ impl CompilerRunner {
             .insert(CompilerPhase::Parser, output_annotated);
     }
 
+    fn run_ast(&mut self) {
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Sort files alphabetically by path
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(path);
+
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((
+                format!("File: {file_path}"),
+                if file_recomputed {
+                    LineStatus::Recomputed
+                } else {
+                    LineStatus::Unknown
+                },
+            ));
+
+            // Parse and get CST root
+            let tokens = baml_lexer::lex_file(&self.db, *source_file);
+            let (green, _errors) =
+                baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
+            let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());
+
+            // Cast to AST SourceFile to access typed API
+            if let Some(ast_file) = AstSourceFile::cast(syntax_tree) {
+                // Iterate over top-level items
+                for item in ast_file.items() {
+                    let ast_repr = format_ast_item(&item);
+                    writeln!(output, "{ast_repr}").ok();
+                    output_annotated.push((
+                        ast_repr,
+                        if file_recomputed {
+                            LineStatus::Recomputed
+                        } else {
+                            LineStatus::Cached
+                        },
+                    ));
+                }
+            } else {
+                let no_items = "  (unable to parse as AST SourceFile)".to_string();
+                writeln!(output, "{no_items}").ok();
+                output_annotated.push((
+                    no_items,
+                    if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    },
+                ));
+            }
+
+            writeln!(output).ok();
+            output_annotated.push((String::new(), LineStatus::Unknown));
+        }
+
+        self.phase_outputs.insert(CompilerPhase::Ast, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Ast, output_annotated);
+    }
+
     fn run_hir(&mut self) {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
@@ -406,7 +480,7 @@ impl CompilerRunner {
             // Show real HIR items
             if !items.is_empty() {
                 for item in &items {
-                    let item_line = format!("  {item}");
+                    let item_line = format!("  {item:?}");
                     writeln!(output, "{item_line}").ok();
                     output_annotated.push((
                         item_line,
@@ -642,6 +716,383 @@ impl CompilerRunner {
             .get(&CompilerPhase::Metrics)
             .cloned()
             .unwrap_or_default()
+    }
+}
+
+/// Format an AST item into a tree-based string representation
+fn format_ast_item(item: &Item) -> String {
+    let mut output = String::new();
+    format_item_tree(item, &mut output, 0);
+    output
+}
+
+/// Recursively format an AST item as a tree
+fn format_item_tree(item: &Item, output: &mut String, indent: usize) {
+    use baml_syntax::ast::*;
+
+    match item {
+        Item::Function(func) => format_function(func, output, indent),
+        Item::Class(class) => format_class(class, output, indent),
+        Item::Enum(enum_def) => format_enum(enum_def, output, indent),
+        Item::Client(client) => format_client(client, output, indent),
+        Item::Test(test) => format_test(test, output, indent),
+        Item::RetryPolicy(policy) => format_retry_policy(policy, output, indent),
+        Item::TemplateString(template) => format_template_string(template, output, indent),
+        Item::TypeAlias(alias) => format_type_alias(alias, output, indent),
+    }
+}
+
+fn write_indent(output: &mut String, indent: usize) {
+    output.push_str(&"  ".repeat(indent));
+}
+
+fn format_function(func: &baml_syntax::ast::FunctionDef, output: &mut String, indent: usize) {
+    use baml_syntax::ast::*;
+
+    write_indent(output, indent);
+    writeln!(output, "FUNCTION").ok();
+
+    // Function name
+    if let Some(name) = func.name() {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+
+    // Parameters
+    if let Some(param_list) = func.param_list() {
+        let params: Vec<_> = param_list.params().collect();
+        if !params.is_empty() {
+            write_indent(output, indent + 1);
+            writeln!(output, "PARAMS").ok();
+            for param in params {
+                format_parameter(&param, output, indent + 2);
+            }
+        }
+    }
+
+    // Return type
+    if let Some(return_type) = func.return_type() {
+        write_indent(output, indent + 1);
+        writeln!(output, "RETURN_TYPE {}", return_type.syntax().text()).ok();
+    }
+
+    // Body
+    if let Some(expr_body) = func.expr_body() {
+        write_indent(output, indent + 1);
+        writeln!(output, "BODY").ok();
+        format_expr_function_body(&expr_body, output, indent + 2);
+    } else if let Some(llm_body) = func.llm_body() {
+        write_indent(output, indent + 1);
+        writeln!(output, "BODY").ok();
+        format_llm_function_body(&llm_body, output, indent + 2);
+    }
+}
+
+fn format_parameter(param: &baml_syntax::ast::Parameter, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "PARAM").ok();
+
+    // Parameter name
+    if let Some(name_token) = param
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .find(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name_token.text()).ok();
+    }
+
+    // Parameter type
+    if let Some(ty) = param
+        .syntax()
+        .children()
+        .find_map(baml_syntax::ast::TypeExpr::cast)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "TYPE {}", ty.syntax().text()).ok();
+    }
+}
+
+fn format_expr_function_body(
+    body: &baml_syntax::ast::ExprFunctionBody,
+    output: &mut String,
+    indent: usize,
+) {
+    use baml_syntax::ast::*;
+
+    // Look for block expression or other expression types
+    if let Some(block) = body.syntax().children().find_map(BlockExpr::cast) {
+        write_indent(output, indent);
+        writeln!(output, "EXPR_BLOCK").ok();
+        format_block_expr(&block, output, indent + 1);
+    } else if let Some(expr) = body.syntax().children().find_map(Expr::cast) {
+        format_expr(&expr, output, indent);
+    } else {
+        // Fallback: show raw syntax
+        write_indent(output, indent);
+        writeln!(output, "EXPR {}", body.syntax().text()).ok();
+    }
+}
+
+fn format_llm_function_body(
+    body: &baml_syntax::ast::LlmFunctionBody,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "LLM_BODY").ok();
+
+    // Show config items
+    for config_item in body
+        .syntax()
+        .children()
+        .filter_map(baml_syntax::ast::ConfigItem::cast)
+    {
+        format_config_item(&config_item, output, indent + 1);
+    }
+}
+
+fn format_config_item(item: &baml_syntax::ast::ConfigItem, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    let text = item.syntax().text().to_string();
+    // Truncate long config values
+    if text.len() > 60 {
+        writeln!(output, "CONFIG {}...", &text[..60]).ok();
+    } else {
+        writeln!(output, "CONFIG {}", text).ok();
+    }
+}
+
+fn format_block_expr(block: &baml_syntax::ast::BlockExpr, output: &mut String, indent: usize) {
+    use baml_syntax::ast::*;
+
+    // Iterate through statements in the block
+    for child in block.syntax().children() {
+        if let Some(let_stmt) = LetStmt::cast(child.clone()) {
+            format_let_stmt(&let_stmt, output, indent);
+        } else if let Some(if_expr) = IfExpr::cast(child.clone()) {
+            format_if_expr(&if_expr, output, indent);
+        } else if let Some(expr) = Expr::cast(child.clone()) {
+            format_expr(&expr, output, indent);
+        }
+    }
+}
+
+fn format_let_stmt(stmt: &baml_syntax::ast::LetStmt, output: &mut String, indent: usize) {
+    use baml_syntax::ast::*;
+
+    write_indent(output, indent);
+    writeln!(output, "STMT_LET").ok();
+
+    // Find the identifier name
+    if let Some(name_token) = stmt
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .find(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name_token.text()).ok();
+    }
+
+    // Find the value expression
+    if let Some(expr) = stmt.syntax().children().find_map(Expr::cast) {
+        write_indent(output, indent + 1);
+        writeln!(output, "VALUE").ok();
+        format_expr(&expr, output, indent + 2);
+    }
+}
+
+fn format_if_expr(if_expr: &baml_syntax::ast::IfExpr, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "EXPR_IF").ok();
+
+    // Condition
+    write_indent(output, indent + 1);
+    writeln!(output, "CONDITION").ok();
+    if let Some(cond) = if_expr
+        .syntax()
+        .children()
+        .find_map(baml_syntax::ast::Expr::cast)
+    {
+        format_expr(&cond, output, indent + 2);
+    }
+
+    // Then branch
+    write_indent(output, indent + 1);
+    writeln!(output, "THEN").ok();
+    if let Some(then_block) = if_expr
+        .syntax()
+        .children()
+        .filter_map(baml_syntax::ast::BlockExpr::cast)
+        .next()
+    {
+        format_block_expr(&then_block, output, indent + 2);
+    }
+}
+
+fn format_expr(expr: &baml_syntax::ast::Expr, output: &mut String, indent: usize) {
+    let text = expr.syntax().text().to_string();
+
+    // If expression is simple (< 40 chars), inline it
+    if text.len() < 40 && !text.contains('\n') {
+        write_indent(output, indent);
+        writeln!(output, "EXPR {}", text.trim()).ok();
+    } else {
+        // Complex expression: show structure
+        write_indent(output, indent);
+        writeln!(output, "EXPR").ok();
+        write_indent(output, indent + 1);
+        writeln!(output, "{}", text.trim()).ok();
+    }
+}
+
+fn format_class(class: &baml_syntax::ast::ClassDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "CLASS").ok();
+
+    // Class name
+    if let Some(name) = class.name() {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+
+    // Fields
+    let fields: Vec<_> = class.fields().collect();
+    if !fields.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "FIELDS").ok();
+        for field in fields {
+            format_field(&field, output, indent + 2);
+        }
+    }
+}
+
+fn format_field(field: &baml_syntax::ast::Field, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "FIELD").ok();
+
+    // Field name
+    if let Some(name) = field.name() {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+
+    // Field type
+    if let Some(ty) = field.ty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "TYPE {}", ty.syntax().text()).ok();
+    }
+}
+
+fn format_enum(enum_def: &baml_syntax::ast::EnumDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "ENUM").ok();
+
+    // Enum name
+    if let Some(name) = enum_def
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_client(client: &baml_syntax::ast::ClientDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "CLIENT").ok();
+
+    // Client name
+    if let Some(name) = client
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_test(test: &baml_syntax::ast::TestDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "TEST").ok();
+
+    // Test name
+    if let Some(name) = test
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_retry_policy(
+    policy: &baml_syntax::ast::RetryPolicyDef,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "RETRY_POLICY").ok();
+
+    // Policy name
+    if let Some(name) = policy
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_template_string(
+    template: &baml_syntax::ast::TemplateStringDef,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "TEMPLATE_STRING").ok();
+
+    // Template name
+    if let Some(name) = template
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_type_alias(alias: &baml_syntax::ast::TypeAliasDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "TYPE_ALIAS").ok();
+
+    // Alias name
+    if let Some(name) = alias
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
     }
 }
 

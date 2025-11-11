@@ -130,13 +130,14 @@ fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
     for &phase in &[
         CompilerPhase::Lexer,
         CompilerPhase::Parser,
+        CompilerPhase::Ast,
         CompilerPhase::Hir,
     ] {
         println!("\n### {} ###", phase.name());
         let annotated = compiler.get_annotated_output(phase);
 
-        // Show first 40 lines
-        for (line, status) in annotated.iter().take(40) {
+        // Show all lines (no limit)
+        for (line, status) in annotated.iter() {
             let marker = match status {
                 compiler::LineStatus::Recomputed => "(red)",
                 compiler::LineStatus::Cached => "(green)",

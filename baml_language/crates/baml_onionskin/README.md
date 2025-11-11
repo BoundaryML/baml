@@ -104,12 +104,6 @@ cargo build --bin baml_onionskin
 The tool uses:
 - **ratatui** for the terminal UI
 - **notify** for file system watching
-- **similar** for diffing (inspired by animation frame comparison)
+- **similar** for diffing
 - **clap** for CLI argument parsing
-- The full BAML compiler pipeline from `baml_db`
-
-The output formatting matches the snapshot format used in `baml_tests` for consistency.
-
-## Why "Onionskin"?
-
-The name comes from traditional animation, where artists draw on translucent "onion skin" paper that allows them to see previous drawings underneath. This tool brings that same layered comparison approach to compiler development - letting you see how your changes ripple through each compilation phase.
+- The full BAML compiler pipeline

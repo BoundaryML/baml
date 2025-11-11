@@ -9,6 +9,19 @@ use text_size::TextRange;
 
 use crate::ParseError;
 
+/// Parse tokens using a caller-provided [`NodeCache`] so that identical
+/// subtrees from previous parses can be reused.
+pub fn parse_file_with_cache(
+    tokens: &[Token],
+    cache: &mut NodeCache,
+) -> (GreenNode, Vec<ParseError>) {
+    parse_impl(tokens, Some(cache))
+}
+
+pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
+    parse_impl(tokens, None)
+}
+
 /// Map lexer token kinds to syntax kinds.
 fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
     match kind {
@@ -57,6 +70,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Comma => SyntaxKind::COMMA,
         TokenKind::Semicolon => SyntaxKind::SEMICOLON,
         TokenKind::Dot => SyntaxKind::DOT,
+        TokenKind::Dollar => SyntaxKind::DOLLAR,
 
         // Special operators
         TokenKind::Arrow => SyntaxKind::ARROW,
@@ -362,16 +376,6 @@ impl<'a> Parser<'a> {
     /// Consume current token, including all trivia before it (whitespace, newlines, comments).
     /// This is used for normal top-level parsing.
     fn bump(&mut self) {
-        static BUMP_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let count = BUMP_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if count % 1000 == 0 {
-            // eprintln!(
-            //     "[BUMP] Called {} times, pos {}/{}",
-            //     count,
-            //     self.current,
-            //     self.tokens.len()
-            // );
-        }
         self.bump_impl(true);
     }
 
@@ -384,13 +388,6 @@ impl<'a> Parser<'a> {
 
     /// Internal: Consume current token with optional comment pattern recognition
     fn bump_impl(&mut self, recognize_comments: bool) {
-        static BUMP_IMPL_COUNT: std::sync::atomic::AtomicUsize =
-            std::sync::atomic::AtomicUsize::new(0);
-        let count = BUMP_IMPL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if count % 5000 == 0 {
-            // eprintln!("[BUMP_IMPL] Called {} times", count);
-        }
-
         // Emit all trivia before the token
         let mut loop_count = 0;
         while self.current < self.tokens.len() {
@@ -512,16 +509,7 @@ impl<'a> Parser<'a> {
         };
         let mut errors = Vec::new();
 
-        let mut event_count = 0;
-        let n_events = self.events.len();
         for event in self.events {
-            event_count += 1;
-            if event_count % 10000 == 0 {
-                // eprintln!(
-                //     "[BUILD_TREE] Processing event {}/{}",
-                //     event_count, &n_events
-                // );
-            }
             match event {
                 Event::StartNode { kind } => {
                     builder.start_node(kind.into());
@@ -1475,15 +1463,20 @@ impl<'a> Parser<'a> {
                 self.parse_expr();
                 self.expect(TokenKind::RBracket);
                 self.finish_node();
-            } else if op == TokenKind::Dot {
-                // Field access
+            } else if op == TokenKind::Dot || op == TokenKind::Dollar {
+                // Field access (including special .$field syntax for watch variables)
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::FIELD_ACCESS_EXPR);
-                self.bump(); // .
+                self.bump(); // . or $
                 if self.at(TokenKind::Word) {
                     self.bump();
                 } else {
-                    self.error("Expected field name after '.'".to_string());
+                    let punct = if op == TokenKind::Dollar {
+                        "'$'"
+                    } else {
+                        "'.'"
+                    };
+                    self.error(format!("Expected field name after {}", punct));
                 }
                 self.finish_node();
             } else if op == TokenKind::LBrace {
@@ -2021,30 +2014,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_config_block(&mut self) {
-        // eprintln!("[PARSE_CONFIG_BLOCK] Starting at pos {}", self.current);
         self.with_node(SyntaxKind::CONFIG_BLOCK, |p| {
             p.expect(TokenKind::LBrace);
 
-            let mut config_item_count = 0;
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                config_item_count += 1;
-                // eprintln!(
-                //     "[PARSE_CONFIG_BLOCK] Item #{}, pos {}/{}, current: {:?}",
-                //     config_item_count,
-                //     p.current,
-                //     p.tokens.len(),
-                //     p.current()
-                //         .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
-                // );
-
-                if config_item_count > 1000 {
-                    // eprintln!(
-                    //     "[PARSE_CONFIG_BLOCK] ERROR: More than 1000 config items! Infinite loop!"
-                    // );
-                    p.error("Config block parsing exceeded item limit".to_string());
-                    break;
-                }
-
                 p.parse_config_item();
             }
 
@@ -2053,25 +2026,13 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_config_item(&mut self) {
-        // eprintln!(
-        //     "[PARSE_CONFIG_ITEM] Starting at pos {}, token: {:?}",
-        //     self.current,
-        //     self.current()
-        //         .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
-        // );
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
             // Config key (identifier)
             if p.at(TokenKind::Word) {
-                // eprintln!("[PARSE_CONFIG_ITEM] Found config key");
                 p.bump();
             } else {
-                // eprintln!(
-                //     "[PARSE_CONFIG_ITEM] ERROR: Expected config key, got {:?}",
-                //     p.current().map(|t| t.kind)
-                // );
                 p.error("Expected config key".to_string());
                 if !p.at_end() {
-                    // eprintln!("[PARSE_CONFIG_ITEM] Consuming bad token to advance");
                     p.bump();
                 }
                 return;
@@ -2079,11 +2040,9 @@ impl<'a> Parser<'a> {
 
             // Config value - can be nested block or simple value
             if p.at(TokenKind::LBrace) {
-                // eprintln!("[PARSE_CONFIG_ITEM] Parsing nested config block");
                 // Nested config block
                 p.parse_config_block();
             } else {
-                // eprintln!("[PARSE_CONFIG_ITEM] Parsing config value");
                 // Simple value - unquoted string or other expression
                 p.parse_config_value();
             }
@@ -2092,7 +2051,6 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_config_value(&mut self) {
-        // eprintln!("[PARSE_CONFIG_VALUE] Starting at pos {}", self.current);
         self.with_node(SyntaxKind::CONFIG_VALUE, |p| {
             // Config values can be:
             // - Strings: "value"
@@ -2101,38 +2059,22 @@ impl<'a> Parser<'a> {
             // - Numbers: 123, 3.14
 
             if p.parse_any_string() {
-                // eprintln!("[PARSE_CONFIG_VALUE] Parsed as string");
                 // String value
                 return;
             }
 
-            // eprintln!("[PARSE_CONFIG_VALUE] Parsing as unquoted value");
             // Parse unquoted string - consume tokens until newline, comma, or brace
-            let mut loop_counter = 0;
             while !p.at_end() {
-                loop_counter += 1;
-                if loop_counter > 10000 {
-                    // eprintln!("[PARSE_CONFIG_VALUE] ERROR: Loop exceeded 10000 iterations!");
-                    p.error("Config value parsing exceeded iteration limit".to_string());
-                    break;
-                }
-
                 // Check if we should stop - at brace/comma OR newline is ahead
                 if p.at(TokenKind::RBrace)
                     || p.at(TokenKind::LBrace)
                     || p.at(TokenKind::Comma)
                     || p.has_newline_ahead()
                 {
-                    // eprintln!(
-                    //     "[PARSE_CONFIG_VALUE] Breaking - at end of line or brace, pos {}, has_newline_ahead: {}",
-                    //     p.current,
-                    //     p.has_newline_ahead()
-                    // );
                     break;
                 }
                 p.bump();
             }
-            // eprintln!("[PARSE_CONFIG_VALUE] Finished at pos {}", p.current);
         });
     }
 
@@ -2246,7 +2188,6 @@ impl<'a> Parser<'a> {
 ///
 /// Returns the green tree and any parse errors encountered.
 fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
-    // eprintln!("[PARSE_IMPL] Starting with {} tokens", tokens.len());
     let mut parser = Parser::new(tokens);
 
     parser.start_node(SyntaxKind::SOURCE_FILE);
@@ -2255,15 +2196,6 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
     let mut item_count = 0;
     while !parser.at_end() {
         item_count += 1;
-        // eprintln!(
-        //     "[PARSE_IMPL] Item #{}, pos {}/{}, current token: {:?}",
-        //     item_count,
-        //     parser.current,
-        //     parser.tokens.len(),
-        //     parser
-        //         .current()
-        //         .map(|t| (t.kind, &t.text[..t.text.len().min(20)]))
-        // );
 
         if parser.at(TokenKind::Enum) {
             parser.parse_enum();
@@ -2301,25 +2233,8 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
 
     parser.finish_node();
 
-    // eprintln!(
-    //     "[PARSE_IMPL] Finished parsing, building tree with {} events",
-    //     parser.events.len()
-    // );
     let result = parser.build_tree(cache);
     result
-}
-
-pub fn parse_file(tokens: &[Token]) -> (GreenNode, Vec<ParseError>) {
-    parse_impl(tokens, None)
-}
-
-/// Parse tokens using a caller-provided [`NodeCache`] so that identical
-/// subtrees from previous parses can be reused.
-pub fn parse_file_with_cache(
-    tokens: &[Token],
-    cache: &mut NodeCache,
-) -> (GreenNode, Vec<ParseError>) {
-    parse_impl(tokens, Some(cache))
 }
 
 #[cfg(test)]

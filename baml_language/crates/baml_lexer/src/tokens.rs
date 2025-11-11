@@ -138,6 +138,8 @@ pub enum TokenKind {
     Semicolon,
     #[token(".")]
     Dot,
+    #[token("$")]
+    Dollar,
 
     // Operators (order matters! Longer tokens first)
     #[token("->")]

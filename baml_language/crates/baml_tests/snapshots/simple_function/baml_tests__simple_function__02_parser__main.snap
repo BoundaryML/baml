@@ -1,6 +1,5 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 4524
 expression: output
 ---
 === SYNTAX TREE ===
@@ -29,13 +28,7 @@ SOURCE_FILE
         WORD "prompt"
         RAW_STRING_LITERAL " #"
     Say hello to {{name}}
-  "#
-}
-
-class User {
-  name string
-  age int
-}"
+  "#"
           HASH "#"
           QUOTE """
           WORD "Say"
@@ -48,15 +41,20 @@ class User {
           R_BRACE "}"
           QUOTE """
           HASH "#"
-          R_BRACE "}"
-          KW_CLASS "class"
-          WORD "User"
-          L_BRACE "{"
-          WORD "name"
-          WORD "string"
-          WORD "age"
-          WORD "int"
-          R_BRACE "}"
+      R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "User"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR " string"
+        WORD "string"
+    FIELD
+      WORD "age"
+      TYPE_EXPR " int"
+        WORD "int"
+    R_BRACE "}"
   SLASH "/"
   SLASH "/"
   WORD "Added"
@@ -67,5 +65,4 @@ class User {
   WORD "comment"
 
 === ERRORS ===
-  Expected Unclosed raw string (expected "#"), found Unclosed raw string (expected "#")
-  Expected Expected RBrace, found EOF, found Expected RBrace, found EOF
+None

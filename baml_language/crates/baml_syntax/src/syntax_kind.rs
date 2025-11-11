@@ -59,6 +59,7 @@ pub enum SyntaxKind {
     COMMA,        // ,
     SEMICOLON,    // ;
     DOT,          // .
+    DOLLAR,       // $
     ARROW,        // ->
     AT,           // @
     AT_AT,        // @@
