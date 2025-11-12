@@ -24,6 +24,7 @@ baml_diagnostics = { path = "crates/baml_diagnostics" }
 baml_hir = { path = "crates/baml_hir" }
 baml_lexer = { path = "crates/baml_lexer" }
 baml_parser = { path = "crates/baml_parser" }
+baml_onionskin = { path = "crates/baml_onionskin" }
 baml_syntax = { path = "crates/baml_syntax" }
 baml_tests = { path = "crates/baml_tests" }
 baml_thir = { path = "crates/baml_thir" }

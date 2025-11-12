@@ -283,9 +283,7 @@ fn generate_lexer_test(
     writeln!(file, "        for token in tokens.iter() {{")?;
     writeln!(file, "            if !matches!(token.kind,")?;
     writeln!(file, "                baml_lexer::TokenKind::Whitespace |")?;
-    writeln!(file, "                baml_lexer::TokenKind::Newline |")?;
-    writeln!(file, "                baml_lexer::TokenKind::LineComment |")?;
-    writeln!(file, "                baml_lexer::TokenKind::BlockComment")?;
+    writeln!(file, "                baml_lexer::TokenKind::Newline")?;
     writeln!(file, "            ) {{")?;
     writeln!(
         file,
