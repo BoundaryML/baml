@@ -8,6 +8,7 @@ import {
   selectedInputSourceAtom,
   workflowsAtom,
   bamlFilesAtom,
+  allFunctionsMapAtom,
 } from '../atoms/core.atoms';
 import { activeTabAtom } from '../../shared/baml-project-panel/playground-panel/unified-atoms';
 import type { FunctionWithCallGraph } from '../interface';
@@ -123,31 +124,53 @@ function applyNavigationAction(
   switch (action.type) {
     case 'switch-workflow': {
       console.log('🔄 Switching to workflow:', action.workflowId);
+
+      // Auto-select first test if available
+      let testName = null;
+      const allFunctions: Map<string, FunctionWithCallGraph> = get(allFunctionsMapAtom);
+      const func = allFunctions.get(action.workflowId);
+      if (func && func.testCases && func.testCases.length > 0) {
+        testName = func.testCases[0]!.name;
+        console.log('  → Auto-selecting first test:', testName);
+      }
+
       setSelection(set, (prev: any) => ({
         ...prev,
         functionName: action.workflowId,
-        testName: null,
+        testName,
         activeWorkflowId: action.workflowId,
         selectedNodeId: action.workflowId,
       }));
       set(activeTabAtom, 'graph');
-      selectTestInput(set, '', undefined);
+      selectTestInput(set, action.workflowId, testName ?? undefined);
       openDetailPanel(set);
       break;
     }
 
     case 'select-node': {
       console.log('🎯 Selecting node in current workflow:', action.nodeId);
+
+      // Auto-select first test if no test specified
+      let testName = action.testId ?? null;
+      if (!testName) {
+        const allFunctions: Map<string, FunctionWithCallGraph> = get(allFunctionsMapAtom);
+        const func = allFunctions.get(action.nodeId);
+        if (func && func.testCases.length > 0) {
+          testName = func.testCases[0]!.name;
+          console.log('  → Auto-selecting first test:', testName);
+        }
+      }
+
       setSelection(set, (prev: any) => ({
         ...prev,
         functionName: action.nodeId,
-        testName: action.testId ?? null,
+        testName,
         activeWorkflowId: action.workflowId,
         selectedNodeId: action.nodeId,
       }));
       set(activeTabAtom, 'graph');
       openDetailPanel(set);
-      selectTestInput(set, action.nodeId, action.testId);
+      selectTestInput(set, action.nodeId, testName ?? undefined);
       schedule(() => panToNode(action.nodeId), 100);
       break;
     }
@@ -171,10 +194,21 @@ function applyNavigationAction(
 
       const targetNodeId = resolveNodeId(workflow, action.nodeId);
 
+      // Auto-select first test if no test specified
+      let testName = action.testId ?? null;
+      if (!testName) {
+        const allFunctions: Map<string, FunctionWithCallGraph> = get(allFunctionsMapAtom);
+        const func = allFunctions.get(action.nodeId);
+        if (func && func.testCases.length > 0) {
+          testName = func.testCases[0]!.name;
+          console.log('  → Auto-selecting first test:', testName);
+        }
+      }
+
       setSelection(set, (prev: any) => ({
         ...prev,
         functionName: action.nodeId,
-        testName: action.testId ?? null,
+        testName,
         activeWorkflowId: action.workflowId,
         selectedNodeId: action.nodeId,
       }));
@@ -186,7 +220,7 @@ function applyNavigationAction(
           selectedNodeId: targetNodeId,
         }));
         openDetailPanel(set);
-        selectTestInput(set, targetNodeId, action.testId);
+        selectTestInput(set, targetNodeId, testName ?? undefined);
       };
 
       schedule(() => {
