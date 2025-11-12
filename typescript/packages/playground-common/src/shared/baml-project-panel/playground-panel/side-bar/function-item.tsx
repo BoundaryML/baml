@@ -179,7 +179,7 @@ export function FunctionItem({ functionName, tests, functionFlavor, isSelected =
     <SidebarMenuButton
       isActive={isSelected}
       className={`flex justify-between items-center w-full pl-8 cursor-pointer text-[10px] py-0.5 h-6 ${
-        isSelected ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
+        isSelected ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : ''
       }`}
       onClick={handleClick}
     >

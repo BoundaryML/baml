@@ -32,7 +32,7 @@ import {
   Square,
 } from 'lucide-react';
 import * as React from 'react';
-import { selectedItemAtom, areTestsRunningAtom } from '../atoms';
+import { areTestsRunningAtom } from '../atoms';
 import { useRunBamlTests } from '../prompt-preview/test-panel/test-runner';
 import { testHistoryAtom, selectedHistoryIndexAtom } from '../prompt-preview/test-panel/atoms';
 import { functionsAtom, isSidebarOpenAtom } from './atoms';
@@ -41,6 +41,7 @@ import { SearchForm } from './search-form';
 import { TestItem } from './test-item';
 import type { FunctionData } from './types';
 import { Button } from '@baml/ui/button';
+import { unifiedSelectionStateAtom } from '../../../../sdk/atoms/core.atoms';
 
 export { isSidebarOpenAtom };
 
@@ -51,7 +52,7 @@ export function TestingSidebar() {
     new Set(),
   );
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests();
-  const selectedItem = useAtomValue(selectedItemAtom);
+  const selection = useAtomValue(unifiedSelectionStateAtom);
   const areTestsRunning = useAtomValue(areTestsRunningAtom);
   const testHistory = useAtomValue(testHistoryAtom);
   const selectedIndex = useAtomValue(selectedHistoryIndexAtom);
@@ -201,7 +202,7 @@ export function TestingSidebar() {
                         functionName={func.name}
                         tests={func.tests}
                         functionFlavor={func.functionFlavor}
-                        isSelected={selectedItem?.[0] === func.name && !selectedItem?.[1]}
+                        isSelected={selection.selectedNodeId === func.name || selection.functionName === func.name}
                         onToggle={() => {
                           // Toggle expansion when clicked
                           handleToggleCollapsible(func.name);
@@ -245,8 +246,8 @@ export function TestingSidebar() {
                                 key={test}
                                 label={test}
                                 isSelected={
-                                  selectedItem?.[0] === func.name &&
-                                  selectedItem?.[1] === test
+                                  selection.functionName === func.name &&
+                                  selection.testName === test
                                 }
                                 searchTerm={searchTerm}
                                 functionName={func.name}

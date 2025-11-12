@@ -11,7 +11,7 @@ import { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-was
 import { ErrorBoundary } from 'react-error-boundary'
 import { Button } from '@baml/ui/button'
 import { TruncatedString } from '../../TruncatedString'
-import { selectedItemAtom, testcaseObjectAtom, TestState } from '../../../atoms'
+import { testcaseObjectAtom, TestState } from '../../../atoms'
 import { type TestHistoryRun } from '../atoms'
 import { useRunBamlTests } from '../test-runner'
 import { getExplanation, getStatus, getTestStateResponse } from '../testStateUtils'
@@ -19,6 +19,7 @@ import { ResponseViewType, tabularViewConfigAtom } from './atoms'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ParsedResponseRenderer } from './ParsedResponseRender'
 import { navigationDispatcherAtom } from '../../../../../../sdk/navigation/dispatcher'
+import { unifiedSelectionStateAtom } from '../../../../../../sdk/atoms/core.atoms'
 import { TestStatus } from './TestStatus'
 import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
 import { useMemo } from 'react'
@@ -119,7 +120,7 @@ const ResponseContent = ({
 export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
   const [config, setConfig] = useAtom(tabularViewConfigAtom)
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
-  const selectedItem = useAtomValue(selectedItemAtom)
+  const selection = useAtomValue(unifiedSelectionStateAtom)
   const dispatchNavigation = useSetAtom(navigationDispatcherAtom)
 
   const toggleConfig = (key: keyof typeof config) => {
@@ -137,8 +138,8 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
   }
 
   const testAtom = useMemo(
-    () => testcaseObjectAtom({ functionName: selectedItem?.[0] ?? '', testcaseName: selectedItem?.[1] ?? '' }),
-    [selectedItem],
+    () => testcaseObjectAtom({ functionName: selection.functionName ?? '', testcaseName: selection.testName ?? '' }),
+    [selection.functionName, selection.testName],
   )
   const tc = useAtomValue(testAtom)
 
@@ -147,13 +148,13 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
 
 
   React.useEffect(() => {
-    if (selectedItem && selectedRowRef.current) {
+    if (selection.functionName && selection.testName && selectedRowRef.current) {
       selectedRowRef.current.scrollIntoView({
         behavior: 'smooth',
         block: 'nearest',
       })
     }
-  }, [selectedItem])
+  }, [selection.functionName, selection.testName])
 
   // Create memoized retry handlers for each test to prevent re-renders
   const createRetryHandler = useMemo(() => {
@@ -232,7 +233,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
         </TableHeader>
         <TableBody>
           {currentRun?.tests.map((test, index) => {
-            const isSelected = selectedItem?.[0] === test.functionName && selectedItem?.[1] === test.testName
+            const isSelected = selection.functionName === test.functionName && selection.testName === test.testName
             const isThisTestRunning = test.response.status === 'running'
 
             return (

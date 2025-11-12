@@ -129,7 +129,7 @@ export function TestItem({
         onClick={handleClick}
         isActive={isSelected}
         className={`flex justify-between items-center w-full text-[10px] py-0.5 h-6 ${
-          isSelected ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
+          isSelected ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : ''
         }`}
       >
         <div className="flex items-center min-w-0 gap-1.5">

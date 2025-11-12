@@ -27,7 +27,7 @@ import { showApiKeyDialogAtom } from '../../../components/api-keys-dialog/atoms'
 import { proxyUrlAtom } from '../atoms';
 import { ThemeToggle } from '../theme/ThemeToggle';
 import { vscode } from '../vscode';
-import { areTestsRunningAtom, selectedItemAtom, selectionAtom } from './atoms';
+import { areTestsRunningAtom, selectionAtom } from './atoms';
 import { FunctionTestName } from './function-test-name';
 import { WorkflowNodeName } from './workflow-node-name';
 import { unifiedSelectionAtom } from './unified-atoms';
@@ -47,7 +47,7 @@ export const displaySettingsAtom = atom({
 const RunButton: React.FC<{ className?: string }> = ({ className }) => {
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests();
   const isRunning = useAtomValue(areTestsRunningAtom);
-  const selected = useAtomValue(selectedItemAtom);
+  const selection = useAtomValue(unifiedSelectionAtom);
 
   return (
     <Button
@@ -60,13 +60,13 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
           : 'bg-purple-600 hover:bg-purple-700 text-white',
         className
       )}
-      disabled={!isRunning && selected === undefined}
+      disabled={!isRunning && (!selection.functionName || !selection.testName)}
       onClick={() => {
         if (isRunning) {
           cancelTests();
-        } else if (selected) {
+        } else if (selection.functionName && selection.testName) {
           void runBamlTests([
-            { functionName: selected[0], testName: selected[1] },
+            { functionName: selection.functionName, testName: selection.testName },
           ]);
         }
       }}
@@ -89,7 +89,6 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
 export const isClientCallGraphEnabledAtom = atom(false);
 
 export function PreviewToolbar() {
-  const selections = useAtomValue(selectedItemAtom);
   const { selectedFn } = useAtomValue(selectionAtom);
   const unifiedSelection = useAtomValue(unifiedSelectionAtom);
   const setShowApiKeyDialog = useSetAtom(showApiKeyDialogAtom);
@@ -158,7 +157,7 @@ export function PreviewToolbar() {
               <div className="min-w-0 flex-1 overflow-hidden">
                 <FunctionTestName
                   functionName={selectedFn.name}
-                  testName={selections?.[1]}
+                  testName={unifiedSelection.testName}
                 />
               </div>
 

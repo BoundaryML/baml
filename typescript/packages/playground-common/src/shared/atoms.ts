@@ -55,11 +55,6 @@ import { selectedTestHistoryAtom } from '../sdk/atoms/test.atoms';
 // ============================================================================
 
 /**
- * @deprecated Use selectionAtom instead
- */
-export const selectedItemAtom = selectionAtom;
-
-/**
  * @deprecated Use selectedFunctionObjectAtom instead
  */
 export const functionObjectAtom = selectedFunctionObjectAtom;

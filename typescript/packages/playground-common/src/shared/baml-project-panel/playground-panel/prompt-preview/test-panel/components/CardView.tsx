@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { Button } from '@baml/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@baml/ui/tooltip'
 import { cn } from '@baml/ui/lib/utils'
-import { selectedItemAtom, testCaseResponseAtom, type TestState, testcaseObjectAtom } from '../../../atoms'
+import { testCaseResponseAtom, type TestState, testcaseObjectAtom } from '../../../atoms'
 import { FunctionTestName } from '../../../function-test-name'
 import { type TestHistoryRun } from '../atoms'
 import { useRunBamlTests } from '../test-runner'
@@ -14,6 +14,7 @@ import { ResponseRenderer } from './ResponseRenderer'
 import { TestStatus } from './TestStatus'
 import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
 import { navigationDispatcherAtom } from '../../../../../../sdk/navigation/dispatcher'
+import { unifiedSelectionStateAtom } from '../../../../../../sdk/atoms/core.atoms'
 
 export const CardView = ({ currentRun }: { currentRun?: TestHistoryRun }) => {
   return (
@@ -46,11 +47,11 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
   const displayResponse = historicalResponse || response
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
   const dispatchNavigation = useSetAtom(navigationDispatcherAtom)
-  const selectedItem = useAtomValue(selectedItemAtom)
+  const selection = useAtomValue(unifiedSelectionStateAtom)
   const tc = useAtomValue(testcaseObjectAtom({ functionName: testId.functionName, testcaseName: testId.testName }))
   const cardRef = useRef<HTMLDivElement>(null)
 
-  const isSelected = selectedItem?.[0] === testId.functionName && selectedItem?.[1] === testId.testName
+  const isSelected = selection.functionName === testId.functionName && selection.testName === testId.testName
   const isThisTestRunning = displayResponse?.status === 'running'
 
   useEffect(() => {

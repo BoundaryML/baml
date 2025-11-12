@@ -80,32 +80,6 @@ export const graphControlsTipDismissedAtom = atomWithStorage(
 );
 
 // ============================================================================
-// Derived Selection Atoms
-// ============================================================================
-
-export const selectedItemAtom = atom(
-  (get) => {
-    const selected = get(selectionAtom);
-    if (
-      selected.selectedFn === null ||
-      selected.selectedTc === null
-    ) {
-      return undefined;
-    }
-    return [selected.selectedFn.name, selected.selectedTc.name] as [
-      string,
-      string,
-    ];
-  },
-  (_get, _set, _functionName: string, _testcaseName: string | undefined) => {
-    throw new Error(
-      'selectedItemAtom setter is deprecated. Use navigationDispatcherAtom directly instead. ' +
-      'See function-item.tsx and test-item.tsx for examples.'
-    );
-  },
-);
-
-// ============================================================================
 // Function & Test Case Helpers
 // ============================================================================
 
