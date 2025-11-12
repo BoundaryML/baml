@@ -107,7 +107,9 @@ export const UnifiedPromptPreview = () => {
   // Auto-switch to default tab when view mode changes
   useEffect(() => {
     setActiveTab(viewMode.defaultTab);
-  }, [viewMode.defaultTab, setActiveTab]);
+  }, [viewMode.defaultTab, viewMode.showLLMTabs, setActiveTab]);
+
+  console.log('activeTab', activeTab);
 
   // Hide text when sidebar is open or on smaller screens
   const getButtonTextClass = () => {

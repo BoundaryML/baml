@@ -33,6 +33,7 @@ import {
   wasmPanicAtom,
   featureFlagsAtom,
   envVarsAtom,
+  bamlFilesAtom,
   bamlFilesTrackedAtom,
   sandboxFilesTrackedAtom,
   vscodeSettingsAtom,
@@ -106,8 +107,16 @@ export class JotaiStorage implements SDKStorage {
   }
 
   setActiveWorkflowId(id: string | null) {
-    const current = this.store.get(unifiedSelectionStateAtom);
-    this.store.set(unifiedSelectionStateAtom, { ...current, activeWorkflowId: id });
+    if (id === null) {
+      this.store.set(unifiedSelectionStateAtom, { mode: 'empty' });
+    } else {
+      this.store.set(unifiedSelectionStateAtom, {
+        mode: 'workflow',
+        workflowId: id,
+        selectedNodeId: id,
+        testName: null,
+      });
+    }
   }
 
   getActiveWorkflowId() {
@@ -319,6 +328,10 @@ export class JotaiStorage implements SDKStorage {
     return this.store.get(bamlFilesTrackedAtom);
   }
 
+  setParsedBAMLFiles(files: any[]) {
+    this.store.set(bamlFilesAtom, files);
+  }
+
   setSandboxFiles(files: Record<string, string>) {
     this.store.set(sandboxFilesTrackedAtom, files);
   }
@@ -353,7 +366,17 @@ export class JotaiStorage implements SDKStorage {
 
   setSelectedFunctionName(name: string | null) {
     const current = this.store.get(unifiedSelectionStateAtom);
-    this.store.set(unifiedSelectionStateAtom, { ...current, functionName: name });
+    if (name === null) {
+      this.store.set(unifiedSelectionStateAtom, { mode: 'empty' });
+    } else {
+      // Preserve testName if we're already in function mode
+      const testName = current.mode === 'function' ? current.testName : null;
+      this.store.set(unifiedSelectionStateAtom, {
+        mode: 'function',
+        functionName: name,
+        testName,
+      });
+    }
   }
 
   getSelectedFunctionName() {
@@ -362,7 +385,19 @@ export class JotaiStorage implements SDKStorage {
 
   setSelectedTestCaseName(name: string | null) {
     const current = this.store.get(unifiedSelectionStateAtom);
-    this.store.set(unifiedSelectionStateAtom, { ...current, testName: name });
+    // Update testName based on current mode
+    if (current.mode === 'workflow') {
+      this.store.set(unifiedSelectionStateAtom, {
+        ...current,
+        testName: name,
+      });
+    } else if (current.mode === 'function') {
+      this.store.set(unifiedSelectionStateAtom, {
+        ...current,
+        testName: name,
+      });
+    }
+    // If mode is 'empty', do nothing - can't set testName without a function/workflow
   }
 
   getSelectedTestCaseName() {

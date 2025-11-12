@@ -5,7 +5,7 @@
  */
 
 import type { createStore } from 'jotai';
-import { BAMLSDK } from './index';
+import { BAMLSDK } from './sdk';
 import { JotaiStorage } from './storage/JotaiStorage';
 import { MockBamlRuntime } from './runtime/MockBamlRuntime';
 import { BamlRuntime } from './runtime/BamlRuntime';

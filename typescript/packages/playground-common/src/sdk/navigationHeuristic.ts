@@ -76,21 +76,12 @@
 
 import type { CodeClickEvent, BAMLFile } from './types';
 import type { FunctionWithCallGraph } from './interface';
-
-/**
- * Navigation action types that can result from the heuristic
- */
-export type NavigationAction =
-  | { type: 'switch-workflow'; workflowId: string }
-  | { type: 'select-node'; workflowId: string; nodeId: string; testId?: string }
-  | { type: 'switch-and-select'; workflowId: string; nodeId: string; testId?: string }
-  | { type: 'show-function-tests'; functionName: string; tests: string[] }
-  | { type: 'empty-state'; reason: string; functionName: string };
+import type { SelectionState } from './atoms/core.atoms';
 
 /**
  * Current navigation state passed to the heuristic
  */
-export interface NavigationState {
+export interface NavigationContext {
   /** Currently active workflow (if any) */
   activeWorkflowId: string | null;
   /** All available workflows */
@@ -104,12 +95,12 @@ export interface NavigationState {
  *
  * @param event - The code click event from the IDE/debug panel
  * @param state - Current navigation state
- * @returns Navigation action to perform
+ * @returns Selection state to apply
  */
 export function determineNavigationAction(
   event: CodeClickEvent,
-  state: NavigationState
-): NavigationAction {
+  state: NavigationContext
+): SelectionState {
   console.log('🧭 Navigation Heuristic:', { event, state });
 
   // Handle TEST clicks
@@ -126,8 +117,8 @@ export function determineNavigationAction(
  */
 function handleTestClick(
   event: CodeClickEvent & { type: 'test' },
-  state: NavigationState
-): NavigationAction {
+  state: NavigationContext
+): SelectionState {
   const targetFunction = event.functionName;
 
   // Check if target is a workflow itself
@@ -136,7 +127,12 @@ function handleTestClick(
   if (isWorkflowWithStructure(workflow)) {
     // Test is for a workflow - just switch to it
     console.log('✅ Test targets workflow:', workflow.id);
-    return { type: 'switch-workflow', workflowId: workflow.id };
+    return {
+      mode: 'workflow',
+      workflowId: workflow.id,
+      selectedNodeId: workflow.id,
+      testName: event.testName,
+    };
   }
 
   // Priority 1: Check if function exists in current workflow (stay in context)
@@ -145,10 +141,10 @@ function handleTestClick(
     if (isWorkflowWithStructure(currentWorkflow) && functionExistsInWorkflow(targetFunction, currentWorkflow)) {
       console.log('✅ Test targets function in current workflow, selecting node:', targetFunction, 'test:', event.testName);
       return {
-        type: 'select-node',
+        mode: 'workflow',
         workflowId: currentWorkflow.id,
-        nodeId: targetFunction,
-        testId: event.testName, // Pass the test name so it can be selected in the details panel
+        selectedNodeId: targetFunction,
+        testName: event.testName,
       };
     }
   }
@@ -160,10 +156,10 @@ function handleTestClick(
     // Test is for a function node in a different workflow - switch and select
     console.log('✅ Test targets function in different workflow:', workflowWithFunction.id, '->', targetFunction, 'test:', event.testName);
     return {
-      type: 'switch-and-select',
+      mode: 'workflow',
       workflowId: workflowWithFunction.id,
-      nodeId: targetFunction,
-      testId: event.testName, // Pass the test name so it can be selected in the details panel
+      selectedNodeId: targetFunction,
+      testName: event.testName,
     };
   }
 
@@ -172,19 +168,15 @@ function handleTestClick(
   if (tests.length > 0) {
     console.log('✅ Test targets standalone function with tests:', targetFunction);
     return {
-      type: 'show-function-tests',
+      mode: 'function',
       functionName: targetFunction,
-      tests,
+      testName: event.testName,
     };
   }
 
   // Priority 4: Test function is not found anywhere
   console.log('⚠️ Test function not found in any workflow:', targetFunction);
-  return {
-    type: 'empty-state',
-    reason: 'Test function is not part of any workflow',
-    functionName: targetFunction,
-  };
+  return { mode: 'empty' };
 }
 
 /**
@@ -192,8 +184,8 @@ function handleTestClick(
  */
 function handleFunctionClick(
   event: CodeClickEvent & { type: 'function' },
-  state: NavigationState
-): NavigationAction {
+  state: NavigationContext
+): SelectionState {
   const targetFunction = event.functionName;
 
   // Priority 1: Check if function exists in current workflow
@@ -202,9 +194,10 @@ function handleFunctionClick(
     if (functionExistsInWorkflow(targetFunction, currentWorkflow)) {
       console.log('✅ Function exists in current workflow, selecting node');
       return {
-        type: 'select-node',
+        mode: 'workflow',
         workflowId: currentWorkflow!.id,
-        nodeId: targetFunction,
+        selectedNodeId: targetFunction,
+        testName: null,
       };
     }
   }
@@ -214,9 +207,10 @@ function handleFunctionClick(
   if (workflowWithFunction) {
     console.log('✅ Found function in different workflow:', workflowWithFunction.id);
     return {
-      type: 'switch-and-select',
+      mode: 'workflow',
       workflowId: workflowWithFunction.id,
-      nodeId: targetFunction,
+      selectedNodeId: targetFunction,
+      testName: null,
     };
   }
 
@@ -225,43 +219,40 @@ function handleFunctionClick(
   if (tests.length > 0) {
     console.log('✅ Function has tests, showing in isolation');
     return {
-      type: 'show-function-tests',
+      mode: 'function',
       functionName: targetFunction,
-      tests,
+      testName: tests[0] ?? null,
     };
   }
 
   // Priority 4: Empty state
   console.log('⚠️ Function not found in any context');
-  return {
-    type: 'empty-state',
-    reason: 'Function is not part of any workflow and has no tests',
-    functionName: targetFunction,
-  };
+  return { mode: 'empty' };
 }
 
 /**
  * Check if a function exists as a node in a workflow
+ * TODO: we don't know currently if an llm function exists in a workflow.
+ *  we need to surface this info.
  */
 function functionExistsInWorkflow(
   functionName: string,
   workflow?: FunctionWithCallGraph | null
 ): workflow is FunctionWithCallGraph {
-  return Boolean(workflow && workflow.nodes?.some(node => node.id === functionName));
+  return Boolean(workflow && workflow.nodes?.some(node => node.functionName === functionName));
 }
 
 /**
  * Find a workflow that contains the given function as a node
+ * Note: workflows array should only contain multi-node workflows (not standalone functions)
  */
 function findWorkflowContaining(
   functionName: string,
   workflows: FunctionWithCallGraph[]
 ): FunctionWithCallGraph | null {
-  return (
-    workflows.find(workflow =>
-      workflow.nodes?.some(node => node.id === functionName)
-    ) ?? null
-  );
+  return workflows.find(workflow =>
+    functionExistsInWorkflow(functionName, workflow)
+  ) ?? null;
 }
 
 /**
@@ -291,17 +282,18 @@ function findTestsForFunction(
 export function getCurrentNavigationState(
   sdk: {
     workflows: { getAll: () => FunctionWithCallGraph[], getActive: () => FunctionWithCallGraph | null },
-    diagnostics: { getBAMLFiles: () => BAMLFile[] }
+    diagnostics: { getBAMLFiles: () => BAMLFile[], getFunctions: () => FunctionWithCallGraph[] }
   }
-): NavigationState {
+): NavigationContext {
   const activeWorkflow = sdk.workflows.getActive();
   return {
     activeWorkflowId: isWorkflowWithStructure(activeWorkflow) ? activeWorkflow!.id : null,
-    workflows: sdk.workflows.getAll().filter(isWorkflowWithStructure),
+    // Use getFunctions() to get ALL functions (for checking workflow membership)
+    workflows: sdk.diagnostics.getFunctions(),
     bamlFiles: sdk.diagnostics.getBAMLFiles(),
   };
 }
 
-function isWorkflowWithStructure(workflow?: FunctionWithCallGraph | null): workflow is FunctionWithCallGraph {
+export function isWorkflowWithStructure(workflow?: FunctionWithCallGraph | null): workflow is FunctionWithCallGraph {
   return Boolean(workflow && workflow.type === 'workflow' && (workflow.nodes?.length ?? 0) > 1);
 }

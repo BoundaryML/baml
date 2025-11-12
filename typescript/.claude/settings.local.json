@@ -10,7 +10,8 @@
       "Bash(pnpm add:*)",
       "Bash(xargs sed:*)",
       "Bash(pnpm test:*)",
-      "Bash(pnpm --filter playground-common typecheck)"
+      "Bash(pnpm --filter playground-common typecheck)",
+      "Bash(pnpm --filter playground-common test)"
     ],
     "deny": [],
     "ask": []

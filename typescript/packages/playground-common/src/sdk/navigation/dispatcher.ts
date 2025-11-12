@@ -1,14 +1,18 @@
 import { atom } from 'jotai';
 import type { Getter, Setter } from 'jotai';
 import type { CodeClickEvent, NavigationIntent } from '../types';
-import { determineNavigationAction, type NavigationAction, type NavigationState } from '../navigationHeuristic';
+import { determineNavigationAction, type NavigationContext, isWorkflowWithStructure } from '../navigationHeuristic';
 import {
   unifiedSelectionStateAtom,
   detailPanelAtom,
   selectedInputSourceAtom,
-  workflowsAtom,
+  functionsAtom,
   bamlFilesAtom,
   allFunctionsMapAtom,
+  workflowsAtom,
+  type SelectionState,
+  type WorkflowSelection,
+  type FunctionSelection,
 } from '../atoms/core.atoms';
 import { activeTabAtom } from '../../shared/baml-project-panel/playground-panel/unified-atoms';
 import type { FunctionWithCallGraph } from '../interface';
@@ -30,10 +34,12 @@ function schedule(fn: () => void, delay: number) {
   pendingTimeouts.add(id);
 }
 
-function buildNavigationState(get: Getter): NavigationState {
+function buildNavigationState(get: Getter): NavigationContext {
   const selection = get(unifiedSelectionStateAtom);
   return {
-    activeWorkflowId: selection.activeWorkflowId,
+    activeWorkflowId: selection.mode === 'workflow' ? selection.workflowId : null,
+    // Use workflowsAtom to get only multi-node workflows (excludes standalone functions)
+    // The navigation heuristic searches through these to find which workflow contains a function
     workflows: get(workflowsAtom),
     bamlFiles: get(bamlFilesAtom) ?? [],
   };
@@ -49,9 +55,9 @@ function closeDetailPanel(set: Setter) {
 
 function setSelection(
   set: Setter,
-  updater: (prev: any) => any,
+  state: SelectionState,
 ) {
-  set(unifiedSelectionStateAtom, updater);
+  set(unifiedSelectionStateAtom, state);
 }
 
 function resolveNodeId(workflow: FunctionWithCallGraph, targetId: string): string {
@@ -116,147 +122,73 @@ function waitForNode(
 }
 
 function applyNavigationAction(
-  action: NavigationAction,
+  action: SelectionState,
   intent: NavigationIntent,
   get: Getter,
   set: Setter,
 ) {
-  switch (action.type) {
-    case 'switch-workflow': {
-      console.log('🔄 Switching to workflow:', action.workflowId);
+  switch (action.mode) {
+    case 'workflow': {
+      console.log('🔄 Workflow mode:', action.workflowId, '→', action.selectedNodeId);
 
-      // Auto-select first test if available
-      let testName = null;
-      const allFunctions: Map<string, FunctionWithCallGraph> = get(allFunctionsMapAtom);
-      const func = allFunctions.get(action.workflowId);
-      if (func && func.testCases && func.testCases.length > 0) {
-        testName = func.testCases[0]!.name;
-        console.log('  → Auto-selecting first test:', testName);
-      }
-
-      setSelection(set, (prev: any) => ({
-        ...prev,
-        functionName: action.workflowId,
-        testName,
-        activeWorkflowId: action.workflowId,
-        selectedNodeId: action.workflowId,
-      }));
-      set(activeTabAtom, 'graph');
-      selectTestInput(set, action.workflowId, testName ?? undefined);
-      openDetailPanel(set);
-      break;
-    }
-
-    case 'select-node': {
-      console.log('🎯 Selecting node in current workflow:', action.nodeId);
-
-      // Auto-select first test if no test specified
-      let testName = action.testId ?? null;
+      // Auto-select first test if not specified
+      let testName = action.testName;
       if (!testName) {
         const allFunctions: Map<string, FunctionWithCallGraph> = get(allFunctionsMapAtom);
-        const func = allFunctions.get(action.nodeId);
-        if (func && func.testCases.length > 0) {
+        const func = allFunctions.get(action.selectedNodeId);
+        if (func && func.testCases && func.testCases.length > 0) {
           testName = func.testCases[0]!.name;
           console.log('  → Auto-selecting first test:', testName);
         }
       }
 
-      setSelection(set, (prev: any) => ({
-        ...prev,
-        functionName: action.nodeId,
+      const finalState: WorkflowSelection = {
+        mode: 'workflow',
+        workflowId: action.workflowId,
+        selectedNodeId: action.selectedNodeId,
         testName,
-        activeWorkflowId: action.workflowId,
-        selectedNodeId: action.nodeId,
-      }));
-      set(activeTabAtom, 'graph');
-      openDetailPanel(set);
-      selectTestInput(set, action.nodeId, testName ?? undefined);
-      schedule(() => panToNode(action.nodeId), 100);
-      break;
-    }
-
-    case 'switch-and-select': {
-      console.log('🔄 Switching to workflow and selecting node:', action.workflowId, '→', action.nodeId);
-      const workflows = get(workflowsAtom) as FunctionWithCallGraph[];
-      const workflow = workflows.find((wf) => wf.id === action.workflowId);
-      if (!workflow) {
-        console.error(`❌ Cannot switch to workflow: "${action.workflowId}" not found`);
-        setSelection(set, () => ({
-          functionName: null,
-          testName: null,
-          activeWorkflowId: null,
-          selectedNodeId: null,
-        }));
-        selectTestInput(set, '', undefined);
-        closeDetailPanel(set);
-        return;
-      }
-
-      const targetNodeId = resolveNodeId(workflow, action.nodeId);
-
-      // Auto-select first test if no test specified
-      let testName = action.testId ?? null;
-      if (!testName) {
-        const allFunctions: Map<string, FunctionWithCallGraph> = get(allFunctionsMapAtom);
-        const func = allFunctions.get(action.nodeId);
-        if (func && func.testCases.length > 0) {
-          testName = func.testCases[0]!.name;
-          console.log('  → Auto-selecting first test:', testName);
-        }
-      }
-
-      setSelection(set, (prev: any) => ({
-        ...prev,
-        functionName: action.nodeId,
-        testName,
-        activeWorkflowId: action.workflowId,
-        selectedNodeId: action.nodeId,
-      }));
-      set(activeTabAtom, 'graph');
-
-      const finalizeSelection = () => {
-        setSelection(set, (prev: any) => ({
-          ...prev,
-          selectedNodeId: targetNodeId,
-        }));
-        openDetailPanel(set);
-        selectTestInput(set, targetNodeId, testName ?? undefined);
       };
 
-      schedule(() => {
-        if (panToNode(targetNodeId)) {
-          finalizeSelection();
-        } else {
-          waitForNode(targetNodeId, 20, finalizeSelection);
-        }
-      }, 150);
+      setSelection(set, finalState);
+      set(activeTabAtom, 'graph');
+      selectTestInput(set, action.selectedNodeId, testName ?? undefined);
+      openDetailPanel(set);
+
+      // Pan to node after a short delay
+      schedule(() => panToNode(action.selectedNodeId), 100);
       break;
     }
 
-    case 'show-function-tests': {
-      console.log('📝 Showing function with tests:', action.functionName);
-      setSelection(set, (prev: any) => ({
-        ...prev,
+    case 'function': {
+      console.log('📝 Function mode:', action.functionName);
+
+      // Auto-select first test if not specified
+      let testName = action.testName;
+      if (!testName) {
+        const allFunctions: Map<string, FunctionWithCallGraph> = get(allFunctionsMapAtom);
+        const func = allFunctions.get(action.functionName);
+        if (func && func.testCases && func.testCases.length > 0) {
+          testName = func.testCases[0]!.name;
+          console.log('  → Auto-selecting first test:', testName);
+        }
+      }
+
+      const finalState: FunctionSelection = {
+        mode: 'function',
         functionName: action.functionName,
-        testName: action.tests[0] ?? null,
-        activeWorkflowId: null,
-        selectedNodeId: action.functionName,
-      }));
+        testName,
+      };
+
+      setSelection(set, finalState);
       set(activeTabAtom, 'preview');
-      selectTestInput(set, '', undefined);
+      selectTestInput(set, action.functionName, testName ?? undefined);
       openDetailPanel(set);
       break;
     }
 
-    case 'empty-state': {
-      console.log('📭 Empty state:', action.reason, intent.functionName);
-      setSelection(set, (prev: any) => ({
-        ...prev,
-        functionName: intent.functionName ?? null,
-        testName: null,
-        activeWorkflowId: null,
-        selectedNodeId: null,
-      }));
+    case 'empty': {
+      console.log('📭 Empty state');
+      setSelection(set, { mode: 'empty' });
       set(activeTabAtom, 'preview');
       selectTestInput(set, '', undefined);
       closeDetailPanel(set);

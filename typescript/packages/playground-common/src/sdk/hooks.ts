@@ -196,7 +196,11 @@ export function useSelectedNode() {
 
   const setSelectedNodeId = useCallback(
     (nodeId: string | null) => {
-      setUnifiedSelection((prev) => ({ ...prev, selectedNodeId: nodeId }));
+      setUnifiedSelection((prev) =>
+        prev.mode === 'workflow' && nodeId
+          ? { ...prev, selectedNodeId: nodeId }
+          : prev
+      );
     },
     [setUnifiedSelection]
   );

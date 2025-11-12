@@ -16,18 +16,29 @@ import {
 import { createMockSDK } from '../factory';
 
 describe('unifiedSelectionAtom', () => {
-  it('writes through to SDK atoms', () => {
+  it('writes through to SDK atoms for function selection', () => {
     const store = createStore();
 
     store.set(unifiedSelectionAtom, {
+      mode: 'function',
       functionName: 'foo',
       testName: 'bar',
-      activeWorkflowId: 'wf',
-      selectedNodeId: 'node',
     });
 
     expect(store.get(selectedFunctionNameAtom)).toBe('foo');
     expect(store.get(selectedTestCaseNameAtom)).toBe('bar');
+  });
+
+  it('writes through to SDK atoms for workflow selection', () => {
+    const store = createStore();
+
+    store.set(unifiedSelectionAtom, {
+      mode: 'workflow',
+      workflowId: 'wf',
+      selectedNodeId: 'node',
+      testName: null,
+    });
+
     expect(store.get(activeWorkflowIdAtom)).toBe('wf');
     expect(store.get(selectedNodeIdAtom)).toBe('node');
   });
@@ -36,10 +47,9 @@ describe('unifiedSelectionAtom', () => {
     const store = createStore();
 
     store.set(unifiedSelectionAtom, {
+      mode: 'function',
       functionName: 'foo',
       testName: null,
-      activeWorkflowId: 'wf',
-      selectedNodeId: 'foo',
     });
 
     store.set(unifiedSelectionAtom, (prev) => ({
@@ -47,24 +57,29 @@ describe('unifiedSelectionAtom', () => {
       testName: 'tc',
     }));
 
-    expect(store.get(selectedFunctionNameAtom)).toBe('foo');
-    expect(store.get(selectedTestCaseNameAtom)).toBe('tc');
-    expect(store.get(activeWorkflowIdAtom)).toBe('wf');
-    expect(store.get(selectedNodeIdAtom)).toBe('foo');
+    const selection = store.get(unifiedSelectionAtom);
+    expect(selection.mode).toBe('function');
+    if (selection.mode === 'function') {
+      expect(selection.functionName).toBe('foo');
+      expect(selection.testName).toBe('tc');
+    }
   });
 
   it('reflects external atom changes when read', () => {
     const store = createStore();
 
-    store.set(unifiedSelectionStateAtom, (prev) => ({
-      ...prev,
+    store.set(unifiedSelectionStateAtom, {
+      mode: 'function',
       functionName: 'ExternalFunction',
-    }));
+      testName: null,
+    });
     const selection = store.get(unifiedSelectionAtom);
 
-    expect(selection.functionName).toBe('ExternalFunction');
-    expect(selection.testName).toBeNull();
-    expect(selection.activeWorkflowId).toBeNull();
+    expect(selection.mode).toBe('function');
+    if (selection.mode === 'function') {
+      expect(selection.functionName).toBe('ExternalFunction');
+      expect(selection.testName).toBeNull();
+    }
   });
 });
 
@@ -82,10 +97,10 @@ describe('viewModeAtom', () => {
     const store = await setupMockRuntimeStore();
 
     store.set(unifiedSelectionAtom, {
-      functionName: 'fetchData',
-      testName: null,
-      activeWorkflowId: 'simpleWorkflow',
+      mode: 'workflow',
+      workflowId: 'simpleWorkflow',
       selectedNodeId: 'fetchData',
+      testName: null,
     });
 
     const graphNodeView = store.get(viewModeAtom);
@@ -93,10 +108,10 @@ describe('viewModeAtom', () => {
     expect(graphNodeView.showGraphTab).toBe(true);
 
     store.set(unifiedSelectionAtom, {
-      functionName: 'processData',
-      testName: null,
-      activeWorkflowId: 'simpleWorkflow',
+      mode: 'workflow',
+      workflowId: 'simpleWorkflow',
       selectedNodeId: 'processData',
+      testName: null,
     });
 
     const llmNodeView = store.get(viewModeAtom);

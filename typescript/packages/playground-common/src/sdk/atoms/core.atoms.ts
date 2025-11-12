@@ -29,24 +29,40 @@ import type { WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_buil
 export const runtimeInstanceAtom = atom<BamlRuntimeInterface | null>(null);
 
 /**
- * Unified selection state interface
+ * Selection state using discriminated unions for type safety
+ *
+ * This design makes it impossible to have invalid states like:
+ * - activeWorkflowId set for a standalone function
+ * - selectedNodeId without an activeWorkflowId
  */
-export interface UnifiedSelectionState {
-  functionName: string | null;
-  testName: string | null;
-  activeWorkflowId: string | null;
-  selectedNodeId: string | null;
+export type SelectionState =
+  | WorkflowSelection
+  | FunctionSelection
+  | EmptySelection;
+
+export interface WorkflowSelection {
+  mode: 'workflow';
+  workflowId: string;        // ID of the workflow being viewed
+  selectedNodeId: string;    // Currently selected node within the workflow
+  testName: string | null;   // Active test case (if any)
+}
+
+export interface FunctionSelection {
+  mode: 'function';
+  functionName: string;      // Standalone function (not in any workflow)
+  testName: string | null;   // Active test case (if any)
+}
+
+export interface EmptySelection {
+  mode: 'empty';
 }
 
 /**
  * Unified selection state - SINGLE SOURCE OF TRUTH for all selection
  * All other selection atoms derive from this
  */
-export const unifiedSelectionStateAtom = atom<UnifiedSelectionState>({
-  functionName: null,
-  testName: null,
-  activeWorkflowId: null,
-  selectedNodeId: null,
+export const unifiedSelectionStateAtom = atom<SelectionState>({
+  mode: 'empty',
 });
 
 /**
@@ -56,20 +72,43 @@ export const unifiedSelectionStateAtom = atom<UnifiedSelectionState>({
  */
 
 /**
+ * Helper functions to safely extract values from SelectionState
+ */
+export function getTestName(state: SelectionState): string | null {
+  if (state.mode === 'function') return state.testName;
+  if (state.mode === 'workflow') return state.testName;
+  return null;
+}
+
+export function getFunctionOrNodeName(state: SelectionState): string | null {
+  if (state.mode === 'function') return state.functionName;
+  if (state.mode === 'workflow') return state.selectedNodeId;
+  return null;
+}
+
+/**
  * All available workflows (derived from runtime)
+ * Returns only multi-node workflows (excludes standalone LLM functions)
  */
 export const workflowsAtom = atom((get) => {
   const runtime = get(runtimeInstanceAtom);
-  return runtime?.getWorkflows() ?? [];
+  const allWorkflows = runtime?.getWorkflows() ?? [];
+  // Filter to only multi-node workflows (exclude standalone LLM functions)
+  return allWorkflows.filter(wf =>
+    wf.type === 'workflow' && (wf.nodes?.length ?? 0) > 1
+  );
 }, (get, set, update: FunctionWithCallGraph[]) => {
   set(workflowsAtom, update);
 });
 
 /**
  * Currently active workflow ID (derived - read-only)
- * This is part of the unified selection state
+ * Returns the workflow ID if in workflow mode, null otherwise
  */
-export const activeWorkflowIdAtom = atom((get) => get(unifiedSelectionStateAtom).activeWorkflowId);
+export const activeWorkflowIdAtom = atom((get) => {
+  const state = get(unifiedSelectionStateAtom);
+  return state.mode === 'workflow' ? state.workflowId : null;
+});
 
 /**
  * Executions stored per workflow using atomFamily
@@ -180,9 +219,12 @@ export const viewModeAtom = atom<{ mode: 'editor' | 'execution' }>({
 
 /**
  * Selected node ID (derived - read-only)
- * This is part of the unified selection state
+ * Returns the selected node ID if in workflow mode, null otherwise
  */
-export const selectedNodeIdAtom = atom((get) => get(unifiedSelectionStateAtom).selectedNodeId);
+export const selectedNodeIdAtom = atom((get) => {
+  const state = get(unifiedSelectionStateAtom);
+  return state.mode === 'workflow' ? state.selectedNodeId : null;
+});
 
 /**
  * Detail panel state
@@ -332,13 +374,55 @@ export const allFunctionsMapAtom = atom((get): Map<string, FunctionWithCallGraph
 
 /**
  * Currently selected function name (derived - read-only from unified selection state)
+ * Returns the function name in function mode, or the selected node ID in workflow mode
  */
-export const selectedFunctionNameAtom = atom((get) => get(unifiedSelectionStateAtom).functionName);
+export const selectedFunctionNameAtom = atom((get) => {
+  const state = get(unifiedSelectionStateAtom);
+  if (state.mode === 'function') return state.functionName;
+  if (state.mode === 'workflow') return state.selectedNodeId;
+  return null;
+});
 
 /**
  * Currently selected test case name (derived - read-only from unified selection state)
  */
-export const selectedTestCaseNameAtom = atom((get) => get(unifiedSelectionStateAtom).testName);
+export const selectedTestCaseNameAtom = atom((get) => {
+  const state = get(unifiedSelectionStateAtom);
+  if (state.mode === 'function') return state.testName;
+  if (state.mode === 'workflow') return state.testName;
+  return null;
+});
+
+/**
+ * Selection mode atom - returns the current mode ('workflow', 'function', or 'empty')
+ */
+export const selectionModeAtom = atom((get) => {
+  return get(unifiedSelectionStateAtom).mode;
+});
+
+/**
+ * Helper functions for checking active state
+ * These are pure functions that can be used in components
+ */
+export const SelectionQuery = {
+  isNodeActive: (selection: SelectionState, nodeId: string): boolean => {
+    if (selection.mode === 'workflow') {
+      return selection.selectedNodeId === nodeId;
+    } else if (selection.mode === 'function') {
+      return selection.functionName === nodeId;
+    }
+    return false;
+  },
+
+  isTestActive: (selection: SelectionState, test: { functionName: string; name: string }): boolean => {
+    if (selection.mode === 'function') {
+      return selection.functionName === test.functionName && selection.testName === test.name;
+    } else if (selection.mode === 'workflow') {
+      return selection.testName === test.name;
+    }
+    return false;
+  },
+};
 
 /**
  * Selected function object (derived from bamlFilesAtom + selectedFunctionNameAtom)

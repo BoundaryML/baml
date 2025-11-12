@@ -144,6 +144,7 @@ export interface SDKStorage {
 
   setBAMLFiles(files: Record<string, string>): void;
   getBAMLFiles(): Record<string, string>;
+  setParsedBAMLFiles(files: any[]): void;
   setSandboxFiles(files: Record<string, string>): void;
   getSandboxFiles(): Record<string, string>;
 

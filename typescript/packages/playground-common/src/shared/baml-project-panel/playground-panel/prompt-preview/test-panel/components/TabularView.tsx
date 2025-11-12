@@ -137,9 +137,12 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
     }))
   }
 
+  const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.selectedNodeId : null;
+  const testName = selection.mode !== 'empty' ? selection.testName : null;
+
   const testAtom = useMemo(
-    () => testcaseObjectAtom({ functionName: selection.functionName ?? '', testcaseName: selection.testName ?? '' }),
-    [selection.functionName, selection.testName],
+    () => testcaseObjectAtom({ functionName: functionName ?? '', testcaseName: testName ?? '' }),
+    [functionName, testName],
   )
   const tc = useAtomValue(testAtom)
 
@@ -148,13 +151,13 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
 
 
   React.useEffect(() => {
-    if (selection.functionName && selection.testName && selectedRowRef.current) {
+    if (functionName && testName && selectedRowRef.current) {
       selectedRowRef.current.scrollIntoView({
         behavior: 'smooth',
         block: 'nearest',
       })
     }
-  }, [selection.functionName, selection.testName])
+  }, [functionName, testName])
 
   // Create memoized retry handlers for each test to prevent re-renders
   const createRetryHandler = useMemo(() => {
@@ -233,7 +236,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
         </TableHeader>
         <TableBody>
           {currentRun?.tests.map((test, index) => {
-            const isSelected = selection.functionName === test.functionName && selection.testName === test.testName
+            const isSelected = functionName === test.functionName && testName === test.testName
             const isThisTestRunning = test.response.status === 'running'
 
             return (

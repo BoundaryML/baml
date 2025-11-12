@@ -202,7 +202,10 @@ export function TestingSidebar() {
                         functionName={func.name}
                         tests={func.tests}
                         functionFlavor={func.functionFlavor}
-                        isSelected={selection.selectedNodeId === func.name || selection.functionName === func.name}
+                        isSelected={
+                          (selection.mode === 'workflow' && selection.selectedNodeId === func.name) ||
+                          (selection.mode === 'function' && selection.functionName === func.name)
+                        }
                         onToggle={() => {
                           // Toggle expansion when clicked
                           handleToggleCollapsible(func.name);
@@ -246,8 +249,8 @@ export function TestingSidebar() {
                                 key={test}
                                 label={test}
                                 isSelected={
-                                  selection.functionName === func.name &&
-                                  selection.testName === test
+                                  ((selection.mode === 'function' && selection.functionName === func.name && selection.testName === test) ||
+                                   (selection.mode === 'workflow' && selection.selectedNodeId === func.name && selection.testName === test))
                                 }
                                 searchTerm={searchTerm}
                                 functionName={func.name}

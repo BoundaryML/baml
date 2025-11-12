@@ -9,7 +9,7 @@ import { atom } from 'jotai';
 import { selectionAtom as originalSelectionAtom } from './atoms';
 import {
   unifiedSelectionStateAtom,
-  type UnifiedSelectionState,
+  type SelectionState,
   activeWorkflowAtom,
 } from '../../../sdk/atoms/core.atoms';
 
@@ -21,7 +21,7 @@ import {
  * Unified selection state - single source of truth for all selection
  * Re-exported from SDK for backward compatibility
  */
-export type UnifiedSelection = UnifiedSelectionState;
+export type UnifiedSelection = SelectionState;
 
 /**
  * Unified selection atom - directly uses the SDK unified state atom
@@ -32,13 +32,9 @@ export const unifiedSelectionAtom = atom(
   (get, set, update: UnifiedSelection | ((prev: UnifiedSelection) => UnifiedSelection)) => {
     const current = get(unifiedSelectionStateAtom);
     const next = typeof update === 'function' ? update(current) : update;
-    const finalValue: UnifiedSelection = {
-      ...current,
-      ...next,
-    };
 
-    console.log('📝 Unified Selection Updated:', finalValue);
-    set(unifiedSelectionStateAtom, finalValue);
+    console.log('📝 Unified Selection Updated:', next);
+    set(unifiedSelectionStateAtom, next);
   }
 );
 
@@ -61,7 +57,7 @@ export const viewModeAtom = atom((get) => {
   const activeWorkflow = get(activeWorkflowAtom);
 
   // Is the selected function part of a workflow?
-  const isInWorkflow = selection.activeWorkflowId !== null;
+  const isInWorkflow = selection.mode === 'workflow';
 
   console.log(selection, selectedFn, activeWorkflow, isInWorkflow);
   const isLLMFunction = selectedFn?.functionFlavor === 'llm';
@@ -93,18 +89,18 @@ export const bottomPanelModeAtom = atom<BottomPanelMode>((get) => {
 
   // Show DetailPanel when:
   // - On Graph tab, OR
-  // - A workflow is active (activeWorkflowId is set), OR
-  // - A node is selected (even standalone functions)
+  // - A workflow is active, OR
+  // - In function or workflow mode
   console.log('bottomPanelModeAtom', activeTab, selection);
   if (
     activeTab === 'graph' ||
-    selection.activeWorkflowId !== null ||
-    selection.selectedNodeId !== null
+    selection.mode === 'workflow' ||
+    selection.mode === 'function'
   ) {
     return 'detail-panel';
   }
 
-  // Show TestPanel for Preview/cURL tabs when no node is selected
+  // Show TestPanel for Preview/cURL tabs when in empty mode
   return 'test-panel';
 });
 
@@ -115,6 +111,6 @@ export const shouldShowGraphAtom = atom((get) => {
   const selection = get(unifiedSelectionAtom);
   const activeTab = get(activeTabAtom);
 
-  // Show graph if we're on the graph tab or if we're in a workflow
-  return activeTab === 'graph' && selection.activeWorkflowId !== null;
+  // Show graph if we're on the graph tab and in workflow mode
+  return activeTab === 'graph' && selection.mode === 'workflow';
 });

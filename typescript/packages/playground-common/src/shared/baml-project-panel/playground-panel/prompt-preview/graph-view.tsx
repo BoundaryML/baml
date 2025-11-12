@@ -66,7 +66,8 @@ export const GraphView = () => {
   const [graphTipDismissed, setGraphTipDismissed] = useAtom(
     graphControlsTipDismissedAtom
   );
-  const selectedNodeId = useAtomValue(unifiedSelectionAtom).selectedNodeId;
+  const selection = useAtomValue(unifiedSelectionAtom);
+  const selectedNodeId = selection.mode === 'workflow' ? selection.selectedNodeId : null;
 
   useEffect(() => {
     const nodes = flowStore.value.getNodes?.();

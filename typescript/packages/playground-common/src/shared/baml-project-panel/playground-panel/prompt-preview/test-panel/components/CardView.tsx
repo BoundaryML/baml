@@ -51,7 +51,9 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
   const tc = useAtomValue(testcaseObjectAtom({ functionName: testId.functionName, testcaseName: testId.testName }))
   const cardRef = useRef<HTMLDivElement>(null)
 
-  const isSelected = selection.functionName === testId.functionName && selection.testName === testId.testName
+  const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.selectedNodeId : null;
+  const testName = selection.mode !== 'empty' ? selection.testName : null;
+  const isSelected = functionName === testId.functionName && testName === testId.testName
   const isThisTestRunning = displayResponse?.status === 'running'
 
   useEffect(() => {

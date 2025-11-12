@@ -7,7 +7,7 @@
 
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { BAMLSDK } from './index';
+import type { BAMLSDK } from './sdk';
 import { createMockSDK, createRealBAMLSDK } from './factory';
 import {
   DebugBanner,

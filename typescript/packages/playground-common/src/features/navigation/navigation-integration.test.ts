@@ -28,10 +28,9 @@ describe('Navigation Integration - Unified State', () => {
   describe('SDK Atom Sync', () => {
     it('should sync functionName to SDK selectedFunctionNameAtom', () => {
       store.set(unifiedSelectionAtom, {
+        mode: 'function',
         functionName: 'extractUser',
         testName: 'test1',
-        activeWorkflowId: null,
-        selectedNodeId: null,
       });
 
       // Check that SDK atom was updated
@@ -41,10 +40,9 @@ describe('Navigation Integration - Unified State', () => {
 
     it('should sync testName to SDK selectedTestCaseNameAtom', () => {
       store.set(unifiedSelectionAtom, {
+        mode: 'function',
         functionName: 'extractUser',
         testName: 'test_extract_valid_user',
-        activeWorkflowId: null,
-        selectedNodeId: null,
       });
 
       // Check that SDK atom was updated
@@ -54,16 +52,16 @@ describe('Navigation Integration - Unified State', () => {
 
     it('should sync when using updater function', () => {
       store.set(unifiedSelectionAtom, {
+        mode: 'function',
         functionName: 'funcA',
         testName: null,
-        activeWorkflowId: null,
-        selectedNodeId: null,
       });
 
-      store.set(unifiedSelectionAtom, (prev) => ({
-        ...prev,
-        functionName: 'funcB',
-      }));
+      store.set(unifiedSelectionAtom, (prev) =>
+        prev.mode === 'function'
+          ? { ...prev, functionName: 'funcB' }
+          : prev
+      );
 
       const sdkFunctionName = store.get(selectedFunctionNameAtom);
       expect(sdkFunctionName).toBe('funcB');
@@ -71,63 +69,65 @@ describe('Navigation Integration - Unified State', () => {
   });
 
   describe('Unified Selection Atom', () => {
-    it('should initialize with null values', () => {
+    it('should initialize with empty mode', () => {
       const selection = store.get(unifiedSelectionAtom);
       expect(selection).toEqual({
-        functionName: null,
-        testName: null,
-        activeWorkflowId: null,
-        selectedNodeId: null,
+        mode: 'empty',
       });
     });
 
     it('should update all fields when switching to a workflow', () => {
       store.set(unifiedSelectionAtom, {
-        functionName: 'simpleWorkflow',
+        mode: 'workflow',
+        workflowId: 'simpleWorkflow',
+        selectedNodeId: 'simpleWorkflow',
         testName: null,
-        activeWorkflowId: 'simpleWorkflow',
-        selectedNodeId: null,
       });
 
       const selection = store.get(unifiedSelectionAtom);
-      expect(selection.functionName).toBe('simpleWorkflow');
-      expect(selection.activeWorkflowId).toBe('simpleWorkflow');
-      expect(selection.selectedNodeId).toBeNull();
+      expect(selection.mode).toBe('workflow');
+      if (selection.mode === 'workflow') {
+        expect(selection.workflowId).toBe('simpleWorkflow');
+        expect(selection.selectedNodeId).toBe('simpleWorkflow');
+      }
     });
 
     it('should update selectedNodeId when selecting a node in a workflow', () => {
       // First set up a workflow
       store.set(unifiedSelectionAtom, {
-        functionName: 'simpleWorkflow',
+        mode: 'workflow',
+        workflowId: 'simpleWorkflow',
+        selectedNodeId: 'simpleWorkflow',
         testName: null,
-        activeWorkflowId: 'simpleWorkflow',
-        selectedNodeId: null,
       });
 
       // Then select a node
-      store.set(unifiedSelectionAtom, (prev) => ({
-        ...prev,
-        selectedNodeId: 'processData',
-        functionName: 'processData',
-      }));
+      store.set(unifiedSelectionAtom, (prev) =>
+        prev.mode === 'workflow'
+          ? { ...prev, selectedNodeId: 'processData' }
+          : prev
+      );
 
       const selection = store.get(unifiedSelectionAtom);
-      expect(selection.selectedNodeId).toBe('processData');
-      expect(selection.functionName).toBe('processData');
-      expect(selection.activeWorkflowId).toBe('simpleWorkflow');
+      expect(selection.mode).toBe('workflow');
+      if (selection.mode === 'workflow') {
+        expect(selection.selectedNodeId).toBe('processData');
+        expect(selection.workflowId).toBe('simpleWorkflow');
+      }
     });
 
-    it('should clear activeWorkflowId for standalone functions', () => {
+    it('should use function mode for standalone functions', () => {
       store.set(unifiedSelectionAtom, {
+        mode: 'function',
         functionName: 'extractUser',
         testName: 'test_extract_valid_user',
-        activeWorkflowId: null,
-        selectedNodeId: null,
       });
 
       const selection = store.get(unifiedSelectionAtom);
-      expect(selection.functionName).toBe('extractUser');
-      expect(selection.activeWorkflowId).toBeNull();
+      expect(selection.mode).toBe('function');
+      if (selection.mode === 'function') {
+        expect(selection.functionName).toBe('extractUser');
+      }
     });
   });
 
@@ -162,13 +162,10 @@ describe('Navigation Integration - Unified State', () => {
 
   describe('Bottom Panel Mode Atom', () => {
     it('should show test-panel by default', () => {
-      // With preview tab active and no node selected
+      // With preview tab active and empty selection
       store.set(activeTabAtom, 'preview');
       store.set(unifiedSelectionAtom, {
-        functionName: null,
-        testName: null,
-        activeWorkflowId: null,
-        selectedNodeId: null,
+        mode: 'empty',
       });
 
       const mode = store.get(bottomPanelModeAtom);
@@ -184,40 +181,38 @@ describe('Navigation Integration - Unified State', () => {
     it('should show detail-panel when node is selected (even on other tabs)', () => {
       store.set(activeTabAtom, 'preview');
       store.set(unifiedSelectionAtom, {
-        functionName: 'processData',
-        testName: null,
-        activeWorkflowId: 'simpleWorkflow',
+        mode: 'workflow',
+        workflowId: 'simpleWorkflow',
         selectedNodeId: 'processData',
+        testName: null,
       });
 
       const mode = store.get(bottomPanelModeAtom);
       expect(mode).toBe('detail-panel');
     });
 
-    it('should show test-panel on preview tab with no node selected', () => {
+    it('should show detail-panel on preview tab with function selected', () => {
       store.set(activeTabAtom, 'preview');
       store.set(unifiedSelectionAtom, {
+        mode: 'function',
         functionName: 'extractUser',
         testName: null,
-        activeWorkflowId: null,
-        selectedNodeId: null,
       });
 
       const mode = store.get(bottomPanelModeAtom);
-      expect(mode).toBe('test-panel');
+      expect(mode).toBe('detail-panel');
     });
 
-    it('should show test-panel on curl tab', () => {
+    it('should show detail-panel on curl tab with function selected', () => {
       store.set(activeTabAtom, 'curl');
       store.set(unifiedSelectionAtom, {
+        mode: 'function',
         functionName: 'extractUser',
         testName: null,
-        activeWorkflowId: null,
-        selectedNodeId: null,
       });
 
       const mode = store.get(bottomPanelModeAtom);
-      expect(mode).toBe('test-panel');
+      expect(mode).toBe('detail-panel');
     });
   });
 
@@ -225,43 +220,46 @@ describe('Navigation Integration - Unified State', () => {
     it('Scenario: Click on workflow test → switch to workflow graph', () => {
       // Simulate: User clicks test_simple_success which tests simpleWorkflow
       store.set(unifiedSelectionAtom, {
-        functionName: 'simpleWorkflow',
+        mode: 'workflow',
+        workflowId: 'simpleWorkflow',
+        selectedNodeId: 'simpleWorkflow',
         testName: null,
-        activeWorkflowId: 'simpleWorkflow',
-        selectedNodeId: null,
       });
       store.set(activeTabAtom, 'graph');
 
       const selection = store.get(unifiedSelectionAtom);
       const tab = store.get(activeTabAtom);
 
-      expect(selection.activeWorkflowId).toBe('simpleWorkflow');
+      expect(selection.mode).toBe('workflow');
       expect(tab).toBe('graph');
     });
 
     it('Scenario: Click on function in workflow → select node and show detail panel', () => {
       // Setup: Already in a workflow
       store.set(unifiedSelectionAtom, {
-        functionName: 'simpleWorkflow',
+        mode: 'workflow',
+        workflowId: 'simpleWorkflow',
+        selectedNodeId: 'simpleWorkflow',
         testName: null,
-        activeWorkflowId: 'simpleWorkflow',
-        selectedNodeId: null,
       });
       store.set(activeTabAtom, 'graph');
 
       // Action: Click on processData function
-      store.set(unifiedSelectionAtom, (prev) => ({
-        ...prev,
-        selectedNodeId: 'processData',
-        functionName: 'processData',
-      }));
+      store.set(unifiedSelectionAtom, (prev) =>
+        prev.mode === 'workflow'
+          ? { ...prev, selectedNodeId: 'processData' }
+          : prev
+      );
 
       const selection = store.get(unifiedSelectionAtom);
       const tab = store.get(activeTabAtom);
       const bottomPanelMode = store.get(bottomPanelModeAtom);
 
-      expect(selection.selectedNodeId).toBe('processData');
-      expect(selection.activeWorkflowId).toBe('simpleWorkflow');
+      expect(selection.mode).toBe('workflow');
+      if (selection.mode === 'workflow') {
+        expect(selection.selectedNodeId).toBe('processData');
+        expect(selection.workflowId).toBe('simpleWorkflow');
+      }
       expect(tab).toBe('graph');
       expect(bottomPanelMode).toBe('detail-panel');
     });
@@ -269,36 +267,38 @@ describe('Navigation Integration - Unified State', () => {
     it('Scenario: Click on function in different workflow → switch and select', () => {
       // Setup: Currently in simpleWorkflow
       store.set(unifiedSelectionAtom, {
-        functionName: 'simpleWorkflow',
+        mode: 'workflow',
+        workflowId: 'simpleWorkflow',
+        selectedNodeId: 'simpleWorkflow',
         testName: null,
-        activeWorkflowId: 'simpleWorkflow',
-        selectedNodeId: null,
       });
 
       // Action: Click handleSuccess which is in conditionalWorkflow
       store.set(unifiedSelectionAtom, {
-        functionName: 'handleSuccess',
-        testName: null,
-        activeWorkflowId: 'conditionalWorkflow',
+        mode: 'workflow',
+        workflowId: 'conditionalWorkflow',
         selectedNodeId: 'handleSuccess',
+        testName: null,
       });
       store.set(activeTabAtom, 'graph');
 
       const selection = store.get(unifiedSelectionAtom);
       const tab = store.get(activeTabAtom);
 
-      expect(selection.activeWorkflowId).toBe('conditionalWorkflow');
-      expect(selection.selectedNodeId).toBe('handleSuccess');
+      expect(selection.mode).toBe('workflow');
+      if (selection.mode === 'workflow') {
+        expect(selection.workflowId).toBe('conditionalWorkflow');
+        expect(selection.selectedNodeId).toBe('handleSuccess');
+      }
       expect(tab).toBe('graph');
     });
 
     it('Scenario: Click on standalone LLM function → show prompt preview', () => {
       // Action: Click extractUser (standalone LLM function)
       store.set(unifiedSelectionAtom, {
+        mode: 'function',
         functionName: 'extractUser',
         testName: 'test_extract_valid_user',
-        activeWorkflowId: null,
-        selectedNodeId: null,
       });
       store.set(activeTabAtom, 'preview');
 
@@ -306,28 +306,29 @@ describe('Navigation Integration - Unified State', () => {
       const tab = store.get(activeTabAtom);
       const bottomPanelMode = store.get(bottomPanelModeAtom);
 
-      expect(selection.functionName).toBe('extractUser');
-      expect(selection.activeWorkflowId).toBeNull();
+      expect(selection.mode).toBe('function');
+      if (selection.mode === 'function') {
+        expect(selection.functionName).toBe('extractUser');
+      }
       expect(tab).toBe('preview');
-      expect(bottomPanelMode).toBe('test-panel');
+      expect(bottomPanelMode).toBe('detail-panel');
     });
 
     it('Scenario: Switch from workflow to standalone function', () => {
       // Setup: In a workflow
       store.set(unifiedSelectionAtom, {
-        functionName: 'processData',
-        testName: null,
-        activeWorkflowId: 'simpleWorkflow',
+        mode: 'workflow',
+        workflowId: 'simpleWorkflow',
         selectedNodeId: 'processData',
+        testName: null,
       });
       store.set(activeTabAtom, 'graph');
 
       // Action: Switch to standalone function
       store.set(unifiedSelectionAtom, {
+        mode: 'function',
         functionName: 'extractUser',
         testName: null,
-        activeWorkflowId: null,
-        selectedNodeId: null,
       });
       store.set(activeTabAtom, 'preview');
 
@@ -335,10 +336,9 @@ describe('Navigation Integration - Unified State', () => {
       const tab = store.get(activeTabAtom);
       const bottomPanelMode = store.get(bottomPanelModeAtom);
 
-      expect(selection.activeWorkflowId).toBeNull();
-      expect(selection.selectedNodeId).toBeNull();
+      expect(selection.mode).toBe('function');
       expect(tab).toBe('preview');
-      expect(bottomPanelMode).toBe('test-panel');
+      expect(bottomPanelMode).toBe('detail-panel');
     });
   });
 });

@@ -49,6 +49,9 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
   const isRunning = useAtomValue(areTestsRunningAtom);
   const selection = useAtomValue(unifiedSelectionAtom);
 
+  const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.selectedNodeId : null;
+  const testName = selection.mode !== 'empty' ? selection.testName : null;
+
   return (
     <Button
       variant="default"
@@ -60,13 +63,13 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
           : 'bg-purple-600 hover:bg-purple-700 text-white',
         className
       )}
-      disabled={!isRunning && (!selection.functionName || !selection.testName)}
+      disabled={!isRunning && (!functionName || !testName)}
       onClick={() => {
         if (isRunning) {
           cancelTests();
-        } else if (selection.functionName && selection.testName) {
+        } else if (functionName && testName) {
           void runBamlTests([
-            { functionName: selection.functionName, testName: selection.testName },
+            { functionName, testName },
           ]);
         }
       }}
@@ -135,11 +138,8 @@ export function PreviewToolbar() {
     return 'text-sm hidden md:block whitespace-nowrap';
   };
 
-  // Check if we're in a workflow context (workflow + node selected, but no function)
-  const isWorkflowContext =
-    !selectedFn &&
-    unifiedSelection.activeWorkflowId &&
-    unifiedSelection.selectedNodeId;
+  // Check if we're in a workflow context (workflow mode)
+  const isWorkflowContext = !selectedFn && unifiedSelection.mode === 'workflow';
 
   const hasSelection = selectedFn !== null || isWorkflowContext;
 
@@ -157,7 +157,7 @@ export function PreviewToolbar() {
               <div className="min-w-0 flex-1 overflow-hidden">
                 <FunctionTestName
                   functionName={selectedFn.name}
-                  testName={unifiedSelection.testName}
+                  testName={unifiedSelection.mode !== 'empty' ? unifiedSelection.testName : null}
                 />
               </div>
 
@@ -165,13 +165,13 @@ export function PreviewToolbar() {
             </div>
           </div>
         )}
-        {isWorkflowContext && (
+        {isWorkflowContext && unifiedSelection.mode === 'workflow' && (
           <div className="flex flex-col gap-1 min-w-0 flex-1 overflow-hidden">
             <div className="flex flex-row items-center gap-2 min-w-0">
               <div className="min-w-0 flex-1 overflow-hidden">
                 <WorkflowNodeName
-                  workflowId={unifiedSelection.activeWorkflowId!}
-                  nodeId={unifiedSelection.selectedNodeId!}
+                  workflowId={unifiedSelection.workflowId}
+                  nodeId={unifiedSelection.selectedNodeId}
                 />
               </div>
 

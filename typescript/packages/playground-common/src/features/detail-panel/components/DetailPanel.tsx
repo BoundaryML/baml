@@ -25,7 +25,7 @@ import {
 import { useActiveNode, useDetailPanel, useNodeInputSources, useSelectedInputSource } from '../../../sdk/hooks';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useAtomValue } from 'jotai';
-import { unifiedSelectionAtom } from '../../../shared/baml-project-panel/playground-panel/atoms';
+import { selectedTestCaseNameAtom } from '../../../sdk/atoms/core.atoms';
 import type { GraphNode, NodeExecution, InputSource } from '../../../sdk/types';
 import { useBAMLSDK } from '../../../sdk';
 
@@ -154,7 +154,7 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
   const { selectedSource, selectSource } = useSelectedInputSource();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { testName } = useAtomValue(unifiedSelectionAtom);
+  const testName = useAtomValue(selectedTestCaseNameAtom);
 
   // Fetch test cases and merge with execution inputs
   const allInputSources = useMemo(() => {
@@ -470,7 +470,7 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
   const { selectedSource, selectSource } = useSelectedInputSource();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { testName } = useAtomValue(unifiedSelectionAtom);
+  const testName = useAtomValue(selectedTestCaseNameAtom);
   const logs = execution?.logs || [];
 
   // Fetch test cases and merge with execution inputs

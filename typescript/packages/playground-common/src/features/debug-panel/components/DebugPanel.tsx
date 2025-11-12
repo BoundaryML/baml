@@ -8,7 +8,7 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Play, FileCode, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, Edit, GitBranch, RefreshCw, Layers, CornerDownLeft, Square } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import { bamlFilesAtom } from '../../../sdk/atoms/core.atoms';
+import { bamlFilesAtom, SelectionQuery } from '../../../sdk/atoms/core.atoms';
 import type { BAMLTest, CodeClickEvent, BAMLFile } from '../../../sdk/types';
 import { useBAMLSDK } from '../../../sdk/provider';
 import type { VscodeToWebviewCommand } from '../../../baml_wasm_web/vscode-to-webview-rpc';
@@ -277,11 +277,11 @@ export function DebugPanel() {
   };
 
   const isNodeActive = (node: DebugNode) => {
-    return selection.selectedNodeId === node.id || selection.functionName === node.id;
+    return SelectionQuery.isNodeActive(selection, node.id);
   };
 
   const isTestActive = (test: BAMLTest) => {
-    return selection.functionName === test.functionName && selection.testName === test.name;
+    return SelectionQuery.isTestActive(selection, test);
   };
 
   // Simulate adding a new file with CheckAvailability function

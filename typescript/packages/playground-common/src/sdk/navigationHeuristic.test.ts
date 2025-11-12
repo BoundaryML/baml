@@ -5,9 +5,10 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { determineNavigationAction, type NavigationState, type NavigationAction } from './navigationHeuristic';
+import { determineNavigationAction, type NavigationContext } from './navigationHeuristic';
 import type { CodeClickEvent, BAMLFile } from './types';
 import type { FunctionWithCallGraph } from './interface';
+import type { SelectionState } from './atoms/core.atoms';
 import { createMockRuntimeConfig } from './mock-config/config';
 
 // ============================================================================
@@ -23,55 +24,9 @@ beforeAll(() => {
   mockBAMLFiles = mockConfig.bamlFiles;
 });
 
-type SelectionSnapshot = {
-  functionName: string | null;
-  testName: string | null;
-  activeWorkflowId: string | null;
-  selectedNodeId: string | null;
-};
-
-const applyActionToSelection = (
-  prev: SelectionSnapshot,
-  action: NavigationAction
-): SelectionSnapshot => {
-  switch (action.type) {
-    case 'switch-workflow':
-      return {
-        functionName: action.workflowId,
-        testName: null,
-        activeWorkflowId: action.workflowId,
-        selectedNodeId: null,
-      };
-    case 'select-node':
-      return {
-        functionName: action.nodeId,
-        testName: action.testId ?? prev.testName ?? null,
-        activeWorkflowId: action.workflowId,
-        selectedNodeId: action.nodeId,
-      };
-    case 'switch-and-select':
-      return {
-        functionName: action.nodeId,
-        testName: action.testId ?? null,
-        activeWorkflowId: action.workflowId,
-        selectedNodeId: action.nodeId,
-      };
-    case 'show-function-tests':
-      return {
-        functionName: action.functionName,
-        testName: action.tests[0] ?? null,
-        activeWorkflowId: null,
-        selectedNodeId: action.functionName,
-      };
-    case 'empty-state':
-    default:
-      return {
-        functionName: null,
-        testName: null,
-        activeWorkflowId: null,
-        selectedNodeId: null,
-      };
-  }
+// Helper to check if a selection is empty
+const isEmptySelection = (selection: SelectionState): boolean => {
+  return selection.mode === 'empty';
 };
 
 // ============================================================================
@@ -88,7 +43,7 @@ describe('Navigation Heuristic - Test Click Events', () => {
       nodeType: 'function',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: null,
       workflows: mockWorkflows,
       bamlFiles: mockBAMLFiles,
@@ -97,8 +52,10 @@ describe('Navigation Heuristic - Test Click Events', () => {
     const action = determineNavigationAction(event, state);
 
     expect(action).toEqual({
-      type: 'switch-workflow',
+      mode: 'workflow',
       workflowId: 'simpleWorkflow',
+      selectedNodeId: 'simpleWorkflow',
+      testName: 'test_simple_success',
     });
   });
 
@@ -111,7 +68,7 @@ describe('Navigation Heuristic - Test Click Events', () => {
       nodeType: 'function',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: null,
       workflows: mockWorkflows,
       bamlFiles: mockBAMLFiles,
@@ -120,10 +77,10 @@ describe('Navigation Heuristic - Test Click Events', () => {
     const action = determineNavigationAction(event, state);
 
     expect(action).toEqual({
-      type: 'switch-and-select',
+      mode: 'workflow',
       workflowId: 'simpleWorkflow',
-      nodeId: 'fetchData',
-      testId: 'test_fetchData_success',
+      selectedNodeId: 'fetchData',
+      testName: 'test_fetchData_success',
     });
   });
 
@@ -136,7 +93,7 @@ describe('Navigation Heuristic - Test Click Events', () => {
       nodeType: 'llm_function',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: 'conditionalWorkflow', // Different workflow is active
       workflows: mockWorkflows,
       bamlFiles: mockBAMLFiles,
@@ -145,10 +102,10 @@ describe('Navigation Heuristic - Test Click Events', () => {
     const action = determineNavigationAction(event, state);
 
     expect(action).toEqual({
-      type: 'switch-and-select',
+      mode: 'workflow',
       workflowId: 'simpleWorkflow',
-      nodeId: 'processData',
-      testId: 'test_processData_valid',
+      selectedNodeId: 'processData',
+      testName: 'test_processData_valid',
     });
   });
 
@@ -161,7 +118,7 @@ describe('Navigation Heuristic - Test Click Events', () => {
       nodeType: 'llm_function',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: null,
       workflows: mockWorkflows,
       bamlFiles: mockBAMLFiles,
@@ -170,9 +127,9 @@ describe('Navigation Heuristic - Test Click Events', () => {
     const action = determineNavigationAction(event, state);
 
     expect(action).toEqual({
-      type: 'show-function-tests',
+      mode: 'function',
       functionName: 'extractUser',
-      tests: ['test_extract_valid_user'],
+      testName: 'test_extract_valid_user',
     });
   });
 
@@ -185,7 +142,7 @@ describe('Navigation Heuristic - Test Click Events', () => {
       nodeType: 'function',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: null,
       workflows: mockWorkflows,
       bamlFiles: mockBAMLFiles,
@@ -194,9 +151,7 @@ describe('Navigation Heuristic - Test Click Events', () => {
     const action = determineNavigationAction(event, state);
 
     expect(action).toEqual({
-      type: 'empty-state',
-      reason: 'Test function is not part of any workflow',
-      functionName: 'unknownFunction',
+      mode: 'empty',
     });
   });
 
@@ -210,7 +165,7 @@ describe('Navigation Heuristic - Test Click Events', () => {
       nodeType: 'function',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: 'sharedWorkflow', // Currently viewing sharedWorkflow
       workflows: mockWorkflows, // fetchData exists in simpleWorkflow and sharedWorkflow
       bamlFiles: mockBAMLFiles,
@@ -220,10 +175,10 @@ describe('Navigation Heuristic - Test Click Events', () => {
 
     // Should select the node in the current workflow, not switch to simpleWorkflow
     expect(action).toEqual({
-      type: 'select-node',
+      mode: 'workflow',
       workflowId: 'sharedWorkflow',
-      nodeId: 'fetchData',
-      testId: 'test_fetchData_in_shared',
+      selectedNodeId: 'fetchData',
+      testName: 'test_fetchData_in_shared',
     });
   });
 });
@@ -238,7 +193,7 @@ describe('Navigation Heuristic - Function Click Events', () => {
         filePath: 'workflows/simple.baml',
       };
 
-      const state: NavigationState = {
+      const state: NavigationContext = {
         activeWorkflowId: 'simpleWorkflow',
         workflows: mockWorkflows,
         bamlFiles: mockBAMLFiles,
@@ -247,9 +202,10 @@ describe('Navigation Heuristic - Function Click Events', () => {
       const action = determineNavigationAction(event, state);
 
       expect(action).toEqual({
-        type: 'select-node',
+        mode: 'workflow',
         workflowId: 'simpleWorkflow',
-        nodeId: 'processData',
+        selectedNodeId: 'processData',
+        testName: null,
       });
     });
 
@@ -261,7 +217,7 @@ describe('Navigation Heuristic - Function Click Events', () => {
         filePath: 'workflows/simple.baml',
       };
 
-      const state: NavigationState = {
+      const state: NavigationContext = {
         activeWorkflowId: 'simpleWorkflow',
         workflows: mockWorkflows,
         bamlFiles: mockBAMLFiles,
@@ -270,9 +226,10 @@ describe('Navigation Heuristic - Function Click Events', () => {
       const action = determineNavigationAction(event, state);
 
       expect(action).toEqual({
-        type: 'select-node',
+        mode: 'workflow',
         workflowId: 'simpleWorkflow',
-        nodeId: 'simpleWorkflow',
+        selectedNodeId: 'simpleWorkflow',
+        testName: null,
       });
     });
   });
@@ -286,7 +243,7 @@ describe('Navigation Heuristic - Function Click Events', () => {
         filePath: 'workflows/conditional.baml',
       };
 
-      const state: NavigationState = {
+      const state: NavigationContext = {
         activeWorkflowId: 'simpleWorkflow',
         workflows: mockWorkflows,
         bamlFiles: mockBAMLFiles,
@@ -295,9 +252,10 @@ describe('Navigation Heuristic - Function Click Events', () => {
       const action = determineNavigationAction(event, state);
 
       expect(action).toEqual({
-        type: 'switch-and-select',
+        mode: 'workflow',
         workflowId: 'conditionalWorkflow',
-        nodeId: 'handleSuccess',
+        selectedNodeId: 'handleSuccess',
+        testName: null,
       });
     });
 
@@ -309,7 +267,7 @@ describe('Navigation Heuristic - Function Click Events', () => {
         filePath: 'workflows/simple.baml',
       };
 
-      const state: NavigationState = {
+      const state: NavigationContext = {
         activeWorkflowId: null,
         workflows: mockWorkflows,
         bamlFiles: mockBAMLFiles,
@@ -318,9 +276,10 @@ describe('Navigation Heuristic - Function Click Events', () => {
       const action = determineNavigationAction(event, state);
 
       expect(action).toEqual({
-        type: 'switch-and-select',
+        mode: 'workflow',
         workflowId: 'simpleWorkflow',
-        nodeId: 'fetchData',
+        selectedNodeId: 'fetchData',
+        testName: null,
       });
     });
 
@@ -332,7 +291,7 @@ describe('Navigation Heuristic - Function Click Events', () => {
         filePath: 'workflows/conditional.baml',
       };
 
-      const state: NavigationState = {
+      const state: NavigationContext = {
         activeWorkflowId: 'simpleWorkflow',
         workflows: mockWorkflows,
         bamlFiles: mockBAMLFiles,
@@ -341,9 +300,10 @@ describe('Navigation Heuristic - Function Click Events', () => {
       const action = determineNavigationAction(event, state);
 
       expect(action).toEqual({
-        type: 'switch-and-select',
+        mode: 'workflow',
         workflowId: 'conditionalWorkflow',
-        nodeId: 'conditionalWorkflow',
+        selectedNodeId: 'conditionalWorkflow',
+        testName: null,
       });
     });
   });
@@ -357,7 +317,7 @@ describe('Navigation Heuristic - Function Click Events', () => {
         filePath: 'functions/utils.baml',
       };
 
-      const state: NavigationState = {
+      const state: NavigationContext = {
         activeWorkflowId: null,
         workflows: mockWorkflows,
         bamlFiles: mockBAMLFiles,
@@ -366,9 +326,9 @@ describe('Navigation Heuristic - Function Click Events', () => {
       const action = determineNavigationAction(event, state);
 
       expect(action).toEqual({
-        type: 'show-function-tests',
+        mode: 'function',
         functionName: 'extractUser',
-        tests: ['test_extract_valid_user'],
+        testName: 'test_extract_valid_user', // Auto-selects first test
       });
     });
   });
@@ -382,7 +342,7 @@ describe('Navigation Heuristic - Function Click Events', () => {
         filePath: 'functions/utils.baml',
       };
 
-      const state: NavigationState = {
+      const state: NavigationContext = {
         activeWorkflowId: null,
         workflows: mockWorkflows,
         bamlFiles: mockBAMLFiles,
@@ -391,9 +351,7 @@ describe('Navigation Heuristic - Function Click Events', () => {
       const action = determineNavigationAction(event, state);
 
       expect(action).toEqual({
-        type: 'empty-state',
-        reason: 'Function is not part of any workflow and has no tests',
-        functionName: 'helperFunction',
+        mode: 'empty',
       });
     });
 
@@ -405,7 +363,7 @@ describe('Navigation Heuristic - Function Click Events', () => {
         filePath: 'unknown.baml',
       };
 
-      const state: NavigationState = {
+      const state: NavigationContext = {
         activeWorkflowId: null,
         workflows: mockWorkflows,
         bamlFiles: mockBAMLFiles,
@@ -414,9 +372,7 @@ describe('Navigation Heuristic - Function Click Events', () => {
       const action = determineNavigationAction(event, state);
 
       expect(action).toEqual({
-        type: 'empty-state',
-        reason: 'Function is not part of any workflow and has no tests',
-        functionName: 'nonExistentFunction',
+        mode: 'empty',
       });
     });
   });
@@ -431,7 +387,7 @@ describe('Navigation Heuristic - Edge Cases', () => {
       filePath: 'test.baml',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: null,
       workflows: [],
       bamlFiles: mockBAMLFiles,
@@ -440,7 +396,7 @@ describe('Navigation Heuristic - Edge Cases', () => {
     const action = determineNavigationAction(event, state);
 
     // Function doesn't exist in BAML files, so should show empty state
-    expect(action.type).toBe('empty-state');
+    expect(action.mode).toBe('empty');
   });
 
   it('should handle empty BAML files list', () => {
@@ -451,7 +407,7 @@ describe('Navigation Heuristic - Edge Cases', () => {
       filePath: 'test.baml',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: null,
       workflows: mockWorkflows,
       bamlFiles: [],
@@ -459,7 +415,7 @@ describe('Navigation Heuristic - Edge Cases', () => {
 
     const action = determineNavigationAction(event, state);
 
-    expect(action.type).toBe('empty-state');
+    expect(action.mode).toBe('empty');
   });
 
   it('should handle workflow that does not exist in workflows list', () => {
@@ -470,7 +426,7 @@ describe('Navigation Heuristic - Edge Cases', () => {
       filePath: 'test.baml',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: 'nonExistentWorkflow',
       workflows: mockWorkflows,
       bamlFiles: mockBAMLFiles,
@@ -479,7 +435,7 @@ describe('Navigation Heuristic - Edge Cases', () => {
     const action = determineNavigationAction(event, state);
 
     // Should skip Priority 1 (current workflow check) and continue to other priorities
-    expect(action.type).toBe('empty-state');
+    expect(action.mode).toBe('empty');
   });
 });
 
@@ -494,7 +450,7 @@ describe('Navigation Heuristic - Complex Scenarios', () => {
       filePath: 'workflows/simple.baml',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: 'simpleWorkflow',
       workflows: mockWorkflows,
       bamlFiles: mockBAMLFiles,
@@ -502,8 +458,10 @@ describe('Navigation Heuristic - Complex Scenarios', () => {
 
     const action = determineNavigationAction(event, state);
 
-    expect(action.type).toBe('select-node');
-    expect(action).toHaveProperty('workflowId', 'simpleWorkflow');
+    expect(action.mode).toBe('workflow');
+    if (action.mode === 'workflow') {
+      expect(action.workflowId).toBe('simpleWorkflow');
+    }
   });
 
   it('should handle function with multiple tests', () => {
@@ -514,7 +472,7 @@ describe('Navigation Heuristic - Complex Scenarios', () => {
       filePath: 'workflows/simple.baml',
     };
 
-    const state: NavigationState = {
+    const state: NavigationContext = {
       activeWorkflowId: 'simpleWorkflow',
       workflows: mockWorkflows,
       bamlFiles: mockBAMLFiles,
@@ -524,26 +482,21 @@ describe('Navigation Heuristic - Complex Scenarios', () => {
 
     // simpleWorkflow is in the current workflow, so should select it
     expect(action).toEqual({
-      type: 'select-node',
+      mode: 'workflow',
       workflowId: 'simpleWorkflow',
-      nodeId: 'simpleWorkflow',
+      selectedNodeId: 'simpleWorkflow',
+      testName: null,
     });
   });
 
   it('should repeatedly select nodes when toggling between workflow and child nodes', () => {
-    const initialState: NavigationState = {
+    const initialState: NavigationContext = {
       activeWorkflowId: null,
       workflows: mockWorkflows,
       bamlFiles: mockBAMLFiles,
     };
 
-    let selection: SelectionSnapshot = {
-      functionName: null,
-      testName: null,
-      activeWorkflowId: null,
-      selectedNodeId: null,
-    };
-
+    // First click on a function in a workflow - should switch to that workflow
     const switchAction = determineNavigationAction(
       {
         type: 'function',
@@ -555,18 +508,14 @@ describe('Navigation Heuristic - Complex Scenarios', () => {
     );
 
     expect(switchAction).toEqual({
-      type: 'switch-and-select',
+      mode: 'workflow',
       workflowId: 'conditionalWorkflow',
-      nodeId: 'checkCondition',
-    });
-
-    selection = applyActionToSelection(selection, switchAction);
-    expect(selection).toMatchObject({
-      activeWorkflowId: 'conditionalWorkflow',
       selectedNodeId: 'checkCondition',
+      testName: null,
     });
 
-    const stateAfterSwitch: NavigationState = {
+    // Now click on the workflow itself while already in that workflow
+    const stateAfterSwitch: NavigationContext = {
       ...initialState,
       activeWorkflowId: 'conditionalWorkflow',
     };
@@ -582,17 +531,13 @@ describe('Navigation Heuristic - Complex Scenarios', () => {
     );
 
     expect(workflowAction).toEqual({
-      type: 'select-node',
+      mode: 'workflow',
       workflowId: 'conditionalWorkflow',
-      nodeId: 'conditionalWorkflow',
-    });
-
-    selection = applyActionToSelection(selection, workflowAction);
-    expect(selection).toMatchObject({
-      activeWorkflowId: 'conditionalWorkflow',
       selectedNodeId: 'conditionalWorkflow',
+      testName: null,
     });
 
+    // Click back to child node - should stay in workflow and select the child
     const backToChild = determineNavigationAction(
       {
         type: 'function',
@@ -604,15 +549,10 @@ describe('Navigation Heuristic - Complex Scenarios', () => {
     );
 
     expect(backToChild).toEqual({
-      type: 'select-node',
+      mode: 'workflow',
       workflowId: 'conditionalWorkflow',
-      nodeId: 'checkCondition',
-    });
-
-    selection = applyActionToSelection(selection, backToChild);
-    expect(selection).toMatchObject({
-      activeWorkflowId: 'conditionalWorkflow',
       selectedNodeId: 'checkCondition',
+      testName: null,
     });
   });
 
