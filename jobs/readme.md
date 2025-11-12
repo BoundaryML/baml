@@ -70,9 +70,18 @@ Boundary Cloud - Rust backend, Typescript / Nextjs frontend
 
 **Do I need to know about programming languages / compilers?** No, we don’t need to hire language experts. We train language experts.
 
+**Do we really need a new programming language?** Watch this [conference talk](https://www.youtube.com/watch?v=2tWnjEGzRss)
+
+**Do people actually use BAML?** Yes, but don't trust us, we could be lying. ask around on [boudnaryml.com/discord](https://www.boundaryml.com/discord)
+
 Generally speaking, no prior knowledge needed, but you should be able to take any problem, and solve it. If graph / tree problems are stressful, Boundary is probably not a good fit. If questions like the following seem fun, this is gonna be a heck of ride.
 
 * what syntax ergonomics can make AI better at grepping for code?
 * how does LLVM work?
 * how does react’s re-rendering work?
 * how do I design a package manager?
+
+## Operational stuff
+* 5 days a week, in person, in Seattle (work should be fun, and in person is just more fun)
+* compensation range: 100k - 180k, 0.2-0.75% equity
+* Current team is all senior/staff level engineers (check out github contributors to stalk us)
