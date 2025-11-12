@@ -16,7 +16,7 @@ import {
 import type * as React from 'react';
 import { useMemo } from 'react';
 import { vscode } from '../../vscode';
-import { selectedItemAtom, testcaseObjectAtom } from '../atoms';
+import { testcaseObjectAtom } from '../atoms';
 import { Loader } from '../prompt-preview/components';
 import {
   selectedHistoryIndexAtom,
@@ -26,6 +26,7 @@ import { useRunBamlTests } from '../prompt-preview/test-panel/test-runner';
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils';
 import type { TestItemProps } from './types';
 import { highlightText } from './utils';
+import { navigationDispatcherAtom } from '../../../../sdk/navigation/dispatcher';
 
 const createSpan = (span: {
   start: number;
@@ -48,7 +49,7 @@ export function TestItem({
   const testHistory = useAtomValue(testHistoryAtom);
   const selectedIndex = useAtomValue(selectedHistoryIndexAtom);
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests();
-  const setSelectedItem = useSetAtom(selectedItemAtom);
+  const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
 
   const testAtom = useMemo(
     () => testcaseObjectAtom({ functionName, testcaseName: label }),
@@ -82,13 +83,31 @@ export function TestItem({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedItem(functionName, label);
+
+    // Dispatch test navigation event (same as DebugPanel)
+    dispatchNavigation({
+      type: 'test',
+      functionName,
+      testName: label,
+      filePath: tc?.span?.filePath ?? 'unknown',
+      nodeType: 'function',
+      source: 'sidebar',
+    });
   };
 
   const handleJumpToFile = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Update selection first
-    setSelectedItem(functionName, label);
+
+    // Dispatch test navigation event first
+    dispatchNavigation({
+      type: 'test',
+      functionName,
+      testName: label,
+      filePath: tc?.span?.filePath ?? 'unknown',
+      nodeType: 'function',
+      source: 'sidebar',
+    });
+
     // Then jump to file
     if (tc?.span) {
       vscode.jumpToFile(tc.span);
@@ -109,7 +128,9 @@ export function TestItem({
       <SidebarMenuButton
         onClick={handleClick}
         isActive={isSelected}
-        className="flex justify-between items-center w-full text-[10px] py-0.5 h-6"
+        className={`flex justify-between items-center w-full text-[10px] py-0.5 h-6 ${
+          isSelected ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
+        }`}
       >
         <div className="flex items-center min-w-0 gap-1.5">
           {getStatusIcon()}

@@ -22,10 +22,10 @@ import { useMemo, useState } from 'react';
 import { vscode } from '../vscode';
 import {
   functionObjectAtom,
-  selectedItemAtom,
   testcaseObjectAtom,
 } from './atoms';
 import { functionsAtom as sdkFunctionsAtom } from '../../../sdk/atoms/core.atoms';
+import { navigationDispatcherAtom } from '../../../sdk/navigation/dispatcher';
 
 interface FunctionTestNameProps {
   functionName: string;
@@ -59,7 +59,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
   const fn = useAtomValue(functionAtom);
   const tc = useAtomValue(testcaseAtom);
   const functions = useAtomValue(functionsAtom);
-  const setSelectedItem = useSetAtom(selectedItemAtom);
+  const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
 
   const currentFunction = functions.find((f) => f.name === functionName);
   const availableTests = currentFunction?.tests || [];
@@ -76,11 +76,34 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
         value={func.name}
         onSelect={() => {
           const firstTest = func.tests[0];
+
+          // Determine function type
+          const functionType = fn?.type === 'workflow' ? 'workflow'
+            : fn?.type === 'llm_function' ? 'llm_function'
+            : fn?.functionFlavor === 'llm' ? 'llm_function'
+            : 'function';
+
           if (firstTest) {
-            setSelectedItem(func.name, firstTest);
+            // Dispatch test navigation
+            dispatchNavigation({
+              type: 'test',
+              functionName: func.name,
+              testName: firstTest,
+              filePath: fn?.span?.filePath ?? fn?.filePath ?? 'unknown',
+              nodeType: fn?.type === 'llm_function' ? 'llm_function' : 'function',
+              source: 'sidebar',
+            });
           } else {
-            setSelectedItem(func.name, undefined);
+            // Dispatch function navigation
+            dispatchNavigation({
+              type: 'function',
+              functionName: func.name,
+              functionType,
+              filePath: fn?.span?.filePath ?? fn?.filePath ?? 'unknown',
+              source: 'sidebar',
+            });
           }
+
           setFunctionOpen(false);
           if (fn?.span) {
             vscode.jumpToFile(fn.span);
@@ -115,7 +138,16 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
         key={test}
         value={test}
         onSelect={() => {
-          setSelectedItem(functionName, test);
+          // Dispatch test navigation
+          dispatchNavigation({
+            type: 'test',
+            functionName,
+            testName: test,
+            filePath: tc?.span?.filePath ?? 'unknown',
+            nodeType: 'function',
+            source: 'sidebar',
+          });
+
           setTestOpen(false);
           if (tc?.span) {
             vscode.jumpToFile(tc.span);

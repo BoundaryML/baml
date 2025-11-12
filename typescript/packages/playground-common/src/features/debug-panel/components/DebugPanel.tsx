@@ -5,16 +5,17 @@
  * to test how the app reacts to code navigation events
  */
 
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Play, FileCode, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, Edit, GitBranch, RefreshCw, Layers, CornerDownLeft, Square } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import { bamlFilesAtom, activeCodeClickAtom } from '../../../sdk/atoms/core.atoms';
+import { bamlFilesAtom } from '../../../sdk/atoms/core.atoms';
 import type { BAMLTest, CodeClickEvent, BAMLFile } from '../../../sdk/types';
 import { useBAMLSDK } from '../../../sdk/provider';
 import type { VscodeToWebviewCommand } from '../../../baml_wasm_web/vscode-to-webview-rpc';
 import { useRunBamlTests } from '../../../shared/baml-project-panel/playground-panel/prompt-preview/test-panel/test-runner';
 import { unifiedSelectionAtom } from '../../../shared/baml-project-panel/playground-panel/unified-atoms';
 import type { FunctionWithCallGraph, NodeType } from '../../../sdk/interface';
+import { navigationDispatcherAtom, navigationIntentAtom } from '../../../sdk/navigation/dispatcher';
 
 type DebugNodeType = NodeType | 'workflow' | 'block';
 type FunctionEventType = Extract<CodeClickEvent, { type: 'function' }>['functionType'];
@@ -202,9 +203,9 @@ export function DebugPanel() {
   const sdk = useBAMLSDK();
   const { runTests: runBamlTests } = useRunBamlTests();
   const [bamlFiles, setBAMLFiles] = useAtom(bamlFilesAtom);
-  const setActiveCodeClick = useSetAtom(activeCodeClickAtom);
-  const [activeCodeClick] = useAtom(activeCodeClickAtom);
-  const setUnifiedSelection = useSetAtom(unifiedSelectionAtom);
+  const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
+  const lastIntent = useAtomValue(navigationIntentAtom);
+  const selection = useAtomValue(unifiedSelectionAtom);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [workflows, setWorkflows] = useState<FunctionWithCallGraph[]>([]);
 
@@ -249,15 +250,8 @@ export function DebugPanel() {
       functionType: mapNodeTypeToEventType(node.nodeType),
       filePath: node.filePath,
     };
-    setActiveCodeClick(event);
     console.log('🔍 Simulated function click:', event);
-
-    // Update unified selection (mirrors SDK atoms)
-    setUnifiedSelection((prev) => ({
-      ...prev,
-      functionName: node.id,
-      testName: null,
-    }));
+    dispatchNavigation({ ...event, source: 'debug-panel' });
   };
 
   const handleTestClick = (test: BAMLTest) => {
@@ -268,14 +262,8 @@ export function DebugPanel() {
       filePath: test.filePath,
       nodeType: test.nodeType,
     };
-    setActiveCodeClick(event);
     console.log('🔍 Simulated test click:', event);
-
-    setUnifiedSelection((prev) => ({
-      ...prev,
-      functionName: test.functionName,
-      testName: test.name,
-    }));
+    dispatchNavigation({ ...event, source: 'debug-panel' });
   };
 
   const handleTestRun = async (test: BAMLTest, e: React.MouseEvent) => {
@@ -289,11 +277,11 @@ export function DebugPanel() {
   };
 
   const isNodeActive = (node: DebugNode) => {
-    return activeCodeClick?.type === 'function' && activeCodeClick.functionName === node.id;
+    return selection.selectedNodeId === node.id || selection.functionName === node.id;
   };
 
   const isTestActive = (test: BAMLTest) => {
-    return activeCodeClick?.type === 'test' && activeCodeClick.testName === test.name;
+    return selection.functionName === test.functionName && selection.testName === test.name;
   };
 
   // Simulate adding a new file with CheckAvailability function
@@ -526,13 +514,13 @@ Date: ${dateTime}`
       </div>
 
       {/* Active Event Display */}
-      {activeCodeClick && (
+      {lastIntent && (
         <div className="sticky bottom-0 bg-card border-t border-border px-2 py-1">
           <div className="text-[9px] font-semibold text-muted-foreground mb-0.5">Active:</div>
           <div className="text-[10px] font-mono text-foreground truncate">
-            {activeCodeClick.type === 'function'
-              ? `${activeCodeClick.functionName} (${activeCodeClick.functionType})`
-              : `${activeCodeClick.testName} → ${activeCodeClick.functionName}`
+            {lastIntent.type === 'function'
+              ? `${lastIntent.functionName} (${lastIntent.functionType})`
+              : `${lastIntent.testName} → ${lastIntent.functionName}`
             }
           </div>
         </div>

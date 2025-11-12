@@ -19,13 +19,30 @@ import type { Node } from '@xyflow/react';
 // Import graph primitives and components from WorkflowApp
 import { kEdgeTypes, ColorfulMarkerDefinitions, kNodeTypes } from '../../../../graph-primitives';
 import { ReactflowInstance } from '../../../../features/graph/components';
-import { useDetailPanel, useActiveWorkflow, useLayoutDirection } from '../../../../sdk/hooks';
+import { useActiveWorkflow, useLayoutDirection } from '../../../../sdk/hooks';
 import { flowStore } from '../../../../states/reactflow';
 import { Loader as Spinner } from '@baml/ui/custom/loader';
 import { useGraphSync } from '../../../../features/graph/hooks';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { graphControlsTipDismissedAtom, unifiedSelectionAtom } from '../atoms';
 import { MousePointer2, ZoomIn, X, ChevronLeft } from 'lucide-react';
+import { navigationDispatcherAtom } from '../../../../sdk/navigation/dispatcher';
+import type { NavigationIntent } from '../../../../sdk/types';
+
+type FunctionIntent = Extract<NavigationIntent, { type: 'function' }>;
+
+const mapNodeTypeToFunctionType = (node: Node): FunctionIntent['functionType'] => {
+  switch (node.type) {
+    case 'llm':
+      return 'llm_function';
+    case 'diamond':
+      return 'conditional';
+    case 'hexagon':
+      return 'loop';
+    default:
+      return 'function';
+  }
+};
 
 /**
  * GraphView - ReactFlow graph component for the Graph tab
@@ -43,11 +60,9 @@ export const GraphView = () => {
   const { convertedGraph, isLayoutLoading } = useGraphSync();
 
   // SDK hooks
-  const detailPanel = useDetailPanel();
   const { activeWorkflowId } = useActiveWorkflow();
   const [direction] = useLayoutDirection();
-
-  const setUnifiedSelection = useSetAtom(unifiedSelectionAtom);
+  const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
   const [graphTipDismissed, setGraphTipDismissed] = useAtom(
     graphControlsTipDismissedAtom
   );
@@ -112,14 +127,13 @@ export const GraphView = () => {
   // Handle node click - select the node and open detail panel
   const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
     console.log('Node clicked:', node.id);
-    setUnifiedSelection((prev) => ({
-      ...prev,
+    dispatchNavigation({
+      type: 'function',
       functionName: node.id,
-      testName: null,
-      selectedNodeId: node.id,
-      activeWorkflowId: prev.activeWorkflowId ?? activeWorkflowId ?? null,
-    }));
-    detailPanel.open();
+      functionType: mapNodeTypeToFunctionType(node),
+      filePath: 'unknown',
+      source: 'graph',
+    });
   };
 
   useLayoutEffect(() => {

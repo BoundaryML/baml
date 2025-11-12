@@ -201,6 +201,11 @@ export function TestingSidebar() {
                         functionName={func.name}
                         tests={func.tests}
                         functionFlavor={func.functionFlavor}
+                        isSelected={selectedItem?.[0] === func.name && !selectedItem?.[1]}
+                        onToggle={() => {
+                          // Toggle expansion when clicked
+                          handleToggleCollapsible(func.name);
+                        }}
                       />
                       {func.tests?.length > 0 && (
                         <>

@@ -2,7 +2,7 @@
 import { Label } from '@baml/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@baml/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@baml/ui/table'
-import { useAtom, useAtomValue } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Check, Copy, Play, Square } from 'lucide-react'
 import * as React from 'react'
 
@@ -18,6 +18,7 @@ import { getExplanation, getStatus, getTestStateResponse } from '../testStateUti
 import { ResponseViewType, tabularViewConfigAtom } from './atoms'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ParsedResponseRenderer } from './ParsedResponseRender'
+import { navigationDispatcherAtom } from '../../../../../../sdk/navigation/dispatcher'
 import { TestStatus } from './TestStatus'
 import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
 import { useMemo } from 'react'
@@ -118,7 +119,8 @@ const ResponseContent = ({
 export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
   const [config, setConfig] = useAtom(tabularViewConfigAtom)
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
-  const [selectedItem, setSelectedItem] = useAtom(selectedItemAtom)
+  const selectedItem = useAtomValue(selectedItemAtom)
+  const dispatchNavigation = useSetAtom(navigationDispatcherAtom)
 
   const toggleConfig = (key: keyof typeof config) => {
     setConfig((prev) => ({
@@ -241,7 +243,17 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                   'relative cursor-pointer transition-colors hover:bg-muted/70 ',
                   isSelected && 'border-purple-500/20 shadow-sm dark:border-purple-900/30 dark:bg-muted/90',
                 )}
-                onClick={() => setSelectedItem(test.functionName, test.testName)}
+                onClick={() => {
+                  // Dispatch test navigation (nodeType will be resolved by the navigation heuristic)
+                  dispatchNavigation({
+                    type: 'test',
+                    functionName: test.functionName,
+                    testName: test.testName,
+                    filePath: 'unknown', // Will be resolved by navigation heuristic
+                    nodeType: 'function', // Default, will be resolved by heuristic
+                    source: 'test-panel',
+                  });
+                }}
               >
                 <TableCell className='px-1 py-1'>
                   <div className='flex flex-col items-center space-y-2'>

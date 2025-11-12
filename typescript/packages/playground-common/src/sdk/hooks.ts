@@ -50,7 +50,7 @@ import {
   proxyUrlAtom,
 } from './atoms/core.atoms';
 
-import type { BAMLEvent, InputSource } from './types';
+import type { BAMLEvent, InputSource, NodeType } from './types';
 
 // ============================================================================
 // Workflow Hooks
@@ -319,6 +319,7 @@ export function useActiveNode() {
   const [selectedNodeId] = useSelectedNode();
   const nodeExecutions = useNodeExecutions();
   const currentGraph = useCurrentGraph();
+  const allFunctions = useAtomValue(allFunctionsMapAtom);
 
   // IMPORTANT: Call all hooks before any conditional returns (Rules of Hooks)
   // Use empty string as fallback to maintain hook call order even when no node is selected
@@ -326,7 +327,30 @@ export function useActiveNode() {
 
   if (!selectedNodeId) return null;
 
-  const node = currentGraph.nodes.find((n) => n.id === selectedNodeId);
+  // First try to find node in current graph (for workflow nodes)
+  let node = currentGraph.nodes.find((n) => n.id === selectedNodeId);
+
+  // If not found in graph, check if it's a standalone function
+  if (!node) {
+    const func = allFunctions.get(selectedNodeId);
+    if (func) {
+      // Create a synthetic node for standalone function
+      // Map function type to NodeType (workflows become 'function' for synthetic nodes)
+      const nodeType: NodeType =
+        func.type === 'llm_function' ? 'llm_function' :
+        'function'; // default for 'function' and 'workflow' types
+
+      node = {
+        id: func.name,
+        label: func.name,
+        type: nodeType,
+        functionName: func.name,
+        codeHash: '', // Empty for synthetic nodes
+        lastModified: Date.now(),
+      };
+    }
+  }
+
   if (!node) return null;
 
   const execution = nodeExecutions.get(selectedNodeId);

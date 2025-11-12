@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { Button } from '@baml/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@baml/ui/tooltip'
 import { cn } from '@baml/ui/lib/utils'
-import { selectedItemAtom, testCaseResponseAtom, type TestState } from '../../../atoms'
+import { selectedItemAtom, testCaseResponseAtom, type TestState, testcaseObjectAtom } from '../../../atoms'
 import { FunctionTestName } from '../../../function-test-name'
 import { type TestHistoryRun } from '../atoms'
 import { useRunBamlTests } from '../test-runner'
@@ -13,6 +13,7 @@ import { getStatus } from '../testStateUtils'
 import { ResponseRenderer } from './ResponseRenderer'
 import { TestStatus } from './TestStatus'
 import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
+import { navigationDispatcherAtom } from '../../../../../../sdk/navigation/dispatcher'
 
 export const CardView = ({ currentRun }: { currentRun?: TestHistoryRun }) => {
   return (
@@ -44,8 +45,9 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
   const response = useAtomValue(testCaseResponseAtom(testId))
   const displayResponse = historicalResponse || response
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
-  const setSelectedItem = useSetAtom(selectedItemAtom)
+  const dispatchNavigation = useSetAtom(navigationDispatcherAtom)
   const selectedItem = useAtomValue(selectedItemAtom)
+  const tc = useAtomValue(testcaseObjectAtom({ functionName: testId.functionName, testcaseName: testId.testName }))
   const cardRef = useRef<HTMLDivElement>(null)
 
   const isSelected = selectedItem?.[0] === testId.functionName && selectedItem?.[1] === testId.testName
@@ -77,7 +79,16 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
         'flex cursor-pointer flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/70 dark:bg-muted/20',
         isSelected && 'border-purple-500/20 shadow-sm dark:border-purple-900/30 dark:bg-muted/90',
       )}
-      onClick={() => setSelectedItem(testId.functionName, testId.testName)}
+      onClick={() => {
+        dispatchNavigation({
+          type: 'test',
+          functionName: testId.functionName,
+          testName: testId.testName,
+          filePath: tc?.span?.filePath ?? 'unknown',
+          nodeType: 'function',
+          source: 'test-panel',
+        });
+      }}
     >
       <div className='flex gap-2 justify-between items-center'>
         <div className='flex gap-2 items-center'>

@@ -183,9 +183,13 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
     }
   }, [testName, allInputSources, node.id, selectSource, selectedSource]);
 
-  // Auto-select the latest available input source
+  // Auto-select the latest available input source (only if no test is explicitly selected)
   useEffect(() => {
+    // Don't auto-select if a source is already selected for this node
     if (selectedSource?.nodeId === node.id) return;
+
+    // Don't auto-select if a test case is explicitly selected (give testName effect priority)
+    if (testName) return;
 
     let latestSource: InputSource | null = null;
     let latestTimestamp = 0;
@@ -217,7 +221,7 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
       const source = latestSource as InputSource;
       selectSource(node.id, source.source, source.id);
     }
-  }, [allInputSources, execution?.executionId, executionInputSources, node.id, selectedSource?.nodeId, selectSource]);
+  }, [allInputSources, execution?.executionId, executionInputSources, node.id, selectedSource?.nodeId, selectSource, testName]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -466,6 +470,7 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
   const { selectedSource, selectSource } = useSelectedInputSource();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { testName } = useAtomValue(unifiedSelectionAtom);
   const logs = execution?.logs || [];
 
   // Fetch test cases and merge with execution inputs
@@ -474,9 +479,13 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
     return [...testCases, ...executionInputSources] as InputSource[];
   }, [sdk, node.functionName, node.id, executionInputSources]);
 
-  // Auto-select the latest available input source
+  // Auto-select the latest available input source (only if no test is explicitly selected)
   useEffect(() => {
+    // Don't auto-select if a source is already selected for this node
     if (selectedSource?.nodeId === node.id) return;
+
+    // Don't auto-select if a test case is explicitly selected (give testName effect priority)
+    if (testName) return;
 
     let latestSource: InputSource | null = null;
     let latestTimestamp = 0;
@@ -508,7 +517,7 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
       const source = latestSource as InputSource;
       selectSource(node.id, source.source, source.id);
     }
-  }, [allInputSources, execution?.executionId, executionInputSources, node.id, selectedSource?.nodeId, selectSource]);
+  }, [allInputSources, execution?.executionId, executionInputSources, node.id, selectedSource?.nodeId, selectSource, testName]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

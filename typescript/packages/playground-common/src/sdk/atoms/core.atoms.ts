@@ -12,6 +12,7 @@ import type {
   NodeExecutionState,
   CacheEntry,
   BAMLEvent,
+  NavigationIntent,
 } from '../types';
 import type { BamlRuntimeInterface } from '../runtime/BamlRuntimeInterface';
 import type { FunctionMetadata, FunctionWithCallGraph } from '../interface';
@@ -47,6 +48,12 @@ export const unifiedSelectionStateAtom = atom<UnifiedSelectionState>({
   activeWorkflowId: null,
   selectedNodeId: null,
 });
+
+/**
+ * ⚠️ Do not set unifiedSelectionStateAtom directly from UI components.
+ * Use the navigation dispatcher so that all selection changes pass through the
+ * navigation heuristic and keep the app in sync.
+ */
 
 /**
  * All available workflows (derived from runtime)
@@ -221,11 +228,6 @@ export const inputsDirtyAtom = atom<boolean>(false);
  */
 export const bamlFilesAtom = atom<any[]>([]);
 
-/**
- * Active code click event
- */
-export const activeCodeClickAtom = atom<any | null>(null);
-
 // ============================================================================
 // DERIVED STATE (computed from core state)
 // ============================================================================
@@ -370,24 +372,6 @@ export const selectionAtom = atom((get) => ({
   selectedFn: get(selectedFunctionObjectAtom),
   selectedTc: get(selectedTestCaseAtom),
 }));
-
-/**
- * Write-only atom to update selection (shared by updateCursor and DebugPanel)
- * This is the central place where selection state is updated
- */
-export const updateSelectionAtom = atom(
-  null,
-  (get, set, update: { functionName: string | null; testCaseName?: string | null }) => {
-    console.log('[updateSelection]', update);
-
-    const current = get(unifiedSelectionStateAtom);
-    set(unifiedSelectionStateAtom, {
-      ...current,
-      functionName: update.functionName,
-      testName: update.testCaseName ?? null,
-    });
-  }
-);
 
 /**
  * Function test snippet atom - generates test code template

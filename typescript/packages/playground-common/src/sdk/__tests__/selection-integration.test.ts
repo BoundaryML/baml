@@ -19,7 +19,7 @@ import {
   unifiedSelectionStateAtom,
 } from '../atoms/core.atoms';
 import { determineNavigationAction, type NavigationState, type NavigationAction } from '../navigationHeuristic';
-import type { CodeClickEvent } from '../types';
+import type { CodeClickEvent, NavigationIntent } from '../types';
 
 describe('Selection State Integration (Real WASM Runtime)', () => {
   let sdk: ReturnType<typeof createRealBAMLSDK>;
@@ -227,13 +227,56 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
     });
   });
 
+  const buildFunctionIntent = (functionName: string): NavigationIntent => {
+    const fn = sdk.diagnostics.getFunctions().find((f) => f.name === functionName);
+    const functionType = fn?.type === 'workflow'
+      ? 'workflow'
+      : fn?.functionFlavor === 'llm'
+        ? 'llm_function'
+        : 'function';
+    const filePath = fn?.filePath ?? 'test://selection';
+
+    return {
+      type: 'function',
+      functionName,
+      functionType,
+      filePath,
+      source: 'test-panel',
+    };
+  };
+
+  const buildTestIntent = (functionName: string, testName: string): NavigationIntent => {
+    const fn = sdk.diagnostics.getFunctions().find((f) => f.name === functionName);
+    const nodeType = fn?.functionFlavor === 'llm' ? 'llm_function' : 'function';
+    const filePath = fn?.filePath ?? 'test://selection';
+
+    return {
+      type: 'test',
+      functionName,
+      testName,
+      nodeType,
+      filePath,
+      source: 'test-panel',
+    };
+  };
+
+  const dispatchIntent = (intent: NavigationIntent | null) => {
+    if (intent) {
+      store.set(sdk.atoms.navigationDispatcherAtom, intent);
+    } else {
+      store.set(unifiedSelectionStateAtom, {
+        functionName: null,
+        testName: null,
+        activeWorkflowId: null,
+        selectedNodeId: null,
+      });
+    }
+  };
+
   describe('Clicking on Functions', () => {
     it('should update selection when clicking on CheckAvailability function', () => {
       // Simulate clicking on CheckAvailability function
-      store.set(sdk.atoms.updateSelectionAtom, {
-        functionName: 'CheckAvailability',
-        testCaseName: null,
-      });
+      dispatchIntent(buildFunctionIntent('CheckAvailability'));
 
       // Verify selection state
       const selectedFunctionName = store.get(sdk.atoms.selectedFunctionNameAtom);
@@ -249,20 +292,14 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
 
     it('should clear test selection when clicking on a different function', () => {
       // First, select a function with a test
-      store.set(sdk.atoms.updateSelectionAtom, {
-        functionName: 'ExtractResume',
-        testCaseName: 'Test1',
-      });
+      dispatchIntent(buildTestIntent('ExtractResume', 'Test1'));
 
       // Verify both are set
       expect(store.get(sdk.atoms.selectedFunctionNameAtom)).toBe('ExtractResume');
       expect(store.get(sdk.atoms.selectedTestCaseNameAtom)).toBe('Test1');
 
       // Now click on a different function (should clear test)
-      store.set(sdk.atoms.updateSelectionAtom, {
-        functionName: 'CountItems',
-        testCaseName: null,
-      });
+      dispatchIntent(buildFunctionIntent('CountItems'));
 
       // Verify test was cleared
       const selectedFunctionName = store.get(sdk.atoms.selectedFunctionNameAtom);
@@ -280,10 +317,7 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
   describe('Clicking on Tests', () => {
     it('should update both function and test when clicking on CheckAvailabilityTest', () => {
       // Simulate clicking on CheckAvailabilityTest
-      store.set(sdk.atoms.updateSelectionAtom, {
-        functionName: 'CheckAvailability',
-        testCaseName: 'CheckAvailabilityTest',
-      });
+      dispatchIntent(buildTestIntent('CheckAvailability', 'CheckAvailabilityTest'));
 
       // Verify selection state
       const selectedFunctionName = store.get(sdk.atoms.selectedFunctionNameAtom);
@@ -299,10 +333,7 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
 
     it('should update selection when clicking on Test1', () => {
       // Simulate clicking on Test1 (for ExtractResume)
-      store.set(sdk.atoms.updateSelectionAtom, {
-        functionName: 'ExtractResume',
-        testCaseName: 'Test1',
-      });
+      dispatchIntent(buildTestIntent('ExtractResume', 'Test1'));
 
       // Verify selection state
       const selectedFunctionName = store.get(sdk.atoms.selectedFunctionNameAtom);
@@ -318,10 +349,7 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
 
     it('should update selection when clicking on ParseResumeTest', () => {
       // Simulate clicking on ParseResumeTest
-      store.set(sdk.atoms.updateSelectionAtom, {
-        functionName: 'ParseResume',
-        testCaseName: 'ParseResumeTest',
-      });
+      dispatchIntent(buildTestIntent('ParseResume', 'ParseResumeTest'));
 
       // Verify selection state
       const selectedFunctionName = store.get(sdk.atoms.selectedFunctionNameAtom);
@@ -343,10 +371,7 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
       console.log('Initial selection:', initialSelection);
 
       // Change function selection
-      store.set(sdk.atoms.updateSelectionAtom, {
-        functionName: 'CheckAvailability',
-        testCaseName: null,
-      });
+      dispatchIntent(buildFunctionIntent('CheckAvailability'));
 
       // Verify selection state changed
       const newSelection = store.get(sdk.atoms.selectionAtom);
@@ -362,10 +387,7 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
 
     it('should derive selectedFunctionObjectAtom from function name', () => {
       // Set function selection
-      store.set(sdk.atoms.updateSelectionAtom, {
-        functionName: 'ExtractResume',
-        testCaseName: null,
-      });
+      dispatchIntent(buildFunctionIntent('ExtractResume'));
 
       // Get derived function object
       const selectedFunctionObject = store.get(sdk.atoms.selectedFunctionObjectAtom);
@@ -389,7 +411,11 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
       ];
 
       for (const selection of selections) {
-        store.set(sdk.atoms.updateSelectionAtom, selection);
+        if (selection.testCaseName) {
+          dispatchIntent(buildTestIntent(selection.functionName, selection.testCaseName));
+        } else {
+          dispatchIntent(buildFunctionIntent(selection.functionName));
+        }
 
         const selectedFunctionName = store.get(sdk.atoms.selectedFunctionNameAtom);
         const selectedTestCaseName = store.get(sdk.atoms.selectedTestCaseNameAtom);
@@ -405,16 +431,10 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
   describe('Edge Cases', () => {
     it('should handle setting selection to null', () => {
       // First set a selection
-      store.set(sdk.atoms.updateSelectionAtom, {
-        functionName: 'CheckAvailability',
-        testCaseName: 'CheckAvailabilityTest',
-      });
+      dispatchIntent(buildTestIntent('CheckAvailability', 'CheckAvailabilityTest'));
 
       // Clear selection
-      store.set(sdk.atoms.updateSelectionAtom, {
-        functionName: null,
-        testCaseName: null,
-      });
+      dispatchIntent(null);
 
       const selectedFunctionName = store.get(sdk.atoms.selectedFunctionNameAtom);
       const selectedTestCaseName = store.get(sdk.atoms.selectedTestCaseNameAtom);
@@ -427,9 +447,11 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
 
     it('should handle selecting a test without a function (edge case)', () => {
       // This is technically an invalid state, but we should handle it gracefully
-      store.set(sdk.atoms.updateSelectionAtom, {
+      store.set(unifiedSelectionStateAtom, {
         functionName: null,
-        testCaseName: 'Test1',
+        testName: 'Test1',
+        activeWorkflowId: null,
+        selectedNodeId: null,
       });
 
       const selectedFunctionName = store.get(sdk.atoms.selectedFunctionNameAtom);

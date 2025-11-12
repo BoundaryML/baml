@@ -15,6 +15,7 @@ import type {
   WasmTestResponse,
 } from '@gloo-ai/baml-schema-wasm-web';
 import { atomFamily, atomWithStorage } from 'jotai/utils';
+import type { NavigationIntent } from '../../../sdk/types';
 
 // ============================================================================
 // SDK Atoms - Direct Re-exports
@@ -51,10 +52,27 @@ import {
 import {
   selectedFunctionNameAtom,
   selectedTestCaseNameAtom,
-  updateSelectionAtom,
   unifiedSelectionStateAtom,
   functionsAtom,
 } from '../../../sdk/atoms/core.atoms';
+import { navigationDispatcherAtom } from '../../../sdk/navigation/dispatcher';
+
+type FunctionIntent = Extract<NavigationIntent, { type: 'function' }>;
+type TestIntent = Extract<NavigationIntent, { type: 'test' }>;
+
+const inferFunctionType = (fn: { type?: string; functionFlavor?: 'llm' | 'expr' } | null | undefined): FunctionIntent['functionType'] => {
+  if (!fn) return 'function';
+  if (fn.type && ['workflow', 'llm_function', 'function', 'conditional', 'loop', 'group', 'return', 'block'].includes(fn.type)) {
+    return fn.type as FunctionIntent['functionType'];
+  }
+  if (fn.functionFlavor === 'llm') {
+    return 'llm_function';
+  }
+  return 'function';
+};
+
+const nodeTypeForFunction = (functionType: FunctionIntent['functionType']): TestIntent['nodeType'] =>
+  functionType === 'llm_function' ? 'llm_function' : 'function';
 
 export const graphControlsTipDismissedAtom = atomWithStorage(
   'playground:graphControlsTipDismissed',
@@ -79,20 +97,11 @@ export const selectedItemAtom = atom(
       string,
     ];
   },
-  (get, set, functionName: string, testcaseName: string | undefined) => {
-    // Check if the selected function is a workflow
-    const functions = get(functionsAtom);
-    const selectedFn = functions.find((f) => f.name === functionName);
-    const isWorkflow = selectedFn?.type === 'workflow';
-
-    // For workflows, set activeWorkflowId so the graph view is shown
-    // For standalone functions, clear workflow/node context to show TestPanel
-    set(unifiedSelectionStateAtom, {
-      functionName,
-      testName: testcaseName ?? null,
-      activeWorkflowId: isWorkflow ? functionName : null,
-      selectedNodeId: null,
-    });
+  (_get, _set, _functionName: string, _testcaseName: string | undefined) => {
+    throw new Error(
+      'selectedItemAtom setter is deprecated. Use navigationDispatcherAtom directly instead. ' +
+      'See function-item.tsx and test-item.tsx for examples.'
+    );
   },
 );
 
@@ -186,16 +195,28 @@ export const updateCursorAtom = atom(
           cursorIdx,
         );
 
-        // Use shared selection update logic
-        set(updateSelectionAtom, {
-          functionName: nestedFunc ? nestedFunc.name : selectedFunc.name,
-          testCaseName: selectedTestcase.name,
+        const targetFunction = nestedFunc ?? selectedFunc;
+        const functionType = inferFunctionType(targetFunction as any);
+        const nodeType = nodeTypeForFunction(functionType);
+
+        set(navigationDispatcherAtom, {
+          type: 'test',
+          functionName: targetFunction.name,
+          testName: selectedTestcase.name,
+          nodeType,
+          filePath: fileName,
+          source: 'cursor',
         });
       } else {
         // Just a function, no test case
-        set(updateSelectionAtom, {
+        const functionType = inferFunctionType(selectedFunc as any);
+
+        set(navigationDispatcherAtom, {
+          type: 'function',
           functionName: selectedFunc.name,
-          testCaseName: null,
+          functionType,
+          filePath: fileName,
+          source: 'cursor',
         });
       }
     }

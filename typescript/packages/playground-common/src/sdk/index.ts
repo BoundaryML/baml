@@ -22,6 +22,7 @@ import type {
 // Import all atoms to expose via sdk.atoms
 import * as coreAtoms from './atoms/core.atoms';
 import * as testAtoms from './atoms/test.atoms';
+import { navigationDispatcherAtom, navigationIntentAtom } from './navigation/dispatcher';
 
 // Import vscode integration for telemetry and flashing regions
 import { vscode } from '../shared/baml-project-panel/vscode';
@@ -46,6 +47,7 @@ export type {
 // Re-export hooks and provider
 export * from './hooks';
 export * from './provider';
+export * from './navigation/dispatcher';
 
 // Re-export debug fixtures and factory functions for testing
 export { DEBUG_BAML_FILES } from './debugFixtures';
@@ -67,7 +69,12 @@ export class BAMLSDK {
    * Components can access state via: sdk.atoms.workflows, sdk.atoms.diagnostics, etc.
    * Test-related atoms are namespaced under sdk.atoms.test
    */
-  atoms = { ...coreAtoms, test: testAtoms };
+  atoms = {
+    ...coreAtoms,
+    navigationDispatcherAtom,
+    navigationIntentAtom,
+    test: testAtoms,
+  };
 
   constructor(runtimeFactory: BamlRuntimeFactory, storage: SDKStorage) {
     this.runtimeFactory = runtimeFactory;

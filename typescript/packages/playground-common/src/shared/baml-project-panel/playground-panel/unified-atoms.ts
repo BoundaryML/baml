@@ -93,13 +93,18 @@ export const bottomPanelModeAtom = atom<BottomPanelMode>((get) => {
 
   // Show DetailPanel when:
   // - On Graph tab, OR
-  // - A graph node is selected (even if on other tabs)
+  // - A workflow is active (activeWorkflowId is set), OR
+  // - A node is selected (even standalone functions)
   console.log('bottomPanelModeAtom', activeTab, selection);
-  if (activeTab === 'graph' || selection.activeWorkflowId !== null) {
+  if (
+    activeTab === 'graph' ||
+    selection.activeWorkflowId !== null ||
+    selection.selectedNodeId !== null
+  ) {
     return 'detail-panel';
   }
 
-  // Show TestPanel for Preview/cURL tabs
+  // Show TestPanel for Preview/cURL tabs when no node is selected
   return 'test-panel';
 });
 

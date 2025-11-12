@@ -4,27 +4,30 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { Bot, FunctionSquare } from 'lucide-react';
 import * as React from 'react';
 import { vscode } from '../../vscode';
-import { functionObjectAtom, selectedItemAtom } from '../atoms';
+import { functionObjectAtom } from '../atoms';
 import { Loader } from '../prompt-preview/components';
 import {
   selectedHistoryIndexAtom,
   testHistoryAtom,
 } from '../prompt-preview/test-panel/atoms';
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils';
+import { navigationDispatcherAtom } from '../../../../sdk/navigation/dispatcher';
 
 interface FunctionItemProps {
   functionName: string;
   tests: string[];
   functionFlavor: 'llm' | 'expr';
+  isSelected?: boolean;
+  onToggle?: () => void;
 }
 
-export function FunctionItem({ functionName, tests, functionFlavor }: FunctionItemProps) {
+export function FunctionItem({ functionName, tests, functionFlavor, isSelected = false, onToggle }: FunctionItemProps) {
   const fnAtom = React.useMemo(
     () => functionObjectAtom(functionName),
     [functionName],
   );
   const fn = useAtomValue(fnAtom);
-  const setSelectedItem = useSetAtom(selectedItemAtom);
+  const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
 
   const testHistory = useAtomValue(testHistoryAtom);
   const selectedIndex = useAtomValue(selectedHistoryIndexAtom);
@@ -144,10 +147,26 @@ export function FunctionItem({ functionName, tests, functionFlavor }: FunctionIt
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Update selection - select function and first test (or undefined if no tests)
-    const firstTest = tests.length > 0 ? tests[0] : undefined;
-    setSelectedItem(functionName, firstTest);
-    // Then jump to file
+
+    // Toggle expansion to show/hide tests
+    onToggle?.();
+
+    // Determine function type
+    const functionType = fn?.type === 'workflow' ? 'workflow'
+      : fn?.type === 'llm_function' ? 'llm_function'
+      : fn?.functionFlavor === 'llm' ? 'llm_function'
+      : 'function';
+
+    // Dispatch navigation event (same as DebugPanel)
+    dispatchNavigation({
+      type: 'function',
+      functionName,
+      functionType,
+      filePath: fn?.span?.filePath ?? fn?.filePath ?? 'unknown',
+      source: 'sidebar',
+    });
+
+    // Jump to file
     if (fn?.span) {
       vscode.jumpToFile(fn.span);
     }
@@ -158,7 +177,10 @@ export function FunctionItem({ functionName, tests, functionFlavor }: FunctionIt
 
   return (
     <SidebarMenuButton
-      className="flex justify-between items-center w-full pl-8 cursor-pointer text-[10px] py-0.5 h-6"
+      isActive={isSelected}
+      className={`flex justify-between items-center w-full pl-8 cursor-pointer text-[10px] py-0.5 h-6 ${
+        isSelected ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
+      }`}
       onClick={handleClick}
     >
       <Tooltip delayDuration={500}>

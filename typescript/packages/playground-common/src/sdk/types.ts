@@ -336,18 +336,47 @@ export interface BAMLFile {
   tests: BAMLTest[];
 }
 
-export type CodeClickEvent = {
-  type: 'function';
-  functionName: string;
-  functionType: 'workflow' | 'function' | 'llm_function' | 'conditional' | 'loop' | 'group' | 'return' | 'block';
-  filePath: string;
-} | {
-  type: 'test';
-  testName: string;
-  functionName: string;
-  filePath: string;
-  nodeType: 'llm_function' | 'function';
+export type CodeClickEvent =
+  | {
+      type: 'function';
+      functionName: string;
+      functionType: 'workflow' | 'function' | 'llm_function' | 'conditional' | 'loop' | 'group' | 'return' | 'block';
+      filePath: string;
+    }
+  | {
+      type: 'test';
+      testName: string;
+      functionName: string;
+      filePath: string;
+      nodeType: 'llm_function' | 'function';
+    };
+
+export type NavigationSource =
+  | 'debug-panel'
+  | 'sidebar'
+  | 'test-panel'
+  | 'graph'
+  | 'cursor'
+  | 'api'
+  | 'unknown';
+
+type NavigationIntentBase = {
+  source?: NavigationSource;
+  filePath?: string;
 };
+
+export type NavigationIntent =
+  | (NavigationIntentBase & {
+      type: 'function';
+      functionName: string;
+      functionType: 'workflow' | 'function' | 'llm_function' | 'conditional' | 'loop' | 'group' | 'return' | 'block';
+    })
+  | (NavigationIntentBase & {
+      type: 'test';
+      testName: string;
+      functionName: string;
+      nodeType: 'llm_function' | 'function';
+    });
 
 // ============================================================================
 // SDK Configuration
