@@ -1,22 +1,134 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 3981
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "// Test basic string parsing in attributes and types
-class Messages {
-  greeting string @alias("hello")
-  empty string @description("")
-  with_spaces string @alias("hello world")
-  with_escapes string @description("line1\nline2\ttab")
-  with_quotes string @alias("She said \"hello\"")
-}
-
-// String literal union types
-function GetRole() -> "admin" | "user" | "guest" {
-  return "user"
-}
-"
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Messages"
+    L_BRACE "{"
+    FIELD
+      WORD "greeting"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""hello""
+            QUOTE """
+            WORD "hello"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "empty"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL """"
+            QUOTE """
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "with_spaces"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""hello world""
+            QUOTE """
+            WORD "hello"
+            WORD "world"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "with_escapes"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""line1\nline2\ttab""
+            QUOTE """
+            WORD "line1"
+            ERROR_TOKEN "\"
+            WORD "nline2"
+            ERROR_TOKEN "\"
+            WORD "ttab"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "with_quotes"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""She said \""
+            QUOTE """
+            WORD "She"
+            WORD "said"
+            ERROR_TOKEN "\"
+            QUOTE """
+    FIELD
+      WORD "hello"
+      TYPE_EXPR
+    ERROR_TOKEN "\"
+    QUOTE """
+    QUOTE """
+    R_PAREN ")"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "GetRole"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      STRING_LITERAL " "admin""
+        QUOTE """
+        WORD "admin"
+        QUOTE """
+      PIPE "|"
+      STRING_LITERAL " "user""
+        QUOTE """
+        WORD "user"
+        QUOTE """
+      PIPE "|"
+      STRING_LITERAL " "guest""
+        QUOTE """
+        WORD "guest"
+        QUOTE """
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        RETURN_STMT
+          KW_RETURN "return"
+          STRING_LITERAL " "user""
+            QUOTE """
+            WORD "user"
+            QUOTE """
+        R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected type, found Expected type
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body

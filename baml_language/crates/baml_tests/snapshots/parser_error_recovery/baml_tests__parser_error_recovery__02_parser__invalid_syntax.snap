@@ -1,21 +1,56 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 1377
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "class 123Invalid {  // Invalid class name
-  field string
-}
-
-enum Status {
-  ACTIVE
-  INACTIVE PENDING  // Two values on one line
-}
-
-function Foo() -> {  // Missing return type
+SOURCE_FILE
+  CLASS_DEF "class"
+    KW_CLASS "class"
+  INTEGER_LITERAL "123"
+  WORD "Invalid"
+  L_BRACE "{"
+  WORD "field"
+  WORD "string"
+  R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Status"
+    L_BRACE "{"
+    ENUM_VARIANT "
+  ACTIVE"
+      WORD "ACTIVE"
+    ENUM_VARIANT "
+  INACTIVE"
+      WORD "INACTIVE"
+    ENUM_VARIANT " PENDING"
+      WORD "PENDING"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Foo"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR " {  // Missing return type
   client GPT4
-}
-"
+}"
+        L_BRACE "{"
+        KW_CLIENT "client"
+        WORD "GPT4"
+        R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected class name, found Expected class name
+  Expected Expected LBrace, found IntegerLiteral, found Expected LBrace, found IntegerLiteral
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected type, found Expected type
+  Expected Expected expression, found Expected expression

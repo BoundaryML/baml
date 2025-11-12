@@ -1,0 +1,1250 @@
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    fmt::Write,
+    ops::Deref,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
+
+use anyhow::Result;
+use baml_db::{
+    RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
+    baml_workspace,
+};
+use baml_syntax::{
+    SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
+    ast::{Item, SourceFile as AstSourceFile},
+};
+use regex::Regex;
+use rowan::{GreenNode, NodeCache, ast::AstNode};
+use salsa::{Event, EventKind, Setter};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum CompilerPhase {
+    Lexer,
+    Parser,
+    Ast,
+    Hir,
+    Thir,
+    Diagnostics,
+    Codegen,
+    Metrics,
+}
+
+impl CompilerPhase {
+    pub(crate) const ALL: &'static [CompilerPhase] = &[
+        CompilerPhase::Lexer,
+        CompilerPhase::Parser,
+        CompilerPhase::Ast,
+        CompilerPhase::Hir,
+        CompilerPhase::Thir,
+        CompilerPhase::Diagnostics,
+        CompilerPhase::Codegen,
+        CompilerPhase::Metrics,
+    ];
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            CompilerPhase::Lexer => "Lexer (Tokens)",
+            CompilerPhase::Parser => "Parser (CST)",
+            CompilerPhase::Ast => "AST (Typed Nodes)",
+            CompilerPhase::Hir => "HIR (High-level IR)",
+            CompilerPhase::Thir => "THIR (Typed IR)",
+            CompilerPhase::Diagnostics => "Diagnostics",
+            CompilerPhase::Codegen => "Codegen (Bytecode)",
+            CompilerPhase::Metrics => "Metrics (Incremental)",
+        }
+    }
+
+    pub(crate) fn next(self) -> CompilerPhase {
+        match self {
+            CompilerPhase::Lexer => CompilerPhase::Parser,
+            CompilerPhase::Parser => CompilerPhase::Ast,
+            CompilerPhase::Ast => CompilerPhase::Hir,
+            CompilerPhase::Hir => CompilerPhase::Thir,
+            CompilerPhase::Thir => CompilerPhase::Diagnostics,
+            CompilerPhase::Diagnostics => CompilerPhase::Codegen,
+            CompilerPhase::Codegen => CompilerPhase::Metrics,
+            CompilerPhase::Metrics => CompilerPhase::Lexer,
+        }
+    }
+
+    pub(crate) fn prev(self) -> CompilerPhase {
+        match self {
+            CompilerPhase::Lexer => CompilerPhase::Metrics,
+            CompilerPhase::Parser => CompilerPhase::Lexer,
+            CompilerPhase::Ast => CompilerPhase::Parser,
+            CompilerPhase::Hir => CompilerPhase::Ast,
+            CompilerPhase::Thir => CompilerPhase::Hir,
+            CompilerPhase::Diagnostics => CompilerPhase::Thir,
+            CompilerPhase::Codegen => CompilerPhase::Diagnostics,
+            CompilerPhase::Metrics => CompilerPhase::Codegen,
+        }
+    }
+}
+
+pub(crate) struct CompilerRunner {
+    db: RootDatabase,
+    project_root: baml_workspace::ProjectRoot,
+    is_directory: bool,
+    /// Source files currently in the database (path -> `SourceFile`)
+    source_files: HashMap<PathBuf, SourceFile>,
+    phase_outputs: HashMap<CompilerPhase, String>,
+    phase_outputs_annotated: HashMap<CompilerPhase, Vec<(String, LineStatus)>>,
+    // Track Salsa events to determine what's recomputed vs cached
+    recomputed_queries: Arc<Mutex<HashSet<String>>>,
+    cached_queries: Arc<Mutex<HashSet<String>>>,
+    // Track which files were modified in the last compilation
+    modified_files: HashSet<PathBuf>,
+    node_cache: NodeCache,
+    parser_cached_elements: HashMap<PathBuf, HashSet<GreenElementId>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LineStatus {
+    Recomputed,
+    Cached,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VisualizationMode {
+    /// Show which files changed (diff-based coloring)
+    Diff,
+    /// Show which incremental queries were recomputed vs cached
+    Incremental,
+}
+
+impl CompilerRunner {
+    pub(crate) fn new(path: impl AsRef<Path>) -> Self {
+        let path = path.as_ref();
+        let is_directory = path.is_dir();
+
+        // Create event tracking
+        let recomputed_queries = Arc::new(Mutex::new(HashSet::new()));
+        let cached_queries = Arc::new(Mutex::new(HashSet::new()));
+
+        let recomputed_clone = recomputed_queries.clone();
+        let cached_clone = cached_queries.clone();
+
+        // Create database with event callback
+        let db =
+            RootDatabase::new_with_event_callback(Box::new(move |event: Event| match event.kind {
+                EventKind::WillExecute { database_key } => {
+                    recomputed_clone
+                        .lock()
+                        .unwrap()
+                        .insert(format!("{database_key:?}"));
+                }
+                EventKind::DidValidateMemoizedValue { database_key } => {
+                    cached_clone
+                        .lock()
+                        .unwrap()
+                        .insert(format!("{database_key:?}"));
+                }
+                _ => {}
+            }));
+
+        Self {
+            project_root: baml_workspace::ProjectRoot::new(&db, PathBuf::new()),
+            db,
+            is_directory,
+            source_files: HashMap::new(),
+            phase_outputs: HashMap::new(),
+            phase_outputs_annotated: HashMap::new(),
+            recomputed_queries,
+            cached_queries,
+            modified_files: HashSet::new(),
+            node_cache: NodeCache::default(),
+            parser_cached_elements: HashMap::new(),
+        }
+    }
+
+    /// Compile files from a "fake filesystem" (`HashMap` of path -> content)
+    /// If `snapshot_files` is provided, we:
+    ///   1. Add snapshot files to DB first
+    ///   2. Use .`set_text()` to update to `current_files`
+    ///
+    /// This allows Salsa to see what changed vs what's cached
+    pub(crate) fn compile_from_filesystem(
+        &mut self,
+        current_files: &HashMap<PathBuf, String>,
+        snapshot_files: Option<&HashMap<PathBuf, String>>,
+    ) {
+        // Clear event tracking
+        self.recomputed_queries.lock().unwrap().clear();
+        self.cached_queries.lock().unwrap().clear();
+
+        // Create new database with event callback
+        let recomputed_clone = self.recomputed_queries.clone();
+        let cached_clone = self.cached_queries.clone();
+
+        self.db =
+            RootDatabase::new_with_event_callback(Box::new(move |event: Event| match event.kind {
+                EventKind::WillExecute { database_key } => {
+                    recomputed_clone
+                        .lock()
+                        .unwrap()
+                        .insert(format!("{database_key:?}"));
+                }
+                EventKind::DidValidateMemoizedValue { database_key } => {
+                    cached_clone
+                        .lock()
+                        .unwrap()
+                        .insert(format!("{database_key:?}"));
+                }
+                _ => {}
+            }));
+
+        // Set project root
+        let project_path = if self.is_directory {
+            current_files
+                .keys()
+                .next()
+                .and_then(|p| p.parent())
+                .unwrap_or_else(|| Path::new("."))
+        } else {
+            current_files
+                .keys()
+                .next()
+                .and_then(|p| p.parent())
+                .unwrap_or_else(|| Path::new("."))
+        };
+        self.project_root = self.db.set_project_root(project_path);
+
+        // Clear the source files list and modified tracking
+        self.source_files.clear();
+        self.modified_files.clear();
+        self.parser_cached_elements
+            .retain(|path, _| current_files.contains_key(path));
+
+        // If snapshot_files provided, use the "fake filesystem" approach
+        if let Some(snapshot) = snapshot_files {
+            // Step 1: Add snapshot files to DB
+            let mut source_file_map = HashMap::new();
+            for (path, content) in snapshot {
+                let path_str = path.to_string_lossy().to_string();
+                let source_file = self.db.add_file(&path_str, content);
+                source_file_map.insert(path.clone(), source_file);
+            }
+
+            // Step 2: Use .set_text() to update to current files
+            for (path, current_content) in current_files {
+                if let Some(source_file) = source_file_map.get(path) {
+                    // File exists in snapshot, check if it changed
+                    let snapshot_content = snapshot.get(path).unwrap();
+                    if snapshot_content != current_content {
+                        // File changed - update it
+                        source_file
+                            .set_text(&mut self.db)
+                            .to(current_content.clone());
+                        self.modified_files.insert(path.clone());
+                    }
+                    self.source_files.insert(path.clone(), *source_file);
+                } else {
+                    // New file not in snapshot, add it
+                    let path_str = path.to_string_lossy().to_string();
+                    let source_file = self.db.add_file(&path_str, current_content);
+                    self.source_files.insert(path.clone(), source_file);
+                    self.modified_files.insert(path.clone());
+                }
+            }
+        } else {
+            // No snapshot, just add current files (all are "new")
+            for (path, content) in current_files {
+                let path_str = path.to_string_lossy().to_string();
+                let source_file = self.db.add_file(&path_str, content);
+                self.source_files.insert(path.clone(), source_file);
+                self.modified_files.insert(path.clone());
+            }
+        }
+
+        // Run all compiler phases
+        self.run_all_phases();
+    }
+
+    fn run_all_phases(&mut self) {
+        self.phase_outputs.clear();
+        self.phase_outputs_annotated.clear();
+
+        for &phase in &[
+            CompilerPhase::Lexer,
+            CompilerPhase::Parser,
+            CompilerPhase::Ast,
+            CompilerPhase::Hir,
+            CompilerPhase::Thir,
+            CompilerPhase::Diagnostics,
+            CompilerPhase::Codegen,
+        ] {
+            self.run_single_phase(phase);
+        }
+
+        self.run_single_phase(CompilerPhase::Metrics);
+    }
+
+    fn run_single_phase(&mut self, phase: CompilerPhase) {
+        match phase {
+            CompilerPhase::Lexer => self.run_lexer(),
+            CompilerPhase::Parser => self.run_parser(),
+            CompilerPhase::Ast => self.run_ast(),
+            CompilerPhase::Hir => self.run_hir(),
+            CompilerPhase::Thir => self.run_thir(),
+            CompilerPhase::Diagnostics => self.run_diagnostics(),
+            CompilerPhase::Codegen => self.run_codegen(),
+            CompilerPhase::Metrics => self.run_metrics(),
+        }
+    }
+
+    fn run_lexer(&mut self) {
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Sort files alphabetically by path
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+            // Check if THIS specific file was modified
+            let file_recomputed = self.modified_files.contains(path);
+
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((
+                format!("File: {file_path}"),
+                if file_recomputed {
+                    LineStatus::Recomputed
+                } else {
+                    LineStatus::Unknown
+                },
+            ));
+
+            let tokens = baml_lexer::lex_file(&self.db, *source_file);
+            for token in tokens {
+                let line = format!("{:?} {:?}", token.kind, token.text);
+                writeln!(output, "{line}").ok();
+                output_annotated.push((
+                    line,
+                    if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    },
+                ));
+            }
+            writeln!(output).ok();
+            output_annotated.push((String::new(), LineStatus::Unknown));
+        }
+
+        self.phase_outputs.insert(CompilerPhase::Lexer, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Lexer, output_annotated);
+    }
+
+    fn run_parser(&mut self) {
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+        let mut next_cached_elements: HashMap<PathBuf, HashSet<GreenElementId>> = HashMap::new();
+
+        // Sort files alphabetically by path
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(path);
+
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((
+                format!("File: {file_path}"),
+                if file_recomputed {
+                    LineStatus::Recomputed
+                } else {
+                    LineStatus::Unknown
+                },
+            ));
+
+            let tokens = baml_lexer::lex_file(&self.db, *source_file);
+            let (green, _errors) =
+                baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
+            let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());
+
+            let (formatted_lines, cached_ids) =
+                format_syntax_tree_with_cache(&syntax_tree, self.parser_cached_elements.get(path));
+            next_cached_elements.insert(path.clone(), cached_ids);
+
+            for (line, status) in formatted_lines {
+                writeln!(output, "{line}").ok();
+                output_annotated.push((line, status));
+            }
+
+            writeln!(output).ok();
+            output_annotated.push((String::new(), LineStatus::Unknown));
+        }
+
+        self.parser_cached_elements = next_cached_elements;
+
+        self.phase_outputs.insert(CompilerPhase::Parser, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Parser, output_annotated);
+    }
+
+    fn run_ast(&mut self) {
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Sort files alphabetically by path
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(path);
+
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((
+                format!("File: {file_path}"),
+                if file_recomputed {
+                    LineStatus::Recomputed
+                } else {
+                    LineStatus::Unknown
+                },
+            ));
+
+            // Parse and get CST root
+            let tokens = baml_lexer::lex_file(&self.db, *source_file);
+            let (green, _errors) =
+                baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
+            let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());
+
+            // Cast to AST SourceFile to access typed API
+            if let Some(ast_file) = AstSourceFile::cast(syntax_tree) {
+                // Iterate over top-level items
+                for item in ast_file.items() {
+                    let ast_repr = format_ast_item(&item);
+                    writeln!(output, "{ast_repr}").ok();
+                    output_annotated.push((
+                        ast_repr,
+                        if file_recomputed {
+                            LineStatus::Recomputed
+                        } else {
+                            LineStatus::Cached
+                        },
+                    ));
+                }
+            } else {
+                let no_items = "  (unable to parse as AST SourceFile)".to_string();
+                writeln!(output, "{no_items}").ok();
+                output_annotated.push((
+                    no_items,
+                    if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    },
+                ));
+            }
+
+            writeln!(output).ok();
+            output_annotated.push((String::new(), LineStatus::Unknown));
+        }
+
+        self.phase_outputs.insert(CompilerPhase::Ast, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Ast, output_annotated);
+    }
+
+    fn run_hir(&mut self) {
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Sort files alphabetically
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+
+            // Use real baml_hir for item extraction
+            let items = baml_hir::file_items(&self.db, *source_file);
+
+            // Check if THIS specific file was modified
+            let file_recomputed = self.modified_files.contains(path);
+
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
+
+            // Show real HIR items
+            if !items.is_empty() {
+                for item in &items {
+                    let item_line = format!("  {item:?}");
+                    writeln!(output, "{item_line}").ok();
+                    output_annotated.push((
+                        item_line,
+                        if file_recomputed {
+                            LineStatus::Recomputed
+                        } else {
+                            LineStatus::Cached
+                        },
+                    ));
+                }
+            } else {
+                let no_items = "  (no items)".to_string();
+                writeln!(output, "{no_items}").ok();
+                output_annotated.push((
+                    no_items,
+                    if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    },
+                ));
+            }
+
+            writeln!(output).ok();
+            output_annotated.push((String::new(), LineStatus::Unknown));
+        }
+
+        self.phase_outputs.insert(CompilerPhase::Hir, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Hir, output_annotated);
+    }
+
+    fn run_thir(&mut self) {
+        // THIR not yet implemented as a tracked function
+        let output = "THIR not yet implemented".to_string();
+
+        let output_annotated: Vec<_> = output
+            .lines()
+            .map(|line| (line.to_string(), LineStatus::Unknown))
+            .collect();
+
+        self.phase_outputs.insert(CompilerPhase::Thir, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Thir, output_annotated);
+    }
+
+    fn run_diagnostics(&mut self) {
+        // Diagnostics not yet implemented as a tracked function
+        let output = "Diagnostics not yet implemented".to_string();
+
+        let output_annotated: Vec<_> = output
+            .lines()
+            .map(|line| (line.to_string(), LineStatus::Unknown))
+            .collect();
+
+        self.phase_outputs
+            .insert(CompilerPhase::Diagnostics, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Diagnostics, output_annotated);
+    }
+
+    fn run_codegen(&mut self) {
+        let bytecode = baml_codegen::generate_project_bytecode(&self.db, self.project_root);
+        let output = format!("{bytecode:#?}");
+
+        let file_recomputed = self.was_query_recomputed("generate_project_bytecode(");
+        let output_annotated: Vec<_> = output
+            .lines()
+            .map(|line| {
+                (
+                    line.to_string(),
+                    if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    },
+                )
+            })
+            .collect();
+
+        self.phase_outputs.insert(CompilerPhase::Codegen, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Codegen, output_annotated);
+    }
+
+    fn run_metrics(&mut self) {
+        let mut output = String::new();
+
+        let recomputed = self.recomputed_queries.lock().unwrap();
+        let cached = self.cached_queries.lock().unwrap();
+
+        writeln!(output, "Recomputed Queries: {}", recomputed.len()).ok();
+        writeln!(output, "Cached Queries: {}", cached.len()).ok();
+        writeln!(output).ok();
+
+        if !recomputed.is_empty() {
+            writeln!(output, "Recomputed:").ok();
+            for query in recomputed.iter() {
+                writeln!(output, "  • {query}").ok();
+            }
+            writeln!(output).ok();
+        }
+
+        if !cached.is_empty() {
+            writeln!(output, "Cached:").ok();
+            for query in cached.iter() {
+                writeln!(output, "  • {query}").ok();
+            }
+        }
+
+        let output_annotated: Vec<_> = output
+            .lines()
+            .map(|line| (line.to_string(), LineStatus::Unknown))
+            .collect();
+
+        self.phase_outputs.insert(CompilerPhase::Metrics, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Metrics, output_annotated);
+    }
+
+    fn was_query_recomputed(&self, query_pattern: &str) -> bool {
+        self.recomputed_queries
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|q| q.contains(query_pattern))
+    }
+
+    pub(crate) fn get_phase_output(&self, phase: CompilerPhase) -> Option<&str> {
+        self.phase_outputs
+            .get(&phase)
+            .map(std::string::String::as_str)
+    }
+
+    pub(crate) fn parser_cache_snapshot(&self) -> HashMap<PathBuf, HashSet<GreenElementId>> {
+        self.parser_cached_elements.clone()
+    }
+
+    pub(crate) fn set_parser_cache_baseline(
+        &mut self,
+        baseline: &HashMap<PathBuf, HashSet<GreenElementId>>,
+    ) {
+        self.parser_cached_elements = baseline.clone();
+    }
+
+    pub(crate) fn get_recomputation_status(&self, _phase: CompilerPhase) -> RecomputationStatus {
+        let recomputed_count = self.recomputed_queries.lock().unwrap().len();
+        let cached_count = self.cached_queries.lock().unwrap().len();
+        RecomputationStatus::Summary {
+            recomputed_count,
+            cached_count,
+        }
+    }
+
+    pub(crate) fn get_annotated_output(&self, phase: CompilerPhase) -> Vec<(String, LineStatus)> {
+        self.phase_outputs_annotated
+            .get(&phase)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Get annotated output with mode-specific coloring
+    pub(crate) fn get_annotated_output_with_mode(
+        &self,
+        phase: CompilerPhase,
+        mode: VisualizationMode,
+    ) -> Vec<(String, LineStatus)> {
+        match mode {
+            VisualizationMode::Incremental => {
+                // In incremental mode, use the original annotations (recomputed vs cached)
+                self.get_annotated_output(phase)
+            }
+            VisualizationMode::Diff => {
+                if let Some(lines) = self.phase_outputs_annotated.get(&phase) {
+                    let mut current_file_modified = false;
+                    let mut saw_file_header = false;
+                    let mut diff_lines = Vec::with_capacity(lines.len());
+
+                    for (text, _status) in lines {
+                        if let Some(path_str) = text.strip_prefix("File: ") {
+                            saw_file_header = true;
+                            let path = PathBuf::from(path_str);
+                            current_file_modified = self.modified_files.contains(&path);
+                            let header_status = if current_file_modified {
+                                LineStatus::Recomputed
+                            } else {
+                                LineStatus::Unknown
+                            };
+                            diff_lines.push((text.clone(), header_status));
+                            continue;
+                        }
+
+                        if text.is_empty() {
+                            diff_lines.push((text.clone(), LineStatus::Unknown));
+                            continue;
+                        }
+
+                        let status = if current_file_modified {
+                            LineStatus::Recomputed
+                        } else {
+                            LineStatus::Cached
+                        };
+                        diff_lines.push((text.clone(), status));
+                    }
+
+                    if saw_file_header {
+                        diff_lines
+                    } else {
+                        lines
+                            .iter()
+                            .map(|(text, status)| (text.clone(), *status))
+                            .collect()
+                    }
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+    }
+
+    pub(crate) fn get_metrics_output(&mut self) -> String {
+        self.run_metrics();
+        self.phase_outputs
+            .get(&CompilerPhase::Metrics)
+            .cloned()
+            .unwrap_or_default()
+    }
+}
+
+/// Format an AST item into a tree-based string representation
+fn format_ast_item(item: &Item) -> String {
+    let mut output = String::new();
+    format_item_tree(item, &mut output, 0);
+    output
+}
+
+/// Recursively format an AST item as a tree
+fn format_item_tree(item: &Item, output: &mut String, indent: usize) {
+    use baml_syntax::ast::*;
+
+    match item {
+        Item::Function(func) => format_function(func, output, indent),
+        Item::Class(class) => format_class(class, output, indent),
+        Item::Enum(enum_def) => format_enum(enum_def, output, indent),
+        Item::Client(client) => format_client(client, output, indent),
+        Item::Test(test) => format_test(test, output, indent),
+        Item::RetryPolicy(policy) => format_retry_policy(policy, output, indent),
+        Item::TemplateString(template) => format_template_string(template, output, indent),
+        Item::TypeAlias(alias) => format_type_alias(alias, output, indent),
+    }
+}
+
+fn write_indent(output: &mut String, indent: usize) {
+    output.push_str(&"  ".repeat(indent));
+}
+
+fn format_function(func: &baml_syntax::ast::FunctionDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "FUNCTION").ok();
+
+    // Function name
+    if let Some(name) = func.name() {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+
+    // Parameters
+    if let Some(param_list) = func.param_list() {
+        let params: Vec<_> = param_list.params().collect();
+        if !params.is_empty() {
+            write_indent(output, indent + 1);
+            writeln!(output, "PARAMS").ok();
+            for param in params {
+                format_parameter(&param, output, indent + 2);
+            }
+        }
+    }
+
+    // Return type
+    if let Some(return_type) = func.return_type() {
+        write_indent(output, indent + 1);
+        writeln!(output, "RETURN_TYPE {}", return_type.syntax().text()).ok();
+    }
+
+    // Body
+    if let Some(expr_body) = func.expr_body() {
+        write_indent(output, indent + 1);
+        writeln!(output, "BODY").ok();
+        format_expr_function_body(&expr_body, output, indent + 2);
+    } else if let Some(llm_body) = func.llm_body() {
+        write_indent(output, indent + 1);
+        writeln!(output, "BODY").ok();
+        format_llm_function_body(&llm_body, output, indent + 2);
+    }
+}
+
+fn format_parameter(param: &baml_syntax::ast::Parameter, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "PARAM").ok();
+
+    // Parameter name
+    if let Some(name_token) = param
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .find(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name_token.text()).ok();
+    }
+
+    // Parameter type
+    if let Some(ty) = param
+        .syntax()
+        .children()
+        .find_map(baml_syntax::ast::TypeExpr::cast)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "TYPE {}", ty.syntax().text()).ok();
+    }
+}
+
+fn format_expr_function_body(
+    body: &baml_syntax::ast::ExprFunctionBody,
+    output: &mut String,
+    indent: usize,
+) {
+    use baml_syntax::ast::*;
+
+    // Look for block expression or other expression types
+    if let Some(block) = body.syntax().children().find_map(BlockExpr::cast) {
+        write_indent(output, indent);
+        writeln!(output, "EXPR_BLOCK").ok();
+        format_block_expr(&block, output, indent + 1);
+    } else if let Some(expr) = body.syntax().children().find_map(Expr::cast) {
+        format_expr(&expr, output, indent);
+    } else {
+        // Fallback: show raw syntax
+        write_indent(output, indent);
+        writeln!(output, "EXPR {}", body.syntax().text()).ok();
+    }
+}
+
+fn format_llm_function_body(
+    body: &baml_syntax::ast::LlmFunctionBody,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "LLM_BODY").ok();
+
+    // Show config items
+    for config_item in body
+        .syntax()
+        .children()
+        .filter_map(baml_syntax::ast::ConfigItem::cast)
+    {
+        format_config_item(&config_item, output, indent + 1);
+    }
+}
+
+fn format_config_item(item: &baml_syntax::ast::ConfigItem, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    let text = item.syntax().text().to_string();
+    // Truncate long config values
+    if text.len() > 60 {
+        writeln!(output, "CONFIG {}...", &text[..60]).ok();
+    } else {
+        writeln!(output, "CONFIG {}", text).ok();
+    }
+}
+
+fn format_block_expr(block: &baml_syntax::ast::BlockExpr, output: &mut String, indent: usize) {
+    use baml_syntax::ast::*;
+
+    // Iterate through statements in the block
+    for child in block.syntax().children() {
+        if let Some(let_stmt) = LetStmt::cast(child.clone()) {
+            format_let_stmt(&let_stmt, output, indent);
+        } else if let Some(if_expr) = IfExpr::cast(child.clone()) {
+            format_if_expr(&if_expr, output, indent);
+        } else if let Some(expr) = Expr::cast(child.clone()) {
+            format_expr(&expr, output, indent);
+        }
+    }
+}
+
+fn format_let_stmt(stmt: &baml_syntax::ast::LetStmt, output: &mut String, indent: usize) {
+    use baml_syntax::ast::*;
+
+    write_indent(output, indent);
+    writeln!(output, "STMT_LET").ok();
+
+    // Find the identifier name
+    if let Some(name_token) = stmt
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .find(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name_token.text()).ok();
+    }
+
+    // Find the value expression
+    if let Some(expr) = stmt.syntax().children().find_map(Expr::cast) {
+        write_indent(output, indent + 1);
+        writeln!(output, "VALUE").ok();
+        format_expr(&expr, output, indent + 2);
+    }
+}
+
+fn format_if_expr(if_expr: &baml_syntax::ast::IfExpr, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "EXPR_IF").ok();
+
+    // Condition
+    write_indent(output, indent + 1);
+    writeln!(output, "CONDITION").ok();
+    if let Some(cond) = if_expr
+        .syntax()
+        .children()
+        .find_map(baml_syntax::ast::Expr::cast)
+    {
+        format_expr(&cond, output, indent + 2);
+    }
+
+    // Then branch
+    write_indent(output, indent + 1);
+    writeln!(output, "THEN").ok();
+    if let Some(then_block) = if_expr
+        .syntax()
+        .children()
+        .filter_map(baml_syntax::ast::BlockExpr::cast)
+        .next()
+    {
+        format_block_expr(&then_block, output, indent + 2);
+    }
+}
+
+fn format_expr(expr: &baml_syntax::ast::Expr, output: &mut String, indent: usize) {
+    let text = expr.syntax().text().to_string();
+
+    // If expression is simple (< 40 chars), inline it
+    if text.len() < 40 && !text.contains('\n') {
+        write_indent(output, indent);
+        writeln!(output, "EXPR {}", text.trim()).ok();
+    } else {
+        // Complex expression: show structure
+        write_indent(output, indent);
+        writeln!(output, "EXPR").ok();
+        write_indent(output, indent + 1);
+        writeln!(output, "{}", text.trim()).ok();
+    }
+}
+
+fn format_class(class: &baml_syntax::ast::ClassDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "CLASS").ok();
+
+    // Class name
+    if let Some(name) = class.name() {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+
+    // Fields
+    let fields: Vec<_> = class.fields().collect();
+    if !fields.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "FIELDS").ok();
+        for field in fields {
+            format_field(&field, output, indent + 2);
+        }
+    }
+}
+
+fn format_field(field: &baml_syntax::ast::Field, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "FIELD").ok();
+
+    // Field name
+    if let Some(name) = field.name() {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+
+    // Field type
+    if let Some(ty) = field.ty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "TYPE {}", ty.syntax().text()).ok();
+    }
+}
+
+fn format_enum(enum_def: &baml_syntax::ast::EnumDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "ENUM").ok();
+
+    // Enum name
+    if let Some(name) = enum_def
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_client(client: &baml_syntax::ast::ClientDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "CLIENT").ok();
+
+    // Client name
+    if let Some(name) = client
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_test(test: &baml_syntax::ast::TestDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "TEST").ok();
+
+    // Test name
+    if let Some(name) = test
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_retry_policy(
+    policy: &baml_syntax::ast::RetryPolicyDef,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "RETRY_POLICY").ok();
+
+    // Policy name
+    if let Some(name) = policy
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_template_string(
+    template: &baml_syntax::ast::TemplateStringDef,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "TEMPLATE_STRING").ok();
+
+    // Template name
+    if let Some(name) = template
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_type_alias(alias: &baml_syntax::ast::TypeAliasDef, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "TYPE_ALIAS").ok();
+
+    // Alias name
+    if let Some(name) = alias
+        .syntax()
+        .children_with_tokens()
+        .filter_map(|n| n.into_token())
+        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .nth(1)
+    {
+        write_indent(output, indent + 1);
+        writeln!(output, "NAME {}", name.text()).ok();
+    }
+}
+
+fn format_syntax_tree_with_cache(
+    syntax_tree: &SyntaxNode,
+    previous: Option<&HashSet<GreenElementId>>,
+) -> (Vec<(String, LineStatus)>, HashSet<GreenElementId>) {
+    let mut indent_level = 0usize;
+    let mut lines = Vec::new();
+    let mut current_ids = HashSet::new();
+    let mut owned_nodes: Vec<GreenNode> = Vec::new();
+
+    for event in syntax_tree.preorder_with_tokens() {
+        match event {
+            WalkEvent::Enter(element) => {
+                let indent = "  ".repeat(indent_level);
+                match element {
+                    SyntaxElement::Node(node) => {
+                        let (id, was_borrowed) = GreenElementId::from_node(&node, &mut owned_nodes);
+                        let status = line_status_for(&id, previous);
+                        current_ids.insert(id);
+                        let raw_line = format!("{indent}{:?}", node);
+                        let mut line = remove_span_ranges(&raw_line);
+                        if !was_borrowed {
+                            line.push_str("  /* owned */");
+                        }
+                        lines.push((line, status));
+                    }
+                    SyntaxElement::Token(token) => {
+                        let id = GreenElementId::from_token(&token);
+                        let status = line_status_for(&id, previous);
+                        current_ids.insert(id);
+                        let raw_line = format!("{indent}{:?}", token);
+                        let line = remove_span_ranges(&raw_line);
+                        lines.push((line, status));
+                    }
+                }
+                indent_level += 1;
+            }
+            WalkEvent::Leave(_) => {
+                indent_level = indent_level.saturating_sub(1);
+            }
+        }
+    }
+
+    (lines, current_ids)
+}
+
+fn line_status_for(id: &GreenElementId, previous: Option<&HashSet<GreenElementId>>) -> LineStatus {
+    if previous.is_some_and(|set| set.contains(id)) {
+        LineStatus::Cached
+    } else {
+        LineStatus::Recomputed
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum RecomputationStatus {
+    Summary {
+        recomputed_count: usize,
+        cached_count: usize,
+    },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct GreenElementId {
+    ptr: *const (),
+    kind: GreenElementKind,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum GreenElementKind {
+    Node,
+    Token,
+}
+
+impl GreenElementId {
+    fn from_node(node: &SyntaxNode, owned_nodes: &mut Vec<GreenNode>) -> (Self, bool) {
+        match node.green() {
+            Cow::Borrowed(data) => (
+                Self {
+                    ptr: data as *const _ as *const (),
+                    kind: GreenElementKind::Node,
+                },
+                true,
+            ),
+            Cow::Owned(green) => {
+                owned_nodes.push(green);
+                let data = owned_nodes
+                    .last()
+                    .map(|node| node.deref() as *const _ as *const ())
+                    .unwrap();
+                (
+                    Self {
+                        ptr: data,
+                        kind: GreenElementKind::Node,
+                    },
+                    false,
+                )
+            }
+        }
+    }
+
+    fn from_token(token: &SyntaxToken) -> Self {
+        Self {
+            ptr: token.green() as *const _ as *const (),
+            kind: GreenElementKind::Token,
+        }
+    }
+}
+
+/// Helper to remove span ranges like @0..69 from CST output
+fn remove_span_ranges(text: &str) -> String {
+    use std::sync::OnceLock;
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| Regex::new(r"@\d+\.\.\d+").unwrap());
+    re.replace_all(text, "").to_string()
+}
+
+/// Helper to read files from disk into a `HashMap`
+pub(crate) fn read_files_from_disk(path: &Path) -> Result<HashMap<PathBuf, String>> {
+    let mut files = HashMap::new();
+
+    if path.is_dir() {
+        let discovered = baml_workspace::discover_baml_files(path);
+        for file_path in discovered {
+            if let Ok(content) = std::fs::read_to_string(&file_path) {
+                files.insert(file_path, content);
+            }
+        }
+    } else {
+        let content = std::fs::read_to_string(path)?;
+        files.insert(path.to_path_buf(), content);
+    }
+
+    Ok(files)
+}
+
+pub(crate) fn normalize_files_to_virtual_root(
+    files: HashMap<PathBuf, String>,
+    root: &Path,
+) -> HashMap<PathBuf, String> {
+    let virtual_root = Path::new("/baml_src");
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+
+    files
+        .into_iter()
+        .map(|(path, contents)| {
+            let relative = if let Ok(rel) = path.strip_prefix(root) {
+                rel.to_path_buf()
+            } else if let Ok(canonical_path) = path.canonicalize() {
+                canonical_path
+                    .strip_prefix(&canonical_root)
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| {
+                        path.file_name()
+                            .map(PathBuf::from)
+                            .unwrap_or_else(|| PathBuf::from("unknown.baml"))
+                    })
+            } else {
+                path.file_name()
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| PathBuf::from("unknown.baml"))
+            };
+
+            (virtual_root.join(relative), contents)
+        })
+        .collect()
+}

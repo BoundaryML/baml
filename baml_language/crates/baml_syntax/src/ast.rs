@@ -1,7 +1,8 @@
 //! Typed AST node wrappers for ergonomic tree access.
 
-use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
 use rowan::ast::AstNode;
+
+use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
 
 /// Trait for all AST nodes.
 pub trait BamlAstNode: AstNode<Language = crate::BamlLanguage> {

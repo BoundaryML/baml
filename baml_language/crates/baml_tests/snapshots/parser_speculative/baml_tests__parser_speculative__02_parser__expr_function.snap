@@ -1,21 +1,93 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 2748
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "class JsonData {
-  field1 int
-  field2 int
-}
-
-function ProcessData(data JsonData) -> string {
-  let result = data.field1 + data.field2
-  if result > 100 {
-    return "high"
-  }
-  return "low"
-}
-"
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "JsonData"
+    L_BRACE "{"
+    FIELD
+      WORD "field1"
+      TYPE_EXPR " int"
+        WORD "int"
+    FIELD
+      WORD "field2"
+      TYPE_EXPR " int"
+        WORD "int"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ProcessData"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER "data"
+        WORD "data"
+  WORD "JsonData"
+  R_PAREN ")"
+  ARROW "->"
+  WORD "string"
+  L_BRACE "{"
+  KW_LET "let"
+  WORD "result"
+  EQUALS "="
+  WORD "data"
+  DOT "."
+  WORD "field1"
+  PLUS "+"
+  WORD "data"
+  DOT "."
+  WORD "field2"
+  KW_IF "if"
+  WORD "result"
+  GREATER ">"
+  INTEGER_LITERAL "100"
+  L_BRACE "{"
+  KW_RETURN "return"
+  QUOTE """
+  WORD "high"
+  QUOTE """
+  R_BRACE "}"
+  KW_RETURN "return"
+  QUOTE """
+  WORD "low"
+  QUOTE """
+  R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected type annotation (:), found Expected type annotation (:)
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected return type (->), found Expected return type (->)
+  Expected Expected function body, found Expected function body
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration

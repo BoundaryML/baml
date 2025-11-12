@@ -1,7 +1,8 @@
 //! Utilities for traversing syntax trees.
 
-use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
 use rowan::{NodeOrToken, TextRange, TextSize, ast::AstNode};
+
+use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
 
 /// Extension trait for syntax nodes.
 pub trait SyntaxNodeExt {

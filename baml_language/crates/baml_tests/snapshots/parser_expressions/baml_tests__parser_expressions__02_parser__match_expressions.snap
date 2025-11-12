@@ -1,33 +1,224 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 2103
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "enum Status {
-  PENDING
-  ACTIVE
-  INACTIVE
-  SUSPENDED
-}
-
-function HandleStatus(status Status) -> string {
-  match status {
-    Status::PENDING => "Waiting for approval"
-    Status::ACTIVE => "Currently active"
-    Status::INACTIVE => "Not active"
-    Status::SUSPENDED => "Temporarily suspended"
-  }
-}
-
-function ComplexMatch(value int) -> string {
-  match value {
-    0 => "zero"
-    1 | 2 | 3 => "small"
-    4..10 => "medium"
-    _ => "large"
-  }
-}
-"
+SOURCE_FILE
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Status"
+    L_BRACE "{"
+    ENUM_VARIANT "
+  PENDING"
+      WORD "PENDING"
+    ENUM_VARIANT "
+  ACTIVE"
+      WORD "ACTIVE"
+    ENUM_VARIANT "
+  INACTIVE"
+      WORD "INACTIVE"
+    ENUM_VARIANT "
+  SUSPENDED"
+      WORD "SUSPENDED"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "HandleStatus"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER "status"
+        WORD "status"
+  WORD "Status"
+  R_PAREN ")"
+  ARROW "->"
+  WORD "string"
+  L_BRACE "{"
+  WORD "match"
+  WORD "status"
+  L_BRACE "{"
+  WORD "Status"
+  DOUBLE_COLON "::"
+  WORD "PENDING"
+  EQUALS "="
+  GREATER ">"
+  QUOTE """
+  WORD "Waiting"
+  KW_FOR "for"
+  WORD "approval"
+  QUOTE """
+  WORD "Status"
+  DOUBLE_COLON "::"
+  WORD "ACTIVE"
+  EQUALS "="
+  GREATER ">"
+  QUOTE """
+  WORD "Currently"
+  WORD "active"
+  QUOTE """
+  WORD "Status"
+  DOUBLE_COLON "::"
+  WORD "INACTIVE"
+  EQUALS "="
+  GREATER ">"
+  QUOTE """
+  WORD "Not"
+  WORD "active"
+  QUOTE """
+  WORD "Status"
+  DOUBLE_COLON "::"
+  WORD "SUSPENDED"
+  EQUALS "="
+  GREATER ">"
+  QUOTE """
+  WORD "Temporarily"
+  WORD "suspended"
+  QUOTE """
+  R_BRACE "}"
+  R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ComplexMatch"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER "value"
+        WORD "value"
+  WORD "int"
+  R_PAREN ")"
+  ARROW "->"
+  WORD "string"
+  L_BRACE "{"
+  WORD "match"
+  WORD "value"
+  L_BRACE "{"
+  INTEGER_LITERAL "0"
+  EQUALS "="
+  GREATER ">"
+  QUOTE """
+  WORD "zero"
+  QUOTE """
+  INTEGER_LITERAL "1"
+  PIPE "|"
+  INTEGER_LITERAL "2"
+  PIPE "|"
+  INTEGER_LITERAL "3"
+  EQUALS "="
+  GREATER ">"
+  QUOTE """
+  WORD "small"
+  QUOTE """
+  INTEGER_LITERAL "4"
+  DOT "."
+  DOT "."
+  INTEGER_LITERAL "10"
+  EQUALS "="
+  GREATER ">"
+  QUOTE """
+  WORD "medium"
+  QUOTE """
+  WORD "_"
+  EQUALS "="
+  GREATER ">"
+  QUOTE """
+  WORD "large"
+  QUOTE """
+  R_BRACE "}"
+  R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected type annotation (:), found Expected type annotation (:)
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected return type (->), found Expected return type (->)
+  Expected Expected function body, found Expected function body
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected type annotation (:), found Expected type annotation (:)
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected return type (->), found Expected return type (->)
+  Expected Expected function body, found Expected function body
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration

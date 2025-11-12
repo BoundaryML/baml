@@ -7,10 +7,39 @@
 pub enum SyntaxKind {
     // ============ Token Kinds (from lexer) ============
 
+    // Keywords
+    // Top-level declaration keywords
+    KW_CLASS,
+    KW_ENUM,
+    KW_FUNCTION,
+    KW_CLIENT,
+    KW_GENERATOR,
+    KW_TEST,
+    KW_RETRY_POLICY,
+    KW_TEMPLATE_STRING,
+    KW_TYPE_BUILDER,
+
+    // Control flow keywords
+    KW_IF,
+    KW_ELSE,
+    KW_FOR,
+    KW_WHILE,
+    KW_LET,
+    KW_IN,
+    KW_BREAK,
+    KW_CONTINUE,
+    KW_RETURN,
+
+    // Other keywords
+    KW_WATCH,
+    KW_INSTANCEOF,
+    KW_ENV,
+    KW_DYNAMIC,
+
     // Literals
-    WORD,    // Any word (keywords determined by parser)
-    INTEGER, // 123
-    FLOAT,   // 123.45
+    WORD,            // Any word (non-keyword identifier)
+    INTEGER_LITERAL, // 123
+    FLOAT_LITERAL,   // 123.45
 
     // String delimiters (parser assembles strings)
     QUOTE, // "
@@ -30,6 +59,7 @@ pub enum SyntaxKind {
     COMMA,        // ,
     SEMICOLON,    // ;
     DOT,          // .
+    DOLLAR,       // $
     ARROW,        // ->
     AT,           // @
     AT_AT,        // @@
@@ -167,6 +197,7 @@ pub enum SyntaxKind {
     OBJECT_LITERAL,
     OBJECT_FIELD,
     ARRAY_LITERAL,
+    MAP_LITERAL,
 
     // String components (assembled by parser)
     STRING_LITERAL,
@@ -203,8 +234,8 @@ impl SyntaxKind {
     pub fn is_literal(self) -> bool {
         matches!(
             self,
-            SyntaxKind::INTEGER
-                | SyntaxKind::FLOAT
+            SyntaxKind::INTEGER_LITERAL
+                | SyntaxKind::FLOAT_LITERAL
                 | SyntaxKind::STRING_LITERAL
                 | SyntaxKind::RAW_STRING_LITERAL
         )

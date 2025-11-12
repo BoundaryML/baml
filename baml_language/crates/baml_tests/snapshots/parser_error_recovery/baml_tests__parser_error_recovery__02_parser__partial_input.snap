@@ -1,34 +1,102 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 1431
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "// Test parser recovery with partial/incomplete input
-class Partial {
-  field1 str  // Incomplete type name
-  field2  // Missing type entirely
-  field3 string @  // Incomplete attribute
-  field4 string @alias(  // Unclosed attribute
-  field5 string  // This should parse correctly
-}
-
-function Incomplete(  // Missing parameters closing
-  param1 string
-
-function NextFunction() -> string {  // Should still parse this
-  return "parsed"
-}
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Partial"
+    L_BRACE "{"
+    FIELD
+      WORD "field1"
+      TYPE_EXPR " str"
+        WORD "str"
+    FIELD
+      WORD "field2"
+      TYPE_EXPR "  // Missing type entirely
+  field3"
+        WORD "field3"
+    FIELD
+      WORD "string"
+      TYPE_EXPR
+      ATTRIBUTE " @  // Incomplete attribute
+  field4"
+        AT "@"
+        WORD "field4"
+    FIELD
+      WORD "string"
+      TYPE_EXPR
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS "(  // Unclosed attribute
+  field5"
+          L_PAREN "("
+          WORD "field5"
+    FIELD
+      WORD "string"
+      TYPE_EXPR
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Incomplete"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER "  // Missing parameters closing
+  param1"
+        WORD "param1"
+  WORD "string"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NextFunction"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        RETURN_STMT
+          KW_RETURN "return"
+          STRING_LITERAL " "parsed""
+            QUOTE """
+            WORD "parsed"
+            QUOTE """
+        R_BRACE "}"
+  ENUM_DEF "
 
 enum  // Missing enum name
-  VALUE1
-  VALUE2
-}
-
-enum ValidEnum {  // Should parse this
-  OPTION1
-  OPTION2
-}
-"
+  VALUE1"
+    KW_ENUM "enum"
+    WORD "VALUE1"
+  WORD "VALUE2"
+  R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "ValidEnum"
+    L_BRACE "{"
+    ENUM_VARIANT "  // Should parse this
+  OPTION1"
+      WORD "OPTION1"
+    ENUM_VARIANT "
+  OPTION2"
+      WORD "OPTION2"
+    R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected type, found Expected type
+  Expected Expected type, found Expected type
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected type, found Expected type
+  Expected Expected type annotation (:), found Expected type annotation (:)
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected return type (->), found Expected return type (->)
+  Expected Expected function body, found Expected function body
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected LBrace, found Word, found Expected LBrace, found Word
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration

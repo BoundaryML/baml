@@ -1,0 +1,56 @@
+[package]
+name = "baml_onionskin"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[[bin]]
+name = "baml_onionskin"
+path = "src/main.rs"
+
+[dependencies]
+baml_db = { workspace = true }
+baml_lexer = { workspace = true }
+baml_parser = { workspace = true }
+baml_hir = { workspace = true }
+baml_thir = { workspace = true }
+baml_codegen = { workspace = true }
+baml_diagnostics = { workspace = true }
+baml_workspace = { workspace = true }
+rowan = { workspace = true }
+
+# Salsa for event system
+salsa = { workspace = true }
+
+# TUI and terminal
+ratatui = "0.29"
+crossterm = "0.28"
+
+# File watching
+notify = "7.0"
+
+# CLI argument parsing
+clap = { version = "4.5", features = ["derive"] }
+
+# Diff functionality
+similar = { version = "2.6", features = ["inline"] }
+
+# Regex for text processing
+regex = "1.11"
+
+# Error handling
+anyhow = "1.0"
+
+# Standard library
+text-size = { workspace = true }
+
+
+[lints.clippy]
+print_stdout = "allow"
+print_stderr = "allow"
