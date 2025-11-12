@@ -1,7 +1,7 @@
 import { SidebarMenuButton } from '@baml/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { FunctionSquare } from 'lucide-react';
+import { Bot, FunctionSquare } from 'lucide-react';
 import * as React from 'react';
 import { vscode } from '../../vscode';
 import { functionObjectAtom, selectedItemAtom } from '../atoms';
@@ -15,9 +15,10 @@ import { getStatus } from '../prompt-preview/test-panel/testStateUtils';
 interface FunctionItemProps {
   functionName: string;
   tests: string[];
+  functionFlavor: 'llm' | 'expr';
 }
 
-export function FunctionItem({ functionName, tests }: FunctionItemProps) {
+export function FunctionItem({ functionName, tests, functionFlavor }: FunctionItemProps) {
   const fnAtom = React.useMemo(
     () => functionObjectAtom(functionName),
     [functionName],
@@ -152,6 +153,9 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
     }
   };
 
+  const resolvedFlavor = fn?.functionFlavor ?? functionFlavor;
+  const Icon = resolvedFlavor === 'llm' ? Bot : FunctionSquare;
+
   return (
     <SidebarMenuButton
       className="flex justify-between items-center w-full pl-8 cursor-pointer text-[10px] py-0.5 h-6"
@@ -169,7 +173,7 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
             ) : (
               <FunctionSquare className="size-3" />
             )} */}
-            <FunctionSquare className="size-3" />
+            <Icon className="size-3" />
             <span className="truncate hover:text-primary hover:underline">
               {functionName}
             </span>
@@ -178,7 +182,7 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
         <TooltipContent className="max-w-xs">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <FunctionSquare className="size-4" />
+              <Icon className="size-4" />
               <span className="font-medium">{functionName}</span>
             </div>
 

@@ -24,7 +24,7 @@ import { flowStore } from '../../../../states/reactflow';
 import { Loader as Spinner } from '@baml/ui/custom/loader';
 import { useGraphSync } from '../../../../features/graph/hooks';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { detailPanelStateAtom, graphControlsTipDismissedAtom, unifiedSelectionAtom } from '../atoms';
+import { graphControlsTipDismissedAtom, unifiedSelectionAtom } from '../atoms';
 import { MousePointer2, ZoomIn, X, ChevronLeft } from 'lucide-react';
 
 /**
@@ -47,16 +47,11 @@ export const GraphView = () => {
   const { activeWorkflowId } = useActiveWorkflow();
   const [direction] = useLayoutDirection();
 
-  // Sync detail panel state with unified atoms
-  const setDetailPanelState = useSetAtom(detailPanelStateAtom);
   const setUnifiedSelection = useSetAtom(unifiedSelectionAtom);
   const [graphTipDismissed, setGraphTipDismissed] = useAtom(
     graphControlsTipDismissedAtom
   );
   const selectedNodeId = useAtomValue(unifiedSelectionAtom).selectedNodeId;
-  useEffect(() => {
-    setDetailPanelState({ isOpen: detailPanel.isOpen });
-  }, [detailPanel.isOpen, setDetailPanelState]);
 
   useEffect(() => {
     const nodes = flowStore.value.getNodes?.();
@@ -177,9 +172,10 @@ export const GraphView = () => {
         onNodeClick={handleNodeClick}
         panOnScroll
         // by making this true note sometimes clicks wont register since it will think you are dragging.
-        nodesDraggable={true}
+        nodesDraggable={false}
         selectionOnDrag
         panOnDrag={[1, 2]}
+        // autoPanOnNodeFocus={true}
         selectionMode={SelectionMode.Partial}
         colorMode="light"
       >

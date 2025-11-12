@@ -72,6 +72,7 @@ function createWorkflow(
     // FunctionMetadata fields
     name: id,
     type: 'workflow',
+    functionFlavor: 'llm',
     span: createMockSpan(filePath),
     signature: `function ${id}(...)`,
     testSnippet: '',
@@ -529,6 +530,7 @@ function createMockFunction(
   const functionType = type === 'block' ? 'workflow' : type;
   const baseFunction = createMockFunctionUnified(name, functionType, filePath, {
     testCases,
+    flavor: type === 'llm_function' || type === 'block' ? 'llm' : 'expr',
   });
 
   // Call graph type should match the input type

@@ -86,9 +86,10 @@ export interface TestCaseMetadata {
  * No WASM dependencies - pure TypeScript types
  */
 export interface FunctionMetadata {
-  name: string;
-  type: 'function' | 'llm_function' | 'workflow';
-  span: SpanInfo;
+    name: string;
+    type: 'function' | 'llm_function' | 'workflow';
+    functionFlavor: 'llm' | 'expr';
+    span: SpanInfo;
   signature: string;
   testSnippet: string;
 

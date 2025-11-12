@@ -1,9 +1,18 @@
+use serde::{Deserialize, Serialize};
+
 mod constraint;
 pub mod expr;
 mod map;
 mod media;
 mod minijinja;
 pub mod tracing;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FunctionFlavor {
+    Llm,
+    Expr,
+}
 
 pub mod baml_value;
 mod generator;

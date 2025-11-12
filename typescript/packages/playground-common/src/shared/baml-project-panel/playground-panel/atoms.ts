@@ -80,12 +80,17 @@ export const selectedItemAtom = atom(
     ];
   },
   (get, set, functionName: string, testcaseName: string | undefined) => {
-    // When selecting a function directly (e.g., from sidebar), clear workflow/node context
-    // This ensures standalone functions show TestPanel instead of DetailPanel
+    // Check if the selected function is a workflow
+    const functions = get(functionsAtom);
+    const selectedFn = functions.find((f) => f.name === functionName);
+    const isWorkflow = selectedFn?.type === 'workflow';
+
+    // For workflows, set activeWorkflowId so the graph view is shown
+    // For standalone functions, clear workflow/node context to show TestPanel
     set(unifiedSelectionStateAtom, {
       functionName,
       testName: testcaseName ?? null,
-      activeWorkflowId: null,
+      activeWorkflowId: isWorkflow ? functionName : null,
       selectedNodeId: null,
     });
   },
@@ -313,7 +318,6 @@ export const testCaseResponseAtom = atomFamily(
 export {
   unifiedSelectionAtom,
   activeTabAtom,
-  detailPanelStateAtom,
   viewModeAtom,
   bottomPanelModeAtom,
   shouldShowGraphAtom,

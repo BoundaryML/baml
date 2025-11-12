@@ -197,7 +197,11 @@ export function TestingSidebar() {
                     className="group/collapsible"
                   >
                     <SidebarMenuItem>
-                      <FunctionItem functionName={func.name} tests={func.tests} />
+                      <FunctionItem
+                        functionName={func.name}
+                        tests={func.tests}
+                        functionFlavor={func.functionFlavor}
+                      />
                       {func.tests?.length > 0 && (
                         <>
                           <CollapsibleTrigger asChild>
@@ -258,4 +262,3 @@ export function TestingSidebar() {
     </Sidebar>
   );
 }
-

@@ -3,6 +3,7 @@
 // but without the wasm-bindgen dependency.
 // Wasm-bindgen causes strange issues with ruby builds so we'd rather not add that dependency if we can.
 
+use baml_types::FunctionFlavor;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -57,6 +58,7 @@ pub struct BamlFunctionTestCasePair {
 pub struct BamlFunction {
     pub name: String,
     pub span: BamlSpan,
+    pub function_type: FunctionFlavor,
     pub test_cases: Vec<BamlFunctionTestCasePair>,
     pub test_snippet: String,
     pub signature: String,

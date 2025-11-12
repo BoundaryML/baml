@@ -63,7 +63,7 @@ pub(crate) mod tests {
         let diagnostics = project.diagnostics(&current_runtime);
         assert!(diagnostics.errors().is_empty());
 
-        let functions = current_runtime.list_functions();
+        let functions = current_runtime.list_functions(None);
 
         for f in functions.iter() {
             f.run_test(
@@ -135,7 +135,7 @@ pub(crate) mod tests {
         let diagnostics = project.diagnostics(&current_runtime);
         assert!(diagnostics.errors().is_empty());
 
-        let functions = current_runtime.list_functions();
+        let functions = current_runtime.list_functions(None);
         let partial_results: Rc<RefCell<Vec<JsValue>>> = Rc::new(RefCell::new(Vec::new()));
         let expr_events: Rc<RefCell<Vec<JsValue>>> = Rc::new(RefCell::new(Vec::new()));
 

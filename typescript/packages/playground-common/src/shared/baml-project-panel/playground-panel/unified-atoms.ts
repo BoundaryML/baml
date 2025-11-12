@@ -48,13 +48,6 @@ export const unifiedSelectionAtom = atom(
 export type TabValue = 'preview' | 'curl' | 'graph';
 export const activeTabAtom = atom<TabValue>('preview');
 
-/**
- * Detail panel state (for graph view)
- */
-export const detailPanelStateAtom = atom({
-  isOpen: false,
-});
-
 // ============================================================================
 // DERIVED STATE
 // ============================================================================
@@ -71,7 +64,7 @@ export const viewModeAtom = atom((get) => {
   const isInWorkflow = selection.activeWorkflowId !== null;
 
   console.log(selection, selectedFn, activeWorkflow, isInWorkflow);
-  const isLLMFunction = selectedFn?.type === 'llm_function';
+  const isLLMFunction = selectedFn?.functionFlavor === 'llm';
   const hasWorkflowStructure =
     selectedFn?.type === 'workflow' && (selectedFn.nodes?.length ?? 0) > 1;
   const activeWorkflowHasStructure =
@@ -83,8 +76,8 @@ export const viewModeAtom = atom((get) => {
     shouldShowWorkflow || (isInWorkflow && !!activeWorkflowHasStructure);
 
   return {
-    showTabs: isLLMFunction, //|| showGraph,
     showGraphTab: showGraph,
+    showLLMTabs: isLLMFunction, // Show Preview/cURL tabs only for LLM functions
     defaultTab: (showGraph ? 'graph' : 'preview') as TabValue,
     showTabBar: isLLMFunction || showGraph,
   };

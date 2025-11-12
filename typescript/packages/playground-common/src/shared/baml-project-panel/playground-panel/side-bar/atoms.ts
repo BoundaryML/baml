@@ -14,6 +14,7 @@ export const functionsAtom = atom((get) => {
   return functions.map((f) => ({
     name: f.name,
     tests: f.testCases?.map((t) => t.name) || [],
+    functionFlavor: f.functionFlavor,
   }));
 });
 

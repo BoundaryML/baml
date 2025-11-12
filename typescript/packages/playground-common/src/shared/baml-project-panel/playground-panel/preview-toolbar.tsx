@@ -29,6 +29,8 @@ import { ThemeToggle } from '../theme/ThemeToggle';
 import { vscode } from '../vscode';
 import { areTestsRunningAtom, selectedItemAtom, selectionAtom } from './atoms';
 import { FunctionTestName } from './function-test-name';
+import { WorkflowNodeName } from './workflow-node-name';
+import { unifiedSelectionAtom } from './unified-atoms';
 import { isParallelTestsEnabledAtom } from './prompt-preview/test-panel/atoms';
 import { useRunBamlTests } from './prompt-preview/test-panel/test-runner';
 import { standaloneBetaFeatureEnabledAtom, isVSCodeEnvironment } from '../feature-flags';
@@ -89,6 +91,7 @@ export const isClientCallGraphEnabledAtom = atom(false);
 export function PreviewToolbar() {
   const selections = useAtomValue(selectedItemAtom);
   const { selectedFn } = useAtomValue(selectionAtom);
+  const unifiedSelection = useAtomValue(unifiedSelectionAtom);
   const setShowApiKeyDialog = useSetAtom(showApiKeyDialogAtom);
   const { open: isSidebarOpen } = useSidebar();
 
@@ -133,12 +136,20 @@ export function PreviewToolbar() {
     return 'text-sm hidden md:block whitespace-nowrap';
   };
 
+  // Check if we're in a workflow context (workflow + node selected, but no function)
+  const isWorkflowContext =
+    !selectedFn &&
+    unifiedSelection.activeWorkflowId &&
+    unifiedSelection.selectedNodeId;
+
+  const hasSelection = selectedFn !== null || isWorkflowContext;
+
   return (
     <div className="flex flex-col gap-1 overflow-hidden w-full">
       <div
         className={cn(
           'flex flex-row gap-1 items-center min-w-0 w-full',
-          selectedFn === null ? 'justify-end' : 'justify-between',
+          !hasSelection ? 'justify-end' : 'justify-between',
         )}
       >
         {selectedFn !== null && (
@@ -148,6 +159,20 @@ export function PreviewToolbar() {
                 <FunctionTestName
                   functionName={selectedFn.name}
                   testName={selections?.[1]}
+                />
+              </div>
+
+              <RunButton />
+            </div>
+          </div>
+        )}
+        {isWorkflowContext && (
+          <div className="flex flex-col gap-1 min-w-0 flex-1 overflow-hidden">
+            <div className="flex flex-row items-center gap-2 min-w-0">
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <WorkflowNodeName
+                  workflowId={unifiedSelection.activeWorkflowId!}
+                  nodeId={unifiedSelection.selectedNodeId!}
                 />
               </div>
 

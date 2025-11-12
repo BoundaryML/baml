@@ -10,7 +10,6 @@ import { createStore } from 'jotai';
 import {
   unifiedSelectionAtom,
   activeTabAtom,
-  detailPanelStateAtom,
   viewModeAtom,
   bottomPanelModeAtom,
 } from '../../shared/baml-project-panel/playground-panel/atoms';
@@ -68,39 +67,6 @@ describe('Navigation Integration - Unified State', () => {
 
       const sdkFunctionName = store.get(selectedFunctionNameAtom);
       expect(sdkFunctionName).toBe('funcB');
-    });
-  });
-
-  describe('View Mode Atom', () => {
-    beforeEach(() => {
-      // Mock the runtimeStateAtom to have some functions
-      // Since we can't easily mock this in the test, we'll test the logic separately
-    });
-
-    it('should show graph tab when activeWorkflowId is set', () => {
-      store.set(unifiedSelectionAtom, {
-        functionName: 'processData',
-        testName: null,
-        activeWorkflowId: 'fetchDataWorkflow',
-        selectedNodeId: null,
-      });
-
-      const viewMode = store.get(viewModeAtom);
-      expect(viewMode.showGraphTab).toBe(true);
-      expect(viewMode.defaultTab).toBe('graph');
-    });
-
-    it('should not show graph tab for standalone function', () => {
-      store.set(unifiedSelectionAtom, {
-        functionName: 'extractUser',
-        testName: null,
-        activeWorkflowId: null,
-        selectedNodeId: null,
-      });
-
-      const viewMode = store.get(viewModeAtom);
-      expect(viewMode.showGraphTab).toBe(false);
-      expect(viewMode.defaultTab).toBe('preview');
     });
   });
 
@@ -191,24 +157,6 @@ describe('Navigation Integration - Unified State', () => {
 
       store.set(activeTabAtom, 'graph');
       expect(store.get(activeTabAtom)).toBe('graph');
-    });
-  });
-
-  describe('Detail Panel State Atom', () => {
-    it('should initialize as closed', () => {
-      const state = store.get(detailPanelStateAtom);
-      expect(state.isOpen).toBe(false);
-    });
-
-    it('should open when node is selected', () => {
-      store.set(detailPanelStateAtom, { isOpen: true });
-      expect(store.get(detailPanelStateAtom).isOpen).toBe(true);
-    });
-
-    it('should close for standalone functions', () => {
-      store.set(detailPanelStateAtom, { isOpen: true });
-      store.set(detailPanelStateAtom, { isOpen: false });
-      expect(store.get(detailPanelStateAtom).isOpen).toBe(false);
     });
   });
 
@@ -307,17 +255,14 @@ describe('Navigation Integration - Unified State', () => {
         selectedNodeId: 'processData',
         functionName: 'processData',
       }));
-      store.set(detailPanelStateAtom, { isOpen: true });
 
       const selection = store.get(unifiedSelectionAtom);
       const tab = store.get(activeTabAtom);
-      const panelState = store.get(detailPanelStateAtom);
       const bottomPanelMode = store.get(bottomPanelModeAtom);
 
       expect(selection.selectedNodeId).toBe('processData');
       expect(selection.activeWorkflowId).toBe('simpleWorkflow');
       expect(tab).toBe('graph');
-      expect(panelState.isOpen).toBe(true);
       expect(bottomPanelMode).toBe('detail-panel');
     });
 
@@ -338,7 +283,6 @@ describe('Navigation Integration - Unified State', () => {
         selectedNodeId: 'handleSuccess',
       });
       store.set(activeTabAtom, 'graph');
-      store.set(detailPanelStateAtom, { isOpen: true });
 
       const selection = store.get(unifiedSelectionAtom);
       const tab = store.get(activeTabAtom);
@@ -357,7 +301,6 @@ describe('Navigation Integration - Unified State', () => {
         selectedNodeId: null,
       });
       store.set(activeTabAtom, 'preview');
-      store.set(detailPanelStateAtom, { isOpen: false });
 
       const selection = store.get(unifiedSelectionAtom);
       const tab = store.get(activeTabAtom);

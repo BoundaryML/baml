@@ -19,7 +19,6 @@ import { panToNodeIfNeeded } from '../../../utils/cameraPan';
 import {
   unifiedSelectionAtom,
   activeTabAtom,
-  detailPanelStateAtom,
 } from '../../../shared/baml-project-panel/playground-panel/atoms';
 
 /**
@@ -34,7 +33,6 @@ export function useCodeNavigation() {
   // Unified state setters
   const setUnifiedSelection = useSetAtom(unifiedSelectionAtom);
   const setActiveTab = useSetAtom(activeTabAtom);
-  const setDetailPanelState = useSetAtom(detailPanelStateAtom);
 
   useEffect(() => {
     if (!activeCodeClick) return;
@@ -96,7 +94,6 @@ export function useCodeNavigation() {
 
         // Update unified state
         setActiveTab('graph');
-        setDetailPanelState({ isOpen: true });
 
         // If a testId is provided, select that test case in the details panel
         if (action.testId) {
@@ -170,7 +167,6 @@ export function useCodeNavigation() {
             selectedNodeId: targetNodeId,
           }));
           openDetailPanel();
-          setDetailPanelState({ isOpen: true });
 
           if (action.testId) {
             console.log('🎯 Selecting test case:', action.testId);
@@ -194,7 +190,6 @@ export function useCodeNavigation() {
           selectedNodeId: null,
         });
         setActiveTab('preview'); // Show prompt preview for standalone LLM function
-        setDetailPanelState({ isOpen: false }); // Close detail panel for standalone view
 
         // Then select the function and open detail panel to show tests
         timeouts.push(setTimeout(() => {
@@ -215,7 +210,6 @@ export function useCodeNavigation() {
           selectedNodeId: null,
         });
         setActiveTab('preview');
-        setDetailPanelState({ isOpen: false });
         break;
     }
 
@@ -230,6 +224,5 @@ export function useCodeNavigation() {
     openDetailPanel,
     setUnifiedSelection,
     setActiveTab,
-    setDetailPanelState,
   ]);
 }

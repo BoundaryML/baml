@@ -185,6 +185,13 @@ function SaveResult(summary: string) -> string {
     {{ ctx.output_format }}
   "#
 }
+
+test SimpleWorkflowTest {
+  functions [SimpleWorkflow]
+  args {
+    user_id "user_12345"
+  }
+}
 `,
 
   'baml_src/workflows/conditional.baml': `class ValidationInsight {

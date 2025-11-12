@@ -23,6 +23,7 @@ import type {
   WasmRuntime,
   TestStatus as WasmTestStatus,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build';
+import { WasmFunctionKind } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build';
 
 import type {
   SpanInfo,
@@ -129,17 +130,23 @@ export class WasmTypeAdapter {
   // ============================================================================
 
   convertFunction(wasmFn: WasmFunction, runtime: WasmRuntime): FunctionMetadata {
-    let type: FunctionMetadata['type'] = 'llm_function';
+    const flavor: FunctionMetadata['functionFlavor'] =
+      wasmFn.function_type === WasmFunctionKind.Llm ? 'llm' : 'expr';
+
+    let type: FunctionMetadata['type'] =
+      flavor === 'llm' ? 'llm_function' : 'function';
     let clientName: string | undefined;
 
-    try {
-      const rawClient = wasmFn.client_name(runtime);
-      clientName = rawClient || undefined;
-      if (!clientName) {
+    if (flavor === 'llm') {
+      try {
+        const rawClient = wasmFn.client_name(runtime);
+        clientName = rawClient || undefined;
+        if (!clientName) {
+          type = 'workflow';
+        }
+      } catch {
         type = 'workflow';
       }
-    } catch {
-      type = 'workflow';
     }
 
     // TODO: Re-enable orchestration graph when needed
@@ -149,6 +156,7 @@ export class WasmTypeAdapter {
     return {
       name: wasmFn.name,
       type,
+      functionFlavor: flavor,
       span: this.convertSpan(wasmFn.span),
       signature: wasmFn.signature,
       testSnippet: wasmFn.test_snippet,
@@ -161,7 +169,8 @@ export class WasmTypeAdapter {
   convertExprFunction(wasmFn: WasmFunction): FunctionMetadata {
     return {
       name: wasmFn.name,
-      type: 'workflow',
+      type: 'function',
+      functionFlavor: 'expr',
       span: this.convertSpan(wasmFn.span),
       signature: wasmFn.signature,
       testSnippet: wasmFn.test_snippet,
@@ -335,11 +344,13 @@ export function createMockFunction(
   options?: {
     clientName?: string;
     testCases?: TestCaseMetadata[];
+    flavor?: FunctionMetadata['functionFlavor'];
   }
 ): FunctionMetadata {
   return {
     name,
     type,
+    functionFlavor: options?.flavor ?? (type === 'llm_function' ? 'llm' : 'expr'),
     span: createMockSpan(filePath),
     signature: `function ${name}(...) -> ...`,
     testSnippet: `test ${name}_test {\n  functions [${name}]\n  args { }\n}`,

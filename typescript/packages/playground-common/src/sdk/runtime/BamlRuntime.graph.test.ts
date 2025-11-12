@@ -152,6 +152,7 @@ describe('buildControlFlowArtifacts', () => {
     const metadata = {
       name: 'SimpleWorkflow',
       type: 'workflow' as const,
+      functionFlavor: 'llm' as const,
       span: mockAdapter.convertSpan(span(0, 10)),
       signature: '',
       testSnippet: '',

@@ -13,6 +13,7 @@
 
 import {
   WasmControlFlowNodeType,
+  WasmFunctionKind,
   type WasmProject,
   type WasmRuntime,
   type WasmDiagnosticError,
@@ -77,6 +78,8 @@ type WasmGeneratorOutput = {
     contents: string;
   }>;
 };
+
+type RichWasmFunction = WasmFunction & { function_type: WasmFunctionKind };
 
 // Type for test execution callbacks
 type WasmPartialResponse = unknown; // The partial response shape varies
@@ -496,12 +499,11 @@ export class BamlRuntime implements BamlRuntimeInterface {
     }
 
     try {
-      const llmFunctions: WasmFunction[] = this.wasmRuntime.list_functions();
-      const exprFunctions: WasmFunction[] = this.wasmRuntime.list_expr_fns?.() ?? [];
+      const wasmFunctions = this.wasmRuntime.list_functions() as RichWasmFunction[];
       const seen = new Set<string>();
       const combined: FunctionWithCallGraph[] = [];
 
-      const pushFn = (fn: WasmFunction, metadata: FunctionMetadata) => {
+      const pushFn = (fn: RichWasmFunction, metadata: FunctionMetadata) => {
         if (seen.has(fn.name)) {
           return;
         }
@@ -509,13 +511,11 @@ export class BamlRuntime implements BamlRuntimeInterface {
         seen.add(fn.name);
       };
 
-      for (const fn of llmFunctions) {
-        const metadata = this.adapter.convertFunction(fn, this.wasmRuntime!);
-        pushFn(fn, metadata);
-      }
-
-      for (const fn of exprFunctions) {
-        const metadata = this.adapter.convertExprFunction(fn);
+      for (const fn of wasmFunctions) {
+        const metadata =
+          fn.function_type === WasmFunctionKind.Llm
+            ? this.adapter.convertFunction(fn, this.wasmRuntime!)
+            : this.adapter.convertExprFunction(fn);
         pushFn(fn, metadata);
       }
 
@@ -1128,10 +1128,13 @@ export class BamlRuntime implements BamlRuntimeInterface {
       throw new Error('Runtime not initialized');
     }
 
-    const wasmFunctions = this.wasmRuntime.list_functions();
+    const wasmFunctions = this.wasmRuntime.list_functions() as RichWasmFunction[];
     const wasmFn = wasmFunctions.find(f => f.name === functionName);
     if (!wasmFn) {
       throw new Error(`Function ${functionName} not found`);
+    }
+    if (wasmFn.function_type !== WasmFunctionKind.Llm) {
+      throw new Error(`Function ${functionName} is not an LLM function`);
     }
 
     const wasmCallContext = new this.wasm.WasmCallContext();
@@ -1161,10 +1164,13 @@ export class BamlRuntime implements BamlRuntimeInterface {
       throw new Error('Runtime not initialized');
     }
 
-    const wasmFunctions = this.wasmRuntime.list_functions();
+    const wasmFunctions = this.wasmRuntime.list_functions() as RichWasmFunction[];
     const wasmFn = wasmFunctions.find(f => f.name === functionName);
     if (!wasmFn) {
       throw new Error(`Function ${functionName} not found`);
+    }
+    if (wasmFn.function_type !== WasmFunctionKind.Llm) {
+      throw new Error(`Function ${functionName} is not an LLM function`);
     }
 
     const wasmCallContext = new this.wasm.WasmCallContext();

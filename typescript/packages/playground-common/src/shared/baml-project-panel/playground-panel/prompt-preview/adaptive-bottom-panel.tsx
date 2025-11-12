@@ -14,7 +14,7 @@ import { DetailPanel } from '../../../../features/detail-panel';
  */
 export const AdaptiveBottomPanel = () => {
   const bottomPanelMode = useAtomValue(bottomPanelModeAtom);
-
+  console.log('viewtype: bottomPanelMode', bottomPanelMode);
   if (bottomPanelMode === 'detail-panel') {
     return <DetailPanel />;
   }

@@ -164,14 +164,18 @@ export const UnifiedPromptPreview = () => {
           <div className="pointer-events-auto flex items-center justify-between gap-2 bg-background/90 px-2 py-0">
             <div className="flex items-center gap-2">
               <TabsList>
-                <TabsTrigger value="preview">
-                  <Eye className="size-3.5" />
-                  <span className="ml-1">Prompt</span>
-                </TabsTrigger>
-                <TabsTrigger value="curl">
-                  <Code2 className="size-3.5" />
-                  <span className="ml-1">cURL</span>
-                </TabsTrigger>
+                {viewMode.showLLMTabs && (
+                  <>
+                    <TabsTrigger value="preview">
+                      <Eye className="size-3.5" />
+                      <span className="ml-1">Prompt</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="curl">
+                      <Code2 className="size-3.5" />
+                      <span className="ml-1">cURL</span>
+                    </TabsTrigger>
+                  </>
+                )}
                 {viewMode.showGraphTab && (
                   <TabsTrigger value="graph">
                     <Network className="size-3.5" />
@@ -180,21 +184,23 @@ export const UnifiedPromptPreview = () => {
                 )}
               </TabsList>
               <FunctionMetadata />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2 text-muted-foreground/70 hover:text-foreground"
-                onClick={handleCopy}
-              >
-                {showCopied ? (
-                  <Check className="size-4 flex-shrink-0" />
-                ) : (
-                  <Copy className="size-4 flex-shrink-0" />
-                )}
-                <span className={getButtonTextClass()}>
-                  {showCopied ? 'Copied!' : activeTab === 'curl' ? 'Copy cURL' : 'Copy Prompt'}
-                </span>
-              </Button>
+              {viewMode.showLLMTabs && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-2 text-muted-foreground/70 hover:text-foreground"
+                  onClick={handleCopy}
+                >
+                  {showCopied ? (
+                    <Check className="size-4 flex-shrink-0" />
+                  ) : (
+                    <Copy className="size-4 flex-shrink-0" />
+                  )}
+                  <span className={getButtonTextClass()}>
+                    {showCopied ? 'Copied!' : activeTab === 'curl' ? 'Copy cURL' : 'Copy Prompt'}
+                  </span>
+                </Button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {activeTab === 'preview' && (
@@ -217,18 +223,22 @@ export const UnifiedPromptPreview = () => {
               )}
             </div>
           </div>
-          <TabsContent
-            value="preview"
-            className="flex-1 pointer-events-auto bg-background/95 mt-0 pt-1 overflow-auto px-2"
-          >
-            <PromptPreviewContent />
-          </TabsContent>
-          <TabsContent
-            value="curl"
-            className="flex-1 pointer-events-auto bg-background/95 mt-0 pt-1 overflow-auto px-2"
-          >
-            <PromptPreviewCurl />
-          </TabsContent>
+          {viewMode.showLLMTabs && (
+            <>
+              <TabsContent
+                value="preview"
+                className="flex-1 pointer-events-auto bg-background/95 mt-0 pt-1 overflow-auto px-2"
+              >
+                {activeTab === 'preview' && <PromptPreviewContent />}
+              </TabsContent>
+              <TabsContent
+                value="curl"
+                className="flex-1 pointer-events-auto bg-background/95 mt-0 pt-1 overflow-auto px-2"
+              >
+                {activeTab === 'curl' && <PromptPreviewCurl />}
+              </TabsContent>
+            </>
+          )}
           {viewMode.showGraphTab && (
             <TabsContent value="graph" className="flex-1 pointer-events-none" />
           )}

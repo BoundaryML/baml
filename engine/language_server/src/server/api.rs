@@ -95,7 +95,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                         let functions = project
                             .lock()
                             .baml_project
-                            .list_functions(effective_flags)
+                            .list_functions(effective_flags, None)
                             .iter()
                             .map(|f| BamlFunctionResult {
                                 name: f.name.clone(),

@@ -413,7 +413,7 @@ Date: ${dateTime}`
   };
 
   return (
-    <div className="absolute bottom-2 right-2 z-[1000] w-[200px] bg-card border border-border rounded-md shadow-lg max-h-[500px] overflow-y-auto">
+    <div className="absolute bottom-2 right-0 z-[1000] w-[200px] bg-card border border-border rounded-md shadow-lg max-h-[400px] overflow-y-auto">
       {/* Header */}
       <div className="sticky top-0 bg-card border-b border-border px-2 py-1">
         <h3 className="text-[10px] font-semibold text-foreground uppercase tracking-wide mb-1">Debug</h3>

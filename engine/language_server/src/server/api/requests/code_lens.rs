@@ -90,7 +90,7 @@ impl SyncRequestHandler for CodeLens {
         };
 
         let mut function_lenses: Vec<lsp_types::CodeLens> = project_lock
-            .list_functions()
+            .list_functions(None)
             .unwrap_or_default()
             .iter()
             .filter(|func| doc_matches(&func.span, &project_lock))
@@ -108,31 +108,6 @@ impl SyncRequestHandler for CodeLens {
                 }
             })
             .collect();
-
-        tracing::info!("Function lenses calculated");
-
-        // Add lenses for expr functions
-        let expr_function_lenses: Vec<lsp_types::CodeLens> = project_lock
-            .list_expr_fns()
-            .unwrap_or_default()
-            .iter()
-            .filter(|func| doc_matches(&func.span, &project_lock))
-            .map(|func| {
-                let range = mk_range(&func.span);
-                let command = OpenBamlPanel {
-                    project_id: project_lock.root_path().to_string_lossy().to_string(),
-                    function_name: func.name.clone(),
-                    show_tests: true,
-                };
-                lsp_types::CodeLens {
-                    range,
-                    command: command.to_lsp_command(),
-                    data: None,
-                }
-            })
-            .collect();
-
-        function_lenses.extend(expr_function_lenses);
 
         // TODO(sam): there is a bug in here, where for a `test` block which test N functions,
         // we generate N^2 "Test {function}" code lenses, even though we should only generate N
@@ -140,7 +115,7 @@ impl SyncRequestHandler for CodeLens {
         // `list_testcases`, but I'm not sure how this behavior interacts with VSCode so for
         // now I'm leaving this as-is.
         let test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
-            .list_function_test_pairs()
+            .list_function_test_pairs(None)
             .unwrap_or_default()
             .iter()
             .filter(|testcase| doc_matches(&testcase.span, &project_lock))
@@ -166,35 +141,6 @@ impl SyncRequestHandler for CodeLens {
             .collect();
 
         function_lenses.extend(test_case_lenses);
-
-        // Add lenses for expr function test pairs
-        let expr_test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
-            .list_expr_fn_test_pairs()
-            .unwrap_or_default()
-            .iter()
-            .filter(|testcase| doc_matches(&testcase.span, &project_lock))
-            .map(|testcase| {
-                let project_id = project_lock.root_path().to_string_lossy().to_string();
-                (
-                    testcase.function_name_span.as_ref(),
-                    lsp_types::CodeLens {
-                        range: mk_range(&testcase.span),
-                        command: RunBamlTest {
-                            project_id: project_id.clone(),
-                            test_case_name: testcase.name.clone(),
-                            function_name: testcase.function.name.clone(),
-                            show_tests: true,
-                        }
-                        .to_lsp_command(),
-                        data: None,
-                    },
-                )
-            })
-            .sorted_by_key(|(span, _)| span.map_or(None, |span| Some(span.start)))
-            .map(|(_, codelens)| codelens)
-            .collect();
-
-        function_lenses.extend(expr_test_case_lenses);
         function_lenses.sort_by_key(|lens| lens.range.start);
         tracing::debug!("Function lenses: {:#?}", function_lenses);
         Ok(Some(function_lenses))
