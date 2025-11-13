@@ -4,7 +4,7 @@ import type {
   Reactflow,
   ReactflowEdgeWithData,
   ReactflowNodeWithData,
-} from '@/mock-data/types';
+} from '../../../mock-data/types';
 import type { LayoutDirection, LayoutVisibility } from './node';
 
 export const getRootNode = (nodes: Reactflow['nodes']) => {

@@ -2,9 +2,9 @@ import { uuid } from '@del-wang/utils';
 import { EdgeLabelRenderer, type Position } from '@xyflow/react';
 import { useMemo } from 'react';
 
-import { getLineCenter } from '@/features/graph/layout/edge/edge';
-import type { ControlPoint } from '@/features/graph/layout/edge/point';
-import { flowStore } from '@/states/reactflow';
+import { getLineCenter } from '../../../features/graph/layout/edge/edge';
+import type { ControlPoint } from '../../../features/graph/layout/edge/point';
+import { flowStore } from '../../../states/reactflow';
 
 import { getEdgeContext, SmartEdge } from './smart-edge';
 import { useEdgeDraggable } from './useEdgeDraggable';

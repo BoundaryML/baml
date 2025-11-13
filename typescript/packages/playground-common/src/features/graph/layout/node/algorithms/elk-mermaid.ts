@@ -4,7 +4,7 @@ import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api';
 import type {
   ReactflowEdgeWithData,
   ReactflowNodeWithData,
-} from '@/mock-data/types';
+} from '../../../../../mock-data/types';
 
 import { getEdgeLayouted, getNodeLayouted, getNodeSize } from '../../metadata';
 import type { LayoutAlgorithmProps } from '..';

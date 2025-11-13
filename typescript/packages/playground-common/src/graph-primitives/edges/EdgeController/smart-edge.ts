@@ -1,19 +1,19 @@
 import { uuid } from '@del-wang/utils';
 
-import type { ReactflowEdgeWithData } from '@/mock-data/types';
+import type { ReactflowEdgeWithData } from '../../../mock-data/types';
 import {
   areLinesReverseDirection,
   distance,
   type ILine,
   isHorizontalFromPosition,
   isLineContainsPoint,
-} from '@/features/graph/layout/edge/edge';
+} from '../../../features/graph/layout/edge/edge';
 import {
   type ControlPoint,
   getOffsetPoint,
   reducePoints,
-} from '@/features/graph/layout/edge/point';
-import { flowStore } from '@/states/reactflow';
+} from '../../../features/graph/layout/edge/point';
+import { flowStore } from '../../../states/reactflow';
 
 import { rebuildEdge } from '../BaseEdge/useRebuildEdge';
 import type { EdgeControllersParams } from '.';

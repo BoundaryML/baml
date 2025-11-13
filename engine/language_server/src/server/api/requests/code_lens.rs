@@ -90,7 +90,7 @@ impl SyncRequestHandler for CodeLens {
         };
 
         let mut function_lenses: Vec<lsp_types::CodeLens> = project_lock
-            .list_functions(None)
+            .list_functions()
             .unwrap_or_default()
             .iter()
             .filter(|func| doc_matches(&func.span, &project_lock))
@@ -115,7 +115,7 @@ impl SyncRequestHandler for CodeLens {
         // `list_testcases`, but I'm not sure how this behavior interacts with VSCode so for
         // now I'm leaving this as-is.
         let test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
-            .list_function_test_pairs(None)
+            .list_function_test_pairs()
             .unwrap_or_default()
             .iter()
             .filter(|testcase| doc_matches(&testcase.span, &project_lock))

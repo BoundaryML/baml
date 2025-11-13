@@ -1,4 +1,4 @@
-import type { Reactflow } from '@/mock-data/types';
+import type { Reactflow } from '../../../../mock-data/types';
 import {
   type ELKMermaidAlgorithm,
   layoutELKMermaid,

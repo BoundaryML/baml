@@ -46,7 +46,7 @@ impl SyncRequestHandler for CodeActionHandler {
         // Get the first function from the current file if available
         let function_name = project
             .lock()
-            .list_functions(None)
+            .list_functions()
             .unwrap_or_default()
             .into_iter()
             .find(|f| f.span.file_path == document_key.path().to_string_lossy())

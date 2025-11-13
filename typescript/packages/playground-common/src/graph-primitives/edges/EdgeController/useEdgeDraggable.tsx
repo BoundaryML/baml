@@ -4,7 +4,7 @@ import type { XYPosition } from '@xyflow/react';
 import { useEffect, useRef } from 'react';
 import { useXState, XSta } from 'xsta';
 
-import { isEqualPoint } from '@/features/graph/layout/edge/point';
+import { isEqualPoint } from '../../../features/graph/layout/edge/point';
 import { SmartEdge } from './smart-edge';
 
 interface UseDraggableParams {
