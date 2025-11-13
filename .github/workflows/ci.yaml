@@ -41,7 +41,7 @@ jobs:
       # Flag for codegen changes
       codegen: ${{ steps.check_codegen.outputs.changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -151,7 +151,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -172,7 +172,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -202,7 +202,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -240,7 +240,7 @@ jobs:
 
       - name: "Upload test results on failure"
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-failures-linux
           path: |
@@ -254,7 +254,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -284,7 +284,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -314,7 +314,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -348,7 +348,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -382,7 +382,7 @@ jobs:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -407,7 +407,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -440,7 +440,7 @@ jobs:
 
       - name: "Upload snapshot failures"
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: snapshot-failures
           path: |
@@ -465,7 +465,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -487,7 +487,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Run benchmarks"
-        uses: CodSpeedHQ/action@v3
+        uses: CodSpeedHQ/action@v4
         with:
           mode: walltime
           run: cd baml_language && cargo codspeed run
