@@ -18,11 +18,11 @@ import { getExplanation, getStatus, getTestStateResponse } from '../testStateUti
 import { ResponseViewType, tabularViewConfigAtom } from './atoms'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ParsedResponseRenderer } from './ParsedResponseRender'
-import { navigationDispatcherAtom } from '../../../../../../sdk/navigation/dispatcher'
+import { navigationDispatcherAtom } from '../../../../../../sdk/navigation'
 import { unifiedSelectionStateAtom } from '../../../../../../sdk/atoms/core.atoms'
 import { TestStatus } from './TestStatus'
 import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { vscode } from '../../../../vscode'
 interface TabularViewProps {
   currentRun?: TestHistoryRun
@@ -159,17 +159,6 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
     }
   }, [functionName, testName])
 
-  // Create memoized retry handlers for each test to prevent re-renders
-  const createRetryHandler = useMemo(() => {
-    const handlers = new Map();
-    return (test: any) => {
-      const key = `${test.functionName}-${test.testName}`;
-      if (!handlers.has(key)) {
-        handlers.set(key, () => runBamlTests([{ functionName: test.functionName, testName: test.testName }]));
-      }
-      return handlers.get(key);
-    };
-  }, [runBamlTests]);
 
   return (
     <div className='space-y-4'>
@@ -238,24 +227,24 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
           {currentRun?.tests.map((test, index) => {
             const isSelected = functionName === test.functionName && testName === test.testName
             const isThisTestRunning = test.response.status === 'running'
+            const rowKey = `${test.functionName}-${test.testName}`
 
             return (
               <TableRow
-                key={index}
-                ref={isSelected ? selectedRowRef : null}
+                key={rowKey}
+                ref={isSelected ? selectedRowRef : undefined}
                 className={cn(
                   'relative cursor-pointer transition-colors hover:bg-muted/70 ',
                   isSelected && 'border-purple-500/20 shadow-sm dark:border-purple-900/30 dark:bg-muted/90',
                 )}
                 onClick={() => {
-                  // Dispatch test navigation (nodeType will be resolved by the navigation heuristic)
+                  // Dispatch test navigation
                   dispatchNavigation({
-                    type: 'test',
+                    kind: 'test',
                     functionName: test.functionName,
                     testName: test.testName,
-                    filePath: 'unknown', // Will be resolved by navigation heuristic
-                    nodeType: 'function', // Default, will be resolved by heuristic
                     source: 'test-panel',
+                    timestamp: Date.now(),
                   });
                 }}
               >
@@ -346,7 +335,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                       errorMessage={test.response.message || 'Unknown error occurred'}
                       functionName={test.functionName}
                       testName={test.testName}
-                      onRetry={createRetryHandler(test)}
+                      onRetry={() => runBamlTests([{ functionName: test.functionName, testName: test.testName }])}
                       className="text-xs"
                     />
                   )}

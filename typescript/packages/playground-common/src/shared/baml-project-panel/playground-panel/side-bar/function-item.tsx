@@ -11,7 +11,7 @@ import {
   testHistoryAtom,
 } from '../prompt-preview/test-panel/atoms';
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils';
-import { navigationDispatcherAtom } from '../../../../sdk/navigation/dispatcher';
+import { navigationDispatcherAtom } from '../../../../sdk/navigation';
 
 interface FunctionItemProps {
   functionName: string;
@@ -159,11 +159,11 @@ export function FunctionItem({ functionName, tests, functionFlavor, isSelected =
 
     // Dispatch navigation event (same as DebugPanel)
     dispatchNavigation({
-      type: 'function',
+      kind: 'function',
       functionName,
       functionType,
-      filePath: fn?.span?.filePath ?? fn?.filePath ?? 'unknown',
       source: 'sidebar',
+      timestamp: Date.now(),
     });
 
     // Jump to file

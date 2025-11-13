@@ -89,7 +89,13 @@ export const EventListener: React.FC = () => {
   // Main message handler - routes IDE/LSP messages to SDK methods
   useEffect(() => {
     const handler = async (event: MessageEvent<VscodeToWebviewCommand>) => {
-      const { source, payload } = event.data;
+      const { source, payload } = event.data || {};
+
+      // Ignore messages that don't have the expected structure
+      if (!source) {
+        return;
+      }
+
       console.debug('[EventListener] Handling command:', { source, payload });
 
       try {

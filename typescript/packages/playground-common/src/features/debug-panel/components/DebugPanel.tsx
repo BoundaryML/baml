@@ -10,12 +10,13 @@ import { Play, FileCode, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, Ed
 import { useState, useEffect, useMemo } from 'react';
 import { bamlFilesAtom, SelectionQuery } from '../../../sdk/atoms/core.atoms';
 import type { BAMLTest, CodeClickEvent, BAMLFile } from '../../../sdk/types';
-import { useBAMLSDK } from '../../../sdk/provider';
+import { useBAMLSDK } from '../../../sdk/hooks';
 import type { VscodeToWebviewCommand } from '../../../baml_wasm_web/vscode-to-webview-rpc';
 import { useRunBamlTests } from '../../../shared/baml-project-panel/playground-panel/prompt-preview/test-panel/test-runner';
 import { unifiedSelectionAtom } from '../../../shared/baml-project-panel/playground-panel/unified-atoms';
 import type { FunctionWithCallGraph, NodeType } from '../../../sdk/interface';
-import { navigationDispatcherAtom, navigationIntentAtom } from '../../../sdk/navigation/dispatcher';
+import { navigationDispatcherAtom } from '../../../sdk/navigation';
+import type { NavigationInput } from '../../../sdk/navigation';
 
 type DebugNodeType = NodeType | 'workflow' | 'block';
 type FunctionEventType = Extract<CodeClickEvent, { type: 'function' }>['functionType'];
@@ -204,7 +205,6 @@ export function DebugPanel() {
   const { runTests: runBamlTests } = useRunBamlTests();
   const [bamlFiles, setBAMLFiles] = useAtom(bamlFilesAtom);
   const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
-  const lastIntent = useAtomValue(navigationIntentAtom);
   const selection = useAtomValue(unifiedSelectionAtom);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [workflows, setWorkflows] = useState<FunctionWithCallGraph[]>([]);
@@ -244,26 +244,29 @@ export function DebugPanel() {
   };
 
   const handleNodeClick = (node: DebugNode) => {
-    const event: CodeClickEvent = {
-      type: 'function',
+    const input: NavigationInput = {
+      kind: node.workflowId ? 'node' : 'function',
+      source: 'debug-panel',
+      timestamp: Date.now(),
       functionName: node.id,
+      workflowId: node.workflowId,
+      nodeId: node.workflowId ? node.id : undefined,
       functionType: mapNodeTypeToEventType(node.nodeType),
-      filePath: node.filePath,
     };
-    console.log('🔍 Simulated function click:', event);
-    dispatchNavigation({ ...event, source: 'debug-panel' });
+    console.log('🔍 Debug panel node click:', { ...input, origin: node.origin });
+    dispatchNavigation(input);
   };
 
   const handleTestClick = (test: BAMLTest) => {
-    const event: CodeClickEvent = {
-      type: 'test',
+    const input: NavigationInput = {
+      kind: 'test',
+      source: 'debug-panel',
+      timestamp: Date.now(),
       testName: test.name,
       functionName: test.functionName,
-      filePath: test.filePath,
-      nodeType: test.nodeType,
     };
-    console.log('🔍 Simulated test click:', event);
-    dispatchNavigation({ ...event, source: 'debug-panel' });
+    console.log('🔍 Simulated test click:', input);
+    dispatchNavigation(input);
   };
 
   const handleTestRun = async (test: BAMLTest, e: React.MouseEvent) => {
@@ -513,18 +516,6 @@ Date: ${dateTime}`
         )}
       </div>
 
-      {/* Active Event Display */}
-      {lastIntent && (
-        <div className="sticky bottom-0 bg-card border-t border-border px-2 py-1">
-          <div className="text-[9px] font-semibold text-muted-foreground mb-0.5">Active:</div>
-          <div className="text-[10px] font-mono text-foreground truncate">
-            {lastIntent.type === 'function'
-              ? `${lastIntent.functionName} (${lastIntent.functionType})`
-              : `${lastIntent.testName} → ${lastIntent.functionName}`
-            }
-          </div>
-        </div>
-      )}
     </div>
   );
 }

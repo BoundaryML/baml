@@ -6,7 +6,7 @@
  */
 
 import { Provider as JotaiProvider, createStore } from 'jotai';
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { BAMLSDK } from './sdk';
 import { createMockSDK, createRealBAMLSDK } from './factory';
 import {
@@ -18,7 +18,8 @@ import {
 } from './DebugBanner';
 import { DEBUG_BAML_FILES } from './debugFixtures';
 
-const BAMLSDKContext = createContext<BAMLSDK | null>(null);
+// Export context for use in hooks
+export const BAMLSDKContext = createContext<BAMLSDK | null>(null);
 
 interface BAMLSDKProviderProps {
   children: ReactNode;
@@ -134,17 +135,6 @@ export function BAMLSDKProvider({ children, mode: initialMode = 'mock' }: BAMLSD
       </JotaiProvider>
     </BAMLSDKContext.Provider>
   );
-}
-
-/**
- * Hook to access the SDK instance
- */
-export function useBAMLSDK(): BAMLSDK {
-  const sdk = useContext(BAMLSDKContext);
-  if (!sdk) {
-    throw new Error('useBAMLSDK must be used within BAMLSDKProvider');
-  }
-  return sdk;
 }
 
 // Re-export RuntimeMode type and debug utilities for convenience

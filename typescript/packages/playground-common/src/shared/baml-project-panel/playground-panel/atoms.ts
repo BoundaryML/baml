@@ -57,13 +57,13 @@ import {
 } from '../../../sdk/atoms/core.atoms';
 import { navigationDispatcherAtom } from '../../../sdk/navigation/dispatcher';
 
-type FunctionIntent = Extract<NavigationIntent, { type: 'function' }>;
-type TestIntent = Extract<NavigationIntent, { type: 'test' }>;
+type FunctionType = 'workflow' | 'function' | 'llm_function' | 'conditional' | 'loop' | 'group' | 'return' | 'block';
+type NodeType = 'llm_function' | 'function';
 
-const inferFunctionType = (fn: { type?: string; functionFlavor?: 'llm' | 'expr' } | null | undefined): FunctionIntent['functionType'] => {
+const inferFunctionType = (fn: { type?: string; functionFlavor?: 'llm' | 'expr' } | null | undefined): FunctionType => {
   if (!fn) return 'function';
   if (fn.type && ['workflow', 'llm_function', 'function', 'conditional', 'loop', 'group', 'return', 'block'].includes(fn.type)) {
-    return fn.type as FunctionIntent['functionType'];
+    return fn.type as FunctionType;
   }
   if (fn.functionFlavor === 'llm') {
     return 'llm_function';
@@ -71,7 +71,7 @@ const inferFunctionType = (fn: { type?: string; functionFlavor?: 'llm' | 'expr' 
   return 'function';
 };
 
-const nodeTypeForFunction = (functionType: FunctionIntent['functionType']): TestIntent['nodeType'] =>
+const nodeTypeForFunction = (functionType: FunctionType): NodeType =>
   functionType === 'llm_function' ? 'llm_function' : 'function';
 
 export const graphControlsTipDismissedAtom = atomWithStorage(
@@ -97,16 +97,21 @@ export const functionObjectAtom = atomFamily((functionName: string) =>
 export const testcaseObjectAtom = atomFamily(
   (params: { functionName: string; testcaseName?: string | null }) =>
     atom((get) => {
-      const functions = get(functionsAtom);
-      const fn = functions.find((f) => f.name === params.functionName);
-      if (!fn) {
+      try {
+        const functions = get(functionsAtom);
+        const fn = functions.find((f) => f.name === params.functionName);
+        if (!fn) {
+          return undefined;
+        }
+        const tc = fn.testCases?.find((tc) => tc.name === params.testcaseName);
+        if (!tc) {
+          return undefined;
+        }
+        return tc;
+      } catch (error) {
+        console.error('Error getting testcase object', error);
         return undefined;
       }
-      const tc = fn.testCases?.find((tc) => tc.name === params.testcaseName);
-      if (!tc) {
-        return undefined;
-      }
-      return tc;
     }),
 );
 
@@ -174,23 +179,22 @@ export const updateCursorAtom = atom(
         const nodeType = nodeTypeForFunction(functionType);
 
         set(navigationDispatcherAtom, {
-          type: 'test',
+          kind: 'test',
           functionName: targetFunction.name,
           testName: selectedTestcase.name,
-          nodeType,
-          filePath: fileName,
           source: 'cursor',
+          timestamp: Date.now(),
         });
       } else {
         // Just a function, no test case
         const functionType = inferFunctionType(selectedFunc as any);
 
         set(navigationDispatcherAtom, {
-          type: 'function',
+          kind: 'function',
           functionName: selectedFunc.name,
           functionType,
-          filePath: fileName,
           source: 'cursor',
+          timestamp: Date.now(),
         });
       }
     }

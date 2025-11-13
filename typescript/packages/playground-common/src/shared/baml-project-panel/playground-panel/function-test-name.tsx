@@ -25,7 +25,7 @@ import {
   testcaseObjectAtom,
 } from './atoms';
 import { functionsAtom as sdkFunctionsAtom } from '../../../sdk/atoms/core.atoms';
-import { navigationDispatcherAtom } from '../../../sdk/navigation/dispatcher';
+import { navigationDispatcherAtom } from '../../../sdk/navigation';
 
 interface FunctionTestNameProps {
   functionName: string;
@@ -86,21 +86,20 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
           if (firstTest) {
             // Dispatch test navigation
             dispatchNavigation({
-              type: 'test',
+              kind: 'test',
               functionName: func.name,
               testName: firstTest,
-              filePath: fn?.span?.filePath ?? fn?.filePath ?? 'unknown',
-              nodeType: fn?.type === 'llm_function' ? 'llm_function' : 'function',
               source: 'sidebar',
+              timestamp: Date.now(),
             });
           } else {
             // Dispatch function navigation
             dispatchNavigation({
-              type: 'function',
+              kind: 'function',
               functionName: func.name,
               functionType,
-              filePath: fn?.span?.filePath ?? fn?.filePath ?? 'unknown',
               source: 'sidebar',
+              timestamp: Date.now(),
             });
           }
 
@@ -140,12 +139,11 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
         onSelect={() => {
           // Dispatch test navigation
           dispatchNavigation({
-            type: 'test',
+            kind: 'test',
             functionName,
             testName: test,
-            filePath: tc?.span?.filePath ?? 'unknown',
-            nodeType: 'function',
             source: 'sidebar',
+            timestamp: Date.now(),
           });
 
           setTestOpen(false);

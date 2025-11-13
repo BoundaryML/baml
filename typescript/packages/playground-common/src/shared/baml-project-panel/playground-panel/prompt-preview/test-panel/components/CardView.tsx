@@ -13,7 +13,7 @@ import { getStatus } from '../testStateUtils'
 import { ResponseRenderer } from './ResponseRenderer'
 import { TestStatus } from './TestStatus'
 import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
-import { navigationDispatcherAtom } from '../../../../../../sdk/navigation/dispatcher'
+import { navigationDispatcherAtom } from '../../../../../../sdk/navigation'
 import { unifiedSelectionStateAtom } from '../../../../../../sdk/atoms/core.atoms'
 
 export const CardView = ({ currentRun }: { currentRun?: TestHistoryRun }) => {
@@ -48,7 +48,6 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
   const dispatchNavigation = useSetAtom(navigationDispatcherAtom)
   const selection = useAtomValue(unifiedSelectionStateAtom)
-  const tc = useAtomValue(testcaseObjectAtom({ functionName: testId.functionName, testcaseName: testId.testName }))
   const cardRef = useRef<HTMLDivElement>(null)
 
   const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.selectedNodeId : null;
@@ -84,12 +83,11 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
       )}
       onClick={() => {
         dispatchNavigation({
-          type: 'test',
+          kind: 'test',
           functionName: testId.functionName,
           testName: testId.testName,
-          filePath: tc?.span?.filePath ?? 'unknown',
-          nodeType: 'function',
           source: 'test-panel',
+          timestamp: Date.now(),
         });
       }}
     >
@@ -103,11 +101,17 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
                   size='icon'
                   className='w-6 h-6 shrink-0'
                   onClick={(e) => {
+
                     e.stopPropagation()
-                    if (isThisTestRunning) {
-                      cancelTests()
-                    } else {
-                      runBamlTests([testId])
+                    try {
+                      if (isThisTestRunning) {
+                        cancelTests()
+                      } else {
+                        runBamlTests([testId])
+                      }
+                    } catch (error) {
+                      console.error('Error running test', error);
+                      throw error;
                     }
                   }}
                 >

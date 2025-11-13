@@ -26,23 +26,8 @@ import { useGraphSync } from '../../../../features/graph/hooks';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { graphControlsTipDismissedAtom, unifiedSelectionAtom } from '../atoms';
 import { MousePointer2, ZoomIn, X, ChevronLeft } from 'lucide-react';
-import { navigationDispatcherAtom } from '../../../../sdk/navigation/dispatcher';
-import type { NavigationIntent } from '../../../../sdk/types';
-
-type FunctionIntent = Extract<NavigationIntent, { type: 'function' }>;
-
-const mapNodeTypeToFunctionType = (node: Node): FunctionIntent['functionType'] => {
-  switch (node.type) {
-    case 'llm':
-      return 'llm_function';
-    case 'diamond':
-      return 'conditional';
-    case 'hexagon':
-      return 'loop';
-    default:
-      return 'function';
-  }
-};
+import { navigationDispatcherAtom } from '../../../../sdk/navigation';
+import type { NavigationInput } from '../../../../sdk/navigation';
 
 /**
  * GraphView - ReactFlow graph component for the Graph tab
@@ -127,14 +112,16 @@ export const GraphView = () => {
 
   // Handle node click - select the node and open detail panel
   const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
-    console.log('Node clicked:', node.id);
-    dispatchNavigation({
-      type: 'function',
-      functionName: node.id,
-      functionType: mapNodeTypeToFunctionType(node),
-      filePath: 'unknown',
+    console.log('Node clicked in workflow:', { workflowId: activeWorkflowId, nodeId: node.id });
+    const input: NavigationInput = {
+      kind: 'node',
       source: 'graph',
-    });
+      timestamp: Date.now(),
+      workflowId: activeWorkflowId || undefined,
+      nodeId: node.id,
+      functionName: node.id, // May or may not be an actual function name
+    };
+    dispatchNavigation(input);
   };
 
   useLayoutEffect(() => {

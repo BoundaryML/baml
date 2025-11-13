@@ -4,8 +4,7 @@
  * Top toolbar for workflow selection and graph controls
  */
 
-import { useWorkflows, useActiveWorkflow, useLayoutDirection } from '../../../sdk/hooks';
-import { useBAMLSDK } from '../../../sdk/provider';
+import { useWorkflows, useActiveWorkflow, useLayoutDirection, useBAMLSDK } from '../../../sdk/hooks';
 import {
   Select,
   SelectContent,

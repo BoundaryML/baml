@@ -5,10 +5,23 @@
  */
 
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useContext } from 'react';
+import { BAMLSDKContext } from './provider';
+import type { BAMLSDK } from './sdk';
 
-// Re-export useBAMLSDK from provider for convenience
-export { useBAMLSDK, BAMLSDKProvider } from './provider';
+// Re-export provider component for convenience
+export { BAMLSDKProvider } from './provider';
+
+/**
+ * Hook to access the SDK instance
+ */
+export function useBAMLSDK(): BAMLSDK {
+  const sdk = useContext(BAMLSDKContext);
+  if (!sdk) {
+    throw new Error('useBAMLSDK must be used within BAMLSDKProvider');
+  }
+  return sdk;
+}
 
 
 // Import atoms directly from core.atoms.ts (no barrel exports)
@@ -750,4 +763,30 @@ export function usePlaygroundPort() {
  */
 export function useProxyUrl() {
   return useAtomValue(proxyUrlAtom);
+}
+
+// ============================================================================
+// Navigation Hooks
+// ============================================================================
+
+import { navigationDispatcherAtom } from './navigation';
+import type { NavigationInput } from './navigation';
+
+/**
+ * Hook to dispatch navigation events
+ *
+ * Usage:
+ * ```tsx
+ * const navigate = useNavigation();
+ *
+ * navigate({
+ *   kind: 'function',
+ *   functionName: 'MyFunction',
+ *   source: 'debug-panel',
+ *   timestamp: Date.now(),
+ * });
+ * ```
+ */
+export function useNavigation() {
+  return useSetAtom(navigationDispatcherAtom);
 }

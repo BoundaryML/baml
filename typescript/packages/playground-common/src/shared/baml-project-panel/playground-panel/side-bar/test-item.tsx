@@ -26,7 +26,7 @@ import { useRunBamlTests } from '../prompt-preview/test-panel/test-runner';
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils';
 import type { TestItemProps } from './types';
 import { highlightText } from './utils';
-import { navigationDispatcherAtom } from '../../../../sdk/navigation/dispatcher';
+import { navigationDispatcherAtom } from '../../../../sdk/navigation';
 
 const createSpan = (span: {
   start: number;
@@ -86,12 +86,11 @@ export function TestItem({
 
     // Dispatch test navigation event (same as DebugPanel)
     dispatchNavigation({
-      type: 'test',
+      kind: 'test',
       functionName,
       testName: label,
-      filePath: tc?.span?.filePath ?? 'unknown',
-      nodeType: 'function',
       source: 'sidebar',
+      timestamp: Date.now(),
     });
   };
 
@@ -100,12 +99,11 @@ export function TestItem({
 
     // Dispatch test navigation event first
     dispatchNavigation({
-      type: 'test',
+      kind: 'test',
       functionName,
       testName: label,
-      filePath: tc?.span?.filePath ?? 'unknown',
-      nodeType: 'function',
       source: 'sidebar',
+      timestamp: Date.now(),
     });
 
     // Then jump to file

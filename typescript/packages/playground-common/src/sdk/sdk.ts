@@ -18,7 +18,7 @@ import type {
 // Import all atoms to expose via sdk.atoms
 import * as coreAtoms from './atoms/core.atoms';
 import * as testAtoms from './atoms/test.atoms';
-import { navigationDispatcherAtom, navigationIntentAtom } from './navigation/dispatcher';
+import { navigationDispatcherAtom } from './navigation/dispatcher';
 
 // Import vscode integration for telemetry and flashing regions
 import { vscode } from '../shared/baml-project-panel/vscode';
@@ -42,7 +42,6 @@ export class BAMLSDK {
   atoms = {
     ...coreAtoms,
     navigationDispatcherAtom,
-    navigationIntentAtom,
     test: testAtoms,
   };
 

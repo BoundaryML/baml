@@ -23,15 +23,15 @@
  * - Search all workflows for one containing this function
  * - If found: Switch to that workflow and select the node
  *
- * **Priority 3: Show function in isolation (if it has tests)**
- * - If function has test cases but is not part of any workflow
- * - Create a minimal graph showing just this function
- * - This is useful for testing individual functions
+ * **Priority 3: Show function in isolation**
+ * - If function exists but is not part of any workflow
+ * - Show the function (with or without test cases)
+ * - If it has tests, auto-select the first one
+ * - If no tests, show "no test selected" UI where user can generate a test
  *
  * **Priority 4: Empty state**
- * - Function is not part of any workflow
- * - Function has no tests
- * - Show helpful message suggesting the user create a workflow or test
+ * - Function doesn't exist anywhere in the codebase
+ * - Show empty state UI
  *
  * ## State Management
  *
@@ -64,13 +64,13 @@
  * **Scenario 4: User clicks standalone function with tests**
  * ```
  * Click: extractUser (not in any workflow, but has tests)
- * Result: Show minimal graph for extractUser with its test cases
+ * Result: Show function with its test cases, auto-select first test
  * ```
  *
- * **Scenario 5: User clicks function with no context**
+ * **Scenario 5: User clicks standalone function with no tests**
  * ```
- * Click: helperFunction (not in any workflow, no tests)
- * Result: Empty state with helpful message
+ * Click: helperFunction (exists but no tests)
+ * Result: Show function with testName: null, user can generate test
  * ```
  */
 
@@ -106,6 +106,20 @@ export function determineNavigationAction(
   // Handle TEST clicks
   if (event.type === 'test') {
     return handleTestClick(event, state);
+  }
+
+  // Priority 0: Direct workflow node selection
+  // If workflowId is provided, user is clicking a node within a workflow graph
+  // Select that node directly without any heuristics
+  if (event.type === 'function' && event.workflowId) {
+    const nodeId = event.nodeId || event.functionName;
+    console.log(`✅ Direct workflow node click: ${event.workflowId} -> ${nodeId}`);
+    return {
+      mode: 'workflow',
+      workflowId: event.workflowId,
+      selectedNodeId: nodeId,
+      testName: null,
+    };
   }
 
   // Handle FUNCTION clicks
@@ -214,19 +228,23 @@ function handleFunctionClick(
     };
   }
 
-  // Priority 3: Check if function has tests (show in isolation)
-  const tests = findTestsForFunction(targetFunction, state.bamlFiles);
-  if (tests.length > 0) {
-    console.log('✅ Function has tests, showing in isolation');
+  // Priority 3: Check if function exists (show in isolation, with or without tests)
+  const functionExists = state.bamlFiles.some(file =>
+    file.functions?.some(fn => fn.name === targetFunction)
+  );
+
+  if (functionExists) {
+    const tests = findTestsForFunction(targetFunction, state.bamlFiles);
+    console.log(`✅ Function exists as standalone (${tests.length} tests)`);
     return {
       mode: 'function',
       functionName: targetFunction,
-      testName: tests[0] ?? null,
+      testName: tests[0] ?? null, // First test if available, null otherwise
     };
   }
 
-  // Priority 4: Empty state
-  console.log('⚠️ Function not found in any context');
+  // Priority 4: Empty state (function doesn't exist at all)
+  console.log('⚠️ Function not found anywhere');
   return { mode: 'empty' };
 }
 

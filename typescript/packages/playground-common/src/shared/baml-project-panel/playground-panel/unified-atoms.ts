@@ -86,11 +86,20 @@ export type BottomPanelMode = 'test-panel' | 'detail-panel';
 export const bottomPanelModeAtom = atom<BottomPanelMode>((get) => {
   const activeTab = get(activeTabAtom);
   const selection = get(unifiedSelectionAtom);
+  const { selectedFn } = get(originalSelectionAtom);
+
+  // Show TestPanel when:
+  // - NOT in workflow mode AND
+  // - It's an LLM function
+  const isLLMFunction = selectedFn?.functionFlavor === 'llm';
+  if (selection.mode !== 'workflow' && isLLMFunction) {
+    return 'test-panel';
+  }
 
   // Show DetailPanel when:
   // - On Graph tab, OR
   // - A workflow is active, OR
-  // - In function or workflow mode
+  // - In function mode (non-LLM functions)
   console.log('bottomPanelModeAtom', activeTab, selection);
   if (
     activeTab === 'graph' ||
@@ -100,7 +109,7 @@ export const bottomPanelModeAtom = atom<BottomPanelMode>((get) => {
     return 'detail-panel';
   }
 
-  // Show TestPanel for Preview/cURL tabs when in empty mode
+  // Show TestPanel for empty mode
   return 'test-panel';
 });
 

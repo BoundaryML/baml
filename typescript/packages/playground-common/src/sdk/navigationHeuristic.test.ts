@@ -308,8 +308,8 @@ describe('Navigation Heuristic - Function Click Events', () => {
     });
   });
 
-  describe('Priority 3: Show function in isolation (with tests)', () => {
-    it('should show function tests when function has tests but is not in any workflow', () => {
+  describe('Priority 3: Show function in isolation (with or without tests)', () => {
+    it('should show function with tests and auto-select first test', () => {
       const event: CodeClickEvent = {
         type: 'function',
         functionName: 'extractUser',
@@ -331,10 +331,8 @@ describe('Navigation Heuristic - Function Click Events', () => {
         testName: 'test_extract_valid_user', // Auto-selects first test
       });
     });
-  });
 
-  describe('Priority 4: Empty state', () => {
-    it('should show empty state when function is not in any workflow and has no tests', () => {
+    it('should show function even when it has no tests', () => {
       const event: CodeClickEvent = {
         type: 'function',
         functionName: 'helperFunction',
@@ -351,9 +349,14 @@ describe('Navigation Heuristic - Function Click Events', () => {
       const action = determineNavigationAction(event, state);
 
       expect(action).toEqual({
-        mode: 'empty',
+        mode: 'function',
+        functionName: 'helperFunction',
+        testName: null, // No tests, but function still shown
       });
     });
+  });
+
+  describe('Priority 4: Empty state', () => {
 
     it('should show empty state when function does not exist anywhere', () => {
       const event: CodeClickEvent = {
