@@ -4,7 +4,7 @@ We build BAML -- a new programming language to build AI powered applications.
 
 *What does the code look like when 50% of the business decisions is decided by an AI agent / prompts? How do you test these AI components? What tools should we build?*
 
-Every computing paradigm, brought with a new language
+Every computing paradigm, brought with it a new language
 
 | Paradigm | Why? | Language | 
 | -- | -- | -- |
