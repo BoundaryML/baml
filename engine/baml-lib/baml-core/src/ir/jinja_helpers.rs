@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use baml_types::{BamlValue, JinjaExpression};
 use minijinja::value::{Kwargs, Value};
 use regex::Regex;
-use serde::Deserialize;
 
 pub fn get_env<'a>() -> minijinja::Environment<'a> {
     let mut env = minijinja::Environment::new();
@@ -67,10 +66,19 @@ fn sum_filter(value: Vec<Value>) -> Value {
 
 /// Convert a minijinja::Value to serde_json::Value for TOON encoding
 fn minijinja_to_json(value: &Value) -> Result<serde_json::Value, minijinja::Error> {
-    <serde_json::Value as Deserialize>::deserialize(value.clone()).map_err(|e| {
+    // Serialize to JSON string first to ensure BAML's custom serialization (including aliases) is applied
+    let json_string = serde_json::to_string(&value).map_err(|e| {
         minijinja::Error::new(
             minijinja::ErrorKind::BadSerialization,
-            format!("Cannot convert value to JSON for TOON encoding: {}", e),
+            format!("Cannot serialize value to JSON string: {}", e),
+        )
+    })?;
+
+    // Parse the JSON string to get a proper serde_json::Value
+    serde_json::from_str(&json_string).map_err(|e| {
+        minijinja::Error::new(
+            minijinja::ErrorKind::BadSerialization,
+            format!("Cannot parse JSON string for TOON encoding: {}", e),
         )
     })
 }
