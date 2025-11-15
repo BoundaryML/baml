@@ -1,0 +1,231 @@
+---
+title: Jinja Filters
+---
+
+Jinja filters allow you to transform and format values within your BAML prompts. Filters are applied using the pipe operator (`|`).
+
+## Basic Usage
+
+```jinja
+{{ value|filter_name }}
+{{ value|filter_name(arg1, arg2) }}
+```
+
+## BAML Custom Filters
+
+### toon
+
+Converts a value to TOON (Token-Oriented Object Notation) format, a compact alternative to JSON that reduces token usage by 30-60%.
+
+**Signature**: `value|toon(indent=2, delimiter="comma", length_marker=None)`
+
+**Parameters**:
+- `indent` (int, optional): Number of spaces per indentation level. Default: 2
+- `delimiter` (string, optional): Delimiter for arrays. Options: "comma", "tab", "pipe". Default: "comma"
+- `length_marker` (string, optional): Single character to prefix array lengths. Default: None
+
+**Examples**:
+
+```jinja
+{# Basic usage #}
+{{ user_data|toon }}
+
+{# With custom indentation #}
+{{ user_data|toon(indent=4) }}
+
+{# With pipe delimiter for more token savings #}
+{{ tags|toon(delimiter="pipe") }}
+
+{# With length marker for clarity #}
+{{ items|toon(length_marker="#") }}
+
+{# Combine options #}
+{{ data|toon(indent=4, delimiter="tab", length_marker="#") }}
+```
+
+**Why TOON?**
+
+TOON is designed for LLM prompts where tokens cost money. It uses:
+- Indentation-based structure (like YAML)
+- Tabular format for arrays of objects (declare keys once)
+- Minimal punctuation
+
+**Comparison**:
+
+JSON (257 tokens):
+```json
+{
+  "users": [
+    { "id": 1, "name": "Alice", "role": "admin" },
+    { "id": 2, "name": "Bob", "role": "user" }
+  ]
+}
+```
+
+TOON (166 tokens):
+```
+users[2]{id,name,role}:
+  1,Alice,admin
+  2,Bob,user
+```
+
+**When to use TOON**:
+- ✅ Passing data to the LLM for analysis
+- ✅ Large structured datasets
+- ✅ Cost-sensitive applications
+
+**When to stick with JSON**:
+- ❌ When the LLM needs to return structured data (use standard output types)
+- ❌ When working with external systems that expect JSON
+
+### regex_match
+
+Tests if a string matches a regular expression pattern.
+
+**Signature**: `value|regex_match(pattern)`
+
+**Example**:
+
+```jinja
+{% if phone_number|regex_match("\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}") %}
+  Valid phone number
+{% endif %}
+```
+
+### sum
+
+Sums all numeric values in an array.
+
+**Signature**: `array|sum`
+
+**Example**:
+
+```jinja
+Total: {{ prices|sum }}
+```
+
+## Standard Jinja Filters
+
+BAML supports all standard Minijinja filters. Here are some commonly used ones:
+
+### length
+
+Returns the length of a string, array, or object.
+
+```jinja
+{{ items|length }} items
+```
+
+### upper / lower
+
+Converts string to uppercase or lowercase.
+
+```jinja
+{{ name|upper }}
+{{ name|lower }}
+```
+
+### title
+
+Converts string to title case.
+
+```jinja
+{{ title|title }}
+```
+
+### trim
+
+Removes whitespace from both ends of a string.
+
+```jinja
+{{ text|trim }}
+```
+
+### default
+
+Provides a default value if the variable is undefined or empty.
+
+```jinja
+{{ user_name|default("Guest") }}
+```
+
+### join
+
+Joins array elements into a string with a separator.
+
+```jinja
+{{ tags|join(", ") }}
+```
+
+### first / last
+
+Returns the first or last element of an array.
+
+```jinja
+{{ items|first }}
+{{ items|last }}
+```
+
+### sort
+
+Sorts an array.
+
+```jinja
+{% for item in items|sort %}
+  {{ item }}
+{% endfor %}
+```
+
+### unique
+
+Removes duplicate values from an array.
+
+```jinja
+{{ values|unique }}
+```
+
+### reverse
+
+Reverses an array or string.
+
+```jinja
+{{ items|reverse }}
+```
+
+### replace
+
+Replaces occurrences of a substring.
+
+```jinja
+{{ text|replace("old", "new") }}
+```
+
+### round
+
+Rounds a number to a specified precision.
+
+```jinja
+{{ price|round(2) }}
+```
+
+### abs
+
+Returns the absolute value of a number.
+
+```jinja
+{{ value|abs }}
+```
+
+## Chaining Filters
+
+You can chain multiple filters together:
+
+```jinja
+{{ name|trim|lower|title }}
+{{ items|unique|sort|join(", ") }}
+```
+
+## More Information
+
+For a complete list of standard Jinja filters, see the [Minijinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions).
+

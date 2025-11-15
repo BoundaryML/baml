@@ -2607,7 +2607,7 @@ dependencies = [
  "filetime",
  "indexmap 2.9.0",
  "internal-baml-core",
- "pathdiff 0.1.0",
+ "pathdiff 0.2.3",
  "serde_json",
  "sugar_path",
  "walkdir",
@@ -4109,6 +4109,7 @@ dependencies = [
  "strsim",
  "strum",
  "textwrap",
+ "toon",
  "whoami",
 ]
 
@@ -4144,6 +4145,7 @@ dependencies = [
  "serde_json",
  "strsim",
  "strum",
+ "toon",
 ]
 
 [[package]]
@@ -7816,6 +7818,16 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "toon"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fa605a2aa68fefdedc9560bd765ce3ad89d45ac1d3ebad43724621098c9299a"
+dependencies = [
+ "regex",
+ "serde_json",
 ]
 
 [[package]]

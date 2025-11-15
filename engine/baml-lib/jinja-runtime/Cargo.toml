@@ -30,3 +30,4 @@ colored.workspace = true
 
 [dev-dependencies]
 env_logger.workspace = true
+toon = "0.1.2"

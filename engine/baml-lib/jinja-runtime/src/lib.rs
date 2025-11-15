@@ -2982,4 +2982,209 @@ Enum value is not equal to the "ALIAS_B" string, as expected
 
         Ok(())
     }
+
+    #[test]
+    fn test_render_prompt_with_toon_filter() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "user_data".to_string(),
+            BamlValue::Class(
+                "User".to_string(),
+                BamlMap::from([
+                    ("id".to_string(), BamlValue::Int(42)),
+                    ("name".to_string(), BamlValue::String("Alice".to_string())),
+                    (
+                        "tags".to_string(),
+                        BamlValue::List(vec![
+                            BamlValue::String("developer".to_string()),
+                            BamlValue::String("admin".to_string()),
+                        ]),
+                    ),
+                ]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class User {
+                id int
+                name string
+                tags string[]
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ _.chat('system') }}\nHere's the user data:\n{{ user_data|toon }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        // Verify it rendered and produced a chat message
+        match rendered {
+            RenderedPrompt::Chat(messages) => {
+                assert_eq!(messages.len(), 1);
+                assert_eq!(messages[0].role, "system");
+
+                let content = messages[0].parts[0].to_string();
+
+                // The BAML class should have been serialized to JSON then to TOON
+                // Compare against what native TOON would produce
+                let json_value = serde_json::json!({
+                    "id": 42,
+                    "name": "Alice",
+                    "tags": ["developer", "admin"]
+                });
+                let expected_toon = toon::encode(&json_value, None);
+
+                // The rendered content should contain the TOON output
+                assert!(content.contains(&expected_toon));
+            }
+            _ => panic!("Expected Chat prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_with_toon_options() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "items".to_string(),
+            BamlValue::List(vec![
+                BamlValue::String("apple".to_string()),
+                BamlValue::String("banana".to_string()),
+                BamlValue::String("cherry".to_string()),
+            ]),
+        )]));
+
+        let ir = make_test_ir("")?;
+
+        let rendered = render_prompt(
+            "{{ items|toon(delimiter='pipe', length_marker='#') }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                // Compare against native TOON with same options
+                let json_value = serde_json::json!(["apple", "banana", "cherry"]);
+                let mut options = toon::EncodeOptions::default();
+                options.delimiter = toon::Delimiter::Pipe;
+                options.length_marker = Some('#');
+                let expected = toon::encode(&json_value, Some(options));
+
+                assert_eq!(content, expected);
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_toon_with_nested_baml_classes() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "data".to_string(),
+            BamlValue::Class(
+                "Outer".to_string(),
+                BamlMap::from([
+                    (
+                        "field1".to_string(),
+                        BamlValue::String("value1".to_string()),
+                    ),
+                    (
+                        "inner".to_string(),
+                        BamlValue::Class(
+                            "Inner".to_string(),
+                            BamlMap::from([("field2".to_string(), BamlValue::Int(123))]),
+                        ),
+                    ),
+                ]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class Outer {
+                field1 string
+                inner Inner
+            }
+            class Inner {
+                field2 int
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ data|toon }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                // Compare against native TOON
+                let json_value = serde_json::json!({
+                    "field1": "value1",
+                    "inner": {
+                        "field2": 123
+                    }
+                });
+                let expected = toon::encode(&json_value, None);
+
+                assert_eq!(content, expected);
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
 }
