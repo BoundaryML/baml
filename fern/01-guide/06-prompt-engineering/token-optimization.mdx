@@ -33,7 +33,7 @@ TOON (Token-Oriented Object Notation) is a compact format that uses:
 - Tabular format for arrays of objects (declare keys once, stream rows)
 - Minimal punctuation
 
-**Potential benefits:** May reduce tokens by 30-60% compared to JSON  
+**Potential benefits:** May reduce token count compared to JSON  
 **Potential downsides:** Less familiar format, may affect LLM comprehension, not all LLMs tested
 
 ## Considerations for Format Selection
@@ -47,7 +47,7 @@ TOON (Token-Oriented Object Notation) is a compact format that uses:
 ### When to Stick with Standard Formats
 - Starting a new project (establish baseline first)
 - Your LLM performs poorly with alternative formats
-- Data structure is small (< 100 tokens)
+- Data structure is very small
 - Team familiarity matters more than token cost
 
 ## Experimentation Example
@@ -85,8 +85,6 @@ When you pass products to this function, they're serialized as JSON:
 ]
 ```
 
-**Token count:** ~257 tokens (for a larger dataset)
-
 ### Experiment: Trying TOON
 
 To test if TOON works for your use case, try the `format(type="toon")` filter:
@@ -112,9 +110,7 @@ The same data serialized as TOON:
   2,Gadget,19.99,false
 ```
 
-**Token count:** ~166 tokens (potentially 35% reduction)
-
-**Next steps:** Test with your actual prompts and verify the LLM still produces accurate results.
+**Next steps:** Test with your actual prompts and measure both token usage and accuracy.
 
 ## TOON Options
 
@@ -213,31 +209,22 @@ test AnalyzeSpending {
 }
 ```
 
-## Measuring Impact: Token Counts
+## Understanding Trade-offs
 
-Token reductions will vary based on your data structure. Here are some example measurements:
+Token reduction is only valuable if accuracy and reliability are maintained. Consider:
 
-| Data Size | JSON Tokens | TOON Tokens | Observed Reduction |
-|-----------|-------------|-------------|--------------------|
-| 10 items  | ~500        | ~300        | ~40%               |
-| 50 items  | ~2,400      | ~1,200      | ~50%               |
-| 100 items | ~4,800      | ~2,200      | ~54%               |
+### What You Might Gain
+- Lower token costs per API call
+- Potentially faster processing (fewer tokens to process)
+- Ability to fit more data in context windows
 
-**Important:** These are example measurements. Your actual results will vary based on:
-- Data structure complexity
-- Field names and value types
-- Nesting levels
+### What You Might Lose
+- LLM comprehension (unfamiliar formats may confuse the model)
+- Debugging ease (non-standard formats are harder to inspect)
+- Team velocity (custom formats require explanation and documentation)
+- Accuracy (LLMs may perform worse with less common formats)
 
-### Cost Considerations
-
-If token reduction translates to cost savings depends on whether accuracy is maintained:
-
-**Hypothetical scenario:** 10,000 API calls/day @ $0.01/1K tokens
-- Baseline (JSON): ~$48/day = $1,440/month
-- With format change: ~$22/day = $660/month  
-- **Potential savings: ~$780/month**
-
-**However:** Lost accuracy, increased debugging time, or degraded user experience can cost far more than token savings. Always measure end-to-end impact.
+**Critical:** Lost accuracy, increased debugging time, or degraded user experience typically cost far more than token savings. Always measure end-to-end impact, not just token counts.
 
 ## Experimentation Guidelines
 
@@ -301,13 +288,15 @@ Different models may respond differently to format changes. Test with the specif
 ### Using BAML Playground
 
 1. Write your function with your baseline format (usually JSON)
-2. Run it in the playground and note:
-   - Token count
+2. Run it in the playground and record:
+   - Actual token count (shown in playground)
    - LLM response quality
    - Any parsing errors
+   - Response consistency across multiple runs
 3. Change to an alternative format
-4. Compare token count AND output quality
-5. Run multiple test cases to ensure consistency
+4. Compare ALL metrics, not just token count
+5. Run multiple test cases with diverse inputs
+6. Verify edge cases and error scenarios
 
 ### In Production
 
