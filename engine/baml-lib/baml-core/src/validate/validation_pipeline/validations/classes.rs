@@ -38,6 +38,11 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             }
         }
 
+        for arg in cls.walk_input_args() {
+            let arg = arg.ast_arg();
+            validate_type(ctx, &arg.1.field_type);
+        }
+
         defined_types.start_scope();
 
         cls.walk_input_args().for_each(|arg| {
