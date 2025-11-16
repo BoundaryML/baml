@@ -28,7 +28,7 @@ Serializes values into structured text while preserving all BAML-specific aliase
 |--------|-------------|--------------|
 | `yaml` | Human-friendly YAML string with enum/class aliases | None |
 | `json` | Standard JSON string (minified) with alias-safe serialization | None |
-| `toon` | Token-efficient TOON output | `indent`, `delimiter`, `length_marker` |
+| `toon` | Compact TOON format for uniform arrays | `indent`, `delimiter`, `length_marker` |
 
 All formats reuse the same alias-aware serializer, so enums emit their `@alias` values and class properties honor `@alias` names at every nesting level (lists, maps, nested classes, etc.).
 
@@ -52,7 +52,20 @@ All formats reuse the same alias-aware serializer, so enums emit their `@alias` 
 
 Invalid combinations raise a template error (e.g., missing `type` or an unknown delimiter for TOON).
 
-For more details on the TOON format, see the [TOON specification](https://github.com/toon-format/toon).
+**About TOON:**
+
+TOON (Token-Oriented Object Notation) combines YAML's indentation with CSV-style tabular layout. It's designed for uniform arrays of objects (multiple fields per row, same structure across items), where it can provide significant token savings while maintaining LLM-friendly structure validation through explicit array lengths and field headers.
+
+**When TOON works best:**
+- Uniform arrays of objects (e.g., lists of users, transactions, products)
+- Highly structured, tabular data
+
+**When other formats may be better:**
+- Deeply nested structures (compact JSON may use fewer tokens)
+- Semi-uniform or mixed data
+- Pure flat tables (CSV is more compact)
+
+For benchmarks, detailed comparisons, and the full specification, see the [TOON repository](https://github.com/toon-format/toon).
 
 ### regex_match
 
