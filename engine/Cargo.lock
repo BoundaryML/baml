@@ -4109,7 +4109,6 @@ dependencies = [
  "strsim",
  "strum",
  "textwrap",
- "toon",
  "whoami",
 ]
 
