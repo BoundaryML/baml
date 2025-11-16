@@ -2,35 +2,59 @@
 title: Token Optimization
 ---
 
-# Optimizing Token Usage with TOON
+# Experimenting with Data Format for Token Efficiency
 
-When working with LLMs, token usage directly impacts both cost and latency. BAML provides the `format` filter (use `type="toon"`) to help you reduce token consumption by 30-60% when passing structured data in prompts.
+When working with LLMs, token usage directly impacts both cost and latency. Different serialization formats can affect how many tokens are used to represent your data—but **the optimal format depends on your specific use case and LLM**.
 
-## What is TOON?
+## Important: Test Before Adopting
 
-TOON (Token-Oriented Object Notation) is a compact data format designed specifically for LLM prompts. It uses:
+**Every optimization has trade-offs.** Reducing token count doesn't automatically improve accuracy, and different LLMs may respond differently to different formats. You should:
+- **Test with your actual data and prompts**
+- **Measure accuracy alongside token savings**
+- **Compare multiple formats** (JSON, YAML, TOON, or custom)
+- **Validate with your specific LLM**
+
+What works for one use case may not work for another.
+
+## Available Format Options
+
+BAML's `format` filter lets you experiment with different serializations:
+
+```jinja
+{{ data|format(type="json") }}   {# Standard JSON #}
+{{ data|format(type="yaml") }}   {# YAML format #}
+{{ data|format(type="toon") }}   {# TOON format #}
+```
+
+### TOON Format
+
+TOON (Token-Oriented Object Notation) is a compact format that uses:
 - Indentation-based structure (like YAML)
 - Tabular format for arrays of objects (declare keys once, stream rows)
 - Minimal punctuation
 
-## When to Use TOON
+**Potential benefits:** May reduce tokens by 30-60% compared to JSON  
+**Potential downsides:** Less familiar format, may affect LLM comprehension, not all LLMs tested
 
-### ✅ Use TOON when:
-- Passing data to the LLM for analysis
-- Working with large structured datasets
-- Token costs are a concern
-- Handling arrays of similar objects
+## Considerations for Format Selection
 
-### ❌ Use standard formats when:
-- The LLM needs to return structured data (use standard BAML output types instead)
-- Working with external systems that expect JSON
-- Data structure is very small (< 100 tokens)
+### When to Experiment with Compact Formats
+- Passing large structured datasets to the LLM
+- Token costs are significant
+- Arrays of similar objects
+- After you've validated accuracy
 
-## Basic Example
+### When to Stick with Standard Formats
+- Starting a new project (establish baseline first)
+- Your LLM performs poorly with alternative formats
+- Data structure is small (< 100 tokens)
+- Team familiarity matters more than token cost
 
-Let's compare JSON vs TOON for a product analysis task:
+## Experimentation Example
 
-### Using JSON (default)
+Here's how you might test different formats for a product analysis task:
+
+### Baseline: Using JSON
 
 ```baml
 class Product {
@@ -61,11 +85,11 @@ When you pass products to this function, they're serialized as JSON:
 ]
 ```
 
-**Token count: ~257 tokens** (for a larger dataset)
+**Token count:** ~257 tokens (for a larger dataset)
 
-### Using TOON
+### Experiment: Trying TOON
 
-Simply add the `format(type="toon")` filter:
+To test if TOON works for your use case, try the `format(type="toon")` filter:
 
 ```baml
 function AnalyzeProducts(products: Product[]) -> string {
@@ -80,7 +104,7 @@ function AnalyzeProducts(products: Product[]) -> string {
 }
 ```
 
-Now the same data is serialized as TOON:
+The same data serialized as TOON:
 
 ```
 [2]{id,name,price,in_stock}:
@@ -88,7 +112,9 @@ Now the same data is serialized as TOON:
   2,Gadget,19.99,false
 ```
 
-**Token count: ~166 tokens** (35% reduction)
+**Token count:** ~166 tokens (potentially 35% reduction)
+
+**Next steps:** Test with your actual prompts and verify the LLM still produces accurate results.
 
 ## TOON Options
 
@@ -187,84 +213,116 @@ test AnalyzeSpending {
 }
 ```
 
-## Token Savings at Scale
+## Measuring Impact: Token Counts
 
-The savings compound with larger datasets:
+Token reductions will vary based on your data structure. Here are some example measurements:
 
-| Data Size | JSON Tokens | TOON Tokens | Savings |
-|-----------|-------------|-------------|---------|
-| 10 items  | ~500        | ~300        | 40%     |
-| 50 items  | ~2,400      | ~1,200      | 50%     |
-| 100 items | ~4,800      | ~2,200      | 54%     |
+| Data Size | JSON Tokens | TOON Tokens | Observed Reduction |
+|-----------|-------------|-------------|--------------------|
+| 10 items  | ~500        | ~300        | ~40%               |
+| 50 items  | ~2,400      | ~1,200      | ~50%               |
+| 100 items | ~4,800      | ~2,200      | ~54%               |
 
-For high-volume applications, this can translate to significant cost savings:
-- 10,000 API calls/day @ $0.01/1K tokens
-- Without TOON: $48/day = $1,440/month
-- With TOON: $22/day = $660/month
-- **Savings: ~$780/month**
+**Important:** These are example measurements. Your actual results will vary based on:
+- Data structure complexity
+- Field names and value types
+- Nesting levels
 
-## Best Practices
+### Cost Considerations
 
-### 1. Combine with Other Optimizations
+If token reduction translates to cost savings depends on whether accuracy is maintained:
+
+**Hypothetical scenario:** 10,000 API calls/day @ $0.01/1K tokens
+- Baseline (JSON): ~$48/day = $1,440/month
+- With format change: ~$22/day = $660/month  
+- **Potential savings: ~$780/month**
+
+**However:** Lost accuracy, increased debugging time, or degraded user experience can cost far more than token savings. Always measure end-to-end impact.
+
+## Experimentation Guidelines
+
+### 1. Start with a Baseline
+
+Always establish a baseline with a standard format first:
 
 ```baml
-function SmartAnalysis(data: Dataset[], context: string) -> Analysis {
-  client GPT35  // Use cheaper model when appropriate
+function AnalyzeData(data: Dataset[]) -> Analysis {
+  client GPT4
   prompt #"
-    {{ _.role("system") }}
-    {{ context|trim }}  // Remove extra whitespace
-    
     {{ _.role("user") }}
     Data:
-    {{ data|format(type="toon", delimiter="tab") }}  // Use TOON for structured data
+    {{ data|format(type="json") }}  // Start with JSON baseline
     
-    Provide a brief analysis.
+    Provide analysis.
   "#
 }
 ```
 
-### 2. Use for Arrays, Not Single Objects
+**Measure:** Accuracy, token usage, latency, cost
 
-TOON provides maximum benefit for arrays:
+### 2. Test Alternative Formats
+
+Try different formats and compare results:
 
 ```jinja
-{# Good - array of objects #}
+{# Experiment 1: YAML #}
+{{ data|format(type="yaml") }}
+
+{# Experiment 2: TOON #}
+{{ data|format(type="toon") }}
+
+{# Experiment 3: TOON with options #}
+{{ data|format(type="toon", delimiter="pipe") }}
+```
+
+**Measure:** Do you maintain accuracy? How much do tokens reduce?
+
+### 3. Consider Your Data Structure
+
+Different formats work better for different structures:
+
+```jinja
+{# Arrays of objects: TOON may help #}
 {{ products|format(type="toon") }}
 
-{# Less beneficial - single object #}
-{{ user|format(type="toon") }}  // Consider using JSON instead
+{# Deeply nested data: YAML might be more readable #}
+{{ config|format(type="yaml") }}
+
+{# Simple data: JSON is familiar and works #}
+{{ user|format(type="json") }}
 ```
 
-### 3. Choose Delimiters Based on Content
+### 4. Test with Your LLM
 
-```jinja
-{# Data contains commas? Use pipe #}
-{{ addresses|format(type="toon", delimiter="pipe") }}
+Different models may respond differently to format changes. Test with the specific LLM you're using.
 
-{# Data is mostly numeric? Use tab #}
-{{ metrics|format(type="toon", delimiter="tab") }}
+## How to Measure Impact
 
-{# Default comma works for most cases #}
-{{ general_data|format(type="toon") }}
-```
+### Using BAML Playground
 
-## Measuring Impact
+1. Write your function with your baseline format (usually JSON)
+2. Run it in the playground and note:
+   - Token count
+   - LLM response quality
+   - Any parsing errors
+3. Change to an alternative format
+4. Compare token count AND output quality
+5. Run multiple test cases to ensure consistency
 
-Use the BAML Playground to compare token usage:
+### In Production
 
-1. Write your function with regular formatting
-2. Test it in the playground and note token count
-3. Add the `format(type="toon")` filter
-4. Compare the new token count
-
-The playground shows you the exact prompt sent to the LLM, making it easy to verify token savings.
+- Use [BAML Studio](/guide/observability/studio) to monitor token usage
+- Track accuracy metrics alongside token metrics
+- A/B test formats if possible
+- Be ready to roll back if quality degrades
 
 ## Next Steps
 
-- Try TOON with your existing functions
-- Experiment with different delimiters for your data
-- Monitor token usage in production using [BAML Studio](/guide/observability/studio)
-- Consider TOON for high-volume API endpoints
+- **Don't assume, test:** Try different formats with your actual data
+- **Measure what matters:** Track accuracy, not just token counts
+- **Start small:** Test on non-critical workloads first
+- **Document results:** Note which formats work best for which use cases
+- **Consider alternatives:** Custom serialization, selective fields, or prompt redesign might also help
 
 ## See Also
 
