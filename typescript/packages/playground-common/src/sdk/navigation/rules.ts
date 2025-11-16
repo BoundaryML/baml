@@ -6,7 +6,7 @@
 
 import type { SelectionState } from '../atoms/core.atoms';
 import type { NavigationRule, EnrichedTarget } from './types';
-import { selectPreferredTest, selectBestWorkflow } from './utils';
+import { selectPreferredTest, selectBestWorkflow, getPrimaryFunction } from './utils';
 
 /**
  * Priority 0: Direct node selection from graph
@@ -28,6 +28,7 @@ const directNodeClick: NavigationRule = {
       mode: 'workflow',
       workflowId: target.workflowId,
       selectedNodeId: target.nodeId,
+      functionName: membership ? getPrimaryFunction(membership.calledFunctions) : null,
       testName: selectPreferredTest(target.availableTests, null),
     };
   },
@@ -58,6 +59,7 @@ const testClick: NavigationRule = {
         mode: 'workflow',
         workflowId: membership.workflowId,
         selectedNodeId: membership.nodeId,
+        functionName: getPrimaryFunction(membership.calledFunctions),
         testName: target.testName ?? null,
       };
     }
@@ -103,6 +105,7 @@ const stayInWorkflow: NavigationRule = {
       mode: 'workflow',
       workflowId: current.workflowId,
       selectedNodeId: membership.nodeId,
+      functionName: getPrimaryFunction(membership.calledFunctions),
       testName: selectPreferredTest(target.availableTests, current.testName),
     };
   },
@@ -132,6 +135,7 @@ const switchToWorkflow: NavigationRule = {
       mode: 'workflow',
       workflowId: membership.workflowId,
       selectedNodeId: membership.nodeId,
+      functionName: getPrimaryFunction(membership.calledFunctions),
       testName: selectPreferredTest(target.availableTests, null),
     };
   },

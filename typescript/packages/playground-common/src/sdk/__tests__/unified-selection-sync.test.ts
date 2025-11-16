@@ -36,6 +36,7 @@ describe('unifiedSelectionAtom', () => {
       mode: 'workflow',
       workflowId: 'wf',
       selectedNodeId: 'node',
+      functionName: null,
       testName: null,
     });
 
@@ -100,6 +101,7 @@ describe('viewModeAtom', () => {
       mode: 'workflow',
       workflowId: 'simpleWorkflow',
       selectedNodeId: 'fetchData',
+      functionName: null,
       testName: null,
     });
 
@@ -111,6 +113,7 @@ describe('viewModeAtom', () => {
       mode: 'workflow',
       workflowId: 'simpleWorkflow',
       selectedNodeId: 'processData',
+      functionName: null,
       testName: null,
     });
 

@@ -55,7 +55,6 @@ import {
   unifiedSelectionStateAtom,
   functionsAtom,
 } from '../../../sdk/atoms/core.atoms';
-import { navigationDispatcherAtom } from '../../../sdk/navigation/dispatcher';
 
 type FunctionType = 'workflow' | 'function' | 'llm_function' | 'conditional' | 'loop' | 'group' | 'return' | 'block';
 type NodeType = 'llm_function' | 'function';
@@ -115,91 +114,6 @@ export const testcaseObjectAtom = atomFamily(
     }),
 );
 
-// ============================================================================
-// Cursor Management
-// ============================================================================
-
-/**
- * Update cursor position - determines which function/test is at cursor and updates selection
- *
- * NOTE: This is a legacy atom for backward compatibility.
- * The logic has been abstracted into BamlRuntime.updateCursor() and SDK.cursor.update()
- * This atom now uses the runtime's method instead of calling WASM directly.
- */
-export const updateCursorAtom = atom(
-  null,
-  (
-    get,
-    set,
-    cursor: {
-      fileName: string;
-      line: number;
-      column: number;
-    },
-  ) => {
-    const runtime = get(runtimeAtom)?.rt;
-    if (!runtime) {
-      return;
-    }
-    const fileContent = get(filesAtom)[cursor.fileName];
-    if (!fileContent) {
-      return;
-    }
-
-    const fileName = cursor.fileName;
-    const lines = fileContent.split('\n');
-
-    let cursorIdx = 0;
-    for (let i = 0; i < cursor.line; i++) {
-      cursorIdx += (lines[i]?.length ?? 0) + 1; // +1 for the newline character
-    }
-    cursorIdx += cursor.column;
-
-    const selectedFunc = runtime.get_function_at_position(
-      fileName,
-      get(selectedFunctionNameAtom) ?? '',
-      cursorIdx,
-    );
-
-    if (selectedFunc) {
-      const selectedTestcase = runtime.get_testcase_from_position(
-        selectedFunc,
-        cursorIdx,
-      );
-
-      if (selectedTestcase) {
-        // Check for nested function in test case
-        const nestedFunc = runtime.get_function_of_testcase(
-          fileName,
-          cursorIdx,
-        );
-
-        const targetFunction = nestedFunc ?? selectedFunc;
-        const functionType = inferFunctionType(targetFunction as any);
-        const nodeType = nodeTypeForFunction(functionType);
-
-        set(navigationDispatcherAtom, {
-          kind: 'test',
-          functionName: targetFunction.name,
-          testName: selectedTestcase.name,
-          source: 'cursor',
-          timestamp: Date.now(),
-        });
-      } else {
-        // Just a function, no test case
-        const functionType = inferFunctionType(selectedFunc as any);
-
-        set(navigationDispatcherAtom, {
-          kind: 'function',
-          functionName: selectedFunc.name,
-          functionType,
-          source: 'cursor',
-          timestamp: Date.now(),
-        });
-      }
-    }
-  }
-);
 
 // ============================================================================
 // Selection State

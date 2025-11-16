@@ -1,0 +1,7 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+assertion_line: 141
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/invalid.baml
+---
+__error: "function `invalid` not found in fixture"

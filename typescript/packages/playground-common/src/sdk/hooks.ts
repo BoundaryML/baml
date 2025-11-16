@@ -769,7 +769,6 @@ export function useProxyUrl() {
 // Navigation Hooks
 // ============================================================================
 
-import { navigationDispatcherAtom } from './navigation';
 import type { NavigationInput } from './navigation';
 
 /**
@@ -788,5 +787,6 @@ import type { NavigationInput } from './navigation';
  * ```
  */
 export function useNavigation() {
-  return useSetAtom(navigationDispatcherAtom);
+  const sdk = useBAMLSDK();
+  return (input: NavigationInput) => sdk.navigate(input);
 }

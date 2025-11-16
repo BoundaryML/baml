@@ -5,13 +5,17 @@
  */
 
 import type { SelectionState } from '../atoms/core.atoms';
-import type { SideEffect, JotaiSet } from './types';
+import type { SideEffect, JotaiSet, NavigationInput, NavigationContext } from './types';
+import type { CallGraphNode } from '../interface';
 import {
   unifiedSelectionStateAtom,
   detailPanelAtom,
   selectedInputSourceAtom,
 } from '../atoms/core.atoms';
 import { activeTabAtom } from '../../shared/baml-project-panel/playground-panel/unified-atoms';
+import { panToNodeIfNeeded } from '../../utils/cameraPan';
+import { flowStore } from '../../states/reactflow';
+import { vscode } from '../../shared/baml-project-panel/vscode';
 
 export class StateManager {
   /**
@@ -21,7 +25,9 @@ export class StateManager {
    */
   buildTransaction(
     targetState: SelectionState,
-    _currentState: SelectionState
+    currentState: SelectionState,
+    input?: NavigationInput,
+    context?: NavigationContext
   ): SideEffect[] {
     const effects: SideEffect[] = [];
 
@@ -33,6 +39,31 @@ export class StateManager {
         workflowId: targetState.workflowId,
         nodeId: targetState.selectedNodeId,
       });
+
+      // Jump to file when clicking a different node from the graph
+      if (
+        input?.source === 'graph' &&
+        input?.kind === 'node' &&
+        currentState.mode === 'workflow' &&
+        currentState.selectedNodeId !== targetState.selectedNodeId &&
+        context
+      ) {
+        const span = this.findNodeSpan(
+          targetState.workflowId,
+          targetState.selectedNodeId,
+          context
+        );
+        if (span) {
+          effects.push({
+            type: 'jump-to-file',
+            span: {
+              filePath: span.filePath,
+              startLine: span.startLine,
+              startColumn: span.startColumn,
+            },
+          });
+        }
+      }
 
       if (targetState.testName) {
         effects.push({ type: 'select-test', testName: targetState.testName });
@@ -97,31 +128,60 @@ export class StateManager {
         case 'pan-to-node':
           // Pan to node is handled by the graph component
           // It listens to selection changes and pans automatically
-          await this.panToNode(effect.workflowId, effect.nodeId);
+          break;
+
+        case 'jump-to-file':
+          await vscode.jumpToFile({
+            filePath: effect.span.filePath,
+            start: 0, // Character offset not needed for jump
+            end: 0,
+            startLine: effect.span.startLine,
+            startColumn: effect.span.startColumn,
+            endLine: effect.span.startLine,
+            endColumn: effect.span.startColumn,
+          });
           break;
       }
     }
   }
 
   /**
-   * Pan to a node in the graph
-   *
-   * This is async because we need to wait for the graph to render
+   * Find the span for a node in a workflow
    */
-  private async panToNode(
-    _workflowId: string,
-    _nodeId: string
-  ): Promise<void> {
-    // The graph component will handle this automatically
-    // when it sees the selectedNodeId change
-    //
-    // If we need explicit panning, we can use flowStore here:
-    // const node = flowStore.value.getNodes?.().find(n => n.id === nodeId);
-    // if (node) {
-    //   flowStore.value.setCenter?.(node.position.x, node.position.y, {
-    //     zoom: 1,
-    //     duration: 300
-    //   });
-    // }
+  private findNodeSpan(
+    workflowId: string,
+    nodeId: string,
+    context: NavigationContext
+  ): { filePath: string; startLine: number; startColumn: number } | null {
+    // Find the workflow
+    const workflow = context.workflows.find((w) => w.id === workflowId);
+    if (!workflow?.callGraph) {
+      return null;
+    }
+
+    // Recursively search for the node in the call graph
+    const findNode = (node: CallGraphNode): CallGraphNode | null => {
+      if (node.id === nodeId) {
+        return node;
+      }
+      for (const child of node.children) {
+        const found = findNode(child);
+        if (found) {
+          return found;
+        }
+      }
+      return null;
+    };
+
+    const node = findNode(workflow.callGraph);
+    if (node?.span) {
+      return {
+        filePath: node.span.filePath,
+        startLine: node.span.startLine,
+        startColumn: node.span.startColumn,
+      };
+    }
+
+    return null;
   }
 }

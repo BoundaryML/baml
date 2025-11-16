@@ -18,7 +18,10 @@ import type {
 // Import all atoms to expose via sdk.atoms
 import * as coreAtoms from './atoms/core.atoms';
 import * as testAtoms from './atoms/test.atoms';
-import { navigationDispatcherAtom } from './navigation/dispatcher';
+
+// Import navigation
+import { createNavigationCoordinator, type NavigationCoordinator } from './navigation/coordinator';
+import type { NavigationInput, NavigationContext } from './navigation/types';
 
 // Import vscode integration for telemetry and flashing regions
 import { vscode } from '../shared/baml-project-panel/vscode';
@@ -33,6 +36,7 @@ export class BAMLSDK {
   private activeExecutions = new Map<string, AbortController>();
   private runtimeFactory: BamlRuntimeFactory;
   private currentFiles: Record<string, string> = {};
+  private coordinator: NavigationCoordinator | null = null;
 
   /**
    * Expose all atoms directly via sdk.atoms
@@ -41,7 +45,6 @@ export class BAMLSDK {
    */
   atoms = {
     ...coreAtoms,
-    navigationDispatcherAtom,
     test: testAtoms,
   };
 
@@ -180,7 +183,38 @@ export class BAMLSDK {
         throw new Error('Files cannot be empty');
       }
 
-      console.log('SDK: Updating files');
+      // Efficiently detect if file contents have changed
+      const oldFiles = this.currentFiles;
+      const oldKeys = Object.keys(oldFiles);
+      const newKeys = Object.keys(files);
+
+      let changed = false;
+
+      if (oldKeys.length !== newKeys.length) {
+        changed = true;
+      } else {
+        for (const key of newKeys) {
+          if (!(key in oldFiles) || oldFiles[key] !== files[key]) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) {
+          for (const key of oldKeys) {
+            if (!(key in files)) {
+              changed = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!changed) {
+        console.log('SDK: No file content changes detected, skipping runtime update');
+        return;
+      }
+
+      console.log('SDK: Updating files..');
 
       // Update files in storage (updates atom)
       this.currentFiles = files;
@@ -311,32 +345,6 @@ export class BAMLSDK {
     },
   };
 
-  // ============================================================================
-  // Cursor Navigation API
-  // ============================================================================
-
-  cursor = {
-    /**
-     * Update cursor position and determine which function/test is at that position
-     * This updates the selection state automatically
-     */
-    update: (cursor: { fileName: string; line: number; column: number }): void => {
-      if (!this.runtime) {
-        return;
-      }
-
-      const currentSelection = this.storage.getSelectedFunctionName();
-      const fileContents = this.storage.getBAMLFiles();
-
-      const result = this.runtime.updateCursor(cursor, fileContents, currentSelection);
-
-      // Update selection state if we found something
-      if (result.functionName) {
-        this.storage.setSelectedFunctionName(result.functionName);
-        this.storage.setSelectedTestCaseName(result.testCaseName);
-      }
-    },
-  };
 
   // ============================================================================
   // Graph API
@@ -573,23 +581,112 @@ export class BAMLSDK {
   // Navigation API
   // ============================================================================
 
+  /**
+   * Get or create the navigation coordinator
+   * Updates context when runtime or workflows change
+   */
+  private getNavigationCoordinator(): NavigationCoordinator {
+    const workflows = this.storage.getWorkflows();
+    const functions = this.runtime?.getFunctions() || [];
+    const bamlFiles = this.runtime?.getBAMLFiles() || [];
+    const tests = bamlFiles.flatMap((file) => file.tests || []);
+
+    const context: NavigationContext = {
+      workflows,
+      functions,
+      bamlFiles,
+      tests,
+    };
+
+    // If we already have a coordinator, update its context
+    if (this.coordinator) {
+      this.coordinator.updateContext(context);
+      return this.coordinator;
+    }
+
+    // Create new coordinator
+    this.coordinator = createNavigationCoordinator(context);
+    return this.coordinator;
+  }
+
+  /**
+   * Navigate to a function, test, or node
+   * This is the main entry point for navigation from the SDK
+   */
+  async navigate(input: NavigationInput): Promise<void> {
+    const coordinator = this.getNavigationCoordinator();
+    console.log('[SDK] navigating', input);
+
+    // Pass raw Jotai store methods directly - navigation updates atoms directly
+    await coordinator.navigate(input, this.storage.store.get, this.storage.store.set);
+  }
+
   navigation = {
     /**
      * Update cursor position from IDE
+     * Dispatches navigation event based on what's at the cursor
      */
-    updateCursor: (content: any): void => {
-      console.debug('[SDK] Cursor updated:', content);
+    updateCursor: (cursor: { fileName: string; line: number; column: number }): void => {
+      if (!this.runtime) {
+        console.warn('[SDK] Cannot update cursor: runtime not initialized');
+        return;
+      }
+
+      const fileContents = this.storage.getBAMLFiles();
+      const currentSelection = this.storage.getSelectedFunctionName();
+
+      // Resolve what's at the cursor position via runtime
+      const result = this.runtime.updateCursor(cursor, fileContents, currentSelection);
+      console.log('[SDK] updateCursor result', result);
+
+      if (!result.functionName) {
+        console.debug('[SDK] Cursor not on any function');
+        return;
+      }
+
+      // Build navigation input
+      // If we have a nodeId, it's a node within a workflow
+      // Otherwise, it's either a test or a function
+      const kind = result.nodeId
+        ? ('node' as const)
+        : result.testCaseName
+          ? ('test' as const)
+          : ('function' as const);
+
+      const navigationInput: NavigationInput = {
+        kind,
+        source: 'cursor' as const,
+        functionName: result.functionName,
+        testName: result.testCaseName ?? undefined,
+        nodeId: result.nodeId ?? undefined,
+        workflowId: result.nodeId ? result.functionName : undefined,
+        timestamp: Date.now(),
+        cursorPosition: {
+          filePath: cursor.fileName,
+          line: cursor.line,
+          column: cursor.column,
+        },
+      };
+
+      // Navigate to the target
+      console.log('[SDK] navigating to', navigationInput);
+      this.navigate(navigationInput);
     },
 
     /**
      * Update cursor position from range
+     * Uses the start position as the cursor
      */
     updateCursorFromRange: (params: {
       fileName: string;
       start: { line: number; character: number };
       end: { line: number; character: number };
     }): void => {
-      console.debug('[SDK] Cursor updated from range:', params);
+      this.navigation.updateCursor({
+        fileName: params.fileName,
+        line: params.start.line,
+        column: params.start.character,
+      });
     },
 
     /**
@@ -597,7 +694,17 @@ export class BAMLSDK {
      */
     selectFunction: (functionName: string): void => {
       console.debug('[SDK] Function selected:', functionName);
-      this.selection.setFunction(functionName);
+
+      // Build navigation input
+      const navigationInput: NavigationInput = {
+        kind: 'function' as const,
+        source: 'api' as const,
+        functionName,
+        timestamp: Date.now(),
+      };
+
+      // Navigate to the function
+      this.navigate(navigationInput);
     },
   };
 

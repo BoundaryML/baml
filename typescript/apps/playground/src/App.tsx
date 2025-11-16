@@ -76,7 +76,7 @@ function AppContent() {
 
 function App() {
   return (
-    <BAMLSDKProvider mode="mock">
+    <BAMLSDKProvider mode="wasm">
       <AppContent />
     </BAMLSDKProvider>
   );

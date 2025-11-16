@@ -4,7 +4,7 @@ import {
   SidebarMenuItem,
 } from '@baml/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -26,7 +26,7 @@ import { useRunBamlTests } from '../prompt-preview/test-panel/test-runner';
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils';
 import type { TestItemProps } from './types';
 import { highlightText } from './utils';
-import { navigationDispatcherAtom } from '../../../../sdk/navigation';
+import { useNavigation } from '../../../../sdk/hooks';
 
 const createSpan = (span: {
   start: number;
@@ -49,7 +49,7 @@ export function TestItem({
   const testHistory = useAtomValue(testHistoryAtom);
   const selectedIndex = useAtomValue(selectedHistoryIndexAtom);
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests();
-  const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
+  const navigate = useNavigation();
 
   const testAtom = useMemo(
     () => testcaseObjectAtom({ functionName, testcaseName: label }),
@@ -84,8 +84,8 @@ export function TestItem({
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // Dispatch test navigation event (same as DebugPanel)
-    dispatchNavigation({
+    // Navigate to test (same as DebugPanel)
+    navigate({
       kind: 'test',
       functionName,
       testName: label,
@@ -97,8 +97,8 @@ export function TestItem({
   const handleJumpToFile = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // Dispatch test navigation event first
-    dispatchNavigation({
+    // Navigate to test first
+    navigate({
       kind: 'test',
       functionName,
       testName: label,

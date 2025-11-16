@@ -31,11 +31,21 @@ import type { BamlRuntimeInterface } from '../runtime/BamlRuntimeInterface';
 import type { FunctionWithCallGraph } from '../interface';
 import type { WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build';
 import { BamlRuntime } from '../runtime/BamlRuntime';
+import type { createStore } from 'jotai';
 
 /**
  * Storage interface for SDK state management
  */
 export interface SDKStorage {
+  // ============================================================================
+  // Jotai Store (for navigation to access atoms directly)
+  // ============================================================================
+
+  /**
+   * Raw Jotai store for direct atom access (used by navigation system)
+   */
+  store: ReturnType<typeof createStore>;
+
   // ============================================================================
   // Runtime Instance (source of truth for derived state)
   // ============================================================================

@@ -2,9 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 
-use crate::control_flow::{ControlFlowVisualization, Edge, Node, NodeId, NodeType};
-
 use super::build_children_map;
+use crate::control_flow::{ControlFlowVisualization, Edge, Node, NodeId, NodeType};
 
 /// Pass 1: remove implicit nodes that do not contribute headerized work.
 pub fn remove_implicit_nodes(viz: &ControlFlowVisualization) -> ControlFlowVisualization {
@@ -110,9 +109,10 @@ fn filter_viz(viz: &ControlFlowVisualization, keep: &HashSet<NodeId>) -> Control
 
 #[cfg(test)]
 mod tests {
+    use internal_baml_core::ast::Span;
+
     use super::*;
     use crate::control_flow::{Node, NodeType};
-    use internal_baml_core::ast::Span;
 
     fn make_node(id: u32, parent: Option<u32>, label: &str, node_type: NodeType) -> Node {
         let parent_id = parent.map(NodeId::new);

@@ -118,6 +118,7 @@ export function determineNavigationAction(
       mode: 'workflow',
       workflowId: event.workflowId,
       selectedNodeId: nodeId,
+      functionName: null,  // TODO: Extract from node when new navigation system is active
       testName: null,
     };
   }
@@ -145,6 +146,7 @@ function handleTestClick(
       mode: 'workflow',
       workflowId: workflow.id,
       selectedNodeId: workflow.id,
+      functionName: null,
       testName: event.testName,
     };
   }
@@ -158,6 +160,7 @@ function handleTestClick(
         mode: 'workflow',
         workflowId: currentWorkflow.id,
         selectedNodeId: targetFunction,
+        functionName: null,
         testName: event.testName,
       };
     }
@@ -173,6 +176,7 @@ function handleTestClick(
       mode: 'workflow',
       workflowId: workflowWithFunction.id,
       selectedNodeId: targetFunction,
+      functionName: null,
       testName: event.testName,
     };
   }
@@ -211,6 +215,7 @@ function handleFunctionClick(
         mode: 'workflow',
         workflowId: currentWorkflow!.id,
         selectedNodeId: targetFunction,
+        functionName: null,
         testName: null,
       };
     }
@@ -224,6 +229,7 @@ function handleFunctionClick(
       mode: 'workflow',
       workflowId: workflowWithFunction.id,
       selectedNodeId: targetFunction,
+      functionName: null,
       testName: null,
     };
   }

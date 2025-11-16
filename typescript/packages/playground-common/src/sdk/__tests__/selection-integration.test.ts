@@ -160,7 +160,7 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
 
   const dispatchInput = (intent: NavigationInput | null) => {
     if (intent) {
-      store.set(sdk.atoms.navigationDispatcherAtom, intent);
+      sdk.navigate(intent);
     } else {
       store.set(unifiedSelectionStateAtom, { mode: 'empty' });
     }
@@ -438,8 +438,8 @@ describe('Selection State Integration (Real WASM Runtime)', () => {
         timestamp: Date.now(),
       };
 
-      // Dispatch the input to simulate clicking on the header node
-      store.set(sdk.atoms.navigationDispatcherAtom, headerInput);
+      // Navigate to the header node to simulate clicking on it
+      sdk.navigate(headerInput);
 
       // Verify that activeTab is set to 'graph'
       const activeTab = store.get(activeTabAtom);

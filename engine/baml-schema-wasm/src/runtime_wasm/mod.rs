@@ -383,6 +383,23 @@ impl WasmSpan {
     }
 }
 
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Clone, Debug)]
+pub struct WasmEntityAtPosition {
+    #[wasm_bindgen(readonly)]
+    pub entity_type: String,
+    #[wasm_bindgen(readonly)]
+    pub entity_name: String,
+    #[wasm_bindgen(readonly)]
+    pub span: WasmSpan,
+    #[wasm_bindgen(readonly)]
+    pub function_type: Option<WasmFunctionKind>,
+    #[wasm_bindgen(readonly)]
+    pub node_id: Option<String>,
+    #[wasm_bindgen(readonly)]
+    pub node_label: Option<String>,
+}
+
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WasmControlFlowNodeType {
@@ -1071,20 +1088,16 @@ impl WasmRuntime {
 
         if include_llm {
             functions.extend(
-                self.runtime
-                    .ir()
-                    .walk_functions()
-                    .map(|f| Self::build_wasm_function(&ctx, &self.runtime, f, WasmFunctionKind::Llm)),
+                self.runtime.ir().walk_functions().map(|f| {
+                    Self::build_wasm_function(&ctx, &self.runtime, f, WasmFunctionKind::Llm)
+                }),
             );
         }
 
         if include_expr {
-            functions.extend(
-                self.runtime
-                    .ir()
-                    .walk_expr_fns()
-                    .map(|f| Self::build_expr_wasm_function(&ctx, &self.runtime, f, WasmFunctionKind::Expr)),
-            );
+            functions.extend(self.runtime.ir().walk_expr_fns().map(|f| {
+                Self::build_expr_wasm_function(&ctx, &self.runtime, f, WasmFunctionKind::Expr)
+            }));
         }
 
         functions
@@ -1143,7 +1156,7 @@ impl WasmRuntime {
         };
 
         WasmFunction {
-            name: f.name().to_string(),
+            name: f.name().to_string().clone(),
             span: wasm_span,
             function_type,
             signature: {
@@ -1385,7 +1398,6 @@ impl WasmRuntime {
         }
     }
 
-    #[wasm_bindgen]
     #[wasm_bindgen]
     pub fn list_generators(&self) -> Vec<WasmGeneratorConfig> {
         self.runtime
@@ -1646,6 +1658,12 @@ impl WasmRuntime {
         selected_func: &str,
         cursor_idx: usize,
     ) -> Option<WasmFunction> {
+        log::info!(
+            "get_function_at_position: file_name={}, selected_func={}, cursor_idx={}",
+            file_name,
+            selected_func,
+            cursor_idx
+        );
         let functions = self.list_functions_internal(None);
 
         for function in functions.clone() {
@@ -1695,6 +1713,113 @@ impl WasmRuntime {
         }
 
         None
+    }
+
+    #[wasm_bindgen]
+    pub fn get_entity_at_position(
+        &self,
+        file_name: &str,
+        cursor_idx: usize,
+    ) -> Option<WasmEntityAtPosition> {
+        // Find the function at this position
+        let function = self.get_function_at_position(file_name, "", cursor_idx)?;
+        log::info!(
+            "entity get_entity_at_position: file_name={}, cursor_idx={}",
+            file_name,
+            cursor_idx
+        );
+        log::info!("entity function: {:#?}", function);
+
+        // If it's an Expr function, extend node spans to cover content until next node
+        if function.function_type == WasmFunctionKind::Expr {
+            if let Ok(graph) = function.function_graph_v2(self) {
+                // Filter nodes that belong to this file and sort by start position
+                let mut file_nodes: Vec<&WasmControlFlowNode> = graph
+                    .nodes
+                    .iter()
+                    .filter(|node| node.span.file_path == file_name)
+                    .collect();
+                file_nodes.sort_by_key(|node| node.span.start);
+
+                // Find the node whose extended span contains the cursor
+                // Each node's span extends from its start to the start of the next node
+                for (i, node) in file_nodes.iter().enumerate() {
+                    let span_start = node.span.start;
+                    let span_end = if i + 1 < file_nodes.len() {
+                        // Extend to the start of the next node
+                        file_nodes[i + 1].span.start
+                    } else {
+                        // Last node extends to the end of the function
+                        function.span.end
+                    };
+
+                    log::info!(
+                        "entity expr node: {} span=[{}, {}), cursor={}",
+                        node.label,
+                        span_start,
+                        span_end,
+                        cursor_idx
+                    );
+
+                    if cursor_idx >= span_start && cursor_idx < span_end {
+                        log::info!("entity returning expr node: {:#?}", node);
+                        return Some(WasmEntityAtPosition {
+                            entity_type: "node".to_string(),
+                            entity_name: function.name.clone(),
+                            span: node.span.clone(),
+                            function_type: Some(function.function_type),
+                            node_id: Some(node.lexical_id.clone()),
+                            node_label: Some(node.label.clone()),
+                        });
+                    }
+                }
+            }
+        }
+        // If it's an LLM function, use the smallest node that contains the cursor
+        else if function.function_type == WasmFunctionKind::Llm {
+            if let Ok(graph) = function.function_graph_v2(self) {
+                // Find the smallest node that contains the cursor
+                let mut best_node: Option<&WasmControlFlowNode> = None;
+                let mut best_node_size = usize::MAX;
+
+                for node in &graph.nodes {
+                    log::info!("entity node: {:#?}", node);
+                    if node.span.contains(file_name, cursor_idx) {
+                        let node_size = node.span.end - node.span.start;
+                        log::info!("entity node_size: {}", node_size);
+                        log::info!("entity best_node_size: {}", best_node_size);
+                        if node_size < best_node_size {
+                            best_node = Some(node);
+                            best_node_size = node_size;
+                        }
+                    }
+                }
+
+                // If we found a node, return it as a more specific entity
+                if let Some(node) = best_node {
+                    log::info!("entity returning node: {:#?}", node);
+                    return Some(WasmEntityAtPosition {
+                        entity_type: "node".to_string(),
+                        entity_name: function.name.clone(),
+                        span: node.span.clone(),
+                        function_type: Some(function.function_type),
+                        node_id: Some(node.lexical_id.clone()),
+                        node_label: Some(node.label.clone()),
+                    });
+                }
+            }
+        }
+
+        // Return the function as the entity
+        log::info!("[entity] returning function: {:#?}", function);
+        Some(WasmEntityAtPosition {
+            entity_type: "function".to_string(),
+            entity_name: function.name.clone(),
+            span: function.span.clone(),
+            function_type: Some(function.function_type),
+            node_id: None,
+            node_label: None,
+        })
     }
 
     #[wasm_bindgen]
@@ -2289,7 +2414,6 @@ impl WasmFunction {
         }
     }
 
-
     #[wasm_bindgen]
     pub fn client_name(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
         if self.function_type != WasmFunctionKind::Llm {
@@ -2781,7 +2905,7 @@ impl WasmFunction {
             .function_graph_v2(&self.name, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
         log::info!(
-            "[wasm::function_graph_v2]: {} graph: {:#?}",
+            "[wasm::function_graph_v2]: {} graph:: {:#?}",
             self.name,
             graph
         );

@@ -1,6 +1,5 @@
 #![cfg(test)]
 
-use super::*;
 use std::{
     collections::{BTreeMap, HashMap},
     fs,
@@ -9,14 +8,15 @@ use std::{
 
 use baml_types::ir_type::{type_meta, TypeIR, TypeValue};
 use insta::assert_yaml_snapshot;
+use internal_baml_core::feature_flags::FeatureFlags;
 use serde_json::{json, Value};
 
 use super::{
     flatten::{expand_branch_groups, flatten_branch_arms_and_scopes, remove_implicit_nodes},
     mermaid::to_mermaid,
+    *,
 };
 use crate::BamlRuntime;
-use internal_baml_core::feature_flags::FeatureFlags;
 
 fn simple_function() -> hir::ExprFunction {
     let span = Span::fake();

@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
-use crate::control_flow::{ControlFlowVisualization, Edge, NodeId, NodeType};
-
 use super::build_children_map;
+use crate::control_flow::{ControlFlowVisualization, Edge, NodeId, NodeType};
 
 /// Pass 2: ensure BranchGroup / BranchArm nodes have the correct fan-out edges.
 pub fn expand_branch_groups(viz: &ControlFlowVisualization) -> ControlFlowVisualization {
@@ -68,9 +67,10 @@ pub fn expand_branch_groups(viz: &ControlFlowVisualization) -> ControlFlowVisual
 
 #[cfg(test)]
 mod tests {
+    use internal_baml_core::ast::Span;
+
     use super::*;
     use crate::control_flow::{Node, NodeType};
-    use internal_baml_core::ast::Span;
 
     fn branch_group_viz() -> ControlFlowVisualization {
         let mut viz = ControlFlowVisualization::default();

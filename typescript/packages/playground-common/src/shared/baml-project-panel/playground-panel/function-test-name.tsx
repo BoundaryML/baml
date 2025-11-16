@@ -15,7 +15,7 @@ import {
 import { cn } from '@baml/ui/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@baml/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { atom } from 'jotai';
 import { Check, ChevronDown, FlaskConical, FunctionSquare } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -25,7 +25,7 @@ import {
   testcaseObjectAtom,
 } from './atoms';
 import { functionsAtom as sdkFunctionsAtom } from '../../../sdk/atoms/core.atoms';
-import { navigationDispatcherAtom } from '../../../sdk/navigation';
+import { useNavigation } from '../../../sdk/hooks';
 
 interface FunctionTestNameProps {
   functionName: string;
@@ -59,7 +59,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
   const fn = useAtomValue(functionAtom);
   const tc = useAtomValue(testcaseAtom);
   const functions = useAtomValue(functionsAtom);
-  const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
+  const navigate = useNavigation();
 
   const currentFunction = functions.find((f) => f.name === functionName);
   const availableTests = currentFunction?.tests || [];
@@ -84,8 +84,8 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
             : 'function';
 
           if (firstTest) {
-            // Dispatch test navigation
-            dispatchNavigation({
+            // Navigate to test
+            navigate({
               kind: 'test',
               functionName: func.name,
               testName: firstTest,
@@ -93,8 +93,8 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
               timestamp: Date.now(),
             });
           } else {
-            // Dispatch function navigation
-            dispatchNavigation({
+            // Navigate to function
+            navigate({
               kind: 'function',
               functionName: func.name,
               functionType,
@@ -137,8 +137,8 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
         key={test}
         value={test}
         onSelect={() => {
-          // Dispatch test navigation
-          dispatchNavigation({
+          // Navigate to test
+          navigate({
             kind: 'test',
             functionName,
             testName: test,

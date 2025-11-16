@@ -7,7 +7,7 @@
 
 import type { FunctionWithCallGraph } from '../interface';
 import type { WorkflowMembership } from './types';
-import { extractCalledFunction } from './utils';
+import { extractCalledFunctions } from './utils';
 
 export class WorkflowIndex {
   private functionToWorkflows = new Map<string, WorkflowMembership[]>();
@@ -29,35 +29,27 @@ export class WorkflowIndex {
       }
 
       for (const node of workflow.nodes) {
-        // Get the function called by this node
-        const calledFunction = extractCalledFunction(node, workflows);
+        // Get ALL functions called by this node
+        const calledFunctions = extractCalledFunctions(node, workflows);
 
-        // Index by node ID (always)
-        this.addMembership(node.id, {
+        const membership: WorkflowMembership = {
           workflowId: workflow.id,
           nodeId: node.id,
           nodeLabel: node.label,
-          calledFunction,
-        });
+          calledFunctions,
+        };
+
+        // Index by node ID (always)
+        this.addMembership(node.id, membership);
 
         // Also index by function name (if different from node ID)
         if (node.functionName && node.functionName !== node.id) {
-          this.addMembership(node.functionName, {
-            workflowId: workflow.id,
-            nodeId: node.id,
-            nodeLabel: node.label,
-            calledFunction,
-          });
+          this.addMembership(node.functionName, membership);
         }
 
-        // Also index by called function (if any)
-        if (calledFunction) {
-          this.addMembership(calledFunction, {
-            workflowId: workflow.id,
-            nodeId: node.id,
-            nodeLabel: node.label,
-            calledFunction,
-          });
+        // Also index by EACH called function
+        for (const calledFunction of calledFunctions) {
+          this.addMembership(calledFunction, membership);
         }
       }
     }

@@ -6,7 +6,7 @@
  */
 
 import { minidenticon } from 'minidenticons';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useActiveWorkflow, useSelectedNode, useWorkflows } from '../../../sdk/hooks';
 import { flowStore } from '../../../states/reactflow';
@@ -50,6 +50,20 @@ export function WorkflowIndicator() {
 
   // Determine if we should show the dropdown
   const shouldShowDropdown = workflowsWithSelectedNode.length > 1;
+
+  useEffect(() => {
+    // pan if selected node id changes
+    const node = flowStore.value.getNode(selectedNodeId ?? '');
+    if (!node) {
+      console.error("Node not found. Can't pan to it:", selectedNodeId);
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      console.log('Panning to node:', node.id);
+      panToNodeIfNeeded(node, flowStore.value);
+    }, 200);
+    return () => clearTimeout(timeoutId);
+  }, [selectedNodeId]);
 
   if (!activeWorkflow) {
     return null;

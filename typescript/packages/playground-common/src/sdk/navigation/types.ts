@@ -53,7 +53,7 @@ export interface WorkflowMembership {
   workflowId: string;
   nodeId: string;
   nodeLabel: string;
-  calledFunction: string | null; // If node calls a function
+  calledFunctions: string[]; // Functions called by this node (can be multiple)
 }
 
 export interface EnrichedTarget {
@@ -104,7 +104,8 @@ export type SideEffect =
   | { type: 'open-panel' }
   | { type: 'close-panel' }
   | { type: 'select-test'; testName: string }
-  | { type: 'clear-test' };
+  | { type: 'clear-test' }
+  | { type: 'jump-to-file'; span: { filePath: string; startLine: number; startColumn: number } };
 
 // ============================================================================
 // Navigation Context (for enrichment)
@@ -136,8 +137,7 @@ export interface NavigationLogEntry {
 // Jotai Types
 // ============================================================================
 
-export type JotaiGet = <Value>(atom: any) => Value;
-export type JotaiSet = <Value, Args extends unknown[], Result>(
-  atom: any,
-  ...args: Args
-) => Result;
+import type { Getter, Setter } from 'jotai';
+
+export type JotaiGet = Getter;
+export type JotaiSet = Setter;

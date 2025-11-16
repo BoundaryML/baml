@@ -29,6 +29,7 @@ import type {
   BamlRuntimeInterface,
   CursorPosition,
   CursorNavigationResult,
+  EntityAtPosition,
   ExecutionOptions,
 } from './BamlRuntimeInterface';
 import type {
@@ -499,7 +500,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
     }
 
     try {
-      const wasmFunctions = this.wasmRuntime.list_functions() as RichWasmFunction[];
+      const wasmFunctions = this.wasmRuntime.list_functions();
       const seen = new Set<string>();
       const combined: FunctionWithCallGraph[] = [];
 
@@ -1127,27 +1128,32 @@ export class BamlRuntime implements BamlRuntimeInterface {
     if (!this.wasmRuntime) {
       throw new Error('Runtime not initialized');
     }
+    try {
 
-    const wasmFunctions = this.wasmRuntime.list_functions() as RichWasmFunction[];
-    const wasmFn = wasmFunctions.find(f => f.name === functionName);
-    if (!wasmFn) {
-      throw new Error(`Function ${functionName} not found`);
+      const wasmFunctions = this.wasmRuntime.list_functions();
+      const wasmFn = wasmFunctions.find(f => f.name === functionName);
+      if (!wasmFn) {
+        throw new Error(`Function ${functionName} not found`);
+      }
+      if (wasmFn.function_type !== WasmFunctionKind.Llm) {
+        throw new Error(`Function ${functionName} is not an LLM function`);
+      }
+
+      const wasmCallContext = new this.wasm.WasmCallContext();
+      const wasmPrompt = await wasmFn.render_prompt_for_test(
+        this.wasmRuntime,
+        testName,
+        wasmCallContext,
+        context.loadMediaFile || (() => Promise.resolve('')),
+        context.apiKeys || {}
+      );
+
+      // Convert WASM prompt to unified type
+      return this.adapter.convertPrompt(wasmPrompt);
+    } catch (error) {
+      console.error('[BamlRuntime] Error rendering prompt for test:', error);
+      throw error;
     }
-    if (wasmFn.function_type !== WasmFunctionKind.Llm) {
-      throw new Error(`Function ${functionName} is not an LLM function`);
-    }
-
-    const wasmCallContext = new this.wasm.WasmCallContext();
-    const wasmPrompt = await wasmFn.render_prompt_for_test(
-      this.wasmRuntime,
-      testName,
-      wasmCallContext,
-      context.loadMediaFile || (() => Promise.resolve('')),
-      context.apiKeys || {}
-    );
-
-    // Convert WASM prompt to unified type
-    return this.adapter.convertPrompt(wasmPrompt);
   }
 
   async renderCurlForTest(
@@ -1160,30 +1166,35 @@ export class BamlRuntime implements BamlRuntimeInterface {
     },
     context: TestExecutionContext
   ): Promise<string> {
-    if (!this.wasmRuntime) {
-      throw new Error('Runtime not initialized');
-    }
+    try {
+      if (!this.wasmRuntime) {
+        throw new Error('Runtime not initialized');
+      }
 
-    const wasmFunctions = this.wasmRuntime.list_functions() as RichWasmFunction[];
-    const wasmFn = wasmFunctions.find(f => f.name === functionName);
-    if (!wasmFn) {
-      throw new Error(`Function ${functionName} not found`);
-    }
-    if (wasmFn.function_type !== WasmFunctionKind.Llm) {
-      throw new Error(`Function ${functionName} is not an LLM function`);
-    }
+      const wasmFunctions = this.wasmRuntime.list_functions();
+      const wasmFn = wasmFunctions.find(f => f.name === functionName);
+      if (!wasmFn) {
+        throw new Error(`Function ${functionName} not found`);
+      }
+      if (wasmFn.function_type !== WasmFunctionKind.Llm) {
+        throw new Error(`Function ${functionName} is not an LLM function`);
+      }
 
-    const wasmCallContext = new this.wasm.WasmCallContext();
-    return await wasmFn.render_raw_curl_for_test(
-      this.wasmRuntime,
-      testName,
-      wasmCallContext,
-      options.stream || false,
-      options.expandImages || false,
-      context.loadMediaFile || (() => Promise.resolve('')),
-      context.apiKeys || {},
-      options.exposeSecrets || false
-    );
+      const wasmCallContext = new this.wasm.WasmCallContext();
+      return await wasmFn.render_raw_curl_for_test(
+        this.wasmRuntime,
+        testName,
+        wasmCallContext,
+        options.stream || false,
+        options.expandImages || false,
+        context.loadMediaFile || (() => Promise.resolve('')),
+        context.apiKeys || {},
+        options.exposeSecrets || false
+      );
+    } catch (error) {
+      console.error('[BamlRuntime] Error rendering curl for test:', error);
+      throw error;
+    }
   }
 
   updateCursor(
@@ -1192,56 +1203,139 @@ export class BamlRuntime implements BamlRuntimeInterface {
     currentSelection: string | null
   ): CursorNavigationResult {
     if (!this.wasmRuntime) {
-      return { functionName: null, testCaseName: null };
+      console.log('no wasm runtime');
+      return { functionName: null, testCaseName: null, nodeId: null };
     }
+    try {
 
-    const fileContent = fileContents[cursor.fileName];
-    if (!fileContent) {
-      return { functionName: null, testCaseName: null };
+      const fileContent = fileContents[cursor.fileName];
+      if (!fileContent) {
+        console.log('no file content');
+        return { functionName: null, testCaseName: null, nodeId: null };
+      }
+
+      // Convert line/column to character index
+      const lines = fileContent.split('\n');
+      let cursorIdx = 0;
+      for (let i = 0; i < cursor.line; i++) {
+        cursorIdx += (lines[i]?.length ?? 0) + 1; // +1 for newline
+      }
+      cursorIdx += cursor.column;
+
+      const entity = this.wasmRuntime.get_entity_at_position(
+        cursor.fileName,
+        cursorIdx
+      );
+      console.log('entity', entity, entity?.toJSON());
+
+      // Get function at cursor position
+      const selectedFunc = this.wasmRuntime.get_function_at_position(
+        cursor.fileName,
+        currentSelection ?? '',
+        cursorIdx
+      );
+
+      if (!selectedFunc) {
+        return { functionName: null, testCaseName: null, nodeId: null };
+      }
+
+      // IMPORTANT, if we dont extract the name here, when we try doing selectedFunc.name after passing selectedFunc to get_testcase_from_position, it will throw a 'passed null pointer to rust' error.
+      const name = selectedFunc.name;
+
+      // Check if cursor is in a test case
+      const selectedTestcase = this.wasmRuntime.get_testcase_from_position(
+        selectedFunc,
+        cursorIdx
+      );
+
+
+      if (selectedTestcase) {
+        // Check for nested function in test case
+        const nestedFunc = this.wasmRuntime.get_function_of_testcase(
+          cursor.fileName,
+          cursorIdx
+        );
+
+
+        return {
+          functionName: nestedFunc ? nestedFunc.name : name,
+          testCaseName: selectedTestcase.name,
+          nodeId: null,
+        };
+      }
+      // selectedFunc.name; // uncomment to repro the 'null pointer passed to rust error'.
+
+      // Extract node_id from entity if available (for workflow nodes)
+      const nodeId = entity?.node_id ?? null;
+
+      // Just a function, no test case
+      return {
+        functionName: name,
+        testCaseName: null,
+        nodeId,
+      };
+    } catch (error) {
+      console.error('[BamlRuntime] Error updating cursor:', error);
+      throw error;
     }
+  }
 
-    // Convert line/column to character index
-    const lines = fileContent.split('\n');
-    let cursorIdx = 0;
-    for (let i = 0; i < cursor.line; i++) {
-      cursorIdx += (lines[i]?.length ?? 0) + 1; // +1 for newline
+  getEntityAtPosition(
+    cursor: CursorPosition,
+    fileContents: Record<string, string>
+  ): EntityAtPosition | null {
+    if (!this.wasmRuntime) {
+      return null;
     }
-    cursorIdx += cursor.column;
+    try {
 
-    // Get function at cursor position
-    const selectedFunc = this.wasmRuntime.get_function_at_position(
-      cursor.fileName,
-      currentSelection ?? '',
-      cursorIdx
-    );
+      const fileContent = fileContents[cursor.fileName];
+      if (!fileContent) {
+        return null;
+      }
 
-    if (!selectedFunc) {
-      return { functionName: null, testCaseName: null };
-    }
+      // Convert line/column to character index
+      const lines = fileContent.split('\n');
+      let cursorIdx = 0;
+      for (let i = 0; i < cursor.line; i++) {
+        cursorIdx += (lines[i]?.length ?? 0) + 1; // +1 for newline
+      }
+      cursorIdx += cursor.column;
 
-    // Check if cursor is in a test case
-    const selectedTestcase = this.wasmRuntime.get_testcase_from_position(
-      selectedFunc,
-      cursorIdx
-    );
-
-    if (selectedTestcase) {
-      // Check for nested function in test case
-      const nestedFunc = this.wasmRuntime.get_function_of_testcase(
+      // Get entity at cursor position from WASM
+      const entity = this.wasmRuntime.get_entity_at_position(
         cursor.fileName,
         cursorIdx
       );
 
-      return {
-        functionName: nestedFunc ? nestedFunc.name : selectedFunc.name,
-        testCaseName: selectedTestcase.name,
-      };
-    }
+      if (!entity) {
+        return null;
 
-    // Just a function, no test case
-    return {
-      functionName: selectedFunc.name,
-      testCaseName: null,
-    };
+
+      }
+
+
+      const wasmKinds = this.wasm?.WasmFunctionKind;
+      let functionType: 'Llm' | 'Expr' | undefined;
+      if (wasmKinds != null) {
+        if (entity.function_type === wasmKinds.Llm) {
+          functionType = 'Llm';
+        } else if (entity.function_type === wasmKinds.Expr) {
+          functionType = 'Expr';
+        }
+      }
+
+      return {
+        entity_type: entity.entity_type as 'function' | 'node',
+        entity_name: entity.entity_name,
+        function_type: functionType,
+        node_id: entity.node_id ?? undefined,
+        node_label: entity.node_label ?? undefined,
+        span: entity.span,
+      };
+    } catch (error) {
+      console.error('[BamlRuntime] Error getting entity at position:', error);
+      throw error;
+    }
   }
 }

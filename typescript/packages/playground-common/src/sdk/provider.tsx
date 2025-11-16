@@ -29,7 +29,7 @@ interface BAMLSDKProviderProps {
 /**
  * Provider component that wraps the app and provides SDK access
  */
-export function BAMLSDKProvider({ children, mode: initialMode = 'mock' }: BAMLSDKProviderProps) {
+export function BAMLSDKProvider({ children, mode: initialMode = 'wasm' }: BAMLSDKProviderProps) {
   // Check if debug mode is enabled (lazy initialization to avoid SSR issues)
   const [debugMode] = useState(() => isDebugMode());
 
@@ -46,11 +46,15 @@ export function BAMLSDKProvider({ children, mode: initialMode = 'mock' }: BAMLSD
   // Track which mode the current SDK was created with
   const currentSDKModeRef = useRef<RuntimeMode | undefined>(undefined);
 
+
+
+
+
+  const [isInitialized, setIsInitialized] = useState(false);
   // Initialize store once
   if (!storeRef.current) {
     storeRef.current = createStore();
   }
-
   // Create or recreate SDK when mode changes
   if (!sdkRef.current || currentSDKModeRef.current !== runtimeMode) {
     console.log('🚀 Creating BAML SDK with mode: ', runtimeMode);
@@ -63,8 +67,6 @@ export function BAMLSDKProvider({ children, mode: initialMode = 'mock' }: BAMLSD
     }
     currentSDKModeRef.current = runtimeMode;
   }
-
-  const [isInitialized, setIsInitialized] = useState(false);
 
   // Handle mode change from debug banner
   const handleModeChange = (newMode: RuntimeMode) => {

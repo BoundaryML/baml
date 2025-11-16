@@ -722,11 +722,19 @@ impl BamlRuntimeExt for BamlRuntime {
         let mut functions = Vec::new();
 
         if include_llm {
-            functions.extend(self.ir.walk_functions().map(|f| build_function!(f, FunctionFlavor::Llm)));
+            functions.extend(
+                self.ir
+                    .walk_functions()
+                    .map(|f| build_function!(f, FunctionFlavor::Llm)),
+            );
         }
 
         if include_expr {
-            functions.extend(self.ir.walk_expr_fns().map(|f| build_function!(f, FunctionFlavor::Expr)));
+            functions.extend(
+                self.ir
+                    .walk_expr_fns()
+                    .map(|f| build_function!(f, FunctionFlavor::Expr)),
+            );
         }
 
         functions

@@ -13,11 +13,14 @@ import type {
   WorkflowMembership,
 } from './types';
 import { WorkflowIndex } from './workflow-index';
+import { extractCalledFunctions } from './utils';
 
 export class TargetEnricher {
   private workflowIndex: WorkflowIndex;
+  private context: NavigationContext;
 
-  constructor(private context: NavigationContext) {
+  constructor(context: NavigationContext) {
+    this.context = context;
     this.workflowIndex = new WorkflowIndex(context.workflows);
   }
 
@@ -27,6 +30,13 @@ export class TargetEnricher {
   updateContext(context: NavigationContext): void {
     this.context = context;
     this.workflowIndex.rebuild(context.workflows);
+  }
+
+  /**
+   * Get current context (for use in coordinator)
+   */
+  getContext(): NavigationContext {
+    return this.context;
   }
 
   /**
@@ -90,12 +100,13 @@ export class TargetEnricher {
       if (workflow) {
         const node = workflow.nodes?.find((n) => n.id === input.nodeId);
         if (node) {
+          const calledFunctions = extractCalledFunctions(node, this.context.workflows);
           return [
             {
               workflowId: workflow.id,
               nodeId: node.id,
               nodeLabel: node.label,
-              calledFunction: node.functionName || null,
+              calledFunctions,
             },
           ];
         }

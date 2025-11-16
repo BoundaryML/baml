@@ -19,14 +19,13 @@ import type { Node } from '@xyflow/react';
 // Import graph primitives and components from WorkflowApp
 import { kEdgeTypes, ColorfulMarkerDefinitions, kNodeTypes } from '../../../../graph-primitives';
 import { ReactflowInstance } from '../../../../features/graph/components';
-import { useActiveWorkflow, useLayoutDirection } from '../../../../sdk/hooks';
+import { useActiveWorkflow, useLayoutDirection, useNavigation } from '../../../../sdk/hooks';
 import { flowStore } from '../../../../states/reactflow';
 import { Loader as Spinner } from '@baml/ui/custom/loader';
 import { useGraphSync } from '../../../../features/graph/hooks';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { graphControlsTipDismissedAtom, unifiedSelectionAtom } from '../atoms';
 import { MousePointer2, ZoomIn, X, ChevronLeft } from 'lucide-react';
-import { navigationDispatcherAtom } from '../../../../sdk/navigation';
 import type { NavigationInput } from '../../../../sdk/navigation';
 
 /**
@@ -47,7 +46,7 @@ export const GraphView = () => {
   // SDK hooks
   const { activeWorkflowId } = useActiveWorkflow();
   const [direction] = useLayoutDirection();
-  const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
+  const navigate = useNavigation();
   const [graphTipDismissed, setGraphTipDismissed] = useAtom(
     graphControlsTipDismissedAtom
   );
@@ -121,7 +120,7 @@ export const GraphView = () => {
       nodeId: node.id,
       functionName: node.id, // May or may not be an actual function name
     };
-    dispatchNavigation(input);
+    navigate(input);
   };
 
   useLayoutEffect(() => {

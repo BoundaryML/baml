@@ -5,17 +5,16 @@
  * to test how the app reacts to code navigation events
  */
 
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { Play, FileCode, Folder, FolderOpen, ChevronRight, ChevronDown, Plus, Edit, GitBranch, RefreshCw, Layers, CornerDownLeft, Square } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { bamlFilesAtom, SelectionQuery } from '../../../sdk/atoms/core.atoms';
 import type { BAMLTest, CodeClickEvent, BAMLFile } from '../../../sdk/types';
-import { useBAMLSDK } from '../../../sdk/hooks';
+import { useBAMLSDK, useNavigation } from '../../../sdk/hooks';
 import type { VscodeToWebviewCommand } from '../../../baml_wasm_web/vscode-to-webview-rpc';
 import { useRunBamlTests } from '../../../shared/baml-project-panel/playground-panel/prompt-preview/test-panel/test-runner';
 import { unifiedSelectionAtom } from '../../../shared/baml-project-panel/playground-panel/unified-atoms';
 import type { FunctionWithCallGraph, NodeType } from '../../../sdk/interface';
-import { navigationDispatcherAtom } from '../../../sdk/navigation';
 import type { NavigationInput } from '../../../sdk/navigation';
 
 type DebugNodeType = NodeType | 'workflow' | 'block';
@@ -93,7 +92,7 @@ function buildNodesByFile(
   };
 
   for (const file of files) {
-    for (const func of file.functions as FunctionWithCallGraph[]) {
+    for (const func of file.functions) {
       addNode(file.path, {
         id: func.name,
         label: func.name,
@@ -204,7 +203,7 @@ export function DebugPanel() {
   const sdk = useBAMLSDK();
   const { runTests: runBamlTests } = useRunBamlTests();
   const [bamlFiles, setBAMLFiles] = useAtom(bamlFilesAtom);
-  const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
+  const navigate = useNavigation();
   const selection = useAtomValue(unifiedSelectionAtom);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [workflows, setWorkflows] = useState<FunctionWithCallGraph[]>([]);
@@ -225,7 +224,7 @@ export function DebugPanel() {
   }, [sdk, bamlFiles]);
 
   const nodesByFile = useMemo(
-    () => buildNodesByFile((bamlFiles as BAMLFile[]) ?? [], workflows),
+    () => buildNodesByFile(bamlFiles ?? [], workflows),
     [bamlFiles, workflows]
   );
 
@@ -254,7 +253,7 @@ export function DebugPanel() {
       functionType: mapNodeTypeToEventType(node.nodeType),
     };
     console.log('🔍 Debug panel node click:', { ...input, origin: node.origin });
-    dispatchNavigation(input);
+    navigate(input);
   };
 
   const handleTestClick = (test: BAMLTest) => {
@@ -266,7 +265,7 @@ export function DebugPanel() {
       functionName: test.functionName,
     };
     console.log('🔍 Simulated test click:', input);
-    dispatchNavigation(input);
+    navigate(input);
   };
 
   const handleTestRun = async (test: BAMLTest, e: React.MouseEvent) => {

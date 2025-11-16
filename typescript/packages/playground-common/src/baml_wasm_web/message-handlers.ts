@@ -26,7 +26,7 @@ export async function handleIDEMessage(
 
   switch (command) {
     case 'update_cursor':
-      // Use SDK navigation method
+      // Use SDK navigation update cursor method
       sdk.navigation.updateCursor(content);
       break;
 

@@ -81,6 +81,15 @@ type SelectionState =
 
 Workflow nodes have complex IDs like `ConditionalWorkflow|root:0|hdr:validate-payload-structure:0`, but the detail panel needs to know which function to display. A node with label "validate payload structure" might call `ValidateInput()`, and we need that mapping.
 
+**Note:** Nodes can call **multiple functions**:
+```
+### some node name
+callFunc1()
+callFunc2()
+```
+
+We track the **primary function** (first one) in `functionName` for the detail panel, but the full list is available in the node's metadata.
+
 ### Event Model
 
 ```typescript

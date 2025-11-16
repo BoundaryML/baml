@@ -24,7 +24,7 @@ export class NavigationCoordinator {
     private engine: RuleEngine,
     private stateManager: StateManager,
     private logger: NavigationLogger
-  ) {}
+  ) { }
 
   /**
    * Main entry point for navigation
@@ -41,15 +41,22 @@ export class NavigationCoordinator {
     try {
       // 1. Enrich target with context
       const target = this.enricher.enrich(input);
+      console.log('[coordinator] target', target);
 
       // 2. Get current state
-      const current = atomGet(unifiedSelectionStateAtom) as SelectionState;
-
+      const current = atomGet(unifiedSelectionStateAtom);
+      console.log('[coordinator] current', current);
       // 3. Decide where to go
       const { state: targetState, rule } = this.engine.decide(target, current);
-
-      // 4. Build transaction
-      const effects = this.stateManager.buildTransaction(targetState, current);
+      console.log('[coordinator] targetState', targetState);
+      console.log('[coordinator] rule', rule);
+      // 4. Build transaction (pass input and context for side effects)
+      const effects = this.stateManager.buildTransaction(
+        targetState,
+        current,
+        input,
+        this.enricher.getContext()
+      );
 
       // 5. Apply transaction
       await this.stateManager.apply(targetState, effects, atomSet);

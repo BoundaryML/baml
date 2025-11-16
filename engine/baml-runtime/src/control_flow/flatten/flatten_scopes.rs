@@ -2,9 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 
-use crate::control_flow::{ControlFlowVisualization, Edge, Node, NodeId, NodeType};
-
 use super::{build_children_map, collect_subtree, node_depth};
+use crate::control_flow::{ControlFlowVisualization, Edge, Node, NodeId, NodeType};
 
 /// Pass 3: flatten BranchArm / OtherScope nodes so header nodes appear at the correct depth.
 pub fn flatten_branch_arms_and_scopes(viz: &ControlFlowVisualization) -> ControlFlowVisualization {
@@ -167,8 +166,9 @@ fn find_exit_nodes(subtree: &HashSet<NodeId>, edges: &IndexMap<NodeId, Vec<Edge>
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use internal_baml_core::ast::Span;
+
+    use super::*;
 
     fn make_node(id: u32, parent: Option<u32>, node_type: NodeType, label: &str) -> Node {
         Node {

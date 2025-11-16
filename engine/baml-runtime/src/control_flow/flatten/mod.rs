@@ -1,5 +1,6 @@
-use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
+
+use indexmap::IndexMap;
 
 use crate::control_flow::{ControlFlowVisualization, Edge, Node, NodeId};
 
@@ -83,8 +84,9 @@ pub(crate) fn node_depth(node_id: NodeId, nodes: &IndexMap<NodeId, Node>) -> usi
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use internal_baml_core::ast::Span;
+
+    use super::*;
 
     fn sample_viz() -> ControlFlowVisualization {
         let mut viz = ControlFlowVisualization::default();

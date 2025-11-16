@@ -81,6 +81,7 @@ describe('Navigation Integration - Unified State', () => {
         mode: 'workflow',
         workflowId: 'simpleWorkflow',
         selectedNodeId: 'simpleWorkflow',
+        functionName: null,
         testName: null,
       });
 
@@ -98,6 +99,7 @@ describe('Navigation Integration - Unified State', () => {
         mode: 'workflow',
         workflowId: 'simpleWorkflow',
         selectedNodeId: 'simpleWorkflow',
+        functionName: null,
         testName: null,
       });
 
@@ -184,6 +186,7 @@ describe('Navigation Integration - Unified State', () => {
         mode: 'workflow',
         workflowId: 'simpleWorkflow',
         selectedNodeId: 'processData',
+        functionName: null,
         testName: null,
       });
 
@@ -223,6 +226,7 @@ describe('Navigation Integration - Unified State', () => {
         mode: 'workflow',
         workflowId: 'simpleWorkflow',
         selectedNodeId: 'simpleWorkflow',
+        functionName: null,
         testName: null,
       });
       store.set(activeTabAtom, 'graph');
@@ -240,6 +244,7 @@ describe('Navigation Integration - Unified State', () => {
         mode: 'workflow',
         workflowId: 'simpleWorkflow',
         selectedNodeId: 'simpleWorkflow',
+        functionName: null,
         testName: null,
       });
       store.set(activeTabAtom, 'graph');
@@ -270,6 +275,7 @@ describe('Navigation Integration - Unified State', () => {
         mode: 'workflow',
         workflowId: 'simpleWorkflow',
         selectedNodeId: 'simpleWorkflow',
+        functionName: null,
         testName: null,
       });
 
@@ -278,6 +284,7 @@ describe('Navigation Integration - Unified State', () => {
         mode: 'workflow',
         workflowId: 'conditionalWorkflow',
         selectedNodeId: 'handleSuccess',
+        functionName: null,
         testName: null,
       });
       store.set(activeTabAtom, 'graph');
@@ -320,6 +327,7 @@ describe('Navigation Integration - Unified State', () => {
         mode: 'workflow',
         workflowId: 'simpleWorkflow',
         selectedNodeId: 'processData',
+        functionName: null,
         testName: null,
       });
       store.set(activeTabAtom, 'graph');

@@ -37,7 +37,7 @@ import {
 // } from '@typescript/vfs';
 import { useTheme } from 'next-themes';
 import ts from 'typescript';
-import { flashRangesAtom, updateCursorAtom } from '../playground-panel/atoms';
+import { flashRangesAtom } from '../playground-panel/atoms';
 
 const extensionMap = {
   js: [langs.javascript()],
@@ -232,7 +232,7 @@ export const CodeMirrorViewer = ({
   //   // return () => clearInterval(interval); // Clean up the interval on component unmount
   // }, [fileContent, ref, shouldScrollDown])
 
-  const setUpdateCursor = useSetAtom(updateCursorAtom);
+  // const setUpdateCursor = useSetAtom(updateCursorAtom);
 
   useEffect(() => {
     async function initializeExtensions() {
@@ -428,11 +428,11 @@ export const CodeMirrorViewer = ({
             // Calculate column by finding the difference between cursor position and line start
             const column = pos - data.line.from + 1;
 
-            setUpdateCursor({
-              fileName: fileContent.id,
-              line,
-              column,
-            });
+            // setUpdateCursor({
+            //   fileName: fileContent.id,
+            //   line,
+            //   column,
+            // });
           }}
           value={fileContent.code}
           onChange={(value) => {

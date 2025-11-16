@@ -30,21 +30,19 @@ export function DebugBanner({ currentMode, onModeChange }: DebugBannerProps) {
         <div className="flex gap-2">
           <button
             onClick={() => onModeChange('mock')}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-              currentMode === 'mock'
-                ? 'bg-black text-yellow-500'
-                : 'bg-yellow-600 hover:bg-yellow-700 text-white'
-            }`}
+            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${currentMode === 'mock'
+              ? 'bg-black text-yellow-500'
+              : 'bg-yellow-600 hover:bg-yellow-700 text-white'
+              }`}
           >
             Mock Runtime
           </button>
           <button
             onClick={() => onModeChange('wasm')}
-            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-              currentMode === 'wasm'
-                ? 'bg-black text-yellow-500'
-                : 'bg-yellow-600 hover:bg-yellow-700 text-white'
-            }`}
+            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${currentMode === 'wasm'
+              ? 'bg-black text-yellow-500'
+              : 'bg-yellow-600 hover:bg-yellow-700 text-white'
+              }`}
           >
             WASM Runtime
           </button>
@@ -101,6 +99,7 @@ export function getPersistedRuntimeMode(): RuntimeMode | null {
   try {
     const mode = localStorage.getItem('baml_runtime_mode');
     if (mode === 'mock' || mode === 'wasm') {
+      console.log('🔧 Getting persisted runtime mode:', mode);
       return mode;
     }
   } catch (e) {

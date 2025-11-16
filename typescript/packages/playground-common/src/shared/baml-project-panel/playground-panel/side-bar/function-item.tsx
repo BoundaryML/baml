@@ -1,6 +1,6 @@
 import { SidebarMenuButton } from '@baml/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { Bot, FunctionSquare } from 'lucide-react';
 import * as React from 'react';
 import { vscode } from '../../vscode';
@@ -11,7 +11,7 @@ import {
   testHistoryAtom,
 } from '../prompt-preview/test-panel/atoms';
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils';
-import { navigationDispatcherAtom } from '../../../../sdk/navigation';
+import { useNavigation } from '../../../../sdk/hooks';
 
 interface FunctionItemProps {
   functionName: string;
@@ -27,7 +27,7 @@ export function FunctionItem({ functionName, tests, functionFlavor, isSelected =
     [functionName],
   );
   const fn = useAtomValue(fnAtom);
-  const dispatchNavigation = useSetAtom(navigationDispatcherAtom);
+  const navigate = useNavigation();
 
   const testHistory = useAtomValue(testHistoryAtom);
   const selectedIndex = useAtomValue(selectedHistoryIndexAtom);
@@ -157,8 +157,8 @@ export function FunctionItem({ functionName, tests, functionFlavor, isSelected =
       : fn?.functionFlavor === 'llm' ? 'llm_function'
       : 'function';
 
-    // Dispatch navigation event (same as DebugPanel)
-    dispatchNavigation({
+    // Navigate to function (same as DebugPanel)
+    navigate({
       kind: 'function',
       functionName,
       functionType,

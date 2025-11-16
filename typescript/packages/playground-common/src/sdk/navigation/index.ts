@@ -16,9 +16,6 @@ export type {
   NavigationLogEntry,
 } from './types';
 
-// Export dispatcher atom (main entry point for components)
-export { navigationDispatcherAtom } from './dispatcher';
-
 // Export coordinator (for advanced usage)
 export { NavigationCoordinator, createNavigationCoordinator } from './coordinator';
 

@@ -72,7 +72,7 @@ import type { FunctionWithCallGraph } from '../interface';
 import { WasmRuntime } from '@gloo-ai/baml-schema-wasm-web';
 
 export class JotaiStorage implements SDKStorage {
-  constructor(private store: ReturnType<typeof createStore>) { }
+  constructor(public store: ReturnType<typeof createStore>) { }
 
   // ============================================================================
   // Runtime Instance (source of truth for derived state)
@@ -114,6 +114,7 @@ export class JotaiStorage implements SDKStorage {
         mode: 'workflow',
         workflowId: id,
         selectedNodeId: id,
+        functionName: null,
         testName: null,
       });
     }
@@ -367,6 +368,7 @@ export class JotaiStorage implements SDKStorage {
   setSelectedFunctionName(name: string | null) {
     const current = this.store.get(unifiedSelectionStateAtom);
     if (name === null) {
+      console.log('setting selected function name to null');
       this.store.set(unifiedSelectionStateAtom, { mode: 'empty' });
     } else {
       // Preserve testName if we're already in function mode

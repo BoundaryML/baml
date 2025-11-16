@@ -2,7 +2,7 @@
 import { Label } from '@baml/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@baml/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@baml/ui/table'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue } from 'jotai'
 import { Check, Copy, Play, Square } from 'lucide-react'
 import * as React from 'react'
 
@@ -18,7 +18,7 @@ import { getExplanation, getStatus, getTestStateResponse } from '../testStateUti
 import { ResponseViewType, tabularViewConfigAtom } from './atoms'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ParsedResponseRenderer } from './ParsedResponseRender'
-import { navigationDispatcherAtom } from '../../../../../../sdk/navigation'
+import { useNavigation } from '../../../../../../sdk/hooks'
 import { unifiedSelectionStateAtom } from '../../../../../../sdk/atoms/core.atoms'
 import { TestStatus } from './TestStatus'
 import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
@@ -121,7 +121,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
   const [config, setConfig] = useAtom(tabularViewConfigAtom)
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
   const selection = useAtomValue(unifiedSelectionStateAtom)
-  const dispatchNavigation = useSetAtom(navigationDispatcherAtom)
+  const navigate = useNavigation()
 
   const toggleConfig = (key: keyof typeof config) => {
     setConfig((prev) => ({
@@ -238,8 +238,8 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                   isSelected && 'border-purple-500/20 shadow-sm dark:border-purple-900/30 dark:bg-muted/90',
                 )}
                 onClick={() => {
-                  // Dispatch test navigation
-                  dispatchNavigation({
+                  // Navigate to test
+                  navigate({
                     kind: 'test',
                     functionName: test.functionName,
                     testName: test.testName,

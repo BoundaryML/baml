@@ -13,6 +13,7 @@ import type {
   CacheEntry,
   BAMLEvent,
   NavigationIntent,
+  BAMLFile,
 } from '../types';
 import type { BamlRuntimeInterface } from '../runtime/BamlRuntimeInterface';
 import type { FunctionMetadata, FunctionWithCallGraph } from '../interface';
@@ -44,6 +45,7 @@ export interface WorkflowSelection {
   mode: 'workflow';
   workflowId: string;        // ID of the workflow being viewed
   selectedNodeId: string;    // Currently selected node within the workflow
+  functionName: string | null;  // Function called by this node (if any)
   testName: string | null;   // Active test case (if any)
 }
 
@@ -107,6 +109,7 @@ export const workflowsAtom = atom((get) => {
  */
 export const activeWorkflowIdAtom = atom((get) => {
   const state = get(unifiedSelectionStateAtom);
+  console.log('[activeWorkflowIdAtom] state', state);
   return state.mode === 'workflow' ? state.workflowId : null;
 });
 
@@ -268,7 +271,7 @@ export const inputsDirtyAtom = atom<boolean>(false);
 /**
  * BAML files
  */
-export const bamlFilesAtom = atom<any[]>([]);
+export const bamlFilesAtom = atom<BAMLFile[]>([]);
 
 // ============================================================================
 // DERIVED STATE (computed from core state)

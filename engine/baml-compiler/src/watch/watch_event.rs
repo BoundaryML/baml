@@ -3,8 +3,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::hir::HeaderContext;
 use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeIR};
+
+use crate::hir::HeaderContext;
 
 /// Unique identifier for a streaming watch notification
 pub type StreamId = String;

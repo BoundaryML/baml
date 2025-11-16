@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
-import { useAtomValue, useSetAtom } from 'jotai'
+import { useAtomValue } from 'jotai'
 import { Play, Square } from 'lucide-react'
 import { useEffect, useRef, useCallback } from 'react'
 import { Button } from '@baml/ui/button'
@@ -13,7 +13,7 @@ import { getStatus } from '../testStateUtils'
 import { ResponseRenderer } from './ResponseRenderer'
 import { TestStatus } from './TestStatus'
 import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
-import { navigationDispatcherAtom } from '../../../../../../sdk/navigation'
+import { useNavigation } from '../../../../../../sdk/hooks'
 import { unifiedSelectionStateAtom } from '../../../../../../sdk/atoms/core.atoms'
 
 export const CardView = ({ currentRun }: { currentRun?: TestHistoryRun }) => {
@@ -46,7 +46,7 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
   const response = useAtomValue(testCaseResponseAtom(testId))
   const displayResponse = historicalResponse || response
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
-  const dispatchNavigation = useSetAtom(navigationDispatcherAtom)
+  const navigate = useNavigation()
   const selection = useAtomValue(unifiedSelectionStateAtom)
   const cardRef = useRef<HTMLDivElement>(null)
 
@@ -82,7 +82,7 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
         isSelected && 'border-purple-500/20 shadow-sm dark:border-purple-900/30 dark:bg-muted/90',
       )}
       onClick={() => {
-        dispatchNavigation({
+        navigate({
           kind: 'test',
           functionName: testId.functionName,
           testName: testId.testName,

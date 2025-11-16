@@ -102,7 +102,6 @@ export const UnifiedPromptPreview = () => {
   const viewMode = useAtomValue(viewModeAtom);
   const [activeTab, setActiveTab] = useAtom(activeTabAtom);
   const [showCopied, setShowCopied] = React.useState(false);
-  const curl = useAtomValue(curlAtom);
 
   // Auto-switch to default tab when view mode changes
   useEffect(() => {
@@ -120,20 +119,13 @@ export const UnifiedPromptPreview = () => {
   };
 
   const handleCopy = () => {
-    // If the cURL tab is active, copy the generated cURL (without secrets)
+    // If the cURL tab is active, we can't copy here - the PromptPreviewCurl component handles its own copying
     if (activeTab === 'curl') {
-      if (curl.state === 'hasData' && curl.data && !(curl.data instanceof Error)) {
-        const text = curl.data.curlTextWithoutSecrets ?? '';
-        if (text) {
-          void navigator.clipboard.writeText(text);
-          setShowCopied(true);
-          setTimeout(() => setShowCopied(false), 1500);
-        }
-      }
+      // The cURL component has its own copy button
       return;
     }
 
-    // Otherwise copy the human-readable prompt preview
+    // Copy the human-readable prompt preview
     if (!renderedPrompt) return;
 
     let textToCopy = '';
@@ -186,7 +178,7 @@ export const UnifiedPromptPreview = () => {
                 )}
               </TabsList>
               <FunctionMetadata />
-              {viewMode.showLLMTabs && (
+              {viewMode.showLLMTabs && activeTab !== 'curl' && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -199,7 +191,7 @@ export const UnifiedPromptPreview = () => {
                     <Copy className="size-4 flex-shrink-0" />
                   )}
                   <span className={getButtonTextClass()}>
-                    {showCopied ? 'Copied!' : activeTab === 'curl' ? 'Copy cURL' : 'Copy Prompt'}
+                    {showCopied ? 'Copied!' : 'Copy Prompt'}
                   </span>
                 </Button>
               )}
