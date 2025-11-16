@@ -4142,6 +4142,7 @@ dependencies = [
  "minijinja",
  "serde",
  "serde_json",
+ "serde_yaml",
  "strsim",
  "strum",
  "toon",

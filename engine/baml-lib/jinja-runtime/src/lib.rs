@@ -122,6 +122,57 @@ pub fn minijinja_value_to_json(value: &minijinja::Value) -> Result<serde_json::V
     }
 }
 
+/// Convert a minijinja::Value to a YAML string while preserving all BAML-specific aliases.
+pub fn minijinja_value_to_yaml(value: &minijinja::Value) -> Result<String, String> {
+    // Reuse the JSON conversion which already preserves aliases for enums/classes/lists.
+    let json_value = minijinja_value_to_json(value)?;
+    serde_yaml::to_string(&json_value).map_err(|e| format!("Failed to serialize to YAML: {}", e))
+}
+
+fn encode_value_to_toon(
+    value: &minijinja::Value,
+    kwargs: &Kwargs,
+) -> Result<String, minijinja::Error> {
+    let json_value = minijinja_value_to_json(value)
+        .map_err(|e| minijinja::Error::new(minijinja::ErrorKind::BadSerialization, e))?;
+
+    let mut options = toon::EncodeOptions::default();
+
+    if let Ok(indent) = kwargs.get::<usize>("indent") {
+        options.indent = indent;
+    }
+
+    if let Ok(delimiter_str) = kwargs.get::<String>("delimiter") {
+        options.delimiter = match delimiter_str.as_str() {
+            "comma" => toon::Delimiter::Comma,
+            "tab" => toon::Delimiter::Tab,
+            "pipe" => toon::Delimiter::Pipe,
+            _ => {
+                return Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    format!(
+                        "Invalid delimiter '{}'. Use 'comma', 'tab', or 'pipe'",
+                        delimiter_str
+                    ),
+                ))
+            }
+        };
+    }
+
+    if let Ok(marker) = kwargs.get::<String>("length_marker") {
+        if marker.len() == 1 {
+            options.length_marker = Some(marker.chars().next().unwrap());
+        } else {
+            return Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                format!("length_marker must be a single character, got '{}'", marker),
+            ));
+        }
+    }
+
+    Ok(toon::encode(&json_value, Some(options)))
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Serialize)]
 pub struct RenderContext_Client {
@@ -179,53 +230,42 @@ fn render_minijinja(params: MinijinjaRenderParams) -> Result<RenderedPrompt, min
     } = params;
     let mut env = get_env();
 
-    // Add toon filter (needs to be here to access MinijinjaBamlClass/etc)
+    // Add generic format filter (needs access to MinijinjaBamlClass/etc)
     env.add_filter(
-        "toon",
+        "format",
         |value: minijinja::Value, kwargs: minijinja::value::Kwargs| {
-            // Convert to JSON using our helper that handles aliases
-            let json_value = minijinja_value_to_json(&value)
-                .map_err(|e| minijinja::Error::new(minijinja::ErrorKind::BadSerialization, e))?;
-
-            // Parse toon options
-            let mut options = toon::EncodeOptions::default();
-
-            if let Ok(indent) = kwargs.get::<usize>("indent") {
-                options.indent = indent;
-            }
-
-            if let Ok(delimiter_str) = kwargs.get::<String>("delimiter") {
-                options.delimiter = match delimiter_str.as_str() {
-                    "comma" => toon::Delimiter::Comma,
-                    "tab" => toon::Delimiter::Tab,
-                    "pipe" => toon::Delimiter::Pipe,
-                    _ => {
-                        return Err(minijinja::Error::new(
-                            minijinja::ErrorKind::InvalidOperation,
-                            format!(
-                                "Invalid delimiter '{}'. Use 'comma', 'tab', or 'pipe'",
-                                delimiter_str
-                            ),
-                        ))
-                    }
-                };
-            }
-
-            if let Ok(marker) = kwargs.get::<String>("length_marker") {
-                if marker.len() == 1 {
-                    options.length_marker = Some(marker.chars().next().unwrap());
-                } else {
-                    return Err(minijinja::Error::new(
+            let format_type = kwargs
+                .get::<String>("type")
+                .or_else(|_| kwargs.get::<String>("format"))
+                .map_err(|_| {
+                    minijinja::Error::new(
                         minijinja::ErrorKind::InvalidOperation,
-                        format!("length_marker must be a single character, got '{}'", marker),
-                    ));
-                }
-            }
+                        "format filter requires 'type' keyword argument",
+                    )
+                })?;
 
-            Ok(toon::encode(&json_value, Some(options)))
+            match format_type.to_lowercase().as_str() {
+                "yaml" => minijinja_value_to_yaml(&value)
+                    .map_err(|e| minijinja::Error::new(minijinja::ErrorKind::BadSerialization, e)),
+                "json" => {
+                    let json_value = minijinja_value_to_json(&value).map_err(|e| {
+                        minijinja::Error::new(minijinja::ErrorKind::BadSerialization, e)
+                    })?;
+                    serde_json::to_string(&json_value).map_err(|e| {
+                        minijinja::Error::new(minijinja::ErrorKind::BadSerialization, e.to_string())
+                    })
+                }
+                "toon" => encode_value_to_toon(&value, &kwargs),
+                other => Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    format!(
+                        "Unsupported format type '{}'. Supported types: 'yaml', 'json', 'toon'",
+                        other
+                    ),
+                )),
+            }
         },
     );
-
     // dedent
     let whitespace_length = template
         .split('\n')
@@ -3156,7 +3196,7 @@ Enum value is not equal to the "ALIAS_B" string, as expected
         )?;
 
         let rendered = render_prompt(
-            "{{ _.chat('system') }}\nHere's the user data:\n{{ user_data|toon }}",
+            "{{ _.chat('system') }}\nHere's the user data:\n{{ user_data|format(type=\"toon\") }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -3217,7 +3257,7 @@ Enum value is not equal to the "ALIAS_B" string, as expected
         let ir = make_test_ir("")?;
 
         let rendered = render_prompt(
-            "{{ items|toon(delimiter='pipe', length_marker='#') }}",
+            "{{ items|format(type=\"toon\", delimiter='pipe', length_marker='#') }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -3290,7 +3330,7 @@ Enum value is not equal to the "ALIAS_B" string, as expected
         )?;
 
         let rendered = render_prompt(
-            "{{ data|toon }}",
+            "{{ data|format(type=\"toon\") }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -3348,7 +3388,7 @@ Enum value is not equal to the "ALIAS_B" string, as expected
         )?;
 
         let rendered = render_prompt(
-            "{{ status|toon }}",
+            "{{ status|format(type=\"toon\") }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -3414,7 +3454,7 @@ Enum value is not equal to the "ALIAS_B" string, as expected
         )?;
 
         let rendered = render_prompt(
-            "{{ user|toon }}",
+            "{{ user|format(type=\"toon\") }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -3478,7 +3518,7 @@ Enum value is not equal to the "ALIAS_B" string, as expected
         )?;
 
         let rendered = render_prompt(
-            "{{ person|toon }}",
+            "{{ person|format(type=\"toon\") }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -3538,7 +3578,7 @@ Enum value is not equal to the "ALIAS_B" string, as expected
         )?;
 
         let rendered = render_prompt(
-            "{{ statuses|toon }}",
+            "{{ statuses|format(type=\"toon\") }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -3616,7 +3656,7 @@ Enum value is not equal to the "ALIAS_B" string, as expected
         )?;
 
         let rendered = render_prompt(
-            "{{ users|toon }}",
+            "{{ users|format(type=\"toon\") }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -3685,7 +3725,7 @@ Enum value is not equal to the "ALIAS_B" string, as expected
         )?;
 
         let rendered = render_prompt(
-            "{{ status_map|toon }}",
+            "{{ status_map|format(type=\"toon\") }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -3788,7 +3828,7 @@ Enum value is not equal to the "ALIAS_B" string, as expected
         )?;
 
         let rendered = render_prompt(
-            "{{ organization|toon }}",
+            "{{ organization|format(type=\"toon\") }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
@@ -3820,6 +3860,570 @@ Enum value is not equal to the "ALIAS_B" string, as expected
                 let expected = toon::encode(&json_value, None);
 
                 assert_eq!(content, expected);
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_yaml_basic() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "data".to_string(),
+            BamlValue::Map(BamlMap::from([
+                ("name".to_string(), BamlValue::String("Alice".to_string())),
+                ("age".to_string(), BamlValue::Int(30)),
+            ])),
+        )]));
+
+        let ir = make_test_ir("")?;
+
+        let rendered = render_prompt(
+            "{{ data|format(type=\"yaml\") }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                let expected = serde_yaml::to_string(&serde_json::json!({
+                    "name": "Alice",
+                    "age": 30
+                }))
+                .unwrap();
+                assert_eq!(content, expected);
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_render_json() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "data".to_string(),
+            BamlValue::Map(BamlMap::from([
+                ("name".to_string(), BamlValue::String("Alice".to_string())),
+                ("age".to_string(), BamlValue::Int(30)),
+            ])),
+        )]));
+
+        let ir = make_test_ir("")?;
+
+        let rendered = render_prompt(
+            "{{ data|format(type=\"json\") }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                let expected =
+                    serde_json::to_string(&serde_json::json!({ "name": "Alice", "age": 30 }))
+                        .unwrap();
+                assert_eq!(content, expected);
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_yaml_with_enum_alias() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "status".to_string(),
+            BamlValue::Enum("Status".to_string(), "Active".to_string()),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            enum Status {
+                Active @alias("active")
+                Inactive @alias("inactive")
+                Pending
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ status|format(type=\"yaml\") }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                let expected = serde_yaml::to_string(&serde_json::json!("active")).unwrap();
+                assert_eq!(content, expected);
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_yaml_with_enum_in_class() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "user".to_string(),
+            BamlValue::Class(
+                "User".to_string(),
+                BamlMap::from([
+                    ("name".to_string(), BamlValue::String("Alice".to_string())),
+                    (
+                        "status".to_string(),
+                        BamlValue::Enum("Status".to_string(), "Active".to_string()),
+                    ),
+                ]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            enum Status {
+                Active @alias("active")
+                Inactive @alias("inactive")
+                Pending
+            }
+            class User {
+                name string
+                status Status
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ user|format(type=\"yaml\") }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                assert!(content.contains("status: active") || content.contains("status: 'active'"));
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_yaml_with_class_aliases() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "person".to_string(),
+            BamlValue::Class(
+                "Person".to_string(),
+                BamlMap::from([
+                    (
+                        "real_name".to_string(),
+                        BamlValue::String("Alice".to_string()),
+                    ),
+                    ("user_age".to_string(), BamlValue::Int(30)),
+                ]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class Person {
+                real_name string @alias("name")
+                user_age int @alias("age")
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ person|format(type=\"yaml\") }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                let expected = serde_yaml::to_string(&serde_json::json!({
+                    "name": "Alice",
+                    "age": 30
+                }))
+                .unwrap();
+                assert_eq!(content, expected);
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_yaml_with_list_of_enums() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "statuses".to_string(),
+            BamlValue::List(vec![
+                BamlValue::Enum("Status".to_string(), "Active".to_string()),
+                BamlValue::Enum("Status".to_string(), "Pending".to_string()),
+                BamlValue::Enum("Status".to_string(), "Inactive".to_string()),
+            ]),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            enum Status {
+                Active @alias("active")
+                Inactive @alias("inactive")
+                Pending
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ statuses|format(type=\"yaml\") }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                assert!(content.contains("active"));
+                assert!(content.contains("Pending"));
+                assert!(content.contains("inactive"));
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_yaml_with_list_of_classes() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "users".to_string(),
+            BamlValue::List(vec![
+                BamlValue::Class(
+                    "User".to_string(),
+                    BamlMap::from([
+                        ("name".to_string(), BamlValue::String("Alice".to_string())),
+                        (
+                            "status".to_string(),
+                            BamlValue::Enum("Status".to_string(), "Active".to_string()),
+                        ),
+                    ]),
+                ),
+                BamlValue::Class(
+                    "User".to_string(),
+                    BamlMap::from([
+                        ("name".to_string(), BamlValue::String("Bob".to_string())),
+                        (
+                            "status".to_string(),
+                            BamlValue::Enum("Status".to_string(), "Pending".to_string()),
+                        ),
+                    ]),
+                ),
+            ]),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            enum Status {
+                Active @alias("active")
+                Inactive @alias("inactive")
+                Pending
+            }
+            class User {
+                name string
+                status Status
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ users|format(type=\"yaml\") }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                assert!(content.contains("active"));
+                assert!(content.contains("Pending"));
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_yaml_with_map_of_enums() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "status_map".to_string(),
+            BamlValue::Map(BamlMap::from([
+                (
+                    "alice".to_string(),
+                    BamlValue::Enum("Status".to_string(), "Active".to_string()),
+                ),
+                (
+                    "bob".to_string(),
+                    BamlValue::Enum("Status".to_string(), "Pending".to_string()),
+                ),
+                (
+                    "charlie".to_string(),
+                    BamlValue::Enum("Status".to_string(), "Inactive".to_string()),
+                ),
+            ])),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            enum Status {
+                Active @alias("active")
+                Inactive @alias("inactive")
+                Pending
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ status_map|format(type=\"yaml\") }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                assert!(content.contains("alice: active") || content.contains("alice: 'active'"));
+                assert!(
+                    content.contains("charlie: inactive")
+                        || content.contains("charlie: 'inactive'")
+                );
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_yaml_with_nested_aliases() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "organization".to_string(),
+            BamlValue::Class(
+                "Organization".to_string(),
+                BamlMap::from([
+                    (
+                        "org_name".to_string(),
+                        BamlValue::String("Acme Corp".to_string()),
+                    ),
+                    (
+                        "members".to_string(),
+                        BamlValue::List(vec![
+                            BamlValue::Class(
+                                "Member".to_string(),
+                                BamlMap::from([
+                                    (
+                                        "user_name".to_string(),
+                                        BamlValue::String("Alice".to_string()),
+                                    ),
+                                    (
+                                        "role".to_string(),
+                                        BamlValue::Enum("Role".to_string(), "Admin".to_string()),
+                                    ),
+                                ]),
+                            ),
+                            BamlValue::Class(
+                                "Member".to_string(),
+                                BamlMap::from([
+                                    (
+                                        "user_name".to_string(),
+                                        BamlValue::String("Bob".to_string()),
+                                    ),
+                                    (
+                                        "role".to_string(),
+                                        BamlValue::Enum("Role".to_string(), "User".to_string()),
+                                    ),
+                                ]),
+                            ),
+                        ]),
+                    ),
+                ]),
+            ),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            enum Role {
+                Admin @alias("admin")
+                User @alias("user")
+            }
+            class Member {
+                user_name string @alias("name")
+                role Role
+            }
+            class Organization {
+                org_name string @alias("name")
+                members Member[]
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ organization|format(type=\"yaml\") }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                assert!(!content.contains("org_name"));
+                assert!(!content.contains("user_name"));
+                assert!(content.contains("role: admin"));
+                assert!(content.contains("role: user"));
             }
             _ => panic!("Expected Completion prompt"),
         }

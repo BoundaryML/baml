@@ -4,7 +4,7 @@ title: Token Optimization
 
 # Optimizing Token Usage with TOON
 
-When working with LLMs, token usage directly impacts both cost and latency. BAML provides the `toon` filter to help you reduce token consumption by 30-60% when passing structured data in prompts.
+When working with LLMs, token usage directly impacts both cost and latency. BAML provides the `format` filter (use `type="toon"`) to help you reduce token consumption by 30-60% when passing structured data in prompts.
 
 ## What is TOON?
 
@@ -65,7 +65,7 @@ When you pass products to this function, they're serialized as JSON:
 
 ### Using TOON
 
-Simply add the `toon` filter:
+Simply add the `format(type="toon")` filter:
 
 ```baml
 function AnalyzeProducts(products: Product[]) -> string {
@@ -73,7 +73,7 @@ function AnalyzeProducts(products: Product[]) -> string {
   prompt #"
     Analyze these products and provide insights:
     
-    {{ products|toon }}
+    {{ products|format(type="toon") }}
     
     Focus on pricing trends and inventory status.
   "#
@@ -97,7 +97,7 @@ Now the same data is serialized as TOON:
 Control spacing for better readability:
 
 ```jinja
-{{ products|toon(indent=4) }}
+{{ products|format(type="toon", indent=4) }}
 ```
 
 ### Alternative Delimiters
@@ -106,13 +106,13 @@ Choose the delimiter that works best for your data:
 
 ```jinja
 {# Comma-separated (default) #}
-{{ products|toon(delimiter="comma") }}
+{{ products|format(type="toon", delimiter="comma") }}
 
 {# Tab-separated (more token savings) #}
-{{ products|toon(delimiter="tab") }}
+{{ products|format(type="toon", delimiter="tab") }}
 
 {# Pipe-separated (best for data with commas) #}
-{{ products|toon(delimiter="pipe") }}
+{{ products|format(type="toon", delimiter="pipe") }}
 ```
 
 ### Length Markers
@@ -120,7 +120,7 @@ Choose the delimiter that works best for your data:
 Add length indicators for clarity:
 
 ```jinja
-{{ products|toon(length_marker="#") }}
+{{ products|format(type="toon", length_marker="#") }}
 ```
 
 Output:
@@ -155,7 +155,7 @@ function AnalyzeTransactions(
     
     {{ _.role("user") }}
     Transaction data:
-    {{ transactions|toon(delimiter="pipe") }}
+    {{ transactions|format(type="toon", delimiter="pipe") }}
     
     Question: {{ question }}
   "#
@@ -216,7 +216,7 @@ function SmartAnalysis(data: Dataset[], context: string) -> Analysis {
     
     {{ _.role("user") }}
     Data:
-    {{ data|toon(delimiter="tab") }}  // Use TOON for structured data
+    {{ data|format(type="toon", delimiter="tab") }}  // Use TOON for structured data
     
     Provide a brief analysis.
   "#
@@ -229,23 +229,23 @@ TOON provides maximum benefit for arrays:
 
 ```jinja
 {# Good - array of objects #}
-{{ products|toon }}
+{{ products|format(type="toon") }}
 
 {# Less beneficial - single object #}
-{{ user|toon }}  // Consider using JSON instead
+{{ user|format(type="toon") }}  // Consider using JSON instead
 ```
 
 ### 3. Choose Delimiters Based on Content
 
 ```jinja
 {# Data contains commas? Use pipe #}
-{{ addresses|toon(delimiter="pipe") }}
+{{ addresses|format(type="toon", delimiter="pipe") }}
 
 {# Data is mostly numeric? Use tab #}
-{{ metrics|toon(delimiter="tab") }}
+{{ metrics|format(type="toon", delimiter="tab") }}
 
 {# Default comma works for most cases #}
-{{ general_data|toon }}
+{{ general_data|format(type="toon") }}
 ```
 
 ## Measuring Impact
@@ -254,7 +254,7 @@ Use the BAML Playground to compare token usage:
 
 1. Write your function with regular formatting
 2. Test it in the playground and note token count
-3. Add the `toon` filter
+3. Add the `format(type="toon")` filter
 4. Compare the new token count
 
 The playground shows you the exact prompt sent to the LLM, making it easy to verify token savings.

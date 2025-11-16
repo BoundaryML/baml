@@ -13,70 +13,44 @@ Jinja filters allow you to transform and format values within your BAML prompts.
 
 ## BAML Custom Filters
 
-### toon
+### format
 
-Converts a value to TOON (Token-Oriented Object Notation) format, a compact alternative to JSON that reduces token usage by 30-60%.
+Serializes values into structured text while preserving all BAML-specific aliases. Use the required `type` argument to choose the output representation.
 
-**Signature**: `value|toon(indent=2, delimiter="comma", length_marker=None)`
+**Signature**: `value|format(type="yaml" | "json" | "toon", **kwargs)`
 
-**Parameters**:
-- `indent` (int, optional): Number of spaces per indentation level. Default: 2
-- `delimiter` (string, optional): Delimiter for arrays. Options: "comma", "tab", "pipe". Default: "comma"
-- `length_marker` (string, optional): Single character to prefix array lengths. Default: None
+**Required arguments**:
+- `type` (string): `"yaml"`, `"json"`, or `"toon"` (alias for TOON serializer)
+
+**Format-specific behavior**:
+
+| Format | Description | Extra kwargs |
+|--------|-------------|--------------|
+| `yaml` | Human-friendly YAML string with enum/class aliases | None |
+| `json` | Standard JSON string (minified) with alias-safe serialization | None |
+| `toon` | Token-efficient TOON output | `indent`, `delimiter`, `length_marker` |
+
+All formats reuse the same alias-aware serializer, so enums emit their `@alias` values and class properties honor `@alias` names at every nesting level (lists, maps, nested classes, etc.).
 
 **Examples**:
 
 ```jinja
-{# Basic usage #}
-{{ user_data|toon }}
+{# YAML for readability #}
+{{ organization|format(type="yaml") }}
 
-{# With custom indentation #}
-{{ user_data|toon(indent=4) }}
+{# JSON for API interop #}
+{{ organization|format(type="json") }}
 
-{# With pipe delimiter for more token savings #}
-{{ tags|toon(delimiter="pipe") }}
-
-{# With length marker for clarity #}
-{{ items|toon(length_marker="#") }}
-
-{# Combine options #}
-{{ data|toon(indent=4, delimiter="tab", length_marker="#") }}
+{# TOON with custom options #}
+{{ organization|format(type="toon", indent=4, delimiter="tab") }}
 ```
 
-**Why TOON?**
+**TOON options** (only when `format="toon"`):
+- `indent` (int, default 2): spaces per indent level
+- `delimiter` (`"comma" | "tab" | "pipe"`, default `"comma"`): column separator for arrays
+- `length_marker` (single char, optional): prefix to annotate array lengths
 
-TOON is designed for LLM prompts where tokens cost money. It uses:
-- Indentation-based structure (like YAML)
-- Tabular format for arrays of objects (declare keys once)
-- Minimal punctuation
-
-**Comparison**:
-
-JSON (257 tokens):
-```json
-{
-  "users": [
-    { "id": 1, "name": "Alice", "role": "admin" },
-    { "id": 2, "name": "Bob", "role": "user" }
-  ]
-}
-```
-
-TOON (166 tokens):
-```
-users[2]{id,name,role}:
-  1,Alice,admin
-  2,Bob,user
-```
-
-**When to use TOON**:
-- ✅ Passing data to the LLM for analysis
-- ✅ Large structured datasets
-- ✅ Cost-sensitive applications
-
-**When to stick with JSON**:
-- ❌ When the LLM needs to return structured data (use standard output types)
-- ❌ When working with external systems that expect JSON
+Invalid combinations raise a template error (e.g., missing `type` or an unknown delimiter for TOON).
 
 ### regex_match
 
