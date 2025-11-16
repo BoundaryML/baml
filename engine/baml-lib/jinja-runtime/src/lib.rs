@@ -56,11 +56,8 @@ pub fn minijinja_value_to_json(value: &minijinja::Value) -> Result<serde_json::V
             if let Some(obj) = value.as_object() {
                 if let Some(baml_list) = obj.downcast_ref::<MinijinjaBamlList>() {
                     // Recursively convert list items
-                    let arr: Result<Vec<serde_json::Value>, String> = baml_list
-                        .list
-                        .iter()
-                        .map(|v| minijinja_value_to_json(v))
-                        .collect();
+                    let arr: Result<Vec<serde_json::Value>, String> =
+                        baml_list.list.iter().map(minijinja_value_to_json).collect();
                     return Ok(serde_json::Value::Array(arr?));
                 }
             }
