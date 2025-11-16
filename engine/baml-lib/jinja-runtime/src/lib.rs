@@ -160,8 +160,8 @@ fn encode_value_to_toon(
     }
 
     if let Ok(marker) = kwargs.get::<String>("length_marker") {
-        if marker.len() == 1 {
-            options.length_marker = Some(marker.chars().next().unwrap());
+        if marker.chars().count() == 1 {
+            options.length_marker = marker.chars().next();
         } else {
             return Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
@@ -3286,6 +3286,72 @@ Enum value is not equal to the "ALIAS_B" string, as expected
                 let expected = toon::encode(&json_value, Some(options));
 
                 assert_eq!(content, expected);
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render_prompt_toon_with_unicode_length_marker() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::from([(
+            "items".to_string(),
+            BamlValue::List(vec![
+                BamlValue::Class(
+                    "Item".to_string(),
+                    BamlMap::from([
+                        ("id".to_string(), BamlValue::Int(1)),
+                        ("name".to_string(), BamlValue::String("Widget".to_string())),
+                    ]),
+                ),
+                BamlValue::Class(
+                    "Item".to_string(),
+                    BamlMap::from([
+                        ("id".to_string(), BamlValue::Int(2)),
+                        ("name".to_string(), BamlValue::String("Gadget".to_string())),
+                    ]),
+                ),
+            ]),
+        )]));
+
+        let ir = make_test_ir(
+            r#"
+            class Item {
+                id int
+                name string
+            }
+            "#,
+        )?;
+
+        let rendered = render_prompt(
+            "{{ items|format(type=\"toon\", length_marker='🔥') }}",
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                assert!(
+                    content.contains("[🔥2]{id,name}"),
+                    "expected unicode length marker prefix inside output, got: {content}"
+                );
             }
             _ => panic!("Expected Completion prompt"),
         }
