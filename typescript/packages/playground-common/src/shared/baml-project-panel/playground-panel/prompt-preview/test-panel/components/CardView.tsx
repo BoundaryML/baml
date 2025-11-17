@@ -132,7 +132,7 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
         <TestStatus status={displayResponse.status} finalState={getStatus(displayResponse)} />
       </div>
 
-      {displayResponse.status === 'running' && <ResponseRenderer response={displayResponse.response} test={displayResponse} />}
+      {displayResponse.status === 'running' && typeof displayResponse.response === 'object' && <ResponseRenderer response={displayResponse.response} test={displayResponse} />}
 
       {displayResponse.status === 'done' && (
         <ResponseRenderer response={displayResponse.response} status={displayResponse.response_status} test={displayResponse} />

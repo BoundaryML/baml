@@ -243,6 +243,17 @@ export interface TestExecutionResult {
   traceUrl?: string;
 }
 
+/**
+ * Plain object version of WASM test/function response
+ * Used for storing test results without WASM dependencies
+ */
+export interface TestResponseData {
+  llm_response?: LLMResponseInfo;
+  llm_failure?: LLMFailureInfo;
+  parsed_response?: ParsedTestResponse;
+  failure_message?: string;
+}
+
 // ============================================================================
 // EXECUTION CONTEXT
 // ============================================================================

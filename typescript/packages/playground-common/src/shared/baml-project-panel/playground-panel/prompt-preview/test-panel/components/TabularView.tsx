@@ -7,7 +7,7 @@ import { Check, Copy, Play, Square } from 'lucide-react'
 import * as React from 'react'
 
 import { cn } from '@baml/ui/lib/utils'
-import { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
+import type { TestResponseData } from '../../../../../../sdk/interface'
 import { ErrorBoundary } from 'react-error-boundary'
 import { Button } from '@baml/ui/button'
 import { TruncatedString } from '../../TruncatedString'
@@ -48,15 +48,15 @@ const CopyButton = ({
   response,
 }: {
   responseViewType: ResponseViewType
-  response: WasmTestResponse
+  response: TestResponseData
 }) => {
   const [copied, setCopied] = React.useState(false)
 
   const handleCopy = () => {
     const content =
       responseViewType === 'parsed'
-        ? JSON.stringify(JSON.parse(response?.parsed_response()?.value ?? ''), null, 2)
-        : (response?.llm_response()?.content ?? '')
+        ? JSON.stringify(JSON.parse(response?.parsed_response?.value ?? ''), null, 2)
+        : (response?.llm_response?.content ?? '')
     navigator.clipboard.writeText(content)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -79,18 +79,18 @@ const ResponseContent = ({
   state,
   responseViewType,
 }: {
-  response: WasmTestResponse | WasmFunctionResponse | undefined
+  response: TestResponseData | undefined
   state: TestState
   responseViewType: ResponseViewType
 }) => {
-  const failureMessage = response && 'failure_message' in response ? response.failure_message() : undefined
+  const failureMessage = response?.failure_message
 
   return (
     <div className=''>
       {/* todo: render the failure if pretty or raw is selected. */}
       {responseViewType === 'parsed' && (
         <>
-          <ParsedResponseRenderer response={getTestStateResponse(state)} />
+          <ParsedResponseRenderer response={getTestStateResponse(state) as TestResponseData | undefined} />
 
           {/* Don't show the explanation for now. */}
           {false && getExplanation(state) && (
@@ -101,12 +101,12 @@ const ResponseContent = ({
           )}
         </>
       )}
-      {responseViewType === 'pretty' && (
-        <MarkdownRenderer source={getTestStateResponse(state)?.llm_response()?.content || ''} />
+      {responseViewType === 'pretty' && typeof getTestStateResponse(state) === 'object' && (
+        <MarkdownRenderer source={(getTestStateResponse(state) as TestResponseData)?.llm_response?.content || ''} />
       )}
-      {responseViewType === 'raw' && (
+      {responseViewType === 'raw' && typeof getTestStateResponse(state) === 'object' && (
         <TruncatedString
-          text={getTestStateResponse(state)?.llm_response()?.content || ''}
+          text={(getTestStateResponse(state) as TestResponseData)?.llm_response?.content || ''}
           maxLength={1500}
           headLength={600}
           tailLength={600}
@@ -227,6 +227,8 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
           {currentRun?.tests.map((test, index) => {
             const isSelected = functionName === test.functionName && testName === test.testName
             const isThisTestRunning = test.response.status === 'running'
+            const testResponse = getTestStateResponse(test.response)
+            const responseData = typeof testResponse === 'object' ? testResponse : undefined
             const rowKey = `${test.functionName}-${test.testName}`
 
             return (
@@ -322,7 +324,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                     type="always"
                   > */}
                   <ResponseContent
-                    response={getTestStateResponse(test.response)}
+                    response={responseData}
                     state={test.response}
                     responseViewType={config.responseViewType}
                   />
@@ -344,7 +346,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                   <TableCell className='px-1 py-1 whitespace-normal'>
                     {test.response.status === 'done' && test.response.response && (
                       <span className='text-xs text-muted-foreground'>
-                        {test.response.response.llm_response()?.model}
+                        {test.response.response.llm_response?.model}
                       </span>
                     )}
                   </TableCell>

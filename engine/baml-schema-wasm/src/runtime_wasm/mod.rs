@@ -1775,41 +1775,17 @@ impl WasmRuntime {
                 }
             }
         }
-        // If it's an LLM function, use the smallest node that contains the cursor
+        // If it's an LLM function, return the function span
         else if function.function_type == WasmFunctionKind::Llm {
-            if let Ok(graph) = function.function_graph_v2(self) {
-                // Find the smallest node that contains the cursor
-                let mut best_node: Option<&WasmControlFlowNode> = None;
-                let mut best_node_size = usize::MAX;
-
-                for node in &graph.nodes {
-                    log::info!("entity node: {:#?}", node);
-                    if node.span.contains(file_name, cursor_idx) {
-                        let node_size = node.span.end - node.span.start;
-                        log::info!("entity node_size: {}", node_size);
-                        log::info!("entity best_node_size: {}", best_node_size);
-                        if node_size < best_node_size {
-                            best_node = Some(node);
-                            best_node_size = node_size;
-                        }
-                    }
-                }
-
-                // If we found a node, return it as a more specific entity
-                if let Some(node) = best_node {
-                    log::info!("entity returning node: {:#?}", node);
-                    return Some(WasmEntityAtPosition {
-                        entity_type: "node".to_string(),
-                        entity_name: function.name.clone(),
-                        span: node.span.clone(),
-                        function_type: Some(function.function_type),
-                        node_id: Some(node.lexical_id.clone()),
-                        node_label: Some(node.label.clone()),
-                    });
-                }
-            }
+            return Some(WasmEntityAtPosition {
+                entity_type: "function".to_string(),
+                entity_name: function.name.clone(),
+                span: function.span.clone(),
+                function_type: Some(function.function_type),
+                node_id: None,
+                node_label: None,
+            });
         }
-
         // Return the function as the entity
         log::info!("[entity] returning function: {:#?}", function);
         Some(WasmEntityAtPosition {

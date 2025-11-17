@@ -5,7 +5,7 @@
  * All events must have node IDs, timestamps, and iterations for graph mapping
  */
 
-import type { LLMFailureInfo, LLMResponseInfo, PromptInfo, SpanInfo, WatchNotification } from './types';
+import type { LLMFailureInfo, LLMResponseInfo, PromptInfo, SpanInfo, WatchNotification, TestResponseData } from './types';
 
 // ============================================================================
 // RICH EXECUTION EVENTS (for run_tests_v2)
@@ -52,6 +52,8 @@ export interface NodeExitEvent extends BaseExecutionEvent {
     code?: string;
     stack?: string;
   };
+  /** Full response data (converted from WASM) for test executions */
+  responseData?: TestResponseData;
 }
 
 /**

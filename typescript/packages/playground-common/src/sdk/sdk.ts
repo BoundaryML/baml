@@ -7,7 +7,7 @@
 
 import type { SDKStorage } from './storage/SDKStorage';
 import type { BamlRuntimeInterface, BamlRuntimeFactory } from './runtime/BamlRuntimeInterface';
-import type { FunctionWithCallGraph } from './interface';
+import type { FunctionWithCallGraph, TestResponseData, WatchNotification } from './interface';
 import type {
   ExecutionSnapshot,
   CacheEntry,
@@ -809,7 +809,8 @@ export class BAMLSDK {
       let duration = 0;
       let outputs: Record<string, any> | undefined;
       let error: Error | undefined;
-      const watchNotifications: import('./interface').WatchNotification[] = [];
+      let responseData: TestResponseData | undefined;
+      const watchNotifications: WatchNotification[] = [];
 
       try {
         // 3. Execute the test and update state during execution
@@ -871,6 +872,7 @@ export class BAMLSDK {
             }
           } else if (event.type === 'node.exit') {
             duration = event.duration;
+            responseData = event.responseData;
             if (event.error) {
               error = new Error(event.error.message);
               error.stack = event.error.stack;
@@ -883,7 +885,7 @@ export class BAMLSDK {
         // 4. Update test history with final result
         this.storage.updateTestInHistory(0, 0, {
           status: 'done',
-          response: outputs || error,
+          response: responseData || {},
           response_status: error ? 'error' : 'passed',
           latency_ms: duration,
           watchNotifications: [...watchNotifications],
@@ -1056,7 +1058,7 @@ export class BAMLSDK {
               } else {
                 this.storage.updateTestInHistory(0, testIndex, {
                   status: 'done',
-                  response: event.outputs,
+                  response: event.responseData || {},
                   response_status: 'passed',
                   latency_ms: event.duration,
                   watchNotifications: watchNotificationsByTest[testKey] || [],
@@ -1122,7 +1124,7 @@ export class BAMLSDK {
                   } else {
                     this.storage.updateTestInHistory(0, i, {
                       status: 'done',
-                      response: event.outputs,
+                      response: event.responseData || {},
                       response_status: 'passed',
                       latency_ms: event.duration,
                       watchNotifications: watchNotificationsByTest[testKey] || [],

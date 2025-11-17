@@ -54,6 +54,7 @@ export type {
   TestExecutionResult,
   TestExecutionContext,
   WatchNotification,
+  TestResponseData,
 
   // Function Call
   FunctionCall,

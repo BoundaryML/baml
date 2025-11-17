@@ -1,7 +1,7 @@
 import JsonView from '@uiw/react-json-view'
 import { githubLightTheme as lightTheme } from '@uiw/react-json-view/githubLight'
 import { vscodeTheme as darkTheme } from '@uiw/react-json-view/vscode'
-import { type WasmFunctionResponse, type WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
+import type { TestResponseData } from '../../../../../../sdk/interface'
 import { useTheme } from 'next-themes'
 import { RenderPromptPart } from '../../render-text'
 import { ScrollArea } from '@baml/ui/scroll-area'
@@ -12,28 +12,24 @@ const ErrorText = ({ text }: { text: string }) => {
 
 // Renders the parsed response only
 export const ParsedResponseRenderer: React.FC<{
-  response?: WasmFunctionResponse | WasmTestResponse
+  response?: TestResponseData
 }> = ({ response }) => {
   if (!response) {
     return <div className='text-xs text-muted-foreground'>Waiting for response...</div>
   }
 
-  const llmFailure = response.llm_failure()
-  const failureMessage = 'failure_message' in response ? response.failure_message() : undefined
+  const llmFailure = response.llm_failure
+  const failureMessage = response.failure_message
 
   if (llmFailure) {
     return <ErrorText text={llmFailure.message} />
   }
 
-  const parsedResponse = response.parsed_response()
+  const parsedResponse = response.parsed_response
 
   return (
     <div>
-      {typeof parsedResponse === 'string' ? (
-        <ParsedResponseRender response={parsedResponse} />
-      ) : (
-        <ParsedResponseRender response={parsedResponse?.value} />
-      )}
+      <ParsedResponseRender response={parsedResponse?.value} />
       {failureMessage && <ErrorText text={failureMessage} />}
     </div>
   )

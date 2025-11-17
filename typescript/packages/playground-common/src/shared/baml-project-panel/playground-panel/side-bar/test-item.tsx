@@ -164,9 +164,9 @@ export function TestItem({
 
                     {/* Show checks/asserts information */}
                     {testResult.response.status === 'done' && testResult.response.response && (() => {
-                      const parsedResponse = testResult.response.response.parsed_response();
+                      const parsedResponse = testResult.response.response.parsed_response;
                       const finalState = getStatus(testResult.response);
-                      const checkCount = parsedResponse && typeof parsedResponse !== 'string' ? parsedResponse.check_count : 0;
+                      const checkCount = parsedResponse ? parsedResponse.checkCount : 0;
 
                       if (checkCount > 0 || finalState === 'constraints_failed' || finalState === 'assert_failed') {
                         return (
@@ -199,10 +199,10 @@ export function TestItem({
                       </div>
                     )}
 
-                    {testResult.response.status === 'done' && testResult.response.response?.llm_response()?.model && (
+                    {testResult.response.status === 'done' && testResult.response.response?.llm_response?.model && (
                       <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Model:</span>
-                        <span className="truncate max-w-32">{testResult.response.response.llm_response()?.model}</span>
+                        <span className="truncate max-w-32">{testResult.response.response.llm_response?.model}</span>
                       </div>
                     )}
 

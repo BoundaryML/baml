@@ -16,6 +16,7 @@ import type {
   WasmChatMessage,
   WasmChatMessagePart,
   WasmTestResponse,
+  WasmFunctionResponse,
   WasmParsedTestResponse,
   WasmLLMResponse,
   WasmLLMFailure,
@@ -40,6 +41,7 @@ import type {
   LLMFailureInfo,
   TestStatus,
   TestExecutionResult,
+  TestResponseData,
 } from './types';
 
 // ============================================================================
@@ -310,6 +312,36 @@ export class WasmTypeAdapter {
       llmFailure: llmFailure ? this.convertLLMFailure(llmFailure) : undefined,
       failureMessage: wasmResponse.failure_message() || undefined,
       traceUrl: wasmResponse.trace_url() || undefined,
+    };
+  }
+
+  /**
+   * Convert WASM test/function response to plain object data
+   * This is used to store responses without WASM dependencies
+   */
+  convertResponseToData(wasmResponse: WasmTestResponse | WasmFunctionResponse): TestResponseData {
+    const parsedResponse = wasmResponse.parsed_response();
+    const llmResponse = wasmResponse.llm_response();
+    const llmFailure = wasmResponse.llm_failure();
+    const failureMessage = 'failure_message' in wasmResponse ? wasmResponse.failure_message() : undefined;
+
+    // Handle both WasmTestResponse (returns WasmParsedTestResponse) and WasmFunctionResponse (returns string)
+    let convertedParsedResponse: ParsedTestResponse | undefined;
+    if (parsedResponse) {
+      if (typeof parsedResponse === 'string') {
+        // WasmFunctionResponse case - string response
+        convertedParsedResponse = { value: parsedResponse, checkCount: 0 };
+      } else {
+        // WasmTestResponse case - structured response
+        convertedParsedResponse = this.convertParsedTestResponse(parsedResponse);
+      }
+    }
+
+    return {
+      parsed_response: convertedParsedResponse,
+      llm_response: llmResponse ? this.convertLLMResponse(llmResponse) : undefined,
+      llm_failure: llmFailure ? this.convertLLMFailure(llmFailure) : undefined,
+      failure_message: failureMessage || undefined,
     };
   }
 }

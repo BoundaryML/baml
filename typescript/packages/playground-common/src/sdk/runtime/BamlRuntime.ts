@@ -856,6 +856,9 @@ export class BamlRuntime implements BamlRuntimeInterface {
 
       const testStatus = statusMap[status] || 'error';
 
+      // Convert WASM response to plain object
+      const responseData = this.adapter.convertResponseToData(result);
+
       // Extract outputs
       let outputs: Record<string, any> = {};
 
@@ -886,6 +889,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
           executionId,
           outputs,
           duration,
+          responseData,
         };
       } else {
         yield {
@@ -896,6 +900,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
           executionId,
           outputs,
           duration,
+          responseData,
           error: {
             message: outputs.error || `Test failed with status: ${testStatus}`,
             code: testStatus,
@@ -1050,6 +1055,9 @@ export class BamlRuntime implements BamlRuntimeInterface {
 
         const testStatus = statusMap[status] || 'error';
 
+        // Convert WASM response to plain object
+        const responseData = this.adapter.convertResponseToData(response);
+
         // Extract outputs
         let outputs: Record<string, any> = {};
         if (testStatus === 'passed') {
@@ -1078,6 +1086,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
             executionId,
             outputs,
             duration: 0, // TODO: Track duration for parallel tests
+            responseData,
           };
         } else {
           yield {
@@ -1088,6 +1097,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
             executionId,
             outputs,
             duration: 0,
+            responseData,
             error: {
               message: outputs.error || `Test failed with status: ${testStatus}`,
               code: testStatus,

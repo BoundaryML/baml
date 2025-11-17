@@ -1,5 +1,5 @@
 // ResponseRenderer.tsx
-import { WasmFunctionResponse, WasmTestResponse, WasmLLMFailure, WasmLLMResponse } from '@gloo-ai/baml-schema-wasm-web'
+import type { TestResponseData, LLMResponseInfo, LLMFailureInfo } from '../../../../../../sdk/interface'
 import { DoneTestStatusType, TestState } from '../../../atoms'
 import { useState } from 'react'
 import {
@@ -21,7 +21,7 @@ import { RenderPromptPart } from '../../render-text'
 import { WatchNotificationsView } from './WatchNotificationsView'
 
 interface ResponseRendererProps {
-  response?: WasmFunctionResponse | WasmTestResponse
+  response?: TestResponseData
   status?: DoneTestStatusType
   test?: TestState  // NEW - to access watchNotifications
 }
@@ -35,10 +35,10 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({ response, st
     return <div className='text-xs text-muted-foreground'>Waiting for response...</div>
   }
 
-  const llmFailure = response.llm_failure()
-  const llmResponse = response.llm_response()
-  const parsedResponse = response.parsed_response()
-  const failureMessage = 'failure_message' in response ? response.failure_message() : undefined
+  const llmFailure = response.llm_failure
+  const llmResponse = response.llm_response
+  const parsedResponse = response.parsed_response
+  const failureMessage = response.failure_message
 
   if (llmFailure) {
     return <LLMFailureView failure={llmFailure} />
@@ -52,7 +52,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({ response, st
 
   const handleParsedCopy = () => {
     if (!parsedResponse) return
-    const value = typeof parsedResponse === 'string' ? parsedResponse : parsedResponse.value
+    const value = parsedResponse.value
     navigator.clipboard.writeText(JSON.stringify(JSON.parse(value ?? ''), null, 2))
     setParsedCopied(true)
     setTimeout(() => setParsedCopied(false), 2000)
@@ -61,7 +61,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({ response, st
   // Helper to determine if we should show parsed response separately
   const shouldShowParsedSeparately = () => {
     // if (!parsedResponse || !llmResponse) return false
-    // const parsedValue = typeof parsedResponse === 'string' ? parsedResponse : parsedResponse.value
+    // const parsedValue = parsedResponse.value
     // return parsedValue && JSON.stringify(JSON.parse(parsedValue)) !== JSON.stringify(llmResponse.content)
     return true
   }
@@ -94,10 +94,10 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({ response, st
             <div className='space-y-2'>
               <span className='flex flex-row gap-x-1 text-xs text-muted-foreground'>
                 <div>Parsed Response</div>
-                {parsedResponse && typeof parsedResponse !== 'string' && parsedResponse.check_count > 0 ? (
+                {parsedResponse && parsedResponse.checkCount > 0 ? (
                   <div className='flex items-center space-x-1'>
                     {/* <CheckCircle className="w-3 h-3" /> */}
-                    <span>({parsedResponse.check_count} checks ran)</span>
+                    <span>({parsedResponse.checkCount} checks ran)</span>
                   </div>
                 ) : null}
               </span>
@@ -131,15 +131,15 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({ response, st
 
 // Renders the raw response only
 export const RawResponseRenderer: React.FC<{
-  response?: WasmFunctionResponse | WasmTestResponse
+  response?: TestResponseData
 }> = ({ response }) => {
   if (!response) {
     return <div className='text-xs text-muted-foreground'>Waiting for response...</div>
   }
-  return <RenderPromptPart text={response.llm_response()?.content ?? ''} />
+  return <RenderPromptPart text={response.llm_response?.content ?? ''} />
 }
 
-const MetadataBadges: React.FC<{ llmResponse: WasmLLMResponse }> = ({ llmResponse }) => (
+const MetadataBadges: React.FC<{ llmResponse: LLMResponseInfo }> = ({ llmResponse }) => (
   <TooltipProvider>
     <Tooltip>
       <TooltipTrigger asChild>
@@ -155,7 +155,7 @@ const MetadataBadges: React.FC<{ llmResponse: WasmLLMResponse }> = ({ llmRespons
       <TooltipTrigger asChild>
         <Badge variant='outline' className='flex items-center space-x-1 font-light text-muted-foreground'>
           <Clock className='w-3 h-3' />
-          <span>{(Number(llmResponse.latency_ms) / 1000).toFixed(2)}s</span>
+          <span>{(llmResponse.latencyMs / 1000).toFixed(2)}s</span>
         </Badge>
       </TooltipTrigger>
       <TooltipContent>Latency</TooltipContent>
@@ -165,8 +165,8 @@ const MetadataBadges: React.FC<{ llmResponse: WasmLLMResponse }> = ({ llmRespons
         <Badge variant='outline' className='flex items-center space-x-1 font-light text-muted-foreground'>
           <ChevronsLeftRight className='w-3 h-3' />
           <span>
-            {llmResponse.input_tokens != null ? Number(llmResponse.input_tokens) : 'unknown'} in |{' '}
-            {llmResponse.output_tokens != null ? Number(llmResponse.output_tokens) : 'unknown'} out
+            {llmResponse.inputTokens != null ? llmResponse.inputTokens : 'unknown'} in |{' '}
+            {llmResponse.outputTokens != null ? llmResponse.outputTokens : 'unknown'} out
           </span>
         </Badge>
       </TooltipTrigger>
@@ -186,7 +186,7 @@ const CopyButton: React.FC<{ copied: boolean; onCopy: () => void }> = ({ copied,
   </Button>
 )
 
-const LLMFailureView: React.FC<{ failure: WasmLLMFailure }> = ({ failure }) => {
+const LLMFailureView: React.FC<{ failure: LLMFailureInfo }> = ({ failure }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   return (

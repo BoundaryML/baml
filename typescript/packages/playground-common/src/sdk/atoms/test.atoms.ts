@@ -5,7 +5,7 @@
  */
 
 import { atom } from 'jotai';
-import type { WatchNotification } from '../interface';
+import type { WatchNotification, TestResponseData } from '../interface';
 
 // Re-export WatchNotification for backward compatibility
 export type { WatchNotification };
@@ -19,10 +19,10 @@ export type { WatchNotification };
  */
 export type TestState =
   | { status: 'queued' }
-  | { status: 'running'; response?: any; watchNotifications?: WatchNotification[] }
+  | { status: 'running'; response?: TestResponseData | string; watchNotifications?: WatchNotification[] }
   | {
       status: 'done';
-      response: any;
+      response: TestResponseData;
       response_status: 'passed' | 'llm_failed' | 'parse_failed' | 'constraints_failed' | 'assert_failed' | 'error';
       latency_ms: number;
       watchNotifications?: WatchNotification[];
