@@ -11,6 +11,7 @@ import type {
   NodeExecutionState,
   NodeExecution,
   CacheEntry,
+  BAMLFile,
 } from '../types';
 
 // Import atoms directly from core.atoms.ts (no barrel exports)
@@ -329,7 +330,7 @@ export class JotaiStorage implements SDKStorage {
     return this.store.get(bamlFilesTrackedAtom);
   }
 
-  setParsedBAMLFiles(files: any[]) {
+  setParsedBAMLFiles(files: BAMLFile[]) {
     this.store.set(bamlFilesAtom, files);
   }
 

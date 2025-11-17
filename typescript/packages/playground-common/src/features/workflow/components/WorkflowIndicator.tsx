@@ -50,20 +50,9 @@ export function WorkflowIndicator() {
 
   // Determine if we should show the dropdown
   const shouldShowDropdown = workflowsWithSelectedNode.length > 1;
+  console.log('aaron: selectedNodeId:', selectedNodeId);
 
-  useEffect(() => {
-    // pan if selected node id changes
-    const node = flowStore.value.getNode(selectedNodeId ?? '');
-    if (!node) {
-      console.error("Node not found. Can't pan to it:", selectedNodeId);
-      return;
-    }
-    const timeoutId = setTimeout(() => {
-      console.log('Panning to node:', node.id);
-      panToNodeIfNeeded(node, flowStore.value);
-    }, 200);
-    return () => clearTimeout(timeoutId);
-  }, [selectedNodeId]);
+
 
   if (!activeWorkflow) {
     return null;

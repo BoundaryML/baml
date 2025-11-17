@@ -10,12 +10,23 @@
 import type { BAMLSDK } from '../sdk';
 import type { VscodeToWebviewCommand } from './vscode-to-webview-rpc';
 
+type IDEPayload = Extract<
+  VscodeToWebviewCommand,
+  { source: 'ide_message' }
+>['payload'];
+
+type UpdateCursorContent = Extract<
+  IDEPayload,
+  { command: 'update_cursor' }
+>['content'];
+
 /**
  * Handle IDE messages (source: 'ide_message')
  */
 export async function handleIDEMessage(
   sdk: BAMLSDK,
-  payload: Extract<VscodeToWebviewCommand, { source: 'ide_message' }>['payload'],
+  payload: IDEPayload,
+  debouncedUpdateCursor: (cursor: UpdateCursorContent) => void,
   // Non-core state setters (atoms that SDK doesn't manage)
   setBamlCliVersion: (version: string) => void,
   setBamlConfig: (config: any) => void
@@ -27,7 +38,13 @@ export async function handleIDEMessage(
   switch (command) {
     case 'update_cursor':
       // Use SDK navigation update cursor method
-      sdk.navigation.updateCursor(content);
+      console.log('looking: update_cursor', content);
+      const updateCursorHandler =
+        debouncedUpdateCursor ??
+        ((cursor: UpdateCursorContent) => {
+          sdk.navigation.updateCursor(cursor);
+        });
+      updateCursorHandler(content);
       break;
 
     case 'baml_settings_updated':
@@ -63,6 +80,11 @@ export async function handleLSPMessage(
 
   switch (method) {
     case 'runtime_updated':
+      const simpleBamlEntry = Object.entries(params.files).find(([name]) => name.endsWith('simple.baml'));
+      if (simpleBamlEntry) {
+        const [name, content] = simpleBamlEntry;
+        console.log('aaron: simple.baml content length:', content.length);
+      }
       // Debounce file updates to prevent excessive WASM recompilation
       // This is a platform quirk (LSP sends rapid updates during typing)
       debouncedUpdateFiles(

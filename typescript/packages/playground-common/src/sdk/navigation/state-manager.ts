@@ -100,6 +100,7 @@ export class StateManager {
     atomSet: JotaiSet
   ): Promise<void> {
     // 1. Update selection atom (most important - do this first)
+    console.log('looking: applying state', state);
     atomSet(unifiedSelectionStateAtom, state);
 
     // 2. Apply side effects

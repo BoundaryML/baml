@@ -29,6 +29,9 @@ export function useGraphSync() {
     //   edges: currentGraph.edges.length,
     //   isSnapshot: currentGraph.isSnapshot,
     // });
+    console.log('aaron: useGraphSync: converting graph:', {
+      currentGraphnodes: currentGraph.nodes
+    });
 
     return sdkGraphToReactflow(
       currentGraph.nodes,

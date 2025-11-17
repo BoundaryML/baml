@@ -1236,7 +1236,14 @@ export class BamlRuntime implements BamlRuntimeInterface {
         cursor.fileName,
         cursorIdx
       );
-      console.log('entity', entity, entity?.toJSON());
+      if (entity) {
+        console.log('[BamlRuntime] Entity at cursor:', {
+          entity_type: entity.entity_type,
+          entity_name: entity.entity_name,
+          node_id: entity.node_id,
+          node_label: entity.node_label,
+        });
+      }
 
       // Get function at cursor position
       const selectedFunc = this.wasmRuntime.get_function_at_position(
@@ -1277,6 +1284,14 @@ export class BamlRuntime implements BamlRuntimeInterface {
 
       // Extract node_id from entity if available (for workflow nodes)
       const nodeId = entity?.node_id ?? null;
+
+      console.log('[BamlRuntime] updateCursor returning:', {
+        functionName: name,
+        nodeId,
+        entity_type: entity?.entity_type,
+        entity_name: entity?.entity_name,
+        node_label: entity?.node_label,
+      });
 
       // Just a function, no test case
       return {

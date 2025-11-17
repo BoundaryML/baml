@@ -1723,12 +1723,6 @@ impl WasmRuntime {
     ) -> Option<WasmEntityAtPosition> {
         // Find the function at this position
         let function = self.get_function_at_position(file_name, "", cursor_idx)?;
-        log::info!(
-            "entity get_entity_at_position: file_name={}, cursor_idx={}",
-            file_name,
-            cursor_idx
-        );
-        log::info!("entity function: {:#?}", function);
 
         // If it's an Expr function, extend node spans to cover content until next node
         if function.function_type == WasmFunctionKind::Expr {
@@ -1753,16 +1747,7 @@ impl WasmRuntime {
                         function.span.end
                     };
 
-                    log::info!(
-                        "entity expr node: {} span=[{}, {}), cursor={}",
-                        node.label,
-                        span_start,
-                        span_end,
-                        cursor_idx
-                    );
-
                     if cursor_idx >= span_start && cursor_idx < span_end {
-                        log::info!("entity returning expr node: {:#?}", node);
                         return Some(WasmEntityAtPosition {
                             entity_type: "node".to_string(),
                             entity_name: function.name.clone(),
@@ -1787,7 +1772,6 @@ impl WasmRuntime {
             });
         }
         // Return the function as the entity
-        log::info!("[entity] returning function: {:#?}", function);
         Some(WasmEntityAtPosition {
             entity_type: "function".to_string(),
             entity_name: function.name.clone(),
@@ -2851,18 +2835,12 @@ impl WasmFunction {
         let ctx = rt
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default();
-        log::info!(
-            "[wasm::function_graph] generating graph for function {}",
-            self.name
-        );
+
         let graph = rt
             .internal()
             .function_graph(&self.name, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
-        log::info!(
-            "[wasm::function_graph] generated Mermaid graph (chars={})",
-            graph.len()
-        );
+
         Ok(graph)
     }
 
@@ -2872,19 +2850,12 @@ impl WasmFunction {
         let ctx = rt
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default();
-        log::info!(
-            "[wasm::function_graph_v2]: generating graph for function {}",
-            self.name
-        );
+
         let graph = rt
             .internal()
             .function_graph_v2(&self.name, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
-        log::info!(
-            "[wasm::function_graph_v2]: {} graph:: {:#?}",
-            self.name,
-            graph
-        );
+
         Ok(graph.into())
     }
 

@@ -108,7 +108,6 @@ export const UnifiedPromptPreview = () => {
     setActiveTab(viewMode.defaultTab);
   }, [viewMode.defaultTab, viewMode.showLLMTabs, setActiveTab]);
 
-  console.log('activeTab', activeTab);
 
   // Hide text when sidebar is open or on smaller screens
   const getButtonTextClass = () => {

@@ -6,16 +6,8 @@
  */
 
 import { type Atom, atom } from 'jotai';
-import { filesAtom, runtimeAtom } from '../atoms';
 
-// Related to test status
-import type {
-  WasmFunction,
-  WasmFunctionResponse,
-  WasmTestResponse,
-} from '@gloo-ai/baml-schema-wasm-web';
 import { atomFamily, atomWithStorage } from 'jotai/utils';
-import type { NavigationIntent } from '../../../sdk/types';
 
 // ============================================================================
 // SDK Atoms - Direct Re-exports
@@ -59,19 +51,7 @@ import {
 type FunctionType = 'workflow' | 'function' | 'llm_function' | 'conditional' | 'loop' | 'group' | 'return' | 'block';
 type NodeType = 'llm_function' | 'function';
 
-const inferFunctionType = (fn: { type?: string; functionFlavor?: 'llm' | 'expr' } | null | undefined): FunctionType => {
-  if (!fn) return 'function';
-  if (fn.type && ['workflow', 'llm_function', 'function', 'conditional', 'loop', 'group', 'return', 'block'].includes(fn.type)) {
-    return fn.type as FunctionType;
-  }
-  if (fn.functionFlavor === 'llm') {
-    return 'llm_function';
-  }
-  return 'function';
-};
 
-const nodeTypeForFunction = (functionType: FunctionType): NodeType =>
-  functionType === 'llm_function' ? 'llm_function' : 'function';
 
 export const graphControlsTipDismissedAtom = atomWithStorage(
   'playground:graphControlsTipDismissed',

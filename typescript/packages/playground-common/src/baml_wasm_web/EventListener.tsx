@@ -59,7 +59,22 @@ export const EventListener: React.FC = () => {
   const debouncedUpdateFiles = useDebounceCallback(
     (files: Record<string, string>) => {
       console.debug('[EventListener] Debounced file update');
+      console.log('aaron: debouncedUpdateFiles', Object.keys(files).length);
+      const simpleBamlEntry = Object.entries(files).find(([name]) => name.endsWith('simple.baml'));
+      if (simpleBamlEntry) {
+        const [name, content] = simpleBamlEntry;
+        console.log('aaron: [AFTER DEBOUNCE] simple.baml content length:', content.length);
+      }
       sdk.files.update(files);
+    },
+    50,
+    true // Leading edge
+  );
+
+  const debouncedUpdateCursor = useDebounceCallback(
+    (cursor: { fileName: string; line: number; column: number }) => {
+      console.debug('[EventListener] Debounced cursor update');
+      sdk.navigation.updateCursor(cursor);
     },
     50,
     true // Leading edge
@@ -102,7 +117,13 @@ export const EventListener: React.FC = () => {
         switch (source) {
           case 'ide_message':
             // Handle IDE messages via SDK
-            await handleIDEMessage(sdk, payload, setBamlCliVersion, setBamlConfig);
+            await handleIDEMessage(
+              sdk,
+              payload,
+              debouncedUpdateCursor,
+              setBamlCliVersion,
+              setBamlConfig
+            );
             break;
 
           case 'lsp_message':
@@ -126,7 +147,7 @@ export const EventListener: React.FC = () => {
     window.addEventListener('message', handler);
 
     return () => window.removeEventListener('message', handler);
-  }, [sdk, debouncedUpdateFiles, setBamlCliVersion, setBamlConfig]);
+  }, [sdk, debouncedUpdateFiles, debouncedUpdateCursor, setBamlCliVersion, setBamlConfig]);
 
   return (
     <>

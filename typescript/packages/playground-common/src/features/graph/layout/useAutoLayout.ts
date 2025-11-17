@@ -1,5 +1,5 @@
 import { nextTick } from '@del-wang/utils/web';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 import { flowStore } from '../../../states/reactflow';
 import { type ILayoutReactflow, layoutReactflow } from './node';
@@ -30,34 +30,76 @@ const layoutWithFlush = async (options: ILayoutReactflow) => {
 
 export const useAutoLayout = () => {
   const [isDirty, setIsDirty] = useState(false);
+  const pendingLayoutRef = useRef<(ILayoutReactflow & { skipFitView?: boolean }) | null>(null);
+  const isProcessingQueueRef = useRef(false);
 
-  const layout = async (options: ILayoutReactflow & { skipFitView?: boolean }) => {
-    if (!flowStore.value.initialized || isDirty || options.nodes.length < 1) {
+  const processLayoutQueue = async () => {
+    if (isProcessingQueueRef.current || !pendingLayoutRef.current) {
       return;
     }
 
-    setIsDirty(true);
-    // Perform the first layout to measure node sizes
-    const firstLayout = await layoutWithFlush({
-      ...options,
-      visibility: 'hidden', // Hide layout during the first layout pass
-    });
-    // Perform the second layout using actual node sizes
-    const secondLayout = await layoutWithFlush({
-      visibility: 'visible',
-      ...options,
-      nodes: firstLayout.nodes,
-      edges: firstLayout.edges,
-    });
-    setIsDirty(false);
+    isProcessingQueueRef.current = true;
 
-    // Center the viewpoint only if skipFitView is not true
-    if (!options.skipFitView) {
-      await flowStore.value.fitView({ duration: 0 });
-      await flowStore.value.zoomTo(flowStore.value.getZoom() * 0.8);
+    while (pendingLayoutRef.current) {
+      const options = pendingLayoutRef.current;
+      pendingLayoutRef.current = null; // Clear before processing so new requests can queue
+
+      if (!flowStore.value.initialized || options.nodes.length < 1) {
+
+        continue;
+      }
+
+      setIsDirty(true);
+
+      try {
+        // Perform the first layout to measure node sizes
+        const firstLayout = await layoutWithFlush({
+          ...options,
+          visibility: 'hidden', // Hide layout during the first layout pass
+        });
+
+        // Check if a newer layout was queued while we were processing
+        if (pendingLayoutRef.current) {
+          console.log('useAutoLayout: newer layout queued, skipping second pass');
+          continue;
+        }
+
+        // Perform the second layout using actual node sizes
+        const secondLayout = await layoutWithFlush({
+          visibility: 'visible',
+          ...options,
+          nodes: firstLayout.nodes,
+          edges: firstLayout.edges,
+        });
+
+        // Center the viewpoint only if skipFitView is not true
+        if (!options.skipFitView) {
+          await flowStore.value.fitView({ duration: 0 });
+          await flowStore.value.zoomTo(flowStore.value.getZoom() * 0.8);
+        }
+      } catch (error) {
+        console.error('aaron: useAutoLayout: layout error:', error);
+      }
     }
 
-    return secondLayout.layout;
+    setIsDirty(false);
+    isProcessingQueueRef.current = false;
+  };
+
+  const layout = async (options: ILayoutReactflow & { skipFitView?: boolean }) => {
+    if (!flowStore.value.initialized || options.nodes.length < 1) {
+      console.log('useAutoLayout: skipping layout:', {
+        isDirty,
+        flowStoreInitialized: flowStore.value.initialized,
+      });
+      return;
+    }
+
+    // Queue the layout request (overwrites any pending request with latest data)
+    pendingLayoutRef.current = options;
+
+    // Start processing if not already running
+    void processLayoutQueue();
   };
 
   return { layout, isDirty };

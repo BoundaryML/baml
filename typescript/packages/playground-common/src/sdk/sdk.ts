@@ -148,6 +148,14 @@ export class BAMLSDK {
 
     // Populate parsed BAML files atom (for navigation, DebugPanel, etc.)
     const parsedFiles = this.runtime.getBAMLFiles();
+    parsedFiles.forEach((file: any) => {
+      file.functions.forEach((fn: any) => {
+        console.log(
+          `aaron: ParsedFiles: Function: ${fn.displayName || fn.name}, Nodes:`,
+          Array.isArray(fn.nodes) ? fn.nodes.map((node: any) => node.id).join(', ') : []
+        );
+      });
+    });
     this.storage.setParsedBAMLFiles(parsedFiles);
 
     // Store last valid WASM instance if no errors
@@ -210,11 +218,10 @@ export class BAMLSDK {
       }
 
       if (!changed) {
-        console.log('SDK: No file content changes detected, skipping runtime update');
+        console.log('files: SDK: No file content changes detected, skipping runtime update');
         return;
       }
 
-      console.log('SDK: Updating files..');
 
       // Update files in storage (updates atom)
       this.currentFiles = files;

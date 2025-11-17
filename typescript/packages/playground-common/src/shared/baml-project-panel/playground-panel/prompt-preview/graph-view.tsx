@@ -27,6 +27,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { graphControlsTipDismissedAtom, unifiedSelectionAtom } from '../atoms';
 import { MousePointer2, ZoomIn, X, ChevronLeft } from 'lucide-react';
 import type { NavigationInput } from '../../../../sdk/navigation';
+import { panToNodeIfNeeded } from '../../../../utils/cameraPan';
 
 /**
  * GraphView - ReactFlow graph component for the Graph tab
@@ -62,6 +63,18 @@ export const GraphView = () => {
         : { ...node, selected: node.id === selectedNodeId }
     );
     flowStore.value.setNodes?.(updated);
+
+    // pan if selected node id changes
+    const node = flowStore.value.getNode(selectedNodeId ?? '');
+    if (!node) {
+      console.error("Node not found. Can't pan to it:", selectedNodeId);
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      console.log('Panning to node:', node.id);
+      panToNodeIfNeeded(node, flowStore.value);
+    }, 200);
+    return () => clearTimeout(timeoutId);
   }, [selectedNodeId]);
 
   const { getEdges, setNodes } = useReactFlow();
@@ -74,6 +87,7 @@ export const GraphView = () => {
 
   // Clear node states when workflow changes
   useEffect(() => {
+    console.log('aaron: useEffect: activeWorkflowId:', activeWorkflowId);
     // Clear all node states AND outputs in UI when switching workflows
     setNodes((currentNodes) =>
       currentNodes.map((node) => ({
@@ -151,15 +165,12 @@ export const GraphView = () => {
     <div ref={containerRef} className="relative w-full h-full">
       <ColorfulMarkerDefinitions />
 
-      {/* Loading overlay */}
-      {isLayoutLoading && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background">
-          <div className="flex flex-col items-center gap-3">
-            <Spinner className="size-8" />
-            <p className="text-sm text-muted-foreground">Calculating layout...</p>
-          </div>
+      {/* Loading spinner - top right */}
+      {/* {isLayoutLoading && (
+        <div className="absolute top-4 right-4 z-50">
+          <Spinner className="size-6" />
         </div>
-      )}
+      )} */}
 
       {/* ReactFlow Graph */}
       <ReactFlow

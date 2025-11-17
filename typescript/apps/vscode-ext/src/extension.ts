@@ -315,6 +315,18 @@ export function activate(context: vscode.ExtensionContext) {
       return
     }
 
+    if (!event.textEditor.document.fileName.endsWith('.baml')) {
+      console.log('onDidChangeTextEditorSelection not a baml file', event.textEditor.document.fileName);
+      return;
+    }
+
+    if (event.kind === undefined) {
+      console.log('onDidChangeTextEditorSelection kind is undefined', event);
+      return;
+    }
+
+    console.log('looking: onDidChangeTextEditorSelection', event);
+
 
 
     // TODO: buggy when used with multiple functions, needs a fix.

@@ -347,6 +347,12 @@ export function useActiveNode() {
   // First try to find node in current graph (for workflow nodes)
   let node = currentGraph.nodes.find((n) => n.id === selectedNodeId);
 
+  console.log('[useActiveNode] Looking for node:', {
+    selectedNodeId,
+    found: !!node,
+    availableNodeIds: currentGraph.nodes.map(n => ({ id: n.id, label: n.label })),
+  });
+
   // If not found in graph, check if it's a standalone function
   if (!node) {
     const func = allFunctions.get(selectedNodeId);
@@ -355,7 +361,7 @@ export function useActiveNode() {
       // Map function type to NodeType (workflows become 'function' for synthetic nodes)
       const nodeType: NodeType =
         func.type === 'llm_function' ? 'llm_function' :
-        'function'; // default for 'function' and 'workflow' types
+          'function'; // default for 'function' and 'workflow' types
 
       node = {
         id: func.name,
