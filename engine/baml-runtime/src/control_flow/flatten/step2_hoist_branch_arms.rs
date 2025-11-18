@@ -61,7 +61,7 @@ pub fn hoist_branch_arms(viz: &ControlFlowVisualization) -> ControlFlowVisualiza
 
     for info in groups {
         // Step 2: move outgoing edges from the branch group onto each arm.
-        next.edges_by_src.remove(&info.node_id);
+        next.edges_by_src.shift_remove(&info.node_id);
         if !info.successors.is_empty() {
             for child in &info.branch_children {
                 let entry = next.edges_by_src.entry(*child).or_default();

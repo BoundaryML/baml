@@ -340,7 +340,7 @@ fn build_llm_function_graph(func: &hir::LlmFunction) -> ControlFlowVisualization
     let mut builder = ControlFlowVizBuilder::default();
     let root_id = builder.allocate_id();
     let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
-    let root_lexical = encode_segments(&func.name, &[root_segment.clone()]);
+    let root_lexical = encode_segments(&func.name, std::slice::from_ref(&root_segment));
     builder.add_node(Node::root(
         root_id,
         root_lexical,
@@ -377,7 +377,7 @@ impl HirTraversalContext {
         let mut graph = ControlFlowVizBuilder::default();
         let root_id = graph.allocate_id();
         let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
-        let root_lexical = encode_segments(function_name, &[root_segment.clone()]);
+        let root_lexical = encode_segments(function_name, std::slice::from_ref(&root_segment));
         graph.add_node(Node::root(
             root_id,
             root_lexical,
