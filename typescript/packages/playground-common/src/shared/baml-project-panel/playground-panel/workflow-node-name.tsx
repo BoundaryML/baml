@@ -21,7 +21,9 @@ export const WorkflowNodeName: React.FC<WorkflowNodeNameProps> = ({
 
   // Find the node in the active workflow to get its label
   const node = activeWorkflow?.nodes?.find((n) => n.id === nodeId);
-  const nodeLabel = node?.label || nodeId;
+  const nodeLabel = node?.label;
+
+  console.log('blahhh333333', { workflowId, nodeId, node, nodeLabel });
 
   return (
     <Breadcrumb>

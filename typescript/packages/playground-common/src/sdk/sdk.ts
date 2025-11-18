@@ -175,6 +175,27 @@ export class BAMLSDK {
     console.log('SDK: Runtime recreated with', workflows.length, 'workflows,', diagnostics.length, 'diagnostics');
     console.log('SDK: Extracted', functions.length, 'functions:', functions.map(f => f.name));
     console.log('SDK: Extracted', allTestCases.length, 'test cases:', allTestCases.map(tc => `${tc.name} (${tc.functionId})`));
+
+    // Restore cursor position if it was updated recently (< 3 seconds ago)
+    const lastCursorPosition = this.storage.getLastCursorPosition();
+    if (lastCursorPosition) {
+      const timeSinceLastUpdate = Date.now() - lastCursorPosition.timestamp;
+      const THREE_SECONDS = 3000;
+
+      if (timeSinceLastUpdate < THREE_SECONDS) {
+        console.log('aaron: [SDK] Restoring cursor position after runtime recreation:', lastCursorPosition);
+        // Re-apply the cursor position to restore navigation state
+        setTimeout(() => {
+          this.navigation.updateCursor({
+            fileName: lastCursorPosition.fileName,
+            line: lastCursorPosition.line,
+            column: lastCursorPosition.column,
+          });
+        }, 100);
+      } else {
+        console.log('aaron: [SDK] Cursor position too old to restore (age:', timeSinceLastUpdate, 'ms)');
+      }
+    }
   }
 
   // ============================================================================
@@ -639,6 +660,14 @@ export class BAMLSDK {
         return;
       }
 
+      // Store cursor position and timestamp for runtime recreation
+      this.storage.setLastCursorPosition({
+        fileName: cursor.fileName,
+        line: cursor.line,
+        column: cursor.column,
+        timestamp: Date.now(),
+      });
+
       const fileContents = this.storage.getBAMLFiles();
       const currentSelection = this.storage.getSelectedFunctionName();
 
@@ -647,7 +676,7 @@ export class BAMLSDK {
       console.log('[SDK] updateCursor result', result);
 
       if (!result.functionName) {
-        console.debug('[SDK] Cursor not on any function');
+        console.debug('aaron: [SDK] Cursor not on any function');
         return;
       }
 

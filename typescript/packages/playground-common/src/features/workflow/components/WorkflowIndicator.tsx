@@ -8,7 +8,7 @@
 import { minidenticon } from 'minidenticons';
 import { useEffect, useMemo } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { useActiveWorkflow, useSelectedNode, useWorkflows } from '../../../sdk/hooks';
+import { useActiveWorkflow, useWorkflows } from '../../../sdk/hooks';
 import { flowStore } from '../../../states/reactflow';
 import { panToNodeIfNeeded } from '../../../utils/cameraPan';
 import {
@@ -17,6 +17,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@baml/ui/dropdown-menu';
+import { selectedNodeIdAtom } from '@/sdk/atoms/core.atoms';
+import { useAtomValue } from 'jotai';
 
 interface MinidenticonImgProps {
   username: string;
@@ -36,7 +38,7 @@ const MinidenticonImg = ({ username, saturation = 50, lightness = 50, className,
 
 export function WorkflowIndicator() {
   const { activeWorkflow, setActiveWorkflow } = useActiveWorkflow();
-  const [selectedNodeId, setSelectedNodeId] = useSelectedNode();
+  const selectedNodeId = useAtomValue(selectedNodeIdAtom);
   const allWorkflows = useWorkflows();
 
   // Find all workflows that contain the selected node
@@ -58,27 +60,7 @@ export function WorkflowIndicator() {
     return null;
   }
 
-  const handleWorkflowSwitch = (workflowId: string) => {
-    const nodeToKeepSelected = selectedNodeId;
-    console.log('🔄 Manually switching workflow via indicator:', workflowId, 'keeping node:', nodeToKeepSelected);
 
-    setActiveWorkflow(workflowId);
-
-    // Wait for workflow to load, then re-select the node and pan to it
-    if (nodeToKeepSelected) {
-      setTimeout(() => {
-        setSelectedNodeId(nodeToKeepSelected);
-
-        // Pan to the node after a brief delay to ensure it's rendered
-        setTimeout(() => {
-          const node = flowStore.value.getNode(nodeToKeepSelected);
-          if (node) {
-            panToNodeIfNeeded(node, flowStore.value);
-          }
-        }, 100);
-      }, 300);
-    }
-  };
 
   return (
     <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[1000]">
@@ -103,7 +85,7 @@ export function WorkflowIndicator() {
             {workflowsWithSelectedNode.map((workflow) => (
               <DropdownMenuItem
                 key={workflow.id}
-                onClick={() => handleWorkflowSwitch(workflow.id)}
+                // onClick={() => handleWorkflowSwitch(workflow.id)}
                 className={workflow.id === activeWorkflow.id ? 'bg-accent' : ''}
               >
                 <div className="flex items-center gap-2">

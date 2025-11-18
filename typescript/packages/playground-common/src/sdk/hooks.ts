@@ -33,6 +33,7 @@ import {
   selectedExecutionIdAtom,
   selectedExecutionAtom,
   latestExecutionAtom,
+  currentGraphAtom,
   nodeExecutionsAtom,
   nodeStateAtomFamily,
   allNodeStatesAtom,
@@ -200,26 +201,6 @@ export function useViewMode() {
   return useAtom(viewModeAtom);
 }
 
-/**
- * Get and set selected node
- */
-export function useSelectedNode() {
-  const selectedNodeId = useAtomValue(selectedNodeIdAtom);
-  const [, setUnifiedSelection] = useAtom(unifiedSelectionStateAtom);
-
-  const setSelectedNodeId = useCallback(
-    (nodeId: string | null) => {
-      setUnifiedSelection((prev) =>
-        prev.mode === 'workflow' && nodeId
-          ? { ...prev, selectedNodeId: nodeId }
-          : prev
-      );
-    },
-    [setUnifiedSelection]
-  );
-
-  return [selectedNodeId, setSelectedNodeId] as const;
-}
 
 /**
  * Get and set detail panel state
@@ -302,38 +283,17 @@ export function useEventSubscription(
 
 /**
  * Get the current graph to display (editor or snapshot)
+ * Now reads from currentGraphAtom for better reactivity
  */
 export function useCurrentGraph() {
-  const [viewMode] = useViewMode();
-  const activeWorkflow = useAtomValue(activeWorkflowAtom);
-  const selectedExecution = useAtomValue(selectedExecutionAtom);
-
-  return useMemo(() => {
-    if (viewMode.mode === 'execution' && selectedExecution) {
-      // Return snapshot graph
-      return {
-        nodes: selectedExecution.graphSnapshot.nodes,
-        edges: selectedExecution.graphSnapshot.edges,
-        isSnapshot: true,
-        execution: selectedExecution,
-      };
-    }
-
-    // Return live graph from current workflow
-    return {
-      nodes: activeWorkflow?.nodes ?? [],
-      edges: activeWorkflow?.edges ?? [],
-      isSnapshot: false,
-      workflow: activeWorkflow,
-    };
-  }, [viewMode, activeWorkflow, selectedExecution]);
+  return useAtomValue(currentGraphAtom);
 }
 
 /**
  * Get the active node (selected node with its execution data)
  */
 export function useActiveNode() {
-  const [selectedNodeId] = useSelectedNode();
+  const selectedNodeId = useAtomValue(selectedNodeIdAtom);
   const nodeExecutions = useNodeExecutions();
   const currentGraph = useCurrentGraph();
   const allFunctions = useAtomValue(allFunctionsMapAtom);
@@ -576,7 +536,7 @@ export function useStandaloneFunctions() {
  * Computed on-demand with useMemo instead of a cached atom
  */
 export function useSelectedFunction() {
-  const [selectedNodeId] = useSelectedNode();
+  const selectedNodeId = useAtomValue(selectedNodeIdAtom);
   const allFunctions = useAtomValue(allFunctionsMapAtom);
 
   return useMemo(() => {
@@ -594,7 +554,7 @@ export function useSelectedFunction() {
  * 2. NOT part of any workflow
  */
 export function useLLMOnlyMode() {
-  const [selectedNodeId] = useSelectedNode();
+  const selectedNodeId = useAtomValue(selectedNodeIdAtom);
   const activeWorkflow = useAtomValue(activeWorkflowAtom);
   const allFunctions = useAtomValue(allFunctionsMapAtom);
   const workflows = useAtomValue(workflowsAtom);

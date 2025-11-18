@@ -52,6 +52,7 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
   const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.selectedNodeId : null;
   const testName = selection.mode !== 'empty' ? selection.testName : null;
 
+
   return (
     <Button
       variant="default"
@@ -111,17 +112,17 @@ export function PreviewToolbar() {
   const setBamlConfig = useSetAtom(bamlConfig);
   const { resolvedTheme, setTheme } = useTheme();
   const isLightMode = resolvedTheme === 'light';
-  
+
   // Beta feature flag settings
   const [betaFeatureEnabled, setBetaFeatureEnabled] = useAtom(standaloneBetaFeatureEnabledAtom);
   const vscodeSettings = useAtomValue(vscodeSettingsAtom);
   const isInVSCode = isVSCodeEnvironment();
-  
+
   // For VSCode, use VSCode settings directly (read-only); for standalone, use atom
-  const displayBetaEnabled = isInVSCode 
+  const displayBetaEnabled = isInVSCode
     ? (vscodeSettings?.featureFlags?.includes('beta') ?? false)
     : betaFeatureEnabled;
-  
+
   const handleBetaToggle = (enabled: boolean) => {
     // This function only runs in standalone mode (not VSCode)
     setBetaFeatureEnabled(enabled);
@@ -142,6 +143,8 @@ export function PreviewToolbar() {
   const isWorkflowContext = !selectedFn && unifiedSelection.mode === 'workflow';
 
   const hasSelection = selectedFn !== null || isWorkflowContext;
+
+  console.log('blahhh2', { selectedFn, unifiedSelection, isWorkflowContext, hasSelection });
 
   return (
     <div className="flex flex-col gap-1 overflow-hidden w-full">
@@ -289,7 +292,7 @@ export function PreviewToolbar() {
               <DropdownMenuLabel className="text-xs px-2 py-1.5">
                 Experimental Features
               </DropdownMenuLabel>
-              
+
               {/* Beta Features - Only show toggle in standalone fiddle, not in VSCode */}
               {!isInVSCode ? (
                 <DropdownMenuCheckboxItem
@@ -306,7 +309,7 @@ export function PreviewToolbar() {
                         Enable experimental BAML features and suppress experimental warnings.
                         <br />
                         <br />
-                        <b>Standalone:</b> This setting is saved locally 
+                        <b>Standalone:</b> This setting is saved locally
                         and persists across sessions.
                       </TooltipContent>
                     </Tooltip>

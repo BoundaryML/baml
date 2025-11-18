@@ -42,6 +42,7 @@ import {
   selectedFunctionNameAtom,
   selectedTestCaseNameAtom,
   unifiedSelectionStateAtom,
+  lastCursorPositionAtom,
 } from '../atoms/core.atoms';
 
 import type {
@@ -508,5 +509,17 @@ export class JotaiStorage implements SDKStorage {
 
   clearFlashRanges() {
     this.store.set(flashRangesAtom, []);
+  }
+
+  // ============================================================================
+  // Cursor Position Tracking
+  // ============================================================================
+
+  setLastCursorPosition(position: { fileName: string; line: number; column: number; timestamp: number } | null) {
+    this.store.set(lastCursorPositionAtom, position);
+  }
+
+  getLastCursorPosition() {
+    return this.store.get(lastCursorPositionAtom);
   }
 }

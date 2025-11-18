@@ -1253,6 +1253,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
       );
 
       if (!selectedFunc) {
+        console.log('aaron: clicked on something that is not a function');
         return { functionName: null, testCaseName: null, nodeId: null };
       }
 

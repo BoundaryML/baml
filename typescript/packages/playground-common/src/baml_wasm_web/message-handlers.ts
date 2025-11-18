@@ -33,7 +33,7 @@ export async function handleIDEMessage(
 ): Promise<void> {
   const { command, content } = payload;
 
-  console.debug('[MessageHandler] IDE message:', command);
+  console.debug('aaron: [MessageHandler] IDE message:', command);
 
   switch (command) {
     case 'update_cursor':

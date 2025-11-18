@@ -11,12 +11,13 @@
 
 import { useEffect } from 'react';
 import { useReactFlow } from '@xyflow/react';
+import { useAtomValue } from 'jotai';
 import {
   useAllNodeStates,
   useNodeExecutions,
   useLatestExecution,
-  useSelectedNode,
 } from '../../../sdk/hooks';
+import { selectedNodeIdAtom } from '../../../sdk/atoms/core.atoms';
 
 /**
  * Hook that syncs execution state to ReactFlow nodes
@@ -26,7 +27,7 @@ export function useExecutionSync() {
   const nodeStates = useAllNodeStates();
   const nodeExecutions = useNodeExecutions();
   const latestExecution = useLatestExecution();
-  const [selectedNodeId] = useSelectedNode();
+  const selectedNodeId = useAtomValue(selectedNodeIdAtom);
 
   useEffect(() => {
     const isExecutionRunning = latestExecution?.status === 'running';

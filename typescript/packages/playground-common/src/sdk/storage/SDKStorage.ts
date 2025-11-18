@@ -207,4 +207,11 @@ export interface SDKStorage {
   setFlashRanges(ranges: FlashRange[]): void;
   getFlashRanges(): FlashRange[];
   clearFlashRanges(): void;
+
+  // ============================================================================
+  // Cursor Position Tracking
+  // ============================================================================
+
+  setLastCursorPosition(position: { fileName: string; line: number; column: number; timestamp: number } | null): void;
+  getLastCursorPosition(): { fileName: string; line: number; column: number; timestamp: number } | null;
 }

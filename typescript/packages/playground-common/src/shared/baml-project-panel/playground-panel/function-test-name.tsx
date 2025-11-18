@@ -65,6 +65,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
   const availableTests = currentFunction?.tests || [];
 
 
+
   // Component for function dropdown items with jumpToFile
   const FunctionDropdownItem = ({ func }: { func: { name: string; tests: string[] } }) => {
     const fnAtom = useMemo(() => functionObjectAtom(func.name), [func.name]);
@@ -80,8 +81,8 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
           // Determine function type
           const functionType = fn?.type === 'workflow' ? 'workflow'
             : fn?.type === 'llm_function' ? 'llm_function'
-            : fn?.functionFlavor === 'llm' ? 'llm_function'
-            : 'function';
+              : fn?.functionFlavor === 'llm' ? 'llm_function'
+                : 'function';
 
           if (firstTest) {
             // Navigate to test

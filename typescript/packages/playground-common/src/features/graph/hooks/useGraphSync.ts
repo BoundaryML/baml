@@ -5,40 +5,26 @@
  * Handles graph changes and ensures proper rendering.
  */
 
-import { useMemo, useEffect, useState, useRef } from 'react';
-import { useCurrentGraph, useLayoutDirection } from '../../../sdk/hooks';
-import { sdkGraphToReactflow } from '../../../sdk/adapter';
+import { useEffect, useState, useRef } from 'react';
+import { useAtomValue } from 'jotai';
+import { convertedGraphAtom, currentGraphAtom, layoutDirectionAtom, selectedNodeIdAtom } from '../../../sdk/atoms/core.atoms';
 import { useAutoLayout } from '../layout/useAutoLayout';
 
 /**
  * Hook that converts SDK graph to ReactFlow and manages layout
  */
 export function useGraphSync() {
-  const currentGraph = useCurrentGraph();
-  const [direction] = useLayoutDirection();
+  const currentGraph = useAtomValue(currentGraphAtom);
+  const convertedGraph = useAtomValue(convertedGraphAtom);
+  const direction = useAtomValue(layoutDirectionAtom);
   const { layout } = useAutoLayout();
   const [isLayoutLoading, setIsLayoutLoading] = useState(false);
   const lastLayoutKeyRef = useRef<string | null>(null);
 
-  // Convert SDK graph to ReactFlow format
-  const convertedGraph = useMemo(() => {
-    if (!currentGraph.nodes.length) return null;
-
-    // console.log('🔄 Converting graph:', {
-    //   nodes: currentGraph.nodes.length,
-    //   edges: currentGraph.edges.length,
-    //   isSnapshot: currentGraph.isSnapshot,
-    // });
-    console.log('aaron: useGraphSync: converting graph:', {
-      currentGraphnodes: currentGraph.nodes
-    });
-
-    return sdkGraphToReactflow(
-      currentGraph.nodes,
-      currentGraph.edges,
-      direction
-    );
-  }, [currentGraph.nodes, currentGraph.edges, direction]);
+  // console.log('aaron: useGraphSync: converted graph from atom:', {
+  //   convertedGraph: convertedGraph?.nodes.length ?? 0,
+  //   currentGraphNodes: currentGraph.nodes.length
+  // });
 
   // Run layout when graph changes
   // Note: Only depend on convertedGraph (which includes direction in its memo)
@@ -49,13 +35,16 @@ export function useGraphSync() {
     const layoutKey = `${currentGraph.workflow?.id ?? 'standalone'}|${convertedGraph.nodes
       .map((node) => node.id)
       .join(',')}|${convertedGraph.edges.length}`;
+    console.log('aaron: useGraphSync: layout key:', layoutKey);
 
     if (lastLayoutKeyRef.current === layoutKey) {
+      console.log('aaron: useGraphSync: skipping layout: last layout key matches current layout key');
       return;
     }
+    console.log('aaron: useGraphSync: setting last layout key:', layoutKey);
     lastLayoutKeyRef.current = layoutKey;
 
-    console.log('📐 Running layout for', convertedGraph.nodes.length, 'nodes');
+    console.log('📐 Running layout for', convertedGraph.nodes.length, 'nodes. Elk will run twice to measure nodes.');
     setIsLayoutLoading(true);
 
     // Add a safety timeout to prevent infinite loading state

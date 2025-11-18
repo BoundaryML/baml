@@ -9,6 +9,7 @@ import {
   ReactFlow,
   SelectionMode,
   useEdgesState,
+  useNodesInitialized,
   useNodesState,
   useReactFlow,
   useViewport,
@@ -40,6 +41,7 @@ import { panToNodeIfNeeded } from '../../../../utils/cameraPan';
 export const GraphView = () => {
   const [nodes, _setNodes, onNodesChange] = useNodesState([]);
   const [edges, _setEdges, onEdgesChange] = useEdgesState([]);
+  const nodesInitialized = useNodesInitialized({ includeHiddenNodes: false });
 
   // Feature hooks
   const { convertedGraph, isLayoutLoading } = useGraphSync();
@@ -54,29 +56,6 @@ export const GraphView = () => {
   const selection = useAtomValue(unifiedSelectionAtom);
   const selectedNodeId = selection.mode === 'workflow' ? selection.selectedNodeId : null;
 
-  useEffect(() => {
-    const nodes = flowStore.value.getNodes?.();
-    if (!nodes || !nodes.length) return;
-    const updated = nodes.map((node) =>
-      node.selected === (node.id === selectedNodeId)
-        ? node
-        : { ...node, selected: node.id === selectedNodeId }
-    );
-    flowStore.value.setNodes?.(updated);
-
-    // pan if selected node id changes
-    const node = flowStore.value.getNode(selectedNodeId ?? '');
-    if (!node) {
-      console.error("Node not found. Can't pan to it:", selectedNodeId);
-      return;
-    }
-    const timeoutId = setTimeout(() => {
-      console.log('Panning to node:', node.id);
-      panToNodeIfNeeded(node, flowStore.value);
-    }, 200);
-    return () => clearTimeout(timeoutId);
-  }, [selectedNodeId]);
-
   const { getEdges, setNodes } = useReactFlow();
   const viewport = useViewport();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -90,7 +69,7 @@ export const GraphView = () => {
     console.log('aaron: useEffect: activeWorkflowId:', activeWorkflowId);
     // Clear all node states AND outputs in UI when switching workflows
     setNodes((currentNodes) =>
-      currentNodes.map((node) => ({
+      [...currentNodes].map((node) => ({
         ...node,
         data: {
           ...node.data,
@@ -101,7 +80,37 @@ export const GraphView = () => {
         },
       }))
     );
-  }, [activeWorkflowId, setNodes]);
+  }, [activeWorkflowId]);
+
+  // set selected node id if it changes
+  useEffect(() => {
+    if (selectedNodeId && nodesInitialized) {
+
+      setNodes((currentNodes) => {
+        console.log("Nodes before updating selection:", currentNodes, "selectedNodeId:", selectedNodeId);
+        return currentNodes.map((node) => ({ ...node, selected: node.id === selectedNodeId }));
+      });
+
+
+      // pan if selected node id changes
+      const node = flowStore.value.getNode(selectedNodeId ?? '');
+      if (!node) {
+        console.error("Node not found. Can't pan to it:", selectedNodeId);
+        return;
+      }
+      console.log('Panning to node:', node.id);
+      setTimeout(() => {
+        // TODO: do this on a new useAutolayout as well
+        // so that we only make graph visible post-panning. Except in that case we dont want to animate it out.
+        panToNodeIfNeeded(node, flowStore.value);
+      }, 10);
+
+
+
+    }
+  }, [selectedNodeId, setNodes, isLayoutLoading, nodesInitialized]);
+
+
 
   // Recalculate edge routing when a node is being dragged or moved
   const handleNodeDrag = () => {
@@ -138,7 +147,7 @@ export const GraphView = () => {
   };
 
   useLayoutEffect(() => {
-    if (!selectedNodeId) {
+    if (!selectedNodeId || !nodesInitialized || isLayoutLoading) {
       setIndicatorPosition(null);
       return;
     }
@@ -166,11 +175,11 @@ export const GraphView = () => {
       <ColorfulMarkerDefinitions />
 
       {/* Loading spinner - top right */}
-      {/* {isLayoutLoading && (
+      {isLayoutLoading && (
         <div className="absolute top-4 right-4 z-50">
           <Spinner className="size-6" />
         </div>
-      )} */}
+      )}
 
       {/* ReactFlow Graph */}
       <ReactFlow
@@ -187,6 +196,7 @@ export const GraphView = () => {
         nodesDraggable={false}
         selectionOnDrag
         panOnDrag={[1, 2]}
+
         // autoPanOnNodeFocus={true}
         selectionMode={SelectionMode.Partial}
         colorMode="light"
@@ -201,7 +211,7 @@ export const GraphView = () => {
         <Controls showInteractive={false} />
       </ReactFlow>
 
-      {indicatorPosition && (
+      {indicatorPosition && nodesInitialized && (
         <div
           className="pointer-events-none absolute z-50"
           style={{

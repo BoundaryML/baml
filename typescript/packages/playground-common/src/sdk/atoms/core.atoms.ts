@@ -18,6 +18,7 @@ import type {
 import type { BamlRuntimeInterface } from '../runtime/BamlRuntimeInterface';
 import type { FunctionMetadata, FunctionWithCallGraph } from '../interface';
 import type { WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build';
+import { sdkGraphToReactflow } from '../adapter';
 
 // ============================================================================
 // CORE STATE (source of truth)
@@ -284,6 +285,7 @@ export const activeWorkflowAtom = atom((get) => {
   const id = get(activeWorkflowIdAtom);
   if (!id) return null;
   const workflows = get(workflowsAtom);
+  console.log('aaron: activeWorkflowAtom: workflows:', workflows.map((w) => ({ id: w.id, nodes: w.nodes.map((n) => n.id).join(', ') })));
   return workflows.find((w) => w.id === id) || null;
 });
 
@@ -319,6 +321,69 @@ export const selectedExecutionAtom = atom((get) => {
 export const latestExecutionAtom = atom((get) => {
   const executions = get(activeWorkflowExecutionsAtom);
   return executions[0] || null;
+});
+
+/**
+ * Current graph to display (derived from selection and view mode)
+ * Returns either the execution snapshot graph or the live workflow graph
+ *
+ * This replaces the useCurrentGraph useMemo logic with a proper derived atom
+ * for better reactivity and composability.
+ */
+export const currentGraphAtom = atom((get) => {
+  const viewMode = get(viewModeAtom);
+  const selectedExecution = get(selectedExecutionAtom);
+  const selection = get(unifiedSelectionStateAtom);
+  const workflows = get(workflowsAtom);
+
+  // If viewing an execution snapshot, return snapshot graph
+  if (viewMode.mode === 'execution' && selectedExecution) {
+    return {
+      nodes: selectedExecution.graphSnapshot.nodes,
+      edges: selectedExecution.graphSnapshot.edges,
+      isSnapshot: true as const,
+      execution: selectedExecution,
+      workflow: undefined,
+    };
+  }
+
+  // If in workflow mode, return the workflow's graph
+  if (selection.mode === 'workflow') {
+    const workflow = workflows.find((w) => w.id === selection.workflowId);
+    return {
+      nodes: workflow?.nodes ?? [],
+      edges: workflow?.edges ?? [],
+      isSnapshot: false as const,
+      workflow,
+      execution: undefined,
+    };
+  }
+
+  // For function or empty modes, return empty graph
+  return {
+    nodes: [],
+    edges: [],
+    isSnapshot: false as const,
+    workflow: null,
+    execution: undefined,
+  };
+});
+
+/**
+ * Converted graph in ReactFlow format (derived from currentGraph and layoutDirection)
+ * This replaces the convertedGraph useMemo in useGraphSync
+ */
+export const convertedGraphAtom = atom((get) => {
+  const currentGraph = get(currentGraphAtom);
+  const direction = get(layoutDirectionAtom);
+
+  if (!currentGraph.nodes.length) return null;
+
+  return sdkGraphToReactflow(
+    currentGraph.nodes,
+    currentGraph.edges,
+    direction
+  );
 });
 
 /**
@@ -730,3 +795,21 @@ export const versionAtom = atom((get) => {
   const runtime = get(runtimeInstanceAtom);
   return runtime?.getVersion() ?? "Loading...";
 });
+
+// ============================================================================
+// CURSOR POSITION TRACKING (for runtime recreation)
+// ============================================================================
+
+export interface CursorPositionState {
+  fileName: string;
+  line: number;
+  column: number;
+  timestamp: number;
+}
+
+/**
+ * Last known cursor position with timestamp
+ * Used to restore cursor position when runtime is recreated
+ * Only restore if timestamp is less than 3 seconds old
+ */
+export const lastCursorPositionAtom = atom<CursorPositionState | null>(null);

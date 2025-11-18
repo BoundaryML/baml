@@ -7,6 +7,7 @@ import { type ILayoutReactflow, layoutReactflow } from './node';
 const layoutWithFlush = async (options: ILayoutReactflow) => {
   const layout = await layoutReactflow(options);
 
+
   // Wait for the nodes and edges to be cleared
   flowStore.value.setNodes([]);
   flowStore.value.setEdges([]);
@@ -35,6 +36,7 @@ export const useAutoLayout = () => {
 
   const processLayoutQueue = async () => {
     if (isProcessingQueueRef.current || !pendingLayoutRef.current) {
+
       return;
     }
 
@@ -60,23 +62,43 @@ export const useAutoLayout = () => {
 
         // Check if a newer layout was queued while we were processing
         if (pendingLayoutRef.current) {
-          console.log('useAutoLayout: newer layout queued, skipping second pass');
           continue;
         }
 
         // Perform the second layout using actual node sizes
         const secondLayout = await layoutWithFlush({
-          visibility: 'visible',
+          visibility: 'hidden',
           ...options,
           nodes: firstLayout.nodes,
           edges: firstLayout.edges,
         });
 
         // Center the viewpoint only if skipFitView is not true
+        // TODO: we may not want to actually do this step when a user is editing their source code cause the graph may become way too small (e..g they may be editing a subgraph they already zoomed into..)
         if (!options.skipFitView) {
-          await flowStore.value.fitView({ duration: 0 });
-          await flowStore.value.zoomTo(flowStore.value.getZoom() * 0.8);
+          await flowStore.value.fitView({ duration: 0, minZoom: 0.8 });
+          await flowStore.value.zoomTo(flowStore.value.getZoom() * 1.0);
         }
+
+        // Make nodes visible after zoom completes
+        flowStore.value.setNodes(
+          secondLayout.nodes.map((node) => ({
+            ...node,
+            style: {
+              ...node.style,
+              visibility: 'visible',
+            },
+          }))
+        );
+        flowStore.value.setEdges(
+          secondLayout.edges.map((edge) => ({
+            ...edge,
+            style: {
+              ...edge.style,
+              visibility: 'visible',
+            },
+          }))
+        );
       } catch (error) {
         console.error('aaron: useAutoLayout: layout error:', error);
       }
@@ -88,10 +110,6 @@ export const useAutoLayout = () => {
 
   const layout = async (options: ILayoutReactflow & { skipFitView?: boolean }) => {
     if (!flowStore.value.initialized || options.nodes.length < 1) {
-      console.log('useAutoLayout: skipping layout:', {
-        isDirty,
-        flowStoreInitialized: flowStore.value.initialized,
-      });
       return;
     }
 
