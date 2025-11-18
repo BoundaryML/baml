@@ -320,6 +320,7 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
 
+    // copy pastes are undefined, but may still be valid.
     // if (event.kind === undefined) {
     //   console.log('onDidChangeTextEditorSelection kind is undefined', event);
     //   return;
