@@ -186,6 +186,16 @@ impl std::fmt::Display for MinijinjaBamlEnumValue {
     }
 }
 
+impl serde::Serialize for MinijinjaBamlEnumValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Serialize as a string using the alias if available, otherwise the value name
+        serializer.serialize_str(self.alias.as_ref().unwrap_or(&self.value))
+    }
+}
+
 impl std::fmt::Debug for MinijinjaBamlEnumValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
@@ -243,9 +253,9 @@ impl Object for MinijinjaBamlEnumValue {
     }
 }
 
-struct MinijinjaBamlClass {
-    class: IndexMap<String, minijinja::Value>,
-    key_to_alias: IndexMap<String, String>,
+pub(crate) struct MinijinjaBamlClass {
+    pub(crate) class: IndexMap<String, minijinja::Value>,
+    pub(crate) key_to_alias: IndexMap<String, String>,
 }
 
 impl std::fmt::Display for MinijinjaBamlClass {
@@ -276,6 +286,37 @@ impl std::fmt::Debug for MinijinjaBamlClass {
     }
 }
 
+impl serde::Serialize for MinijinjaBamlClass {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.class.len()))?;
+
+        // Serialize with aliased keys
+        for (k, v) in self.class.iter() {
+            let alias = self.key_to_alias.get(k).unwrap_or(k);
+            map.serialize_entry(alias, v)?;
+        }
+
+        map.end()
+    }
+}
+
+impl MinijinjaBamlClass {
+    /// Get the aliased keys and values for serialization
+    pub fn get_aliased_entries(&self) -> Vec<(String, &minijinja::Value)> {
+        self.class
+            .iter()
+            .map(|(k, v)| {
+                let alias = self.key_to_alias.get(k).unwrap_or(k);
+                (alias.clone(), v)
+            })
+            .collect()
+    }
+}
+
 impl Object for MinijinjaBamlClass {
     fn repr(self: &Arc<Self>) -> ObjectRepr {
         ObjectRepr::Map
@@ -302,8 +343,8 @@ impl Object for MinijinjaBamlClass {
 
 // List
 
-struct MinijinjaBamlList {
-    list: Vec<minijinja::Value>,
+pub(crate) struct MinijinjaBamlList {
+    pub(crate) list: Vec<minijinja::Value>,
 }
 
 impl std::fmt::Display for MinijinjaBamlList {
@@ -327,6 +368,22 @@ impl std::fmt::Display for MinijinjaBamlList {
 impl std::fmt::Debug for MinijinjaBamlList {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
+    }
+}
+
+impl serde::Serialize for MinijinjaBamlList {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.list.len()))?;
+
+        for value in &self.list {
+            seq.serialize_element(value)?;
+        }
+
+        seq.end()
     }
 }
 
@@ -365,6 +422,15 @@ pub(crate) struct BamlNull;
 impl std::fmt::Display for BamlNull {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("null")
+    }
+}
+
+impl serde::Serialize for BamlNull {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_none()
     }
 }
 

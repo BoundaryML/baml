@@ -4145,8 +4145,10 @@ dependencies = [
  "minijinja",
  "serde",
  "serde_json",
+ "serde_yaml",
  "strsim",
  "strum",
+ "toon",
 ]
 
 [[package]]
@@ -7819,6 +7821,16 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "toon"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fa605a2aa68fefdedc9560bd765ce3ad89d45ac1d3ebad43724621098c9299a"
+dependencies = [
+ "regex",
+ "serde_json",
 ]
 
 [[package]]

@@ -512,6 +512,10 @@ impl<'a> Walker<'a, &'a Field> {
             .transpose()
     }
 
+    pub fn skip(&self, ctx: &EvaluationContext<'_>) -> Result<bool> {
+        Ok(self.item.attributes.skip())
+    }
+
     pub fn streaming_behavior(&self) -> StreamingBehavior {
         self.item.attributes.streaming_behavior()
     }

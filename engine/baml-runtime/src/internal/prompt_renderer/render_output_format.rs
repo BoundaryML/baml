@@ -80,7 +80,7 @@ fn find_new_class_field(
     class_walker: &Result<ClassWalker<'_>>,
     overrides: &RuntimeClassOverride,
     _ctx: &RuntimeContext,
-) -> Result<(Name, TypeIR, Option<String>, bool)> {
+) -> Result<Option<(Name, TypeIR, Option<String>, bool)>> {
     let Some(field_overrides) = overrides.new_fields.get(field_name) else {
         anyhow::bail!("Class {} does not have a field: {}", class_name, field_name);
     };
@@ -96,13 +96,17 @@ fn find_new_class_field(
         }
     }
 
+    if let Some(true) = field_overrides.1.skip {
+        return Ok(None);
+    }
+
     let alias = OverridableValue::<String>::from(field_overrides.1.alias.as_ref());
     let desc = OverridableValue::<String>::from(field_overrides.1.meta.get("description"));
 
     let name = Name::new_with_alias(field_name.to_string(), alias.value());
     let desc = desc.value();
 
-    Ok((name, field_overrides.0.clone(), desc, false)) // TODO: Field overrides are not "stream.not_null". Should this be configurable?
+    Ok(Some((name, field_overrides.0.clone(), desc, false))) // TODO: Field overrides are not "stream.not_null". Should this be configurable?
 }
 
 fn find_existing_class_field(
@@ -111,7 +115,7 @@ fn find_existing_class_field(
     class_walker: &Result<ClassWalker<'_>>,
     overrides: &Option<&RuntimeClassOverride>,
     ctx: &RuntimeContext,
-) -> Result<(Name, TypeIR, Option<String>, bool)> {
+) -> Result<Option<(Name, TypeIR, Option<String>, bool)>> {
     let Ok(class_walker) = class_walker else {
         anyhow::bail!("Class {} does not exist", class_name);
     };
@@ -125,14 +129,25 @@ fn find_existing_class_field(
     let mut alias = OverridableValue::Unset;
     let mut desc = OverridableValue::Unset;
     let mut needed = OverridableValue::Unset;
+    let mut skip = OverridableValue::Unset;
 
     if let Some(attrs) = field_overrides {
+        match attrs.skip {
+            Some(true) => return Ok(None),
+            Some(false) => skip = OverridableValue::Set(false),
+            None => {}
+        }
+
         alias = OverridableValue::<String>::from(attrs.alias.as_ref());
         desc = OverridableValue::<String>::from(attrs.meta.get("description"));
         needed = OverridableValue::<bool>::from(attrs.meta.get("stream.not_null"));
     }
 
     let eval_ctx = ctx.eval_ctx(false);
+
+    if field_walker.skip(&eval_ctx)? && !matches!(skip, OverridableValue::Set(false)) {
+        return Ok(None);
+    }
 
     if matches!(alias, OverridableValue::Unset) {
         if let Some(_alias) = field_walker.alias(&eval_ctx)? {
@@ -150,7 +165,8 @@ fn find_existing_class_field(
     let desc = desc.value();
     let r#type = field_walker.r#type();
     let needed = needed.value().unwrap_or(false);
-    Ok((name, r#type.clone(), desc, needed))
+
+    Ok(Some((name, r#type.clone(), desc, needed)))
 }
 
 fn find_enum_value(
@@ -365,13 +381,15 @@ fn relevant_data_models<'a>(
                             let meta =
                                 find_existing_class_field(cls, &field, &walker, &overrides, ctx)?;
                             Ok(meta)
-                        });
+                        })
+                        .filter_map(Result::transpose);
 
                     let new_fields = overrides
                         .map(|o| {
                             o.new_fields
                                 .keys()
                                 .map(|k| find_new_class_field(cls, k, &walker, o, ctx))
+                                .filter_map(Result::transpose)
                         })
                         .into_iter()
                         .flatten();
@@ -555,6 +573,71 @@ mod tests {
         let foo_enum = render_output.find_enum("Foo").unwrap();
         assert_eq!(foo_enum.values[0].0.real_name(), "Bar".to_string());
         assert_eq!(foo_enum.values.len(), 1);
+
+        let rendered = render_output
+            .render(RenderOptions::default())
+            .unwrap()
+            .unwrap();
+        println!("{rendered}");
+        assert_eq!(
+            rendered,
+            r#"
+Answer with any of the categories:
+Foo
+----
+- Bar
+        "#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn skipped_class_fields_are_not_rendered() {
+        let files = vec![(
+            "test-file.baml",
+            r#"
+class Example {
+  keep string
+  dont_keep string? @skip
+}
+            "#,
+        )]
+        .into_iter()
+        .collect();
+        let env_vars = HashMap::new();
+        let baml_runtime =
+            BamlRuntime::from_file_content(".", &files, env_vars.clone(), FeatureFlags::new())
+                .unwrap();
+        let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
+        let ctx: RuntimeContext = ctx_manager
+            .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
+            .unwrap();
+
+        let field_type = TypeIR::class("Example");
+        let render_output = render_output_format(
+            baml_runtime.ir.as_ref(),
+            &ctx,
+            &field_type,
+            StreamingMode::NonStreaming,
+        )
+        .unwrap();
+
+        let rendered = render_output
+            .render(RenderOptions::default())
+            .unwrap()
+            .unwrap();
+        println!("{rendered}");
+
+        assert_eq!(
+            rendered,
+            r#"
+Answer in JSON using this schema:
+{
+  keep: string,
+}
+        "#
+            .trim()
+        )
     }
 
     #[test]
