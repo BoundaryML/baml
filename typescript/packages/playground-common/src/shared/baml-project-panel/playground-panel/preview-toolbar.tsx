@@ -50,7 +50,7 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
   const selection = useAtomValue(unifiedSelectionAtom);
 
   const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.selectedNodeId : null;
-  const testName = selection.mode !== 'empty' ? selection.testName : null;
+  const testName = selection.mode === 'function' || selection.mode === 'workflow' ? selection.testName : selection.mode === 'loading' ? selection.intent.testName ?? null : null;
 
 
   return (
@@ -160,7 +160,7 @@ export function PreviewToolbar() {
               <div className="min-w-0 flex-1 overflow-hidden">
                 <FunctionTestName
                   functionName={selectedFn.name}
-                  testName={unifiedSelection.mode !== 'empty' ? unifiedSelection.testName : null}
+                  testName={unifiedSelection.mode === 'function' || unifiedSelection.mode === 'workflow' ? unifiedSelection.testName : unifiedSelection.mode === 'loading' ? unifiedSelection.intent.testName ?? null : null}
                 />
               </div>
 

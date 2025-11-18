@@ -82,14 +82,17 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
 
         let generator_version = locked.get_common_generator_version();
 
-        let opt_version = generator_version.as_ref().ok();
+        let opt_version = generator_version.as_ref().ok().and_then(|v| v.as_ref());
         send_generator_version(&notifier, &locked, opt_version);
 
         // Make sure to check all available versions againt each other, & generate only if there's
         // no errors.
 
         {
-            let gen_version_iter = generator_version.as_ref().map(AsRef::as_ref);
+            // Propagate any errors from get_common_generator_version (e.g., version mismatches)
+            // but allow Ok(None) to pass through (no generators is valid)
+            let gen_version_opt = generator_version.internal_error()?;
+            let gen_version_iter = gen_version_opt.as_ref().map(AsRef::as_ref);
 
             let runtime_version = env!("CARGO_PKG_VERSION");
             let version_iter = [runtime_version]
@@ -97,11 +100,8 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
                 .chain(client_version)
                 .chain(gen_version_iter);
 
-            // check all versions against each other, ignoring any errors
-            // in common generator version.
+            // check all versions against each other
             _ = common_version_up_to_patch(version_iter).internal_error()?;
-            // Make sure to propagate the generator version check as well.
-            _ = generator_version.internal_error()?;
         }
 
         let default_flags2 = vec!["beta".to_string()];

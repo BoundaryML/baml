@@ -6,7 +6,7 @@
  */
 
 import { Provider as JotaiProvider, createStore } from 'jotai';
-import { createContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { BAMLSDK } from './sdk';
 import { createMockSDK, createRealBAMLSDK } from './factory';
 import {
@@ -30,67 +30,49 @@ interface BAMLSDKProviderProps {
  * Provider component that wraps the app and provides SDK access
  */
 export function BAMLSDKProvider({ children, mode: initialMode = 'wasm' }: BAMLSDKProviderProps) {
-  // Check if debug mode is enabled (lazy initialization to avoid SSR issues)
-  const [debugMode] = useState(() => isDebugMode());
+  // Check if debug mode is enabled (memoized to avoid SSR issues)
+  const debugMode = useMemo(() => isDebugMode(), []);
 
   // Get persisted runtime mode or use initial mode (lazy initialization)
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>(() => {
-    const defaultMode = debugMode ? (getPersistedRuntimeMode() || initialMode) : initialMode;
-    return defaultMode;
+    return debugMode ? (getPersistedRuntimeMode() || initialMode) : initialMode;
   });
 
-  // Create refs to ensure single instance creation
-  const storeRef = useRef<ReturnType<typeof createStore> | undefined>(undefined);
-  const sdkRef = useRef<BAMLSDK | undefined>(undefined);
-
-  // Track which mode the current SDK was created with
-  const currentSDKModeRef = useRef<RuntimeMode | undefined>(undefined);
-
-
-
-
-
   const [isInitialized, setIsInitialized] = useState(false);
-  // Initialize store once
-  if (!storeRef.current) {
-    storeRef.current = createStore();
-  }
-  // Create or recreate SDK when mode changes
-  if (!sdkRef.current || currentSDKModeRef.current !== runtimeMode) {
-    console.log('🚀 Creating BAML SDK with mode: ', runtimeMode);
+
+  // Create store once and never recreate it
+  const store = useMemo(() => createStore(), []);
+
+  // Create SDK whenever mode changes
+  const sdk = useMemo(() => {
+    console.log('aaron: [BAMLSDKProvider] Creating SDK with mode:', runtimeMode, store);
+    console.log('🚀 Creating BAML SDK with mode:', runtimeMode);
     if (runtimeMode === 'mock') {
-      sdkRef.current = createMockSDK(storeRef.current);
+      return createMockSDK(store);
     } else if (runtimeMode === 'wasm') {
-      sdkRef.current = createRealBAMLSDK(storeRef.current);
-    } else {
-      throw new Error(`Unsupported mode: ${runtimeMode}`);
+      return createRealBAMLSDK(store);
     }
-    currentSDKModeRef.current = runtimeMode;
-  }
+    throw new Error(`Unsupported mode: ${runtimeMode}`);
+  }, [runtimeMode, store]);
 
   // Handle mode change from debug banner
-  const handleModeChange = (newMode: RuntimeMode) => {
-    if (newMode === runtimeMode) return;
+  const handleModeChange = useCallback(
+    (newMode: RuntimeMode) => {
+      if (newMode === runtimeMode) return;
 
-    console.log('🔄 Switching runtime mode:', runtimeMode, '->', newMode);
+      console.log('🔄 Switching runtime mode:', runtimeMode, '->', newMode);
+      persistRuntimeMode(newMode);
+      setIsInitialized(false);
+      setRuntimeMode(newMode);
+    },
+    [runtimeMode]
+  );
 
-    // Persist the new mode
-    persistRuntimeMode(newMode);
-
-    // Reset initialization state
-    setIsInitialized(false);
-
-    // Update mode (this will trigger SDK recreation)
-    setRuntimeMode(newMode);
-  };
-
-  // Handle async initialization - reinitialize when runtime mode changes
+  // Handle async initialization - reinitialize when SDK changes
   useEffect(() => {
     let mounted = true;
 
     async function init() {
-      if (!sdkRef.current) return;
-
       console.log('⏳ Initializing SDK with mode:', runtimeMode);
 
       // Use debug fixtures when in debug mode, otherwise use empty files
@@ -101,11 +83,11 @@ export function BAMLSDKProvider({ children, mode: initialMode = 'wasm' }: BAMLSD
           'workflows/conditional.baml': '// Mock conditional workflow',
         };
 
-      await sdkRef.current.initialize(initialFiles);
+      await sdk.initialize(initialFiles);
 
       if (mounted) {
         console.log('✅ SDK initialized successfully');
-        const workflows = sdkRef.current.workflows.getAll();
+        const workflows = sdk.workflows.getAll();
         console.log('📦 Loaded workflows:', workflows.length, workflows.map((w) => w.id));
         setIsInitialized(true);
       }
@@ -116,11 +98,11 @@ export function BAMLSDKProvider({ children, mode: initialMode = 'wasm' }: BAMLSD
     return () => {
       mounted = false;
     };
-  }, [runtimeMode, debugMode]); // Reinitialize when runtime mode changes
+  }, [sdk, runtimeMode, debugMode]);
 
   return (
-    <BAMLSDKContext.Provider value={sdkRef.current}>
-      <JotaiProvider store={storeRef.current}>
+    <BAMLSDKContext.Provider value={sdk}>
+      <JotaiProvider store={store}>
         {debugMode && <DebugBanner currentMode={runtimeMode} onModeChange={handleModeChange} />}
         {!isInitialized ? (
           <div className="w-screen h-screen flex items-center justify-center bg-background">

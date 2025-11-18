@@ -320,10 +320,11 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
 
-    if (event.kind === undefined) {
-      console.log('onDidChangeTextEditorSelection kind is undefined', event);
-      return;
-    }
+    // if (event.kind === undefined) {
+    //   console.log('onDidChangeTextEditorSelection kind is undefined', event);
+    //   return;
+    // }
+
 
     console.log('looking: onDidChangeTextEditorSelection', event);
 

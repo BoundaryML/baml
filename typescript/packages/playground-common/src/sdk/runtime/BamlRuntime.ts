@@ -120,8 +120,9 @@ async function getWasmModule(): Promise<BamlWasmModule> {
     wasmModuleCache.init_js_callback_bridge(vscode.loadAwsCreds, vscode.loadGcpCreds);
 
     console.log('[BamlRuntime] WASM module loaded and cached ✓');
+  } else {
+    console.log('loaded wasm from cache');
   }
-  console.log('loaded wasm from cache');
 
   return wasmModuleCache;
 }
@@ -418,7 +419,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
     let diagnostics: DiagnosticError[] = [];
 
     try {
-      console.log('[BamlRuntime] Creating runtime with env vars and feature flags', { envVars, featureFlags });
+      console.log('[BamlRuntime] Creating runtime with env vars and feature flags', { envVars, featureFlags, files: Object.entries(files).map(([path, content]) => ({ path, content })) });
       // Create runtime with env vars and feature 
       // flags
       wasmRuntime = wasmProject.runtime(envVars, featureFlags);

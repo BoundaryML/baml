@@ -23,6 +23,7 @@ export function createMockSDK(
     speedMultiplier?: number;
   }
 ): BAMLSDK {
+  console.log('[createMockSDK] Creating mock SDK with options:', options);
   // Create mock configuration
   const mockConfig = createMockRuntimeConfig(options);
 

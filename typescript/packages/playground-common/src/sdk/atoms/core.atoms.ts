@@ -12,13 +12,13 @@ import type {
   NodeExecutionState,
   CacheEntry,
   BAMLEvent,
-  NavigationIntent,
   BAMLFile,
 } from '../types';
 import type { BamlRuntimeInterface } from '../runtime/BamlRuntimeInterface';
 import type { FunctionMetadata, FunctionWithCallGraph } from '../interface';
 import type { WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build';
 import { sdkGraphToReactflow } from '../adapter';
+import type { NavigationInput } from '../navigation/types';
 
 // ============================================================================
 // CORE STATE (source of truth)
@@ -40,6 +40,7 @@ export const runtimeInstanceAtom = atom<BamlRuntimeInterface | null>(null);
 export type SelectionState =
   | WorkflowSelection
   | FunctionSelection
+  | LoadingSelection
   | EmptySelection;
 
 export interface WorkflowSelection {
@@ -56,8 +57,15 @@ export interface FunctionSelection {
   testName: string | null;   // Active test case (if any)
 }
 
+export interface LoadingSelection {
+  mode: 'loading';
+  intent: NavigationInput;  // What we're trying to navigate to
+  startedAt: number;        // Timestamp when loading started
+}
+
 export interface EmptySelection {
   mode: 'empty';
+  reason?: 'not-found' | 'no-files';  // Why we're in empty state
 }
 
 /**
@@ -80,12 +88,16 @@ export const unifiedSelectionStateAtom = atom<SelectionState>({
 export function getTestName(state: SelectionState): string | null {
   if (state.mode === 'function') return state.testName;
   if (state.mode === 'workflow') return state.testName;
+  if (state.mode === 'loading') return state.intent.testName ?? null;
   return null;
 }
 
 export function getFunctionOrNodeName(state: SelectionState): string | null {
   if (state.mode === 'function') return state.functionName;
   if (state.mode === 'workflow') return state.selectedNodeId;
+  if (state.mode === 'loading') {
+    return state.intent.functionName ?? state.intent.nodeId ?? null;
+  }
   return null;
 }
 

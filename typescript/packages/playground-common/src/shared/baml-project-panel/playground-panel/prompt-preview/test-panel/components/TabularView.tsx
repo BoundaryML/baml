@@ -138,7 +138,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
   }
 
   const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.selectedNodeId : null;
-  const testName = selection.mode !== 'empty' ? selection.testName : null;
+  const testName = selection.mode === 'function' || selection.mode === 'workflow' ? selection.testName : selection.mode === 'loading' ? selection.intent.testName ?? null : null;
 
   const testAtom = useMemo(
     () => testcaseObjectAtom({ functionName: functionName ?? '', testcaseName: testName ?? '' }),

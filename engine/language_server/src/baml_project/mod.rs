@@ -1536,16 +1536,23 @@ impl Project {
     // }
 
     /// Checks if all generators use the same major.minor version.
-    /// Returns Ok(()) if they do,
+    /// Returns Ok(Some(version)) if generators exist and have matching versions,
+    /// Ok(None) if no generators exist,
     /// otherwise returns an Err with a descriptive message.
-    pub fn get_common_generator_version(&self) -> anyhow::Result<String> {
+    pub fn get_common_generator_version(&self) -> anyhow::Result<Option<String>> {
         // list generators. If we can't get the runtime, we'll error out.
-        let generators = self
+        let generators: Vec<_> = self
             .runtime()?
             .codegen_generators()
-            .map(|gen| gen.version.as_str());
+            .map(|gen| gen.version.as_str())
+            .collect();
 
-        common_version_up_to_patch(generators)
+        // If there are no generators, that's valid - just return None
+        if generators.is_empty() {
+            return Ok(None);
+        }
+
+        common_version_up_to_patch(generators).map(Some)
     }
 }
 

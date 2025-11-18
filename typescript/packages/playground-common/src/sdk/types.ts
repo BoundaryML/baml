@@ -338,58 +338,30 @@ export interface BAMLFile {
 
 export type CodeClickEvent =
   | {
-      type: 'function';
-      functionName: string;
-      functionType: 'workflow' | 'function' | 'llm_function' | 'conditional' | 'loop' | 'group' | 'return' | 'block';
-      filePath: string;
-      /**
-       * If clicking a node within a workflow graph, this should be the workflow ID.
-       * This tells the navigation heuristic to select the node within the active workflow
-       * rather than trying to find which workflow contains this function.
-       */
-      workflowId?: string;
-      /**
-       * For workflow nodes, this is the specific node ID (might be different from functionName)
-       * For example, group nodes, if nodes, etc.
-       */
-      nodeId?: string;
-    }
+    type: 'function';
+    functionName: string;
+    functionType: 'workflow' | 'function' | 'llm_function' | 'conditional' | 'loop' | 'group' | 'return' | 'block';
+    filePath: string;
+    /**
+     * If clicking a node within a workflow graph, this should be the workflow ID.
+     * This tells the navigation heuristic to select the node within the active workflow
+     * rather than trying to find which workflow contains this function.
+     */
+    workflowId?: string;
+    /**
+     * For workflow nodes, this is the specific node ID (might be different from functionName)
+     * For example, group nodes, if nodes, etc.
+     */
+    nodeId?: string;
+  }
   | {
-      type: 'test';
-      testName: string;
-      functionName: string;
-      filePath: string;
-      nodeType: 'llm_function' | 'function';
-    };
+    type: 'test';
+    testName: string;
+    functionName: string;
+    filePath: string;
+    nodeType: 'llm_function' | 'function';
+  };
 
-export type NavigationSource =
-  | 'debug-panel'
-  | 'sidebar'
-  | 'test-panel'
-  | 'graph'
-  | 'cursor'
-  | 'api'
-  | 'unknown';
-
-type NavigationIntentBase = {
-  source?: NavigationSource;
-  filePath?: string;
-};
-
-export type NavigationIntent =
-  | (NavigationIntentBase & {
-      type: 'function';
-      functionName: string;
-      functionType: 'workflow' | 'function' | 'llm_function' | 'conditional' | 'loop' | 'group' | 'return' | 'block';
-      workflowId?: string;
-      nodeId?: string;
-    })
-  | (NavigationIntentBase & {
-      type: 'test';
-      testName: string;
-      functionName: string;
-      nodeType: 'llm_function' | 'function';
-    });
 
 // ============================================================================
 // SDK Configuration

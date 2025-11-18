@@ -5,7 +5,7 @@
  */
 
 import type { SelectionState } from '../atoms/core.atoms';
-import type { NavigationRule, EnrichedTarget } from './types';
+import type { NavigationRule, EnrichedTarget, NavigationInput } from './types';
 import { selectPreferredTest, selectBestWorkflow, getPrimaryFunction } from './utils';
 
 /**
@@ -161,6 +161,39 @@ const showFunction: NavigationRule = {
 };
 
 /**
+ * Priority 998: Loading state
+ *
+ * When target doesn't exist but we have intent, enter loading state
+ */
+const loadingState: NavigationRule = {
+  id: 'loading-state',
+  priority: 998,
+  matches: (target) =>
+    !target.exists &&
+    (!!target.functionName || !!target.testName || !!target.workflowId),
+  resolve: (target) => {
+    // Preserve the original navigation input
+    const intent: NavigationInput = {
+      kind: target.kind,
+      source: 'api',
+      timestamp: Date.now(),
+      functionName: target.functionName,
+      testName: target.testName,
+      workflowId: target.workflowId,
+      nodeId: target.nodeId,
+    };
+
+    return {
+      mode: 'loading',
+      intent,
+      startedAt: Date.now(),
+    };
+  },
+  explain: (target) =>
+    `Target "${target.name}" not found yet, entering loading state`,
+};
+
+/**
  * Priority 999: Catch-all (empty state)
  *
  * If nothing else matches, show empty state
@@ -169,8 +202,8 @@ const emptyState: NavigationRule = {
   id: 'empty-state',
   priority: 999,
   matches: () => true,
-  resolve: () => ({ mode: 'empty' }),
-  explain: () => 'Target not found, showing empty state',
+  resolve: () => ({ mode: 'empty', reason: 'no-files' }),
+  explain: () => 'No valid target, showing empty state',
 };
 
 /**
@@ -182,5 +215,6 @@ export const NAVIGATION_RULES: NavigationRule[] = [
   stayInWorkflow,
   switchToWorkflow,
   showFunction,
+  loadingState,
   emptyState,
 ];

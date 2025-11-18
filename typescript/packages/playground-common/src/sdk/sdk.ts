@@ -68,8 +68,6 @@ export class BAMLSDK {
       throw new Error('Cannot initialize SDK with empty files');
     }
 
-    console.log('SDK: Initializing with', Object.keys(initialFiles).length, 'files');
-
     // Load VSCode settings (in VSCode environment only)
     await this.loadVSCodeSettings();
 
@@ -82,15 +80,6 @@ export class BAMLSDK {
     }
     if (options?.featureFlags) {
       this.storage.setFeatureFlags(options.featureFlags);
-    }
-
-    // Create runtime (WASM module will be loaded and cached on first call)
-    await this.recreateRuntime();
-
-    // Set first workflow as active
-    const workflows = this.runtime!.getWorkflows();
-    if (workflows.length > 0) {
-      this.storage.setActiveWorkflowId(workflows[0]!.id);
     }
   }
 
@@ -148,6 +137,7 @@ export class BAMLSDK {
 
     // Populate parsed BAML files atom (for navigation, DebugPanel, etc.)
     const parsedFiles = this.runtime.getBAMLFiles();
+    console.log('aaron: [SDK] Parsed files:', parsedFiles.map((file: any) => file.path));
     parsedFiles.forEach((file: any) => {
       file.functions.forEach((fn: any) => {
         console.log(
@@ -176,6 +166,9 @@ export class BAMLSDK {
     console.log('SDK: Extracted', functions.length, 'functions:', functions.map(f => f.name));
     console.log('SDK: Extracted', allTestCases.length, 'test cases:', allTestCases.map(tc => `${tc.name} (${tc.functionId})`));
 
+    // Retry pending navigation if in loading state
+    await this.retryPendingNavigation();
+
     // Restore cursor position if it was updated recently (< 3 seconds ago)
     const lastCursorPosition = this.storage.getLastCursorPosition();
     if (lastCursorPosition) {
@@ -196,6 +189,30 @@ export class BAMLSDK {
         console.log('aaron: [SDK] Cursor position too old to restore (age:', timeSinceLastUpdate, 'ms)');
       }
     }
+  }
+
+  /**
+   * Retry pending navigation if we're in a loading state
+   * Called after runtime recreation to complete pending navigations
+   */
+  private async retryPendingNavigation() {
+    const currentState = this.storage.store.get(this.atoms.unifiedSelectionStateAtom);
+
+    if (currentState.mode !== 'loading') {
+      return; // Nothing to retry
+    }
+
+    console.log('🔄 Retrying pending navigation:', currentState.intent);
+
+    // Get coordinator (this automatically updates context with latest runtime data)
+    const coordinator = this.getNavigationCoordinator();
+
+    // Navigate with preserved intent
+    await coordinator.navigate(
+      currentState.intent,
+      this.storage.store.get,
+      this.storage.store.set
+    );
   }
 
   // ============================================================================

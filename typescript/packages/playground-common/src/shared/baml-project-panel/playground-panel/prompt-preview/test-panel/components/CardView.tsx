@@ -51,7 +51,7 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
   const cardRef = useRef<HTMLDivElement>(null)
 
   const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.selectedNodeId : null;
-  const testName = selection.mode !== 'empty' ? selection.testName : null;
+  const testName = selection.mode === 'function' || selection.mode === 'workflow' ? selection.testName : selection.mode === 'loading' ? selection.intent.testName ?? null : null;
   const isSelected = functionName === testId.functionName && testName === testId.testName
   const isThisTestRunning = displayResponse?.status === 'running'
 
