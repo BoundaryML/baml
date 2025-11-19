@@ -185,12 +185,12 @@ SOURCE_FILE
   R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected attribute argument, found Error
+Error: Expected attribute argument, found Error
    ╭─[ 0:4:34 ]
    │
  4 │   double_in_single string @alias('She said "hello"')
    │                                  ┬  
-   │                                  ╰── Expected Expected attribute argument, found Error
+   │                                  ╰── Expected attribute argument, found Error
 ───╯
 
 Error: Expected RParen, found Error
@@ -217,12 +217,12 @@ Error: Expected Unexpected token in class body, found Quote
    │                                            ╰── Expected Unexpected token in class body, found Quote
 ───╯
 
-Error: Expected Expected type, found Error
+Error: Expected type, found Error
    ╭─[ 0:5:41 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                         ┬  
-   │                                         ╰── Expected Expected type, found Error
+   │                                         ╰── Expected type, found Error
 ───╯
 
 Error: Expected Unexpected token in class body, found Error
@@ -241,12 +241,12 @@ Error: Expected Unexpected token in class body, found Quote
    │                                          ╰── Expected Unexpected token in class body, found Quote
 ───╯
 
-Error: Expected Expected type, found Error
+Error: Expected type, found Error
    ╭─[ 0:5:48 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                ┬  
-   │                                                ╰── Expected Expected type, found Error
+   │                                                ╰── Expected type, found Error
 ───╯
 
 Error: Expected Unexpected token in class body, found Error
@@ -289,12 +289,12 @@ Error: Expected RParen, found Word
    │                                                  ╰──── Expected RParen, found Word
 ───╯
 
-Error: Expected Expected type, found Error
+Error: Expected type, found Error
    ╭─[ 0:6:53 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                     ┬  
-   │                                                     ╰── Expected Expected type, found Error
+   │                                                     ╰── Expected type, found Error
 ───╯
 
 Error: Expected Unexpected token in class body, found Error
@@ -321,12 +321,12 @@ Error: Expected Unexpected token in class body, found Error
    │                                                        ╰── Expected Unexpected token in class body, found Error
 ───╯
 
-Error: Expected Expected type, found Error
+Error: Expected type, found Error
    ╭─[ 0:6:64 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                ┬  
-   │                                                                ╰── Expected Expected type, found Error
+   │                                                                ╰── Expected type, found Error
 ───╯
 
 Error: Expected Unexpected token in class body, found Error
@@ -361,12 +361,12 @@ Error: Expected RParen, found Word
    │                                ╰─── Expected RParen, found Word
 ───╯
 
-Error: Expected Expected type, found Error
+Error: Expected type, found Error
    ╭─[ 0:7:34 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                  ┬  
-   │                                  ╰── Expected Expected type, found Error
+   │                                  ╰── Expected type, found Error
 ───╯
 
 Error: Expected Unexpected token in class body, found Error
@@ -409,12 +409,12 @@ Error: Expected Unexpected token in class body, found Quote
    │                                       ╰── Expected Unexpected token in class body, found Quote
 ───╯
 
-Error: Expected Expected type, found Error
+Error: Expected type, found Error
    ╭─[ 0:7:45 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                             ┬  
-   │                                             ╰── Expected Expected type, found Error
+   │                                             ╰── Expected type, found Error
 ───╯
 
 Error: Expected Unexpected token in class body, found Error
@@ -433,28 +433,28 @@ Error: Expected Unexpected token in class body, found Quote
    │                                              ╰── Expected Unexpected token in class body, found Quote
 ───╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
    ╭─[ 0:7:48 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                                ┬  
-   │                                                ╰── Expected Expected top-level declaration, found Quote
+   │                                                ╰── Expected top-level declaration, found Quote
 ───╯
 
-Error: Expected Expected top-level declaration, found RParen
+Error: Expected top-level declaration, found RParen
    ╭─[ 0:7:49 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                                 ┬  
-   │                                                 ╰── Expected Expected top-level declaration, found RParen
+   │                                                 ╰── Expected top-level declaration, found RParen
 ───╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
    ╭─[ 0:8:1 ]
    │
  8 │ }
    │ ┬  
-   │ ╰── Expected Expected top-level declaration, found RBrace
+   │ ╰── Expected top-level declaration, found RBrace
 ───╯
 
 Error: Expected RBrace, found Client
@@ -465,274 +465,274 @@ Error: Expected RBrace, found Client
     │      ╰──── Expected RBrace, found Client
 ────╯
 
-Error: Expected Expected config block, found Word
+Error: Expected config block, found Word
     ╭─[ 0:13:3 ]
     │
  13 │   prompt #"
     │   ───┬──  
-    │      ╰──── Expected Expected config block, found Word
+    │      ╰──── Expected config block, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:13:3 ]
     │
  13 │   prompt #"
     │   ───┬──  
-    │      ╰──── Expected Expected top-level declaration, found Word
+    │      ╰──── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found Hash
     ╭─[ 0:13:10 ]
     │
  13 │   prompt #"
     │          ┬  
-    │          ╰── Expected Expected top-level declaration, found Hash
+    │          ╰── Expected top-level declaration, found Hash
 ────╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
     ╭─[ 0:13:11 ]
     │
  13 │   prompt #"
     │           ┬  
-    │           ╰── Expected Expected top-level declaration, found Quote
+    │           ╰── Expected top-level declaration, found Quote
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:14:5 ]
     │
  14 │     Generate a message for "{{ name }}"
     │     ────┬───  
-    │         ╰───── Expected Expected top-level declaration, found Word
+    │         ╰───── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:14:14 ]
     │
  14 │     Generate a message for "{{ name }}"
     │              ┬  
-    │              ╰── Expected Expected top-level declaration, found Word
+    │              ╰── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:14:16 ]
     │
  14 │     Generate a message for "{{ name }}"
     │                ───┬───  
-    │                   ╰───── Expected Expected top-level declaration, found Word
+    │                   ╰───── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found For
+Error: Expected top-level declaration, found For
     ╭─[ 0:14:24 ]
     │
  14 │     Generate a message for "{{ name }}"
     │                        ─┬─  
-    │                         ╰─── Expected Expected top-level declaration, found For
+    │                         ╰─── Expected top-level declaration, found For
 ────╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
     ╭─[ 0:14:28 ]
     │
  14 │     Generate a message for "{{ name }}"
     │                            ┬  
-    │                            ╰── Expected Expected top-level declaration, found Quote
+    │                            ╰── Expected top-level declaration, found Quote
 ────╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
     ╭─[ 0:14:29 ]
     │
  14 │     Generate a message for "{{ name }}"
     │                             ┬  
-    │                             ╰── Expected Expected top-level declaration, found LBrace
+    │                             ╰── Expected top-level declaration, found LBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
     ╭─[ 0:14:30 ]
     │
  14 │     Generate a message for "{{ name }}"
     │                              ┬  
-    │                              ╰── Expected Expected top-level declaration, found LBrace
+    │                              ╰── Expected top-level declaration, found LBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:14:32 ]
     │
  14 │     Generate a message for "{{ name }}"
     │                                ──┬─  
-    │                                  ╰─── Expected Expected top-level declaration, found Word
+    │                                  ╰─── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
     ╭─[ 0:14:37 ]
     │
  14 │     Generate a message for "{{ name }}"
     │                                     ┬  
-    │                                     ╰── Expected Expected top-level declaration, found RBrace
+    │                                     ╰── Expected top-level declaration, found RBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
     ╭─[ 0:14:38 ]
     │
  14 │     Generate a message for "{{ name }}"
     │                                      ┬  
-    │                                      ╰── Expected Expected top-level declaration, found RBrace
+    │                                      ╰── Expected top-level declaration, found RBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
     ╭─[ 0:14:39 ]
     │
  14 │     Generate a message for "{{ name }}"
     │                                       ┬  
-    │                                       ╰── Expected Expected top-level declaration, found Quote
+    │                                       ╰── Expected top-level declaration, found Quote
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:15:5 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │     ───┬───  
-    │        ╰───── Expected Expected top-level declaration, found Word
+    │        ╰───── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:15:13 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │             ───┬──  
-    │                ╰──── Expected Expected top-level declaration, found Word
+    │                ╰──── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:15:20 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                    ──┬─  
-    │                      ╰─── Expected Expected top-level declaration, found Word
+    │                      ╰─── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Colon
+Error: Expected top-level declaration, found Colon
     ╭─[ 0:15:24 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                        ┬  
-    │                        ╰── Expected Expected top-level declaration, found Colon
+    │                        ╰── Expected top-level declaration, found Colon
 ────╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
     ╭─[ 0:15:26 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                          ┬  
-    │                          ╰── Expected Expected top-level declaration, found Quote
+    │                          ╰── Expected top-level declaration, found Quote
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:15:27 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                           ───┬───  
-    │                              ╰───── Expected Expected top-level declaration, found Word
+    │                              ╰───── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Comma
+Error: Expected top-level declaration, found Comma
     ╭─[ 0:15:34 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                                  ┬  
-    │                                  ╰── Expected Expected top-level declaration, found Comma
+    │                                  ╰── Expected top-level declaration, found Comma
 ────╯
 
-Error: Expected Expected top-level declaration, found Error
+Error: Expected top-level declaration, found Error
     ╭─[ 0:15:36 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                                    ┬  
-    │                                    ╰── Expected Expected top-level declaration, found Error
+    │                                    ╰── Expected top-level declaration, found Error
 ────╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
     ╭─[ 0:15:37 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                                     ┬  
-    │                                     ╰── Expected Expected top-level declaration, found LBrace
+    │                                     ╰── Expected top-level declaration, found LBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
     ╭─[ 0:15:38 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                                      ┬  
-    │                                      ╰── Expected Expected top-level declaration, found LBrace
+    │                                      ╰── Expected top-level declaration, found LBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:15:40 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                                        ──┬─  
-    │                                          ╰─── Expected Expected top-level declaration, found Word
+    │                                          ╰─── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
     ╭─[ 0:15:45 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                                             ┬  
-    │                                             ╰── Expected Expected top-level declaration, found RBrace
+    │                                             ╰── Expected top-level declaration, found RBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
     ╭─[ 0:15:46 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                                              ┬  
-    │                                              ╰── Expected Expected top-level declaration, found RBrace
+    │                                              ╰── Expected top-level declaration, found RBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found Error
+Error: Expected top-level declaration, found Error
     ╭─[ 0:15:47 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                                               ┬  
-    │                                               ╰── Expected Expected top-level declaration, found Error
+    │                                               ╰── Expected top-level declaration, found Error
 ────╯
 
-Error: Expected Expected top-level declaration, found Not
+Error: Expected top-level declaration, found Not
     ╭─[ 0:15:48 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                                                ┬  
-    │                                                ╰── Expected Expected top-level declaration, found Not
+    │                                                ╰── Expected top-level declaration, found Not
 ────╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
     ╭─[ 0:15:49 ]
     │
  15 │     Include quotes like: "Welcome, '{{ name }}'!"
     │                                                 ┬  
-    │                                                 ╰── Expected Expected top-level declaration, found Quote
+    │                                                 ╰── Expected top-level declaration, found Quote
 ────╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
     ╭─[ 0:16:3 ]
     │
  16 │   "#
     │   ┬  
-    │   ╰── Expected Expected top-level declaration, found Quote
+    │   ╰── Expected top-level declaration, found Quote
 ────╯
 
-Error: Expected Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found Hash
     ╭─[ 0:16:4 ]
     │
  16 │   "#
     │    ┬  
-    │    ╰── Expected Expected top-level declaration, found Hash
+    │    ╰── Expected top-level declaration, found Hash
 ────╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
     ╭─[ 0:17:1 ]
     │
  17 │ }
     │ ┬  
-    │ ╰── Expected Expected top-level declaration, found RBrace
+    │ ╰── Expected top-level declaration, found RBrace
 ────╯

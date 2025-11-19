@@ -54,170 +54,170 @@ Error: Expected RBrace, found Client
    │      ╰──── Expected RBrace, found Client
 ───╯
 
-Error: Expected Expected config block, found Word
+Error: Expected config block, found Word
    ╭─[ 0:3:3 ]
    │
  3 │   prompt #"
    │   ───┬──  
-   │      ╰──── Expected Expected config block, found Word
+   │      ╰──── Expected config block, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:3:3 ]
    │
  3 │   prompt #"
    │   ───┬──  
-   │      ╰──── Expected Expected top-level declaration, found Word
+   │      ╰──── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found Hash
    ╭─[ 0:3:10 ]
    │
  3 │   prompt #"
    │          ┬  
-   │          ╰── Expected Expected top-level declaration, found Hash
+   │          ╰── Expected top-level declaration, found Hash
 ───╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
    ╭─[ 0:3:11 ]
    │
  3 │   prompt #"
    │           ┬  
-   │           ╰── Expected Expected top-level declaration, found Quote
+   │           ╰── Expected top-level declaration, found Quote
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:4:5 ]
    │
  4 │     Extract structured data from: {{ text }}
    │     ───┬───  
-   │        ╰───── Expected Expected top-level declaration, found Word
+   │        ╰───── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:4:13 ]
    │
  4 │     Extract structured data from: {{ text }}
    │             ─────┬────  
-   │                  ╰────── Expected Expected top-level declaration, found Word
+   │                  ╰────── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:4:24 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                        ──┬─  
-   │                          ╰─── Expected Expected top-level declaration, found Word
+   │                          ╰─── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:4:29 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                             ──┬─  
-   │                               ╰─── Expected Expected top-level declaration, found Word
+   │                               ╰─── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Colon
+Error: Expected top-level declaration, found Colon
    ╭─[ 0:4:33 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                 ┬  
-   │                                 ╰── Expected Expected top-level declaration, found Colon
+   │                                 ╰── Expected top-level declaration, found Colon
 ───╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
    ╭─[ 0:4:35 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                   ┬  
-   │                                   ╰── Expected Expected top-level declaration, found LBrace
+   │                                   ╰── Expected top-level declaration, found LBrace
 ───╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
    ╭─[ 0:4:36 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                    ┬  
-   │                                    ╰── Expected Expected top-level declaration, found LBrace
+   │                                    ╰── Expected top-level declaration, found LBrace
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:4:38 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                      ──┬─  
-   │                                        ╰─── Expected Expected top-level declaration, found Word
+   │                                        ╰─── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
    ╭─[ 0:4:43 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                           ┬  
-   │                                           ╰── Expected Expected top-level declaration, found RBrace
+   │                                           ╰── Expected top-level declaration, found RBrace
 ───╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
    ╭─[ 0:4:44 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                            ┬  
-   │                                            ╰── Expected Expected top-level declaration, found RBrace
+   │                                            ╰── Expected top-level declaration, found RBrace
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:5:5 ]
    │
  5 │     Return as JSON.
    │     ───┬──  
-   │        ╰──── Expected Expected top-level declaration, found Word
+   │        ╰──── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:5:12 ]
    │
  5 │     Return as JSON.
    │            ─┬  
-   │             ╰── Expected Expected top-level declaration, found Word
+   │             ╰── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:5:15 ]
    │
  5 │     Return as JSON.
    │               ──┬─  
-   │                 ╰─── Expected Expected top-level declaration, found Word
+   │                 ╰─── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Dot
+Error: Expected top-level declaration, found Dot
    ╭─[ 0:5:19 ]
    │
  5 │     Return as JSON.
    │                   ┬  
-   │                   ╰── Expected Expected top-level declaration, found Dot
+   │                   ╰── Expected top-level declaration, found Dot
 ───╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
    ╭─[ 0:6:3 ]
    │
  6 │   "#
    │   ┬  
-   │   ╰── Expected Expected top-level declaration, found Quote
+   │   ╰── Expected top-level declaration, found Quote
 ───╯
 
-Error: Expected Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found Hash
    ╭─[ 0:6:4 ]
    │
  6 │   "#
    │    ┬  
-   │    ╰── Expected Expected top-level declaration, found Hash
+   │    ╰── Expected top-level declaration, found Hash
 ───╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
    ╭─[ 0:7:1 ]
    │
  7 │ }
    │ ┬  
-   │ ╰── Expected Expected top-level declaration, found RBrace
+   │ ╰── Expected top-level declaration, found RBrace
 ───╯

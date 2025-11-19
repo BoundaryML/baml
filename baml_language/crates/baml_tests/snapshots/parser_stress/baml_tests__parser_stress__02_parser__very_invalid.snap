@@ -17,12 +17,12 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT "
-  let x = ¿"
+  let x = ¿;"
           KW_LET "let"
           WORD "x"
           EQUALS "="
           ERROR_TOKEN "¿"
-        SEMICOLON ";"
+          SEMICOLON ";"
         WHILE_STMT
           KW_WHILE "while"
           ERROR_TOKEN "\"
@@ -37,26 +37,18 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected expression, found Error
+Error: Expected expression, found Error
    ╭─[ 0:6:11 ]
    │
  6 │   let x = ¿;
    │           ─┬  
-   │            ╰── Expected Expected expression, found Error
+   │            ╰── Expected expression, found Error
 ───╯
 
-Error: Expected Expected expression, found Semicolon
-   ╭─[ 0:6:13 ]
-   │
- 6 │   let x = ¿;
-   │             ┬  
-   │             ╰── Expected Expected expression, found Semicolon
-───╯
-
-Error: Expected Expected expression, found Error
+Error: Expected expression, found Error
    ╭─[ 0:8:10 ]
    │
  8 │   while \ {
    │          ┬  
-   │          ╰── Expected Expected expression, found Error
+   │          ╰── Expected expression, found Error
 ───╯

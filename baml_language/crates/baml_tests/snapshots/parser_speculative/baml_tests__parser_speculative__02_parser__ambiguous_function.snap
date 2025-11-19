@@ -65,18 +65,18 @@ Error: Expected RBrace, found Client
    │      ╰──── Expected RBrace, found Client
 ───╯
 
-Error: Expected Expected config block, found RBrace
+Error: Expected config block, found RBrace
    ╭─[ 0:5:1 ]
    │
  5 │ }
    │ ┬  
-   │ ╰── Expected Expected config block, found RBrace
+   │ ╰── Expected config block, found RBrace
 ───╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
    ╭─[ 0:5:1 ]
    │
  5 │ }
    │ ┬  
-   │ ╰── Expected Expected top-level declaration, found RBrace
+   │ ╰── Expected top-level declaration, found RBrace
 ───╯

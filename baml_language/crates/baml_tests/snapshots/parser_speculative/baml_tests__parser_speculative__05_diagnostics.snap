@@ -11,20 +11,20 @@ expression: output
    │      ╰──── Expected RBrace, found Client
 ───╯
 
-  [parse] Error: Expected Expected config block, found RBrace
+  [parse] Error: Expected config block, found RBrace
    ╭─[ 0:5:1 ]
    │
  5 │ }
    │ ┬  
-   │ ╰── Expected Expected config block, found RBrace
+   │ ╰── Expected config block, found RBrace
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found RBrace
    ╭─[ 0:5:1 ]
    │
  5 │ }
    │ ┬  
-   │ ╰── Expected Expected top-level declaration, found RBrace
+   │ ╰── Expected top-level declaration, found RBrace
 ───╯
 
   [parse] Error: Expected RBrace, found Client
@@ -35,172 +35,172 @@ expression: output
    │      ╰──── Expected RBrace, found Client
 ───╯
 
-  [parse] Error: Expected Expected config block, found Word
+  [parse] Error: Expected config block, found Word
    ╭─[ 2:3:3 ]
    │
  3 │   prompt #"
    │   ───┬──  
-   │      ╰──── Expected Expected config block, found Word
+   │      ╰──── Expected config block, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 2:3:3 ]
    │
  3 │   prompt #"
    │   ───┬──  
-   │      ╰──── Expected Expected top-level declaration, found Word
+   │      ╰──── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Hash
+  [parse] Error: Expected top-level declaration, found Hash
    ╭─[ 2:3:10 ]
    │
  3 │   prompt #"
    │          ┬  
-   │          ╰── Expected Expected top-level declaration, found Hash
+   │          ╰── Expected top-level declaration, found Hash
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Quote
+  [parse] Error: Expected top-level declaration, found Quote
    ╭─[ 2:3:11 ]
    │
  3 │   prompt #"
    │           ┬  
-   │           ╰── Expected Expected top-level declaration, found Quote
+   │           ╰── Expected top-level declaration, found Quote
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 2:4:5 ]
    │
  4 │     Extract structured data from: {{ text }}
    │     ───┬───  
-   │        ╰───── Expected Expected top-level declaration, found Word
+   │        ╰───── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 2:4:13 ]
    │
  4 │     Extract structured data from: {{ text }}
    │             ─────┬────  
-   │                  ╰────── Expected Expected top-level declaration, found Word
+   │                  ╰────── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 2:4:24 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                        ──┬─  
-   │                          ╰─── Expected Expected top-level declaration, found Word
+   │                          ╰─── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 2:4:29 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                             ──┬─  
-   │                               ╰─── Expected Expected top-level declaration, found Word
+   │                               ╰─── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Colon
+  [parse] Error: Expected top-level declaration, found Colon
    ╭─[ 2:4:33 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                 ┬  
-   │                                 ╰── Expected Expected top-level declaration, found Colon
+   │                                 ╰── Expected top-level declaration, found Colon
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found LBrace
+  [parse] Error: Expected top-level declaration, found LBrace
    ╭─[ 2:4:35 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                   ┬  
-   │                                   ╰── Expected Expected top-level declaration, found LBrace
+   │                                   ╰── Expected top-level declaration, found LBrace
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found LBrace
+  [parse] Error: Expected top-level declaration, found LBrace
    ╭─[ 2:4:36 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                    ┬  
-   │                                    ╰── Expected Expected top-level declaration, found LBrace
+   │                                    ╰── Expected top-level declaration, found LBrace
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 2:4:38 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                      ──┬─  
-   │                                        ╰─── Expected Expected top-level declaration, found Word
+   │                                        ╰─── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found RBrace
    ╭─[ 2:4:43 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                           ┬  
-   │                                           ╰── Expected Expected top-level declaration, found RBrace
+   │                                           ╰── Expected top-level declaration, found RBrace
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found RBrace
    ╭─[ 2:4:44 ]
    │
  4 │     Extract structured data from: {{ text }}
    │                                            ┬  
-   │                                            ╰── Expected Expected top-level declaration, found RBrace
+   │                                            ╰── Expected top-level declaration, found RBrace
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 2:5:5 ]
    │
  5 │     Return as JSON.
    │     ───┬──  
-   │        ╰──── Expected Expected top-level declaration, found Word
+   │        ╰──── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 2:5:12 ]
    │
  5 │     Return as JSON.
    │            ─┬  
-   │             ╰── Expected Expected top-level declaration, found Word
+   │             ╰── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 2:5:15 ]
    │
  5 │     Return as JSON.
    │               ──┬─  
-   │                 ╰─── Expected Expected top-level declaration, found Word
+   │                 ╰─── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Dot
+  [parse] Error: Expected top-level declaration, found Dot
    ╭─[ 2:5:19 ]
    │
  5 │     Return as JSON.
    │                   ┬  
-   │                   ╰── Expected Expected top-level declaration, found Dot
+   │                   ╰── Expected top-level declaration, found Dot
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Quote
+  [parse] Error: Expected top-level declaration, found Quote
    ╭─[ 2:6:3 ]
    │
  6 │   "#
    │   ┬  
-   │   ╰── Expected Expected top-level declaration, found Quote
+   │   ╰── Expected top-level declaration, found Quote
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Hash
+  [parse] Error: Expected top-level declaration, found Hash
    ╭─[ 2:6:4 ]
    │
  6 │   "#
    │    ┬  
-   │    ╰── Expected Expected top-level declaration, found Hash
+   │    ╰── Expected top-level declaration, found Hash
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found RBrace
    ╭─[ 2:7:1 ]
    │
  7 │ }
    │ ┬  
-   │ ╰── Expected Expected top-level declaration, found RBrace
+   │ ╰── Expected top-level declaration, found RBrace
 ───╯
 
   [parse] Error: Expected RBrace, found Client
@@ -211,212 +211,212 @@ expression: output
    │      ╰──── Expected RBrace, found Client
 ───╯
 
-  [parse] Error: Expected Expected config block, found Word
+  [parse] Error: Expected config block, found Word
    ╭─[ 3:4:3 ]
    │
  4 │   prompt #"
    │   ───┬──  
-   │      ╰──── Expected Expected config block, found Word
+   │      ╰──── Expected config block, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:4:3 ]
    │
  4 │   prompt #"
    │   ───┬──  
-   │      ╰──── Expected Expected top-level declaration, found Word
+   │      ╰──── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Hash
+  [parse] Error: Expected top-level declaration, found Hash
    ╭─[ 3:4:10 ]
    │
  4 │   prompt #"
    │          ┬  
-   │          ╰── Expected Expected top-level declaration, found Hash
+   │          ╰── Expected top-level declaration, found Hash
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Quote
+  [parse] Error: Expected top-level declaration, found Quote
    ╭─[ 3:4:11 ]
    │
  4 │   prompt #"
    │           ┬  
-   │           ╰── Expected Expected top-level declaration, found Quote
+   │           ╰── Expected top-level declaration, found Quote
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:5:5 ]
    │
  5 │     Analyze the following text:
    │     ───┬───  
-   │        ╰───── Expected Expected top-level declaration, found Word
+   │        ╰───── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:5:13 ]
    │
  5 │     Analyze the following text:
    │             ─┬─  
-   │              ╰─── Expected Expected top-level declaration, found Word
+   │              ╰─── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:5:17 ]
    │
  5 │     Analyze the following text:
    │                 ────┬────  
-   │                     ╰────── Expected Expected top-level declaration, found Word
+   │                     ╰────── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:5:27 ]
    │
  5 │     Analyze the following text:
    │                           ──┬─  
-   │                             ╰─── Expected Expected top-level declaration, found Word
+   │                             ╰─── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Colon
+  [parse] Error: Expected top-level declaration, found Colon
    ╭─[ 3:5:31 ]
    │
  5 │     Analyze the following text:
    │                               ┬  
-   │                               ╰── Expected Expected top-level declaration, found Colon
+   │                               ╰── Expected top-level declaration, found Colon
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found LBrace
+  [parse] Error: Expected top-level declaration, found LBrace
    ╭─[ 3:6:5 ]
    │
  6 │     {{ text }}
    │     ┬  
-   │     ╰── Expected Expected top-level declaration, found LBrace
+   │     ╰── Expected top-level declaration, found LBrace
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found LBrace
+  [parse] Error: Expected top-level declaration, found LBrace
    ╭─[ 3:6:6 ]
    │
  6 │     {{ text }}
    │      ┬  
-   │      ╰── Expected Expected top-level declaration, found LBrace
+   │      ╰── Expected top-level declaration, found LBrace
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:6:8 ]
    │
  6 │     {{ text }}
    │        ──┬─  
-   │          ╰─── Expected Expected top-level declaration, found Word
+   │          ╰─── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found RBrace
    ╭─[ 3:6:13 ]
    │
  6 │     {{ text }}
    │             ┬  
-   │             ╰── Expected Expected top-level declaration, found RBrace
+   │             ╰── Expected top-level declaration, found RBrace
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found RBrace
    ╭─[ 3:6:14 ]
    │
  6 │     {{ text }}
    │              ┬  
-   │              ╰── Expected Expected top-level declaration, found RBrace
+   │              ╰── Expected top-level declaration, found RBrace
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:8:5 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │     ───┬──  
-   │        ╰──── Expected Expected top-level declaration, found Word
+   │        ╰──── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:8:12 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │            ─┬  
-   │             ╰── Expected Expected top-level declaration, found Word
+   │             ╰── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:8:15 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │               ────┬───  
-   │                   ╰───── Expected Expected top-level declaration, found Word
+   │                   ╰───── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:8:24 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                        ───┬──  
-   │                           ╰──── Expected Expected top-level declaration, found Word
+   │                           ╰──── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:8:31 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                               ──┬─  
-   │                                 ╰─── Expected Expected top-level declaration, found Word
+   │                                 ╰─── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:8:36 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                                    ────┬────  
-   │                                        ╰────── Expected Expected top-level declaration, found Word
+   │                                        ╰────── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:8:46 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                                              ─┬─  
-   │                                               ╰─── Expected Expected top-level declaration, found Word
+   │                                               ╰─── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
    ╭─[ 3:8:50 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                                                  ────┬───  
-   │                                                      ╰───── Expected Expected top-level declaration, found Word
+   │                                                      ╰───── Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Dot
+  [parse] Error: Expected top-level declaration, found Dot
    ╭─[ 3:8:58 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                                                          ┬  
-   │                                                          ╰── Expected Expected top-level declaration, found Dot
+   │                                                          ╰── Expected top-level declaration, found Dot
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Quote
+  [parse] Error: Expected top-level declaration, found Quote
    ╭─[ 3:9:3 ]
    │
  9 │   "#
    │   ┬  
-   │   ╰── Expected Expected top-level declaration, found Quote
+   │   ╰── Expected top-level declaration, found Quote
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Hash
+  [parse] Error: Expected top-level declaration, found Hash
    ╭─[ 3:9:4 ]
    │
  9 │   "#
    │    ┬  
-   │    ╰── Expected Expected top-level declaration, found Hash
+   │    ╰── Expected top-level declaration, found Hash
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found RBrace
     ╭─[ 3:10:1 ]
     │
  10 │ }
     │ ┬  
-    │ ╰── Expected Expected top-level declaration, found RBrace
+    │ ╰── Expected top-level declaration, found RBrace
 ────╯
 
   [parse] Error: Expected RBrace, found Client
@@ -427,226 +427,226 @@ expression: output
     │      ╰──── Expected RBrace, found Client
 ────╯
 
-  [parse] Error: Expected Expected config block, found Word
+  [parse] Error: Expected config block, found Word
     ╭─[ 3:33:3 ]
     │
  33 │   prompt #"
     │   ───┬──  
-    │      ╰──── Expected Expected config block, found Word
+    │      ╰──── Expected config block, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:33:3 ]
     │
  33 │   prompt #"
     │   ───┬──  
-    │      ╰──── Expected Expected top-level declaration, found Word
+    │      ╰──── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Hash
+  [parse] Error: Expected top-level declaration, found Hash
     ╭─[ 3:33:10 ]
     │
  33 │   prompt #"
     │          ┬  
-    │          ╰── Expected Expected top-level declaration, found Hash
+    │          ╰── Expected top-level declaration, found Hash
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Quote
+  [parse] Error: Expected top-level declaration, found Quote
     ╭─[ 3:33:11 ]
     │
  33 │   prompt #"
     │           ┬  
-    │           ╰── Expected Expected top-level declaration, found Quote
+    │           ╰── Expected top-level declaration, found Quote
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:34:5 ]
     │
  34 │     Process this through multiple steps:
     │     ───┬───  
-    │        ╰───── Expected Expected top-level declaration, found Word
+    │        ╰───── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:34:13 ]
     │
  34 │     Process this through multiple steps:
     │             ──┬─  
-    │               ╰─── Expected Expected top-level declaration, found Word
+    │               ╰─── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:34:18 ]
     │
  34 │     Process this through multiple steps:
     │                  ───┬───  
-    │                     ╰───── Expected Expected top-level declaration, found Word
+    │                     ╰───── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:34:26 ]
     │
  34 │     Process this through multiple steps:
     │                          ────┬───  
-    │                              ╰───── Expected Expected top-level declaration, found Word
+    │                              ╰───── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:34:35 ]
     │
  34 │     Process this through multiple steps:
     │                                   ──┬──  
-    │                                     ╰──── Expected Expected top-level declaration, found Word
+    │                                     ╰──── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Colon
+  [parse] Error: Expected top-level declaration, found Colon
     ╭─[ 3:34:40 ]
     │
  34 │     Process this through multiple steps:
     │                                        ┬  
-    │                                        ╰── Expected Expected top-level declaration, found Colon
+    │                                        ╰── Expected top-level declaration, found Colon
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found IntegerLiteral
+  [parse] Error: Expected top-level declaration, found IntegerLiteral
     ╭─[ 3:35:5 ]
     │
  35 │     1. {{ input }}
     │     ┬  
-    │     ╰── Expected Expected top-level declaration, found IntegerLiteral
+    │     ╰── Expected top-level declaration, found IntegerLiteral
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Dot
+  [parse] Error: Expected top-level declaration, found Dot
     ╭─[ 3:35:6 ]
     │
  35 │     1. {{ input }}
     │      ┬  
-    │      ╰── Expected Expected top-level declaration, found Dot
+    │      ╰── Expected top-level declaration, found Dot
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found LBrace
+  [parse] Error: Expected top-level declaration, found LBrace
     ╭─[ 3:35:8 ]
     │
  35 │     1. {{ input }}
     │        ┬  
-    │        ╰── Expected Expected top-level declaration, found LBrace
+    │        ╰── Expected top-level declaration, found LBrace
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found LBrace
+  [parse] Error: Expected top-level declaration, found LBrace
     ╭─[ 3:35:9 ]
     │
  35 │     1. {{ input }}
     │         ┬  
-    │         ╰── Expected Expected top-level declaration, found LBrace
+    │         ╰── Expected top-level declaration, found LBrace
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:35:11 ]
     │
  35 │     1. {{ input }}
     │           ──┬──  
-    │             ╰──── Expected Expected top-level declaration, found Word
+    │             ╰──── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found RBrace
     ╭─[ 3:35:17 ]
     │
  35 │     1. {{ input }}
     │                 ┬  
-    │                 ╰── Expected Expected top-level declaration, found RBrace
+    │                 ╰── Expected top-level declaration, found RBrace
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found RBrace
     ╭─[ 3:35:18 ]
     │
  35 │     1. {{ input }}
     │                  ┬  
-    │                  ╰── Expected Expected top-level declaration, found RBrace
+    │                  ╰── Expected top-level declaration, found RBrace
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found IntegerLiteral
+  [parse] Error: Expected top-level declaration, found IntegerLiteral
     ╭─[ 3:36:5 ]
     │
  36 │     2. Transform it
     │     ┬  
-    │     ╰── Expected Expected top-level declaration, found IntegerLiteral
+    │     ╰── Expected top-level declaration, found IntegerLiteral
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Dot
+  [parse] Error: Expected top-level declaration, found Dot
     ╭─[ 3:36:6 ]
     │
  36 │     2. Transform it
     │      ┬  
-    │      ╰── Expected Expected top-level declaration, found Dot
+    │      ╰── Expected top-level declaration, found Dot
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:36:8 ]
     │
  36 │     2. Transform it
     │        ────┬────  
-    │            ╰────── Expected Expected top-level declaration, found Word
+    │            ╰────── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:36:18 ]
     │
  36 │     2. Transform it
     │                  ─┬  
-    │                   ╰── Expected Expected top-level declaration, found Word
+    │                   ╰── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found IntegerLiteral
+  [parse] Error: Expected top-level declaration, found IntegerLiteral
     ╭─[ 3:37:5 ]
     │
  37 │     3. Return result
     │     ┬  
-    │     ╰── Expected Expected top-level declaration, found IntegerLiteral
+    │     ╰── Expected top-level declaration, found IntegerLiteral
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Dot
+  [parse] Error: Expected top-level declaration, found Dot
     ╭─[ 3:37:6 ]
     │
  37 │     3. Return result
     │      ┬  
-    │      ╰── Expected Expected top-level declaration, found Dot
+    │      ╰── Expected top-level declaration, found Dot
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:37:8 ]
     │
  37 │     3. Return result
     │        ───┬──  
-    │           ╰──── Expected Expected top-level declaration, found Word
+    │           ╰──── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:37:15 ]
     │
  37 │     3. Return result
     │               ───┬──  
-    │                  ╰──── Expected Expected top-level declaration, found Word
+    │                  ╰──── Expected top-level declaration, found Word
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Quote
+  [parse] Error: Expected top-level declaration, found Quote
     ╭─[ 3:38:3 ]
     │
  38 │   "#
     │   ┬  
-    │   ╰── Expected Expected top-level declaration, found Quote
+    │   ╰── Expected top-level declaration, found Quote
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Hash
+  [parse] Error: Expected top-level declaration, found Hash
     ╭─[ 3:38:4 ]
     │
  38 │   "#
     │    ┬  
-    │    ╰── Expected Expected top-level declaration, found Hash
+    │    ╰── Expected top-level declaration, found Hash
 ────╯
 
-  [parse] Error: Expected Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found RBrace
     ╭─[ 3:39:1 ]
     │
  39 │ }
     │ ┬  
-    │ ╰── Expected Expected top-level declaration, found RBrace
+    │ ╰── Expected top-level declaration, found RBrace
 ────╯

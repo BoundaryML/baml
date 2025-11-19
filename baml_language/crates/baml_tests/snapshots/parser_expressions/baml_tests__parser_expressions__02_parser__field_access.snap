@@ -28,7 +28,7 @@ SOURCE_FILE
             WORD "user"
             DOT "."
             WORD "name"
-        SEMICOLON ";"
+          SEMICOLON ";"
         LET_STMT
           KW_LET "let"
           WORD "bio"
@@ -39,7 +39,7 @@ SOURCE_FILE
             WORD "profile"
             DOT "."
             WORD "bio"
-        SEMICOLON ";"
+          SEMICOLON ";"
         LET_STMT
           KW_LET "let"
           WORD "theme"
@@ -52,7 +52,7 @@ SOURCE_FILE
             WORD "settings"
             DOT "."
             WORD "theme"
-        SEMICOLON ";"
+          SEMICOLON ";"
         LET_STMT
           KW_LET "let"
           WORD "firstTag"
@@ -65,13 +65,13 @@ SOURCE_FILE
             L_BRACKET "["
             INTEGER_LITERAL "0"
             R_BRACKET "]"
-        SEMICOLON ";"
+          SEMICOLON ";"
         RETURN_STMT "
 
-  return theme"
+  return theme;"
           KW_RETURN "return"
           WORD "theme"
-        SEMICOLON ";"
+          SEMICOLON ";"
         R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -116,42 +116,4 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected expression, found Semicolon
-   ╭─[ 0:3:23 ]
-   │
- 3 │   let name = user.name;
-   │                       ┬  
-   │                       ╰── Expected Expected expression, found Semicolon
-───╯
-
-Error: Expected Expected expression, found Semicolon
-   ╭─[ 0:6:29 ]
-   │
- 6 │   let bio = user.profile.bio;
-   │                             ┬  
-   │                             ╰── Expected Expected expression, found Semicolon
-───╯
-
-Error: Expected Expected expression, found Semicolon
-   ╭─[ 0:9:42 ]
-   │
- 9 │   let theme = user.profile.settings.theme;
-   │                                          ┬  
-   │                                          ╰── Expected Expected expression, found Semicolon
-───╯
-
-Error: Expected Expected expression, found Semicolon
-    ╭─[ 0:12:30 ]
-    │
- 12 │   let firstTag = user.tags[0];
-    │                              ┬  
-    │                              ╰── Expected Expected expression, found Semicolon
-────╯
-
-Error: Expected Expected expression, found Semicolon
-    ╭─[ 0:14:15 ]
-    │
- 14 │   return theme;
-    │               ┬  
-    │               ╰── Expected Expected expression, found Semicolon
-────╯
+None

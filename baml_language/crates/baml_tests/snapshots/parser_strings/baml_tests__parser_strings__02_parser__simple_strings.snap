@@ -133,12 +133,12 @@ Error: Expected RParen, found Word
    │                                           ╰──── Expected RParen, found Word
 ───╯
 
-Error: Expected Expected type, found Error
+Error: Expected type, found Error
    ╭─[ 0:7:46 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                              ┬  
-   │                                              ╰── Expected Expected type, found Error
+   │                                              ╰── Expected type, found Error
 ───╯
 
 Error: Expected Unexpected token in class body, found Error

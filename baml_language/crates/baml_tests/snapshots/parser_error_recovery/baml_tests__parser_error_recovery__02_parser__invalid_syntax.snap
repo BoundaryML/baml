@@ -43,12 +43,12 @@ SOURCE_FILE
   R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected class name, found IntegerLiteral
+Error: Expected class name, found IntegerLiteral
    ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
-   │        ╰─── Expected Expected class name, found IntegerLiteral
+   │        ╰─── Expected class name, found IntegerLiteral
 ───╯
 
 Error: Expected LBrace, found IntegerLiteral
@@ -59,60 +59,60 @@ Error: Expected LBrace, found IntegerLiteral
    │        ╰─── Expected LBrace, found IntegerLiteral
 ───╯
 
-Error: Expected Expected top-level declaration, found IntegerLiteral
+Error: Expected top-level declaration, found IntegerLiteral
    ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
-   │        ╰─── Expected Expected top-level declaration, found IntegerLiteral
+   │        ╰─── Expected top-level declaration, found IntegerLiteral
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:1:10 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │          ───┬───  
-   │             ╰───── Expected Expected top-level declaration, found Word
+   │             ╰───── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
    ╭─[ 0:1:18 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │                  ┬  
-   │                  ╰── Expected Expected top-level declaration, found LBrace
+   │                  ╰── Expected top-level declaration, found LBrace
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:2:3 ]
    │
  2 │   field string
    │   ──┬──  
-   │     ╰──── Expected Expected top-level declaration, found Word
+   │     ╰──── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:2:9 ]
    │
  2 │   field string
    │         ───┬──  
-   │            ╰──── Expected Expected top-level declaration, found Word
+   │            ╰──── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
    ╭─[ 0:3:1 ]
    │
  3 │ }
    │ ┬  
-   │ ╰── Expected Expected top-level declaration, found RBrace
+   │ ╰── Expected top-level declaration, found RBrace
 ───╯
 
-Error: Expected Expected type, found LBrace
+Error: Expected type, found LBrace
     ╭─[ 0:10:19 ]
     │
  10 │ function Foo() -> {  // Missing return type
     │                   ┬  
-    │                   ╰── Expected Expected type, found LBrace
+    │                   ╰── Expected type, found LBrace
 ────╯
 
 Error: Expected RBrace, found Client
@@ -123,18 +123,18 @@ Error: Expected RBrace, found Client
     │      ╰──── Expected RBrace, found Client
 ────╯
 
-Error: Expected Expected config block, found RBrace
+Error: Expected config block, found RBrace
     ╭─[ 0:12:1 ]
     │
  12 │ }
     │ ┬  
-    │ ╰── Expected Expected config block, found RBrace
+    │ ╰── Expected config block, found RBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
     ╭─[ 0:12:1 ]
     │
  12 │ }
     │ ┬  
-    │ ╰── Expected Expected top-level declaration, found RBrace
+    │ ╰── Expected top-level declaration, found RBrace
 ────╯

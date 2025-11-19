@@ -50,16 +50,16 @@ SOURCE_FILE
             L_BRACKET "["
             INTEGER_LITERAL "0"
             R_BRACKET "]"
-        SEMICOLON ";"
+          SEMICOLON ";"
         LET_STMT "
 
   // Array indexing with variable
-  let idx = 1"
+  let idx = 1;"
           KW_LET "let"
           WORD "idx"
           EQUALS "="
           INTEGER_LITERAL "1"
-        SEMICOLON ";"
+          SEMICOLON ";"
         LET_STMT
           KW_LET "let"
           WORD "second"
@@ -69,7 +69,7 @@ SOURCE_FILE
             L_BRACKET "["
             WORD "idx"
             R_BRACKET "]"
-        SEMICOLON ";"
+          SEMICOLON ";"
         LET_STMT
           KW_LET "let"
           WORD "firstName"
@@ -82,7 +82,7 @@ SOURCE_FILE
               R_BRACKET "]"
             DOT "."
             WORD "name"
-        SEMICOLON ";"
+          SEMICOLON ";"
         LET_STMT
           KW_LET "let"
           WORD "tag"
@@ -99,60 +99,14 @@ SOURCE_FILE
             L_BRACKET "["
             INTEGER_LITERAL "0"
             R_BRACKET "]"
-        SEMICOLON ";"
+          SEMICOLON ";"
         RETURN_STMT "
 
-  return firstName"
+  return firstName;"
           KW_RETURN "return"
           WORD "firstName"
-        SEMICOLON ";"
+          SEMICOLON ";"
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected expression, found Semicolon
-    ╭─[ 0:11:23 ]
-    │
- 11 │   let first = users[0];
-    │                       ┬  
-    │                       ╰── Expected Expected expression, found Semicolon
-────╯
-
-Error: Expected Expected expression, found Semicolon
-    ╭─[ 0:14:14 ]
-    │
- 14 │   let idx = 1;
-    │              ┬  
-    │              ╰── Expected Expected expression, found Semicolon
-────╯
-
-Error: Expected Expected expression, found Semicolon
-    ╭─[ 0:15:26 ]
-    │
- 15 │   let second = users[idx];
-    │                          ┬  
-    │                          ╰── Expected Expected expression, found Semicolon
-────╯
-
-Error: Expected Expected expression, found Semicolon
-    ╭─[ 0:18:32 ]
-    │
- 18 │   let firstName = users[0].name;
-    │                                ┬  
-    │                                ╰── Expected Expected expression, found Semicolon
-────╯
-
-Error: Expected Expected expression, found Semicolon
-    ╭─[ 0:21:29 ]
-    │
- 21 │   let tag = users[0].tags[0];
-    │                             ┬  
-    │                             ╰── Expected Expected expression, found Semicolon
-────╯
-
-Error: Expected Expected expression, found Semicolon
-    ╭─[ 0:23:19 ]
-    │
- 23 │   return firstName;
-    │                   ┬  
-    │                   ╰── Expected Expected expression, found Semicolon
-────╯
+None

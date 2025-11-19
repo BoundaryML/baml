@@ -279,28 +279,28 @@ SOURCE_FILE
   R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected function name, found Error
+Error: Expected function name, found Error
     ╭─[ 0:29:1 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │ ─┬─  
-    │  ╰─── Expected Expected function name, found Error
+    │  ╰─── Expected function name, found Error
 ────╯
 
-Error: Expected Expected parameter name, found Error
+Error: Expected parameter name, found Error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected Expected parameter name, found Error
+    │               ╰─── Expected parameter name, found Error
 ────╯
 
-Error: Expected Expected type annotation, found Error
+Error: Expected type annotation, found Error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected Expected type annotation, found Error
+    │               ╰─── Expected type annotation, found Error
 ────╯
 
 Error: Expected RParen, found Error
@@ -311,124 +311,124 @@ Error: Expected RParen, found Error
     │               ╰─── Expected RParen, found Error
 ────╯
 
-Error: Expected Expected return type (->), found Error
+Error: Expected return type (->), found Error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected Expected return type (->), found Error
+    │               ╰─── Expected return type (->), found Error
 ────╯
 
-Error: Expected Expected function body, found Error
+Error: Expected function body, found Error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected Expected function body, found Error
+    │               ╰─── Expected function body, found Error
 ────╯
 
-Error: Expected Expected top-level declaration, found Error
+Error: Expected top-level declaration, found Error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected Expected top-level declaration, found Error
+    │               ╰─── Expected top-level declaration, found Error
 ────╯
 
-Error: Expected Expected top-level declaration, found Error
+Error: Expected top-level declaration, found Error
     ╭─[ 0:29:17 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                 ─┬─  
-    │                  ╰─── Expected Expected top-level declaration, found Error
+    │                  ╰─── Expected top-level declaration, found Error
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:29:21 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                     ───┬──  
-    │                        ╰──── Expected Expected top-level declaration, found Word
+    │                        ╰──── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found RParen
+Error: Expected top-level declaration, found RParen
     ╭─[ 0:29:27 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                           ┬  
-    │                           ╰── Expected Expected top-level declaration, found RParen
+    │                           ╰── Expected top-level declaration, found RParen
 ────╯
 
-Error: Expected Expected top-level declaration, found Arrow
+Error: Expected top-level declaration, found Arrow
     ╭─[ 0:29:29 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                             ─┬   
-    │                              ╰─── Expected Expected top-level declaration, found Arrow
+    │                              ╰─── Expected top-level declaration, found Arrow
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:29:32 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                                ────┬───  
-    │                                    ╰───── Expected Expected top-level declaration, found Word
+    │                                    ╰───── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
     ╭─[ 0:30:1 ]
     │
  30 │   "#
     │ ┬  
-    │ ╰── Expected Expected top-level declaration, found LBrace
+    │ ╰── Expected top-level declaration, found LBrace
 ────╯
 
-Error: Expected Expected config block, found Word
+Error: Expected config block, found Word
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
 
-Error: Expected Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found Hash
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
 
-Error: Expected Expected top-level declaration, found Colon
+Error: Expected top-level declaration, found Colon
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
 
-Error: Expected Expected top-level declaration, found Error
+Error: Expected top-level declaration, found Error
 
-Error: Expected Expected top-level declaration, found Error
+Error: Expected top-level declaration, found Error
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
 
-Error: Expected Expected top-level declaration, found Colon
+Error: Expected top-level declaration, found Colon
 
-Error: Expected Expected top-level declaration, found Error
+Error: Expected top-level declaration, found Error
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
 
-Error: Expected Expected top-level declaration, found Error
+Error: Expected top-level declaration, found Error
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
 
-Error: Expected Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found Hash
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace

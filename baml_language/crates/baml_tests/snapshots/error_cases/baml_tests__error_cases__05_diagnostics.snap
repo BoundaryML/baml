@@ -11,18 +11,18 @@ expression: output
    │     ╰───── Expected RBrace, found Function
 ───╯
 
-  [parse] Error: Expected Expected function name, found IntegerLiteral
+  [parse] Error: Expected function name, found IntegerLiteral
    ╭─[ 0:6:10 ]
    │
  6 │ function 123Invalid() {}
    │          ─┬─  
-   │           ╰─── Expected Expected function name, found IntegerLiteral
+   │           ╰─── Expected function name, found IntegerLiteral
 ───╯
 
-  [parse] Error: Expected Expected return type (->), found LBrace
+  [parse] Error: Expected return type (->), found LBrace
    ╭─[ 0:6:23 ]
    │
  6 │ function 123Invalid() {}
    │                       ┬  
-   │                       ╰── Expected Expected return type (->), found LBrace
+   │                       ╰── Expected return type (->), found LBrace
 ───╯

@@ -267,212 +267,212 @@ Error: Expected RBrace, found Client
    │      ╰──── Expected RBrace, found Client
 ───╯
 
-Error: Expected Expected config block, found Word
+Error: Expected config block, found Word
    ╭─[ 0:4:3 ]
    │
  4 │   prompt #"
    │   ───┬──  
-   │      ╰──── Expected Expected config block, found Word
+   │      ╰──── Expected config block, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:4:3 ]
    │
  4 │   prompt #"
    │   ───┬──  
-   │      ╰──── Expected Expected top-level declaration, found Word
+   │      ╰──── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found Hash
    ╭─[ 0:4:10 ]
    │
  4 │   prompt #"
    │          ┬  
-   │          ╰── Expected Expected top-level declaration, found Hash
+   │          ╰── Expected top-level declaration, found Hash
 ───╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
    ╭─[ 0:4:11 ]
    │
  4 │   prompt #"
    │           ┬  
-   │           ╰── Expected Expected top-level declaration, found Quote
+   │           ╰── Expected top-level declaration, found Quote
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:5:5 ]
    │
  5 │     Analyze the following text:
    │     ───┬───  
-   │        ╰───── Expected Expected top-level declaration, found Word
+   │        ╰───── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:5:13 ]
    │
  5 │     Analyze the following text:
    │             ─┬─  
-   │              ╰─── Expected Expected top-level declaration, found Word
+   │              ╰─── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:5:17 ]
    │
  5 │     Analyze the following text:
    │                 ────┬────  
-   │                     ╰────── Expected Expected top-level declaration, found Word
+   │                     ╰────── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:5:27 ]
    │
  5 │     Analyze the following text:
    │                           ──┬─  
-   │                             ╰─── Expected Expected top-level declaration, found Word
+   │                             ╰─── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Colon
+Error: Expected top-level declaration, found Colon
    ╭─[ 0:5:31 ]
    │
  5 │     Analyze the following text:
    │                               ┬  
-   │                               ╰── Expected Expected top-level declaration, found Colon
+   │                               ╰── Expected top-level declaration, found Colon
 ───╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
    ╭─[ 0:6:5 ]
    │
  6 │     {{ text }}
    │     ┬  
-   │     ╰── Expected Expected top-level declaration, found LBrace
+   │     ╰── Expected top-level declaration, found LBrace
 ───╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
    ╭─[ 0:6:6 ]
    │
  6 │     {{ text }}
    │      ┬  
-   │      ╰── Expected Expected top-level declaration, found LBrace
+   │      ╰── Expected top-level declaration, found LBrace
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:6:8 ]
    │
  6 │     {{ text }}
    │        ──┬─  
-   │          ╰─── Expected Expected top-level declaration, found Word
+   │          ╰─── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
    ╭─[ 0:6:13 ]
    │
  6 │     {{ text }}
    │             ┬  
-   │             ╰── Expected Expected top-level declaration, found RBrace
+   │             ╰── Expected top-level declaration, found RBrace
 ───╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
    ╭─[ 0:6:14 ]
    │
  6 │     {{ text }}
    │              ┬  
-   │              ╰── Expected Expected top-level declaration, found RBrace
+   │              ╰── Expected top-level declaration, found RBrace
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:8:5 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │     ───┬──  
-   │        ╰──── Expected Expected top-level declaration, found Word
+   │        ╰──── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:8:12 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │            ─┬  
-   │             ╰── Expected Expected top-level declaration, found Word
+   │             ╰── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:8:15 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │               ────┬───  
-   │                   ╰───── Expected Expected top-level declaration, found Word
+   │                   ╰───── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:8:24 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                        ───┬──  
-   │                           ╰──── Expected Expected top-level declaration, found Word
+   │                           ╰──── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:8:31 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                               ──┬─  
-   │                                 ╰─── Expected Expected top-level declaration, found Word
+   │                                 ╰─── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:8:36 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                                    ────┬────  
-   │                                        ╰────── Expected Expected top-level declaration, found Word
+   │                                        ╰────── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:8:46 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                                              ─┬─  
-   │                                               ╰─── Expected Expected top-level declaration, found Word
+   │                                               ╰─── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
    ╭─[ 0:8:50 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                                                  ────┬───  
-   │                                                      ╰───── Expected Expected top-level declaration, found Word
+   │                                                      ╰───── Expected top-level declaration, found Word
 ───╯
 
-Error: Expected Expected top-level declaration, found Dot
+Error: Expected top-level declaration, found Dot
    ╭─[ 0:8:58 ]
    │
  8 │     Return an Analysis object with sentiment and keywords.
    │                                                          ┬  
-   │                                                          ╰── Expected Expected top-level declaration, found Dot
+   │                                                          ╰── Expected top-level declaration, found Dot
 ───╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
    ╭─[ 0:9:3 ]
    │
  9 │   "#
    │   ┬  
-   │   ╰── Expected Expected top-level declaration, found Quote
+   │   ╰── Expected top-level declaration, found Quote
 ───╯
 
-Error: Expected Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found Hash
    ╭─[ 0:9:4 ]
    │
  9 │   "#
    │    ┬  
-   │    ╰── Expected Expected top-level declaration, found Hash
+   │    ╰── Expected top-level declaration, found Hash
 ───╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
     ╭─[ 0:10:1 ]
     │
  10 │ }
     │ ┬  
-    │ ╰── Expected Expected top-level declaration, found RBrace
+    │ ╰── Expected top-level declaration, found RBrace
 ────╯
 
 Error: Expected RBrace, found Client
@@ -483,226 +483,226 @@ Error: Expected RBrace, found Client
     │      ╰──── Expected RBrace, found Client
 ────╯
 
-Error: Expected Expected config block, found Word
+Error: Expected config block, found Word
     ╭─[ 0:33:3 ]
     │
  33 │   prompt #"
     │   ───┬──  
-    │      ╰──── Expected Expected config block, found Word
+    │      ╰──── Expected config block, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:33:3 ]
     │
  33 │   prompt #"
     │   ───┬──  
-    │      ╰──── Expected Expected top-level declaration, found Word
+    │      ╰──── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found Hash
     ╭─[ 0:33:10 ]
     │
  33 │   prompt #"
     │          ┬  
-    │          ╰── Expected Expected top-level declaration, found Hash
+    │          ╰── Expected top-level declaration, found Hash
 ────╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
     ╭─[ 0:33:11 ]
     │
  33 │   prompt #"
     │           ┬  
-    │           ╰── Expected Expected top-level declaration, found Quote
+    │           ╰── Expected top-level declaration, found Quote
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:34:5 ]
     │
  34 │     Process this through multiple steps:
     │     ───┬───  
-    │        ╰───── Expected Expected top-level declaration, found Word
+    │        ╰───── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:34:13 ]
     │
  34 │     Process this through multiple steps:
     │             ──┬─  
-    │               ╰─── Expected Expected top-level declaration, found Word
+    │               ╰─── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:34:18 ]
     │
  34 │     Process this through multiple steps:
     │                  ───┬───  
-    │                     ╰───── Expected Expected top-level declaration, found Word
+    │                     ╰───── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:34:26 ]
     │
  34 │     Process this through multiple steps:
     │                          ────┬───  
-    │                              ╰───── Expected Expected top-level declaration, found Word
+    │                              ╰───── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:34:35 ]
     │
  34 │     Process this through multiple steps:
     │                                   ──┬──  
-    │                                     ╰──── Expected Expected top-level declaration, found Word
+    │                                     ╰──── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Colon
+Error: Expected top-level declaration, found Colon
     ╭─[ 0:34:40 ]
     │
  34 │     Process this through multiple steps:
     │                                        ┬  
-    │                                        ╰── Expected Expected top-level declaration, found Colon
+    │                                        ╰── Expected top-level declaration, found Colon
 ────╯
 
-Error: Expected Expected top-level declaration, found IntegerLiteral
+Error: Expected top-level declaration, found IntegerLiteral
     ╭─[ 0:35:5 ]
     │
  35 │     1. {{ input }}
     │     ┬  
-    │     ╰── Expected Expected top-level declaration, found IntegerLiteral
+    │     ╰── Expected top-level declaration, found IntegerLiteral
 ────╯
 
-Error: Expected Expected top-level declaration, found Dot
+Error: Expected top-level declaration, found Dot
     ╭─[ 0:35:6 ]
     │
  35 │     1. {{ input }}
     │      ┬  
-    │      ╰── Expected Expected top-level declaration, found Dot
+    │      ╰── Expected top-level declaration, found Dot
 ────╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
     ╭─[ 0:35:8 ]
     │
  35 │     1. {{ input }}
     │        ┬  
-    │        ╰── Expected Expected top-level declaration, found LBrace
+    │        ╰── Expected top-level declaration, found LBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found LBrace
     ╭─[ 0:35:9 ]
     │
  35 │     1. {{ input }}
     │         ┬  
-    │         ╰── Expected Expected top-level declaration, found LBrace
+    │         ╰── Expected top-level declaration, found LBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:35:11 ]
     │
  35 │     1. {{ input }}
     │           ──┬──  
-    │             ╰──── Expected Expected top-level declaration, found Word
+    │             ╰──── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
     ╭─[ 0:35:17 ]
     │
  35 │     1. {{ input }}
     │                 ┬  
-    │                 ╰── Expected Expected top-level declaration, found RBrace
+    │                 ╰── Expected top-level declaration, found RBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
     ╭─[ 0:35:18 ]
     │
  35 │     1. {{ input }}
     │                  ┬  
-    │                  ╰── Expected Expected top-level declaration, found RBrace
+    │                  ╰── Expected top-level declaration, found RBrace
 ────╯
 
-Error: Expected Expected top-level declaration, found IntegerLiteral
+Error: Expected top-level declaration, found IntegerLiteral
     ╭─[ 0:36:5 ]
     │
  36 │     2. Transform it
     │     ┬  
-    │     ╰── Expected Expected top-level declaration, found IntegerLiteral
+    │     ╰── Expected top-level declaration, found IntegerLiteral
 ────╯
 
-Error: Expected Expected top-level declaration, found Dot
+Error: Expected top-level declaration, found Dot
     ╭─[ 0:36:6 ]
     │
  36 │     2. Transform it
     │      ┬  
-    │      ╰── Expected Expected top-level declaration, found Dot
+    │      ╰── Expected top-level declaration, found Dot
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:36:8 ]
     │
  36 │     2. Transform it
     │        ────┬────  
-    │            ╰────── Expected Expected top-level declaration, found Word
+    │            ╰────── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:36:18 ]
     │
  36 │     2. Transform it
     │                  ─┬  
-    │                   ╰── Expected Expected top-level declaration, found Word
+    │                   ╰── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found IntegerLiteral
+Error: Expected top-level declaration, found IntegerLiteral
     ╭─[ 0:37:5 ]
     │
  37 │     3. Return result
     │     ┬  
-    │     ╰── Expected Expected top-level declaration, found IntegerLiteral
+    │     ╰── Expected top-level declaration, found IntegerLiteral
 ────╯
 
-Error: Expected Expected top-level declaration, found Dot
+Error: Expected top-level declaration, found Dot
     ╭─[ 0:37:6 ]
     │
  37 │     3. Return result
     │      ┬  
-    │      ╰── Expected Expected top-level declaration, found Dot
+    │      ╰── Expected top-level declaration, found Dot
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:37:8 ]
     │
  37 │     3. Return result
     │        ───┬──  
-    │           ╰──── Expected Expected top-level declaration, found Word
+    │           ╰──── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Word
     ╭─[ 0:37:15 ]
     │
  37 │     3. Return result
     │               ───┬──  
-    │                  ╰──── Expected Expected top-level declaration, found Word
+    │                  ╰──── Expected top-level declaration, found Word
 ────╯
 
-Error: Expected Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found Quote
     ╭─[ 0:38:3 ]
     │
  38 │   "#
     │   ┬  
-    │   ╰── Expected Expected top-level declaration, found Quote
+    │   ╰── Expected top-level declaration, found Quote
 ────╯
 
-Error: Expected Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found Hash
     ╭─[ 0:38:4 ]
     │
  38 │   "#
     │    ┬  
-    │    ╰── Expected Expected top-level declaration, found Hash
+    │    ╰── Expected top-level declaration, found Hash
 ────╯
 
-Error: Expected Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found RBrace
     ╭─[ 0:39:1 ]
     │
  39 │ }
     │ ┬  
-    │ ╰── Expected Expected top-level declaration, found RBrace
+    │ ╰── Expected top-level declaration, found RBrace
 ────╯
