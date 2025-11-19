@@ -3,11 +3,9 @@
 //! Separated from `ItemTree` to provide fine-grained incrementality.
 //! Signature changes invalidate type checking, but not name resolution.
 
-use std::sync::Arc;
-
-use rowan::ast::AstNode;
-
 use crate::{Name, type_ref::TypeRef};
+use rowan::ast::AstNode;
+use std::sync::Arc;
 
 /// The signature of a function (everything except the body).
 #[derive(Debug, Clone, PartialEq, Eq)]
