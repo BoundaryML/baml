@@ -197,6 +197,8 @@ fn generate_project_tests(file: &mut File, project: &TestProject) -> std::io::Re
     writeln!(file, "    use baml_db::baml_thir;")?;
     writeln!(file, "    use baml_db::baml_codegen;")?;
     writeln!(file, "    use baml_db::Diagnostic;")?;
+    writeln!(file, "    use baml_diagnostics::render_diagnostic_with_color;")?;
+    writeln!(file, "    use std::collections::HashMap;")?;
     writeln!(file, "    use insta::{{assert_snapshot, with_settings}};")?;
     writeln!(file, "    use std::fmt::Write;")?;
     writeln!(file, "    #[allow(unused_imports)]")?;
@@ -332,11 +334,13 @@ fn generate_parser_test(
         "        let content = content.replace(\"\\r\\n\", \"\\n\");"
     )?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
+    writeln!(file, "        let mut sources = HashMap::new();")?;
     writeln!(
         file,
         "        let source_file = db.add_file(\"{}\", &content);",
         baml_file.relative_path.display()
     )?;
+    writeln!(file, "        sources.insert(source_file.file_id(&db), content.clone());")?;
     writeln!(
         file,
         "        let tree = baml_parser::syntax_tree(&db, source_file);"
@@ -365,7 +369,7 @@ fn generate_parser_test(
     writeln!(file, "            for error in errors.iter() {{")?;
     writeln!(
         file,
-        "                writeln!(output, \"  {{}}\", error.message()).unwrap();"
+        "                writeln!(output, \"{{}}\", render_diagnostic_with_color(error, &sources, false)).unwrap();"
     )?;
     writeln!(file, "            }}")?;
     writeln!(file, "        }}")?;
@@ -545,6 +549,7 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
     writeln!(file, "    #[test]")?;
     writeln!(file, "    fn test_05_diagnostics() {{")?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
+    writeln!(file, "        let mut sources = HashMap::new();")?;
     writeln!(file, "        let mut all_errors = Vec::new();")?;
     writeln!(file)?;
 
@@ -567,6 +572,7 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
         )?;
         writeln!(file, "                &content,")?;
         writeln!(file, "            );")?;
+        writeln!(file, "            sources.insert(source_file.file_id(&db), content.clone());")?;
         writeln!(file)?;
         writeln!(
             file,
@@ -575,7 +581,7 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
         writeln!(file, "            for error in errors {{")?;
         writeln!(
             file,
-            "                all_errors.push((\"parse\".to_string(), error.message()));"
+            "                all_errors.push((\"parse\".to_string(), render_diagnostic_with_color(&error, &sources, false)));"
         )?;
         writeln!(file, "            }}")?;
         writeln!(file, "        }}")?;

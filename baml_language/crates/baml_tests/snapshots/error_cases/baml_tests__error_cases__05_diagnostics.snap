@@ -1,10 +1,36 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 461
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
+  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Missing closing brace
+   │ │ 
+   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Missing closing brace
+   │ │ 
+   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+───╯
+
+  [parse] Error: Expected Expected type, found Expected type
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Missing closing brace
+   │ │ 
+   │ ╰─ Expected Expected type, found Expected type
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Missing closing brace
+   │ │ 
+   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+───╯

@@ -1,6 +1,5 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 3395
 expression: output
 ---
 === SYNTAX TREE ===
@@ -165,14 +164,90 @@ SOURCE_FILE
   R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
-  Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
-  Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
+Error: Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
+───╯
+
+Error: Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
+───╯
+
+Error: Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
+───╯
+
+Error: Expected Expected function body, found Expected function body
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected function body, found Expected function body
+───╯
+
+Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Deeply nested type references
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯

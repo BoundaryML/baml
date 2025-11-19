@@ -216,6 +216,7 @@ name = "baml_tests"
 version = "0.0.0"
 dependencies = [
  "baml_db",
+ "baml_diagnostics",
  "codspeed-divan-compat",
  "insta",
  "walkdir",

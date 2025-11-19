@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -165,54 +165,410 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected Colon, found Equals, found Expected Colon, found Equals
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected Colon, found Word, found Expected Colon, found Word
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected Colon, found Equals, found Expected Colon, found Equals
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected Colon, found Word, found Expected Colon, found Word
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected Colon, found Equals, found Expected Colon, found Equals
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected Colon, found Word, found Expected Colon, found Word
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected Colon, found Equals, found Expected Colon, found Equals
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected Colon, found Word, found Expected Colon, found Word
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected Colon, found Equals, found Expected Colon, found Equals
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
+Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected Colon, found Word, found Expected Colon, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected Colon, found Word, found Expected Colon, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected Colon, found Word, found Expected Colon, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected Colon, found Word, found Expected Colon, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
+───╯
+
+Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+Error: Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ enum Status {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
+───╯

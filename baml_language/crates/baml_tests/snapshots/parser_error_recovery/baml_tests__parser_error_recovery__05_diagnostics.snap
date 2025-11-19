@@ -1,31 +1,212 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Expected Expected class name, found Expected class name
-  [parse] Expected Expected LBrace, found IntegerLiteral, found Expected LBrace, found IntegerLiteral
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Expected RParen, found Function, found Expected RParen, found Function
-  [parse] Expected Expected return type (->), found Expected return type (->)
-  [parse] Expected Expected function body, found Expected function body
-  [parse] Expected Expected LBrace, found Word, found Expected LBrace, found Word
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
-  [parse] Expected Unclosed string literal, found Unclosed string literal
-  [parse] Expected Expected RBrace, found EOF, found Expected RBrace, found EOF
+  [parse] Error: Expected Expected class name, found Expected class name
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected class name, found Expected class name
+───╯
+
+  [parse] Error: Expected Expected LBrace, found IntegerLiteral, found Expected LBrace, found IntegerLiteral
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected LBrace, found IntegerLiteral, found Expected LBrace, found IntegerLiteral
+───╯
+
+  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+  [parse] Error: Expected Expected type, found Expected type
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected type, found Expected type
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+───╯
+
+  [parse] Error: Expected Expected type, found Expected type
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected type, found Expected type
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+───╯
+
+  [parse] Error: Expected Expected type, found Expected type
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected type, found Expected type
+───╯
+
+  [parse] Error: Expected Expected type, found Expected type
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected type, found Expected type
+───╯
+
+  [parse] Error: Expected Expected RParen, found Word, found Expected RParen, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected RParen, found Word, found Expected RParen, found Word
+───╯
+
+  [parse] Error: Expected Expected type, found Expected type
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected type, found Expected type
+───╯
+
+  [parse] Error: Expected Expected RParen, found Function, found Expected RParen, found Function
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected RParen, found Function, found Expected RParen, found Function
+───╯
+
+  [parse] Error: Expected Expected return type (->), found Expected return type (->)
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected return type (->), found Expected return type (->)
+───╯
+
+  [parse] Error: Expected Expected function body, found Expected function body
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected function body, found Expected function body
+───╯
+
+  [parse] Error: Expected Expected LBrace, found Word, found Expected LBrace, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected LBrace, found Word, found Expected LBrace, found Word
+───╯
+
+  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+───╯
+
+  [parse] Error: Expected Expected RParen, found Word, found Expected RParen, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected RParen, found Word, found Expected RParen, found Word
+───╯
+
+  [parse] Error: Expected Unclosed string literal, found Unclosed string literal
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Unclosed string literal, found Unclosed string literal
+───╯
+
+  [parse] Error: Expected Expected RBrace, found EOF, found Expected RBrace, found EOF
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ │ 
+   │ ╰─ Expected Expected RBrace, found EOF, found Expected RBrace, found EOF
+───╯

@@ -1,67 +1,500 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected Colon, found Equals, found Expected Colon, found Equals
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected Colon, found Word, found Expected Colon, found Word
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected Colon, found Equals, found Expected Colon, found Equals
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected Colon, found Word, found Expected Colon, found Word
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected Colon, found Equals, found Expected Colon, found Equals
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected Colon, found Word, found Expected Colon, found Word
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected Colon, found Equals, found Expected Colon, found Equals
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected Colon, found Word, found Expected Colon, found Word
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected Colon, found Equals, found Expected Colon, found Equals
-  [parse] Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  [parse] Expected Expected field name or '}', found Expected field name or '}'
-  [parse] Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected expression, found Expected expression
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected expression, found Expected expression
+───╯
+
+  [parse] Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected Colon, found Word, found Expected Colon, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected Colon, found Word, found Expected Colon, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected Colon, found Word, found Expected Colon, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected Colon, found Word, found Expected Colon, found Word
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
+───╯
+
+  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+───╯
+
+  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
+───╯
+
+  [parse] Error: Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
+───╯

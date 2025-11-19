@@ -18,6 +18,15 @@ fn span_to_ariadne(span: Span) -> (usize, std::ops::Range<usize>) {
 
 /// Render any diagnostic to a beautiful string using Ariadne.
 pub fn render_diagnostic(diag: &dyn Diagnostic, sources: &HashMap<FileId, String>) -> String {
+    render_diagnostic_with_color(diag, sources, true)
+}
+
+/// Render any diagnostic to a beautiful string using Ariadne, with optional color.
+pub fn render_diagnostic_with_color(
+    diag: &dyn Diagnostic,
+    sources: &HashMap<FileId, String>,
+    color: bool,
+) -> String {
     let Some(span) = diag.span() else {
         // If no span, just return the message
         return diag.message();
@@ -32,6 +41,7 @@ pub fn render_diagnostic(diag: &dyn Diagnostic, sources: &HashMap<FileId, String
     let (file_id, range) = span_to_ariadne(span);
 
     let report = Report::build(kind, (file_id, range.clone()))
+        .with_config(ariadne::Config::default().with_color(color))
         .with_message(diag.message())
         .with_label(
             Label::new((file_id, range))
