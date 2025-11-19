@@ -116,42 +116,42 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+Error: Expected expression
+   ╭─[ 0:3:23 ]
    │
- 1 │ function FieldAccess(user User) -> string {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 3 │   let name = user.name;
+   │                       ┬  
+   │                       ╰── Expected expression
 ───╯
 
-Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+Error: Expected expression
+   ╭─[ 0:6:29 ]
    │
- 1 │ function FieldAccess(user User) -> string {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 6 │   let bio = user.profile.bio;
+   │                             ┬  
+   │                             ╰── Expected expression
 ───╯
 
-Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+Error: Expected expression
+   ╭─[ 0:9:42 ]
    │
- 1 │ function FieldAccess(user User) -> string {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 9 │   let theme = user.profile.settings.theme;
+   │                                          ┬  
+   │                                          ╰── Expected expression
 ───╯
 
-Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function FieldAccess(user User) -> string {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+Error: Expected expression
+    ╭─[ 0:12:30 ]
+    │
+ 12 │   let firstTag = user.tags[0];
+    │                              ┬  
+    │                              ╰── Expected expression
+────╯
 
-Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function FieldAccess(user User) -> string {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+Error: Expected expression
+    ╭─[ 0:14:15 ]
+    │
+ 14 │   return theme;
+    │               ┬  
+    │               ╰── Expected expression
+────╯

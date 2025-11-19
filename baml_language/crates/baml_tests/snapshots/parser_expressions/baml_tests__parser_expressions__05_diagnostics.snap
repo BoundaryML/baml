@@ -3,498 +3,498 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected expression
+   ╭─[ 1:3:23 ]
    │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 3 │   let name = user.name;
+   │                       ┬  
+   │                       ╰── Expected expression
 ───╯
 
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected expression
+   ╭─[ 1:6:29 ]
    │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 6 │   let bio = user.profile.bio;
+   │                             ┬  
+   │                             ╰── Expected expression
 ───╯
 
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected expression
+   ╭─[ 1:9:42 ]
    │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 9 │   let theme = user.profile.settings.theme;
+   │                                          ┬  
+   │                                          ╰── Expected expression
 ───╯
 
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+  [parse] Error: Expected expression
+    ╭─[ 1:12:30 ]
+    │
+ 12 │   let firstTag = user.tags[0];
+    │                              ┬  
+    │                              ╰── Expected expression
+────╯
 
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+  [parse] Error: Expected expression
+    ╭─[ 1:14:15 ]
+    │
+ 14 │   return theme;
+    │               ┬  
+    │               ╰── Expected expression
+────╯
 
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+  [parse] Error: Expected expression
+    ╭─[ 3:11:23 ]
+    │
+ 11 │   let first = users[0];
+    │                       ┬  
+    │                       ╰── Expected expression
+────╯
 
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+  [parse] Error: Expected expression
+    ╭─[ 3:14:14 ]
+    │
+ 14 │   let idx = 1;
+    │              ┬  
+    │              ╰── Expected expression
+────╯
 
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+  [parse] Error: Expected expression
+    ╭─[ 3:15:26 ]
+    │
+ 15 │   let second = users[idx];
+    │                          ┬  
+    │                          ╰── Expected expression
+────╯
 
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+  [parse] Error: Expected expression
+    ╭─[ 3:18:32 ]
+    │
+ 18 │   let firstName = users[0].name;
+    │                                ┬  
+    │                                ╰── Expected expression
+────╯
 
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+  [parse] Error: Expected expression
+    ╭─[ 3:21:29 ]
+    │
+ 21 │   let tag = users[0].tags[0];
+    │                             ┬  
+    │                             ╰── Expected expression
+────╯
 
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+  [parse] Error: Expected expression
+    ╭─[ 3:23:19 ]
+    │
+ 23 │   return firstName;
+    │                   ┬  
+    │                   ╰── Expected expression
+────╯
 
-  [parse] Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-───╯
+  [parse] Error: Expected Colon, found DoubleColon
+    ╭─[ 4:10:11 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval"
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:10:11 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval"
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
-───╯
+  [parse] Error: Expected Colon, found Equals
+    ╭─[ 4:10:21 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval"
+    │                     ┬  
+    │                     ╰── Expected Colon, found Equals
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:10:21 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval"
+    │                     ┬  
+    │                     ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:10:22 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval"
+    │                      ┬  
+    │                      ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected Colon, found Word, found Expected Colon, found Word
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
-───╯
+  [parse] Error: Expected Colon, found Word
+    ╭─[ 4:11:5 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active"
+    │     ───┬──  
+    │        ╰──── Expected Colon, found Word
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:11:5 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active"
+    │     ───┬──  
+    │        ╰──── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-───╯
+  [parse] Error: Expected Colon, found DoubleColon
+    ╭─[ 4:11:11 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active"
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:11:11 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active"
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
-───╯
+  [parse] Error: Expected Colon, found Equals
+    ╭─[ 4:11:20 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active"
+    │                    ┬  
+    │                    ╰── Expected Colon, found Equals
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:11:20 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active"
+    │                    ┬  
+    │                    ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:11:21 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active"
+    │                     ┬  
+    │                     ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected Colon, found Word, found Expected Colon, found Word
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
-───╯
+  [parse] Error: Expected Colon, found Word
+    ╭─[ 4:12:5 ]
+    │
+ 12 │     Status::INACTIVE => "Not active"
+    │     ───┬──  
+    │        ╰──── Expected Colon, found Word
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:12:5 ]
+    │
+ 12 │     Status::INACTIVE => "Not active"
+    │     ───┬──  
+    │        ╰──── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-───╯
+  [parse] Error: Expected Colon, found DoubleColon
+    ╭─[ 4:12:11 ]
+    │
+ 12 │     Status::INACTIVE => "Not active"
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:12:11 ]
+    │
+ 12 │     Status::INACTIVE => "Not active"
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
-───╯
+  [parse] Error: Expected Colon, found Equals
+    ╭─[ 4:12:22 ]
+    │
+ 12 │     Status::INACTIVE => "Not active"
+    │                      ┬  
+    │                      ╰── Expected Colon, found Equals
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:12:22 ]
+    │
+ 12 │     Status::INACTIVE => "Not active"
+    │                      ┬  
+    │                      ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:12:23 ]
+    │
+ 12 │     Status::INACTIVE => "Not active"
+    │                       ┬  
+    │                       ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected Colon, found Word, found Expected Colon, found Word
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
-───╯
+  [parse] Error: Expected Colon, found Word
+    ╭─[ 4:13:5 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended"
+    │     ───┬──  
+    │        ╰──── Expected Colon, found Word
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:13:5 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended"
+    │     ───┬──  
+    │        ╰──── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found DoubleColon, found Expected Colon, found DoubleColon
-───╯
+  [parse] Error: Expected Colon, found DoubleColon
+    ╭─[ 4:13:11 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended"
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:13:11 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended"
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
-───╯
+  [parse] Error: Expected Colon, found Equals
+    ╭─[ 4:13:23 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended"
+    │                       ┬  
+    │                       ╰── Expected Colon, found Equals
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:13:23 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended"
+    │                       ┬  
+    │                       ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:13:24 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended"
+    │                        ┬  
+    │                        ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
-───╯
+  [parse] Error: Expected Colon, found RBrace
+    ╭─[ 4:14:3 ]
+    │
+ 14 │   }
+    │   ┬  
+    │   ╰── Expected Colon, found RBrace
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:19:5 ]
+    │
+ 19 │     0 => "zero"
+    │     ┬  
+    │     ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:19:7 ]
+    │
+ 19 │     0 => "zero"
+    │       ┬  
+    │       ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:19:8 ]
+    │
+ 19 │     0 => "zero"
+    │        ┬  
+    │        ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
-───╯
+  [parse] Error: Expected Colon, found IntegerLiteral
+    ╭─[ 4:20:5 ]
+    │
+ 20 │     1 | 2 | 3 => "small"
+    │     ┬  
+    │     ╰── Expected Colon, found IntegerLiteral
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:20:5 ]
+    │
+ 20 │     1 | 2 | 3 => "small"
+    │     ┬  
+    │     ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:20:7 ]
+    │
+ 20 │     1 | 2 | 3 => "small"
+    │       ┬  
+    │       ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:20:9 ]
+    │
+ 20 │     1 | 2 | 3 => "small"
+    │         ┬  
+    │         ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:20:11 ]
+    │
+ 20 │     1 | 2 | 3 => "small"
+    │           ┬  
+    │           ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:20:13 ]
+    │
+ 20 │     1 | 2 | 3 => "small"
+    │             ┬  
+    │             ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:20:15 ]
+    │
+ 20 │     1 | 2 | 3 => "small"
+    │               ┬  
+    │               ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:20:16 ]
+    │
+ 20 │     1 | 2 | 3 => "small"
+    │                ┬  
+    │                ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found IntegerLiteral, found Expected Colon, found IntegerLiteral
-───╯
+  [parse] Error: Expected Colon, found IntegerLiteral
+    ╭─[ 4:21:5 ]
+    │
+ 21 │     4..10 => "medium"
+    │     ┬  
+    │     ╰── Expected Colon, found IntegerLiteral
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:21:5 ]
+    │
+ 21 │     4..10 => "medium"
+    │     ┬  
+    │     ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:21:6 ]
+    │
+ 21 │     4..10 => "medium"
+    │      ┬  
+    │      ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:21:7 ]
+    │
+ 21 │     4..10 => "medium"
+    │       ┬  
+    │       ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:21:8 ]
+    │
+ 21 │     4..10 => "medium"
+    │        ─┬  
+    │         ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:21:11 ]
+    │
+ 21 │     4..10 => "medium"
+    │           ┬  
+    │           ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:21:12 ]
+    │
+ 21 │     4..10 => "medium"
+    │            ┬  
+    │            ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected Colon, found Word, found Expected Colon, found Word
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found Word, found Expected Colon, found Word
-───╯
+  [parse] Error: Expected Colon, found Word
+    ╭─[ 4:22:5 ]
+    │
+ 22 │     _ => "large"
+    │     ┬  
+    │     ╰── Expected Colon, found Word
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:22:5 ]
+    │
+ 22 │     _ => "large"
+    │     ┬  
+    │     ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected Colon, found Equals, found Expected Colon, found Equals
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found Equals, found Expected Colon, found Equals
-───╯
+  [parse] Error: Expected Colon, found Equals
+    ╭─[ 4:22:7 ]
+    │
+ 22 │     _ => "large"
+    │       ┬  
+    │       ╰── Expected Colon, found Equals
+────╯
 
-  [parse] Error: Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-───╯
+  [parse] Error: Expected ',' or '}' after object field
+    ╭─[ 4:22:7 ]
+    │
+ 22 │     _ => "large"
+    │       ┬  
+    │       ╰── Expected ',' or '}' after object field
+────╯
 
-  [parse] Error: Expected Expected field name or '}', found Expected field name or '}'
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected field name or '}', found Expected field name or '}'
-───╯
+  [parse] Error: Expected field name or '}'
+    ╭─[ 4:22:8 ]
+    │
+ 22 │     _ => "large"
+    │        ┬  
+    │        ╰── Expected field name or '}'
+────╯
 
-  [parse] Error: Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
-   ╭─[ 0:1:1 ]
-   │
- 1 │ function Calculate() -> int {
-   │ │ 
-   │ ╰─ Expected Expected Colon, found RBrace, found Expected Colon, found RBrace
-───╯
+  [parse] Error: Expected Colon, found RBrace
+    ╭─[ 4:23:3 ]
+    │
+ 23 │   }
+    │   ┬  
+    │   ╰── Expected Colon, found RBrace
+────╯

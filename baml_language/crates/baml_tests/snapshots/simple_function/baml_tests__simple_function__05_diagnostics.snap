@@ -3,4 +3,130 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [parse] Error: Expected RBrace, found Client
+   ╭─[ 0:2:3 ]
+   │
+ 2 │   client GPT4
+   │   ───┬──  
+   │      ╰──── Expected RBrace, found Client
+───╯
+
+  [parse] Error: Expected config block
+   ╭─[ 0:3:3 ]
+   │
+ 3 │   prompt #"
+   │   ───┬──  
+   │      ╰──── Expected config block
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:3 ]
+   │
+ 3 │   prompt #"
+   │   ───┬──  
+   │      ╰──── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:10 ]
+   │
+ 3 │   prompt #"
+   │          ┬  
+   │          ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:11 ]
+   │
+ 3 │   prompt #"
+   │           ┬  
+   │           ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:4:5 ]
+   │
+ 4 │     Say hello to {{name}}
+   │     ─┬─  
+   │      ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:4:9 ]
+   │
+ 4 │     Say hello to {{name}}
+   │         ──┬──  
+   │           ╰──── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:4:15 ]
+   │
+ 4 │     Say hello to {{name}}
+   │               ─┬  
+   │                ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:4:18 ]
+   │
+ 4 │     Say hello to {{name}}
+   │                  ┬  
+   │                  ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:4:19 ]
+   │
+ 4 │     Say hello to {{name}}
+   │                   ┬  
+   │                   ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:4:20 ]
+   │
+ 4 │     Say hello to {{name}}
+   │                    ──┬─  
+   │                      ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:4:24 ]
+   │
+ 4 │     Say hello to {{name}}
+   │                        ┬  
+   │                        ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:4:25 ]
+   │
+ 4 │     Say hello to {{name}}
+   │                         ┬  
+   │                         ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:5:3 ]
+   │
+ 5 │   "#
+   │   ┬  
+   │   ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:5:4 ]
+   │
+ 5 │   "#
+   │    ┬  
+   │    ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:6:1 ]
+   │
+ 6 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration
+───╯

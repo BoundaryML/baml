@@ -12,10 +12,9 @@ SOURCE_FILE
       WORD "name"
       TYPE_EXPR " string"
         WORD "string"
+  CLASS_DEF
     KW_CLASS "class"
-    FIELD
-      WORD "Another"
-      TYPE_EXPR
+    WORD "Another"
     L_BRACE "{"
     FIELD
       WORD "field"
@@ -24,26 +23,10 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+Error: Expected RBrace, found Class
+   ╭─[ 0:5:1 ]
    │
- 1 │ class User {
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
-───╯
-
-Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
-   │
- 1 │ class User {
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
-───╯
-
-Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
-   │
- 1 │ class User {
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 5 │ class Another {  // Should still parse this class
+   │ ──┬──  
+   │   ╰──── Expected RBrace, found Class
 ───╯

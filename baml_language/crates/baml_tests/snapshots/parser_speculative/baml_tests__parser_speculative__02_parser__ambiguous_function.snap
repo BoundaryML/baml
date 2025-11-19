@@ -18,14 +18,13 @@ SOURCE_FILE
     TYPE_EXPR " string"
       WORD "string"
     EXPR_FUNCTION_BODY
-      BLOCK_EXPR " {
-  client GPT4  // This keyword determines it's an LLM function
-  // Even though it starts like it could be expression function
-}"
+      BLOCK_EXPR " {"
         L_BRACE "{"
-        KW_CLIENT "client"
-        WORD "GPT4"
-        R_BRACE "}"
+  CLIENT_DEF "
+  client GPT4"
+    KW_CLIENT "client"
+    WORD "GPT4"
+  R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "AnotherLLM"
@@ -58,10 +57,26 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+Error: Expected RBrace, found Client
+   ╭─[ 0:3:3 ]
    │
- 1 │ // This could initially look like either type
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 3 │   client GPT4  // This keyword determines it's an LLM function
+   │   ───┬──  
+   │      ╰──── Expected RBrace, found Client
+───╯
+
+Error: Expected config block
+   ╭─[ 0:5:1 ]
+   │
+ 5 │ }
+   │ ┬  
+   │ ╰── Expected config block
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:5:1 ]
+   │
+ 5 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration
 ───╯

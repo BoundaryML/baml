@@ -63,26 +63,26 @@ SOURCE_FILE
           R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected RParen, found Word, found Expected RParen, found Word
-   ╭─[ 0:1:1 ]
+Error: Expected RParen, found Word
+   ╭─[ 0:4:25 ]
    │
- 1 │ class Test {
-   │ │ 
-   │ ╰─ Expected Expected RParen, found Word, found Expected RParen, found Word
+ 4 │   field3 string @alias("another closed string")  // Should still parse this
+   │                         ───┬───  
+   │                            ╰───── Expected RParen, found Word
 ───╯
 
-Error: Expected Unclosed string literal, found Unclosed string literal
-   ╭─[ 0:1:1 ]
+Error: Unclosed string literal
+   ╭─[ 0:5:2 ]
    │
- 1 │ class Test {
-   │ │ 
-   │ ╰─ Expected Unclosed string literal, found Unclosed string literal
+ 5 │ }
+   │  ┬  
+   │  ╰── Unclosed string literal
 ───╯
 
-Error: Expected Expected RBrace, found EOF, found Expected RBrace, found EOF
-   ╭─[ 0:1:1 ]
+Error: Expected RBrace, found EOF
+   ╭─[ 0:5:2 ]
    │
- 1 │ class Test {
-   │ │ 
-   │ ╰─ Expected Expected RBrace, found EOF, found Expected RBrace, found EOF
+ 5 │ }
+   │  ┬  
+   │  ╰── Expected RBrace, found EOF
 ───╯

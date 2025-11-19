@@ -3,10 +3,650 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected RBrace, found Client
+   ╭─[ 0:3:3 ]
    │
- 1 │ // This could initially look like either type
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 3 │   client GPT4  // This keyword determines it's an LLM function
+   │   ───┬──  
+   │      ╰──── Expected RBrace, found Client
 ───╯
+
+  [parse] Error: Expected config block
+   ╭─[ 0:5:1 ]
+   │
+ 5 │ }
+   │ ┬  
+   │ ╰── Expected config block
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:5:1 ]
+   │
+ 5 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected RBrace, found Client
+   ╭─[ 2:2:3 ]
+   │
+ 2 │   client GPT4
+   │   ───┬──  
+   │      ╰──── Expected RBrace, found Client
+───╯
+
+  [parse] Error: Expected config block
+   ╭─[ 2:3:3 ]
+   │
+ 3 │   prompt #"
+   │   ───┬──  
+   │      ╰──── Expected config block
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:3:3 ]
+   │
+ 3 │   prompt #"
+   │   ───┬──  
+   │      ╰──── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:3:10 ]
+   │
+ 3 │   prompt #"
+   │          ┬  
+   │          ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:3:11 ]
+   │
+ 3 │   prompt #"
+   │           ┬  
+   │           ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:4:5 ]
+   │
+ 4 │     Extract structured data from: {{ text }}
+   │     ───┬───  
+   │        ╰───── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:4:13 ]
+   │
+ 4 │     Extract structured data from: {{ text }}
+   │             ─────┬────  
+   │                  ╰────── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:4:24 ]
+   │
+ 4 │     Extract structured data from: {{ text }}
+   │                        ──┬─  
+   │                          ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:4:29 ]
+   │
+ 4 │     Extract structured data from: {{ text }}
+   │                             ──┬─  
+   │                               ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:4:33 ]
+   │
+ 4 │     Extract structured data from: {{ text }}
+   │                                 ┬  
+   │                                 ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:4:35 ]
+   │
+ 4 │     Extract structured data from: {{ text }}
+   │                                   ┬  
+   │                                   ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:4:36 ]
+   │
+ 4 │     Extract structured data from: {{ text }}
+   │                                    ┬  
+   │                                    ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:4:38 ]
+   │
+ 4 │     Extract structured data from: {{ text }}
+   │                                      ──┬─  
+   │                                        ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:4:43 ]
+   │
+ 4 │     Extract structured data from: {{ text }}
+   │                                           ┬  
+   │                                           ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:4:44 ]
+   │
+ 4 │     Extract structured data from: {{ text }}
+   │                                            ┬  
+   │                                            ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:5:5 ]
+   │
+ 5 │     Return as JSON.
+   │     ───┬──  
+   │        ╰──── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:5:12 ]
+   │
+ 5 │     Return as JSON.
+   │            ─┬  
+   │             ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:5:15 ]
+   │
+ 5 │     Return as JSON.
+   │               ──┬─  
+   │                 ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:5:19 ]
+   │
+ 5 │     Return as JSON.
+   │                   ┬  
+   │                   ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:6:3 ]
+   │
+ 6 │   "#
+   │   ┬  
+   │   ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:6:4 ]
+   │
+ 6 │   "#
+   │    ┬  
+   │    ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 2:7:1 ]
+   │
+ 7 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected RBrace, found Client
+   ╭─[ 3:3:3 ]
+   │
+ 3 │   client GPT4
+   │   ───┬──  
+   │      ╰──── Expected RBrace, found Client
+───╯
+
+  [parse] Error: Expected config block
+   ╭─[ 3:4:3 ]
+   │
+ 4 │   prompt #"
+   │   ───┬──  
+   │      ╰──── Expected config block
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:4:3 ]
+   │
+ 4 │   prompt #"
+   │   ───┬──  
+   │      ╰──── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:4:10 ]
+   │
+ 4 │   prompt #"
+   │          ┬  
+   │          ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:4:11 ]
+   │
+ 4 │   prompt #"
+   │           ┬  
+   │           ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:5:5 ]
+   │
+ 5 │     Analyze the following text:
+   │     ───┬───  
+   │        ╰───── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:5:13 ]
+   │
+ 5 │     Analyze the following text:
+   │             ─┬─  
+   │              ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:5:17 ]
+   │
+ 5 │     Analyze the following text:
+   │                 ────┬────  
+   │                     ╰────── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:5:27 ]
+   │
+ 5 │     Analyze the following text:
+   │                           ──┬─  
+   │                             ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:5:31 ]
+   │
+ 5 │     Analyze the following text:
+   │                               ┬  
+   │                               ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:6:5 ]
+   │
+ 6 │     {{ text }}
+   │     ┬  
+   │     ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:6:6 ]
+   │
+ 6 │     {{ text }}
+   │      ┬  
+   │      ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:6:8 ]
+   │
+ 6 │     {{ text }}
+   │        ──┬─  
+   │          ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:6:13 ]
+   │
+ 6 │     {{ text }}
+   │             ┬  
+   │             ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:6:14 ]
+   │
+ 6 │     {{ text }}
+   │              ┬  
+   │              ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:8:5 ]
+   │
+ 8 │     Return an Analysis object with sentiment and keywords.
+   │     ───┬──  
+   │        ╰──── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:8:12 ]
+   │
+ 8 │     Return an Analysis object with sentiment and keywords.
+   │            ─┬  
+   │             ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:8:15 ]
+   │
+ 8 │     Return an Analysis object with sentiment and keywords.
+   │               ────┬───  
+   │                   ╰───── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:8:24 ]
+   │
+ 8 │     Return an Analysis object with sentiment and keywords.
+   │                        ───┬──  
+   │                           ╰──── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:8:31 ]
+   │
+ 8 │     Return an Analysis object with sentiment and keywords.
+   │                               ──┬─  
+   │                                 ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:8:36 ]
+   │
+ 8 │     Return an Analysis object with sentiment and keywords.
+   │                                    ────┬────  
+   │                                        ╰────── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:8:46 ]
+   │
+ 8 │     Return an Analysis object with sentiment and keywords.
+   │                                              ─┬─  
+   │                                               ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:8:50 ]
+   │
+ 8 │     Return an Analysis object with sentiment and keywords.
+   │                                                  ────┬───  
+   │                                                      ╰───── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:8:58 ]
+   │
+ 8 │     Return an Analysis object with sentiment and keywords.
+   │                                                          ┬  
+   │                                                          ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:9:3 ]
+   │
+ 9 │   "#
+   │   ┬  
+   │   ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 3:9:4 ]
+   │
+ 9 │   "#
+   │    ┬  
+   │    ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:10:1 ]
+    │
+ 10 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected RBrace, found Client
+    ╭─[ 3:32:3 ]
+    │
+ 32 │   client GPT4
+    │   ───┬──  
+    │      ╰──── Expected RBrace, found Client
+────╯
+
+  [parse] Error: Expected config block
+    ╭─[ 3:33:3 ]
+    │
+ 33 │   prompt #"
+    │   ───┬──  
+    │      ╰──── Expected config block
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:33:3 ]
+    │
+ 33 │   prompt #"
+    │   ───┬──  
+    │      ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:33:10 ]
+    │
+ 33 │   prompt #"
+    │          ┬  
+    │          ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:33:11 ]
+    │
+ 33 │   prompt #"
+    │           ┬  
+    │           ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:34:5 ]
+    │
+ 34 │     Process this through multiple steps:
+    │     ───┬───  
+    │        ╰───── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:34:13 ]
+    │
+ 34 │     Process this through multiple steps:
+    │             ──┬─  
+    │               ╰─── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:34:18 ]
+    │
+ 34 │     Process this through multiple steps:
+    │                  ───┬───  
+    │                     ╰───── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:34:26 ]
+    │
+ 34 │     Process this through multiple steps:
+    │                          ────┬───  
+    │                              ╰───── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:34:35 ]
+    │
+ 34 │     Process this through multiple steps:
+    │                                   ──┬──  
+    │                                     ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:34:40 ]
+    │
+ 34 │     Process this through multiple steps:
+    │                                        ┬  
+    │                                        ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:35:5 ]
+    │
+ 35 │     1. {{ input }}
+    │     ┬  
+    │     ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:35:6 ]
+    │
+ 35 │     1. {{ input }}
+    │      ┬  
+    │      ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:35:8 ]
+    │
+ 35 │     1. {{ input }}
+    │        ┬  
+    │        ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:35:9 ]
+    │
+ 35 │     1. {{ input }}
+    │         ┬  
+    │         ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:35:11 ]
+    │
+ 35 │     1. {{ input }}
+    │           ──┬──  
+    │             ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:35:17 ]
+    │
+ 35 │     1. {{ input }}
+    │                 ┬  
+    │                 ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:35:18 ]
+    │
+ 35 │     1. {{ input }}
+    │                  ┬  
+    │                  ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:36:5 ]
+    │
+ 36 │     2. Transform it
+    │     ┬  
+    │     ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:36:6 ]
+    │
+ 36 │     2. Transform it
+    │      ┬  
+    │      ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:36:8 ]
+    │
+ 36 │     2. Transform it
+    │        ────┬────  
+    │            ╰────── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:36:18 ]
+    │
+ 36 │     2. Transform it
+    │                  ─┬  
+    │                   ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:37:5 ]
+    │
+ 37 │     3. Return result
+    │     ┬  
+    │     ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:37:6 ]
+    │
+ 37 │     3. Return result
+    │      ┬  
+    │      ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:37:8 ]
+    │
+ 37 │     3. Return result
+    │        ───┬──  
+    │           ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:37:15 ]
+    │
+ 37 │     3. Return result
+    │               ───┬──  
+    │                  ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:38:3 ]
+    │
+ 38 │   "#
+    │   ┬  
+    │   ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:38:4 ]
+    │
+ 38 │   "#
+    │    ┬  
+    │    ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:39:1 ]
+    │
+ 39 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration
+────╯

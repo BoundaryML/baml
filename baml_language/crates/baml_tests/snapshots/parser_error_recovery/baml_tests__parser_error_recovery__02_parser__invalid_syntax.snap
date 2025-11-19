@@ -34,91 +34,107 @@ SOURCE_FILE
     ARROW "->"
     TYPE_EXPR
     EXPR_FUNCTION_BODY
-      BLOCK_EXPR " {  // Missing return type
-  client GPT4
-}"
+      BLOCK_EXPR " {"
         L_BRACE "{"
-        KW_CLIENT "client"
-        WORD "GPT4"
-        R_BRACE "}"
+  CLIENT_DEF "  // Missing return type
+  client GPT4"
+    KW_CLIENT "client"
+    WORD "GPT4"
+  R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected class name, found Expected class name
-   ╭─[ 0:1:1 ]
+Error: Expected class name
+   ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
-   │ │ 
-   │ ╰─ Expected Expected class name, found Expected class name
+   │       ─┬─  
+   │        ╰─── Expected class name
 ───╯
 
-Error: Expected Expected LBrace, found IntegerLiteral, found Expected LBrace, found IntegerLiteral
-   ╭─[ 0:1:1 ]
+Error: Expected LBrace, found IntegerLiteral
+   ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
-   │ │ 
-   │ ╰─ Expected Expected LBrace, found IntegerLiteral, found Expected LBrace, found IntegerLiteral
+   │       ─┬─  
+   │        ╰─── Expected LBrace, found IntegerLiteral
 ───╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
+Error: Expected top-level declaration
+   ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+   │       ─┬─  
+   │        ╰─── Expected top-level declaration
 ───╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
+Error: Expected top-level declaration
+   ╭─[ 0:1:10 ]
    │
  1 │ class 123Invalid {  // Invalid class name
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+   │          ───┬───  
+   │             ╰───── Expected top-level declaration
 ───╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
+Error: Expected top-level declaration
+   ╭─[ 0:1:18 ]
    │
  1 │ class 123Invalid {  // Invalid class name
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+   │                  ┬  
+   │                  ╰── Expected top-level declaration
 ───╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
+Error: Expected top-level declaration
+   ╭─[ 0:2:3 ]
    │
- 1 │ class 123Invalid {  // Invalid class name
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+ 2 │   field string
+   │   ──┬──  
+   │     ╰──── Expected top-level declaration
 ───╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
+Error: Expected top-level declaration
+   ╭─[ 0:2:9 ]
    │
- 1 │ class 123Invalid {  // Invalid class name
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+ 2 │   field string
+   │         ───┬──  
+   │            ╰──── Expected top-level declaration
 ───╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
+Error: Expected top-level declaration
+   ╭─[ 0:3:1 ]
    │
- 1 │ class 123Invalid {  // Invalid class name
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+ 3 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration
 ───╯
 
-Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
-   │
- 1 │ class 123Invalid {  // Invalid class name
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
-───╯
+Error: Expected type
+    ╭─[ 0:10:19 ]
+    │
+ 10 │ function Foo() -> {  // Missing return type
+    │                   ┬  
+    │                   ╰── Expected type
+────╯
 
-Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
-   │
- 1 │ class 123Invalid {  // Invalid class name
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
-───╯
+Error: Expected RBrace, found Client
+    ╭─[ 0:11:3 ]
+    │
+ 11 │   client GPT4
+    │   ───┬──  
+    │      ╰──── Expected RBrace, found Client
+────╯
+
+Error: Expected config block
+    ╭─[ 0:12:1 ]
+    │
+ 12 │ }
+    │ ┬  
+    │ ╰── Expected config block
+────╯
+
+Error: Expected top-level declaration
+    ╭─[ 0:12:1 ]
+    │
+ 12 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration
+────╯

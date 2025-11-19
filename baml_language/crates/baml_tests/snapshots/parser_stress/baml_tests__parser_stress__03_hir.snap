@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -65,701 +65,1001 @@ class Level5 {
 function Process83 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process38 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process18 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process64 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process57 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process53 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process3 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process6 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process43 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process52 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process85 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process2 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process94 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process29 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process48 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process45 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process26 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process12 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process8 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process5 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process1 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process55 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process82 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process16 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process69 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process17 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process95 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process61 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process41 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process19 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process77 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process14 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process31 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process63 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process68 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process47 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process36 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process51 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process39 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process72 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process60 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process76 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process13 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process30 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process73 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process7 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process50 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process86 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process11 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process74 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process84 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process87 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process40 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process22 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process49 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process34 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process92 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process75 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process66 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process23 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process32 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process78 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process71 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process80 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process15 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process58 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process81 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process4 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process93 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process28 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process90 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process98 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process20 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process91 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process25 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process59 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process67 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process27 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process62 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process65 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process9 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process44 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process88 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process97 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process46 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process99 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process21 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process42 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process33 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process79 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process70 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process96 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process10 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process35 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process100 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process24 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process37 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process56 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process54 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 function Process89 {
   params: [input: String]
   return: String
-  body: Llm {
-    client: GPT4
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
   }
 }
 class User535 {
@@ -6261,6 +6561,9 @@ enum Status15 {
   EnumVariant { name: "ACTIVE_15" }
   EnumVariant { name: "INACTIVE_15" }
   EnumVariant { name: "PENDING_15" }
+}
+client GPT4 {
+  provider: unknown
 }
 enum Item {
   EnumVariant { name: "Function" }

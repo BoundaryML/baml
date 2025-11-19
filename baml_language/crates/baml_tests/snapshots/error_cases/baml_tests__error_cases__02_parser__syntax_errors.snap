@@ -12,46 +12,39 @@ SOURCE_FILE
       WORD "field"
       TYPE_EXPR " int"
         WORD "int"
+  FUNCTION_DEF
     KW_FUNCTION "function"
     INTEGER_LITERAL "123"
-    FIELD
-      WORD "Invalid"
-      TYPE_EXPR
-        L_PAREN "("
-        TYPE_EXPR
-        R_PAREN ")"
-    L_BRACE "{"
-    R_BRACE "}"
+    WORD "Invalid"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR " {}"
+        L_BRACE "{"
+        R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+Error: Expected RBrace, found Function
+   ╭─[ 0:6:1 ]
    │
- 1 │ // Missing closing brace
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 6 │ function 123Invalid() {}
+   │ ────┬───  
+   │     ╰───── Expected RBrace, found Function
 ───╯
 
-Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+Error: Expected function name
+   ╭─[ 0:6:10 ]
    │
- 1 │ // Missing closing brace
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 6 │ function 123Invalid() {}
+   │          ─┬─  
+   │           ╰─── Expected function name
 ───╯
 
-Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
+Error: Expected return type (->)
+   ╭─[ 0:6:23 ]
    │
- 1 │ // Missing closing brace
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
-───╯
-
-Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Missing closing brace
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 6 │ function 123Invalid() {}
+   │                       ┬  
+   │                       ╰── Expected return type (->)
 ───╯

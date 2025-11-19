@@ -235,13 +235,13 @@ SOURCE_FILE
     R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
+    ERROR_TOKEN "处"
+    ERROR_TOKEN "理"
+    ERROR_TOKEN "文"
+    ERROR_TOKEN "本"
     PARAMETER_LIST
+      L_PAREN "("
       PARAMETER
-  ERROR_TOKEN "处"
-  ERROR_TOKEN "理"
-  ERROR_TOKEN "文"
-  ERROR_TOKEN "本"
-  L_PAREN "("
   ERROR_TOKEN "输"
   ERROR_TOKEN "入"
   WORD "string"
@@ -279,354 +279,156 @@ SOURCE_FILE
   R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected function name, found Expected function name
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected function name, found Expected function name
-───╯
+Error: Expected function name
+    ╭─[ 0:29:1 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │ ─┬─  
+    │  ╰─── Expected function name
+────╯
 
-Error: Expected Expected LParen, found Error, found Expected LParen, found Error
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected LParen, found Error, found Expected LParen, found Error
-───╯
+Error: Expected parameter name
+    ╭─[ 0:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected parameter name
+────╯
 
-Error: Expected Expected parameter name, found Expected parameter name
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected parameter name, found Expected parameter name
-───╯
+Error: Expected type annotation
+    ╭─[ 0:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected type annotation
+────╯
 
-Error: Expected Expected type annotation, found Expected type annotation
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected type annotation, found Expected type annotation
-───╯
+Error: Expected RParen, found Error
+    ╭─[ 0:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected RParen, found Error
+────╯
 
-Error: Expected Expected RParen, found Error, found Expected RParen, found Error
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected RParen, found Error, found Expected RParen, found Error
-───╯
+Error: Expected return type (->)
+    ╭─[ 0:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected return type (->)
+────╯
 
-Error: Expected Expected return type (->), found Expected return type (->)
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected return type (->), found Expected return type (->)
-───╯
+Error: Expected function body
+    ╭─[ 0:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected function body
+────╯
 
-Error: Expected Expected function body, found Expected function body
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected function body, found Expected function body
-───╯
+Error: Expected top-level declaration
+    ╭─[ 0:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected top-level declaration
+────╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
+    ╭─[ 0:29:17 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                 ─┬─  
+    │                  ╰─── Expected top-level declaration
+────╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
+    ╭─[ 0:29:21 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                     ───┬──  
+    │                        ╰──── Expected top-level declaration
+────╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
+    ╭─[ 0:29:27 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                           ┬  
+    │                           ╰── Expected top-level declaration
+────╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
+    ╭─[ 0:29:29 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                             ─┬   
+    │                              ╰─── Expected top-level declaration
+────╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
+    ╭─[ 0:29:32 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                                ────┬───  
+    │                                    ╰───── Expected top-level declaration
+────╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
+    ╭─[ 0:30:1 ]
+    │
+ 30 │   "#
+    │ ┬  
+    │ ╰── Expected top-level declaration
+────╯
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected config block
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected config block, found Expected config block
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected config block, found Expected config block
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration
 
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test Unicode and special character handling
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+Error: Expected top-level declaration

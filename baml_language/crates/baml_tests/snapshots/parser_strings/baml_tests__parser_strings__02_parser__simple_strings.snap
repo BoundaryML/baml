@@ -125,50 +125,50 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected RParen, found Word, found Expected RParen, found Word
-   ╭─[ 0:1:1 ]
+Error: Expected RParen, found Word
+   ╭─[ 0:7:41 ]
    │
- 1 │ // Test basic string parsing in attributes and types
-   │ │ 
-   │ ╰─ Expected Expected RParen, found Word, found Expected RParen, found Word
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                         ──┬──  
+   │                                           ╰──── Expected RParen, found Word
 ───╯
 
-Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
+Error: Expected type
+   ╭─[ 0:7:46 ]
    │
- 1 │ // Test basic string parsing in attributes and types
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                              ┬  
+   │                                              ╰── Expected type
 ───╯
 
-Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+Error: Unexpected token in class body
+   ╭─[ 0:7:46 ]
    │
- 1 │ // Test basic string parsing in attributes and types
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                              ┬  
+   │                                              ╰── Unexpected token in class body
 ───╯
 
-Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+Error: Unexpected token in class body
+   ╭─[ 0:7:47 ]
    │
- 1 │ // Test basic string parsing in attributes and types
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                               ┬  
+   │                                               ╰── Unexpected token in class body
 ───╯
 
-Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+Error: Unexpected token in class body
+   ╭─[ 0:7:48 ]
    │
- 1 │ // Test basic string parsing in attributes and types
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                                ┬  
+   │                                                ╰── Unexpected token in class body
 ───╯
 
-Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+Error: Unexpected token in class body
+   ╭─[ 0:7:49 ]
    │
- 1 │ // Test basic string parsing in attributes and types
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                                 ┬  
+   │                                                 ╰── Unexpected token in class body
 ───╯

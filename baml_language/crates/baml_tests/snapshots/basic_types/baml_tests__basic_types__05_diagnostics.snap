@@ -1,7 +1,204 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 249
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [parse] Error: Expected RBrace, found Client
+   ╭─[ 0:2:5 ]
+   │
+ 2 │     client GPT4
+   │     ───┬──  
+   │        ╰──── Expected RBrace, found Client
+───╯
+
+  [parse] Error: Expected config block
+   ╭─[ 0:3:5 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │     ───┬──  
+   │        ╰──── Expected config block
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:5 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │     ───┬──  
+   │        ╰──── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:12 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │            ┬  
+   │            ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:13 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │             ┬  
+   │             ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:14 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │              ─┬─  
+   │               ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:18 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │                  ──┬─  
+   │                    ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:23 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │                       ┬  
+   │                       ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:24 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │                        ┬  
+   │                        ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:25 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │                         ─┬  
+   │                          ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:27 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │                           ┬  
+   │                           ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:28 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │                            ┬  
+   │                            ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:29 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │                             ┬  
+   │                             ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:3:30 ]
+   │
+ 3 │     prompt #"Get user {{id}}"#
+   │                              ┬  
+   │                              ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:4:1 ]
+   │
+ 4 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected RBrace, found Client
+   ╭─[ 0:7:5 ]
+   │
+ 7 │     client GPT4
+   │     ───┬──  
+   │        ╰──── Expected RBrace, found Client
+───╯
+
+  [parse] Error: Expected config block
+   ╭─[ 0:8:5 ]
+   │
+ 8 │     prompt #"Get status"#
+   │     ───┬──  
+   │        ╰──── Expected config block
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:8:5 ]
+   │
+ 8 │     prompt #"Get status"#
+   │     ───┬──  
+   │        ╰──── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:8:12 ]
+   │
+ 8 │     prompt #"Get status"#
+   │            ┬  
+   │            ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:8:13 ]
+   │
+ 8 │     prompt #"Get status"#
+   │             ┬  
+   │             ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:8:14 ]
+   │
+ 8 │     prompt #"Get status"#
+   │              ─┬─  
+   │               ╰─── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:8:18 ]
+   │
+ 8 │     prompt #"Get status"#
+   │                  ───┬──  
+   │                     ╰──── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:8:24 ]
+   │
+ 8 │     prompt #"Get status"#
+   │                        ┬  
+   │                        ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:8:25 ]
+   │
+ 8 │     prompt #"Get status"#
+   │                         ┬  
+   │                         ╰── Expected top-level declaration
+───╯
+
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:9:1 ]
+   │
+ 9 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration
+───╯

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -17,9 +17,13 @@ enum Status {
   EnumVariant { name: "INACTIVE" }
   EnumVariant { name: "PENDING" }
 }
+client GPT4 {
+  provider: unknown
+}
 class User {
   name: String
-  Another: Path(Path { segments: [""], kind: Plain })
+}
+class Another {
   field: Int
 }
 function NextFunction {

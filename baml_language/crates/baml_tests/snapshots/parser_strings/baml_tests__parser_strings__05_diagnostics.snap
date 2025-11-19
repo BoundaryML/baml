@@ -3,674 +3,940 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Error: Expected Expected attribute argument, found Expected attribute argument
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected attribute argument
+   ╭─[ 0:4:34 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected attribute argument, found Expected attribute argument
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                                  ┬  
+   │                                  ╰── Expected attribute argument
 ───╯
 
-  [parse] Error: Expected Expected RParen, found Error, found Expected RParen, found Error
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected RParen, found Error
+   ╭─[ 0:4:34 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected RParen, found Error, found Expected RParen, found Error
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                                  ┬  
+   │                                  ╰── Expected RParen, found Error
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:4:34 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                                  ┬  
+   │                                  ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:4:44 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                                            ┬  
+   │                                            ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected type
+   ╭─[ 0:5:41 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                         ┬  
+   │                                         ╰── Expected type
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:5:41 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                         ┬  
+   │                                         ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:5:42 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                          ┬  
+   │                                          ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected type
+   ╭─[ 0:5:48 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                ┬  
+   │                                                ╰── Expected type
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:5:48 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                ┬  
+   │                                                ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:5:49 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                 ┬  
+   │                                                 ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:5:58 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                          ┬  
+   │                                                          ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:5:59 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                           ┬  
+   │                                                           ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Expected RParen, found Word, found Expected RParen, found Word
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected RParen, found Word
+   ╭─[ 0:6:47 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected RParen, found Word, found Expected RParen, found Word
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                               ───┬──  
+   │                                                  ╰──── Expected RParen, found Word
 ───╯
 
-  [parse] Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected type
+   ╭─[ 0:6:53 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                     ┬  
+   │                                                     ╰── Expected type
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:6:53 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                     ┬  
+   │                                                     ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:6:54 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                      ┬  
+   │                                                      ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:6:56 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                        ┬  
+   │                                                        ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected type
+   ╭─[ 0:6:64 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                                ┬  
+   │                                                                ╰── Expected type
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:6:64 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                                ┬  
+   │                                                                ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:6:65 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                                 ┬  
+   │                                                                 ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:6:66 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                                  ┬  
+   │                                                                  ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Expected RParen, found Word, found Expected RParen, found Word
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected RParen, found Word
+   ╭─[ 0:7:31 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected RParen, found Word, found Expected RParen, found Word
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                               ─┬─  
+   │                                ╰─── Expected RParen, found Word
 ───╯
 
-  [parse] Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected type
+   ╭─[ 0:7:34 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                  ┬  
+   │                                  ╰── Expected type
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:7:34 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                  ┬  
+   │                                  ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:7:35 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                   ┬  
+   │                                   ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:7:36 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                    ┬  
+   │                                    ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:7:38 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                      ┬  
+   │                                      ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:7:39 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                       ┬  
+   │                                       ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected type
+   ╭─[ 0:7:45 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                             ┬  
+   │                                             ╰── Expected type
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:7:45 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                             ┬  
+   │                                             ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
+  [parse] Error: Unexpected token in class body
+   ╭─[ 0:7:46 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                              ┬  
+   │                                              ╰── Unexpected token in class body
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:7:48 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                                ┬  
+   │                                                ╰── Expected top-level declaration
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:7:49 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                                 ┬  
+   │                                                 ╰── Expected top-level declaration
 ───╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
+  [parse] Error: Expected top-level declaration
+   ╭─[ 0:8:1 ]
    │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
+ 8 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration
 ───╯
 
-  [parse] Error: Expected Expected RParen, found Word, found Expected RParen, found Word
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected RParen, found Word, found Expected RParen, found Word
-───╯
-
-  [parse] Error: Expected Expected type, found Expected type
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected type, found Expected type
-───╯
-
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
-───╯
-
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
-───╯
-
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
-───╯
-
-  [parse] Error: Expected Unexpected token in class body, found Unexpected token in class body
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Unexpected token in class body, found Unexpected token in class body
-───╯
-
-  [parse] Error: Expected Expected function name, found Expected function name
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected function name, found Expected function name
-───╯
-
-  [parse] Error: Expected Expected LParen, found Error, found Expected LParen, found Error
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected LParen, found Error, found Expected LParen, found Error
-───╯
-
-  [parse] Error: Expected Expected parameter name, found Expected parameter name
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected parameter name, found Expected parameter name
-───╯
-
-  [parse] Error: Expected Expected type annotation, found Expected type annotation
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected type annotation, found Expected type annotation
-───╯
-
-  [parse] Error: Expected Expected RParen, found Error, found Expected RParen, found Error
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected RParen, found Error, found Expected RParen, found Error
-───╯
-
-  [parse] Error: Expected Expected return type (->), found Expected return type (->)
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected return type (->), found Expected return type (->)
-───╯
-
-  [parse] Error: Expected Expected function body, found Expected function body
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected function body, found Expected function body
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected config block, found Expected config block
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected config block, found Expected config block
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
-
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+  [parse] Error: Expected RBrace, found Client
+    ╭─[ 0:12:3 ]
+    │
+ 12 │   client GPT4
+    │   ───┬──  
+    │      ╰──── Expected RBrace, found Client
+────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+  [parse] Error: Expected config block
+    ╭─[ 0:13:3 ]
+    │
+ 13 │   prompt #"
+    │   ───┬──  
+    │      ╰──── Expected config block
+────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:13:3 ]
+    │
+ 13 │   prompt #"
+    │   ───┬──  
+    │      ╰──── Expected top-level declaration
+────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:13:10 ]
+    │
+ 13 │   prompt #"
+    │          ┬  
+    │          ╰── Expected top-level declaration
+────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:13:11 ]
+    │
+ 13 │   prompt #"
+    │           ┬  
+    │           ╰── Expected top-level declaration
+────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:5 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │     ────┬───  
+    │         ╰───── Expected top-level declaration
+────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:14 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │              ┬  
+    │              ╰── Expected top-level declaration
+────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:16 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │                ───┬───  
+    │                   ╰───── Expected top-level declaration
+────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:24 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │                        ─┬─  
+    │                         ╰─── Expected top-level declaration
+────╯
 
-  [parse] Error: Expected Expected top-level declaration, found Expected top-level declaration
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected Expected top-level declaration, found Expected top-level declaration
-───╯
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:28 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │                            ┬  
+    │                            ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:29 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │                             ┬  
+    │                             ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:30 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │                              ┬  
+    │                              ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:32 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │                                ──┬─  
+    │                                  ╰─── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:37 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │                                     ┬  
+    │                                     ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:38 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │                                      ┬  
+    │                                      ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:14:39 ]
+    │
+ 14 │     Generate a message for "{{ name }}"
+    │                                       ┬  
+    │                                       ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:5 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │     ───┬───  
+    │        ╰───── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:13 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │             ───┬──  
+    │                ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:20 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                    ──┬─  
+    │                      ╰─── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:24 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                        ┬  
+    │                        ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:26 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                          ┬  
+    │                          ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:27 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                           ───┬───  
+    │                              ╰───── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:34 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                                  ┬  
+    │                                  ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:36 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                                    ┬  
+    │                                    ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:37 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                                     ┬  
+    │                                     ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:38 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                                      ┬  
+    │                                      ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:40 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                                        ──┬─  
+    │                                          ╰─── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:45 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                                             ┬  
+    │                                             ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:46 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                                              ┬  
+    │                                              ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:47 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                                               ┬  
+    │                                               ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:48 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                                                ┬  
+    │                                                ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:15:49 ]
+    │
+ 15 │     Include quotes like: "Welcome, '{{ name }}'!"
+    │                                                 ┬  
+    │                                                 ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:16:3 ]
+    │
+ 16 │   "#
+    │   ┬  
+    │   ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:16:4 ]
+    │
+ 16 │   "#
+    │    ┬  
+    │    ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 0:17:1 ]
+    │
+ 17 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected RBrace, found Client
+    ╭─[ 1:14:3 ]
+    │
+ 14 │   client GPT4
+    │   ───┬──  
+    │      ╰──── Expected RBrace, found Client
+────╯
+
+  [parse] Error: Expected config block
+    ╭─[ 1:15:3 ]
+    │
+ 15 │   prompt #"
+    │   ───┬──  
+    │      ╰──── Expected config block
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:15:3 ]
+    │
+ 15 │   prompt #"
+    │   ───┬──  
+    │      ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:15:10 ]
+    │
+ 15 │   prompt #"
+    │          ┬  
+    │          ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:15:11 ]
+    │
+ 15 │   prompt #"
+    │           ┬  
+    │           ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:16:5 ]
+    │
+ 16 │     Process the following text:
+    │     ───┬───  
+    │        ╰───── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:16:13 ]
+    │
+ 16 │     Process the following text:
+    │             ─┬─  
+    │              ╰─── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:16:17 ]
+    │
+ 16 │     Process the following text:
+    │                 ────┬────  
+    │                     ╰────── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:16:27 ]
+    │
+ 16 │     Process the following text:
+    │                           ──┬─  
+    │                             ╰─── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:16:31 ]
+    │
+ 16 │     Process the following text:
+    │                               ┬  
+    │                               ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:17:5 ]
+    │
+ 17 │     {{ input }}
+    │     ┬  
+    │     ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:17:6 ]
+    │
+ 17 │     {{ input }}
+    │      ┬  
+    │      ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:17:8 ]
+    │
+ 17 │     {{ input }}
+    │        ──┬──  
+    │          ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:17:14 ]
+    │
+ 17 │     {{ input }}
+    │              ┬  
+    │              ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:17:15 ]
+    │
+ 17 │     {{ input }}
+    │               ┬  
+    │               ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:19:5 ]
+    │
+ 19 │     Return the processed result.
+    │     ───┬──  
+    │        ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:19:12 ]
+    │
+ 19 │     Return the processed result.
+    │            ─┬─  
+    │             ╰─── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:19:16 ]
+    │
+ 19 │     Return the processed result.
+    │                ────┬────  
+    │                    ╰────── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:19:26 ]
+    │
+ 19 │     Return the processed result.
+    │                          ───┬──  
+    │                             ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:19:32 ]
+    │
+ 19 │     Return the processed result.
+    │                                ┬  
+    │                                ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:20:3 ]
+    │
+ 20 │   "#
+    │   ┬  
+    │   ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:20:4 ]
+    │
+ 20 │   "#
+    │    ┬  
+    │    ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 1:21:1 ]
+    │
+ 21 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected RParen, found Word
+   ╭─[ 2:7:41 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                         ──┬──  
+   │                                           ╰──── Expected RParen, found Word
+───╯
+
+  [parse] Error: Expected type
+   ╭─[ 2:7:46 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                              ┬  
+   │                                              ╰── Expected type
+───╯
+
+  [parse] Error: Unexpected token in class body
+   ╭─[ 2:7:46 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                              ┬  
+   │                                              ╰── Unexpected token in class body
+───╯
+
+  [parse] Error: Unexpected token in class body
+   ╭─[ 2:7:47 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                               ┬  
+   │                                               ╰── Unexpected token in class body
+───╯
+
+  [parse] Error: Unexpected token in class body
+   ╭─[ 2:7:48 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                                ┬  
+   │                                                ╰── Unexpected token in class body
+───╯
+
+  [parse] Error: Unexpected token in class body
+   ╭─[ 2:7:49 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                                 ┬  
+   │                                                 ╰── Unexpected token in class body
+───╯
+
+  [parse] Error: Expected function name
+    ╭─[ 3:29:1 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │ ─┬─  
+    │  ╰─── Expected function name
+────╯
+
+  [parse] Error: Expected parameter name
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected parameter name
+────╯
+
+  [parse] Error: Expected type annotation
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected type annotation
+────╯
+
+  [parse] Error: Expected RParen, found Error
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected RParen, found Error
+────╯
+
+  [parse] Error: Expected return type (->)
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected return type (->)
+────╯
+
+  [parse] Error: Expected function body
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected function body
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:29:17 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                 ─┬─  
+    │                  ╰─── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:29:21 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                     ───┬──  
+    │                        ╰──── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:29:27 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                           ┬  
+    │                           ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:29:29 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                             ─┬   
+    │                              ╰─── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:29:32 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                                ────┬───  
+    │                                    ╰───── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected top-level declaration
+    ╭─[ 3:30:1 ]
+    │
+ 30 │   "#
+    │ ┬  
+    │ ╰── Expected top-level declaration
+────╯
+
+  [parse] Error: Expected config block
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration
+
+  [parse] Error: Expected top-level declaration

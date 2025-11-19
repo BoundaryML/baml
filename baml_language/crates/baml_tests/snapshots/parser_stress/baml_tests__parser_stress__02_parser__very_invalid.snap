@@ -37,26 +37,26 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+Error: Expected expression
+   ╭─[ 0:6:11 ]
    │
- 1 │ // Invalid BAML
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 6 │   let x = ¿;
+   │           ─┬  
+   │            ╰── Expected expression
 ───╯
 
-Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+Error: Expected expression
+   ╭─[ 0:6:13 ]
    │
- 1 │ // Invalid BAML
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 6 │   let x = ¿;
+   │             ┬  
+   │             ╰── Expected expression
 ───╯
 
-Error: Expected Expected expression, found Expected expression
-   ╭─[ 0:1:1 ]
+Error: Expected expression
+   ╭─[ 0:8:10 ]
    │
- 1 │ // Invalid BAML
-   │ │ 
-   │ ╰─ Expected Expected expression, found Expected expression
+ 8 │   while \ {
+   │          ┬  
+   │          ╰── Expected expression
 ───╯

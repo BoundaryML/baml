@@ -18,30 +18,27 @@ SOURCE_FILE
     ARROW "->"
     TYPE_EXPR " string"
       WORD "string"
-    LLM_FUNCTION_BODY
-      L_BRACE "{"
-      CLIENT_FIELD "
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR " {"
+        L_BRACE "{"
+  CLIENT_DEF "
   client GPT4"
-        KW_CLIENT "client"
-        WORD "GPT4"
-      PROMPT_FIELD
-        WORD "prompt"
-        RAW_STRING_LITERAL " #"
-    Say hello to {{name}}
-  "#"
-          HASH "#"
-          QUOTE """
-          WORD "Say"
-          WORD "hello"
-          WORD "to"
-          L_BRACE "{"
-          L_BRACE "{"
-          WORD "name"
-          R_BRACE "}"
-          R_BRACE "}"
-          QUOTE """
-          HASH "#"
-      R_BRACE "}"
+    KW_CLIENT "client"
+    WORD "GPT4"
+  WORD "prompt"
+  HASH "#"
+  QUOTE """
+  WORD "Say"
+  WORD "hello"
+  WORD "to"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "name"
+  R_BRACE "}"
+  R_BRACE "}"
+  QUOTE """
+  HASH "#"
+  R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
     WORD "User"
@@ -65,4 +62,130 @@ SOURCE_FILE
   WORD "comment"
 
 === ERRORS ===
-None
+Error: Expected RBrace, found Client
+   ╭─[ 0:2:3 ]
+   │
+ 2 │   client GPT4
+   │   ───┬──  
+   │      ╰──── Expected RBrace, found Client
+───╯
+
+Error: Expected config block
+   ╭─[ 0:3:3 ]
+   │
+ 3 │   prompt #"
+   │   ───┬──  
+   │      ╰──── Expected config block
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:3:3 ]
+   │
+ 3 │   prompt #"
+   │   ───┬──  
+   │      ╰──── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:3:10 ]
+   │
+ 3 │   prompt #"
+   │          ┬  
+   │          ╰── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:3:11 ]
+   │
+ 3 │   prompt #"
+   │           ┬  
+   │           ╰── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:4:5 ]
+   │
+ 4 │     Say hello to {{name}}
+   │     ─┬─  
+   │      ╰─── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:4:9 ]
+   │
+ 4 │     Say hello to {{name}}
+   │         ──┬──  
+   │           ╰──── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:4:15 ]
+   │
+ 4 │     Say hello to {{name}}
+   │               ─┬  
+   │                ╰── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:4:18 ]
+   │
+ 4 │     Say hello to {{name}}
+   │                  ┬  
+   │                  ╰── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:4:19 ]
+   │
+ 4 │     Say hello to {{name}}
+   │                   ┬  
+   │                   ╰── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:4:20 ]
+   │
+ 4 │     Say hello to {{name}}
+   │                    ──┬─  
+   │                      ╰─── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:4:24 ]
+   │
+ 4 │     Say hello to {{name}}
+   │                        ┬  
+   │                        ╰── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:4:25 ]
+   │
+ 4 │     Say hello to {{name}}
+   │                         ┬  
+   │                         ╰── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:5:3 ]
+   │
+ 5 │   "#
+   │   ┬  
+   │   ╰── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:5:4 ]
+   │
+ 5 │   "#
+   │    ┬  
+   │    ╰── Expected top-level declaration
+───╯
+
+Error: Expected top-level declaration
+   ╭─[ 0:6:1 ]
+   │
+ 6 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration
+───╯
