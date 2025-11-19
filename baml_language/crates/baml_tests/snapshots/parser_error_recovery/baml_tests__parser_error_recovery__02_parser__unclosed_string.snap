@@ -71,12 +71,12 @@ Error: Expected RParen, found Word
    │                            ╰───── Expected RParen, found Word
 ───╯
 
-Error: Unclosed string literal
+Error: Expected Unclosed string literal, found EOF
    ╭─[ 0:5:2 ]
    │
  5 │ }
    │  ┬  
-   │  ╰── Unclosed string literal
+   │  ╰── Expected Unclosed string literal, found EOF
 ───╯
 
 Error: Expected RBrace, found EOF

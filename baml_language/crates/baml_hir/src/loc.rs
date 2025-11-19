@@ -10,8 +10,9 @@
 //! Salsa complications with non-Copy enums. When we add modules, we'll
 //! need to refactor this.
 
-use crate::ids::LocalItemId;
 use baml_base::FileId;
+
+use crate::ids::LocalItemId;
 
 /// Marker types for different item kinds in the `ItemTree`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

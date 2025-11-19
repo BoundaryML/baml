@@ -4,14 +4,16 @@
 //! It acts as an "invalidation barrier" - only changes to item signatures
 //! cause the `ItemTree` to change, not edits to whitespace, comments, or bodies.
 
+use std::ops::Index;
+
+use baml_base::Name;
+use rustc_hash::FxHashMap;
+
 use crate::{
     ids::LocalItemId,
     loc::{ClassMarker, ClientMarker, EnumMarker, FunctionMarker, TestMarker, TypeAliasMarker},
     type_ref::TypeRef,
 };
-use baml_base::Name;
-use rustc_hash::FxHashMap;
-use std::ops::Index;
 
 /// Position-independent item storage for a container.
 ///

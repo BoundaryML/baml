@@ -37,26 +37,26 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected expression
+Error: Expected Expected expression, found Error
    ╭─[ 0:6:11 ]
    │
  6 │   let x = ¿;
    │           ─┬  
-   │            ╰── Expected expression
+   │            ╰── Expected Expected expression, found Error
 ───╯
 
-Error: Expected expression
+Error: Expected Expected expression, found Semicolon
    ╭─[ 0:6:13 ]
    │
  6 │   let x = ¿;
    │             ┬  
-   │             ╰── Expected expression
+   │             ╰── Expected Expected expression, found Semicolon
 ───╯
 
-Error: Expected expression
+Error: Expected Expected expression, found Error
    ╭─[ 0:8:10 ]
    │
  8 │   while \ {
    │          ┬  
-   │          ╰── Expected expression
+   │          ╰── Expected Expected expression, found Error
 ───╯

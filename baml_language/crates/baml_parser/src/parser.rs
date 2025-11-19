@@ -136,11 +136,19 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
 /// Events for building the syntax tree.
 #[derive(Debug, Clone)]
 enum Event {
-    StartNode { kind: SyntaxKind },
+    StartNode {
+        kind: SyntaxKind,
+    },
     FinishNode,
-    Token { kind: SyntaxKind, text: String },
-    Error { message: String, span: Span },
-    UnexpectedToken { expected: String, found: String, span: Span },
+    Token {
+        kind: SyntaxKind,
+        text: String,
+    },
+    UnexpectedToken {
+        expected: String,
+        found: String,
+        span: Span,
+    },
 }
 
 /// Parser state for checkpoint/restore.
@@ -374,7 +382,7 @@ impl<'a> Parser<'a> {
     }
 
     // ============ Error Recovery Helpers ============`
-    
+
     /// Check if the current token is a top-level keyword.
     /// Used for error recovery to break out of malformed blocks.
     fn at_top_level_keyword(&self) -> bool {
@@ -468,16 +476,13 @@ impl<'a> Parser<'a> {
                 .current()
                 .map(|t| format!("{:?}", t.kind))
                 .unwrap_or_else(|| "EOF".to_string());
-            
-            let span = self
-                .current()
-                .map(|t| t.span)
-                .unwrap_or_else(|| {
-                    // Use the span of the last token if available, or a default empty span
-                    self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                        baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                    })
-                });
+
+            let span = self.current().map(|t| t.span).unwrap_or_else(|| {
+                // Use the span of the last token if available, or a default empty span
+                self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
+                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
+                })
+            });
 
             self.events.push(Event::UnexpectedToken {
                 expected: format!("{kind:?}"),
@@ -512,17 +517,24 @@ impl<'a> Parser<'a> {
         self.events.push(Event::FinishNode);
     }
 
-    fn error(&mut self, message: String) {
-        let span = self
+    fn error(&mut self, expected: String) {
+        let found = self
             .current()
-            .map(|t| t.span)
-            .unwrap_or_else(|| {
-                // Use the span of the last token if available, or a default empty span
-                self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                })
-            });
-        self.events.push(Event::Error { message, span });
+            .map(|t| format!("{:?}", t.kind))
+            .unwrap_or_else(|| "EOF".to_string());
+
+        let span = self.current().map(|t| t.span).unwrap_or_else(|| {
+            // Use the span of the last token if available, or a default empty span
+            self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
+                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
+            })
+        });
+
+        self.events.push(Event::UnexpectedToken {
+            expected,
+            found,
+            span,
+        });
     }
 
     /// Parse with a node wrapper
@@ -557,14 +569,11 @@ impl<'a> Parser<'a> {
                 Event::Token { kind, text } => {
                     builder.token(kind.into(), &text);
                 }
-                Event::Error { message, span } => {
-                    // Store error for later reporting
-                    errors.push(ParseError::Message {
-                        message,
-                        span,
-                    });
-                }
-                Event::UnexpectedToken { expected, found, span } => {
+                Event::UnexpectedToken {
+                    expected,
+                    found,
+                    span,
+                } => {
                     errors.push(ParseError::UnexpectedToken {
                         expected,
                         found,
@@ -1080,10 +1089,10 @@ impl<'a> Parser<'a> {
             } else {
                 p.error("Expected function name".to_string());
                 // Recovery: skip until we see '(', '{', or '->'
-                while !p.at(TokenKind::LParen) 
-                    && !p.at(TokenKind::LBrace) 
-                    && !p.at(TokenKind::Arrow) 
-                    && !p.at_end() 
+                while !p.at(TokenKind::LParen)
+                    && !p.at(TokenKind::LBrace)
+                    && !p.at(TokenKind::Arrow)
+                    && !p.at_end()
                 {
                     p.bump();
                 }
@@ -1600,7 +1609,7 @@ impl<'a> Parser<'a> {
                         return i;
                     }
                 }
-                Event::Error { .. } => {}
+                Event::UnexpectedToken { .. } => {}
                 Event::UnexpectedToken { .. } => {}
             }
         }
@@ -1644,7 +1653,7 @@ impl<'a> Parser<'a> {
                         return *kind == SyntaxKind::WORD;
                     }
                 }
-                Event::Error { .. } => {}
+                Event::UnexpectedToken { .. } => {}
                 Event::UnexpectedToken { .. } => {}
             }
         }

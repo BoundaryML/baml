@@ -87,20 +87,20 @@ enum  // Missing enum name
     R_BRACE "}"
 
 === ERRORS ===
-Error: Expected type
+Error: Expected Expected type, found At
    ╭─[ 0:5:17 ]
    │
  5 │   field3 string @  // Incomplete attribute
    │                 ┬  
-   │                 ╰── Expected type
+   │                 ╰── Expected Expected type, found At
 ───╯
 
-Error: Expected type
+Error: Expected Expected type, found At
    ╭─[ 0:6:17 ]
    │
  6 │   field4 string @alias(  // Unclosed attribute
    │                 ┬  
-   │                 ╰── Expected type
+   │                 ╰── Expected Expected type, found At
 ───╯
 
 Error: Expected RParen, found Word
@@ -111,12 +111,12 @@ Error: Expected RParen, found Word
    │             ╰──── Expected RParen, found Word
 ───╯
 
-Error: Expected type
+Error: Expected Expected type, found RBrace
    ╭─[ 0:8:1 ]
    │
  8 │ }
    │ ┬  
-   │ ╰── Expected type
+   │ ╰── Expected Expected type, found RBrace
 ───╯
 
 Error: Expected RParen, found Function
@@ -127,20 +127,20 @@ Error: Expected RParen, found Function
     │     ╰───── Expected RParen, found Function
 ────╯
 
-Error: Expected return type (->)
+Error: Expected Expected return type (->), found Function
     ╭─[ 0:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
-    │     ╰───── Expected return type (->)
+    │     ╰───── Expected Expected return type (->), found Function
 ────╯
 
-Error: Expected function body
+Error: Expected Expected function body, found Function
     ╭─[ 0:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
-    │     ╰───── Expected function body
+    │     ╰───── Expected Expected function body, found Function
 ────╯
 
 Error: Expected LBrace, found Word
@@ -151,18 +151,18 @@ Error: Expected LBrace, found Word
     │      ╰──── Expected LBrace, found Word
 ────╯
 
-Error: Expected top-level declaration
+Error: Expected Expected top-level declaration, found Word
     ╭─[ 0:19:3 ]
     │
  19 │   VALUE2
     │   ───┬──  
-    │      ╰──── Expected top-level declaration
+    │      ╰──── Expected Expected top-level declaration, found Word
 ────╯
 
-Error: Expected top-level declaration
+Error: Expected Expected top-level declaration, found RBrace
     ╭─[ 0:20:1 ]
     │
  20 │ }
     │ ┬  
-    │ ╰── Expected top-level declaration
+    │ ╰── Expected Expected top-level declaration, found RBrace
 ────╯

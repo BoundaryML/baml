@@ -1,0 +1,336 @@
+---
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 4730
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "RawStrings"
+    L_BRACE "{"
+    FIELD
+      WORD "simple"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "#"raw string"#"
+            HASH "#"
+            QUOTE """
+            WORD "raw"
+            WORD "string"
+            QUOTE """
+            HASH "#"
+          R_PAREN ")"
+    FIELD
+      WORD "with_quotes"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "#"contains "quotes" easily"#"
+            HASH "#"
+            QUOTE """
+            WORD "contains"
+            QUOTE """
+            WORD "quotes"
+            QUOTE """
+            WORD "easily"
+            QUOTE """
+            HASH "#"
+          R_PAREN ")"
+    FIELD
+      WORD "multi_hash"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "##"contains #"hash"# inside"##"
+            HASH "#"
+            HASH "#"
+            QUOTE """
+            WORD "contains"
+            HASH "#"
+            QUOTE """
+            WORD "hash"
+            QUOTE """
+            HASH "#"
+            WORD "inside"
+            QUOTE """
+            HASH "#"
+            HASH "#"
+          R_PAREN ")"
+    FIELD
+      WORD "multiline"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "###"
+    This is a multiline
+    raw string with "quotes"
+    and #hashes#
+  "###"
+            HASH "#"
+            HASH "#"
+            HASH "#"
+            QUOTE """
+            WORD "This"
+            WORD "is"
+            WORD "a"
+            WORD "multiline"
+            WORD "raw"
+            WORD "string"
+            WORD "with"
+            QUOTE """
+            WORD "quotes"
+            QUOTE """
+            WORD "and"
+            HASH "#"
+            WORD "hashes"
+            HASH "#"
+            QUOTE """
+            HASH "#"
+            HASH "#"
+            HASH "#"
+          R_PAREN ")"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ProcessText"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "input"
+        TYPE_EXPR " string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR " {"
+        L_BRACE "{"
+  CLIENT_DEF "
+  client GPT4"
+    KW_CLIENT "client"
+    WORD "GPT4"
+  WORD "prompt"
+  HASH "#"
+  QUOTE """
+  WORD "Process"
+  WORD "the"
+  WORD "following"
+  WORD "text"
+  COLON ":"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "input"
+  R_BRACE "}"
+  R_BRACE "}"
+  WORD "Return"
+  WORD "the"
+  WORD "processed"
+  WORD "result"
+  DOT "."
+  QUOTE """
+  HASH "#"
+  R_BRACE "}"
+
+=== ERRORS ===
+Error: Expected RBrace, found Client
+    ╭─[ 0:14:3 ]
+    │
+ 14 │   client GPT4
+    │   ───┬──  
+    │      ╰──── Expected RBrace, found Client
+────╯
+
+Error: Expected Expected config block, found Word
+    ╭─[ 0:15:3 ]
+    │
+ 15 │   prompt #"
+    │   ───┬──  
+    │      ╰──── Expected Expected config block, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found Word
+    ╭─[ 0:15:3 ]
+    │
+ 15 │   prompt #"
+    │   ───┬──  
+    │      ╰──── Expected Expected top-level declaration, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found Hash
+    ╭─[ 0:15:10 ]
+    │
+ 15 │   prompt #"
+    │          ┬  
+    │          ╰── Expected Expected top-level declaration, found Hash
+────╯
+
+Error: Expected Expected top-level declaration, found Quote
+    ╭─[ 0:15:11 ]
+    │
+ 15 │   prompt #"
+    │           ┬  
+    │           ╰── Expected Expected top-level declaration, found Quote
+────╯
+
+Error: Expected Expected top-level declaration, found Word
+    ╭─[ 0:16:5 ]
+    │
+ 16 │     Process the following text:
+    │     ───┬───  
+    │        ╰───── Expected Expected top-level declaration, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found Word
+    ╭─[ 0:16:13 ]
+    │
+ 16 │     Process the following text:
+    │             ─┬─  
+    │              ╰─── Expected Expected top-level declaration, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found Word
+    ╭─[ 0:16:17 ]
+    │
+ 16 │     Process the following text:
+    │                 ────┬────  
+    │                     ╰────── Expected Expected top-level declaration, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found Word
+    ╭─[ 0:16:27 ]
+    │
+ 16 │     Process the following text:
+    │                           ──┬─  
+    │                             ╰─── Expected Expected top-level declaration, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found Colon
+    ╭─[ 0:16:31 ]
+    │
+ 16 │     Process the following text:
+    │                               ┬  
+    │                               ╰── Expected Expected top-level declaration, found Colon
+────╯
+
+Error: Expected Expected top-level declaration, found LBrace
+    ╭─[ 0:17:5 ]
+    │
+ 17 │     {{ input }}
+    │     ┬  
+    │     ╰── Expected Expected top-level declaration, found LBrace
+────╯
+
+Error: Expected Expected top-level declaration, found LBrace
+    ╭─[ 0:17:6 ]
+    │
+ 17 │     {{ input }}
+    │      ┬  
+    │      ╰── Expected Expected top-level declaration, found LBrace
+────╯
+
+Error: Expected Expected top-level declaration, found Word
+    ╭─[ 0:17:8 ]
+    │
+ 17 │     {{ input }}
+    │        ──┬──  
+    │          ╰──── Expected Expected top-level declaration, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found RBrace
+    ╭─[ 0:17:14 ]
+    │
+ 17 │     {{ input }}
+    │              ┬  
+    │              ╰── Expected Expected top-level declaration, found RBrace
+────╯
+
+Error: Expected Expected top-level declaration, found RBrace
+    ╭─[ 0:17:15 ]
+    │
+ 17 │     {{ input }}
+    │               ┬  
+    │               ╰── Expected Expected top-level declaration, found RBrace
+────╯
+
+Error: Expected Expected top-level declaration, found Word
+    ╭─[ 0:19:5 ]
+    │
+ 19 │     Return the processed result.
+    │     ───┬──  
+    │        ╰──── Expected Expected top-level declaration, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found Word
+    ╭─[ 0:19:12 ]
+    │
+ 19 │     Return the processed result.
+    │            ─┬─  
+    │             ╰─── Expected Expected top-level declaration, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found Word
+    ╭─[ 0:19:16 ]
+    │
+ 19 │     Return the processed result.
+    │                ────┬────  
+    │                    ╰────── Expected Expected top-level declaration, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found Word
+    ╭─[ 0:19:26 ]
+    │
+ 19 │     Return the processed result.
+    │                          ───┬──  
+    │                             ╰──── Expected Expected top-level declaration, found Word
+────╯
+
+Error: Expected Expected top-level declaration, found Dot
+    ╭─[ 0:19:32 ]
+    │
+ 19 │     Return the processed result.
+    │                                ┬  
+    │                                ╰── Expected Expected top-level declaration, found Dot
+────╯
+
+Error: Expected Expected top-level declaration, found Quote
+    ╭─[ 0:20:3 ]
+    │
+ 20 │   "#
+    │   ┬  
+    │   ╰── Expected Expected top-level declaration, found Quote
+────╯
+
+Error: Expected Expected top-level declaration, found Hash
+    ╭─[ 0:20:4 ]
+    │
+ 20 │   "#
+    │    ┬  
+    │    ╰── Expected Expected top-level declaration, found Hash
+────╯
+
+Error: Expected Expected top-level declaration, found RBrace
+    ╭─[ 0:21:1 ]
+    │
+ 21 │ }
+    │ ┬  
+    │ ╰── Expected Expected top-level declaration, found RBrace
+────╯

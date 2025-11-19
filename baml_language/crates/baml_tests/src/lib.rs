@@ -62,8 +62,9 @@ fn format_hir_file(
     source_file: baml_db::SourceFile,
     items: &[baml_db::baml_hir::ItemId],
 ) -> String {
-    use baml_db::baml_hir::ItemId;
     use std::fmt::Write;
+
+    use baml_db::baml_hir::ItemId;
 
     // Get the ItemTree once and keep it alive for all lookups
     let item_tree = baml_db::baml_hir::file_item_tree(db, source_file);

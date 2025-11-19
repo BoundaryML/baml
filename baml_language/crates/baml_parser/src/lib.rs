@@ -22,10 +22,6 @@ pub enum ParseError {
         expected: String,
         span: Span,
     },
-    Message {
-        message: String,
-        span: Span,
-    },
     // Add more variants as needed
 }
 
@@ -40,15 +36,14 @@ impl baml_base::Diagnostic for ParseError {
             ParseError::UnexpectedEof { expected, .. } => {
                 format!("Unexpected end of file, expected {expected}")
             }
-            ParseError::Message { message, .. } => message.clone(),
         }
     }
 
     fn span(&self) -> Option<Span> {
         match self {
-            ParseError::UnexpectedToken { span, .. }
-            | ParseError::UnexpectedEof { span, .. }
-            | ParseError::Message { span, .. } => Some(*span),
+            ParseError::UnexpectedToken { span, .. } | ParseError::UnexpectedEof { span, .. } => {
+                Some(*span)
+            }
         }
     }
 

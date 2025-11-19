@@ -11,116 +11,116 @@ expression: output
    │        ╰──── Expected RBrace, found Client
 ───╯
 
-  [parse] Error: Expected config block
+  [parse] Error: Expected Expected config block, found Word
    ╭─[ 0:3:5 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │     ───┬──  
-   │        ╰──── Expected config block
+   │        ╰──── Expected Expected config block, found Word
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Word
    ╭─[ 0:3:5 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │     ───┬──  
-   │        ╰──── Expected top-level declaration
+   │        ╰──── Expected Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Hash
    ╭─[ 0:3:12 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │            ┬  
-   │            ╰── Expected top-level declaration
+   │            ╰── Expected Expected top-level declaration, found Hash
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Quote
    ╭─[ 0:3:13 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │             ┬  
-   │             ╰── Expected top-level declaration
+   │             ╰── Expected Expected top-level declaration, found Quote
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Word
    ╭─[ 0:3:14 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │              ─┬─  
-   │               ╰─── Expected top-level declaration
+   │               ╰─── Expected Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Word
    ╭─[ 0:3:18 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │                  ──┬─  
-   │                    ╰─── Expected top-level declaration
+   │                    ╰─── Expected Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found LBrace
    ╭─[ 0:3:23 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │                       ┬  
-   │                       ╰── Expected top-level declaration
+   │                       ╰── Expected Expected top-level declaration, found LBrace
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found LBrace
    ╭─[ 0:3:24 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │                        ┬  
-   │                        ╰── Expected top-level declaration
+   │                        ╰── Expected Expected top-level declaration, found LBrace
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Word
    ╭─[ 0:3:25 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │                         ─┬  
-   │                          ╰── Expected top-level declaration
+   │                          ╰── Expected Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found RBrace
    ╭─[ 0:3:27 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │                           ┬  
-   │                           ╰── Expected top-level declaration
+   │                           ╰── Expected Expected top-level declaration, found RBrace
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found RBrace
    ╭─[ 0:3:28 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │                            ┬  
-   │                            ╰── Expected top-level declaration
+   │                            ╰── Expected Expected top-level declaration, found RBrace
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Quote
    ╭─[ 0:3:29 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │                             ┬  
-   │                             ╰── Expected top-level declaration
+   │                             ╰── Expected Expected top-level declaration, found Quote
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Hash
    ╭─[ 0:3:30 ]
    │
  3 │     prompt #"Get user {{id}}"#
    │                              ┬  
-   │                              ╰── Expected top-level declaration
+   │                              ╰── Expected Expected top-level declaration, found Hash
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found RBrace
    ╭─[ 0:4:1 ]
    │
  4 │ }
    │ ┬  
-   │ ╰── Expected top-level declaration
+   │ ╰── Expected Expected top-level declaration, found RBrace
 ───╯
 
   [parse] Error: Expected RBrace, found Client
@@ -131,74 +131,74 @@ expression: output
    │        ╰──── Expected RBrace, found Client
 ───╯
 
-  [parse] Error: Expected config block
+  [parse] Error: Expected Expected config block, found Word
    ╭─[ 0:8:5 ]
    │
  8 │     prompt #"Get status"#
    │     ───┬──  
-   │        ╰──── Expected config block
+   │        ╰──── Expected Expected config block, found Word
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Word
    ╭─[ 0:8:5 ]
    │
  8 │     prompt #"Get status"#
    │     ───┬──  
-   │        ╰──── Expected top-level declaration
+   │        ╰──── Expected Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Hash
    ╭─[ 0:8:12 ]
    │
  8 │     prompt #"Get status"#
    │            ┬  
-   │            ╰── Expected top-level declaration
+   │            ╰── Expected Expected top-level declaration, found Hash
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Quote
    ╭─[ 0:8:13 ]
    │
  8 │     prompt #"Get status"#
    │             ┬  
-   │             ╰── Expected top-level declaration
+   │             ╰── Expected Expected top-level declaration, found Quote
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Word
    ╭─[ 0:8:14 ]
    │
  8 │     prompt #"Get status"#
    │              ─┬─  
-   │               ╰─── Expected top-level declaration
+   │               ╰─── Expected Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Word
    ╭─[ 0:8:18 ]
    │
  8 │     prompt #"Get status"#
    │                  ───┬──  
-   │                     ╰──── Expected top-level declaration
+   │                     ╰──── Expected Expected top-level declaration, found Word
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Quote
    ╭─[ 0:8:24 ]
    │
  8 │     prompt #"Get status"#
    │                        ┬  
-   │                        ╰── Expected top-level declaration
+   │                        ╰── Expected Expected top-level declaration, found Quote
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found Hash
    ╭─[ 0:8:25 ]
    │
  8 │     prompt #"Get status"#
    │                         ┬  
-   │                         ╰── Expected top-level declaration
+   │                         ╰── Expected Expected top-level declaration, found Hash
 ───╯
 
-  [parse] Error: Expected top-level declaration
+  [parse] Error: Expected Expected top-level declaration, found RBrace
    ╭─[ 0:9:1 ]
    │
  9 │ }
    │ ┬  
-   │ ╰── Expected top-level declaration
+   │ ╰── Expected Expected top-level declaration, found RBrace
 ───╯

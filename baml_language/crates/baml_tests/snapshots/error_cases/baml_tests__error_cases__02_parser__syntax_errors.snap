@@ -33,18 +33,18 @@ Error: Expected RBrace, found Function
    │     ╰───── Expected RBrace, found Function
 ───╯
 
-Error: Expected function name
+Error: Expected Expected function name, found IntegerLiteral
    ╭─[ 0:6:10 ]
    │
  6 │ function 123Invalid() {}
    │          ─┬─  
-   │           ╰─── Expected function name
+   │           ╰─── Expected Expected function name, found IntegerLiteral
 ───╯
 
-Error: Expected return type (->)
+Error: Expected Expected return type (->), found LBrace
    ╭─[ 0:6:23 ]
    │
  6 │ function 123Invalid() {}
    │                       ┬  
-   │                       ╰── Expected return type (->)
+   │                       ╰── Expected Expected return type (->), found LBrace
 ───╯

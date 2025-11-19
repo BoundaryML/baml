@@ -197,7 +197,10 @@ fn generate_project_tests(file: &mut File, project: &TestProject) -> std::io::Re
     writeln!(file, "    use baml_db::baml_thir;")?;
     writeln!(file, "    use baml_db::baml_codegen;")?;
     writeln!(file, "    use baml_db::Diagnostic;")?;
-    writeln!(file, "    use baml_diagnostics::render_diagnostic_with_color;")?;
+    writeln!(
+        file,
+        "    use baml_diagnostics::render_diagnostic_with_color;"
+    )?;
     writeln!(file, "    use std::collections::HashMap;")?;
     writeln!(file, "    use insta::{{assert_snapshot, with_settings}};")?;
     writeln!(file, "    use std::fmt::Write;")?;
@@ -340,7 +343,10 @@ fn generate_parser_test(
         "        let source_file = db.add_file(\"{}\", &content);",
         baml_file.relative_path.display()
     )?;
-    writeln!(file, "        sources.insert(source_file.file_id(&db), content.clone());")?;
+    writeln!(
+        file,
+        "        sources.insert(source_file.file_id(&db), content.clone());"
+    )?;
     writeln!(
         file,
         "        let tree = baml_parser::syntax_tree(&db, source_file);"
@@ -572,7 +578,10 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
         )?;
         writeln!(file, "                &content,")?;
         writeln!(file, "            );")?;
-        writeln!(file, "            sources.insert(source_file.file_id(&db), content.clone());")?;
+        writeln!(
+            file,
+            "            sources.insert(source_file.file_id(&db), content.clone());"
+        )?;
         writeln!(file)?;
         writeln!(
             file,

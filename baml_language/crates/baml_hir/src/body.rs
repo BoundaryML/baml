@@ -3,10 +3,12 @@
 //! The CST already distinguishes `LLM_FUNCTION_BODY` from `EXPR_FUNCTION_BODY`,
 //! so we just need to lower each type appropriately.
 
-use crate::Name;
+use std::sync::Arc;
+
 use la_arena::{Arena, Idx};
 use rowan::ast::AstNode;
-use std::sync::Arc;
+
+use crate::Name;
 
 /// The body of a function - determined by CST node type.
 #[derive(Debug, Clone, PartialEq, Eq)]

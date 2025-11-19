@@ -133,42 +133,42 @@ Error: Expected RParen, found Word
    │                                           ╰──── Expected RParen, found Word
 ───╯
 
-Error: Expected type
+Error: Expected Expected type, found Error
    ╭─[ 0:7:46 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                              ┬  
-   │                                              ╰── Expected type
+   │                                              ╰── Expected Expected type, found Error
 ───╯
 
-Error: Unexpected token in class body
+Error: Expected Unexpected token in class body, found Error
    ╭─[ 0:7:46 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                              ┬  
-   │                                              ╰── Unexpected token in class body
+   │                                              ╰── Expected Unexpected token in class body, found Error
 ───╯
 
-Error: Unexpected token in class body
+Error: Expected Unexpected token in class body, found Quote
    ╭─[ 0:7:47 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                               ┬  
-   │                                               ╰── Unexpected token in class body
+   │                                               ╰── Expected Unexpected token in class body, found Quote
 ───╯
 
-Error: Unexpected token in class body
+Error: Expected Unexpected token in class body, found Quote
    ╭─[ 0:7:48 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                                ┬  
-   │                                                ╰── Unexpected token in class body
+   │                                                ╰── Expected Unexpected token in class body, found Quote
 ───╯
 
-Error: Unexpected token in class body
+Error: Expected Unexpected token in class body, found RParen
    ╭─[ 0:7:49 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                                 ┬  
-   │                                                 ╰── Unexpected token in class body
+   │                                                 ╰── Expected Unexpected token in class body, found RParen
 ───╯
