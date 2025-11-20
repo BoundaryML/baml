@@ -487,11 +487,12 @@ jobs:
         working-directory: baml_language
 
       - name: "Run benchmarks"
-        uses: CodSpeedHQ/action@v3
+        uses: CodSpeedHQ/action@v4
         with:
           mode: walltime
-          run: cd baml_language && cargo codspeed run
+          run: cargo codspeed run
           token: ${{ secrets.CODSPEED_TOKEN }}
+          working-directory: baml_language
 
   test-summary:
     name: "Test Summary"
