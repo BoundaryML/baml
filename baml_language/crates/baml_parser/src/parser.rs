@@ -1192,8 +1192,9 @@ impl<'a> Parser<'a> {
             let mut has_prompt = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword() {
+                // Error recovery: if we see a top-level keyword (except Client, which is valid in LLM bodies)
+                // assume we missed a closing brace
+                if p.at_top_level_keyword() && !p.at(TokenKind::Client) {
                     break;
                 }
 

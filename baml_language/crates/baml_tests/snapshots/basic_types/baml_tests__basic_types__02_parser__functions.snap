@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -18,26 +18,27 @@ SOURCE_FILE
     ARROW "->"
     TYPE_EXPR " User"
       WORD "User"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR " {"
-        L_BRACE "{"
-  CLIENT_DEF "
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "
     client GPT4"
-    KW_CLIENT "client"
-    WORD "GPT4"
-  WORD "prompt"
-  HASH "#"
-  QUOTE """
-  WORD "Get"
-  WORD "user"
-  L_BRACE "{"
-  L_BRACE "{"
-  WORD "id"
-  R_BRACE "}"
-  R_BRACE "}"
-  QUOTE """
-  HASH "#"
-  R_BRACE "}"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL " #"Get user {{id}}"#"
+          HASH "#"
+          QUOTE """
+          WORD "Get"
+          WORD "user"
+          L_BRACE "{"
+          L_BRACE "{"
+          WORD "id"
+          R_BRACE "}"
+          R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "GetStatus"
@@ -47,219 +48,22 @@ SOURCE_FILE
     ARROW "->"
     TYPE_EXPR " Status"
       WORD "Status"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR " {"
-        L_BRACE "{"
-  CLIENT_DEF "
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "
     client GPT4"
-    KW_CLIENT "client"
-    WORD "GPT4"
-  WORD "prompt"
-  HASH "#"
-  QUOTE """
-  WORD "Get"
-  WORD "status"
-  QUOTE """
-  HASH "#"
-  R_BRACE "}"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL " #"Get status"#"
+          HASH "#"
+          QUOTE """
+          WORD "Get"
+          WORD "status"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
 
 === ERRORS ===
-Error: Expected RBrace, found Client
-   ╭─[ 0:2:5 ]
-   │
- 2 │     client GPT4
-   │     ───┬──  
-   │        ╰──── Expected RBrace, found Client
-───╯
-
-Error: Expected config block, found Word
-   ╭─[ 0:3:5 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │     ───┬──  
-   │        ╰──── Expected config block, found Word
-───╯
-
-Error: Expected top-level declaration, found Word
-   ╭─[ 0:3:5 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │     ───┬──  
-   │        ╰──── Expected top-level declaration, found Word
-───╯
-
-Error: Expected top-level declaration, found Hash
-   ╭─[ 0:3:12 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │            ┬  
-   │            ╰── Expected top-level declaration, found Hash
-───╯
-
-Error: Expected top-level declaration, found Quote
-   ╭─[ 0:3:13 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │             ┬  
-   │             ╰── Expected top-level declaration, found Quote
-───╯
-
-Error: Expected top-level declaration, found Word
-   ╭─[ 0:3:14 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │              ─┬─  
-   │               ╰─── Expected top-level declaration, found Word
-───╯
-
-Error: Expected top-level declaration, found Word
-   ╭─[ 0:3:18 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │                  ──┬─  
-   │                    ╰─── Expected top-level declaration, found Word
-───╯
-
-Error: Expected top-level declaration, found LBrace
-   ╭─[ 0:3:23 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │                       ┬  
-   │                       ╰── Expected top-level declaration, found LBrace
-───╯
-
-Error: Expected top-level declaration, found LBrace
-   ╭─[ 0:3:24 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │                        ┬  
-   │                        ╰── Expected top-level declaration, found LBrace
-───╯
-
-Error: Expected top-level declaration, found Word
-   ╭─[ 0:3:25 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │                         ─┬  
-   │                          ╰── Expected top-level declaration, found Word
-───╯
-
-Error: Expected top-level declaration, found RBrace
-   ╭─[ 0:3:27 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │                           ┬  
-   │                           ╰── Expected top-level declaration, found RBrace
-───╯
-
-Error: Expected top-level declaration, found RBrace
-   ╭─[ 0:3:28 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │                            ┬  
-   │                            ╰── Expected top-level declaration, found RBrace
-───╯
-
-Error: Expected top-level declaration, found Quote
-   ╭─[ 0:3:29 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │                             ┬  
-   │                             ╰── Expected top-level declaration, found Quote
-───╯
-
-Error: Expected top-level declaration, found Hash
-   ╭─[ 0:3:30 ]
-   │
- 3 │     prompt #"Get user {{id}}"#
-   │                              ┬  
-   │                              ╰── Expected top-level declaration, found Hash
-───╯
-
-Error: Expected top-level declaration, found RBrace
-   ╭─[ 0:4:1 ]
-   │
- 4 │ }
-   │ ┬  
-   │ ╰── Expected top-level declaration, found RBrace
-───╯
-
-Error: Expected RBrace, found Client
-   ╭─[ 0:7:5 ]
-   │
- 7 │     client GPT4
-   │     ───┬──  
-   │        ╰──── Expected RBrace, found Client
-───╯
-
-Error: Expected config block, found Word
-   ╭─[ 0:8:5 ]
-   │
- 8 │     prompt #"Get status"#
-   │     ───┬──  
-   │        ╰──── Expected config block, found Word
-───╯
-
-Error: Expected top-level declaration, found Word
-   ╭─[ 0:8:5 ]
-   │
- 8 │     prompt #"Get status"#
-   │     ───┬──  
-   │        ╰──── Expected top-level declaration, found Word
-───╯
-
-Error: Expected top-level declaration, found Hash
-   ╭─[ 0:8:12 ]
-   │
- 8 │     prompt #"Get status"#
-   │            ┬  
-   │            ╰── Expected top-level declaration, found Hash
-───╯
-
-Error: Expected top-level declaration, found Quote
-   ╭─[ 0:8:13 ]
-   │
- 8 │     prompt #"Get status"#
-   │             ┬  
-   │             ╰── Expected top-level declaration, found Quote
-───╯
-
-Error: Expected top-level declaration, found Word
-   ╭─[ 0:8:14 ]
-   │
- 8 │     prompt #"Get status"#
-   │              ─┬─  
-   │               ╰─── Expected top-level declaration, found Word
-───╯
-
-Error: Expected top-level declaration, found Word
-   ╭─[ 0:8:18 ]
-   │
- 8 │     prompt #"Get status"#
-   │                  ───┬──  
-   │                     ╰──── Expected top-level declaration, found Word
-───╯
-
-Error: Expected top-level declaration, found Quote
-   ╭─[ 0:8:24 ]
-   │
- 8 │     prompt #"Get status"#
-   │                        ┬  
-   │                        ╰── Expected top-level declaration, found Quote
-───╯
-
-Error: Expected top-level declaration, found Hash
-   ╭─[ 0:8:25 ]
-   │
- 8 │     prompt #"Get status"#
-   │                         ┬  
-   │                         ╰── Expected top-level declaration, found Hash
-───╯
-
-Error: Expected top-level declaration, found RBrace
-   ╭─[ 0:9:1 ]
-   │
- 9 │ }
-   │ ┬  
-   │ ╰── Expected top-level declaration, found RBrace
-───╯
+None

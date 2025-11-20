@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -59,15 +59,11 @@ class JsonData {
 function ExtractData {
   params: [text: String]
   return: Path(Path { segments: ["JsonData"], kind: Plain })
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
+  body: Llm {
+    client: GPT4
+    prompt: "\n    Extract structured data from: {{ text }}\n    Return as JSON.\n  "
+    interpolations: [text]
   }
-}
-client GPT4 {
-  provider: unknown
 }
 function ProcessAnalysis {
   params: [analysis: Path(Path { segments: ["Analysis"], kind: Plain })]
@@ -118,21 +114,19 @@ function ProcessAnalysis {
 function ChainedProcess {
   params: [input: String]
   return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
+  body: Llm {
+    client: GPT4
+    prompt: "\n    Process this through multiple steps:\n    1. {{ input }}\n    2. Transform it\n    3. Return result\n  "
+    interpolations: [input]
   }
 }
 function LLMAnalyze {
   params: [text: String]
   return: Path(Path { segments: ["Analysis"], kind: Plain })
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
+  body: Llm {
+    client: GPT4
+    prompt: "\n    Analyze the following text:\n    {{ text }}\n    \n    Return an Analysis object with sentiment and keywords.\n  "
+    interpolations: [text]
   }
 }
 function SimpleCalc {
@@ -157,7 +151,4 @@ class Analysis {
   sentiment: String
   keywords: List(Path(Path { segments: ["string"], kind: Plain }))
   score: Float
-}
-client GPT4 {
-  provider: unknown
 }
