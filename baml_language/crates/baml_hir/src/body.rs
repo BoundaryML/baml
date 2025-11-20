@@ -85,12 +85,6 @@ pub enum Expr {
         else_branch: Option<ExprId>,
     },
 
-    /// Match expression
-    Match {
-        scrutinee: ExprId,
-        arms: Vec<MatchArm>,
-    },
-
     /// Binary operation
     Binary {
         op: BinaryOp,
@@ -149,25 +143,14 @@ pub enum Stmt {
     Missing,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MatchArm {
-    pub pattern: PatId,
-    pub expr: ExprId,
-}
-
+/// The left-hand side of a let binding, or match arm in the future.
+///
+/// Today only variables can be bound, but in the future we will support
+/// more complex patterns: wildcards, literals, paths, and constructors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pattern {
-    /// Literal pattern: `42`, `"hello"`
-    Literal(Literal),
-
-    /// Path pattern: `SomeVariant`
-    Path(Name),
-
     /// Binding pattern: `x`, `user`
     Binding(Name),
-
-    /// Wildcard: `_`
-    Wildcard,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -852,7 +835,10 @@ impl LoweringContext {
                 let name = Name::new(token.text());
                 self.patterns.alloc(Pattern::Binding(name))
             })
-            .unwrap_or_else(|| self.patterns.alloc(Pattern::Wildcard));
+            .unwrap_or_else(|| {
+                self.patterns
+                    .alloc(Pattern::Binding(Name::new("missing_let")))
+            });
 
         // Extract initializer expression
         let initializer = node
