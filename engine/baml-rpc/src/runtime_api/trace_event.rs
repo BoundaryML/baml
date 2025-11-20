@@ -426,16 +426,16 @@ mod tests {
     // #[test]
     // fn test_serialize_trace_event_batch_to_newfile_and_gz() {
     //     use std::fs;
-    //     use std::io::Write;
-    //     use std::time::Instant;
+    //     // use std::io::Write;
+    //     // use std::time::Instant;
 
     //     // You'll want to change these paths for your own testing/environment.
     //     let orig_path =
     //         "/Users/aaronvillalpando/Downloads/tracebatch_01kab00gkeeky8qfssrp43b0w5.json";
     //     let new_path =
-    //         "/Users/aaronvillalpando/Downloads/newfile-tracebatch_01kab00gkeeky8qfssrp43b0w5.json";
-    //     let gz_path =
-    //         "/Users/aaronvillalpando/Downloads/newfile-tracebatch_01kab00gkeeky8qfssrp43b0w5.json.gz";
+    //         "/Users/aaronvillalpando/Downloads/newfile2-tracebatch_01kab00gkeeky8qfssrp43b0w5.json";
+    //     // let gz_path =
+    //     //     "/Users/aaronvillalpando/Downloads/newfile-tracebatch_01kab00gkeeky8qfssrp43b0w5.json.gz";
 
     //     // Read source .json
     //     let file_contents =
@@ -457,26 +457,26 @@ mod tests {
     //     assert!(metadata.len() > 0, "New file is empty");
 
     //     // Now write a gzipped version and time it
-    //     let start = Instant::now();
+    //     // let start = Instant::now();
 
-    //     let gz_file = fs::File::create(gz_path).expect("Failed to create gz output file");
-    //     let mut encoder = flate2::write::GzEncoder::new(gz_file, flate2::Compression::default());
-    //     encoder
-    //         .write_all(json_str.as_bytes())
-    //         .expect("Failed to write gzipped json");
-    //     encoder
-    //         .finish()
-    //         .expect("Failed to finish writing gzipped json");
+    //     // let gz_file = fs::File::create(gz_path).expect("Failed to create gz output file");
+    //     // let mut encoder = flate2::write::GzEncoder::new(gz_file, flate2::Compression::default());
+    //     // encoder
+    //     //     .write_all(json_str.as_bytes())
+    //     //     .expect("Failed to write gzipped json");
+    //     // encoder
+    //     //     .finish()
+    //     //     .expect("Failed to finish writing gzipped json");
 
-    //     let duration = start.elapsed();
-    //     let gz_metadata = fs::metadata(gz_path).expect("Gzipped file should exist");
+    //     // let duration = start.elapsed();
+    //     // let gz_metadata = fs::metadata(gz_path).expect("Gzipped file should exist");
 
-    //     assert!(gz_metadata.len() > 0, "Gzipped file is empty");
-    //     println!(
-    //         "Gzipped JSON tracebatch written to {} in {:?} ({} bytes)",
-    //         gz_path,
-    //         duration,
-    //         gz_metadata.len()
-    //     );
+    //     // assert!(gz_metadata.len() > 0, "Gzipped file is empty");
+    //     // println!(
+    //     //     "Gzipped JSON tracebatch written to {} in {:?} ({} bytes)",
+    //     //     gz_path,
+    //     //     duration,
+    //     //     gz_metadata.len()
+    //     // );
     // }
 }

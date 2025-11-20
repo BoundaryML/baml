@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::type_definition::BamlTypeId;
@@ -53,8 +53,8 @@ impl std::fmt::Display for TypeMetadata {
 
 /// FieldType represents the type of either a class field or a function arg.
 /// THIS IS ONLY FOR NON_STREAMING TYPES.
-#[derive(Debug, PartialEq, Eq, Hash, TS)]
-#[ts(export, tag = "type", content = "data", rename_all = "snake_case")]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, TS)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum TypeReferenceWithMetadata<Metadata> {
     // Unknown type
     Unknown, // Not supported
@@ -101,196 +101,196 @@ pub enum TypeReferenceWithMetadata<Metadata> {
 // Shadow definition for deserialization logic
 // This is needed because we want to support a compressed format where "data" is omitted
 // if it would be empty (e.g. for primitives with no checks/asserts).
-#[derive(Deserialize)]
-#[serde(tag = "type", content = "data", rename_all = "snake_case")]
-#[serde(remote = "TypeReferenceWithMetadata")]
-#[serde(bound = "Metadata: Deserialize<'de> + Default")]
-enum TypeReferenceWithMetadataDef<Metadata> {
-    // Unknown type
-    Unknown, // Not supported
+// #[derive(Deserialize)]
+// #[serde(tag = "type", content = "data", rename_all = "snake_case")]
+// #[serde(remote = "TypeReferenceWithMetadata")]
+// #[serde(bound = "Metadata: Deserialize<'de> + Default")]
+// enum TypeReferenceWithMetadataDef<Metadata> {
+//     // Unknown type
+//     Unknown, // Not supported
 
-    // Primitive types
-    String(Metadata),
-    Int(Metadata),
-    Float(Metadata),
-    Bool(Metadata),
-    Media(MediaTypeDefinition, Metadata),
-    Literal(LiteralTypeDefinition, Metadata),
+//     // Primitive types
+//     String(Metadata),
+//     Int(Metadata),
+//     Float(Metadata),
+//     Bool(Metadata),
+//     Media(MediaTypeDefinition, Metadata),
+//     Literal(LiteralTypeDefinition, Metadata),
 
-    // User-defined types
-    Class {
-        type_id: Arc<BamlTypeId>,
-        metadata: Metadata,
-    },
-    Enum {
-        type_id: Arc<BamlTypeId>,
-        metadata: Metadata,
-    },
-    RecursiveTypeAlias {
-        type_id: Arc<BamlTypeId>,
-        metadata: Metadata,
-    },
+//     // User-defined types
+//     Class {
+//         type_id: Arc<BamlTypeId>,
+//         metadata: Metadata,
+//     },
+//     Enum {
+//         type_id: Arc<BamlTypeId>,
+//         metadata: Metadata,
+//     },
+//     RecursiveTypeAlias {
+//         type_id: Arc<BamlTypeId>,
+//         metadata: Metadata,
+//     },
 
-    // Container types
-    List(Box<TypeReferenceWithMetadata<Metadata>>, Metadata),
-    Map {
-        key: Box<TypeReferenceWithMetadata<Metadata>>,
-        value: Box<TypeReferenceWithMetadata<Metadata>>,
-        metadata: Metadata,
-    },
-    Union {
-        union_type: UnionType<Metadata>,
-        metadata: Metadata,
-    },
-    Tuple {
-        items: Vec<TypeReferenceWithMetadata<Metadata>>,
-        metadata: Metadata,
-    },
-}
+//     // Container types
+//     List(Box<TypeReferenceWithMetadata<Metadata>>, Metadata),
+//     Map {
+//         key: Box<TypeReferenceWithMetadata<Metadata>>,
+//         value: Box<TypeReferenceWithMetadata<Metadata>>,
+//         metadata: Metadata,
+//     },
+//     Union {
+//         union_type: UnionType<Metadata>,
+//         metadata: Metadata,
+//     },
+//     Tuple {
+//         items: Vec<TypeReferenceWithMetadata<Metadata>>,
+//         metadata: Metadata,
+//     },
+// }
 
-impl<'de, M> Deserialize<'de> for TypeReferenceWithMetadata<M>
-where
-    M: Deserialize<'de> + Default,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // We deserialize into a Value first to check if "data" is present.
-        // If "data" is missing and the type is a primitive, we inject an empty object
-        // so that the standard deserialization logic (via TypeReferenceWithMetadataDef) works.
-        let mut v: serde_json::Value = Deserialize::deserialize(deserializer)?;
-        if let Some(obj) = v.as_object_mut() {
-            if let Some("string" | "int" | "float" | "bool") = obj.get("type").and_then(|t| t.as_str()) {
-                if !obj.contains_key("data") {
-                    obj.insert("data".to_string(), serde_json::json!({}));
-                }
-            }
-        }
-        TypeReferenceWithMetadataDef::deserialize(v).map_err(serde::de::Error::custom)
-    }
-}
+// impl<'de, M> Deserialize<'de> for TypeReferenceWithMetadata<M>
+// where
+//     M: Deserialize<'de> + Default,
+// {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: Deserializer<'de>,
+//     {
+//         // We deserialize into a Value first to check if "data" is present.
+//         // If "data" is missing and the type is a primitive, we inject an empty object
+//         // so that the standard deserialization logic (via TypeReferenceWithMetadataDef) works.
+//         let mut v: serde_json::Value = Deserialize::deserialize(deserializer)?;
+//         if let Some(obj) = v.as_object_mut() {
+//             if let Some("string" | "int" | "float" | "bool") = obj.get("type").and_then(|t| t.as_str()) {
+//                 if !obj.contains_key("data") {
+//                     obj.insert("data".to_string(), serde_json::json!({}));
+//                 }
+//             }
+//         }
+//         TypeReferenceWithMetadataDef::deserialize(v).map_err(serde::de::Error::custom)
+//     }
+// }
 
-impl<M> Serialize for TypeReferenceWithMetadata<M>
-where
-    M: Serialize + Default + PartialEq,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        #[derive(Serialize)]
-        #[serde(tag = "type", content = "data", rename_all = "snake_case")]
-        #[serde(bound = "M: Serialize + Default + PartialEq")]
-        enum TypeReferenceSurrogate<'a, M> {
-            Unknown,
-            String(&'a M),
-            Int(&'a M),
-            Float(&'a M),
-            Bool(&'a M),
-            Media(&'a MediaTypeDefinition, &'a M),
-            Literal(&'a LiteralTypeDefinition, &'a M),
-            Class {
-                type_id: &'a Arc<BamlTypeId>,
-                metadata: &'a M,
-            },
-            Enum {
-                type_id: &'a Arc<BamlTypeId>,
-                metadata: &'a M,
-            },
-            RecursiveTypeAlias {
-                type_id: &'a Arc<BamlTypeId>,
-                metadata: &'a M,
-            },
-            List(&'a TypeReferenceWithMetadata<M>, &'a M),
-            Map {
-                key: &'a TypeReferenceWithMetadata<M>,
-                value: &'a TypeReferenceWithMetadata<M>,
-                metadata: &'a M,
-            },
-            Union {
-                union_type: &'a UnionType<M>,
-                metadata: &'a M,
-            },
-            Tuple {
-                items: &'a Vec<TypeReferenceWithMetadata<M>>,
-                metadata: &'a M,
-            },
-        }
+// impl<M> Serialize for TypeReferenceWithMetadata<M>
+// where
+//     M: Serialize + Default + PartialEq,
+// {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: Serializer,
+//     {
+//         #[derive(Serialize)]
+//         #[serde(tag = "type", content = "data", rename_all = "snake_case")]
+//         #[serde(bound = "M: Serialize + Default + PartialEq")]
+//         enum TypeReferenceSurrogate<'a, M> {
+//             Unknown,
+//             String(&'a M),
+//             Int(&'a M),
+//             Float(&'a M),
+//             Bool(&'a M),
+//             Media(&'a MediaTypeDefinition, &'a M),
+//             Literal(&'a LiteralTypeDefinition, &'a M),
+//             Class {
+//                 type_id: &'a Arc<BamlTypeId>,
+//                 metadata: &'a M,
+//             },
+//             Enum {
+//                 type_id: &'a Arc<BamlTypeId>,
+//                 metadata: &'a M,
+//             },
+//             RecursiveTypeAlias {
+//                 type_id: &'a Arc<BamlTypeId>,
+//                 metadata: &'a M,
+//             },
+//             List(&'a TypeReferenceWithMetadata<M>, &'a M),
+//             Map {
+//                 key: &'a TypeReferenceWithMetadata<M>,
+//                 value: &'a TypeReferenceWithMetadata<M>,
+//                 metadata: &'a M,
+//             },
+//             Union {
+//                 union_type: &'a UnionType<M>,
+//                 metadata: &'a M,
+//             },
+//             Tuple {
+//                 items: &'a Vec<TypeReferenceWithMetadata<M>>,
+//                 metadata: &'a M,
+//             },
+//         }
 
-        // Check for primitives with empty metadata
-        // If metadata is default (empty), we serialize as just {"type": "string"}
-        // instead of {"type": "string", "data": {}}.
-        if let Some(meta) = self.metadata() {
-            if *meta == M::default() {
-                match self {
-                    Self::String(_) => {
-                        use serde::ser::SerializeStruct;
-                        let mut s = serializer.serialize_struct("TypeReference", 1)?;
-                        s.serialize_field("type", "string")?;
-                        return s.end();
-                    }
-                    Self::Int(_) => {
-                        use serde::ser::SerializeStruct;
-                        let mut s = serializer.serialize_struct("TypeReference", 1)?;
-                        s.serialize_field("type", "int")?;
-                        return s.end();
-                    }
-                    Self::Float(_) => {
-                        use serde::ser::SerializeStruct;
-                        let mut s = serializer.serialize_struct("TypeReference", 1)?;
-                        s.serialize_field("type", "float")?;
-                        return s.end();
-                    }
-                    Self::Bool(_) => {
-                        use serde::ser::SerializeStruct;
-                        let mut s = serializer.serialize_struct("TypeReference", 1)?;
-                        s.serialize_field("type", "bool")?;
-                        return s.end();
-                    }
-                    _ => {}
-                }
-            }
-        }
+//         // Check for primitives with empty metadata
+//         // If metadata is default (empty), we serialize as just {"type": "string"}
+//         // instead of {"type": "string", "data": {}}.
+//         if let Some(meta) = self.metadata() {
+//             if *meta == M::default() {
+//                 match self {
+//                     Self::String(_) => {
+//                         use serde::ser::SerializeStruct;
+//                         let mut s = serializer.serialize_struct("TypeReference", 1)?;
+//                         s.serialize_field("type", "string")?;
+//                         return s.end();
+//                     }
+//                     Self::Int(_) => {
+//                         use serde::ser::SerializeStruct;
+//                         let mut s = serializer.serialize_struct("TypeReference", 1)?;
+//                         s.serialize_field("type", "int")?;
+//                         return s.end();
+//                     }
+//                     Self::Float(_) => {
+//                         use serde::ser::SerializeStruct;
+//                         let mut s = serializer.serialize_struct("TypeReference", 1)?;
+//                         s.serialize_field("type", "float")?;
+//                         return s.end();
+//                     }
+//                     Self::Bool(_) => {
+//                         use serde::ser::SerializeStruct;
+//                         let mut s = serializer.serialize_struct("TypeReference", 1)?;
+//                         s.serialize_field("type", "bool")?;
+//                         return s.end();
+//                     }
+//                     _ => {}
+//                 }
+//             }
+//         }
 
-        // Fallback to surrogate
-        let surrogate = match self {
-            Self::Unknown => TypeReferenceSurrogate::Unknown,
-            Self::String(m) => TypeReferenceSurrogate::String(m),
-            Self::Int(m) => TypeReferenceSurrogate::Int(m),
-            Self::Float(m) => TypeReferenceSurrogate::Float(m),
-            Self::Bool(m) => TypeReferenceSurrogate::Bool(m),
-            Self::Media(t, m) => TypeReferenceSurrogate::Media(t, m),
-            Self::Literal(t, m) => TypeReferenceSurrogate::Literal(t, m),
-            Self::Class { type_id, metadata } => {
-                TypeReferenceSurrogate::Class { type_id, metadata }
-            }
-            Self::Enum { type_id, metadata } => TypeReferenceSurrogate::Enum { type_id, metadata },
-            Self::RecursiveTypeAlias { type_id, metadata } => {
-                TypeReferenceSurrogate::RecursiveTypeAlias { type_id, metadata }
-            }
-            Self::List(item, metadata) => TypeReferenceSurrogate::List(item.as_ref(), metadata),
-            Self::Map {
-                key,
-                value,
-                metadata,
-            } => TypeReferenceSurrogate::Map {
-                key: key.as_ref(),
-                value: value.as_ref(),
-                metadata,
-            },
-            Self::Union {
-                union_type,
-                metadata,
-            } => TypeReferenceSurrogate::Union {
-                union_type,
-                metadata,
-            },
-            Self::Tuple { items, metadata } => TypeReferenceSurrogate::Tuple { items, metadata },
-        };
-        surrogate.serialize(serializer)
-    }
-}
+//         // Fallback to surrogate
+//         let surrogate = match self {
+//             Self::Unknown => TypeReferenceSurrogate::Unknown,
+//             Self::String(m) => TypeReferenceSurrogate::String(m),
+//             Self::Int(m) => TypeReferenceSurrogate::Int(m),
+//             Self::Float(m) => TypeReferenceSurrogate::Float(m),
+//             Self::Bool(m) => TypeReferenceSurrogate::Bool(m),
+//             Self::Media(t, m) => TypeReferenceSurrogate::Media(t, m),
+//             Self::Literal(t, m) => TypeReferenceSurrogate::Literal(t, m),
+//             Self::Class { type_id, metadata } => {
+//                 TypeReferenceSurrogate::Class { type_id, metadata }
+//             }
+//             Self::Enum { type_id, metadata } => TypeReferenceSurrogate::Enum { type_id, metadata },
+//             Self::RecursiveTypeAlias { type_id, metadata } => {
+//                 TypeReferenceSurrogate::RecursiveTypeAlias { type_id, metadata }
+//             }
+//             Self::List(item, metadata) => TypeReferenceSurrogate::List(item.as_ref(), metadata),
+//             Self::Map {
+//                 key,
+//                 value,
+//                 metadata,
+//             } => TypeReferenceSurrogate::Map {
+//                 key: key.as_ref(),
+//                 value: value.as_ref(),
+//                 metadata,
+//             },
+//             Self::Union {
+//                 union_type,
+//                 metadata,
+//             } => TypeReferenceSurrogate::Union {
+//                 union_type,
+//                 metadata,
+//             },
+//             Self::Tuple { items, metadata } => TypeReferenceSurrogate::Tuple { items, metadata },
+//         };
+//         surrogate.serialize(serializer)
+//     }
+// }
 
 impl<T: std::fmt::Display> std::fmt::Display for TypeReferenceWithMetadata<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -371,10 +371,6 @@ impl std::fmt::Display for LiteralTypeDefinition {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash, TS)]
-#[serde(bound(
-    serialize = "Metadata: Serialize + Default + PartialEq",
-    deserialize = "Metadata: Deserialize<'de> + Default"
-))]
 pub struct UnionType<Metadata> {
     pub types: Vec<TypeReferenceWithMetadata<Metadata>>,
     pub is_nullable: bool,
