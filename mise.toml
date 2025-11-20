@@ -35,7 +35,7 @@ java = "temurin-23"
 "wool:new" = "./wools/scripts/new_wool.py"
 "wool:update" = "./wools/scripts/update_wool.py"
 "wool:check" = "./wools/scripts/update_wool_readme.py --check"
-"wool:serve" = "cd wools && uv run --with mkdocs-material --with mkdocs-awesome-pages-plugin mkdocs serve"
+"wool:serve" = "cd wools && uv run --with mkdocs-material mkdocs serve"
 
 [settings]
 experimental = true
