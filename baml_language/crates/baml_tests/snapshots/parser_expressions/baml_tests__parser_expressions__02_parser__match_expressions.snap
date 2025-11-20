@@ -1,187 +1,552 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "// enum Status {
-//   PENDING
-//   ACTIVE
-//   INACTIVE
-//   SUSPENDED
-// }
-// 
-// function HandleStatus(status Status) -> string {
-//   match status {
-//     Status::PENDING => "Waiting for approval"
-//     Status::ACTIVE => "Currently active"
-//     Status::INACTIVE => "Not active"
-//     Status::SUSPENDED => "Temporarily suspended"
-//   }
-// }
-// 
-// function ComplexMatch(value int) -> string {
-//   match value {
-//     0 => "zero"
-//     1 | 2 | 3 => "small"
-//     4..10 => "medium"
-//     _ => "large"
-//   }
-// }
-// "
-  SLASH "/"
-  SLASH "/"
-  KW_ENUM "enum"
-  WORD "Status"
-  L_BRACE "{"
-  SLASH "/"
-  SLASH "/"
-  WORD "PENDING"
-  SLASH "/"
-  SLASH "/"
-  WORD "ACTIVE"
-  SLASH "/"
-  SLASH "/"
-  WORD "INACTIVE"
-  SLASH "/"
-  SLASH "/"
-  WORD "SUSPENDED"
-  SLASH "/"
-  SLASH "/"
-  R_BRACE "}"
-  SLASH "/"
-  SLASH "/"
-  SLASH "/"
-  SLASH "/"
-  KW_FUNCTION "function"
-  WORD "HandleStatus"
-  L_PAREN "("
-  WORD "status"
-  WORD "Status"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "string"
-  L_BRACE "{"
-  SLASH "/"
-  SLASH "/"
-  WORD "match"
-  WORD "status"
-  L_BRACE "{"
-  SLASH "/"
-  SLASH "/"
-  WORD "Status"
-  DOUBLE_COLON "::"
-  WORD "PENDING"
-  EQUALS "="
-  GREATER ">"
-  QUOTE """
-  WORD "Waiting"
-  KW_FOR "for"
-  WORD "approval"
-  QUOTE """
-  SLASH "/"
-  SLASH "/"
-  WORD "Status"
-  DOUBLE_COLON "::"
-  WORD "ACTIVE"
-  EQUALS "="
-  GREATER ">"
-  QUOTE """
-  WORD "Currently"
-  WORD "active"
-  QUOTE """
-  SLASH "/"
-  SLASH "/"
-  WORD "Status"
-  DOUBLE_COLON "::"
-  WORD "INACTIVE"
-  EQUALS "="
-  GREATER ">"
-  QUOTE """
-  WORD "Not"
-  WORD "active"
-  QUOTE """
-  SLASH "/"
-  SLASH "/"
-  WORD "Status"
-  DOUBLE_COLON "::"
-  WORD "SUSPENDED"
-  EQUALS "="
-  GREATER ">"
-  QUOTE """
-  WORD "Temporarily"
-  WORD "suspended"
-  QUOTE """
-  SLASH "/"
-  SLASH "/"
-  R_BRACE "}"
-  SLASH "/"
-  SLASH "/"
-  R_BRACE "}"
-  SLASH "/"
-  SLASH "/"
-  SLASH "/"
-  SLASH "/"
-  KW_FUNCTION "function"
-  WORD "ComplexMatch"
-  L_PAREN "("
-  WORD "value"
-  WORD "int"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "string"
-  L_BRACE "{"
-  SLASH "/"
-  SLASH "/"
-  WORD "match"
-  WORD "value"
-  L_BRACE "{"
-  SLASH "/"
-  SLASH "/"
-  INTEGER_LITERAL "0"
-  EQUALS "="
-  GREATER ">"
-  QUOTE """
-  WORD "zero"
-  QUOTE """
-  SLASH "/"
-  SLASH "/"
-  INTEGER_LITERAL "1"
-  PIPE "|"
-  INTEGER_LITERAL "2"
-  PIPE "|"
-  INTEGER_LITERAL "3"
-  EQUALS "="
-  GREATER ">"
-  QUOTE """
-  WORD "small"
-  QUOTE """
-  SLASH "/"
-  SLASH "/"
-  INTEGER_LITERAL "4"
-  DOT "."
-  DOT "."
-  INTEGER_LITERAL "10"
-  EQUALS "="
-  GREATER ">"
-  QUOTE """
-  WORD "medium"
-  QUOTE """
-  SLASH "/"
-  SLASH "/"
-  WORD "_"
-  EQUALS "="
-  GREATER ">"
-  QUOTE """
-  WORD "large"
-  QUOTE """
-  SLASH "/"
-  SLASH "/"
-  R_BRACE "}"
-  SLASH "/"
-  SLASH "/"
-  R_BRACE "}"
-  SLASH "/"
-  SLASH "/"
+SOURCE_FILE
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Status"
+    L_BRACE "{"
+    ENUM_VARIANT "
+  PENDING"
+      WORD "PENDING"
+    ENUM_VARIANT "
+  ACTIVE"
+      WORD "ACTIVE"
+    ENUM_VARIANT "
+  INACTIVE"
+      WORD "INACTIVE"
+    ENUM_VARIANT "
+  SUSPENDED"
+      WORD "SUSPENDED"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "HandleStatus"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "status"
+        COLON ":"
+        TYPE_EXPR " Status"
+          WORD "Status"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        WORD "match"
+        OBJECT_LITERAL
+          WORD "status"
+          L_BRACE "{"
+          OBJECT_FIELD "
+    Status"
+            WORD "Status"
+          DOUBLE_COLON "::"
+          OBJECT_FIELD "PENDING"
+            WORD "PENDING"
+          EQUALS "="
+          GREATER ">"
+          OBJECT_FIELD
+            STRING_LITERAL " "Waiting for approval""
+              QUOTE """
+              WORD "Waiting"
+              KW_FOR "for"
+              WORD "approval"
+              QUOTE """
+          COMMA ","
+          OBJECT_FIELD "
+    Status"
+            WORD "Status"
+          DOUBLE_COLON "::"
+          OBJECT_FIELD "ACTIVE"
+            WORD "ACTIVE"
+          EQUALS "="
+          GREATER ">"
+          OBJECT_FIELD
+            STRING_LITERAL " "Currently active""
+              QUOTE """
+              WORD "Currently"
+              WORD "active"
+              QUOTE """
+          COMMA ","
+          OBJECT_FIELD "
+    Status"
+            WORD "Status"
+          DOUBLE_COLON "::"
+          OBJECT_FIELD "INACTIVE"
+            WORD "INACTIVE"
+          EQUALS "="
+          GREATER ">"
+          OBJECT_FIELD
+            STRING_LITERAL " "Not active""
+              QUOTE """
+              WORD "Not"
+              WORD "active"
+              QUOTE """
+          COMMA ","
+          OBJECT_FIELD "
+    Status"
+            WORD "Status"
+          DOUBLE_COLON "::"
+          OBJECT_FIELD "SUSPENDED"
+            WORD "SUSPENDED"
+          EQUALS "="
+          GREATER ">"
+          OBJECT_FIELD
+            STRING_LITERAL " "Temporarily suspended""
+              QUOTE """
+              WORD "Temporarily"
+              WORD "suspended"
+              QUOTE """
+          COMMA ","
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ComplexMatch"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "value"
+        COLON ":"
+        TYPE_EXPR " int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        WORD "match"
+        OBJECT_LITERAL
+          WORD "value"
+          L_BRACE "{"
+          INTEGER_LITERAL "0"
+          EQUALS "="
+          GREATER ">"
+          OBJECT_FIELD
+            STRING_LITERAL " "zero""
+              QUOTE """
+              WORD "zero"
+              QUOTE """
+          COMMA ","
+          INTEGER_LITERAL "1"
+          PIPE "|"
+          INTEGER_LITERAL "2"
+          PIPE "|"
+          INTEGER_LITERAL "3"
+          EQUALS "="
+          GREATER ">"
+          OBJECT_FIELD
+            STRING_LITERAL " "small""
+              QUOTE """
+              WORD "small"
+              QUOTE """
+          COMMA ","
+          INTEGER_LITERAL "4"
+          DOT "."
+          DOT "."
+          INTEGER_LITERAL "10"
+          EQUALS "="
+          GREATER ">"
+          OBJECT_FIELD
+            STRING_LITERAL " "medium""
+              QUOTE """
+              WORD "medium"
+              QUOTE """
+          COMMA ","
+          OBJECT_FIELD "
+    _"
+            WORD "_"
+          EQUALS "="
+          GREATER ">"
+          OBJECT_FIELD
+            STRING_LITERAL " "large""
+              QUOTE """
+              WORD "large"
+              QUOTE """
+          COMMA ","
+          R_BRACE "}"
+        R_BRACE "}"
 
 === ERRORS ===
-None
+Error: Expected Colon, found DoubleColon
+    ╭─[ 0:10:11 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
+
+Error: Expected ',' or '}' after object field, found DoubleColon
+    ╭─[ 0:10:11 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field, found DoubleColon
+────╯
+
+Error: Expected Colon, found Equals
+    ╭─[ 0:10:21 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │                     ┬  
+    │                     ╰── Expected Colon, found Equals
+────╯
+
+Error: Expected ',' or '}' after object field, found Equals
+    ╭─[ 0:10:21 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │                     ┬  
+    │                     ╰── Expected ',' or '}' after object field, found Equals
+────╯
+
+Error: Expected field name or '}', found Greater
+    ╭─[ 0:10:22 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │                      ┬  
+    │                      ╰── Expected field name or '}', found Greater
+────╯
+
+Error: Expected Colon, found Comma
+    ╭─[ 0:10:46 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │                                              ┬  
+    │                                              ╰── Expected Colon, found Comma
+────╯
+
+Error: Expected Colon, found DoubleColon
+    ╭─[ 0:11:11 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
+
+Error: Expected ',' or '}' after object field, found DoubleColon
+    ╭─[ 0:11:11 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field, found DoubleColon
+────╯
+
+Error: Expected Colon, found Equals
+    ╭─[ 0:11:20 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │                    ┬  
+    │                    ╰── Expected Colon, found Equals
+────╯
+
+Error: Expected ',' or '}' after object field, found Equals
+    ╭─[ 0:11:20 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │                    ┬  
+    │                    ╰── Expected ',' or '}' after object field, found Equals
+────╯
+
+Error: Expected field name or '}', found Greater
+    ╭─[ 0:11:21 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │                     ┬  
+    │                     ╰── Expected field name or '}', found Greater
+────╯
+
+Error: Expected Colon, found Comma
+    ╭─[ 0:11:41 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │                                         ┬  
+    │                                         ╰── Expected Colon, found Comma
+────╯
+
+Error: Expected Colon, found DoubleColon
+    ╭─[ 0:12:11 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
+
+Error: Expected ',' or '}' after object field, found DoubleColon
+    ╭─[ 0:12:11 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field, found DoubleColon
+────╯
+
+Error: Expected Colon, found Equals
+    ╭─[ 0:12:22 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │                      ┬  
+    │                      ╰── Expected Colon, found Equals
+────╯
+
+Error: Expected ',' or '}' after object field, found Equals
+    ╭─[ 0:12:22 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │                      ┬  
+    │                      ╰── Expected ',' or '}' after object field, found Equals
+────╯
+
+Error: Expected field name or '}', found Greater
+    ╭─[ 0:12:23 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │                       ┬  
+    │                       ╰── Expected field name or '}', found Greater
+────╯
+
+Error: Expected Colon, found Comma
+    ╭─[ 0:12:37 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │                                     ┬  
+    │                                     ╰── Expected Colon, found Comma
+────╯
+
+Error: Expected Colon, found DoubleColon
+    ╭─[ 0:13:11 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
+
+Error: Expected ',' or '}' after object field, found DoubleColon
+    ╭─[ 0:13:11 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field, found DoubleColon
+────╯
+
+Error: Expected Colon, found Equals
+    ╭─[ 0:13:23 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │                       ┬  
+    │                       ╰── Expected Colon, found Equals
+────╯
+
+Error: Expected ',' or '}' after object field, found Equals
+    ╭─[ 0:13:23 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │                       ┬  
+    │                       ╰── Expected ',' or '}' after object field, found Equals
+────╯
+
+Error: Expected field name or '}', found Greater
+    ╭─[ 0:13:24 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │                        ┬  
+    │                        ╰── Expected field name or '}', found Greater
+────╯
+
+Error: Expected Colon, found Comma
+    ╭─[ 0:13:49 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │                                                 ┬  
+    │                                                 ╰── Expected Colon, found Comma
+────╯
+
+Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 0:19:5 ]
+    │
+ 19 │     0 => "zero",
+    │     ┬  
+    │     ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+Error: Expected field name or '}', found Equals
+    ╭─[ 0:19:7 ]
+    │
+ 19 │     0 => "zero",
+    │       ┬  
+    │       ╰── Expected field name or '}', found Equals
+────╯
+
+Error: Expected field name or '}', found Greater
+    ╭─[ 0:19:8 ]
+    │
+ 19 │     0 => "zero",
+    │        ┬  
+    │        ╰── Expected field name or '}', found Greater
+────╯
+
+Error: Expected Colon, found Comma
+    ╭─[ 0:19:16 ]
+    │
+ 19 │     0 => "zero",
+    │                ┬  
+    │                ╰── Expected Colon, found Comma
+────╯
+
+Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 0:20:5 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │     ┬  
+    │     ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+Error: Expected field name or '}', found Pipe
+    ╭─[ 0:20:7 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │       ┬  
+    │       ╰── Expected field name or '}', found Pipe
+────╯
+
+Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 0:20:9 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │         ┬  
+    │         ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+Error: Expected field name or '}', found Pipe
+    ╭─[ 0:20:11 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │           ┬  
+    │           ╰── Expected field name or '}', found Pipe
+────╯
+
+Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 0:20:13 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │             ┬  
+    │             ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+Error: Expected field name or '}', found Equals
+    ╭─[ 0:20:15 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │               ┬  
+    │               ╰── Expected field name or '}', found Equals
+────╯
+
+Error: Expected field name or '}', found Greater
+    ╭─[ 0:20:16 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │                ┬  
+    │                ╰── Expected field name or '}', found Greater
+────╯
+
+Error: Expected Colon, found Comma
+    ╭─[ 0:20:25 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │                         ┬  
+    │                         ╰── Expected Colon, found Comma
+────╯
+
+Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 0:21:5 ]
+    │
+ 21 │     4..10 => "medium",
+    │     ┬  
+    │     ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+Error: Expected field name or '}', found Dot
+    ╭─[ 0:21:6 ]
+    │
+ 21 │     4..10 => "medium",
+    │      ┬  
+    │      ╰── Expected field name or '}', found Dot
+────╯
+
+Error: Expected field name or '}', found Dot
+    ╭─[ 0:21:7 ]
+    │
+ 21 │     4..10 => "medium",
+    │       ┬  
+    │       ╰── Expected field name or '}', found Dot
+────╯
+
+Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 0:21:8 ]
+    │
+ 21 │     4..10 => "medium",
+    │        ─┬  
+    │         ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+Error: Expected field name or '}', found Equals
+    ╭─[ 0:21:11 ]
+    │
+ 21 │     4..10 => "medium",
+    │           ┬  
+    │           ╰── Expected field name or '}', found Equals
+────╯
+
+Error: Expected field name or '}', found Greater
+    ╭─[ 0:21:12 ]
+    │
+ 21 │     4..10 => "medium",
+    │            ┬  
+    │            ╰── Expected field name or '}', found Greater
+────╯
+
+Error: Expected Colon, found Comma
+    ╭─[ 0:21:22 ]
+    │
+ 21 │     4..10 => "medium",
+    │                      ┬  
+    │                      ╰── Expected Colon, found Comma
+────╯
+
+Error: Expected Colon, found Equals
+    ╭─[ 0:22:7 ]
+    │
+ 22 │     _ => "large",
+    │       ┬  
+    │       ╰── Expected Colon, found Equals
+────╯
+
+Error: Expected ',' or '}' after object field, found Equals
+    ╭─[ 0:22:7 ]
+    │
+ 22 │     _ => "large",
+    │       ┬  
+    │       ╰── Expected ',' or '}' after object field, found Equals
+────╯
+
+Error: Expected field name or '}', found Greater
+    ╭─[ 0:22:8 ]
+    │
+ 22 │     _ => "large",
+    │        ┬  
+    │        ╰── Expected field name or '}', found Greater
+────╯
+
+Error: Expected Colon, found Comma
+    ╭─[ 0:22:17 ]
+    │
+ 22 │     _ => "large",
+    │                 ┬  
+    │                 ╰── Expected Colon, found Comma
+────╯

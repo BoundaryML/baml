@@ -1,6 +1,380 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [parse] Error: Expected Colon, found DoubleColon
+    ╭─[ 4:10:11 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
+
+  [parse] Error: Expected ',' or '}' after object field, found DoubleColon
+    ╭─[ 4:10:11 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field, found DoubleColon
+────╯
+
+  [parse] Error: Expected Colon, found Equals
+    ╭─[ 4:10:21 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │                     ┬  
+    │                     ╰── Expected Colon, found Equals
+────╯
+
+  [parse] Error: Expected ',' or '}' after object field, found Equals
+    ╭─[ 4:10:21 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │                     ┬  
+    │                     ╰── Expected ',' or '}' after object field, found Equals
+────╯
+
+  [parse] Error: Expected field name or '}', found Greater
+    ╭─[ 4:10:22 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │                      ┬  
+    │                      ╰── Expected field name or '}', found Greater
+────╯
+
+  [parse] Error: Expected Colon, found Comma
+    ╭─[ 4:10:46 ]
+    │
+ 10 │     Status::PENDING => "Waiting for approval",
+    │                                              ┬  
+    │                                              ╰── Expected Colon, found Comma
+────╯
+
+  [parse] Error: Expected Colon, found DoubleColon
+    ╭─[ 4:11:11 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
+
+  [parse] Error: Expected ',' or '}' after object field, found DoubleColon
+    ╭─[ 4:11:11 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field, found DoubleColon
+────╯
+
+  [parse] Error: Expected Colon, found Equals
+    ╭─[ 4:11:20 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │                    ┬  
+    │                    ╰── Expected Colon, found Equals
+────╯
+
+  [parse] Error: Expected ',' or '}' after object field, found Equals
+    ╭─[ 4:11:20 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │                    ┬  
+    │                    ╰── Expected ',' or '}' after object field, found Equals
+────╯
+
+  [parse] Error: Expected field name or '}', found Greater
+    ╭─[ 4:11:21 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │                     ┬  
+    │                     ╰── Expected field name or '}', found Greater
+────╯
+
+  [parse] Error: Expected Colon, found Comma
+    ╭─[ 4:11:41 ]
+    │
+ 11 │     Status::ACTIVE => "Currently active",
+    │                                         ┬  
+    │                                         ╰── Expected Colon, found Comma
+────╯
+
+  [parse] Error: Expected Colon, found DoubleColon
+    ╭─[ 4:12:11 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
+
+  [parse] Error: Expected ',' or '}' after object field, found DoubleColon
+    ╭─[ 4:12:11 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field, found DoubleColon
+────╯
+
+  [parse] Error: Expected Colon, found Equals
+    ╭─[ 4:12:22 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │                      ┬  
+    │                      ╰── Expected Colon, found Equals
+────╯
+
+  [parse] Error: Expected ',' or '}' after object field, found Equals
+    ╭─[ 4:12:22 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │                      ┬  
+    │                      ╰── Expected ',' or '}' after object field, found Equals
+────╯
+
+  [parse] Error: Expected field name or '}', found Greater
+    ╭─[ 4:12:23 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │                       ┬  
+    │                       ╰── Expected field name or '}', found Greater
+────╯
+
+  [parse] Error: Expected Colon, found Comma
+    ╭─[ 4:12:37 ]
+    │
+ 12 │     Status::INACTIVE => "Not active",
+    │                                     ┬  
+    │                                     ╰── Expected Colon, found Comma
+────╯
+
+  [parse] Error: Expected Colon, found DoubleColon
+    ╭─[ 4:13:11 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │           ─┬  
+    │            ╰── Expected Colon, found DoubleColon
+────╯
+
+  [parse] Error: Expected ',' or '}' after object field, found DoubleColon
+    ╭─[ 4:13:11 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │           ─┬  
+    │            ╰── Expected ',' or '}' after object field, found DoubleColon
+────╯
+
+  [parse] Error: Expected Colon, found Equals
+    ╭─[ 4:13:23 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │                       ┬  
+    │                       ╰── Expected Colon, found Equals
+────╯
+
+  [parse] Error: Expected ',' or '}' after object field, found Equals
+    ╭─[ 4:13:23 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │                       ┬  
+    │                       ╰── Expected ',' or '}' after object field, found Equals
+────╯
+
+  [parse] Error: Expected field name or '}', found Greater
+    ╭─[ 4:13:24 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │                        ┬  
+    │                        ╰── Expected field name or '}', found Greater
+────╯
+
+  [parse] Error: Expected Colon, found Comma
+    ╭─[ 4:13:49 ]
+    │
+ 13 │     Status::SUSPENDED => "Temporarily suspended",
+    │                                                 ┬  
+    │                                                 ╰── Expected Colon, found Comma
+────╯
+
+  [parse] Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 4:19:5 ]
+    │
+ 19 │     0 => "zero",
+    │     ┬  
+    │     ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+  [parse] Error: Expected field name or '}', found Equals
+    ╭─[ 4:19:7 ]
+    │
+ 19 │     0 => "zero",
+    │       ┬  
+    │       ╰── Expected field name or '}', found Equals
+────╯
+
+  [parse] Error: Expected field name or '}', found Greater
+    ╭─[ 4:19:8 ]
+    │
+ 19 │     0 => "zero",
+    │        ┬  
+    │        ╰── Expected field name or '}', found Greater
+────╯
+
+  [parse] Error: Expected Colon, found Comma
+    ╭─[ 4:19:16 ]
+    │
+ 19 │     0 => "zero",
+    │                ┬  
+    │                ╰── Expected Colon, found Comma
+────╯
+
+  [parse] Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 4:20:5 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │     ┬  
+    │     ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+  [parse] Error: Expected field name or '}', found Pipe
+    ╭─[ 4:20:7 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │       ┬  
+    │       ╰── Expected field name or '}', found Pipe
+────╯
+
+  [parse] Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 4:20:9 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │         ┬  
+    │         ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+  [parse] Error: Expected field name or '}', found Pipe
+    ╭─[ 4:20:11 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │           ┬  
+    │           ╰── Expected field name or '}', found Pipe
+────╯
+
+  [parse] Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 4:20:13 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │             ┬  
+    │             ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+  [parse] Error: Expected field name or '}', found Equals
+    ╭─[ 4:20:15 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │               ┬  
+    │               ╰── Expected field name or '}', found Equals
+────╯
+
+  [parse] Error: Expected field name or '}', found Greater
+    ╭─[ 4:20:16 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │                ┬  
+    │                ╰── Expected field name or '}', found Greater
+────╯
+
+  [parse] Error: Expected Colon, found Comma
+    ╭─[ 4:20:25 ]
+    │
+ 20 │     1 | 2 | 3 => "small",
+    │                         ┬  
+    │                         ╰── Expected Colon, found Comma
+────╯
+
+  [parse] Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 4:21:5 ]
+    │
+ 21 │     4..10 => "medium",
+    │     ┬  
+    │     ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+  [parse] Error: Expected field name or '}', found Dot
+    ╭─[ 4:21:6 ]
+    │
+ 21 │     4..10 => "medium",
+    │      ┬  
+    │      ╰── Expected field name or '}', found Dot
+────╯
+
+  [parse] Error: Expected field name or '}', found Dot
+    ╭─[ 4:21:7 ]
+    │
+ 21 │     4..10 => "medium",
+    │       ┬  
+    │       ╰── Expected field name or '}', found Dot
+────╯
+
+  [parse] Error: Expected field name or '}', found IntegerLiteral
+    ╭─[ 4:21:8 ]
+    │
+ 21 │     4..10 => "medium",
+    │        ─┬  
+    │         ╰── Expected field name or '}', found IntegerLiteral
+────╯
+
+  [parse] Error: Expected field name or '}', found Equals
+    ╭─[ 4:21:11 ]
+    │
+ 21 │     4..10 => "medium",
+    │           ┬  
+    │           ╰── Expected field name or '}', found Equals
+────╯
+
+  [parse] Error: Expected field name or '}', found Greater
+    ╭─[ 4:21:12 ]
+    │
+ 21 │     4..10 => "medium",
+    │            ┬  
+    │            ╰── Expected field name or '}', found Greater
+────╯
+
+  [parse] Error: Expected Colon, found Comma
+    ╭─[ 4:21:22 ]
+    │
+ 21 │     4..10 => "medium",
+    │                      ┬  
+    │                      ╰── Expected Colon, found Comma
+────╯
+
+  [parse] Error: Expected Colon, found Equals
+    ╭─[ 4:22:7 ]
+    │
+ 22 │     _ => "large",
+    │       ┬  
+    │       ╰── Expected Colon, found Equals
+────╯
+
+  [parse] Error: Expected ',' or '}' after object field, found Equals
+    ╭─[ 4:22:7 ]
+    │
+ 22 │     _ => "large",
+    │       ┬  
+    │       ╰── Expected ',' or '}' after object field, found Equals
+────╯
+
+  [parse] Error: Expected field name or '}', found Greater
+    ╭─[ 4:22:8 ]
+    │
+ 22 │     _ => "large",
+    │        ┬  
+    │        ╰── Expected field name or '}', found Greater
+────╯
+
+  [parse] Error: Expected Colon, found Comma
+    ╭─[ 4:22:17 ]
+    │
+ 22 │     _ => "large",
+    │                 ┬  
+    │                 ╰── Expected Colon, found Comma
+────╯
