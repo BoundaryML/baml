@@ -638,7 +638,8 @@ impl TracePublisher {
     /// This method:
     ///   1. Converts events to RPC format with blob extraction.
     ///   2. Serializes the events into JSON.
-    ///   3. Uploads the JSON to S3 via presigned URL.
+    ///   3. Checks the payload size against a configurable limit.
+    ///   4. Uploads the JSON to S3 via presigned URL.
     async fn process_batch_impl(&self, batch: Vec<Arc<TraceEventWithMeta>>) -> Result<()> {
         // log::info!("Processing {:#?}", batch);
         // Assemble the upload request structure.
@@ -656,7 +657,31 @@ impl TracePublisher {
         //     batch_size = batch.len()
         // );
 
-        // Serialize to JSON - optionally write to file for testing
+        // Serialize to bytes once and check size
+        let payload_bytes = serde_json::to_vec(&trace_event_batch)
+            .context("Failed to serialize trace event batch")?;
+
+        // Check size limit
+        let max_upload_mb = self
+            .lookup
+            .ast
+            .env_var("BAML_MAX_TRACE_UPLOAD_MB")
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(10);
+
+        let size_mb = payload_bytes.len() as f64 / 1_048_576.0;
+
+        if size_mb > max_upload_mb as f64 {
+            baml_log::warn!(
+                "Skipping Boundary trace batch upload: payload size {:.2} MB exceeds limit of {} MB ({} events).",
+                size_mb,
+                max_upload_mb,
+                batch.len()
+            );
+            return Ok(());
+        }
+
+        // Optionally write to file for testing
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Ok(trace_file_path) = std::env::var("BAML_TRACE_FILE") {
@@ -700,7 +725,8 @@ impl TracePublisher {
         self.lookup
             .client
             .put(upload_url_details.upload_url)
-            .json(&trace_event_batch)
+            .header("Content-Type", "application/json")
+            .body(payload_bytes)
             .headers(
                 upload_url_details
                     .upload_metadata
@@ -717,7 +743,11 @@ impl TracePublisher {
             .await
             .context("Failed to upload trace events to S3")?;
 
-        log::debug!("Successfully uploaded batch of {} events", batch.len());
+        log::debug!(
+            "Successfully uploaded batch of {} events ({:.2} MB)",
+            batch.len(),
+            size_mb
+        );
         Ok(())
     }
 }
