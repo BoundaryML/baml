@@ -1,12 +1,13 @@
 //! Path representation for name resolution.
 //!
 //! Paths allow referencing items across module boundaries (future feature).
-//! Today: All paths are single-segment (e.g., "User")
-//! Future: Multi-segment paths (e.g., "`users::User`")
+//! Today: Most paths are single-segment (e.g., "User") and refer to user-defined
+//! items in the current project. There are also some paths that begin with the
+//! "baml" segment, a builtin pseudomodule.
 
 use baml_base::Name;
 
-/// A path to an item (`foo::bar::Baz`).
+/// A path to an item (`foo.bar.Baz`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Path {
     /// Path segments (`["foo", "bar", "Baz"]`).
@@ -17,21 +18,13 @@ pub struct Path {
 }
 
 /// The kind of path resolution.
+///
+/// Only one variant today. Maybe in the future we support absolute paths.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PathKind {
-    /// Relative path (`foo::bar`).
+    /// Relative path (`foo.bar`).
     /// Resolved relative to current scope.
     Plain,
-
-    /// Absolute path (`::foo::bar`) (future feature).
-    /// Resolved from project root.
-    #[allow(dead_code)]
-    Absolute,
-
-    /// Super path (`super::foo`) (future feature).
-    /// Resolved relative to parent module.
-    #[allow(dead_code)]
-    Super { count: u32 },
 }
 
 impl Path {
@@ -44,7 +37,6 @@ impl Path {
     }
 
     /// Create a multi-segment path (future feature).
-    #[allow(dead_code)]
     pub fn new(segments: Vec<Name>) -> Self {
         Path {
             segments,
