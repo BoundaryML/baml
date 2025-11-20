@@ -255,170 +255,228 @@ pub struct LLMUsage {
     pub cached_input_tokens: Option<u64>,
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::fs;
-//     use std::path::Path;
+#[cfg(test)]
+mod tests {
+    use std::{fs, path::Path};
 
-//     #[test]
-//     fn test_deserialize_trace_events_debug_json() {
-//         // Make sure the file exists
-//         let path = Path::new(
-//             "/Users/aaronvillalpando/Projects/baml/integ-tests/python/trace_events_debug_vaibhav.json",
-//         );
-//         assert!(path.exists(), "Test data file does not exist: {:?}", path);
+    use super::*;
 
-//         // Read the file contents
-//         let contents = fs::read_to_string(path).expect("Failed to read trace_events_debug.json");
+    #[test]
+    fn test_deserialize_trace_events_debug_json() {
+        // Make sure the file exists
+        let path = Path::new(
+            "/Users/aaronvillalpando/Projects/baml/integ-tests/python/trace_events_debug_vaibhav.json",
+        );
+        assert!(path.exists(), "Test data file does not exist: {:?}", path);
 
-//         // Deserialize each line as a separate BackendTraceEvent (NDJSON format)
-//         let mut events = Vec::new();
-//         let mut original_lines = Vec::new();
-//         for (line_num, line) in contents.lines().enumerate() {
-//             if line.trim().is_empty() {
-//                 continue;
-//             }
+        // Read the file contents
+        let contents = fs::read_to_string(path).expect("Failed to read trace_events_debug.json");
 
-//             original_lines.push(line);
-//             let event: BackendTraceEvent = serde_json::from_str(line).unwrap_or_else(|e| {
-//                 panic!(
-//                     "Failed to deserialize line {}: {:?}\nLine content: {}",
-//                     line_num + 1,
-//                     e,
-//                     line
-//                 )
-//             });
-//             events.push(event);
-//         }
+        // Deserialize each line as a separate BackendTraceEvent (NDJSON format)
+        let mut events = Vec::new();
+        let mut original_lines = Vec::new();
+        for (line_num, line) in contents.lines().enumerate() {
+            if line.trim().is_empty() {
+                continue;
+            }
 
-//         assert!(
-//             !events.is_empty(),
-//             "Deserialized events should not be empty"
-//         );
+            original_lines.push(line);
+            let event: BackendTraceEvent = serde_json::from_str(line).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to deserialize line {}: {:?}\nLine content: {}",
+                    line_num + 1,
+                    e,
+                    line
+                )
+            });
+            events.push(event);
+        }
 
-//         // Serialize events back to JSON and compare with original
-//         for (idx, event) in events.iter().enumerate() {
-//             let serialized = serde_json::to_string(&event).unwrap_or_else(|e| {
-//                 panic!("Failed to serialize event {}: {:?}", idx, e)
-//             });
+        assert!(
+            !events.is_empty(),
+            "Deserialized events should not be empty"
+        );
 
-//             // Parse both as serde_json::Value for normalization (handles field order differences)
-//             let original_value: serde_json::Value = serde_json::from_str(original_lines[idx])
-//                 .unwrap_or_else(|e| {
-//                     panic!("Failed to parse original line {} as JSON: {:?}", idx, e)
-//                 });
-//             let serialized_value: serde_json::Value = serde_json::from_str(&serialized)
-//                 .unwrap_or_else(|e| {
-//                     panic!("Failed to parse serialized line {} as JSON: {:?}", idx, e)
-//                 });
+        // Serialize events back to JSON and compare with original
+        for (idx, event) in events.iter().enumerate() {
+            let serialized = serde_json::to_string(&event)
+                .unwrap_or_else(|e| panic!("Failed to serialize event {}: {:?}", idx, e));
 
-//             assert_eq!(
-//                 original_value, serialized_value,
-//                 "Serialized event {} does not match original.\nOriginal: {}\nSerialized: {}",
-//                 idx, original_lines[idx], serialized
-//             );
-//         }
-//     }
+            // Parse both as serde_json::Value for normalization (handles field order differences)
+            let original_value: serde_json::Value = serde_json::from_str(original_lines[idx])
+                .unwrap_or_else(|e| {
+                    panic!("Failed to parse original line {} as JSON: {:?}", idx, e)
+                });
+            let serialized_value: serde_json::Value = serde_json::from_str(&serialized)
+                .unwrap_or_else(|e| {
+                    panic!("Failed to parse serialized line {} as JSON: {:?}", idx, e)
+                });
 
-//     #[test]
-//     fn test_roundtrip_serialize_deserialize() {
-//         // Read from original file
-//         let original_path = Path::new(
-//             "/Users/aaronvillalpando/Projects/baml/integ-tests/python/trace_events_debug_213.json",
-//         );
-//         assert!(
-//             original_path.exists(),
-//             "Test data file does not exist: {:?}",
-//             original_path
-//         );
+            assert_eq!(
+                original_value, serialized_value,
+                "Serialized event {} does not match original.\nOriginal: {}\nSerialized: {}",
+                idx, original_lines[idx], serialized
+            );
+        }
+    }
 
-//         let contents =
-//             fs::read_to_string(original_path).expect("Failed to read trace_events_debug_213.json");
+    #[test]
+    fn test_roundtrip_serialize_deserialize() {
+        // Read from original file
+        let original_path = Path::new(
+            "/Users/aaronvillalpando/Projects/baml/integ-tests/python/trace_events_debug_213.json",
+        );
+        assert!(
+            original_path.exists(),
+            "Test data file does not exist: {:?}",
+            original_path
+        );
 
-//         // Deserialize from original file
-//         let mut original_events = Vec::new();
-//         for (line_num, line) in contents.lines().enumerate() {
-//             if line.trim().is_empty() {
-//                 continue;
-//             }
+        let contents =
+            fs::read_to_string(original_path).expect("Failed to read trace_events_debug_213.json");
 
-//             let event: BackendTraceEvent = serde_json::from_str(line).unwrap_or_else(|e| {
-//                 panic!(
-//                     "Failed to deserialize line {}: {:?}\nLine content: {}",
-//                     line_num + 1,
-//                     e,
-//                     line
-//                 )
-//             });
-//             original_events.push(event);
-//         }
+        // Deserialize from original file
+        let mut original_events = Vec::new();
+        for (line_num, line) in contents.lines().enumerate() {
+            if line.trim().is_empty() {
+                continue;
+            }
 
-//         assert!(
-//             !original_events.is_empty(),
-//             "Deserialized events should not be empty"
-//         );
+            let event: BackendTraceEvent = serde_json::from_str(line).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to deserialize line {}: {:?}\nLine content: {}",
+                    line_num + 1,
+                    e,
+                    line
+                )
+            });
+            original_events.push(event);
+        }
 
-//         // Serialize to a new file
-//         let temp_path = Path::new(
-//             "/Users/aaronvillalpando/Projects/baml/integ-tests/python/trace_events_debug_213_roundtrip.json",
-//         );
-//         let mut serialized_content = String::new();
-//         for event in &original_events {
-//             let line = serde_json::to_string(&event)
-//                 .expect("Failed to serialize event");
-//             serialized_content.push_str(&line);
-//             serialized_content.push('\n');
-//         }
-//         fs::write(temp_path, &serialized_content).expect("Failed to write serialized file");
+        assert!(
+            !original_events.is_empty(),
+            "Deserialized events should not be empty"
+        );
 
-//         // Deserialize from the new file
-//         let roundtrip_contents =
-//             fs::read_to_string(temp_path).expect("Failed to read roundtrip file");
-//         let mut roundtrip_events = Vec::new();
-//         for (line_num, line) in roundtrip_contents.lines().enumerate() {
-//             if line.trim().is_empty() {
-//                 continue;
-//             }
+        // Serialize to a new file
+        let temp_path = Path::new(
+            "/Users/aaronvillalpando/Projects/baml/integ-tests/python/trace_events_debug_213_roundtrip.json",
+        );
+        let mut serialized_content = String::new();
+        for event in &original_events {
+            let line = serde_json::to_string(&event).expect("Failed to serialize event");
+            serialized_content.push_str(&line);
+            serialized_content.push('\n');
+        }
+        fs::write(temp_path, &serialized_content).expect("Failed to write serialized file");
 
-//             let event: BackendTraceEvent = serde_json::from_str(line).unwrap_or_else(|e| {
-//                 panic!(
-//                     "Failed to deserialize roundtrip line {}: {:?}\nLine content: {}",
-//                     line_num + 1,
-//                     e,
-//                     line
-//                 )
-//             });
-//             roundtrip_events.push(event);
-//         }
+        // Deserialize from the new file
+        let roundtrip_contents =
+            fs::read_to_string(temp_path).expect("Failed to read roundtrip file");
+        let mut roundtrip_events = Vec::new();
+        for (line_num, line) in roundtrip_contents.lines().enumerate() {
+            if line.trim().is_empty() {
+                continue;
+            }
 
-//         // Clean up temp file
-//         fs::remove_file(temp_path).ok();
+            let event: BackendTraceEvent = serde_json::from_str(line).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to deserialize roundtrip line {}: {:?}\nLine content: {}",
+                    line_num + 1,
+                    e,
+                    line
+                )
+            });
+            roundtrip_events.push(event);
+        }
 
-//         // Compare original and roundtrip events
-//         assert_eq!(
-//             original_events.len(),
-//             roundtrip_events.len(),
-//             "Number of events should match"
-//         );
+        // Clean up temp file
+        fs::remove_file(temp_path).ok();
 
-//         for (idx, (original, roundtrip)) in original_events
-//             .iter()
-//             .zip(roundtrip_events.iter())
-//             .enumerate()
-//         {
-//             let original_json = serde_json::to_value(original)
-//                 .unwrap_or_else(|e| panic!("Failed to convert original event {} to JSON: {:?}", idx, e));
-//             let roundtrip_json = serde_json::to_value(roundtrip)
-//                 .unwrap_or_else(|e| panic!("Failed to convert roundtrip event {} to JSON: {:?}", idx, e));
+        // Compare original and roundtrip events
+        assert_eq!(
+            original_events.len(),
+            roundtrip_events.len(),
+            "Number of events should match"
+        );
 
-//             assert_eq!(
-//                 original_json, roundtrip_json,
-//                 "Event {} does not match after roundtrip.\nOriginal: {}\nRoundtrip: {}",
-//                 idx,
-//                 serde_json::to_string_pretty(&original_json).unwrap(),
-//                 serde_json::to_string_pretty(&roundtrip_json).unwrap()
-//             );
-//         }
-//     }
-// }
+        for (idx, (original, roundtrip)) in original_events
+            .iter()
+            .zip(roundtrip_events.iter())
+            .enumerate()
+        {
+            let original_json = serde_json::to_value(original).unwrap_or_else(|e| {
+                panic!("Failed to convert original event {} to JSON: {:?}", idx, e)
+            });
+            let roundtrip_json = serde_json::to_value(roundtrip).unwrap_or_else(|e| {
+                panic!("Failed to convert roundtrip event {} to JSON: {:?}", idx, e)
+            });
+
+            assert_eq!(
+                original_json,
+                roundtrip_json,
+                "Event {} does not match after roundtrip.\nOriginal: {}\nRoundtrip: {}",
+                idx,
+                serde_json::to_string_pretty(&original_json).unwrap(),
+                serde_json::to_string_pretty(&roundtrip_json).unwrap()
+            );
+        }
+    }
+
+    // #[test]
+    // fn test_serialize_trace_event_batch_to_newfile_and_gz() {
+    //     use std::fs;
+    //     use std::io::Write;
+    //     use std::time::Instant;
+
+    //     // You'll want to change these paths for your own testing/environment.
+    //     let orig_path =
+    //         "/Users/aaronvillalpando/Downloads/tracebatch_01kab00gkeeky8qfssrp43b0w5.json";
+    //     let new_path =
+    //         "/Users/aaronvillalpando/Downloads/newfile-tracebatch_01kab00gkeeky8qfssrp43b0w5.json";
+    //     let gz_path =
+    //         "/Users/aaronvillalpando/Downloads/newfile-tracebatch_01kab00gkeeky8qfssrp43b0w5.json.gz";
+
+    //     // Read source .json
+    //     let file_contents =
+    //         fs::read_to_string(orig_path).expect("Failed to read original tracebatch json file");
+
+    //     // Parse as TraceEventBatch
+    //     let batch: TraceEventBatch = serde_json::from_str(&file_contents)
+    //         .expect("Failed to parse TraceEventBatch from json");
+
+    //     // Serialize back to json
+    //     let json_str =
+    //         serde_json::to_string(&batch).expect("Failed to serialize TraceEventBatch to json");
+
+    //     // Write to new file in same dir, with newfile-<orig_filename>
+    //     fs::write(new_path, &json_str).expect("Failed to write new tracebatch json file");
+
+    //     // Optionally, assert the file exists and is not empty
+    //     let metadata = fs::metadata(new_path).expect("New file should exist");
+    //     assert!(metadata.len() > 0, "New file is empty");
+
+    //     // Now write a gzipped version and time it
+    //     let start = Instant::now();
+
+    //     let gz_file = fs::File::create(gz_path).expect("Failed to create gz output file");
+    //     let mut encoder = flate2::write::GzEncoder::new(gz_file, flate2::Compression::default());
+    //     encoder
+    //         .write_all(json_str.as_bytes())
+    //         .expect("Failed to write gzipped json");
+    //     encoder
+    //         .finish()
+    //         .expect("Failed to finish writing gzipped json");
+
+    //     let duration = start.elapsed();
+    //     let gz_metadata = fs::metadata(gz_path).expect("Gzipped file should exist");
+
+    //     assert!(gz_metadata.len() > 0, "Gzipped file is empty");
+    //     println!(
+    //         "Gzipped JSON tracebatch written to {} in {:?} ({} bytes)",
+    //         gz_path,
+    //         duration,
+    //         gz_metadata.len()
+    //     );
+    // }
+}

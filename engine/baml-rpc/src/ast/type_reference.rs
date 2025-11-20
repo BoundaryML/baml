@@ -54,6 +54,7 @@ impl std::fmt::Display for TypeMetadata {
 /// FieldType represents the type of either a class field or a function arg.
 /// THIS IS ONLY FOR NON_STREAMING TYPES.
 #[derive(Debug, PartialEq, Eq, Hash, TS)]
+#[ts(export, tag = "type", content = "data", rename_all = "snake_case")]
 pub enum TypeReferenceWithMetadata<Metadata> {
     // Unknown type
     Unknown, // Not supported
@@ -160,18 +161,13 @@ where
         // so that the standard deserialization logic (via TypeReferenceWithMetadataDef) works.
         let mut v: serde_json::Value = Deserialize::deserialize(deserializer)?;
         if let Some(obj) = v.as_object_mut() {
-            if let Some(type_str) = obj.get("type").and_then(|t| t.as_str()) {
-                match type_str {
-                    "string" | "int" | "float" | "bool" => {
-                        if !obj.contains_key("data") {
-                            obj.insert("data".to_string(), serde_json::json!({}));
-                        }
-                    }
-                    _ => {}
+            if let Some("string" | "int" | "float" | "bool") = obj.get("type").and_then(|t| t.as_str()) {
+                if !obj.contains_key("data") {
+                    obj.insert("data".to_string(), serde_json::json!({}));
                 }
             }
         }
-        TypeReferenceWithMetadataDef::deserialize(v).map_err(|e| serde::de::Error::custom(e))
+        TypeReferenceWithMetadataDef::deserialize(v).map_err(serde::de::Error::custom)
     }
 }
 

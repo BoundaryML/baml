@@ -4,6 +4,7 @@ use std::{
     borrow::Cow,
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    io::Write,
     sync::Arc,
 };
 
@@ -23,6 +24,7 @@ use baml_types::{
     tracing::events::{TraceData, TraceEvent},
     BamlValueWithMeta, HasType, TypeIR,
 };
+use flate2::{write::GzEncoder, Compression};
 use futures::StreamExt;
 use http::{HeaderMap, HeaderName, HeaderValue};
 use once_cell::sync::OnceCell;
@@ -657,11 +659,45 @@ impl TracePublisher {
         //     batch_size = batch.len()
         // );
 
-        // Serialize to bytes once and check size
+        // Serialize to bytes once
         let payload_bytes = serde_json::to_vec(&trace_event_batch)
             .context("Failed to serialize trace event batch")?;
 
-        // Check size limit
+        let uncompressed_size_mb = payload_bytes.len() as f64 / 1_048_576.0;
+
+        // Compress if payload is larger than threshold (default 2 MB)
+        let compression_threshold_mb = self
+            .lookup
+            .ast
+            .env_var("BAML_TRACE_COMPRESSION_THRESHOLD_MB")
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(2.0);
+
+        let (final_payload, content_encoding) = if uncompressed_size_mb > compression_threshold_mb {
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+            encoder
+                .write_all(&payload_bytes)
+                .context("Failed to write to gzip encoder")?;
+            let compressed = encoder
+                .finish()
+                .context("Failed to finish gzip compression")?;
+
+            let compressed_size_bytes = compressed.len() as f64;
+            let compressed_size_mb = compressed_size_bytes / 1_048_576.0;
+            log::debug!(
+                "Compressed trace batch from {:.5} MB to {:.2} MB ({:.1}% reduction, {} events)",
+                uncompressed_size_mb,
+                compressed_size_mb,
+                (1.0 - compressed_size_mb / uncompressed_size_mb) * 100.0,
+                batch.len()
+            );
+
+            (compressed, Some("gzip"))
+        } else {
+            (payload_bytes, None)
+        };
+
+        // Check size limit after compression
         let max_upload_mb = self
             .lookup
             .ast
@@ -669,12 +705,12 @@ impl TracePublisher {
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(10);
 
-        let size_mb = payload_bytes.len() as f64 / 1_048_576.0;
+        let final_size_mb = final_payload.len() as f64 / 1_048_576.0;
 
-        if size_mb > max_upload_mb as f64 {
+        if final_size_mb > max_upload_mb as f64 {
             baml_log::warn!(
                 "Skipping Boundary trace batch upload: payload size {:.2} MB exceeds limit of {} MB ({} events).",
-                size_mb,
+                final_size_mb,
                 max_upload_mb,
                 batch.len()
             );
@@ -722,11 +758,19 @@ impl TracePublisher {
             }
         };
 
-        self.lookup
+        let mut request = self
+            .lookup
             .client
             .put(upload_url_details.upload_url)
             .header("Content-Type", "application/json")
-            .body(payload_bytes)
+            .body(final_payload);
+
+        // Add Content-Encoding header if compressed
+        if let Some(encoding) = content_encoding {
+            request = request.header("Content-Encoding", encoding);
+        }
+
+        request
             .headers(
                 upload_url_details
                     .upload_metadata
@@ -746,7 +790,7 @@ impl TracePublisher {
         log::debug!(
             "Successfully uploaded batch of {} events ({:.2} MB)",
             batch.len(),
-            size_mb
+            final_size_mb
         );
         Ok(())
     }
