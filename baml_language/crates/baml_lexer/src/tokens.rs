@@ -450,8 +450,7 @@ mod tests {
         );
 
         // Lossless
-        let all_tokens = lex(source);
-        assert_eq!(reconstruct_source(&all_tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
@@ -477,8 +476,7 @@ mod tests {
             ]
         );
 
-        let all_tokens = lex(source);
-        assert_eq!(reconstruct_source(&all_tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
@@ -502,8 +500,7 @@ mod tests {
             ]
         );
 
-        let all_tokens = lex(source);
-        assert_eq!(reconstruct_source(&all_tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
@@ -547,8 +544,7 @@ mod tests {
         );
 
         // Lossless
-        let all_tokens = lex(source);
-        assert_eq!(reconstruct_source(&all_tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
@@ -574,8 +570,7 @@ mod tests {
         );
 
         // Lossless
-        let all_tokens = lex(source);
-        assert_eq!(reconstruct_source(&all_tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
@@ -604,8 +599,7 @@ mod tests {
                 TokenKind::Hash,
             ]
         );
-        let all_tokens = lex(source);
-        assert_eq!(reconstruct_source(&all_tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
@@ -632,8 +626,7 @@ mod tests {
         );
 
         // Verify lossless
-        let all_tokens = lex(source);
-        assert_eq!(reconstruct_source(&all_tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
@@ -663,8 +656,7 @@ mod tests {
         );
 
         // Verify lossless
-        let all_tokens = lex(source);
-        assert_eq!(reconstruct_source(&all_tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
@@ -693,7 +685,6 @@ mod tests {
         );
 
         // Verify lossless
-        let all_tokens = lex(source);
-        assert_eq!(reconstruct_source(&all_tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 }
