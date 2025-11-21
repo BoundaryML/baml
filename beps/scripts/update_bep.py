@@ -8,8 +8,8 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-WOOL_DIR = REPO_ROOT / "wools"
-DOCS_DIR = WOOL_DIR / "docs"
+BEP_DIR = REPO_ROOT / "beps"
+DOCS_DIR = BEP_DIR / "docs"
 PROPOSALS_DIR = DOCS_DIR / "proposals"
 
 VALID_STATUSES = [
@@ -21,17 +21,17 @@ VALID_STATUSES = [
     "Implemented",
 ]
 
-def find_wool_path(wool_identifier):
+def find_bep_path(bep_identifier):
     # Try finding by directory name match first in proposals dir
-    # Could be WOOL-001, WOOL-001-exceptions, etc.
+    # Could be BEP-001, BEP-001-exceptions, etc.
     
     # Case 1: Exact folder match
-    exact = PROPOSALS_DIR / wool_identifier
+    exact = PROPOSALS_DIR / bep_identifier
     if exact.is_dir() and (exact / "README.md").exists():
         return exact / "README.md"
         
     # Case 1b: Exact match ignoring path prefixes if passed via CLI completion
-    clean_id = Path(wool_identifier).name
+    clean_id = Path(bep_identifier).name
     exact_clean = PROPOSALS_DIR / clean_id
     if exact_clean.is_dir() and (exact_clean / "README.md").exists():
             return exact_clean / "README.md"
@@ -39,34 +39,34 @@ def find_wool_path(wool_identifier):
     # Case 2: Partial match (e.g. "001")
     # Normalize to integer if possible
     search_num = None
-    m = re.match(r"(?:WOOL-)?(\d+)", wool_identifier, re.IGNORECASE)
+    m = re.match(r"(?:BEP-)?(\d+)", bep_identifier, re.IGNORECASE)
     if m:
         search_num = int(m.group(1))
     
     matches = []
     # Search in proposals dir
-    candidates = list(PROPOSALS_DIR.glob("WOOL-*"))
+    candidates = list(PROPOSALS_DIR.glob("BEP-*"))
     # Legacy support for root level if any left
-    candidates.extend(list(WOOL_DIR.glob("WOOL-*")))
-    candidates.extend(list(DOCS_DIR.glob("WOOL-*")))
+    candidates.extend(list(BEP_DIR.glob("BEP-*")))
+    candidates.extend(list(DOCS_DIR.glob("BEP-*")))
 
     for d in candidates:
         if not d.is_dir(): continue
         
         # Check if directory name matches number
-        m_dir = re.match(r"WOOL-(\d+)", d.name)
+        m_dir = re.match(r"BEP-(\d+)", d.name)
         if m_dir and search_num is not None and int(m_dir.group(1)) == search_num:
             matches.append(d / "README.md")
             continue
             
         # Check if string contains identifier (case insensitive)
-        if wool_identifier.lower() in d.name.lower():
+        if bep_identifier.lower() in d.name.lower():
                 matches.append(d / "README.md")
 
     if len(matches) == 1:
         return matches[0]
     elif len(matches) > 1:
-        print(f"Ambiguous identifier '{wool_identifier}'. Matches:")
+        print(f"Ambiguous identifier '{bep_identifier}'. Matches:")
         for m in matches:
             print(f"  - {m.parent.name}")
         sys.exit(1)
@@ -116,16 +116,16 @@ def update_frontmatter(path, updates):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Update a WOOL proposal's status or touch it.")
-    parser.add_argument("wool_id", help="The WOOL ID or folder name (e.g. '001', 'WOOL-001', 'WOOL-001-exceptions')")
+    parser = argparse.ArgumentParser(description="Update a BEP proposal's status or touch it.")
+    parser.add_argument("bep_id", help="The BEP ID or folder name (e.g. '001', 'BEP-001', 'BEP-001-exceptions')")
     parser.add_argument("--status", help=f"Set new status ({', '.join(VALID_STATUSES)})")
     parser.add_argument("--touch", action="store_true", help="Update the modification time (default if no other args)")
     
     args = parser.parse_args()
     
-    target_path = find_wool_path(args.wool_id)
+    target_path = find_bep_path(args.bep_id)
     if not target_path:
-        print(f"Error: Could not find WOOL matching '{args.wool_id}'")
+        print(f"Error: Could not find BEP matching '{args.bep_id}'")
         sys.exit(1)
 
     updates = {}

@@ -12,16 +12,16 @@ from datetime import datetime
 import os
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-WOOL_DIR = REPO_ROOT / "wools"
-DOCS_DIR = WOOL_DIR / "docs"
+BEP_DIR = REPO_ROOT / "beps"
+DOCS_DIR = BEP_DIR / "docs"
 PROPOSALS_DIR = DOCS_DIR / "proposals"
 README_PATH = DOCS_DIR / "README.md"
 
-TABLE_START = "<!-- WOOL-TABLE-START -->"
-TABLE_END = "<!-- WOOL-TABLE-END -->"
+TABLE_START = "<!-- BEP-TABLE-START -->"
+TABLE_END = "<!-- BEP-TABLE-END -->"
 
 
-def parse_wool_file(path: Path):
+def parse_bep_file(path: Path):
     text = path.read_text(encoding="utf-8")
     
     # Parse metadata from frontmatter (simple key: value parsing)
@@ -41,13 +41,13 @@ def parse_wool_file(path: Path):
                     return metadata.get(key, default)
                 
                 # Parse ID from filename if not in metadata, or trust filename
-                # Handle both WOOL-XXX.md and WOOL-XXX/README.md
+                # Handle both BEP-XXX.md and BEP-XXX/README.md
                 if path.name == "README.md":
-                     m_filename = re.match(r"(WOOL-\d+)", path.parent.name)
+                     m_filename = re.match(r"(BEP-\d+)", path.parent.name)
                 else:
-                     m_filename = re.match(r"(WOOL-\d+)", path.name)
+                     m_filename = re.match(r"(BEP-\d+)", path.name)
                 
-                wool_id = m_filename.group(1) if m_filename else "WOOL-XXX"
+                bep_id = m_filename.group(1) if m_filename else "BEP-XXX"
                 
                 title = get_meta("title", "Untitled")
                 status = get_meta("status", "Unknown")
@@ -98,7 +98,7 @@ def parse_wool_file(path: Path):
                     link_path = path.name
 
                 return {
-                    "id": wool_id,
+                    "id": bep_id,
                     "title": title,
                     "status": status,
                     "shepherds": shepherds,
@@ -115,12 +115,12 @@ def parse_wool_file(path: Path):
             return None
 
     # Fallback to old parsing if no frontmatter (for backward compat or mixed state)
-    # 1. ID + title from "# WOOL-XXX: Title"
-    m_heading = re.search(r"^#\s+(WOOL-\d+):\s*(.+)$", text, re.MULTILINE)
+    # 1. ID + title from "# BEP-XXX: Title"
+    m_heading = re.search(r"^#\s+(BEP-\d+):\s*(.+)$", text, re.MULTILINE)
     if not m_heading:
         return None
 
-    wool_id = m_heading.group(1).strip()
+    bep_id = m_heading.group(1).strip()
     title = m_heading.group(2).strip()
 
     # 2. Status from "**Status:** Foo"
@@ -146,7 +146,7 @@ def parse_wool_file(path: Path):
         summary = " ".join(line.strip() for line in summary.splitlines())
 
     return {
-        "id": wool_id,
+        "id": bep_id,
         "title": title,
         "status": status,
         "shepherds": "TBD",
@@ -172,11 +172,11 @@ def get_status_badge(status: str) -> str:
 
 def generate_table(entries):
     if not entries:
-        return "_No WOOLs found._"
+        return "_No BEPs found._"
 
-    # Sort by numeric part of WOOL-XXX
+    # Sort by numeric part of BEP-XXX
     def sort_key(e):
-        m = re.match(r"WOOL-(\d+)", e["id"])
+        m = re.match(r"BEP-(\d+)", e["id"])
         return int(m.group(1)) if m else 9999
 
     entries = sorted(entries, key=sort_key)
@@ -189,13 +189,13 @@ def generate_table(entries):
     lines.append(f"| {get_status_badge('Accepted')} | Approved for implementation |")
     lines.append(f"| {get_status_badge('Implemented')} | Feature is live in BAML |")
     lines.append(f"| {get_status_badge('Rejected')} | Decided against |")
-    lines.append(f"| {get_status_badge('Superseded')} | Replaced by another WOOL |")
+    lines.append(f"| {get_status_badge('Superseded')} | Replaced by another BEP |")
     lines.append("")
     
     lines.append("<table>")
     lines.append("  <thead>")
     lines.append("    <tr>")
-    lines.append("      <th>WOOL</th>")
+    lines.append("      <th>BEP</th>")
     lines.append("    </tr>")
     lines.append("  </thead>")
     lines.append("  <tbody>")
@@ -211,11 +211,11 @@ def generate_table(entries):
         last_modified = e.get("last_modified", "Unknown")
         
         if shepherds == "TBD" and status not in ["Superseded", "Rejected"]:
-             raise ValueError(f"WOOL {e['id']} ({status}) must have a shepherd assigned (currently 'TBD').")
+             raise ValueError(f"BEP {e['id']} ({status}) must have a shepherd assigned (currently 'TBD').")
         
         # Warn if shepherd format doesn't look like "Name <email>" but allow it for flexibility
         if status not in ["Superseded", "Rejected"] and "<" not in shepherds:
-             # Optional: print(f"Warning: WOOL {e['id']} shepherd '{shepherds}' might be missing email <...>.")
+             # Optional: print(f"Warning: BEP {e['id']} shepherd '{shepherds}' might be missing email <...>.")
              pass
 
         status_badge = get_status_badge(status)
@@ -254,7 +254,7 @@ def update_readme(table_md: str, check_only: bool = False):
         if readme != new_readme:
             print(f"Error: {README_PATH} is out of sync.")
             print("To fix this, run the following command locally and commit the changes:")
-            print("\n    mise run wool:readme\n")
+            print("\n    mise run bep:readme\n")
             sys.exit(1)
         else:
             print(f"Success: {README_PATH} is up to date.")
@@ -268,18 +268,18 @@ def main():
     parser.add_argument("--check", action="store_true", help="Check if README is up-to-date without modifying it")
     args = parser.parse_args()
 
-    # Support both flat files and directory-based WOOLs in proposals dir
-    wool_files = []
+    # Support both flat files and directory-based BEPs in proposals dir
+    bep_files = []
     if PROPOSALS_DIR.exists():
-        wool_files.extend(sorted(list(PROPOSALS_DIR.glob("WOOL-*.md")) + list(PROPOSALS_DIR.glob("WOOL-*/README.md"))))
+        bep_files.extend(sorted(list(PROPOSALS_DIR.glob("BEP-*.md")) + list(PROPOSALS_DIR.glob("BEP-*/README.md"))))
     
     # Legacy support for root level
-    wool_files.extend(sorted(list(WOOL_DIR.glob("WOOL-*.md")) + list(WOOL_DIR.glob("WOOL-*/README.md"))))
-    wool_files.extend(sorted(list(DOCS_DIR.glob("WOOL-*.md")) + list(DOCS_DIR.glob("WOOL-*/README.md"))))
+    bep_files.extend(sorted(list(BEP_DIR.glob("BEP-*.md")) + list(BEP_DIR.glob("BEP-*/README.md"))))
+    bep_files.extend(sorted(list(DOCS_DIR.glob("BEP-*.md")) + list(DOCS_DIR.glob("BEP-*/README.md"))))
     
     entries = []
-    for f in wool_files:
-        parsed = parse_wool_file(f)
+    for f in bep_files:
+        parsed = parse_bep_file(f)
         if parsed:
             # Adjust path for README linking
             if "proposals" in str(f.parent):
@@ -288,7 +288,7 @@ def main():
 
     table_md = generate_table(entries)
     update_readme(table_md, check_only=args.check)
-    print(f"Updated {README_PATH} with {len(entries)} WOOL entries.")
+    print(f"Updated {README_PATH} with {len(entries)} BEP entries.")
 
 
 if __name__ == "__main__":

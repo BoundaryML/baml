@@ -177,3 +177,6 @@ result
 target/
 
 baml-graph/_site/
+
+# beps
+_site/

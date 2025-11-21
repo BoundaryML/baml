@@ -31,11 +31,11 @@ java = "temurin-23"
 "npm:@infisical/cli" = "latest"
 
 [tasks]
-"wool:readme" = "./wools/scripts/update_wool_readme.py"
-"wool:new" = "./wools/scripts/new_wool.py"
-"wool:update" = "./wools/scripts/update_wool.py"
-"wool:check" = "./wools/scripts/update_wool_readme.py --check"
-"wool:serve" = "cd wools && uv run --with mkdocs-material mkdocs serve"
+"bep:readme" = "./beps/scripts/update_bep_readme.py"
+"bep:new" = "./beps/scripts/new_bep.py"
+"bep:update" = "./beps/scripts/update_bep.py"
+"bep:check" = "./beps/scripts/update_bep_readme.py --check"
+"bep:serve" = "cd beps && uv run --with mkdocs-material --with mkdocs-awesome-pages-plugin --with click==8.2.1 --with mkdocs-git-revision-date-localized-plugin --with mkdocs-git-committers-plugin-2 mkdocs serve"
 
 [settings]
 experimental = true

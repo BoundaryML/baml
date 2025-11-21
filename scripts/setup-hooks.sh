@@ -89,15 +89,15 @@ if ! cargo clippy --workspace --all-targets --all-features -- -D warnings; then
 fi
 echo -e "${GREEN}✓ Clippy checks passed${NC}"
 
-# Run wool:readme to keep WOOL index up to date
-echo -e "${YELLOW}Checking WOOL index...${NC}"
+# Run bep:readme to keep BEP index up to date
+echo -e "${YELLOW}Checking BEP index...${NC}"
 cd "$REPO_ROOT" || exit 1
 if command -v mise >/dev/null 2>&1; then
-    mise run wool:readme
-    git add wools/README.md 2>/dev/null || true
-    echo -e "${GREEN}✓ WOOL index updated${NC}"
+    mise run bep:readme
+    git add beps/README.md 2>/dev/null || true
+    echo -e "${GREEN}✓ BEP index updated${NC}"
 else
-    echo -e "${YELLOW}Warning: mise not found, skipping WOOL index update${NC}"
+    echo -e "${YELLOW}Warning: mise not found, skipping BEP index update${NC}"
 fi
 
 echo ""

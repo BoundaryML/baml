@@ -1,6 +1,6 @@
-site_name: WOOLs (Working On Our Language)
+site_name: BEPs (BAML Enhancement Proposals)
 site_description: BAML Language Proposals
-site_url: https://boundaryml.github.io/baml/wools/
+# site_url: https://boundaryml.github.io/baml/beps/
 
 theme:
   name: material
@@ -41,7 +41,17 @@ markdown_extensions:
 
 plugins:
   - search
+  - git-revision-date-localized:
+      fallback_to_build_date: true
+      type: datetime
+  - git-committers:
+      repository: boundaryml/baml
+      branch: canary
+
+hooks:
+  - bep_hooks.py
 
 site_dir: ../_site
 
-
+watch:
+  - docs/

@@ -10,19 +10,19 @@ from pathlib import Path
 from datetime import date
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-WOOL_DIR = REPO_ROOT / "wools"
-DOCS_DIR = WOOL_DIR / "docs"
+BEP_DIR = REPO_ROOT / "beps"
+DOCS_DIR = BEP_DIR / "docs"
 PROPOSALS_DIR = DOCS_DIR / "proposals"
 
 TEMPLATE = """---
-id: {wool_id}
+id: {bep_id}
 title: "{title}"
 shepherds: {author}
 status: Draft
 created: {created_date}
 ---
 
-# {wool_id}: {title}
+# {bep_id}: {title}
 
 ## Summary
 
@@ -72,19 +72,19 @@ def get_git_author():
         return "<Author>"
 
 
-def get_next_wool_number():
+def get_next_bep_number():
     if not PROPOSALS_DIR.exists():
         PROPOSALS_DIR.mkdir(parents=True)
         
-    # Find all folders matching WOOL-* in proposals dir
-    wool_folders = [d for d in PROPOSALS_DIR.glob("WOOL-*") if d.is_dir()]
+    # Find all folders matching BEP-* in proposals dir
+    bep_folders = [d for d in PROPOSALS_DIR.glob("BEP-*") if d.is_dir()]
     # Also check for standalone files just in case, to avoid collision (legacy support)
-    wool_files = list(PROPOSALS_DIR.glob("WOOL-*.md"))
+    bep_files = list(PROPOSALS_DIR.glob("BEP-*.md"))
     
     max_num = -1
     
-    for path in wool_folders + wool_files:
-        m = re.search(r"WOOL-(\d+)", path.name)
+    for path in bep_folders + bep_files:
+        m = re.search(r"BEP-(\d+)", path.name)
         if m:
             num = int(m.group(1))
             if num > max_num:
@@ -100,7 +100,7 @@ def slugify(text):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Create a new WOOL proposal.")
+    parser = argparse.ArgumentParser(description="Create a new BEP proposal.")
     parser.add_argument("title", help="The title of the feature proposal")
     parser.add_argument("--author", help="Author name(s)", default=None)
     args = parser.parse_args()
@@ -108,12 +108,12 @@ def main():
     title = args.title
     author = args.author or get_git_author()
 
-    next_num = get_next_wool_number()
-    wool_id = f"WOOL-{next_num:03d}"
+    next_num = get_next_bep_number()
+    bep_id = f"BEP-{next_num:03d}"
     slug = slugify(title)
     
-    # Create directory: wools/proposals/WOOL-XXX-title
-    folder_name = f"{wool_id}-{slug}"
+    # Create directory: beps/proposals/BEP-XXX-title
+    folder_name = f"{bep_id}-{slug}"
     folder_path = PROPOSALS_DIR / folder_name
     folder_path.mkdir(exist_ok=True, parents=True)
     
@@ -121,14 +121,14 @@ def main():
     filepath = folder_path / "README.md"
 
     content = TEMPLATE.format(
-        wool_id=wool_id,
+        bep_id=bep_id,
         title=title,
         author=author,
         created_date=date.today().strftime("%Y-%m-%d"),
     )
 
     filepath.write_text(content, encoding="utf-8")
-    print(f"Created new WOOL: {filepath}")
+    print(f"Created new BEP: {filepath}")
 
 
 if __name__ == "__main__":
