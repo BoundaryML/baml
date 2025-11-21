@@ -57,17 +57,15 @@ pub enum BlobUploaderMessage {
 }
 
 /// Global publisher channel.
-/// When the module is first used, we create an unbounded channel and then spawn the publisher task.
-static PUBLISHING_CHANNEL: OnceCell<mpsc::UnboundedSender<PublisherMessage>> = OnceCell::new();
+/// When the module is first used, we create a bounded channel and then spawn the publisher task.
+/// The channel capacity is limited to 10 batches worth of events to prevent unbounded memory growth.
+static PUBLISHING_CHANNEL: OnceCell<mpsc::Sender<PublisherMessage>> = OnceCell::new();
 #[cfg(not(target_arch = "wasm32"))]
 static PUBLISHING_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
 static BLOB_UPLOADER_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
-static BLOB_UPLOADER_CHANNEL: OnceCell<mpsc::UnboundedSender<BlobUploaderMessage>> =
-    OnceCell::new();
+static BLOB_UPLOADER_CHANNEL: OnceCell<mpsc::Sender<BlobUploaderMessage>> = OnceCell::new();
 
-fn get_publish_channel(
-    allow_missing: bool,
-) -> Option<&'static mpsc::UnboundedSender<PublisherMessage>> {
+fn get_publish_channel(allow_missing: bool) -> Option<&'static mpsc::Sender<PublisherMessage>> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let Some(join_handle) = PUBLISHING_TASK.get() else {
@@ -235,11 +233,25 @@ pub fn start_publisher(
     }
     log::debug!("Starting publisher");
 
-    let mut blob_rx_holder: Option<mpsc::UnboundedReceiver<BlobUploaderMessage>> = None;
+    // Read batch sizes early to calculate channel capacities
+    let trace_batch_size = lookup
+        .env_var("BAML_TRACE_BATCH_SIZE")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(500);
+    let blob_batch_size = lookup
+        .env_var("BAML_BLOB_BATCH_SIZE")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(10);
+
+    // Limit to 10 batches worth of capacity
+    let trace_queue_capacity = 4 * trace_batch_size;
+    let blob_queue_capacity = 4 * blob_batch_size;
+
+    let mut blob_rx_holder: Option<mpsc::Receiver<BlobUploaderMessage>> = None;
     let blob_tx = match BLOB_UPLOADER_CHANNEL.get() {
         Some(existing) => existing.clone(),
         None => {
-            let (new_tx, new_rx) = mpsc::unbounded_channel::<BlobUploaderMessage>();
+            let (new_tx, new_rx) = mpsc::channel::<BlobUploaderMessage>(blob_queue_capacity);
             match BLOB_UPLOADER_CHANNEL.set(new_tx.clone()) {
                 Ok(()) => {
                     blob_rx_holder = Some(new_rx);
@@ -278,11 +290,15 @@ pub fn start_publisher(
         let blob_tx_for_publisher = blob_tx.clone();
 
         PUBLISHING_CHANNEL.get_or_init(move || {
-            let (tx, rx) = mpsc::unbounded_channel::<PublisherMessage>();
+            let (tx, rx) = mpsc::channel::<PublisherMessage>(trace_queue_capacity);
 
-            let mut publisher =
-                TracePublisher::new(rx, lookup_for_publisher, blob_tx_for_publisher);
-            let mut blob_uploader = BlobUploader::new(blob_rx, lookup_for_blob);
+            let mut publisher = TracePublisher::new(
+                rx,
+                lookup_for_publisher,
+                blob_tx_for_publisher,
+                trace_batch_size,
+            );
+            let mut blob_uploader = BlobUploader::new(blob_rx, lookup_for_blob, blob_batch_size);
 
             #[cfg(not(target_arch = "wasm32"))]
             {
@@ -310,18 +326,24 @@ pub fn start_publisher(
         })
     };
 
-    let _ = channel.send(PublisherMessage::UpdateRuntime(lookup));
+    // Use blocking send for UpdateRuntime to ensure it's processed
+    match channel.blocking_send(PublisherMessage::UpdateRuntime(lookup)) {
+        Ok(()) => {}
+        Err(e) => {
+            log::error!("Failed to send UpdateRuntime message: {}", e);
+        }
+    }
 }
 
 struct TracePublisher {
     batch_size: usize,
-    rx: mpsc::UnboundedReceiver<PublisherMessage>,
+    rx: mpsc::Receiver<PublisherMessage>,
     lookup: Arc<RuntimeAST>,
-    blob_tx: mpsc::UnboundedSender<BlobUploaderMessage>,
+    blob_tx: mpsc::Sender<BlobUploaderMessage>,
 }
 
 struct BlobUploader {
-    rx: mpsc::UnboundedReceiver<BlobUploaderMessage>,
+    rx: mpsc::Receiver<BlobUploaderMessage>,
     lookup: Arc<RuntimeAST>,
     queued_blobs: Vec<super::rpc_converters::blob_storage::BlobWithContent>,
     batch_size: usize,
@@ -329,16 +351,11 @@ struct BlobUploader {
 
 impl TracePublisher {
     pub fn new(
-        rx: mpsc::UnboundedReceiver<PublisherMessage>,
+        rx: mpsc::Receiver<PublisherMessage>,
         lookup: Arc<RuntimeAST>,
-        blob_tx: mpsc::UnboundedSender<BlobUploaderMessage>,
+        blob_tx: mpsc::Sender<BlobUploaderMessage>,
+        batch_size: usize,
     ) -> Self {
-        let batch_size = lookup
-            .ast
-            .env_var("BAML_TRACE_BATCH_SIZE")
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(500);
-
         Self {
             rx,
             batch_size,
@@ -383,8 +400,8 @@ impl TracePublisher {
                             buffer.push(event);
                             if buffer.len() >= self.batch_size {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
-                                // Trigger blob upload after batch processing
-                                let _ = self.blob_tx.send(BlobUploaderMessage::Upload);
+                                // Trigger blob upload after batch processing (best effort)
+                                let _ = self.blob_tx.try_send(BlobUploaderMessage::Upload);
                             }
 
                         },
@@ -395,7 +412,7 @@ impl TracePublisher {
                             }
                             // Flush blob uploader and wait for completion
                             let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
-                            let _ = self.blob_tx.send(BlobUploaderMessage::Flush(blob_ack_tx));
+                            let _ = self.blob_tx.send(BlobUploaderMessage::Flush(blob_ack_tx)).await;
                             let _ = blob_ack_rx.await;
                             // Signal flush completion.
                             let _ = flush_ack.send(());
@@ -407,7 +424,7 @@ impl TracePublisher {
                             }
                             // Shutdown blob uploader and wait for completion
                             let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
-                            let _ = self.blob_tx.send(BlobUploaderMessage::Shutdown(blob_ack_tx));
+                            let _ = self.blob_tx.send(BlobUploaderMessage::Shutdown(blob_ack_tx)).await;
                             let _ = blob_ack_rx.await;
                             let _ = shutdown_ack.send(());
                             break;
@@ -422,8 +439,8 @@ impl TracePublisher {
                     }
                     if !buffer.is_empty() {
                         self.process_batch(std::mem::take(&mut buffer)).await;
-                        // Trigger blob upload after batch processing
-                        let _ = self.blob_tx.send(BlobUploaderMessage::Upload);
+                        // Trigger blob upload after batch processing (best effort)
+                        let _ = self.blob_tx.try_send(BlobUploaderMessage::Upload);
                     }
                 }
             }
@@ -801,13 +818,11 @@ trait AsReqwestHeaders {
 }
 
 impl BlobUploader {
-    pub fn new(rx: mpsc::UnboundedReceiver<BlobUploaderMessage>, lookup: Arc<RuntimeAST>) -> Self {
-        let batch_size = lookup
-            .ast
-            .env_var("BAML_BLOB_BATCH_SIZE")
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(10); // Default to 10 blobs per batch
-
+    pub fn new(
+        rx: mpsc::Receiver<BlobUploaderMessage>,
+        lookup: Arc<RuntimeAST>,
+        batch_size: usize,
+    ) -> Self {
         Self {
             rx,
             lookup,
@@ -1056,6 +1071,7 @@ async fn flush_blob_uploader_channel(timeout_duration: Duration) -> anyhow::Resu
     let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
     blob_tx
         .send(BlobUploaderMessage::Flush(blob_ack_tx))
+        .await
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
     match timeout(timeout_duration, blob_ack_rx).await {
@@ -1075,9 +1091,19 @@ pub fn publish_trace_event(event: Arc<TraceEventWithMeta>) -> anyhow::Result<()>
     let Some(channel) = get_publish_channel(false) else {
         return Ok(());
     };
-    channel
-        .send(PublisherMessage::Trace(event))
-        .map_err(|e| e.into())
+    match channel.try_send(PublisherMessage::Trace(event)) {
+        Ok(()) => Ok(()),
+        Err(mpsc::error::TrySendError::Full(_)) => {
+            log::warn!(
+                "Trace event queue is full (max 4 batches). Dropping trace event. \
+                Consider increasing BAML_TRACE_BATCH_SIZE or reducing trace volume."
+            );
+            Ok(())
+        }
+        Err(mpsc::error::TrySendError::Closed(_)) => {
+            Err(anyhow::anyhow!("Trace publisher channel is closed"))
+        }
+    }
 }
 
 // Note, the library we are using doesnt seem to work well for flushing in Node
@@ -1094,6 +1120,7 @@ pub async fn flush() -> anyhow::Result<()> {
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
         let send_res = channel
             .send(PublisherMessage::Flush(ack_tx))
+            .await
             .map_err(|e| anyhow::anyhow!(e.to_string()));
         if let Err(e) = send_res {
             publisher_result = Some(Err(e));
