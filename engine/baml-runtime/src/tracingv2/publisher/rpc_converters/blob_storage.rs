@@ -129,7 +129,9 @@ impl BlobRefCache {
                         log::warn!("Blob upload queue is full (max 4 batches). Dropping blob {blob_hash}. Consider increasing BAML_BLOB_BATCH_SIZE.");
                     }
                     Err(mpsc::error::TrySendError::Closed(_)) => {
-                        log::warn!("Blob uploader channel is closed. Cannot queue blob {blob_hash}.");
+                        log::warn!(
+                            "Blob uploader channel is closed. Cannot queue blob {blob_hash}."
+                        );
                     }
                 }
             }
