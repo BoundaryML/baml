@@ -3,26 +3,34 @@ source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Error: Expected RBrace, found Client
-   ╭─[ 0:3:3 ]
-   │
- 3 │   client GPT4  // This keyword determines it's an LLM function
-   │   ───┬──  
-   │      ╰──── Expected RBrace, found Client
-───╯
-
-  [parse] Error: Expected config block, found RBrace
+  [parse] Error: Expected LLM function missing 'prompt' field, found RBrace
    ╭─[ 0:5:1 ]
    │
  5 │ }
    │ ┬  
-   │ ╰── Expected config block, found RBrace
+   │ ╰── Expected LLM function missing 'prompt' field, found RBrace
 ───╯
 
-  [parse] Error: Expected top-level declaration, found RBrace
-   ╭─[ 0:5:1 ]
+  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
+   ╭─[ 0:9:3 ]
    │
- 5 │ }
-   │ ┬  
-   │ ╰── Expected top-level declaration, found RBrace
+ 9 │   clent GPT4  // Typo in "client"
+   │   ──┬──  
+   │     ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
 ───╯
+
+  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
+   ╭─[ 0:9:9 ]
+   │
+ 9 │   clent GPT4  // Typo in "client"
+   │         ──┬─  
+   │           ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
+───╯
+
+  [parse] Error: Expected LLM function missing 'client' field, found RBrace
+    ╭─[ 0:11:1 ]
+    │
+ 11 │ }
+    │ ┬  
+    │ ╰── Expected LLM function missing 'client' field, found RBrace
+────╯

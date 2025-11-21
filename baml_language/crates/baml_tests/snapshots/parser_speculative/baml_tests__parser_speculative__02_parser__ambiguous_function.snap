@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -17,14 +17,13 @@ SOURCE_FILE
     ARROW "->"
     TYPE_EXPR " string"
       WORD "string"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR " {"
-        L_BRACE "{"
-  CLIENT_DEF "
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "
   client GPT4"
-    KW_CLIENT "client"
-    WORD "GPT4"
-  R_BRACE "}"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "AnotherLLM"
@@ -38,11 +37,11 @@ SOURCE_FILE
     ARROW "->"
     TYPE_EXPR " string"
       WORD "string"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR
-        L_BRACE "{"
-        WORD "clent"
-        WORD "GPT4"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      WORD "clent"
+      WORD "GPT4"
+      PROMPT_FIELD
         WORD "prompt"
         STRING_LITERAL " "Process: {{ input }}""
           QUOTE """
@@ -54,29 +53,37 @@ SOURCE_FILE
           R_BRACE "}"
           R_BRACE "}"
           QUOTE """
-        R_BRACE "}"
+      R_BRACE "}"
 
 === ERRORS ===
-Error: Expected RBrace, found Client
-   ╭─[ 0:3:3 ]
-   │
- 3 │   client GPT4  // This keyword determines it's an LLM function
-   │   ───┬──  
-   │      ╰──── Expected RBrace, found Client
-───╯
-
-Error: Expected config block, found RBrace
+Error: Expected LLM function missing 'prompt' field, found RBrace
    ╭─[ 0:5:1 ]
    │
  5 │ }
    │ ┬  
-   │ ╰── Expected config block, found RBrace
+   │ ╰── Expected LLM function missing 'prompt' field, found RBrace
 ───╯
 
-Error: Expected top-level declaration, found RBrace
-   ╭─[ 0:5:1 ]
+Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
+   ╭─[ 0:9:3 ]
    │
- 5 │ }
-   │ ┬  
-   │ ╰── Expected top-level declaration, found RBrace
+ 9 │   clent GPT4  // Typo in "client"
+   │   ──┬──  
+   │     ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
 ───╯
+
+Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
+   ╭─[ 0:9:9 ]
+   │
+ 9 │   clent GPT4  // Typo in "client"
+   │         ──┬─  
+   │           ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
+───╯
+
+Error: Expected LLM function missing 'client' field, found RBrace
+    ╭─[ 0:11:1 ]
+    │
+ 11 │ }
+    │ ┬  
+    │ ╰── Expected LLM function missing 'client' field, found RBrace
+────╯

@@ -151,13 +151,6 @@ enum Event {
     },
 }
 
-/// Parser state for checkpoint/restore.
-#[derive(Clone, Copy)]
-struct ParserCheckpoint {
-    current: usize,
-    events_len: usize,
-}
-
 /// Recursive descent parser with error recovery.
 pub(crate) struct Parser<'a> {
     tokens: &'a [Token],
@@ -491,20 +484,6 @@ impl<'a> Parser<'a> {
             });
             false
         }
-    }
-
-    // ============ Checkpoint Support for Speculative Parsing ============
-
-    fn checkpoint(&self) -> ParserCheckpoint {
-        ParserCheckpoint {
-            current: self.current,
-            events_len: self.events.len(),
-        }
-    }
-
-    fn restore(&mut self, checkpoint: ParserCheckpoint) {
-        self.current = checkpoint.current;
-        self.events.truncate(checkpoint.events_len);
     }
 
     // ============ Tree Building ============
@@ -1159,32 +1138,51 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_body(&mut self) {
-        // Use speculative parsing to determine function type
-        let checkpoint = self.checkpoint();
-
-        // Try parsing as LLM function
-        let llm_errors = self.try_parse_as_llm_function();
-
-        // Restore to checkpoint
-        self.restore(checkpoint);
-
-        // Try parsing as expression function
-        let expr_errors = self.try_parse_as_expr_function();
-
-        // Choose the interpretation with fewer errors
-        let use_llm = self.should_use_llm_interpretation(&llm_errors, &expr_errors, &checkpoint);
-
-        if use_llm {
-            // Use LLM interpretation - restore and parse again as LLM
-            self.restore(checkpoint);
-            self.try_parse_as_llm_function();
+        // Scan tokens to determine function type before parsing (single pass)
+        if self.looks_like_llm_function_body() {
+            self.parse_llm_function_body();
+        } else {
+            self.parse_expr_function_body();
         }
-        // Otherwise, expression interpretation is already current
     }
 
-    fn try_parse_as_llm_function(&mut self) -> Vec<String> {
-        let mut errors = Vec::new();
+    /// Scan tokens to detect if this looks like an LLM function body.
+    /// LLM functions contain `client` and `prompt` keywords at brace depth 1.
+    /// Expression functions contain `let`, `return`, `if`, `while`, `for`.
+    fn looks_like_llm_function_body(&self) -> bool {
+        let mut i = self.current;
+        let mut brace_depth = 0;
 
+        while i < self.tokens.len() {
+            let token = &self.tokens[i];
+            match token.kind {
+                TokenKind::LBrace => brace_depth += 1,
+                TokenKind::RBrace if brace_depth == 1 => break,
+                TokenKind::RBrace => brace_depth -= 1,
+                TokenKind::Word if brace_depth == 1 => {
+                    let text = &token.text;
+                    if text == "client" || text == "prompt" {
+                        return true;
+                    }
+                    if text == "let"
+                        || text == "return"
+                        || text == "if"
+                        || text == "while"
+                        || text == "for"
+                    {
+                        return false;
+                    }
+                }
+                // Check for Client keyword token (not just Word with text "client")
+                TokenKind::Client if brace_depth == 1 => return true,
+                _ => {}
+            }
+            i += 1;
+        }
+        false // default to expression function
+    }
+
+    fn parse_llm_function_body(&mut self) {
         self.with_node(SyntaxKind::LLM_FUNCTION_BODY, |p| {
             p.expect(TokenKind::LBrace);
 
@@ -1200,7 +1198,7 @@ impl<'a> Parser<'a> {
 
                 if p.at(TokenKind::Client) {
                     if has_client {
-                        errors.push("Duplicate 'client' field".to_string());
+                        p.error("Duplicate 'client' field".to_string());
                     }
                     has_client = true;
                     p.parse_client_field();
@@ -1208,13 +1206,13 @@ impl<'a> Parser<'a> {
                     && p.current().map(|t| t.text == "prompt").unwrap_or(false)
                 {
                     if has_prompt {
-                        errors.push("Duplicate 'prompt' field".to_string());
+                        p.error("Duplicate 'prompt' field".to_string());
                     }
                     has_prompt = true;
                     p.parse_prompt_field();
                 } else {
                     // Unexpected token in LLM function
-                    errors.push(format!(
+                    p.error(format!(
                         "Only 'client' and 'prompt' allowed in LLM function, found '{}'",
                         p.current().map(|t| t.text.as_str()).unwrap_or("EOF")
                     ));
@@ -1223,69 +1221,20 @@ impl<'a> Parser<'a> {
             }
 
             if !has_client {
-                errors.push("LLM function missing 'client' field".to_string());
+                p.error("LLM function missing 'client' field".to_string());
             }
             if !has_prompt {
-                errors.push("LLM function missing 'prompt' field".to_string());
+                p.error("LLM function missing 'prompt' field".to_string());
             }
 
             p.expect(TokenKind::RBrace);
         });
-
-        errors
     }
 
-    fn try_parse_as_expr_function(&mut self) -> Vec<String> {
-        let errors = Vec::new();
-
+    fn parse_expr_function_body(&mut self) {
         self.with_node(SyntaxKind::EXPR_FUNCTION_BODY, |p| {
-            p.parse_block_expr(); // Parse as a block expression with statements
+            p.parse_block_expr();
         });
-
-        errors
-    }
-
-    fn should_use_llm_interpretation(
-        &self,
-        llm_errors: &[String],
-        expr_errors: &[String],
-        checkpoint: &ParserCheckpoint,
-    ) -> bool {
-        // If error counts differ, choose the one with fewer errors
-        if llm_errors.len() < expr_errors.len() {
-            return true;
-        }
-        if expr_errors.len() < llm_errors.len() {
-            return false;
-        }
-
-        // Tie-breaking heuristics when error counts are equal:
-        // Look ahead from checkpoint to see if body contains LLM keywords
-        let mut i = checkpoint.current;
-        while i < self.tokens.len() {
-            let token = &self.tokens[i];
-            if token.kind == TokenKind::RBrace {
-                break; // End of function body
-            }
-            if token.kind == TokenKind::Word {
-                let text = &token.text;
-                if text == "client" || text == "prompt" {
-                    return true; // Has LLM keywords, prefer LLM interpretation
-                }
-                if text == "let"
-                    || text == "return"
-                    || text == "if"
-                    || text == "while"
-                    || text == "for"
-                {
-                    return false; // Has expression keywords, prefer expression interpretation
-                }
-            }
-            i += 1;
-        }
-
-        // Default to expression function (more general)
-        false
     }
 
     fn parse_client_field(&mut self) {

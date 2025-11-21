@@ -6,25 +6,15 @@ expression: output
 function Ambiguous {
   params: [input: String]
   return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
+  body: Llm {
+    client: GPT4
   }
 }
 function AnotherLLM {
   params: [input: String]
   return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
+  body: Llm {
   }
-}
-client GPT4 {
-  provider: unknown
 }
 function ProcessData {
   params: [data: Path(Path { segments: ["JsonData"], kind: Plain })]
