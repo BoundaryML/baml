@@ -455,7 +455,7 @@ impl BamlTracer {
         }
 
         // Add function start trace event
-        log::info!("Creating trace event for {}", function_name);
+        // log::info!("Creating trace event for {}", function_name);
         let trace_event = TraceEvent::new_function_start(
             call_stack,
             function_name.to_string(),

@@ -231,7 +231,6 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
         value: BamlValueWithMeta<T>,
         field_type: TypeIR,
     ) -> anyhow::Result<BamlValueWithMeta<(T, TypeIR)>> {
-        eprintln!("about to distribute {:?} with type {:?}", value, field_type);
         match value {
             BamlValueWithMeta::String(s, meta) => {
                 let literal_type =

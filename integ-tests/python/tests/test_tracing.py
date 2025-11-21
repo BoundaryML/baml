@@ -63,6 +63,11 @@ class TraceEvent(BaseModel):
         return self.content.type == "function_end"
 
     @property
+    def is_set_tags(self) -> bool:
+        """Check if this is a SetTags event"""
+        return self.content.type == "intermediate" and "SetTags" in self.content.data
+
+    @property
     def function_name(self) -> str:
         """Get the function display name"""
         return self.content.data.get("function_display_name", "")
@@ -72,6 +77,13 @@ class TraceEvent(BaseModel):
         """Get tags from function_start events"""
         if self.is_function_start:
             return self.content.data.get("tags", {})
+        return {}
+
+    @property
+    def set_tags(self) -> Dict[str, str]:
+        """Get tags from SetTags events"""
+        if self.is_set_tags:
+            return self.content.data.get("SetTags", {})
         return {}
 
     @property
@@ -262,10 +274,39 @@ class TraceFileReader:
             f"✓ {child.function_name}: call_stack = [{parent.function_name}, {child.call_id}]"
         )
 
+    def get_set_tags_events(self, call_id: str) -> List[TraceEvent]:
+        """Get all SetTags events for a specific call_id"""
+        return [
+            e
+            for e in self.load_events()
+            if e.call_id == call_id and e.is_set_tags
+        ]
+
+    def get_merged_tags(self, event: TraceEvent) -> Dict[str, str]:
+        """
+        Get merged tags for an event: function_start tags + all SetTags events.
+        This matches the behavior of the Collector which merges tags from all events.
+        """
+        # Start with function_start tags
+        merged_tags = event.tags.copy()
+
+        # Find and merge all SetTags events for this call_id
+        set_tags_events = self.get_set_tags_events(event.call_id)
+        for set_tags_event in set_tags_events:
+            merged_tags.update(set_tags_event.set_tags)
+
+        return merged_tags
+
     def verify_tags(self, event: TraceEvent, expected_tags: Dict[str, str]) -> None:
-        """Verify that an event has the expected tags"""
+        """
+        Verify that an event has the expected tags.
+        This checks both function_start tags AND SetTags events for the call_id.
+        """
+        # Get merged tags (function_start + SetTags events)
+        merged_tags = self.get_merged_tags(event)
+
         for key, value in expected_tags.items():
-            assert_that(event.tags).contains_entry({key: value})
+            assert_that(merged_tags).contains_entry({key: value})
         print(f"✓ {event.function_name} has tags: {expected_tags}")
 
     def print_trace_hierarchy(
@@ -322,10 +363,13 @@ class TraceFileReader:
 
             print("".join(parts))
 
-            if show_tags and event.tags:
-                tag_indent = indent_str * (indent_level + 1)
-                for key, value in event.tags.items():
-                    print(f"{tag_indent}@{key}={value}")
+            if show_tags:
+                # Use merged tags (function_start + SetTags events)
+                merged_tags = self.get_merged_tags(event)
+                if merged_tags:
+                    tag_indent = indent_str * (indent_level + 1)
+                    for key, value in merged_tags.items():
+                        print(f"{tag_indent}@{key}={value}")
 
             # Print children
             if event.call_id in tree:

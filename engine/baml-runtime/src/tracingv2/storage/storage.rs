@@ -112,12 +112,21 @@ impl TraceStorage {
         let Some(&count) = self.ref_counts.get(&event.call_id) else {
             // If no references exist, skip or handle otherwise
             // log::trace!("No references for FunctionID {:?} -- dropping events", event.call_id);
+            eprintln!(
+                "No references for FunctionID {:?} -- dropping events: {:#?}",
+                event.call_id, event
+            );
             return;
         };
         if count > 0 {
             if let Some(events_vec) = self.call_map.get_mut(&event.call_id) {
                 events_vec.push(event);
             }
+        } else {
+            eprintln!(
+                "No reference count > 0 for FunctionID {:?} -- dropping events: {:#?}",
+                event.call_id, event
+            );
         }
     }
 
