@@ -1212,6 +1212,64 @@ async def test_event_log_hook():
     flush()  # clear the hook
     on_log_event(None)
 
+# ============================================================================
+# TEST 13: Reproduce big unions issue
+# ============================================================================
+@pytest.mark.asyncio
+async def test_tracing_big_union():
+    """Test tracing a big union"""
+
+    @trace
+    async def child_function(arg: Any):
+        await asyncio.sleep(0.1)
+        return f"child: {arg}"
+
+    @trace
+    async def root_function(arg: Any):
+        result = await child_function(arg)
+        return f"root: {result}"
+
+    # Set up trace file for verification
+    trace_file = os.environ["BAML_TRACE_FILE"]
+    if os.path.exists(trace_file):
+        os.remove(trace_file)
+    print(f"Trace file: {trace_file}")
+
+    try:
+        # Clear any existing traces
+        flush()
+        _ = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.drain_stats()
+
+        res = await root_function({"a": 10, "b": { "c": 20, "d": "hi"}, "e": [1, 2, "hi", {"f": 30, "g": "hello"}]})
+        # res = await root_function([1, "hello"])
+        assert_that(res).contains("hello")
+
+        flush()
+
+        # Verify trace events using helper
+        reader = TraceFileReader(trace_file)
+        print("\n=== Trace Hierarchy ===")
+        reader.print_trace_hierarchy(show_ids=True, show_depth=True)
+        event_counts = reader.count_events()
+        print(f"Trace event counts: {event_counts}")
+        assert_that(event_counts["function_start"]).is_equal_to(2)  # root + child
+        assert_that(event_counts["function_end"]).is_equal_to(2)
+
+        # Find root and verify
+        root = reader.find_root("root_function")
+        assert_that(root).is_not_none()
+        assert_that(root.is_root()).is_true()
+        print(f"✓ root_function: call_stack = [{root.call_id}]")
+
+        # Find child and verify parent-child relationship
+        children = reader.find_children(root.call_id, "child_function")
+        assert_that(len(children)).is_equal_to(1)
+        child = children[0]
+        reader.verify_parent_child(root, child)
+
+        print("✓ Callstack verification complete!")
+    finally:
+        pass
 
 # ============================================================================
 # Cleanup fixture

@@ -1086,7 +1086,7 @@ impl<T> BamlValueWithMeta<T> {
     }
 
     /// Apply the same meta value to every node throughout a BamlValue.
-    pub fn with_const_meta(value: &BamlValue, meta: T) -> BamlValueWithMeta<T>
+    pub fn with_same_meta_at_all_nodes(value: &BamlValue, meta: T) -> BamlValueWithMeta<T>
     where
         T: Clone,
     {
@@ -1099,14 +1099,19 @@ impl<T> BamlValueWithMeta<T> {
             BamlValue::Map(entries) => BamlValueWithMeta::Map(
                 entries
                     .iter()
-                    .map(|(k, v)| (k.clone(), Self::with_const_meta(v, meta.clone())))
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            Self::with_same_meta_at_all_nodes(v, meta.clone()),
+                        )
+                    })
                     .collect(),
                 meta,
             ),
             BamlValue::List(items) => List(
                 items
                     .iter()
-                    .map(|i| Self::with_const_meta(i, meta.clone()))
+                    .map(|i| Self::with_same_meta_at_all_nodes(i, meta.clone()))
                     .collect(),
                 meta,
             ),
@@ -1116,7 +1121,12 @@ impl<T> BamlValueWithMeta<T> {
                 class_name.clone(),
                 items
                     .iter()
-                    .map(|(k, v)| (k.clone(), Self::with_const_meta(v, meta.clone())))
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            Self::with_same_meta_at_all_nodes(v, meta.clone()),
+                        )
+                    })
                     .collect(),
                 meta,
             ),

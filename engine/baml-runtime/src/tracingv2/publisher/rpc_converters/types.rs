@@ -8,8 +8,8 @@ use baml_types::{
 
 use super::{IRRpcState, IntoRpcEvent};
 
-impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::BamlValue<'a>>
-    for BamlValueWithMeta<T>
+impl<'a, T: HasType<type_meta::NonStreaming> + std::fmt::Debug>
+    IntoRpcEvent<'a, runtime_api::BamlValue<'a>> for BamlValueWithMeta<T>
 {
     fn to_rpc_event(&'a self, lookup: &(impl IRRpcState + ?Sized)) -> runtime_api::BamlValue<'a> {
         let type_ref = self.field_type().to_rpc_event(lookup);

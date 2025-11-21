@@ -493,10 +493,11 @@ impl BamlAsyncInterpreterRuntime {
             }
         };
 
-        let response_baml_value = ResponseBamlValue(BamlValueWithMeta::with_const_meta(
-            &baml_value,
-            ResponseValueMeta(vec![], vec![], Completion::default(), output_type),
-        ));
+        let response_baml_value =
+            ResponseBamlValue(BamlValueWithMeta::with_same_meta_at_all_nodes(
+                &baml_value,
+                ResponseValueMeta(vec![], vec![], Completion::default(), output_type),
+            ));
 
         let final_result = Ok(FunctionResult::new(
             OrchestrationScope { scope: vec![] },

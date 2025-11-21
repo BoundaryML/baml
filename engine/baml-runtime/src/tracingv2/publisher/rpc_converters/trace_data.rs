@@ -9,7 +9,8 @@ use baml_types::{
 
 use super::{IRRpcState, IntoRpcEvent};
 
-impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
+impl<'a, T: std::fmt::Debug + HasType<type_meta::NonStreaming>>
+    IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
     for baml_types::tracing::events::FunctionStart<T>
 {
     fn to_rpc_event(
@@ -90,7 +91,8 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::EvaluationContext>
         }
     }
 }
-impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
+impl<'a, T: std::fmt::Debug + HasType<type_meta::NonStreaming>>
+    IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
     for baml_types::tracing::events::FunctionEnd<'a, T>
 {
     fn to_rpc_event(

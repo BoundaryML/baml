@@ -14,7 +14,7 @@ use baml_types::{
 };
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
-use internal_baml_core::ir::ir_helpers::infer_type;
+use internal_baml_core::ir::ir_helpers::{infer_type, infer_value_with_type};
 use internal_baml_jinja::RenderedPrompt;
 use jsonish::ResponseBamlValue;
 use serde::Serialize;
@@ -455,21 +455,13 @@ impl BamlTracer {
         }
 
         // Add function start trace event
+        log::info!("Creating trace event for {}", function_name);
         let trace_event = TraceEvent::new_function_start(
             call_stack,
             function_name.to_string(),
             params
                 .iter()
-                .map(|(k, v)| {
-                    let field_type = infer_type(v).unwrap_or_else(|| {
-                        log::warn!("Failed to infer FieldType for BamlValue in tracing. Defaulting to Null.");
-                        baml_types::ir_type::TypeNonStreaming::Primitive(baml_types::TypeValue::Null, Default::default())
-                    });
-                    (
-                        k.clone(),
-                        BamlValueWithMeta::with_const_meta(v, field_type),
-                    )
-                })
+                .map(|(k, v)| (k.clone(), infer_value_with_type(v)))
                 .collect(),
             EvaluationContext {
                 tags: global_tags
@@ -485,6 +477,7 @@ impl BamlTracer {
             },
             is_stream,
         );
+        log::info!("Submitting trace event for {}", function_name);
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
         call
@@ -611,7 +604,7 @@ impl BamlTracer {
                 ),
             };
             let baml_value_with_meta: BamlValueWithMeta<baml_types::ir_type::TypeNonStreaming> =
-                BamlValueWithMeta::with_const_meta(
+                BamlValueWithMeta::with_same_meta_at_all_nodes(
                     response.as_ref().unwrap_or(&baml_types::BamlValue::Null),
                     field_type_for_meta,
                 );
