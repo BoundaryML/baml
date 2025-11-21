@@ -38,6 +38,7 @@ markdown_extensions:
   - pymdownx.snippets
   - tables
   - attr_list
+  - md_in_html
 
 plugins:
   - search
