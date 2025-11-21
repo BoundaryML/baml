@@ -6,12 +6,15 @@ description: Learn how to handle Pdf inputs in BAML functions
 Pdf values to BAML functions can be created in client libraries. This document explains how to use these functions both at compile time and runtime to handle Pdf data. For more details, refer to [pdf types](/ref/baml/types#pdf).
 
 <Info>
-  `Pdf` instances can be created from URLs, Base64 data, or local files. URL processing is controlled by your client's `media_url_handler` configuration.
+  `Pdf` instances can be created from URLs, Base64 data, or local files. URL
+  processing is controlled by your client's
+  [`media_url_handler`](/ref/baml_client/pdf#url-handling) configuration.
   Please note that many websites will block requests to directly fetch PDFs.
 </Info>
 
 <Warning>
-  Some models like Vertex AI require the media type to be explicitly specified. Always provide the `mediaType` parameter when possible for better compatibility.
+  Some models like Vertex AI require the media type to be explicitly specified.
+  Always provide the `mediaType` parameter when possible for better compatibility.
 </Warning>
 
 ## Usage Examples
@@ -149,7 +152,61 @@ test PdfFileTest {
   The path to the PDF file. Supports relative paths (resolved from the current BAML file) or absolute paths. The file does not need to be inside `baml_src/`.
 </ParamField>
 
-## Static Methods
+## API Reference
+
+<Tabs>
+<Tab title="Python" language="python">
+
+### Static Methods
+
+<ParamField
+  path="from_url"
+  type="(url: str) -> Pdf"
+>
+  Creates a Pdf object from a URL. The media type is automatically set to `application/pdf`.
+</ParamField>
+
+<ParamField
+  path="from_base64"
+  type="(base64: str) -> Pdf"
+>
+  Creates a Pdf object using Base64 encoded data. The media type is automatically set to `application/pdf`.
+</ParamField>
+
+### Instance Methods
+
+<ParamField
+  path="is_url"
+  type="() -> bool"
+>
+  Check if the Pdf is stored as a URL.
+</ParamField>
+
+<ParamField
+  path="as_url"
+  type="() -> str"
+>
+  Get the URL if the Pdf is stored as a URL. Raises an exception if the Pdf is not stored as a URL.
+</ParamField>
+
+<ParamField
+  path="as_base64"
+  type="() -> list[str]"
+>
+  Get the base64 data and media type if the Pdf is stored as base64. Returns `[base64_data, media_type]`. Raises an exception if the Pdf is not stored as base64.
+</ParamField>
+
+<ParamField
+  path="baml_serialize"
+  type="() -> dict"
+>
+  Convert the Pdf to a dictionary representation. Returns either `{"url": str}` or `{"base64": str, "media_type": str}`.
+</ParamField>
+
+</Tab>
+<Tab title="TypeScript" language="typescript">
+
+### Static Methods
 
 <ParamField
   path="fromUrl"
@@ -160,9 +217,9 @@ test PdfFileTest {
 
 <ParamField
   path="fromBase64"
-  type="(mediaType: string, base64: string) => Pdf"
+  type="(base64: string) => Pdf"
 >
-  Creates a Pdf object using Base64 encoded data along with the given MIME type. The `mediaType` parameter is required.
+  Creates a Pdf object using Base64 encoded data. The media type is automatically set to `application/pdf`.
 </ParamField>
 
 <ParamField
@@ -181,7 +238,7 @@ test PdfFileTest {
   Creates a Pdf object from a Blob object. Available in browser environments only.
 </ParamField>
 
-## Instance Methods
+### Instance Methods
 
 <ParamField
   path="isUrl"
@@ -201,7 +258,7 @@ test PdfFileTest {
   path="asBase64"
   type="() => [string, string]"
 >
-  Get the base64 data and media type if the Pdf is stored as base64. Returns [base64Data, mediaType]. Throws an Error if the Pdf is not stored as base64.
+  Get the base64 data and media type if the Pdf is stored as base64. Returns `[base64Data, mediaType]`. Throws an Error if the Pdf is not stored as base64.
 </ParamField>
 
 <ParamField
@@ -210,6 +267,63 @@ test PdfFileTest {
 >
   Convert the Pdf to a JSON representation. Returns either a URL object or a base64 object with media type, depending on how the Pdf was created.
 </ParamField>
+
+</Tab>
+<Tab title="Go" language="go">
+
+### Static Methods
+
+<ParamField
+  path="NewPDFFromUrl"
+  type="(url string, mediaType *string) (*PDF, error)"
+>
+  Creates a PDF object from a URL. Optionally specify the media type for better model compatibility.
+</ParamField>
+
+<ParamField
+  path="NewPDFFromBase64"
+  type="(base64 string, mediaType *string) (*PDF, error)"
+>
+  Creates a PDF object using Base64 encoded data. The media type is automatically set to `application/pdf` if not provided.
+</ParamField>
+
+### Instance Methods
+
+<ParamField
+  path="IsUrl"
+  type="() bool"
+>
+  Check if the PDF is stored as a URL.
+</ParamField>
+
+<ParamField
+  path="AsUrl"
+  type="() (string, error)"
+>
+  Get the URL if the PDF is stored as a URL. Returns an error if the PDF is not stored as a URL.
+</ParamField>
+
+<ParamField
+  path="AsBase64"
+  type="() (string, string, error)"
+>
+  Get the base64 data and media type if the PDF is stored as base64. Returns `(base64Data, mediaType, error)`. Returns an error if the PDF is not stored as base64.
+</ParamField>
+
+<ParamField
+  path="ToJSON"
+  type="() (map[string]interface{}, error)"
+>
+  Convert the PDF to a map representation. Returns either `{"url": string}` or `{"base64": string, "media_type": string}`.
+</ParamField>
+
+</Tab>
+<Tab title="Ruby" language="ruby">
+
+Ruby implementation is in development.
+
+</Tab>
+</Tabs>
 
 ## URL Handling
 
@@ -227,6 +341,115 @@ PDF URLs are processed according to your client's `media_url_handler` configurat
   2. Downloading the PDF locally and using `from_file`
   3. Using a proxy or authenticated request
 </Warning>
+
+## Configuring Media URL Handlers
+
+You can customize how PDF URLs are processed by configuring the `media_url_handler` in your BAML client definition. This is useful when you need to override provider defaults or ensure compatibility with specific model requirements.
+
+```baml
+// Basic example: OpenAI client with PDF base64 encoding
+client<llm> MyOpenAIClient {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    media_url_handler {
+      pdf "send_base64"  // Convert PDF URLs to base64
+    }
+  }
+}
+
+function AnalyzePdf(pdf: pdf) -> string {
+  client MyOpenAIClient
+  prompt #"
+    Analyze this PDF: {{ pdf }}
+  "#
+}
+```
+
+### Available Modes
+
+The `media_url_handler.pdf` setting accepts the following values:
+
+- **`send_base64`**: Fetch the PDF from the URL and convert it to base64 before sending to the model. Use this when the provider requires base64 encoding or when you want to ensure the content is embedded in the request.
+
+- **`send_url`**: Keep the PDF as a URL and send it directly to the model. The model provider will fetch the content. Note that many providers don't support direct URL fetching for PDFs.
+
+- **`send_url_add_mime_type`**: Keep the PDF as a URL but add MIME type information (`application/pdf`). Useful for providers like Vertex AI that require explicit MIME types.
+
+- **`send_base64_unless_google_url`**: Keep Google Cloud Storage URLs (`gs://`) as-is, but convert all other URLs to base64. Useful when working with Google AI models.
+
+### Provider-Specific Examples
+
+```baml
+// OpenAI: Override default (send_url) to use base64
+client<llm> OpenAIClient {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    media_url_handler {
+      pdf "send_base64"  // OpenAI requires base64 for PDFs
+    }
+  }
+}
+
+// Anthropic: Override default (send_base64) to use URL
+client<llm> AnthropicClient {
+  provider anthropic
+  options {
+    model "claude-3-5-sonnet-20241022"
+    api_key env.ANTHROPIC_API_KEY
+    media_url_handler {
+      pdf "send_url"  // Anthropic supports both URL and base64
+    }
+  }
+}
+
+// Vertex AI: Use URL with MIME type
+client<llm> VertexClient {
+  provider vertex-ai
+  options {
+    model "gemini-1.5-pro"
+    project "your-project"
+    location "us-central1"
+    media_url_handler {
+      pdf "send_url_add_mime_type"  // Vertex requires MIME type
+    }
+  }
+}
+
+// Google AI: Use conditional handling for GCS URLs
+client<llm> GoogleAIClient {
+  provider google-ai
+  options {
+    model "gemini-1.5-pro"
+    api_key env.GOOGLE_API_KEY
+    media_url_handler {
+      pdf "send_base64_unless_google_url"  // Keep gs:// URLs, convert others
+    }
+  }
+}
+
+// You can configure multiple media types independently
+client<llm> MultiMediaClient {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    media_url_handler {
+      image "send_base64"
+      audio "send_url"
+      pdf "send_base64"
+      video "send_url"
+    }
+  }
+}
+```
+
+<Info>
+  You can configure different handling modes for each media type (`image`, `audio`, `pdf`, `video`) independently in the same client.
+</Info>
 
 ## Model Compatibility
 
