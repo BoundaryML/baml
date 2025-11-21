@@ -1094,6 +1094,7 @@ mod tests {
             let end_event: TraceEventWithMeta = TraceEvent::new_function_end(
                 vec![f_id.clone()],
                 Ok(baml_types::BamlValueWithMeta::Null(TypeNonStreaming::null())),
+                baml_types::tracing::events::FunctionType::BamlLlm,
             );
             let end_event = Arc::new(end_event);
             {
@@ -1226,9 +1227,10 @@ mod tests {
             let end_event = Arc::new(TraceEvent {
                 call_id: f_id.clone(),
                 function_event_id: FunctionEventId::new(),
-                content: TraceData::FunctionEnd(FunctionEnd::Success(
-                    baml_types::BamlValueWithMeta::Null(TypeNonStreaming::null()),
-                )),
+                content: TraceData::FunctionEnd(FunctionEnd::Success {
+                    value: baml_types::BamlValueWithMeta::Null(TypeNonStreaming::null()),
+                    function_type: baml_types::tracing::events::FunctionType::BamlLlm,
+                }),
                 call_stack: vec![f_id.clone()],
                 timestamp: end_time,
             });
@@ -1320,6 +1322,7 @@ mod tests {
         let end_event: TraceEventWithMeta = TraceEvent::new_function_end(
             vec![f_id.clone()],
             Ok(baml_types::BamlValueWithMeta::Null(TypeNonStreaming::null())),
+            baml_types::tracing::events::FunctionType::BamlLlm,
         );
         let end_event = Arc::new(end_event);
         {

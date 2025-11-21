@@ -59,6 +59,7 @@ pub struct TracingCall {
     params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
     tags: HashMap<String, BamlValue>,
+    pub function_type: FunctionType,
 }
 
 impl TracingCall {
@@ -433,6 +434,12 @@ impl BamlTracer {
             ctx
         );
 
+        let function_type = if is_baml_function {
+            FunctionType::BamlLlm
+        } else {
+            FunctionType::Native
+        };
+
         let call = TracingCall {
             call_id,
             function_name: function_name.to_string(),
@@ -442,6 +449,7 @@ impl BamlTracer {
             // Note these tags are the ones currently on the stack. While the function runs we may register
             // more tags with set_tags(). Those are picked up via a diff event (SetTags)
             tags: ctx_tags.clone(),
+            function_type: function_type.clone(),
         };
         // println!("---- {} ctx {:#?}", function_name, ctx);
         // baml_log::info!("---- {} ctx {:#?}", function_name, ctx);
@@ -470,11 +478,7 @@ impl BamlTracer {
                     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
                     .collect(),
             },
-            if is_baml_function {
-                FunctionType::BamlLlm
-            } else {
-                FunctionType::Native
-            },
+            function_type,
             is_stream,
         );
         log::info!("Submitting trace event for {}", function_name);
@@ -585,6 +589,7 @@ impl BamlTracer {
                 Err(baml_types::tracing::events::BamlError::External {
                     message: std::borrow::Cow::Owned(error_message),
                 }),
+                call.function_type.clone(),
             )
         } else {
             // Normal success case
@@ -609,7 +614,11 @@ impl BamlTracer {
                     field_type_for_meta,
                 );
 
-            TraceEvent::new_function_end(call.new_call_id_stack.clone(), Ok(baml_value_with_meta))
+            TraceEvent::new_function_end(
+                call.new_call_id_stack.clone(),
+                Ok(baml_value_with_meta),
+                call.function_type,
+            )
         };
 
         BAML_TRACER.lock().unwrap().put(Arc::new(event));
