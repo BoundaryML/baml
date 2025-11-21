@@ -5,7 +5,7 @@
 //! cause the `ItemTree` to change, not edits to whitespace, comments, or bodies.
 
 use crate::{
-    ids::LocalItemId,
+    ids::{ItemKind, LocalItemId, hash_name},
     loc::{ClassMarker, ClientMarker, EnumMarker, FunctionMarker, TestMarker, TypeAliasMarker},
     type_ref::TypeRef,
 };
@@ -22,8 +22,8 @@ use std::ops::Index;
 /// Adding an item in the middle of the file doesn't change the `LocalItemIds`
 /// of other items because `LocalItemIds` are derived from names.
 ///
-/// Unlike the previous arena-based approach, items are stored directly in
-/// `FxHashMap<LocalItemId, Item>`, eliminating an extra level of indirection.
+/// **Collision handling:** IDs pack a 16-bit hash and 16-bit collision index.
+/// The `next_index` map tracks the next available index per `(ItemKind, hash)`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemTree {
     pub(crate) functions: FxHashMap<LocalItemId<FunctionMarker>, Function>,
@@ -32,6 +32,10 @@ pub struct ItemTree {
     pub(crate) type_aliases: FxHashMap<LocalItemId<TypeAliasMarker>, TypeAlias>,
     pub(crate) clients: FxHashMap<LocalItemId<ClientMarker>, Client>,
     pub(crate) tests: FxHashMap<LocalItemId<TestMarker>, Test>,
+
+    /// Collision tracker: (`ItemKind`, hash) -> next available index.
+    /// Single map for all item types, following rust-analyzer's pattern.
+    next_index: FxHashMap<(ItemKind, u16), u16>,
 }
 
 impl Default for ItemTree {
@@ -50,70 +54,61 @@ impl ItemTree {
             type_aliases: FxHashMap::default(),
             clients: FxHashMap::default(),
             tests: FxHashMap::default(),
+            next_index: FxHashMap::default(),
         }
     }
 
+    /// Allocate a collision-resistant ID for an item.
+    /// Returns a `LocalItemId` with the name's hash and a unique collision index.
+    fn alloc_id<T>(&mut self, kind: ItemKind, name: &Name) -> LocalItemId<T> {
+        let hash = hash_name(name);
+        let index = self.next_index.entry((kind, hash)).or_insert(0);
+        let id = LocalItemId::new(hash, *index);
+        *index += 1;
+        id
+    }
+
     /// Add a function and return its local ID.
-    /// `LocalItemId` is derived from the function's name for position-independence.
     pub fn alloc_function(&mut self, func: Function) -> LocalItemId<FunctionMarker> {
-        let id = LocalItemId::from_name(&func.name);
+        let id = self.alloc_id(ItemKind::Function, &func.name);
         self.functions.insert(id, func);
         id
     }
 
     /// Add a class and return its local ID.
-    /// `LocalItemId` is derived from the class's name for position-independence.
     pub fn alloc_class(&mut self, class: Class) -> LocalItemId<ClassMarker> {
-        let id = LocalItemId::from_name(&class.name);
+        let id = self.alloc_id(ItemKind::Class, &class.name);
         self.classes.insert(id, class);
         id
     }
 
     /// Add an enum and return its local ID.
-    /// `LocalItemId` is derived from the enum's name for position-independence.
     pub fn alloc_enum(&mut self, enum_def: Enum) -> LocalItemId<EnumMarker> {
-        let id = LocalItemId::from_name(&enum_def.name);
+        let id = self.alloc_id(ItemKind::Enum, &enum_def.name);
         self.enums.insert(id, enum_def);
         id
     }
 
     /// Add a type alias and return its local ID.
-    /// `LocalItemId` is derived from the type alias's name for position-independence.
-    /// If there's a name collision, appends a counter to make it unique.
-    pub fn alloc_type_alias(&mut self, mut alias: TypeAlias) -> LocalItemId<TypeAliasMarker> {
-        let mut id = LocalItemId::from_name(&alias.name);
-
-        // Handle name collisions by appending counter
-        let mut counter = 0;
-        while self.type_aliases.contains_key(&id) {
-            counter += 1;
-            let collision_name = Name::new(format!("{}_{}", alias.name.as_str(), counter));
-            id = LocalItemId::from_name(&collision_name);
-            alias.name = collision_name;
-        }
-
+    pub fn alloc_type_alias(&mut self, alias: TypeAlias) -> LocalItemId<TypeAliasMarker> {
+        let id = self.alloc_id(ItemKind::TypeAlias, &alias.name);
         self.type_aliases.insert(id, alias);
         id
     }
 
     /// Add a client and return its local ID.
-    /// `LocalItemId` is derived from the client's name for position-independence.
     pub fn alloc_client(&mut self, client: Client) -> LocalItemId<ClientMarker> {
-        let id = LocalItemId::from_name(&client.name);
+        let id = self.alloc_id(ItemKind::Client, &client.name);
         self.clients.insert(id, client);
         id
     }
 
     /// Add a test and return its local ID.
-    /// `LocalItemId` is derived from the test's name for position-independence.
     pub fn alloc_test(&mut self, test: Test) -> LocalItemId<TestMarker> {
-        let id = LocalItemId::from_name(&test.name);
+        let id = self.alloc_id(ItemKind::Test, &test.name);
         self.tests.insert(id, test);
         id
     }
-
-    // Note: Use the Index implementations for lookups.
-    // Example: let func = &item_tree[func_id];
 }
 
 /// A function definition in the `ItemTree`.

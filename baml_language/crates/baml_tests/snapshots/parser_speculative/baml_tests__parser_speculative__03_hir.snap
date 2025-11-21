@@ -3,17 +3,17 @@ source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
+function AnotherLLM {
+  params: [input: String]
+  return: String
+  body: Llm {
+  }
+}
 function Ambiguous {
   params: [input: String]
   return: String
   body: Llm {
     client: GPT4
-  }
-}
-function AnotherLLM {
-  params: [input: String]
-  return: String
-  body: Llm {
   }
 }
 function ProcessData {
@@ -53,6 +53,24 @@ function ExtractData {
     client: GPT4
     prompt: "\n    Extract structured data from: {{ text }}\n    Return as JSON.\n  "
     interpolations: [text]
+  }
+}
+function SimpleCalc {
+  params: [a: Int, b: Int]
+  return: Int
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path("a")
+      Idx::<Expr>(1): Path("b")
+      Idx::<Expr>(2): Literal(Int(2))
+      Idx::<Expr>(3): Binary { op: Mul, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
+      Idx::<Expr>(4): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(3) }
+      Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Return(Some(Idx::<Expr>(4)))
+    ]
+    root: Idx::<Expr>(5)
   }
 }
 function ProcessAnalysis {
@@ -101,15 +119,6 @@ function ProcessAnalysis {
     root: Idx::<Expr>(29)
   }
 }
-function ChainedProcess {
-  params: [input: String]
-  return: String
-  body: Llm {
-    client: GPT4
-    prompt: "\n    Process this through multiple steps:\n    1. {{ input }}\n    2. Transform it\n    3. Return result\n  "
-    interpolations: [input]
-  }
-}
 function LLMAnalyze {
   params: [text: String]
   return: Path(Path { segments: ["Analysis"], kind: Plain })
@@ -119,22 +128,13 @@ function LLMAnalyze {
     interpolations: [text]
   }
 }
-function SimpleCalc {
-  params: [a: Int, b: Int]
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path("a")
-      Idx::<Expr>(1): Path("b")
-      Idx::<Expr>(2): Literal(Int(2))
-      Idx::<Expr>(3): Binary { op: Mul, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
-      Idx::<Expr>(4): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(3) }
-      Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Return(Some(Idx::<Expr>(4)))
-    ]
-    root: Idx::<Expr>(5)
+function ChainedProcess {
+  params: [input: String]
+  return: String
+  body: Llm {
+    client: GPT4
+    prompt: "\n    Process this through multiple steps:\n    1. {{ input }}\n    2. Transform it\n    3. Return result\n  "
+    interpolations: [input]
   }
 }
 class Analysis {

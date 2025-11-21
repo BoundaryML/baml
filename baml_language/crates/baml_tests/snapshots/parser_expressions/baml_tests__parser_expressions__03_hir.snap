@@ -141,6 +141,18 @@ class User {
   age: Int
   tags: List(Path(Path { segments: ["string"], kind: Plain }))
 }
+function ComplexMatch {
+  params: [value: Int]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Missing
+      Idx::<Expr>(1): Object { type_name: Some("value"), fields: [("_", Idx::<Expr>(0))] }
+      Idx::<Expr>(2): Block { stmts: [], tail_expr: Some(Idx::<Expr>(1)) }
+    ]
+    root: Idx::<Expr>(2)
+  }
+}
 function HandleStatus {
   params: [status: Path(Path { segments: ["Status"], kind: Plain })]
   return: String
@@ -158,18 +170,6 @@ function HandleStatus {
       Idx::<Expr>(9): Block { stmts: [], tail_expr: Some(Idx::<Expr>(8)) }
     ]
     root: Idx::<Expr>(9)
-  }
-}
-function ComplexMatch {
-  params: [value: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Missing
-      Idx::<Expr>(1): Object { type_name: Some("value"), fields: [("_", Idx::<Expr>(0))] }
-      Idx::<Expr>(2): Block { stmts: [], tail_expr: Some(Idx::<Expr>(1)) }
-    ]
-    root: Idx::<Expr>(2)
   }
 }
 enum Status {

@@ -3,16 +3,6 @@ source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function boolArray {
-  return: List(Path(Path { segments: ["bool"], kind: Plain }))
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Array { elements: [] }
-      Idx::<Expr>(1): Block { stmts: [], tail_expr: Some(Idx::<Expr>(0)) }
-    ]
-    root: Idx::<Expr>(1)
-  }
-}
 function floatArray {
   return: List(Path(Path { segments: ["float"], kind: Plain }))
   body: Expr {
@@ -21,6 +11,19 @@ function floatArray {
       Idx::<Expr>(1): Block { stmts: [], tail_expr: Some(Idx::<Expr>(0)) }
     ]
     root: Idx::<Expr>(1)
+  }
+}
+function stringArray {
+  return: List(Path(Path { segments: ["string"], kind: Plain }))
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Literal(String("hello"))
+      Idx::<Expr>(1): Literal(String(" \"world\""))
+      Idx::<Expr>(2): Literal(String(" \"test\""))
+      Idx::<Expr>(3): Array { elements: [Idx::<Expr>(0), Idx::<Expr>(1), Idx::<Expr>(2)] }
+      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
+    ]
+    root: Idx::<Expr>(4)
   }
 }
 function pointArray {
@@ -42,17 +45,14 @@ function pointArray {
     root: Idx::<Expr>(10)
   }
 }
-function stringArray {
-  return: List(Path(Path { segments: ["string"], kind: Plain }))
+function boolArray {
+  return: List(Path(Path { segments: ["bool"], kind: Plain }))
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Literal(String("hello"))
-      Idx::<Expr>(1): Literal(String(" \"world\""))
-      Idx::<Expr>(2): Literal(String(" \"test\""))
-      Idx::<Expr>(3): Array { elements: [Idx::<Expr>(0), Idx::<Expr>(1), Idx::<Expr>(2)] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
+      Idx::<Expr>(0): Array { elements: [] }
+      Idx::<Expr>(1): Block { stmts: [], tail_expr: Some(Idx::<Expr>(0)) }
     ]
-    root: Idx::<Expr>(4)
+    root: Idx::<Expr>(1)
   }
 }
 function intArray {
@@ -105,17 +105,8 @@ class Point {
   x: Int
   y: Int
 }
-function floatValues {
-  return: Path(Path { segments: ["map<string, float>"], kind: Plain })
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
-  }
-}
-function stringValues {
-  return: Path(Path { segments: ["map<string, string>"], kind: Plain })
+function boolValues {
+  return: Path(Path { segments: ["map<string, bool>"], kind: Plain })
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
@@ -132,8 +123,17 @@ function intValues {
     root: Idx::<Expr>(0)
   }
 }
-function boolValues {
-  return: Path(Path { segments: ["map<string, bool>"], kind: Plain })
+function stringValues {
+  return: Path(Path { segments: ["map<string, string>"], kind: Plain })
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
+    ]
+    root: Idx::<Expr>(0)
+  }
+}
+function floatValues {
+  return: Path(Path { segments: ["map<string, float>"], kind: Plain })
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Block { stmts: [], tail_expr: None }

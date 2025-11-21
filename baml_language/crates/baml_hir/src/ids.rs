@@ -97,73 +97,65 @@ impl std::fmt::Debug for ItemId<'_> {
     }
 }
 
-/// Local ID within an arena (type-safe index).
+/// Local ID within an `ItemTree` (type-safe, collision-resistant).
+///
+/// Packs a 16-bit hash and 16-bit collision index into 32 bits.
+/// This follows rust-analyzer's approach: hash for position-independence,
+/// index for collision handling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LocalItemId<T> {
-    index: u32,
+    /// Upper 16 bits: hash, Lower 16 bits: collision index
+    packed: u32,
     _phantom: PhantomData<T>,
 }
 
 impl<T> LocalItemId<T> {
-    pub const fn new(index: u32) -> Self {
+    /// Create a new `LocalItemId` from hash and collision index.
+    pub const fn new(hash: u16, index: u16) -> Self {
+        let packed = ((hash as u32) << 16) | (index as u32);
         LocalItemId {
-            index,
+            packed,
             _phantom: PhantomData,
         }
     }
 
-    /// Create a `LocalItemId` from a name (content-based, not position-based).
-    /// This provides position-independence: the same name always produces the same ID.
-    pub fn from_name(name: &baml_base::Name) -> Self {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-        name.hash(&mut hasher);
-        let hash = hasher.finish();
-
-        // Use the lower 32 bits of the hash (truncation is intentional)
-        #[allow(clippy::cast_possible_truncation)]
-        let index = hash as u32;
-
-        LocalItemId {
-            index,
-            _phantom: PhantomData,
-        }
+    /// Extract the hash portion (upper 16 bits).
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn hash(self) -> u16 {
+        (self.packed >> 16) as u16
     }
 
-    /// Convert from an la-arena Idx to `LocalItemId`.
-    pub fn from_arena<U>(idx: la_arena::Idx<U>) -> Self {
-        LocalItemId {
-            index: idx.into_raw().into_u32(),
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Convert to an la-arena Idx.
-    pub fn to_arena<U>(self) -> la_arena::Idx<U> {
-        la_arena::Idx::from_raw(la_arena::RawIdx::from_u32(self.index))
+    /// Extract the collision index (lower 16 bits).
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn index(self) -> u16 {
+        self.packed as u16
     }
 
     pub const fn as_u32(self) -> u32 {
-        self.index
-    }
-
-    pub const fn as_usize(self) -> usize {
-        self.index as usize
+        self.packed
     }
 }
 
-// Implement From for convenience
-impl<T> From<u32> for LocalItemId<T> {
-    fn from(index: u32) -> Self {
-        LocalItemId::new(index)
-    }
-}
+/// Hash a name to 16 bits for use in `LocalItemId`.
+pub fn hash_name(name: &baml_base::Name) -> u16 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
 
-impl<T> From<usize> for LocalItemId<T> {
+    let mut hasher = DefaultHasher::new();
+    name.hash(&mut hasher);
     #[allow(clippy::cast_possible_truncation)]
-    fn from(index: usize) -> Self {
-        LocalItemId::new(index as u32)
-    }
+    let hash = hasher.finish() as u16;
+    hash
+}
+
+/// Item kinds for collision tracking.
+/// Used as part of the composite key `(ItemKind, hash)` in the collision map.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ItemKind {
+    Function,
+    Class,
+    Enum,
+    TypeAlias,
+    Client,
+    Test,
 }

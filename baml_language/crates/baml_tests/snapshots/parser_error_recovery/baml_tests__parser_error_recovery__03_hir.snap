@@ -14,11 +14,16 @@ enum Status {
   EnumVariant { name: "INACTIVE" }
   EnumVariant { name: "PENDING" }
 }
+class Another {
+  field: Int
+}
 class User {
   name: String
 }
-class Another {
-  field: Int
+function Incomplete {
+  params: [param1: String]
+  return: Unknown
+  body: Missing
 }
 function NextFunction {
   return: String
@@ -32,11 +37,6 @@ function NextFunction {
     ]
     root: Idx::<Expr>(1)
   }
-}
-function Incomplete {
-  params: [param1: String]
-  return: Unknown
-  body: Missing
 }
 class Partial {
   field1: Path(Path { segments: ["str"], kind: Plain })
