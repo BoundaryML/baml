@@ -481,7 +481,6 @@ impl BamlTracer {
             function_type,
             is_stream,
         );
-        log::info!("Submitting trace event for {}", function_name);
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
         call
