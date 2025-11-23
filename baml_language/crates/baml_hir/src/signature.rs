@@ -18,11 +18,6 @@ pub struct FunctionSignature {
 
     /// Return type
     pub return_type: TypeRef,
-
-    /// Attributes/modifiers
-    pub attrs: FunctionAttributes,
-    // Note: Generic parameters are queried separately via generic_params()
-    // for incrementality - changes to generics don't invalidate signatures
 }
 
 /// Function parameter.
@@ -30,25 +25,6 @@ pub struct FunctionSignature {
 pub struct Param {
     pub name: Name,
     pub type_ref: TypeRef,
-}
-
-/// Function attributes and modifiers.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct FunctionAttributes {
-    /// Whether this is a streaming function
-    pub is_streaming: bool,
-
-    /// Whether this is async
-    pub is_async: bool,
-
-    /// Custom attributes (@@retry, @@cache, etc.)
-    pub custom_attrs: Vec<CustomAttribute>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CustomAttribute {
-    pub name: Name,
-    pub args: Vec<String>, // Simplified for now
 }
 
 impl FunctionSignature {
@@ -83,14 +59,10 @@ impl FunctionSignature {
             .map(|t| lower_type_ref(&t))
             .unwrap_or(TypeRef::Unknown);
 
-        // Extract attributes (future work)
-        let attrs = FunctionAttributes::default();
-
         Arc::new(FunctionSignature {
             name,
             params,
             return_type,
-            attrs,
         })
     }
 }

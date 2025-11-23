@@ -40,7 +40,7 @@ pub use item_tree::*;
 pub use loc::*;
 pub use path::*;
 // Re-export signature types explicitly (no wildcards to avoid conflicts)
-pub use signature::{CustomAttribute, FunctionAttributes, FunctionSignature, Param};
+pub use signature::{FunctionSignature, Param};
 pub use type_ref::*;
 
 //

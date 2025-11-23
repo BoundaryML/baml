@@ -121,7 +121,6 @@ pub fn function_signature<'db>(
         name: func.name.clone(),
         params: vec![],
         return_type: baml_hir::TypeRef::Unknown,
-        attrs: baml_hir::FunctionAttributes::default(),
     })
 }
 
