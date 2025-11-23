@@ -24,7 +24,6 @@ use rowan::ast::AstNode;
 
 // Module declarations
 mod body;
-mod container;
 mod generics;
 mod ids;
 mod item_tree;
@@ -35,7 +34,6 @@ mod type_ref;
 
 // Re-exports
 pub use body::*;
-pub use container::{BlockId, ContainerId, LocalModuleId, ModuleId, ProjectId};
 pub use generics::*;
 pub use ids::*;
 pub use item_tree::*;
