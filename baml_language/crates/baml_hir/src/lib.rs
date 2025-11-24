@@ -23,6 +23,7 @@ use baml_syntax::SyntaxNode;
 use rowan::ast::AstNode;
 
 // Module declarations
+mod ast_id_map;
 mod body;
 mod generics;
 mod ids;
@@ -33,6 +34,7 @@ mod signature;
 mod type_ref;
 
 // Re-exports
+pub use ast_id_map::{AstIdMap, FileAstId, ItemKind as AstItemKind};
 pub use body::*;
 pub use generics::*;
 pub use ids::*;
@@ -81,6 +83,18 @@ pub struct ProjectItems<'db> {
     pub items: Vec<ItemId<'db>>,
 }
 
+/// Interned function body text for content-based caching.
+///
+/// By interning the body text, Salsa can detect when a function body
+/// actually changed (vs just the CST being rebuilt). This enables
+/// fine-grained incrementality where editing one function's body
+/// doesn't invalidate other functions' body queries.
+#[salsa::interned]
+pub struct FunctionBodyText {
+    /// The raw text of the function body (everything inside the braces)
+    pub text: String,
+}
+
 //
 // ────────────────────────────────────────────────────────── SALSA QUERIES ─────
 //
@@ -100,14 +114,33 @@ pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
 // #[salsa::tracked]
 // pub fn container_item_tree(db: &dyn Db, container: ContainerId) -> Arc<ItemTree>
 
+/// Tracked: Build stable ID map for syntax nodes.
+///
+/// This query provides an invalidation barrier for function bodies and signatures:
+/// it re-runs when the file changes, but downstream queries only invalidate if
+/// specific `AstIds` change or resolve to different nodes.
+///
+/// The `AstIdMap` uses content-based hashing (name + kind) to create stable IDs
+/// that survive:
+/// - Reordering items
+/// - Adding/removing other items
+/// - Changing whitespace/comments
+/// - Changing function bodies
+#[salsa::tracked]
+pub fn file_ast_id_map(db: &dyn Db, file: SourceFile) -> Arc<AstIdMap> {
+    let tree = syntax_tree(db, file);
+    let map = AstIdMap::from_source(&tree);
+    Arc::new(map)
+}
+
 /// Tracked: Get all items defined in a file.
 ///
 /// Returns a tracked struct containing interned IDs for all top-level items.
 #[salsa::tracked]
 pub fn file_items(db: &dyn Db, file: SourceFile) -> FileItems<'_> {
     let item_tree = file_item_tree(db, file);
-    let file_id = file.file_id(db);
-    let items = intern_all_items(db, file_id, &item_tree);
+    let ast_id_map = file_ast_id_map(db, file);
+    let items = intern_all_items(db, file, &item_tree, &ast_id_map);
     FileItems::new(db, items)
 }
 
@@ -169,8 +202,9 @@ pub fn type_alias_generic_params(_db: &dyn Db, _alias: TypeAliasId<'_>) -> Arc<G
 /// Items are returned sorted by their ID value for deterministic ordering.
 fn intern_all_items<'db>(
     db: &'db dyn Db,
-    file: baml_base::FileId,
+    file: baml_base::SourceFile,
     tree: &ItemTree,
+    ast_id_map: &AstIdMap,
 ) -> Vec<ItemId<'db>> {
     let mut items = Vec::new();
 
@@ -178,7 +212,14 @@ fn intern_all_items<'db>(
     let mut funcs: Vec<_> = tree.functions.keys().copied().collect();
     funcs.sort_by_key(|id| id.as_u32());
     for local_id in funcs {
-        let loc = FunctionLoc::new(db, file, local_id);
+        let func = &tree[local_id];
+
+        // Look up AstId for this function
+        let ast_id = ast_id_map
+            .find_by_name(func.name.as_str(), AstItemKind::Function)
+            .expect("function must have AstId in map");
+
+        let loc = FunctionLoc::new(db, file, local_id, ast_id);
         items.push(ItemId::Function(loc));
     }
 

@@ -93,63 +93,130 @@ impl Default for RootDatabase {
 ///
 /// This is separate from the `ItemTree` to provide fine-grained incrementality.
 /// Changing a function body does NOT invalidate this query.
+///
+/// Uses `AstId` for O(1) direct lookup instead of O(n) linear search.
+///
+/// Note: Takes only `function` as parameter (not `file` separately).
+/// The file is retrieved from `function.file(db)`. This is critical for
+/// incrementality - passing `file` separately would cause unnecessary re-runs.
 #[salsa::tracked]
 pub fn function_signature<'db>(
     db: &'db dyn baml_hir::Db,
-    file: SourceFile,
     function: baml_hir::FunctionLoc<'db>,
 ) -> Arc<baml_hir::FunctionSignature> {
+    // Get file from function location
+    let file = function.file(db);
+
+    // Get AstIdMap for stable node addressing
+    let ast_id_map = baml_hir::file_ast_id_map(db, file);
+
+    // Get function's AstId from location
+    let ast_id = function.ast_id(db);
+
+    // Use AstId to find node directly (O(1) lookup)
+    let ptr = ast_id_map
+        .get(ast_id)
+        .expect("function AstId must exist in map");
+
+    // Convert pointer to node
     let tree = baml_parser::syntax_tree(db, file);
-    let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
+    let func_node = ptr.to_node(&tree);
+    let func_def =
+        baml_syntax::ast::FunctionDef::cast(func_node).expect("AstId must point to function");
 
-    // Find the function node by name
-    let item_tree = baml_hir::file_item_tree(db, file);
-    let func = &item_tree[function.id(db)];
+    // Lower signature
+    baml_hir::FunctionSignature::lower(&func_def)
+}
 
-    for item in source_file.items() {
-        if let baml_syntax::ast::Item::Function(func_node) = item {
-            if let Some(name_token) = func_node.name() {
-                if name_token.text() == func.name.as_str() {
-                    return baml_hir::FunctionSignature::lower(&func_node);
-                }
-            }
-        }
-    }
+/// Extract and intern the body text of a function for content-based caching.
+///
+/// This query extracts just the body text and interns it. If the body text
+/// is unchanged, the interned ID will be the same, allowing downstream
+/// queries to be cached.
+#[salsa::tracked]
+pub fn function_body_text<'db>(
+    db: &'db dyn baml_hir::Db,
+    function: baml_hir::FunctionLoc<'db>,
+) -> baml_hir::FunctionBodyText<'db> {
+    // Get file from function location
+    let file = function.file(db);
 
-    // Function not found - return minimal signature
-    Arc::new(baml_hir::FunctionSignature {
-        name: func.name.clone(),
-        params: vec![],
-        return_type: baml_hir::TypeRef::Unknown,
-    })
+    // Get AstIdMap for stable node addressing
+    let ast_id_map = baml_hir::file_ast_id_map(db, file);
+
+    // Get function's AstId from location
+    let ast_id = function.ast_id(db);
+
+    // Use AstId to find node directly (O(1) lookup)
+    let ptr = ast_id_map
+        .get(ast_id)
+        .expect("function AstId must exist in map");
+
+    // Convert pointer to node
+    let tree = baml_parser::syntax_tree(db, file);
+    let func_node = ptr.to_node(&tree);
+    let func_def =
+        baml_syntax::ast::FunctionDef::cast(func_node).expect("AstId must point to function");
+
+    // Extract body text (for content-based caching)
+    let body_text = if let Some(llm_body) = func_def.llm_body() {
+        llm_body.syntax().text().to_string()
+    } else if let Some(expr_body) = func_def.expr_body() {
+        expr_body.syntax().text().to_string()
+    } else {
+        String::new()
+    };
+
+    // Intern the body text - if unchanged, same ID returned
+    baml_hir::FunctionBodyText::new(db, body_text)
+}
+
+/// Lower a function body based on its interned body text (internal query).
+///
+/// This query takes BOTH the function location AND the interned body text.
+/// By including `body_text` as a parameter, Salsa can cache based on it:
+/// if `body_text` is unchanged, the cached result is returned.
+#[salsa::tracked]
+fn function_body_impl<'db>(
+    db: &'db dyn baml_hir::Db,
+    function: baml_hir::FunctionLoc<'db>,
+    _body_text: baml_hir::FunctionBodyText<'db>,
+) -> Arc<baml_hir::FunctionBody> {
+    // Get file from function location
+    let file = function.file(db);
+
+    // Get AstIdMap for stable node addressing
+    let ast_id_map = baml_hir::file_ast_id_map(db, file);
+
+    // Get function's AstId from location
+    let ast_id = function.ast_id(db);
+
+    // Use AstId to find node directly (O(1) lookup)
+    let ptr = ast_id_map
+        .get(ast_id)
+        .expect("function AstId must exist in map");
+
+    // Convert pointer to node
+    let tree = baml_parser::syntax_tree(db, file);
+    let func_node = ptr.to_node(&tree);
+    let func_def =
+        baml_syntax::ast::FunctionDef::cast(func_node).expect("AstId must point to function");
+
+    // Lower body
+    // Even though we access the syntax tree here, Salsa will cache the result
+    // based on the body_text parameter. If body_text is unchanged, we return
+    // the cached Arc (same pointer).
+    baml_hir::FunctionBody::lower(&func_def)
 }
 
 /// Returns the body of a function (LLM prompt or expression IR).
 ///
-/// This is the most frequently invalidated query - it changes whenever
-/// the function body is edited.
-#[salsa::tracked]
+/// This is the public API. It internally calls `function_body_text` and
+/// `function_body_impl` to enable content-based caching.
 pub fn function_body<'db>(
     db: &'db dyn baml_hir::Db,
-    file: SourceFile,
     function: baml_hir::FunctionLoc<'db>,
 ) -> Arc<baml_hir::FunctionBody> {
-    let tree = baml_parser::syntax_tree(db, file);
-    let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
-
-    let item_tree = baml_hir::file_item_tree(db, file);
-    let func = &item_tree[function.id(db)];
-
-    for item in source_file.items() {
-        if let baml_syntax::ast::Item::Function(func_node) = item {
-            if let Some(name_token) = func_node.name() {
-                if name_token.text() == func.name.as_str() {
-                    return baml_hir::FunctionBody::lower(&func_node);
-                }
-            }
-        }
-    }
-
-    // No body found
-    Arc::new(baml_hir::FunctionBody::Missing)
+    let body_text = function_body_text(db, function);
+    function_body_impl(db, function, body_text)
 }

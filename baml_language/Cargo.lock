@@ -148,6 +148,7 @@ name = "baml_hir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_lexer",
  "baml_parser",
  "baml_syntax",
  "baml_workspace",
@@ -219,6 +220,7 @@ dependencies = [
  "baml_diagnostics",
  "codspeed-divan-compat",
  "insta",
+ "salsa",
  "walkdir",
 ]
 
