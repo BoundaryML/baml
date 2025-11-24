@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1005,7 +1005,7 @@ dependencies = [
 
 [[package]]
 name = "baml-compiler"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -1023,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "baml-derive"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1045,7 +1045,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "baml-compiler",
  "baml-vm",
@@ -1064,7 +1064,7 @@ dependencies = [
 
 [[package]]
 name = "baml-log"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1079,7 +1079,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lsp-types"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1110,7 +1110,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1192,7 +1192,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-compiler",
@@ -1372,7 +1372,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1426,7 +1426,7 @@ dependencies = [
 
 [[package]]
 name = "baml-vm"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-compiler",
@@ -1443,7 +1443,7 @@ dependencies = [
 
 [[package]]
 name = "baml_cffi"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1646,7 +1646,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2601,7 +2601,7 @@ dependencies = [
 
 [[package]]
 name = "dir-writer"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -2609,7 +2609,7 @@ dependencies = [
  "filetime",
  "indexmap 2.9.0",
  "internal-baml-core",
- "pathdiff 0.2.3",
+ "pathdiff 0.1.0",
  "serde_json",
  "sugar_path",
  "walkdir",
@@ -3145,7 +3145,7 @@ dependencies = [
 
 [[package]]
 name = "generators-go"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3158,7 +3158,7 @@ dependencies = [
 
 [[package]]
 name = "generators-lib"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -3176,7 +3176,7 @@ dependencies = [
 
 [[package]]
 name = "generators-openapi"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3195,7 +3195,7 @@ dependencies = [
 
 [[package]]
 name = "generators-python"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3209,7 +3209,7 @@ dependencies = [
 
 [[package]]
 name = "generators-ruby"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3222,7 +3222,7 @@ dependencies = [
 
 [[package]]
 name = "generators-typescript"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -4055,7 +4055,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-ast"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -4077,7 +4077,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-compiler",
@@ -4118,7 +4118,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -4131,7 +4131,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -4154,7 +4154,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -4173,7 +4173,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-derive",
@@ -4199,7 +4199,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "internal-baml-ast",
  "internal-baml-diagnostics",
@@ -4211,7 +4211,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -4411,7 +4411,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -4499,7 +4499,7 @@ dependencies = [
 
 [[package]]
 name = "language-server"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4614,7 +4614,7 @@ checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
 
 [[package]]
 name = "llm-response-parser"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -5499,7 +5499,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "playground-server"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -7445,7 +7445,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-harness"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -7822,7 +7822,7 @@ dependencies = [
 
 [[package]]
 name = "tools"
-version = "0.213.0"
+version = "0.214.0"
 dependencies = [
  "anyhow",
  "notify-debouncer-full",
