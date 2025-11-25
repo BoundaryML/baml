@@ -136,6 +136,9 @@ pub enum Stmt {
         initializer: Option<ExprId>,
     },
 
+    /// While loop: `while (condition) { body }`
+    While { condition: ExprId, body: ExprId },
+
     /// Return statement: `return "minor";`
     Return(Option<ExprId>),
 
@@ -343,6 +346,10 @@ impl LoweringContext {
                 }
                 SyntaxKind::RETURN_STMT => {
                     let stmt_id = self.lower_return_stmt(child);
+                    stmts.push(stmt_id);
+                }
+                SyntaxKind::WHILE_STMT => {
+                    let stmt_id = self.lower_while_stmt(child);
                     stmts.push(stmt_id);
                 }
                 SyntaxKind::EXPR
@@ -934,6 +941,24 @@ impl LoweringContext {
         };
 
         self.stmts.alloc(Stmt::Return(return_value))
+    }
+
+    fn lower_while_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
+        // Use the WhileStmt AST wrapper for cleaner access
+        let while_stmt = baml_syntax::ast::WhileStmt::cast(node.clone());
+
+        let condition = while_stmt
+            .as_ref()
+            .and_then(baml_syntax::WhileStmt::condition)
+            .map(|n| self.lower_expr(&n))
+            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+
+        let body = while_stmt
+            .and_then(|w| w.body())
+            .map(|block| self.lower_block_expr(&block))
+            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+
+        self.stmts.alloc(Stmt::While { condition, body })
     }
 
     fn has_trailing_semicolon(node: &baml_syntax::SyntaxNode) -> bool {

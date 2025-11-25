@@ -178,3 +178,59 @@ function TestPrecedence {
     root: Idx::<Expr>(21)
   }
 }
+function simple_while_loop {
+  return: Int
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path("i")
+      Idx::<Expr>(1): Literal(Int(10))
+      Idx::<Expr>(2): Binary { op: Lt, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(1) }
+      Idx::<Expr>(3): Path("i")
+      Idx::<Expr>(4): Path("i")
+      Idx::<Expr>(5): Literal(Int(1))
+      Idx::<Expr>(6): Binary { op: Add, lhs: Idx::<Expr>(4), rhs: Idx::<Expr>(5) }
+      Idx::<Expr>(7): Binary { op: Add, lhs: Idx::<Expr>(3), rhs: Idx::<Expr>(6) }
+      Idx::<Expr>(8): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
+      Idx::<Expr>(9): Path("i")
+      Idx::<Expr>(10): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: None }
+      Idx::<Stmt>(1): Expr(Idx::<Expr>(7))
+      Idx::<Stmt>(2): While { condition: Idx::<Expr>(2), body: Idx::<Expr>(8) }
+      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(9)))
+    ]
+    root: Idx::<Expr>(10)
+  }
+}
+function nested_while_loop {
+  return: Int
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path("i")
+      Idx::<Expr>(1): Literal(Int(10))
+      Idx::<Expr>(2): Binary { op: Lt, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(1) }
+      Idx::<Expr>(3): Path("j")
+      Idx::<Expr>(4): Literal(Int(10))
+      Idx::<Expr>(5): Binary { op: Lt, lhs: Idx::<Expr>(3), rhs: Idx::<Expr>(4) }
+      Idx::<Expr>(6): Path("j")
+      Idx::<Expr>(7): Path("j")
+      Idx::<Expr>(8): Literal(Int(1))
+      Idx::<Expr>(9): Binary { op: Add, lhs: Idx::<Expr>(7), rhs: Idx::<Expr>(8) }
+      Idx::<Expr>(10): Binary { op: Add, lhs: Idx::<Expr>(6), rhs: Idx::<Expr>(9) }
+      Idx::<Expr>(11): Block { stmts: [Idx::<Stmt>(2)], tail_expr: None }
+      Idx::<Expr>(12): Block { stmts: [Idx::<Stmt>(1), Idx::<Stmt>(3)], tail_expr: None }
+      Idx::<Expr>(13): Path("i")
+      Idx::<Expr>(14): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: None }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: None }
+      Idx::<Stmt>(2): Expr(Idx::<Expr>(10))
+      Idx::<Stmt>(3): While { condition: Idx::<Expr>(5), body: Idx::<Expr>(11) }
+      Idx::<Stmt>(4): While { condition: Idx::<Expr>(2), body: Idx::<Expr>(12) }
+      Idx::<Stmt>(5): Return(Some(Idx::<Expr>(13)))
+    ]
+    root: Idx::<Expr>(14)
+  }
+}

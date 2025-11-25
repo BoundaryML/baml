@@ -75,6 +75,9 @@ ast_node!(IfExpr, IF_EXPR);
 ast_node!(WhileStmt, WHILE_STMT);
 ast_node!(ForExpr, FOR_EXPR);
 ast_node!(BlockExpr, BLOCK_EXPR);
+ast_node!(ReturnStmt, RETURN_STMT);
+ast_node!(BreakStmt, BREAK_STMT);
+ast_node!(ContinueStmt, CONTINUE_STMT);
 
 // Implement accessor methods
 impl SourceFile {
@@ -354,6 +357,91 @@ impl Attribute {
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+}
+
+impl WhileStmt {
+    /// Get the condition expression.
+    /// The condition is the first child expression of the while statement.
+    pub fn condition(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+
+    /// Get the body block expression.
+    /// The body is the second child (`BLOCK_EXPR`) of the while statement.
+    pub fn body(&self) -> Option<BlockExpr> {
+        self.syntax.children().find_map(BlockExpr::cast)
+    }
+}
+
+impl IfExpr {
+    /// Get the condition expression.
+    /// The condition is the first child expression of the if expression.
+    pub fn condition(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+
+    /// Get the then branch block expression.
+    /// The then branch is the first `BLOCK_EXPR` child.
+    pub fn then_branch(&self) -> Option<BlockExpr> {
+        self.syntax.children().find_map(BlockExpr::cast)
+    }
+
+    /// Get the else branch, which could be another `IfExpr` (else if) or a `BlockExpr` (else).
+    pub fn else_branch(&self) -> Option<SyntaxNode> {
+        let children: Vec<_> = self.syntax.children().collect();
+        // If there are more than 2 children, the third one is the else branch
+        children.get(2).cloned()
+    }
+}
+
+impl ForExpr {
+    /// Get the loop variable name.
+    pub fn loop_var(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the iterator expression.
+    pub fn iterator(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+
+    /// Get the body block expression.
+    pub fn body(&self) -> Option<BlockExpr> {
+        self.syntax.children().find_map(BlockExpr::cast)
+    }
+}
+
+impl LetStmt {
+    /// Get the variable name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the type annotation, if present.
+    pub fn ty(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
+    }
+
+    /// Get the initializer expression.
+    pub fn initializer(&self) -> Option<SyntaxNode> {
+        // The initializer is a child node that's not a TYPE_EXPR
+        self.syntax
+            .children()
+            .find(|n| n.kind() != SyntaxKind::TYPE_EXPR)
+    }
+}
+
+impl ReturnStmt {
+    /// Get the return value expression, if present.
+    pub fn value(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
     }
 }
 
