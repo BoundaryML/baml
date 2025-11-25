@@ -136,7 +136,7 @@ class DoNotUseDirectlyCallManager:
 
         # Check if already aborted
         if resolved_options.abort_controller is not None and resolved_options.abort_controller.aborted:
-            raise Exception("BamlAbortError: Operation was aborted")
+            raise baml_py.baml_py.BamlAbortError("Operation was aborted")
 
         return await __runtime__.call_function(
             function_name,
@@ -166,7 +166,7 @@ class DoNotUseDirectlyCallManager:
 
         # Check if already aborted
         if resolved_options.abort_controller is not None and resolved_options.abort_controller.aborted:
-            raise Exception("BamlAbortError: Operation was aborted")
+            raise baml_py.baml_py.BamlAbortError("Operation was aborted")
 
         ctx = __ctx__manager__.get()
         return __runtime__.call_function_sync(

@@ -781,9 +781,9 @@ navigation:
             path: 03-reference/baml/clients/providers/azure.mdx
           - page: "openai-generic"
             path: 03-reference/baml/clients/providers/openai-generic.mdx
-          - page: "Azure AI Foundary (openai-generic)"
-            slug: azure-ai-foundary
-            path: 03-reference/baml/clients/providers/azure-ai-foundary.mdx
+          - page: "Microsoft Foundry (openai-generic)"
+            slug: microsoft-foundry
+            path: 03-reference/baml/clients/providers/microsoft-foundry.mdx
           - page: "Cerebras (openai-generic)"
             slug: cerebras
             path: 03-reference/baml/clients/providers/cerebras.mdx
@@ -1169,8 +1169,8 @@ redirects:
     destination: "/ref/boundary-extraction-api/extract"
   - source: "/document-extraction-api/overview/docs/api/extraction-examples"
     destination: "/ref/boundary-extraction-api/extract/examples"
-  - source: "/ref/llm-client-providers/openai-generic-azure-ai-foundary"
-    destination: "/ref/llm-client-providers/azure-ai-foundary"
+  - source: "/ref/llm-client-providers/openai-generic-microsoft-foundry"
+    destination: "/ref/llm-client-providers/microsoft-foundry"
   - source: "/ref/llm-client-providers/openai-generic-groq"
     destination: "/ref/llm-client-providers/groq"
   - source: "/ref/llm-client-providers/openai-generic-hugging-face"

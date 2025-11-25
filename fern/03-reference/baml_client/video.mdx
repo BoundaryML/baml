@@ -94,7 +94,61 @@ export function TestVideoInput() {
 ```
 </CodeBlocks>
 
-## Static Methods
+## API Reference
+
+<Tabs>
+<Tab title="Python" language="python">
+
+### Static Methods
+
+<ParamField
+  path="from_url"
+  type="(url: str, media_type: Optional[str] = None) -> Video"
+>
+  Creates a Video object from a URL. Optionally specify the media type, otherwise it will be inferred from the URL. When targeting AWS Bedrock with an `s3://` URI, pass the media type explicitly so the request includes the expected `format`.
+</ParamField>
+
+<ParamField
+  path="from_base64"
+  type="(media_type: str, base64: str) -> Video"
+>
+  Creates a Video object using Base64 encoded data along with the given MIME type.
+</ParamField>
+
+### Instance Methods
+
+<ParamField
+  path="is_url"
+  type="() -> bool"
+>
+  Check if the video is stored as a URL.
+</ParamField>
+
+<ParamField
+  path="as_url"
+  type="() -> str"
+>
+  Get the URL of the video if it's stored as a URL. Raises an exception if the video is not stored as a URL.
+</ParamField>
+
+<ParamField
+  path="as_base64"
+  type="() -> list[str]"
+>
+  Get the base64 data and media type if the video is stored as base64. Returns `[base64_data, media_type]`. Raises an exception if the video is not stored as base64.
+</ParamField>
+
+<ParamField
+  path="baml_serialize"
+  type="() -> dict"
+>
+  Convert the video to a dictionary representation. Returns either `{"url": str}` or `{"base64": str, "media_type": str}`.
+</ParamField>
+
+</Tab>
+<Tab title="TypeScript" language="typescript">
+
+### Static Methods
 
 <ParamField
   path="fromUrl"
@@ -118,7 +172,7 @@ export function TestVideoInput() {
   Creates a Video object from a File object. Available in browser environments only.
 </ParamField>
 
-{/* <ParamField
+<ParamField
   path="fromBlob"
   type="(blob: Blob, mediaType?: string) => Promise<Video>"
 >
@@ -132,9 +186,9 @@ export function TestVideoInput() {
 >
   <Info>Only available in browser environments.</Info>
   Creates a Video object by fetching from a URL. Available in browser environments only.
-</ParamField> */}
+</ParamField>
 
-## Instance Methods
+### Instance Methods
 
 <ParamField
   path="isUrl"
@@ -154,15 +208,72 @@ export function TestVideoInput() {
   path="asBase64"
   type="() => [string, string]"
 >
-  Get the base64 data and media type if the video is stored as base64. Returns [base64Data, mediaType]. Throws an Error if the video is not stored as base64.
+  Get the base64 data and media type if the video is stored as base64. Returns `[base64Data, mediaType]`. Throws an Error if the video is not stored as base64.
 </ParamField>
 
-{/* <ParamField
+<ParamField
   path="toJSON"
   type="() => { url: string } | { base64: string; media_type: string }"
 >
   Convert the video to a JSON representation. Returns either a URL object or a base64 object with media type.
-</ParamField> */}
+</ParamField>
+
+</Tab>
+<Tab title="Go" language="go">
+
+### Static Methods
+
+<ParamField
+  path="NewVideoFromUrl"
+  type="(url string, mediaType *string) (*Video, error)"
+>
+  Creates a Video object from a URL. Optionally specify the media type for better model compatibility.
+</ParamField>
+
+<ParamField
+  path="NewVideoFromBase64"
+  type="(base64 string, mediaType *string) (*Video, error)"
+>
+  Creates a Video object using Base64 encoded data along with the given MIME type.
+</ParamField>
+
+### Instance Methods
+
+<ParamField
+  path="IsUrl"
+  type="() bool"
+>
+  Check if the video is stored as a URL.
+</ParamField>
+
+<ParamField
+  path="AsUrl"
+  type="() (string, error)"
+>
+  Get the URL of the video if it's stored as a URL. Returns an error if the video is not stored as a URL.
+</ParamField>
+
+<ParamField
+  path="AsBase64"
+  type="() (string, string, error)"
+>
+  Get the base64 data and media type if the video is stored as base64. Returns `(base64Data, mediaType, error)`. Returns an error if the video is not stored as base64.
+</ParamField>
+
+<ParamField
+  path="ToJSON"
+  type="() (map[string]interface{}, error)"
+>
+  Convert the video to a map representation. Returns either `{"url": string}` or `{"base64": string, "media_type": string}`.
+</ParamField>
+
+</Tab>
+<Tab title="Ruby" language="ruby">
+
+Ruby implementation is in development.
+
+</Tab>
+</Tabs>
 
 ## URL Handling
 

@@ -125,7 +125,6 @@ async def test_collector_async_no_stream_success():
 @pytest.mark.asyncio
 async def test_functionlog_tags_inherit_from_parent_trace():
     collector = Collector(name="tags-collector")
-   
 
     @trace
     async def parent_fn(msg: str):
@@ -145,6 +144,26 @@ async def test_functionlog_tags_inherit_from_parent_trace():
     # Verify keys set in parent trace appear in child function log
     assert tags.get("parent_id") == "p123"
     assert tags.get("run") == "xyz"
+    # Verify calls
+    calls = log.calls
+    assert len(calls) == 1
+
+    call = calls[0]
+
+    assert call.provider == "openai"
+    assert call.client_name == "GPT4oMini"
+    assert call.selected
+
+    # Verify request/response
+    request = call.http_request
+    assert request is not None
+    print(f"### request.body: {request.body} \n {type(request.body)}", file=sys.stderr)
+    body = request.body.json()
+    assert isinstance(body, dict)
+    assert "messages" in body
+    assert "content" in body["messages"][0]
+    assert body["messages"][0]["content"] is not None
+    assert body["model"] == "gpt-4o-mini"
 
 
 @pytest.mark.asyncio

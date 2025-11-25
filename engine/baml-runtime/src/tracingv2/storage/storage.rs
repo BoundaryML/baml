@@ -110,8 +110,11 @@ impl TraceStorage {
         }
 
         let Some(&count) = self.ref_counts.get(&event.call_id) else {
+            // Note -- this happens on python functions since there's no collector for them so we never 'track' these.
+            // meaning we can just disacrd the data after publishing.
             // If no references exist, skip or handle otherwise
             // log::trace!("No references for FunctionID {:?} -- dropping events", event.call_id);
+
             return;
         };
         if count > 0 {
@@ -1085,6 +1088,7 @@ mod tests {
             let end_event: TraceEventWithMeta = TraceEvent::new_function_end(
                 vec![f_id.clone()],
                 Ok(baml_types::BamlValueWithMeta::Null(TypeNonStreaming::null())),
+                baml_types::tracing::events::FunctionType::BamlLlm,
             );
             let end_event = Arc::new(end_event);
             {
@@ -1217,9 +1221,10 @@ mod tests {
             let end_event = Arc::new(TraceEvent {
                 call_id: f_id.clone(),
                 function_event_id: FunctionEventId::new(),
-                content: TraceData::FunctionEnd(FunctionEnd::Success(
-                    baml_types::BamlValueWithMeta::Null(TypeNonStreaming::null()),
-                )),
+                content: TraceData::FunctionEnd(FunctionEnd::Success {
+                    value: baml_types::BamlValueWithMeta::Null(TypeNonStreaming::null()),
+                    function_type: baml_types::tracing::events::FunctionType::BamlLlm,
+                }),
                 call_stack: vec![f_id.clone()],
                 timestamp: end_time,
             });
@@ -1311,6 +1316,7 @@ mod tests {
         let end_event: TraceEventWithMeta = TraceEvent::new_function_end(
             vec![f_id.clone()],
             Ok(baml_types::BamlValueWithMeta::Null(TypeNonStreaming::null())),
+            baml_types::tracing::events::FunctionType::BamlLlm,
         );
         let end_event = Arc::new(end_event);
         {

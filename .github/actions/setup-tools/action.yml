@@ -10,7 +10,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Remove unused tools
+    - name: Remove unused tools (Linux only)
+      if: runner.os == 'Linux'
       shell: bash
       run: |
         # from https://carlosbecker.com/posts/github-actions-disk-space/ and

@@ -14,7 +14,7 @@ use baml_types::{
 };
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
-use internal_baml_core::ir::ir_helpers::infer_type;
+use internal_baml_core::ir::ir_helpers::{infer_type, infer_value_with_type};
 use internal_baml_jinja::RenderedPrompt;
 use jsonish::ResponseBamlValue;
 use serde::Serialize;
@@ -59,6 +59,7 @@ pub struct TracingCall {
     params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
     tags: HashMap<String, BamlValue>,
+    pub function_type: FunctionType,
 }
 
 impl TracingCall {
@@ -433,6 +434,12 @@ impl BamlTracer {
             ctx
         );
 
+        let function_type = if is_baml_function {
+            FunctionType::BamlLlm
+        } else {
+            FunctionType::Native
+        };
+
         let call = TracingCall {
             call_id,
             function_name: function_name.to_string(),
@@ -442,6 +449,7 @@ impl BamlTracer {
             // Note these tags are the ones currently on the stack. While the function runs we may register
             // more tags with set_tags(). Those are picked up via a diff event (SetTags)
             tags: ctx_tags.clone(),
+            function_type: function_type.clone(),
         };
         // println!("---- {} ctx {:#?}", function_name, ctx);
         // baml_log::info!("---- {} ctx {:#?}", function_name, ctx);
@@ -455,21 +463,13 @@ impl BamlTracer {
         }
 
         // Add function start trace event
+        // log::info!("Creating trace event for {}", function_name);
         let trace_event = TraceEvent::new_function_start(
             call_stack,
             function_name.to_string(),
             params
                 .iter()
-                .map(|(k, v)| {
-                    let field_type = infer_type(v).unwrap_or_else(|| {
-                        log::warn!("Failed to infer FieldType for BamlValue in tracing. Defaulting to Null.");
-                        baml_types::ir_type::TypeNonStreaming::Primitive(baml_types::TypeValue::Null, Default::default())
-                    });
-                    (
-                        k.clone(),
-                        BamlValueWithMeta::with_const_meta(v, field_type),
-                    )
-                })
+                .map(|(k, v)| (k.clone(), infer_value_with_type(v)))
                 .collect(),
             EvaluationContext {
                 tags: global_tags
@@ -478,11 +478,7 @@ impl BamlTracer {
                     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
                     .collect(),
             },
-            if is_baml_function {
-                FunctionType::BamlLlm
-            } else {
-                FunctionType::Native
-            },
+            function_type,
             is_stream,
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
@@ -592,6 +588,7 @@ impl BamlTracer {
                 Err(baml_types::tracing::events::BamlError::External {
                     message: std::borrow::Cow::Owned(error_message),
                 }),
+                call.function_type.clone(),
             )
         } else {
             // Normal success case
@@ -611,12 +608,16 @@ impl BamlTracer {
                 ),
             };
             let baml_value_with_meta: BamlValueWithMeta<baml_types::ir_type::TypeNonStreaming> =
-                BamlValueWithMeta::with_const_meta(
+                BamlValueWithMeta::with_same_meta_at_all_nodes(
                     response.as_ref().unwrap_or(&baml_types::BamlValue::Null),
                     field_type_for_meta,
                 );
 
-            TraceEvent::new_function_end(call.new_call_id_stack.clone(), Ok(baml_value_with_meta))
+            TraceEvent::new_function_end(
+                call.new_call_id_stack.clone(),
+                Ok(baml_value_with_meta),
+                call.function_type,
+            )
         };
 
         BAML_TRACER.lock().unwrap().put(Arc::new(event));

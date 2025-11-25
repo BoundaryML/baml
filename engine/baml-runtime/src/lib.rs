@@ -278,6 +278,7 @@ impl<'a> TracingCallGuard<'a> {
     #[cfg(not(target_arch = "wasm32"))]
     fn finish_with(mut self, result: &Result<FunctionResult>) -> Result<()> {
         if let Some(call) = self.call.take() {
+            let function_type = call.function_type.clone();
             // Emit TraceEvent::new_function_end
             let trace_event = TraceEvent::new_function_end(
                 self.call_id_stack.clone(),
@@ -288,6 +289,7 @@ impl<'a> TracingCallGuard<'a> {
                     },
                     Err(e) => Err(e.to_baml_error()),
                 },
+                function_type,
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
@@ -311,6 +313,7 @@ impl<'a> TracingCallGuard<'a> {
     #[cfg(target_arch = "wasm32")]
     async fn finish_with(mut self, result: &Result<FunctionResult>) -> Result<()> {
         if let Some(call) = self.call.take() {
+            let function_type = call.function_type.clone();
             // Emit TraceEvent::new_function_end
             let trace_event = TraceEvent::new_function_end(
                 self.call_id_stack.clone(),
@@ -321,6 +324,7 @@ impl<'a> TracingCallGuard<'a> {
                     },
                     Err(e) => Err(e.to_baml_error()),
                 },
+                function_type,
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
@@ -351,6 +355,7 @@ impl<'a> TracingCallGuard<'a> {
 impl Drop for TracingCallGuard<'_> {
     fn drop(&mut self) {
         if let Some(call) = self.call.take() {
+            let function_type = call.function_type.clone();
             // Only execute drop logic if we have an error (early return case)
             let result: Result<FunctionResult> = if let Some(error) = self.error_result.take() {
                 Err(error)
@@ -363,6 +368,7 @@ impl Drop for TracingCallGuard<'_> {
                         Err(BamlError::External {
                             message: "Operation cancelled".into(),
                         }),
+                        function_type.clone(),
                     );
                     BAML_TRACER
                         .lock()
@@ -376,6 +382,7 @@ impl Drop for TracingCallGuard<'_> {
             let trace_event = TraceEvent::new_function_end(
                 self.call_id_stack.clone(),
                 Err(result.as_ref().err().unwrap().to_baml_error()),
+                function_type.clone(),
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 

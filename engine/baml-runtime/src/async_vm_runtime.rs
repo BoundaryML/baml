@@ -371,7 +371,10 @@ impl BamlAsyncVmRuntime {
                                     try_baml_value_from_vm_value(&vm, &state.value).unwrap();
 
                                 let baml_value_with_meta =
-                                    BamlValueWithMeta::with_const_meta(&current_value, fake_meta);
+                                    BamlValueWithMeta::with_same_meta_at_all_nodes(
+                                        &current_value,
+                                        fake_meta,
+                                    );
 
                                 let notification = watch::WatchNotification::new_var(
                                     watched_var_name.to_owned(), // variable name
@@ -796,10 +799,11 @@ impl BamlAsyncVmRuntime {
             }
         };
 
-        let response_baml_value = ResponseBamlValue(BamlValueWithMeta::with_const_meta(
-            &baml_value,
-            ResponseValueMeta(vec![], vec![], Completion::default(), output_type),
-        ));
+        let response_baml_value =
+            ResponseBamlValue(BamlValueWithMeta::with_same_meta_at_all_nodes(
+                &baml_value,
+                ResponseValueMeta(vec![], vec![], Completion::default(), output_type),
+            ));
 
         let final_result = Ok(FunctionResult::new(
             OrchestrationScope { scope: vec![] },
