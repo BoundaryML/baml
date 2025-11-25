@@ -1409,18 +1409,60 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::FOR_EXPR, |p| {
             p.expect(TokenKind::For);
 
-            // Loop variable
-            if p.at(TokenKind::Word) {
-                p.bump();
+            // Check for parenthesized form: for (...) { }
+            if p.at(TokenKind::LParen) {
+                p.bump(); // (
+
+                // Check if this is iterator-style: for (let var in expr) or C-style: for (init; cond; update)
+                if p.at(TokenKind::Let) {
+                    // Peek ahead to check if this is iterator-style (has 'in' keyword)
+                    // For iterator-style: for (let i in expr)
+                    // For C-style: for (let i = 0; ...)
+                    if p.looks_like_for_in_loop() {
+                        // Iterator-style: for (let var in expr)
+                        p.parse_for_in_pattern();
+                        p.expect(TokenKind::In);
+                        p.parse_expr(); // iterator expression
+                    } else {
+                        // C-style: for (let i = 0; cond; update)
+                        p.parse_let_stmt();
+                        // The let statement already consumed the semicolon
+                        // Now parse condition
+                        if !p.at(TokenKind::Semicolon) && !p.at(TokenKind::RParen) {
+                            p.parse_expr(); // condition
+                        }
+                        p.eat(TokenKind::Semicolon);
+
+                        // Parse update expression
+                        if !p.at(TokenKind::RParen) {
+                            p.parse_expr(); // update
+                        }
+                    }
+                } else if p.at(TokenKind::Word) {
+                    // Simple iterator-style without let: for (i in expr)
+                    p.bump(); // variable name
+                    if p.at(TokenKind::In) {
+                        p.bump(); // in
+                        p.parse_expr(); // iterator expression
+                    } else {
+                        p.error("'in' keyword after loop variable".to_string());
+                    }
+                } else {
+                    p.error("loop variable or 'let'".to_string());
+                }
+
+                p.expect(TokenKind::RParen);
             } else {
-                p.error("loop variable".to_string());
+                // Non-parenthesized form: for var in expr { }
+                if p.at(TokenKind::Word) {
+                    p.bump();
+                } else {
+                    p.error("loop variable".to_string());
+                }
+
+                p.expect(TokenKind::In);
+                p.parse_expr();
             }
-
-            // 'in' keyword
-            p.expect(TokenKind::In);
-
-            // Iterator expression
-            p.parse_expr();
 
             // Body
             if p.at(TokenKind::LBrace) {
@@ -1428,6 +1470,36 @@ impl<'a> Parser<'a> {
             } else {
                 p.error("block after for expression".to_string());
             }
+        });
+    }
+
+    /// Check if this looks like a for-in loop (has 'in' keyword after variable name)
+    fn looks_like_for_in_loop(&self) -> bool {
+        // We're at 'let', look for pattern: let WORD in
+        // Skip: let (0), WORD (1), check for 'in' (2)
+        self.peek(2)
+            .map(|t| t.kind == TokenKind::In)
+            .unwrap_or(false)
+    }
+
+    /// Parse a for-in loop pattern: let var (without initializer)
+    fn parse_for_in_pattern(&mut self) {
+        self.with_node(SyntaxKind::LET_STMT, |p| {
+            p.expect(TokenKind::Let);
+
+            // Variable name
+            if p.at(TokenKind::Word) {
+                p.bump();
+            } else {
+                p.error("variable name".to_string());
+            }
+
+            // Optional type annotation
+            if p.eat(TokenKind::Colon) {
+                p.parse_type();
+            }
+
+            // No initializer for for-in loops - don't emit error
         });
     }
 

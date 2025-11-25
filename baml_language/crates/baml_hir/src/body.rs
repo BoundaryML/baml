@@ -139,6 +139,21 @@ pub enum Stmt {
     /// While loop: `while (condition) { body }`
     While { condition: ExprId, body: ExprId },
 
+    /// For loop (iterator-style): `for (let i in items) { body }`
+    ForIn {
+        pattern: PatId,
+        iterator: ExprId,
+        body: ExprId,
+    },
+
+    /// For loop (C-style): `for (let i = 0; i < 10; i += 1) { body }`
+    ForCStyle {
+        initializer: Option<StmtId>,
+        condition: Option<ExprId>,
+        update: Option<ExprId>,
+        body: ExprId,
+    },
+
     /// Return statement: `return "minor";`
     Return(Option<ExprId>),
 
@@ -350,6 +365,10 @@ impl LoweringContext {
                 }
                 SyntaxKind::WHILE_STMT => {
                     let stmt_id = self.lower_while_stmt(child);
+                    stmts.push(stmt_id);
+                }
+                SyntaxKind::FOR_EXPR => {
+                    let stmt_id = self.lower_for_stmt(child);
                     stmts.push(stmt_id);
                 }
                 SyntaxKind::EXPR
@@ -959,6 +978,67 @@ impl LoweringContext {
             .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
         self.stmts.alloc(Stmt::While { condition, body })
+    }
+
+    fn lower_for_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
+        // Use the ForExpr AST wrapper for cleaner access
+        let for_expr = baml_syntax::ast::ForExpr::cast(node.clone());
+
+        let Some(for_expr) = for_expr else {
+            return self.stmts.alloc(Stmt::Missing);
+        };
+
+        // Get the body (common to both styles)
+        let body = for_expr
+            .body()
+            .map(|block| self.lower_block_expr(&block))
+            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+
+        if for_expr.is_iterator_style() {
+            // Iterator-style: for (let i in items) { ... }
+            let pattern = for_expr
+                .let_stmt()
+                .and_then(|let_stmt| let_stmt.name())
+                .map(|name| {
+                    let name = crate::Name::new(name.text());
+                    self.patterns.alloc(Pattern::Binding(name))
+                })
+                .or_else(|| {
+                    // Fallback to simple loop variable without let
+                    for_expr.loop_var().map(|name| {
+                        let name = crate::Name::new(name.text());
+                        self.patterns.alloc(Pattern::Binding(name))
+                    })
+                })
+                .unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(crate::Name::new("_"))));
+
+            let iterator = for_expr
+                .iterator()
+                .map(|n| self.lower_expr(&n))
+                .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+
+            self.stmts.alloc(Stmt::ForIn {
+                pattern,
+                iterator,
+                body,
+            })
+        } else {
+            // C-style: for (let i = 0; i < 10; i += 1) { ... }
+            let initializer = for_expr
+                .let_stmt()
+                .map(|let_stmt| self.lower_let_stmt(let_stmt.syntax()));
+
+            let condition = for_expr.condition().map(|n| self.lower_expr(&n));
+
+            let update = for_expr.update().map(|n| self.lower_expr(&n));
+
+            self.stmts.alloc(Stmt::ForCStyle {
+                initializer,
+                condition,
+                update,
+                body,
+            })
+        }
     }
 
     fn has_trailing_semicolon(node: &baml_syntax::SyntaxNode) -> bool {

@@ -396,7 +396,21 @@ impl IfExpr {
 }
 
 impl ForExpr {
-    /// Get the loop variable name.
+    /// Check if this is an iterator-style for loop (has 'in' keyword).
+    pub fn is_iterator_style(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|token| token.kind() == SyntaxKind::KW_IN)
+    }
+
+    /// Get the let statement (initializer) if present.
+    /// Used for both `for (let i in ...)` and `for (let i = 0; ...)`.
+    pub fn let_stmt(&self) -> Option<LetStmt> {
+        self.syntax.children().find_map(LetStmt::cast)
+    }
+
+    /// Get the loop variable name (for simple `for i in ...` without let).
     pub fn loop_var(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
@@ -404,9 +418,57 @@ impl ForExpr {
             .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
-    /// Get the iterator expression.
+    /// Get the iterator expression (for iterator-style loops).
+    /// This is the expression after `in` keyword.
     pub fn iterator(&self) -> Option<SyntaxNode> {
-        self.syntax.children().next()
+        // Find expression after the 'in' keyword
+        // The iterator is not a LET_STMT and not a BLOCK_EXPR
+        self.syntax
+            .children()
+            .find(|n| !matches!(n.kind(), SyntaxKind::LET_STMT | SyntaxKind::BLOCK_EXPR))
+    }
+
+    /// Get the condition expression (for C-style loops).
+    /// This is the expression after the first semicolon.
+    pub fn condition(&self) -> Option<SyntaxNode> {
+        if self.is_iterator_style() {
+            return None;
+        }
+        // For C-style, the condition is the second expression child (after LET_STMT)
+        let mut found_let = false;
+        for child in self.syntax.children() {
+            if child.kind() == SyntaxKind::LET_STMT {
+                found_let = true;
+                continue;
+            }
+            if found_let && child.kind() != SyntaxKind::BLOCK_EXPR {
+                return Some(child);
+            }
+        }
+        None
+    }
+
+    /// Get the update expression (for C-style loops).
+    /// This is the expression after the second semicolon.
+    pub fn update(&self) -> Option<SyntaxNode> {
+        if self.is_iterator_style() {
+            return None;
+        }
+        // For C-style, the update is the third expression child
+        let mut count = 0;
+        for child in self.syntax.children() {
+            if child.kind() == SyntaxKind::LET_STMT {
+                continue;
+            }
+            if child.kind() == SyntaxKind::BLOCK_EXPR {
+                continue;
+            }
+            count += 1;
+            if count == 2 {
+                return Some(child);
+            }
+        }
+        None
     }
 
     /// Get the body block expression.
