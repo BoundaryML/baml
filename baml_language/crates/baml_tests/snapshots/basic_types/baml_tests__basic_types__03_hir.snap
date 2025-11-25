@@ -3,6 +3,19 @@ source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
+class FieldAttributes {
+  money: Int
+  currency: String
+  name: String
+  summary: String
+  details: Optional(Path(Path { segments: ["string"], kind: Plain }))
+  state: String
+  multiple: Optional(Path(Path { segments: ["string"], kind: Plain }))
+}
+class ClassAttributes {
+  name: String
+  @@dynamic
+}
 function GetStatus {
   return: Path(Path { segments: ["Status"], kind: Plain })
   body: Llm {

@@ -1,0 +1,22 @@
+class FieldAttributes {
+    // Description attribute
+    money int @description("In USD")
+    // Alias attribute
+    currency string @alias("currency_code")
+    // Skip attribute
+    name string @skip
+    // Stream done attribute
+    summary string @stream.done
+    // Stream not null attribute
+    details string? @stream.not_null
+    // Stream with state attribute
+    state string @stream.with_state
+
+    // Multiple attributes
+    multiple string? @description("Multiple attributes") @alias("multiple_alias") @stream.done @stream.not_null
+}
+
+class ClassAttributes {
+    name string
+    @@dynamic
+}

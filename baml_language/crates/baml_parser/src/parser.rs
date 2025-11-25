@@ -761,14 +761,24 @@ impl<'a> Parser<'a> {
 
     // ============ Attribute Parsing ============
 
-    /// Parse a field attribute: @alias("name")
+    /// Parse a field attribute: @alias("name") or @stream.done
     pub(crate) fn parse_field_attribute(&mut self) {
         self.with_node(SyntaxKind::ATTRIBUTE, |p| {
             p.expect(TokenKind::At);
 
-            // Attribute name
+            // Attribute name (can be dotted like stream.done)
             if p.at(TokenKind::Word) {
                 p.bump();
+                // Handle dotted attribute names like @stream.done
+                while p.at(TokenKind::Dot) {
+                    p.bump(); // consume dot
+                    if p.at(TokenKind::Word) {
+                        p.bump(); // consume next segment
+                    } else {
+                        p.error("attribute name segment after dot".to_string());
+                        break;
+                    }
+                }
             } else {
                 p.error("attribute name".to_string());
                 return;
@@ -786,8 +796,8 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::BLOCK_ATTRIBUTE, |p| {
             p.expect(TokenKind::AtAt);
 
-            // Attribute name
-            if p.at(TokenKind::Word) {
+            // Attribute name (can be a Word or reserved keyword like Dynamic)
+            if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) {
                 p.bump();
             } else {
                 p.error("attribute name".to_string());

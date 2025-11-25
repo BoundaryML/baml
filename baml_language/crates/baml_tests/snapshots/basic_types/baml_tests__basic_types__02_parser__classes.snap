@@ -1,0 +1,127 @@
+---
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "FieldAttributes"
+    L_BRACE "{"
+    FIELD
+      WORD "money"
+      TYPE_EXPR " int"
+        WORD "int"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""In USD""
+            QUOTE """
+            WORD "In"
+            WORD "USD"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "currency"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""currency_code""
+            QUOTE """
+            WORD "currency_code"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "name"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE " @skip"
+        AT "@"
+        WORD "skip"
+    FIELD
+      WORD "summary"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE " @stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+    FIELD
+      WORD "details"
+      TYPE_EXPR " string?"
+        WORD "string"
+        QUESTION "?"
+      ATTRIBUTE " @stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
+    FIELD
+      WORD "state"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE " @stream.with_state"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "with_state"
+    FIELD
+      WORD "multiple"
+      TYPE_EXPR " string?"
+        WORD "string"
+        QUESTION "?"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""Multiple attributes""
+            QUOTE """
+            WORD "Multiple"
+            WORD "attributes"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""multiple_alias""
+            QUOTE """
+            WORD "multiple_alias"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE " @stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+      ATTRIBUTE " @stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ClassAttributes"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR " string"
+        WORD "string"
+    BLOCK_ATTRIBUTE "
+    @@dynamic"
+      AT_AT "@@"
+      KW_DYNAMIC "dynamic"
+    R_BRACE "}"
+
+=== ERRORS ===
+None
