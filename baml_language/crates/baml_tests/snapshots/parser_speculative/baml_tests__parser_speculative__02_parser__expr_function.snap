@@ -47,12 +47,16 @@ SOURCE_FILE
               WORD "data"
               DOT "."
               WORD "field2"
+          SEMICOLON ";"
         IF_EXPR
           KW_IF "if"
-          BINARY_EXPR "result > 100"
-            WORD "result"
-            GREATER ">"
-            INTEGER_LITERAL "100"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "result > 100"
+              WORD "result"
+              GREATER ">"
+              INTEGER_LITERAL "100"
+            R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
             RETURN_STMT
@@ -61,6 +65,7 @@ SOURCE_FILE
                 QUOTE """
                 WORD "high"
                 QUOTE """
+              SEMICOLON ";"
             R_BRACE "}"
         RETURN_STMT
           KW_RETURN "return"
@@ -68,6 +73,7 @@ SOURCE_FILE
             QUOTE """
             WORD "low"
             QUOTE """
+          SEMICOLON ";"
         R_BRACE "}"
 
 === ERRORS ===

@@ -7,6 +7,8 @@ function AnotherLLM {
   params: [input: String]
   return: String
   body: Llm {
+    prompt: "Process: {{ input }}"
+    interpolations: [input]
   }
 }
 function Ambiguous {

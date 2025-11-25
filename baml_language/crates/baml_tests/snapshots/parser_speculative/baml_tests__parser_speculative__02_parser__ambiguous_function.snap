@@ -43,7 +43,8 @@ SOURCE_FILE
       WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        STRING_LITERAL " "Process: {{ input }}""
+        RAW_STRING_LITERAL " #"Process: {{ input }}"#"
+          HASH "#"
           QUOTE """
           WORD "Process"
           COLON ":"
@@ -53,6 +54,7 @@ SOURCE_FILE
           R_BRACE "}"
           R_BRACE "}"
           QUOTE """
+          HASH "#"
       R_BRACE "}"
 
 === ERRORS ===

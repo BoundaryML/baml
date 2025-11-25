@@ -22,10 +22,13 @@ SOURCE_FILE
         L_BRACE "{"
         IF_EXPR
           KW_IF "if"
-          BINARY_EXPR "age < 18"
-            WORD "age"
-            LESS "<"
-            INTEGER_LITERAL "18"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "age < 18"
+              WORD "age"
+              LESS "<"
+              INTEGER_LITERAL "18"
+            R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
             RETURN_STMT
@@ -34,14 +37,18 @@ SOURCE_FILE
                 QUOTE """
                 WORD "minor"
                 QUOTE """
+              SEMICOLON ";"
             R_BRACE "}"
           KW_ELSE "else"
           IF_EXPR
             KW_IF "if"
-            BINARY_EXPR "age < 65"
-              WORD "age"
-              LESS "<"
-              INTEGER_LITERAL "65"
+            PAREN_EXPR
+              L_PAREN "("
+              BINARY_EXPR "age < 65"
+                WORD "age"
+                LESS "<"
+                INTEGER_LITERAL "65"
+              R_PAREN ")"
             BLOCK_EXPR
               L_BRACE "{"
               RETURN_STMT
@@ -50,6 +57,7 @@ SOURCE_FILE
                   QUOTE """
                   WORD "adult"
                   QUOTE """
+                SEMICOLON ";"
               R_BRACE "}"
             KW_ELSE "else"
             BLOCK_EXPR
@@ -60,6 +68,7 @@ SOURCE_FILE
                   QUOTE """
                   WORD "senior"
                   QUOTE """
+                SEMICOLON ";"
               R_BRACE "}"
         R_BRACE "}"
 
