@@ -25,7 +25,7 @@ import {
 import { useActiveNode, useDetailPanel, useNodeInputSources, useSelectedInputSource } from '../../../sdk/hooks';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useAtomValue } from 'jotai';
-import { selectedTestCaseNameAtom } from '../../../sdk/atoms/core.atoms';
+import { selectedTestCaseNameAtom, selectedTestFunctionNameAtom } from '../../../sdk/atoms/core.atoms';
 import type { GraphNode, NodeExecution, InputSource } from '../../../sdk/types';
 import { useBAMLSDK } from '../../../sdk';
 
@@ -155,12 +155,30 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const testName = useAtomValue(selectedTestCaseNameAtom);
+  const testFunctionName = useAtomValue(selectedTestFunctionNameAtom);
 
   // Fetch test cases and merge with execution inputs
+  // Include tests from both the node's function AND the selected test's function
   const allInputSources = useMemo(() => {
-    const testCases = sdk.testCases.get(node.functionName ?? node.id);
-    return [...testCases, ...executionInputSources] as InputSource[];
-  }, [sdk, node.functionName, node.id, executionInputSources]);
+    const nodeTestCases = sdk.testCases.get(node.functionName ?? node.id);
+
+    // Also get tests from the selected test's function (if different)
+    let additionalTestCases: InputSource[] = [];
+    if (testFunctionName && testFunctionName !== node.functionName && testFunctionName !== node.id) {
+      additionalTestCases = sdk.testCases.get(testFunctionName);
+    }
+
+    // Deduplicate by id
+    const allTests = [...nodeTestCases, ...additionalTestCases];
+    const seenIds = new Set<string>();
+    const uniqueTests = allTests.filter(tc => {
+      if (seenIds.has(tc.id)) return false;
+      seenIds.add(tc.id);
+      return true;
+    });
+
+    return [...uniqueTests, ...executionInputSources] as InputSource[];
+  }, [sdk, node.functionName, node.id, executionInputSources, testFunctionName]);
 
   // If a test case is selected in unified state, prefer that source
   useEffect(() => {
@@ -380,7 +398,7 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
           Run from here
         </button>
         <button
-          className="px-1.5 py-0.5 text-xs font-medium bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white rounded flex items-center gap-0.5 shrink-0"
+          className="px-1.5 py-0.5 text-xs font-medium bg-muted hover:bg-muted/80 disabled:opacity-50 rounded flex items-center gap-0.5 shrink-0 border border-border"
           disabled={!currentSource}
           title="Replay this node only"
           onClick={async () => {
@@ -395,10 +413,10 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
       </div>
 
       {/* LLM Client Info */}
-      <div className="flex items-center gap-1.5 py-1">
-        <Database className="w-3 h-3 text-purple-600 dark:text-purple-400" />
-        <span className="text-xs font-medium">Client:</span>
-        <span className="text-xs text-purple-600 dark:text-purple-400 font-mono">{llmClient}</span>
+      <div className="flex items-center gap-1.5">
+        <Database className="w-3 h-3 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">Client:</span>
+        <span className="text-xs font-mono">{llmClient}</span>
       </div>
 
       {/* Input/Output Grid */}
@@ -407,9 +425,9 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
         <div>
           <div className="flex items-center gap-1 mb-1">
             <FileInput className="w-3 h-3 text-muted-foreground" />
-            <span className="text-[11px] font-semibold text-muted-foreground">Input</span>
+            <span className="text-[11px] font-medium text-muted-foreground">Input</span>
           </div>
-          <pre className="bg-muted p-1.5 rounded text-[10px] overflow-auto max-h-32 font-mono">
+          <pre className="border border-border rounded p-1.5 text-[10px] overflow-auto max-h-32 font-mono">
             {JSON.stringify(displayedInputs, null, 2)}
           </pre>
         </div>
@@ -418,14 +436,14 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
         <div>
           <div className="flex items-center gap-1 mb-1">
             <FileOutput className="w-3 h-3 text-muted-foreground" />
-            <span className="text-[11px] font-semibold text-muted-foreground">Output</span>
+            <span className="text-[11px] font-medium text-muted-foreground">Output</span>
           </div>
           {displayedOutputs ? (
-            <pre className="bg-muted p-1.5 rounded text-[10px] overflow-auto max-h-32 font-mono">
+            <pre className="border border-border rounded p-1.5 text-[10px] overflow-auto max-h-32 font-mono">
               {JSON.stringify(displayedOutputs, null, 2)}
             </pre>
           ) : (
-            <div className="bg-muted/30 border border-dashed border-muted rounded p-1.5 text-[10px] text-muted-foreground italic">
+            <div className="border border-dashed border-border rounded p-1.5 text-[10px] text-muted-foreground italic">
               {execution?.state === 'running' ? 'Waiting...' : 'No output'}
             </div>
           )}
@@ -435,10 +453,10 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
       {/* LLM Request */}
       <div>
         <div className="flex items-center gap-1 mb-1">
-          <MessageSquare className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-          <span className="text-[11px] font-semibold text-muted-foreground">LLM Request</span>
+          <MessageSquare className="w-3 h-3 text-muted-foreground" />
+          <span className="text-[11px] font-medium text-muted-foreground">LLM Request</span>
         </div>
-        <pre className="bg-muted p-1.5 rounded text-[10px] overflow-auto max-h-32 font-mono">
+        <pre className="border border-border rounded p-1.5 text-[10px] overflow-auto max-h-32 font-mono">
           {JSON.stringify(llmRequest, null, 2)}
         </pre>
       </div>
@@ -446,15 +464,15 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
       {/* LLM Response */}
       <div>
         <div className="flex items-center gap-1 mb-1">
-          <Sparkles className="w-3 h-3 text-purple-600 dark:text-purple-400" />
-          <span className="text-[11px] font-semibold text-muted-foreground">LLM Response</span>
+          <Sparkles className="w-3 h-3 text-muted-foreground" />
+          <span className="text-[11px] font-medium text-muted-foreground">LLM Response</span>
         </div>
         {llmResponse ? (
-          <pre className="bg-muted p-1.5 rounded text-[10px] overflow-auto max-h-32 font-mono">
+          <pre className="border border-border rounded p-1.5 text-[10px] overflow-auto max-h-32 font-mono">
             {JSON.stringify(llmResponse, null, 2)}
           </pre>
         ) : (
-          <div className="bg-muted/30 border border-dashed border-muted rounded p-1.5 text-[10px] text-muted-foreground italic">
+          <div className="border border-dashed border-border rounded p-1.5 text-[10px] text-muted-foreground italic">
             {execution?.state === 'running' ? 'Waiting for response...' : 'No response'}
           </div>
         )}
@@ -471,13 +489,52 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const testName = useAtomValue(selectedTestCaseNameAtom);
+  const testFunctionName = useAtomValue(selectedTestFunctionNameAtom);
   const logs = execution?.logs || [];
 
   // Fetch test cases and merge with execution inputs
+  // Include tests from both the node's function AND the selected test's function
   const allInputSources = useMemo(() => {
-    const testCases = sdk.testCases.get(node.functionName ?? node.id);
-    return [...testCases, ...executionInputSources] as InputSource[];
-  }, [sdk, node.functionName, node.id, executionInputSources]);
+    const nodeTestCases = sdk.testCases.get(node.functionName ?? node.id);
+
+    // Also get tests from the selected test's function (if different)
+    let additionalTestCases: InputSource[] = [];
+    if (testFunctionName && testFunctionName !== node.functionName && testFunctionName !== node.id) {
+      additionalTestCases = sdk.testCases.get(testFunctionName);
+    }
+
+    // Deduplicate by id
+    const allTests = [...nodeTestCases, ...additionalTestCases];
+    const seenIds = new Set<string>();
+    const uniqueTests = allTests.filter(tc => {
+      if (seenIds.has(tc.id)) return false;
+      seenIds.add(tc.id);
+      return true;
+    });
+
+    return [...uniqueTests, ...executionInputSources] as InputSource[];
+  }, [sdk, node.functionName, node.id, executionInputSources, testFunctionName]);
+
+  // If a test case is selected in unified state, prefer that source
+  useEffect(() => {
+    if (!testName) return;
+    if (selectedSource?.nodeId === node.id && selectedSource.sourceType === 'test') {
+      const current = allInputSources.find((s) => s.id === selectedSource.sourceId);
+      if (current && (current.name === testName || current.id === testName || current.id.endsWith(`_${testName}`))) {
+        return;
+      }
+    }
+
+    const matchingSource = allInputSources.find(
+      (source) =>
+        source.source === 'test' &&
+        (source.name === testName || source.id === testName || source.id.endsWith(`_${testName}`))
+    );
+
+    if (matchingSource) {
+      selectSource(node.id, 'test', matchingSource.id);
+    }
+  }, [testName, allInputSources, node.id, selectSource, selectedSource]);
 
   // Auto-select the latest available input source (only if no test is explicitly selected)
   useEffect(() => {
@@ -671,7 +728,7 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
           Run from here
         </button>
         <button
-          className="px-1.5 py-0.5 text-xs font-medium bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white rounded flex items-center gap-0.5 shrink-0"
+          className="px-1.5 py-0.5 text-xs font-medium bg-muted hover:bg-muted/80 disabled:opacity-50 rounded flex items-center gap-0.5 shrink-0 border border-border"
           disabled={!currentSource}
           title="Replay this node only"
           onClick={async () => {
@@ -685,22 +742,15 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
         </button>
       </div>
 
-      {/* Node Type Badge */}
-      <div className="flex items-center gap-1.5 py-1 px-1.5 bg-muted/30 rounded">
-        <Terminal className="w-3 h-3 text-muted-foreground" />
-        <span className="text-xs font-medium">Type:</span>
-        <span className="text-xs font-mono text-muted-foreground">{node.type}</span>
-      </div>
-
       {/* Input/Output Grid */}
       <div className="grid grid-cols-2 gap-2">
         {/* Input */}
         <div>
           <div className="flex items-center gap-1 mb-1">
             <FileInput className="w-3 h-3 text-muted-foreground" />
-            <span className="text-[11px] font-semibold text-muted-foreground">Input</span>
+            <span className="text-[11px] font-medium text-muted-foreground">Input</span>
           </div>
-          <pre className="bg-muted p-1.5 rounded text-[10px] overflow-auto max-h-32 font-mono">
+          <pre className="border border-border rounded p-1.5 text-[10px] overflow-auto max-h-32 font-mono">
             {JSON.stringify(displayedInputs, null, 2)}
           </pre>
         </div>
@@ -709,14 +759,14 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
         <div>
           <div className="flex items-center gap-1 mb-1">
             <FileOutput className="w-3 h-3 text-muted-foreground" />
-            <span className="text-[11px] font-semibold text-muted-foreground">Output</span>
+            <span className="text-[11px] font-medium text-muted-foreground">Output</span>
           </div>
           {displayedOutputs ? (
-            <pre className="bg-muted p-1.5 rounded text-[10px] overflow-auto max-h-32 font-mono">
+            <pre className="border border-border rounded p-1.5 text-[10px] overflow-auto max-h-32 font-mono">
               {JSON.stringify(displayedOutputs, null, 2)}
             </pre>
           ) : (
-            <div className="bg-muted/30 border border-dashed border-muted rounded p-1.5 text-[10px] text-muted-foreground italic">
+            <div className="border border-dashed border-border rounded p-1.5 text-[10px] text-muted-foreground italic">
               {execution?.state === 'running' ? 'Waiting...' : 'No output'}
             </div>
           )}
@@ -724,15 +774,15 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
       </div>
 
       {/* Logs Section */}
-      <div>
-        <div className="flex items-center gap-1 mb-1">
-          <ScrollText className="w-3 h-3 text-muted-foreground" />
-          <span className="text-[11px] font-semibold text-muted-foreground">Logs</span>
-        </div>
-        {logs.length > 0 ? (
+      {logs.length > 0 && (
+        <div>
+          <div className="flex items-center gap-1 mb-1">
+            <ScrollText className="w-3 h-3 text-muted-foreground" />
+            <span className="text-[11px] font-medium text-muted-foreground">Logs</span>
+          </div>
           <div className="space-y-0.5">
             {logs.map((log, index) => (
-              <div key={index} className="text-[10px] font-mono bg-muted p-1.5 rounded">
+              <div key={index} className="text-[10px] font-mono border border-border rounded p-1.5">
                 <span className="text-muted-foreground">
                   {new Date(log.timestamp).toLocaleTimeString()}
                 </span>
@@ -753,13 +803,8 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
               </div>
             ))}
           </div>
-        ) : (
-          <div className="bg-muted/30 border border-dashed border-muted rounded p-3 text-center">
-            <Terminal className="w-6 h-6 text-muted-foreground mx-auto mb-1 opacity-50" />
-            <p className="text-[10px] text-muted-foreground">No logs emitted</p>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

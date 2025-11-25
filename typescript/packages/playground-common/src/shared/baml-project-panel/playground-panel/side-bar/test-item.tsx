@@ -219,17 +219,17 @@ export function TestItem({
             </TooltipContent>
           </Tooltip>
         </div>
-        <SidebarMenuAction
-          className="cursor-pointer size-[9px] items-center justify-center pt-0.5"
-          onClick={handleRunTest}
-        >
-          {isThisTestRunning ? (
-            <Square className="!size-3 fill-red-500 stroke-red-500" />
-          ) : (
-            <Play className="!size-3" />
-          )}
-        </SidebarMenuAction>
       </SidebarMenuButton>
+      <SidebarMenuAction
+        className="cursor-pointer size-[9px] items-center justify-center pt-0.5"
+        onClick={handleRunTest}
+      >
+        {isThisTestRunning ? (
+          <Square className="!size-3 fill-red-500 stroke-red-500" />
+        ) : (
+          <Play className="!size-3" />
+        )}
+      </SidebarMenuAction>
     </SidebarMenuItem>
   );
 }

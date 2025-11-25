@@ -18,6 +18,7 @@ import { Socket } from 'net'
 import StatusBarPanel from './panels/StatusBarPanel'
 import { Server } from 'http'
 import { LAST_ACTIVE_BAML_FILE } from './helpers/get-open-file'
+import { refreshBamlConfigSingleton } from './plugins/language-server-client/bamlConfig'
 
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection =
@@ -286,6 +287,7 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(diagnosticsCollection)
+
 
   vscode.window.onDidChangeActiveTextEditor((event) => {
     // makes it so we reload the project. Could probably be called reloadProjectFiles or something. This is because we may be clicking into a different file in a separate baml_src.

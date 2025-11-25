@@ -110,6 +110,7 @@ export function PreviewToolbar() {
   );
   const proxySettings = useAtomValue(proxyUrlAtom);
   const setBamlConfig = useSetAtom(bamlConfig);
+  const setVscodeSettings = useSetAtom(vscodeSettingsAtom);
   const { resolvedTheme, setTheme } = useTheme();
   const isLightMode = resolvedTheme === 'light';
 
@@ -247,19 +248,31 @@ export function PreviewToolbar() {
                 checked={proxySettings.proxyEnabled}
                 onCheckedChange={async (checked) => {
                   try {
-                    await vscode.setProxySettings(!!checked);
-                    // Update local config to reflect the change immediately
+                    // Optimistically update vscodeSettingsAtom so proxyUrlAtom updates immediately
+                    setVscodeSettings((prev) => ({
+                      ...prev,
+                      enablePlaygroundProxy: !!checked,
+                    }));
+                    // Also update bamlConfig for consistency
                     setBamlConfig((prev: BamlConfigAtom) => ({
                       ...prev,
                       config: {
                         ...prev.config,
+                        enablePlaygroundProxy: !!checked,
                       },
                     }));
+                    // Send to VSCode to persist the setting
+                    await vscode.setProxySettings(!!checked);
                   } catch (error) {
                     console.error('Failed to update proxy settings:', error);
                     toast.error('Error updating proxy settings', {
                       description: 'Please try again',
                     });
+                    // Revert optimistic update on error
+                    setVscodeSettings((prev) => ({
+                      ...prev,
+                      enablePlaygroundProxy: !checked,
+                    }));
                   }
                 }}
                 className="text-sm px-2 py-1.5 pl-7"

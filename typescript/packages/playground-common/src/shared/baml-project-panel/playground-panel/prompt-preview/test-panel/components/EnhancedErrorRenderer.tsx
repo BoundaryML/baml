@@ -259,7 +259,7 @@ const DefaultErrorRenderer: React.FC<{ context: ErrorContext }> = ({ context }) 
           borderColor: 'rgba(220, 38, 38, 0.3)',
         }}
       >
-        <pre className="text-xs whitespace-pre-wrap break-words font-mono text-[var(--vscode-charts-red)]" style={{ color: '#dc2626' }}>
+        <pre className="text-xs whitespace-pre-wrap break-all font-mono text-[var(--vscode-charts-red)]" style={{ color: '#dc2626' }}>
           {context.errorMessage}
         </pre>
       </div>

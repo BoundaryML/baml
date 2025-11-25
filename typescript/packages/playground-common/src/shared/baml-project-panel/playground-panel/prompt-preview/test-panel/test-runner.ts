@@ -57,6 +57,11 @@ export const useRunBamlTests = () => {
    */
   const runTests = useCallback(
     async (tests: Array<{ functionName: string; testName: string }>) => {
+      console.log('[useRunBamlTests] Running tests with apiKeys:', {
+        hasBoundaryProxyUrl: 'BOUNDARY_PROXY_URL' in apiKeys,
+        boundaryProxyUrl: apiKeys.BOUNDARY_PROXY_URL,
+        keyCount: Object.keys(apiKeys).length,
+      })
       await sdk.tests.runAll(tests, {
         apiKeys,
         parallel: isParallelTestsEnabled,

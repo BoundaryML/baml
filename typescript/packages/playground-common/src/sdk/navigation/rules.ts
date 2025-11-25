@@ -59,7 +59,9 @@ const testClick: NavigationRule = {
         mode: 'workflow',
         workflowId: membership.workflowId,
         selectedNodeId: membership.nodeId,
-        functionName: getPrimaryFunction(membership.calledFunctions),
+        // Use the test's function name, not the node's called functions
+        // The test belongs to a specific function, and that's what we need for sidebar highlighting
+        functionName: target.functionName ?? getPrimaryFunction(membership.calledFunctions),
         testName: target.testName ?? null,
       };
     }

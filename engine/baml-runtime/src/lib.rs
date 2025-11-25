@@ -956,7 +956,7 @@ impl BamlRuntime {
         baml_log::set_from_env(&env_vars).unwrap();
 
         log::info!(
-            "[Runtime] run_test_with_expr_events start function={function_name} test={test_name}"
+            "[Runtime] run_test_with_expr_events start function={function_name} test={test_name}...."
         );
 
         let call = self

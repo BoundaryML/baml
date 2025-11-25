@@ -720,6 +720,14 @@ export class BamlRuntime implements BamlRuntimeInterface {
     throw new Error('Workflow execution not yet implemented for BamlRuntime');
   }
 
+  /**
+   * Execute a test using callbacks for streaming updates.
+   * WASM execution is blocking, so we can't use generators for streaming.
+   * Instead, callbacks in context are called directly during WASM execution.
+   *
+   * The generator interface is kept for compatibility but only yields
+   * the enter and exit events - streaming happens via callbacks.
+   */
   async *executeTest(
     functionName: string,
     testName: string,
@@ -752,7 +760,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
 
     try {
       // Extract inputs from test case
-      const inputs: Record<string, any> = {};
+      const inputs: Record<string, unknown> = {};
       for (const param of testCase.inputs) {
         if (param.value !== undefined) {
           try {
@@ -775,41 +783,24 @@ export class BamlRuntime implements BamlRuntimeInterface {
 
       const startTime = performance.now();
 
-      // Create a generator-friendly way to yield events from callbacks
-      const events: RichExecutionEvent[] = [];
-      const pushEvent = (event: RichExecutionEvent) => {
-        events.push(event);
-      };
-
-      // Execute the test with all callbacks yielding events
+      // Execute WASM with callbacks - callbacks are called synchronously during execution
+      // This is the key insight: WASM won't yield to JS event loop, so we must use callbacks
       const result = await wasmFunction.run_test_with_expr_events(
         this.wasmRuntime,
         testCase.name,
-        // on_partial_response callback
-        (partial: any) => {
-          pushEvent({
-            type: 'partial.response',
-            nodeId,
-            timestamp: Date.now(),
-            iteration: 0,
-            executionId,
-            partialContent: String(partial),
-            isFinal: false,
-          });
+        // on_partial_response callback - called during streaming
+        (partial: WasmPartialResponse) => {
+          console.log('[BamlRuntime] onPartialResponse:', partial);
+          // Call context callback directly - this updates UI state immediately
+          context.onPartialResponse?.(partial);
         },
         // get_baml_src_cb - load media files
         context?.loadMediaFile || vscode.loadMediaFile,
         // on_expr_event - expression evaluation events (for highlighting)
         (spans: WasmSpan[]) => {
           if (spans && spans.length > 0) {
-            pushEvent({
-              type: 'highlight',
-              nodeId,
-              timestamp: Date.now(),
-              iteration: 0,
-              executionId,
-              spans: spans.map((span) => this.adapter.convertSpan(span)),
-            });
+            const convertedSpans = spans.map((span) => this.adapter.convertSpan(span));
+            context.onHighlight?.(convertedSpans);
           }
         },
         // env - API keys / environment
@@ -817,28 +808,16 @@ export class BamlRuntime implements BamlRuntimeInterface {
         // abort_signal
         context?.abortSignal || null,
         // watch_handler - for watch notifications
-        (notification: any) => {
-          pushEvent({
-            type: 'watch.notification',
-            nodeId,
-            timestamp: Date.now(),
-            iteration: 0,
-            executionId,
-            notification: {
-              variableName: notification.variable_name,
-              channelName: notification.channel_name,
-              blockName: notification.block_name,
-              isStream: notification.is_stream,
-              value: notification.value,
-            },
+        (notification: WasmNotification) => {
+          context.onWatchNotification?.({
+            variableName: notification.variable_name,
+            channelName: notification.channel_name,
+            blockName: notification.block_name,
+            isStream: notification.is_stream,
+            value: notification.value,
           });
         }
       );
-
-      // Yield all accumulated events from callbacks
-      for (const event of events) {
-        yield event;
-      }
 
       const endTime = performance.now();
       const duration = endTime - startTime;
@@ -861,7 +840,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
       const responseData = this.adapter.convertResponseToData(result);
 
       // Extract outputs
-      let outputs: Record<string, any> = {};
+      let outputs: Record<string, unknown> = {};
 
       if (testStatus === 'passed') {
         const parsedResponse = result.parsed_response();
@@ -903,7 +882,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
           duration,
           responseData,
           error: {
-            message: outputs.error || `Test failed with status: ${testStatus}`,
+            message: typeof outputs.error === 'string' ? outputs.error : `Test failed with status: ${testStatus}`,
             code: testStatus,
           },
         };

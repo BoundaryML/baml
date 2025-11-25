@@ -49,8 +49,14 @@ export async function handleIDEMessage(
 
     case 'baml_settings_updated':
       // Update config atom directly (non-core state)
-      // TODO: Move to SDK.settings.update() when bamlConfig structure is unified
       setBamlConfig(content);
+      // Also update SDK's vscodeSettingsAtom so proxyUrlAtom updates correctly
+      if (content?.config) {
+        sdk.settings.updateVSCodeSettings({
+          enablePlaygroundProxy: content.config.enablePlaygroundProxy,
+          featureFlags: content.config.featureFlags,
+        });
+      }
       break;
 
     case 'baml_cli_version':
@@ -95,8 +101,7 @@ export async function handleLSPMessage(
       break;
 
     case 'baml_settings_updated':
-      // Update config atomvia merge (non-core state)
-      // TODO: Move to SDK.settings.update() when bamlConfig structure is unified
+      // Update config atom via merge (non-core state)
       setBamlConfig(({ config: prevConfig, ...prevRest }: any) => {
         const newConfig = {
           ...prevRest,
@@ -109,6 +114,14 @@ export async function handleLSPMessage(
         });
         return newConfig;
       });
+      // Also update SDK's vscodeSettingsAtom so proxyUrlAtom updates correctly
+      // params is Partial<BamlConfigAtom>, so config is nested
+      if (params?.config) {
+        sdk.settings.updateVSCodeSettings({
+          enablePlaygroundProxy: params.config.enablePlaygroundProxy,
+          featureFlags: params.config.featureFlags,
+        });
+      }
       break;
 
     case 'workspace/executeCommand':
@@ -177,7 +190,7 @@ async function handleWorkspaceCommand(
         // This is a JetBrains-specific platform quirk
         setTimeout(async () => {
           try {
-            await sdk.tests.run(firstArg.functionName!, firstArg.testCaseName!);
+            await sdk.tests.runAll([{ functionName: firstArg.functionName!, testName: firstArg.testCaseName! }]);
           } catch (error) {
             console.error('[MessageHandler] Test execution failed:', error);
           }

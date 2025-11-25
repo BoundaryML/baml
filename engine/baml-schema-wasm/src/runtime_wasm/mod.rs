@@ -2504,13 +2504,14 @@ impl WasmFunction {
         let function_name_for_test_pair = function_name.clone();
         let test_name_for_test_pair = test_name.clone();
         log::info!(
-            "[WasmFunction] run_test_with_expr_events start function={} test={}",
+            "[WasmFunction] run_test_with_expr_events start function={} test={}..",
             function_name,
             test_name.as_str()
         );
 
         // Create the closure to handle partial responses:
         let cb = Box::new(move |r: FunctionResult| {
+            log::info!("on event partial response");
             let this = JsValue::NULL;
             let res = WasmFunctionResponse {
                 function_response: r,

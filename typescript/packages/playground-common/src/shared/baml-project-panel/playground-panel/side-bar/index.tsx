@@ -105,6 +105,24 @@ export function TestingSidebar() {
     openCollapsibles.size === filteredFunctions.length &&
     filteredFunctions.length > 0;
 
+  // Auto-expand function when its test is selected
+  React.useEffect(() => {
+    const functionName = selection.mode === 'function' || selection.mode === 'workflow'
+      ? selection.functionName
+      : null;
+    const testName = selection.mode === 'function' || selection.mode === 'workflow'
+      ? selection.testName
+      : null;
+
+    if (functionName && testName) {
+      // Check if this function exists and has this test
+      const func = functions.find(f => f.name === functionName);
+      if (func && func.tests.includes(testName) && !openCollapsibles.has(functionName)) {
+        setOpenCollapsibles(prev => new Set([...prev, functionName]));
+      }
+    }
+  }, [selection, functions, openCollapsibles]);
+
   return (
     // <div className={cn('flex relative h-full')}>
     <Sidebar variant="inset" collapsible="offcanvas" side="right">
@@ -250,7 +268,7 @@ export function TestingSidebar() {
                                 label={test}
                                 isSelected={
                                   ((selection.mode === 'function' && selection.functionName === func.name && selection.testName === test) ||
-                                   (selection.mode === 'workflow' && selection.selectedNodeId === func.name && selection.testName === test))
+                                   (selection.mode === 'workflow' && selection.functionName === func.name && selection.testName === test))
                                 }
                                 searchTerm={searchTerm}
                                 functionName={func.name}

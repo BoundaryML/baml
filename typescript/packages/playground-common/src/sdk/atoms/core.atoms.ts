@@ -474,6 +474,18 @@ export const selectedTestCaseNameAtom = atom((get) => {
 });
 
 /**
+ * Function name associated with selected test (for test case lookups)
+ * In workflow mode, returns the functionName (the function the test belongs to)
+ * In function mode, returns the functionName
+ */
+export const selectedTestFunctionNameAtom = atom((get) => {
+  const state = get(unifiedSelectionStateAtom);
+  if (state.mode === 'function') return state.functionName;
+  if (state.mode === 'workflow') return state.functionName;
+  return null;
+});
+
+/**
  * Selection mode atom - returns the current mode ('workflow', 'function', or 'empty')
  */
 export const selectionModeAtom = atom((get) => {
@@ -704,6 +716,7 @@ export const proxyUrlAtom = atom((get) => {
   const port = get(playgroundPortAtom);
   const proxyUrl = port && port !== 0 ? `http://localhost:${port}` : undefined;
   const proxyEnabled = !!vscodeSettings?.enablePlaygroundProxy;
+  console.log('[proxyUrlAtom] Computing:', { vscodeSettings, port, proxyEnabled, proxyUrl });
   return { proxyEnabled, proxyUrl };
 });
 

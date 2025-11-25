@@ -144,10 +144,13 @@ export const UnifiedPromptPreview = () => {
     setTimeout(() => setShowCopied(false), 1500);
   };
 
+  // Only show graph when graph tab exists and is active
+  const showGraph = viewMode.showGraphTab && activeTab === 'graph';
+
   // If no tabs should be shown (non-LLM function in workflow), render graph directly
   return (
     <div className="relative h-full">
-      <GraphHost />
+      {showGraph && <GraphHost />}
       {viewMode.showTabBar && (
         <Tabs
           value={activeTab}

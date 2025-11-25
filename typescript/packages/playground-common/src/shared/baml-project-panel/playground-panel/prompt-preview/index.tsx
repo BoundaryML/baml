@@ -99,7 +99,7 @@ export const PromptPreview = () => {
             {/* Resizable Layout - Main Content + Bottom Panel */}
             <div className="flex-1 min-h-0">
               {hasContentToRender ? (
-                <ResizablePanelGroup direction="vertical" id="unified-layout">
+                <ResizablePanelGroup direction="vertical" autoSaveId="baml-playground-layout">
                   {/* Main Panel - Unified Prompt Preview with tabs */}
                   <ResizablePanel defaultSize={60} minSize={30}>
                     <div className="h-full overflow-y-auto px-1">

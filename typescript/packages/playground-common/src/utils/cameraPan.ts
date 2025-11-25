@@ -41,7 +41,7 @@ export function panToNodeIfNeeded(
   node: Node,
   flowInstance: ReactFlowInstance,
   config: DeadzoneConfig = DEFAULT_DEADZONE,
-  duration = 500
+  duration = 250
 ): void {
   // Get viewport dimensions
   const viewport = flowInstance.getViewport();
