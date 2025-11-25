@@ -459,13 +459,10 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
     writeln!(file, "    #[test]")?;
     writeln!(file, "    fn test_04_thir() {{")?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
-    writeln!(
-        file,
-        "        let root = db.set_project_root(std::path::PathBuf::from(\".\"));"
-    )?;
+    writeln!(file, "        let mut source_files = Vec::new();")?;
     writeln!(file)?;
 
-    // Load all files
+    // Load all files and store SourceFile handles
     for baml_file in &project.files {
         writeln!(file, "        {{")?;
         writeln!(
@@ -477,7 +474,7 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
             file,
             "            let content = content.replace(\"\\r\\n\", \"\\n\");"
         )?;
-        writeln!(file, "            db.add_file(")?;
+        writeln!(file, "            let sf = db.add_file(")?;
         writeln!(
             file,
             "                \"{}\",",
@@ -485,47 +482,72 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
         )?;
         writeln!(file, "                &content,")?;
         writeln!(file, "            );")?;
+        writeln!(file, "            source_files.push(sf);")?;
         writeln!(file, "        }}")?;
     }
 
     writeln!(file)?;
-    writeln!(
-        file,
-        "        let items = baml_hir::project_items(&db, root);"
-    )?;
     writeln!(file, "        let mut output = String::new();")?;
     writeln!(
         file,
         "        writeln!(output, \"=== TYPE INFERENCE ===\").unwrap();"
     )?;
     writeln!(file)?;
-    writeln!(file, "        for item in items.iter() {{")?;
+    // Iterate over files and get items from each
+    writeln!(file, "        for source_file in &source_files {{")?;
     writeln!(
         file,
-        "            if let baml_hir::ItemId::Function(func_id) = item {{"
+        "            let items = baml_hir::file_items(&db, *source_file);"
+    )?;
+    writeln!(file, "            for item in items.iter() {{")?;
+    writeln!(
+        file,
+        "                if let baml_hir::ItemId::Function(func_id) = item {{"
     )?;
     writeln!(
         file,
-        "                let result = baml_thir::infer_function(&db, func_id.clone());"
+        "                    let result = baml_thir::infer_function(&db, func_id.clone());"
     )?;
     writeln!(
         file,
-        "                writeln!(output, \"  Function {{:?}}:\", func_id).unwrap();"
+        "                    writeln!(output, \"  Function {{}}:\", func_id.name).unwrap();"
     )?;
     writeln!(
         file,
-        "                writeln!(output, \"    Return: {{:?}}\", result.return_type).unwrap();"
+        "                    writeln!(output, \"    Return: {{}}\", result.return_type).unwrap();"
     )?;
-    writeln!(file, "                if !result.errors.is_empty() {{")?;
     writeln!(
         file,
-        "                    writeln!(output, \"    Errors:\").unwrap();"
+        "                    if !result.param_types.is_empty() {{"
     )?;
-    writeln!(file, "                    for error in &result.errors {{")?;
     writeln!(
         file,
-        "                        writeln!(output, \"      - {{}}\", error.message()).unwrap();"
+        "                        writeln!(output, \"    Params:\").unwrap();"
     )?;
+    writeln!(
+        file,
+        "                        for (name, ty) in &result.param_types {{"
+    )?;
+    writeln!(
+        file,
+        "                            writeln!(output, \"      - {{}}: {{}}\", name, ty).unwrap();"
+    )?;
+    writeln!(file, "                        }}")?;
+    writeln!(file, "                    }}")?;
+    writeln!(file, "                    if !result.errors.is_empty() {{")?;
+    writeln!(
+        file,
+        "                        writeln!(output, \"    Errors:\").unwrap();"
+    )?;
+    writeln!(
+        file,
+        "                        for error in &result.errors {{"
+    )?;
+    writeln!(
+        file,
+        "                            writeln!(output, \"      - {{}}\", error.message()).unwrap();"
+    )?;
+    writeln!(file, "                        }}")?;
     writeln!(file, "                    }}")?;
     writeln!(file, "                }}")?;
     writeln!(file, "            }}")?;

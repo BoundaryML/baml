@@ -2,6 +2,7 @@
 //!
 //! Defines the core structures for accessing file contents and paths.
 
+use std::fmt;
 use std::path::PathBuf;
 
 use crate::FileId;
@@ -23,4 +24,10 @@ pub struct SourceFile {
     /// The FileId associated with this source file
     /// This is used to maintain compatibility with existing code
     pub file_id: FileId,
+}
+
+impl fmt::Debug for SourceFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SourceFile").field("id", &self.0).finish()
+    }
 }

@@ -147,9 +147,11 @@ name = "baml_hir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_db",
  "baml_parser",
  "baml_syntax",
  "baml_workspace",
+ "rowan",
  "salsa",
 ]
 
@@ -224,6 +226,7 @@ dependencies = [
  "baml_base",
  "baml_hir",
  "salsa",
+ "text-size",
 ]
 
 [[package]]

@@ -56,7 +56,7 @@ impl SyntaxTreeBuilder {
         builder.start_node(SyntaxKind::FUNCTION_DEF);
 
         // function keyword
-        builder.token(SyntaxKind::WORD, "function");
+        builder.token(SyntaxKind::KW_FUNCTION, "function");
         builder.ws(" ");
 
         // function name
@@ -120,7 +120,7 @@ impl SyntaxTreeBuilder {
         builder.start_node(SyntaxKind::CLASS_DEF);
 
         // class keyword
-        builder.token(SyntaxKind::WORD, "class");
+        builder.token(SyntaxKind::KW_CLASS, "class");
         builder.ws(" ");
 
         // class name

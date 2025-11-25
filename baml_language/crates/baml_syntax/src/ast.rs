@@ -26,7 +26,7 @@ macro_rules! ast_node {
             type Language = crate::BamlLanguage;
 
             fn can_cast(kind: <Self::Language as rowan::Language>::Kind) -> bool {
-                kind == SyntaxKind::$kind.into()
+                kind == SyntaxKind::$kind
             }
 
             fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -87,13 +87,11 @@ impl SourceFile {
 impl FunctionDef {
     /// Get the function name.
     pub fn name(&self) -> Option<SyntaxToken> {
+        // The function name is the first WORD token (not KW_FUNCTION)
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(1) // Skip the "function" keyword, get the second WORD
+            .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
     /// Get the parameter list.
@@ -142,13 +140,11 @@ impl ParameterList {
 impl ClassDef {
     /// Get the class name.
     pub fn name(&self) -> Option<SyntaxToken> {
+        // The class name is the first WORD token (not KW_CLASS)
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(1) // Skip the "class" keyword, get the second WORD
+            .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
     /// Get all fields.
@@ -159,6 +155,21 @@ impl ClassDef {
     /// Get block attributes (@@dynamic).
     pub fn block_attributes(&self) -> impl Iterator<Item = BlockAttribute> {
         self.syntax.children().filter_map(BlockAttribute::cast)
+    }
+}
+
+impl Parameter {
+    /// Get the parameter name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the parameter type.
+    pub fn ty(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
     }
 }
 
@@ -177,6 +188,42 @@ impl Field {
     }
 
     /// Get field attributes (@alias, @description, etc.).
+    pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
+        self.syntax.children().filter_map(Attribute::cast)
+    }
+}
+
+impl EnumDef {
+    /// Get the enum name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        // The enum name is the first WORD token (KW_ENUM is a separate token kind)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get all variants.
+    pub fn variants(&self) -> impl Iterator<Item = EnumVariant> {
+        self.syntax.children().filter_map(EnumVariant::cast)
+    }
+
+    /// Get block attributes (@@dynamic).
+    pub fn block_attributes(&self) -> impl Iterator<Item = BlockAttribute> {
+        self.syntax.children().filter_map(BlockAttribute::cast)
+    }
+}
+
+impl EnumVariant {
+    /// Get the variant name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get variant attributes (@alias, @description, etc.).
     pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
         self.syntax.children().filter_map(Attribute::cast)
     }

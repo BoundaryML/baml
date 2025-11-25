@@ -22,4 +22,8 @@ baml_parser = { workspace = true }
 baml_syntax = { workspace = true }
 baml_workspace = { workspace = true }
 
+rowan = { workspace = true }
 salsa = { workspace = true }
+
+[dev-dependencies]
+baml_db = { workspace = true }
