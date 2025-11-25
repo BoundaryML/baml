@@ -184,35 +184,22 @@ export interface BamlRuntimeInterface {
   ): AsyncGenerator<RichExecutionEvent>;
 
   /**
-   * Execute a function with a test case
-   *
-   * Emits rich execution events with:
-   * - Node IDs for graph mapping
-   * - Timestamps for ordering
-   * - Iteration counts for loops/cycles
-   * - Actual runtime values (client, types, etc.)
-   * - Block entry/exit events
-   *
-   * Works for both:
-   * - Standalone functions (simple execution)
-   * - Root functions/"workflows" (nested calls emit events for each node)
-   */
-  executeTest(
-    functionName: string,
-    testName: string,
-    context: TestExecutionContext
-  ): AsyncGenerator<RichExecutionEvent>;
-
-  /**
    * Execute multiple tests
    *
-   * Can execute in parallel or sequentially.
-   * Events are tagged with executionId to group related events.
+   * All real-time updates happen through callbacks in TestExecutionContext:
+   * - onPartialResponse: Called with TestResponseData as responses stream in
+   * - onWatchNotification: Called when watch blocks emit notifications
+   * - onHighlight: Called when code should be highlighted
+   *
+   * These callbacks are called synchronously by WASM during execution,
+   * providing true real-time updates without generator blocking issues.
+   *
+   * Returns a promise that resolves when all tests complete.
    */
   executeTests(
     tests: Array<{ functionName: string; testName: string }>,
     context: TestExecutionContext
-  ): AsyncGenerator<RichExecutionEvent>;
+  ): Promise<void>;
 
   /**
    * Cancel a running execution

@@ -897,164 +897,89 @@ export class BAMLSDK {
       // Track watch notifications per test
       const watchNotificationsByTest: Record<string, WatchNotification[]> = {};
 
+      // Initialize watch notifications tracking and mark all tests as running
+      for (let i = 0; i < tests.length; i++) {
+        const test = tests[i]!;
+        const testKey = `${test.functionName}:${test.testName}`;
+        watchNotificationsByTest[testKey] = [];
+        // Mark as running - execution is about to begin
+        this.storage.updateTestInHistory(0, i, { status: 'running' });
+      }
+
       try {
-        if (options?.parallel) {
-          // Parallel execution via runtime.executeTests()
-          for await (const event of this.runtime.executeTests(tests, {
-            apiKeys: options?.apiKeys,
-            abortSignal: controller.signal,
-          })) {
-            // Find test index based on nodeId (which should be the function name)
-            const testIndex = 'nodeId' in event
-              ? tests.findIndex((t) => t.functionName === event.nodeId)
-              : -1;
+        // Execute tests via runtime - runtime decides parallel vs sequential
+        // SDK just handles callbacks uniformly
+        await this.runtime.executeTests(tests, {
+          apiKeys: options?.apiKeys,
+          abortSignal: controller.signal,
+          parallel: options?.parallel,
 
-            if (testIndex === -1) continue;
-
-            const testKey = `${tests[testIndex]!.functionName}:${tests[testIndex]!.testName}`;
-
-            if (event.type === 'partial.response') {
+          // Called when a partial response is received during streaming
+          onPartialResponse: (functionName, testName, partial) => {
+            console.log('[SDK] onPartialResponse:', functionName, testName, partial);
+            const testIndex = tests.findIndex(t =>
+              t.functionName === functionName && t.testName === testName
+            );
+            if (testIndex !== -1) {
+              const testKey = `${functionName}:${testName}`;
               this.storage.updateTestInHistory(0, testIndex, {
                 status: 'running',
-                response: event.partialContent,
+                response: partial,
                 watchNotifications: watchNotificationsByTest[testKey] || [],
               });
-            } else if (event.type === 'watch.notification') {
-              if (!watchNotificationsByTest[testKey]) {
-                watchNotificationsByTest[testKey] = [];
-              }
-              const enriched = this.enrichNotification(event.notification);
-              watchNotificationsByTest[testKey].push(enriched);
-              this.storage.addWatchNotification(enriched);
-              if (enriched.blockName) {
-                this.storage.addHighlightedBlock(enriched.blockName);
-              }
-            } else if (event.type === 'highlight') {
-              try {
-                // Convert SpanInfo (camelCase) to VSCode format (snake_case)
-                const vscodeSpans = event.spans.map((span) => ({
-                  file_path: span.filePath,
-                  start_line: span.startLine,
-                  start: span.start,
-                  end_line: span.endLine,
-                  end: span.end,
-                }));
-                vscode.setFlashingRegions(vscodeSpans);
-                this.storage.setFlashRanges(event.spans.map((span) => ({
-                  filePath: span.filePath,
-                  startLine: span.startLine,
-                  startCol: span.start,
-                  endLine: span.endLine,
-                  endCol: span.end,
-                })));
-              } catch (e) {
-                console.error('[SDK] Failed to set flashing regions:', e);
-              }
-            } else if (event.type === 'node.exit') {
-              if (event.error) {
-                this.storage.updateTestInHistory(0, testIndex, {
-                  status: 'error',
-                  message: event.error.message,
-                });
-              } else {
-                this.storage.updateTestInHistory(0, testIndex, {
-                  status: 'done',
-                  response: event.responseData || {},
-                  response_status: 'passed',
-                  latency_ms: event.duration,
-                  watchNotifications: watchNotificationsByTest[testKey] || [],
-                });
-              }
             }
-          }
-        } else {
-          // Sequential execution
-          for (let i = 0; i < tests.length; i++) {
-            const test = tests[i]!;
-            const testKey = `${test.functionName}:${test.testName}`;
-            watchNotificationsByTest[testKey] = [];
+          },
 
-            // Mark as running
-            this.storage.updateTestInHistory(0, i, { status: 'running' });
-
-            try {
-              // Pass callbacks directly to the runtime - WASM calls these synchronously during execution
-              // This is how we get real-time streaming updates
-              for await (const event of this.runtime.executeTest(test.functionName, test.testName, {
-                apiKeys: options?.apiKeys,
-                abortSignal: controller.signal,
-                // Streaming callbacks - called synchronously by WASM during execution
-                onPartialResponse: (partial) => {
-                  this.storage.updateTestInHistory(0, i, {
-                    status: 'running',
-                    response: String(partial),
-                    watchNotifications: watchNotificationsByTest[testKey] || [],
-                  });
-                },
-                onWatchNotification: (notification) => {
-                  const enriched = this.enrichNotification(notification);
-                  watchNotificationsByTest[testKey]!.push(enriched);
-                  this.storage.addWatchNotification(enriched);
-                  if (enriched.blockName) {
-                    this.storage.addHighlightedBlock(enriched.blockName);
-                  }
-                  // Also update history with latest notifications
-                  this.storage.updateTestInHistory(0, i, {
-                    status: 'running',
-                    watchNotifications: [...watchNotificationsByTest[testKey]!],
-                  });
-                },
-                onHighlight: (spans) => {
-                  try {
-                    // Convert SpanInfo (camelCase) to VSCode format (snake_case)
-                    const vscodeSpans = spans.map((span) => ({
-                      file_path: span.filePath,
-                      start_line: span.startLine,
-                      start: span.start,
-                      end_line: span.endLine,
-                      end: span.end,
-                    }));
-                    vscode.setFlashingRegions(vscodeSpans);
-                    this.storage.setFlashRanges(spans.map((span) => ({
-                      filePath: span.filePath,
-                      startLine: span.startLine,
-                      startCol: span.start,
-                      endLine: span.endLine,
-                      endCol: span.end,
-                    })));
-                  } catch (e) {
-                    console.error('[SDK] Failed to set flashing regions:', e);
-                  }
-                },
-              })) {
-                // Generator only yields node.enter and node.exit events now
-                // Streaming happens via callbacks above
-                if (event.type === 'node.exit') {
-                  if (event.error) {
-                    this.storage.updateTestInHistory(0, i, {
-                      status: 'error',
-                      message: event.error.message,
-                    });
-                  } else {
-                    this.storage.updateTestInHistory(0, i, {
-                      status: 'done',
-                      response: event.responseData || {},
-                      response_status: 'passed',
-                      latency_ms: event.duration,
-                      watchNotifications: watchNotificationsByTest[testKey] || [],
-                    });
-                  }
-                }
-              }
-            } catch (e) {
-              const err = e instanceof Error ? e : new Error(String(e));
-              this.storage.updateTestInHistory(0, i, {
-                status: 'error',
-                message: err.message,
+          // Called when a test completes
+          onTestComplete: (functionName, testName, response, status, latencyMs) => {
+            console.log('[SDK] onTestComplete:', functionName, testName, status);
+            const testIndex = tests.findIndex(t =>
+              t.functionName === functionName && t.testName === testName
+            );
+            if (testIndex !== -1) {
+              const testKey = `${functionName}:${testName}`;
+              this.storage.updateTestInHistory(0, testIndex, {
+                status: 'done',
+                response,
+                response_status: status,
+                latency_ms: latencyMs,
+                watchNotifications: watchNotificationsByTest[testKey] || [],
               });
             }
-          }
-        }
+          },
+
+          // Called when a watch notification is received
+          onWatchNotification: (notification) => {
+            const enriched = this.enrichNotification(notification);
+            this.storage.addWatchNotification(enriched);
+            if (enriched.blockName) {
+              this.storage.addHighlightedBlock(enriched.blockName);
+            }
+          },
+
+          // Called when code should be highlighted
+          onHighlight: (spans) => {
+            try {
+              const vscodeSpans = spans.map((span) => ({
+                file_path: span.filePath,
+                start_line: span.startLine,
+                start: span.start,
+                end_line: span.endLine,
+                end: span.end,
+              }));
+              vscode.setFlashingRegions(vscodeSpans);
+              this.storage.setFlashRanges(spans.map((span) => ({
+                filePath: span.filePath,
+                startLine: span.startLine,
+                startCol: span.start,
+                endLine: span.endLine,
+                endCol: span.end,
+              })));
+            } catch (e) {
+              console.error('[SDK] Failed to set flashing regions:', e);
+            }
+          },
+        });
       } catch (e) {
         console.error('[SDK] Test execution error:', e);
         const err = e instanceof Error ? e : new Error(String(e));

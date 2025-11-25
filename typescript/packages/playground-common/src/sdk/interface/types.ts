@@ -270,8 +270,15 @@ export interface TestExecutionContext {
   apiKeys?: Record<string, string>;
   abortSignal?: AbortSignal;
   loadMediaFile?: (path: string) => Promise<Uint8Array>;
-  onPartialResponse?: (response: unknown) => void;
+  /** Whether to run tests in parallel (default: false = sequential) */
+  parallel?: boolean;
+  /** Called when a partial response is received during streaming */
+  onPartialResponse?: (functionName: string, testName: string, response: TestResponseData) => void;
+  /** Called when a test completes (success or failure) */
+  onTestComplete?: (functionName: string, testName: string, response: TestResponseData, status: 'passed' | 'llm_failed' | 'parse_failed' | 'constraints_failed' | 'assert_failed' | 'error', latencyMs: number) => void;
+  /** Called when a watch notification is received */
   onWatchNotification?: (notification: WatchNotification) => void;
+  /** Called when code should be highlighted */
   onHighlight?: (spans: SpanInfo[]) => void;
 }
 

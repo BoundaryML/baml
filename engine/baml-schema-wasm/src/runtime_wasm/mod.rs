@@ -2027,6 +2027,7 @@ impl WasmRuntime {
                     // Create a closure to handle partial responses for this test
                     let on_partial_response_clone = on_partial_response.clone();
                     let cb = Box::new(move |r| {
+                        log::info!("on_partial_response: {:#?}", r);
                         let this = JsValue::NULL;
                         let res = WasmFunctionResponse {
                             function_response: r,

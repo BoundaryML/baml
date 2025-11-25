@@ -422,21 +422,31 @@ export class JotaiStorage implements SDKStorage {
   }
 
   updateTestInHistory(runIndex: number, testIndex: number, update: TestState) {
-    const history = this.store.get(testHistoryAtom);
-    const newHistory = [...history];
-    const run = newHistory[runIndex];
-    if (!run) return;
+    console.log('[JotaiStorage] updateTestInHistory called:', { runIndex, testIndex, update });
+    this.store.set(testHistoryAtom, (prev) => {
+      console.log('[JotaiStorage] inside functional updater, prev length:', prev.length);
+      const newHistory = [...prev];
+      const run = newHistory[runIndex];
+      if (!run) {
+        console.warn('[JotaiStorage] run not found at index:', runIndex);
+        return prev;
+      }
 
-    const test = run.tests[testIndex];
-    if (!test) return;
+      const test = run.tests[testIndex];
+      if (!test) {
+        console.warn('[JotaiStorage] test not found at index:', testIndex);
+        return prev;
+      }
 
-    run.tests[testIndex] = {
-      ...test,
-      response: update,
-      timestamp: Date.now(),
-    };
+      run.tests[testIndex] = {
+        ...test,
+        response: update,
+        timestamp: Date.now(),
+      };
 
-    this.store.set(testHistoryAtom, newHistory);
+      console.log('[JotaiStorage] updated test:', run.tests[testIndex]);
+      return newHistory;
+    });
   }
 
   setSelectedHistoryIndex(index: number) {

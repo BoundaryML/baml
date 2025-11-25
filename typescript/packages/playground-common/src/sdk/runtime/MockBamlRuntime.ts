@@ -132,34 +132,33 @@ export class MockBamlRuntime implements BamlRuntimeInterface {
     );
   }
 
-  async *executeTest(
+  async executeTest(
     functionName: string,
     testName: string,
     context: TestExecutionContext
-  ): AsyncGenerator<RichExecutionEvent> {
-    // Find test and execute
-    const test = this.getTestCases(functionName).find((t) => t.name === testName);
-    if (!test) throw new Error(`Test ${testName} not found for function ${functionName}`);
-
-    // Execute with test inputs
-    // TODO: Update simulator to emit RichExecutionEvent
-    // For now, cast the events
-    const inputs: Record<string, unknown> = {};
-    for (const input of test.inputs) {
-      if (input.value) {
-        inputs[input.name] = input.value;
-      }
-    }
-    yield* this.executeWorkflow(test.functionId, inputs) as AsyncGenerator<RichExecutionEvent>;
+  ): Promise<void> {
+    await this.executeTests([{ functionName, testName }], context);
   }
 
-  async *executeTests(
+  async executeTests(
     tests: Array<{ functionName: string; testName: string }>,
     context: TestExecutionContext
-  ): AsyncGenerator<RichExecutionEvent> {
-    // Mock implementation: run tests sequentially
+  ): Promise<void> {
+    // Mock implementation - just simulate execution
     for (const test of tests) {
-      yield* this.executeTest(test.functionName, test.testName, context);
+      const t = this.getTestCases(test.functionName).find((tc) => tc.name === test.testName);
+      if (!t) throw new Error(`Test ${test.testName} not found for function ${test.functionName}`);
+
+      // Simulate partial response callback
+      if (context.onPartialResponse) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        context.onPartialResponse(test.functionName, test.testName, {
+          parsed_response: { value: 'Mock response', checkCount: 0 },
+        });
+      }
+
+      // Simulate completion
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
   }
 

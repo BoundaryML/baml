@@ -123,8 +123,8 @@ export interface LLMFailureEvent extends BaseExecutionEvent {
  */
 export interface PartialResponseEvent extends BaseExecutionEvent {
   type: 'partial.response';
-  /** Partial content */
-  partialContent: string;
+  /** Partial response data */
+  partialResponse: TestResponseData;
   /** Whether this is the final chunk */
   isFinal: boolean;
 }

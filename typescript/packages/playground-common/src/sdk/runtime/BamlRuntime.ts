@@ -22,6 +22,7 @@ import {
   type WasmError,
   type WasmSpan,
   type WasmTestResponse,
+  type WasmFunctionResponse,
   type WasmControlFlowGraph,
   type WasmControlFlowNode,
 } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build';
@@ -83,7 +84,7 @@ type WasmGeneratorOutput = {
 type RichWasmFunction = WasmFunction & { function_type: WasmFunctionKind };
 
 // Type for test execution callbacks
-type WasmPartialResponse = unknown; // The partial response shape varies
+type WasmPartialResponse = WasmFunctionResponse | WasmTestResponse; // Can be either partial or complete response
 type WasmNotification = { variable_name?: string; channel_name?: string; block_name?: string; is_stream: boolean; value: string };
 
 // Type for test result from run_tests
@@ -720,46 +721,25 @@ export class BamlRuntime implements BamlRuntimeInterface {
     throw new Error('Workflow execution not yet implemented for BamlRuntime');
   }
 
-  /**
-   * Execute a test using callbacks for streaming updates.
-   * WASM execution is blocking, so we can't use generators for streaming.
-   * Instead, callbacks in context are called directly during WASM execution.
-   *
-   * The generator interface is kept for compatibility but only yields
-   * the enter and exit events - streaming happens via callbacks.
-   */
-  async *executeTest(
-    functionName: string,
-    testName: string,
+
+  async executeTests(
+    tests: Array<{ functionName: string; testName: string }>,
     context: TestExecutionContext
-  ): AsyncGenerator<RichExecutionEvent> {
+  ): Promise<void> {
     if (!this.wasmRuntime) {
-      throw new Error('Cannot execute test - runtime is invalid');
+      throw new Error('Cannot execute tests - runtime is invalid');
     }
 
-    // Generate execution ID
-    const executionId = `exec_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    // Prepare test cases for run_tests
+    const testCases = tests.map((test) => {
+      const allTestCases: WasmTestCase[] = this.wasmRuntime!.list_testcases();
+      const testCase = allTestCases.find((tc) => tc.name === test.testName);
 
-    // Find the test case
-    const testCases: WasmTestCase[] = this.wasmRuntime.list_testcases();
-    const testCase = testCases.find((tc) => tc.name === testName);
+      if (!testCase) {
+        throw new Error(`Test case not found: ${test.testName}`);
+      }
 
-    if (!testCase) {
-      throw new Error(`Test case not found: ${testName}`);
-    }
-
-    // Get the function for this test
-    const functions: WasmFunction[] = this.wasmRuntime.list_functions();
-    const wasmFunction = functions.find((fn) => fn.name === functionName);
-
-    if (!wasmFunction) {
-      throw new Error(`Function not found: ${functionName}`);
-    }
-
-    const nodeId = functionName;
-
-    try {
-      // Extract inputs from test case
+      // Convert inputs
       const inputs: Record<string, unknown> = {};
       for (const param of testCase.inputs) {
         if (param.value !== undefined) {
@@ -771,216 +751,34 @@ export class BamlRuntime implements BamlRuntimeInterface {
         }
       }
 
-      // Yield node enter event
-      yield {
-        type: 'node.enter',
-        nodeId,
-        timestamp: Date.now(),
-        iteration: 0,
-        executionId,
+      return {
+        functionName: test.functionName,
+        testName: test.testName,
         inputs,
       };
+    });
 
-      const startTime = performance.now();
-
-      // Execute WASM with callbacks - callbacks are called synchronously during execution
-      // This is the key insight: WASM won't yield to JS event loop, so we must use callbacks
-      const result = await wasmFunction.run_test_with_expr_events(
-        this.wasmRuntime,
-        testCase.name,
-        // on_partial_response callback - called during streaming
-        (partial: WasmPartialResponse) => {
-          console.log('[BamlRuntime] onPartialResponse:', partial);
-          // Call context callback directly - this updates UI state immediately
-          context.onPartialResponse?.(partial);
-        },
-        // get_baml_src_cb - load media files
-        context?.loadMediaFile || vscode.loadMediaFile,
-        // on_expr_event - expression evaluation events (for highlighting)
-        (spans: WasmSpan[]) => {
-          if (spans && spans.length > 0) {
-            const convertedSpans = spans.map((span) => this.adapter.convertSpan(span));
-            context.onHighlight?.(convertedSpans);
-          }
-        },
-        // env - API keys / environment
-        context?.apiKeys || {},
-        // abort_signal
-        context?.abortSignal || null,
-        // watch_handler - for watch notifications
-        (notification: WasmNotification) => {
-          context.onWatchNotification?.({
-            variableName: notification.variable_name,
-            channelName: notification.channel_name,
-            blockName: notification.block_name,
-            isStream: notification.is_stream,
-            value: notification.value,
-          });
-        }
-      );
-
-      const endTime = performance.now();
-      const duration = endTime - startTime;
-
-      // Parse the result
-      const status = result.status();
-      const statusMap = {
-        [this.wasm.TestStatus.Passed]: 'passed',
-        [this.wasm.TestStatus.LLMFailure]: 'llm_failed',
-        [this.wasm.TestStatus.ParseFailure]: 'parse_failed',
-        [this.wasm.TestStatus.ConstraintsFailed]: 'constraints_failed',
-        [this.wasm.TestStatus.AssertFailed]: 'assert_failed',
-        [this.wasm.TestStatus.UnableToRun]: 'error',
-        [this.wasm.TestStatus.FinishReasonFailed]: 'error',
-      } as const;
-
-      const testStatus = statusMap[status] || 'error';
-
-      // Convert WASM response to plain object
-      const responseData = this.adapter.convertResponseToData(result);
-
-      // Extract outputs
-      let outputs: Record<string, unknown> = {};
-
-      if (testStatus === 'passed') {
-        const parsedResponse = result.parsed_response();
-        if (parsedResponse) {
-          try {
-            outputs = { result: JSON.parse(parsedResponse.value) };
-          } catch {
-            outputs = { result: parsedResponse.value };
-          }
-        }
-      } else {
-        // Get error information
-        const failureMsg = result.failure_message();
-        if (failureMsg) {
-          outputs = { error: failureMsg };
-        }
-      }
-
-      // Yield completion or error event
-      if (testStatus === 'passed') {
-        yield {
-          type: 'node.exit',
-          nodeId,
-          timestamp: Date.now(),
-          iteration: 0,
-          executionId,
-          outputs,
-          duration,
-          responseData,
-        };
-      } else {
-        yield {
-          type: 'node.exit',
-          nodeId,
-          timestamp: Date.now(),
-          iteration: 0,
-          executionId,
-          outputs,
-          duration,
-          responseData,
-          error: {
-            message: typeof outputs.error === 'string' ? outputs.error : `Test failed with status: ${testStatus}`,
-            code: testStatus,
-          },
-        };
-      }
-    } catch (error) {
-      yield {
-        type: 'node.exit',
-        nodeId,
-        timestamp: Date.now(),
-        iteration: 0,
-        executionId,
-        duration: 0,
-        error: {
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        },
-      };
-    }
-  }
-
-  async *executeTests(
-    tests: Array<{ functionName: string; testName: string }>,
-    context: TestExecutionContext
-  ): AsyncGenerator<RichExecutionEvent> {
-    if (!this.wasmRuntime) {
-      throw new Error('Cannot execute tests - runtime is invalid');
+    // Track start times for latency calculation
+    const startTimes: Record<string, number> = {};
+    for (const test of tests) {
+      startTimes[`${test.functionName}:${test.testName}`] = Date.now();
     }
 
-    try {
-      // Prepare test cases for run_tests
-      const testCases = tests.map((test) => {
-        const allTestCases: WasmTestCase[] = this.wasmRuntime!.list_testcases();
-        const testCase = allTestCases.find((tc) => tc.name === test.testName);
-
-        if (!testCase) {
-          throw new Error(`Test case not found: ${test.testName}`);
-        }
-
-        // Convert inputs
-        const inputs: Record<string, unknown> = {};
-        for (const param of testCase.inputs) {
-          if (param.value !== undefined) {
-            try {
-              inputs[param.name] = JSON.parse(param.value);
-            } catch {
-              inputs[param.name] = param.value;
-            }
-          }
-        }
-
-        return {
-          functionName: test.functionName,
-          testName: test.testName,
-          inputs,
-        };
-      });
-
-      const executionId = `batch_${Date.now()}`;
-
-      // Yield started events for all tests
-      for (const test of tests) {
-        const testCase = testCases.find((tc) => tc.testName === test.testName);
-        if (testCase) {
-          yield {
-            type: 'node.enter',
-            nodeId: test.functionName,
-            timestamp: Date.now(),
-            iteration: 0,
-            executionId,
-            inputs: testCase.inputs,
-          };
-        }
-      }
-
-      // Create event collectors for callbacks
-      const events: RichExecutionEvent[] = [];
-      const pushEvent = (event: RichExecutionEvent) => {
-        events.push(event);
-      };
-
-      // Execute all tests in parallel via run_tests
-      const results = await this.wasmRuntime.run_tests(
+    // Execute all tests via run_tests
+    // Callbacks fire in real-time during execution!
+    // Note: WASM handles parallel vs sequential internally based on the test cases
+    const results = await this.wasmRuntime.run_tests(
         testCases,
         // on_partial_response callback
         (partial: WasmPartialResponse & { func_test_pair: () => { function_name: string; test_name: string } }) => {
+          console.log('[BamlRuntime] on_partial_response:', partial);
           const pair = partial.func_test_pair();
+          const convertedPartial = this.adapter.convertResponseToData(partial);
+
           if (context.onPartialResponse) {
-            context.onPartialResponse(partial);
+            console.log('[BamlRuntime] calling context.onPartialResponse for', pair.function_name, pair.test_name);
+            context.onPartialResponse(pair.function_name, pair.test_name, convertedPartial);
           }
-          pushEvent({
-            type: 'partial.response',
-            nodeId: pair.function_name,
-            timestamp: Date.now(),
-            iteration: 0,
-            executionId,
-            partialContent: String(partial),
-            isFinal: false,
-          });
         },
         // get_baml_src_cb - load media files
         context.loadMediaFile || vscode.loadMediaFile,
@@ -990,7 +788,6 @@ export class BamlRuntime implements BamlRuntimeInterface {
         context.abortSignal || null,
         // watch_handler - for watch notifications
         (notification: WasmNotification & { function_name?: string; test_name?: string }) => {
-          // Watch notifications should have function_name and test_name from parallel execution
           const watchNotification = {
             variableName: notification.variable_name,
             channelName: notification.channel_name,
@@ -1001,106 +798,32 @@ export class BamlRuntime implements BamlRuntimeInterface {
           if (context.onWatchNotification) {
             context.onWatchNotification(watchNotification);
           }
-          pushEvent({
-            type: 'watch.notification',
-            nodeId: notification.function_name || 'unknown',
-            timestamp: Date.now(),
-            iteration: 0,
-            executionId,
-            notification: watchNotification,
-          });
         }
       );
 
-      // Yield all accumulated events from callbacks
-      for (const event of events) {
-        yield event;
-      }
+    // Process final results and call onTestComplete for each test
+    let response: WasmTestResponse | undefined;
+    while ((response = results.yield_next()) !== undefined) {
+      const pair = response.func_test_pair();
+      const status = response.status();
+      const testKey = `${pair.function_name}:${pair.test_name}`;
+      const latencyMs = Date.now() - (startTimes[testKey] || Date.now());
 
-      // Process results
-      let response: WasmTestResponse | undefined;
-      while ((response = results.yield_next()) !== undefined) {
-        const pair = response.func_test_pair();
-        const status = response.status();
+      const statusMap: Record<number, 'passed' | 'llm_failed' | 'parse_failed' | 'constraints_failed' | 'assert_failed' | 'error'> = {
+        [this.wasm.TestStatus.Passed]: 'passed',
+        [this.wasm.TestStatus.LLMFailure]: 'llm_failed',
+        [this.wasm.TestStatus.ParseFailure]: 'parse_failed',
+        [this.wasm.TestStatus.ConstraintsFailed]: 'constraints_failed',
+        [this.wasm.TestStatus.AssertFailed]: 'assert_failed',
+        [this.wasm.TestStatus.UnableToRun]: 'error',
+        [this.wasm.TestStatus.FinishReasonFailed]: 'error',
+      };
 
-        const statusMap = {
-          [this.wasm.TestStatus.Passed]: 'passed',
-          [this.wasm.TestStatus.LLMFailure]: 'llm_failed',
-          [this.wasm.TestStatus.ParseFailure]: 'parse_failed',
-          [this.wasm.TestStatus.ConstraintsFailed]: 'constraints_failed',
-          [this.wasm.TestStatus.AssertFailed]: 'assert_failed',
-          [this.wasm.TestStatus.UnableToRun]: 'error',
-          [this.wasm.TestStatus.FinishReasonFailed]: 'error',
-        } as const;
+      const testStatus = statusMap[status] || 'error';
+      const responseData = this.adapter.convertResponseToData(response);
 
-        const testStatus = statusMap[status] || 'error';
-
-        // Convert WASM response to plain object
-        const responseData = this.adapter.convertResponseToData(response);
-
-        // Extract outputs
-        let outputs: Record<string, any> = {};
-        if (testStatus === 'passed') {
-          const parsedResponse = response.parsed_response();
-          if (parsedResponse) {
-            try {
-              outputs = { result: JSON.parse(parsedResponse.value) };
-            } catch {
-              outputs = { result: parsedResponse.value };
-            }
-          }
-        } else {
-          const failureMsg = response.failure_message();
-          if (failureMsg) {
-            outputs = { error: failureMsg };
-          }
-        }
-
-        // Yield completion or error event
-        if (testStatus === 'passed') {
-          yield {
-            type: 'node.exit',
-            nodeId: pair.function_name,
-            timestamp: Date.now(),
-            iteration: 0,
-            executionId,
-            outputs,
-            duration: 0, // TODO: Track duration for parallel tests
-            responseData,
-          };
-        } else {
-          yield {
-            type: 'node.exit',
-            nodeId: pair.function_name,
-            timestamp: Date.now(),
-            iteration: 0,
-            executionId,
-            outputs,
-            duration: 0,
-            responseData,
-            error: {
-              message: outputs.error || `Test failed with status: ${testStatus}`,
-              code: testStatus,
-            },
-          };
-        }
-      }
-    } catch (error) {
-      // Yield error for all tests
-      const executionId = `batch_${Date.now()}`;
-      for (const test of tests) {
-        yield {
-          type: 'node.exit',
-          nodeId: test.functionName,
-          timestamp: Date.now(),
-          iteration: 0,
-          executionId,
-          duration: 0,
-          error: {
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          },
-        };
+      if (context.onTestComplete) {
+        context.onTestComplete(pair.function_name, pair.test_name, responseData, testStatus, latencyMs);
       }
     }
   }
