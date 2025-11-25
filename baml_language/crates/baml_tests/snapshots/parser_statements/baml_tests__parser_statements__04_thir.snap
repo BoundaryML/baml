@@ -3,160 +3,20 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
-function c_style_for_loop() -> int
-└─ Block(3 stmts): void
-   ├─ Let result: int
-   │  └─ Literal(Int(0)): int
-   ├─ ForCStyle
-   │  ├─ Let i: int
-   │  │  └─ Literal(Int(0)): int
-   │  ├─ Binary(Lt): bool
-   │  │  ├─ Path(i): int
-   │  │  └─ Literal(Int(10)): int
-   │  ├─ Binary(Add): int
-   │  │  ├─ Path(i): int
-   │  │  └─ Literal(Int(1)): int
-   │  └─ Block(1 stmts): void
-   │     └─ ExprStmt
-   │        └─ Binary(Add): int
-   │           ├─ Path(result): int
-   │           └─ Path(i): int
-   └─ Return
-      └─ Path(result): int
-
-function iterator_style_for_loop() -> int
-└─ Block(3 stmts): void
-   ├─ Let result: int
-   │  └─ Literal(Int(0)): int
-   ├─ ForIn (i)
-   │  ├─ Array[3]: int[]
-   │  │  ├─ Literal(Int(1)): int
-   │  │  ├─ Literal(Int(2)): int
-   │  │  └─ Literal(Int(3)): int
-   │  └─ Block(1 stmts): void
-   │     └─ ExprStmt
-   │        └─ Binary(Add): int
-   │           ├─ Path(result): int
-   │           └─ Path(i): int
-   └─ Return
-      └─ Path(result): int
-
-function nested_for_loop() -> int
-└─ Block(3 stmts): void
-   ├─ Let result: int
-   │  └─ Literal(Int(0)): int
-   ├─ ForIn (i)
-   │  ├─ Array[3]: int[]
-   │  │  ├─ Literal(Int(1)): int
-   │  │  ├─ Literal(Int(2)): int
-   │  │  └─ Literal(Int(3)): int
-   │  └─ Block(1 stmts): void
-   │     └─ ForIn (j)
-   │        ├─ Array[3]: int[]
-   │        │  ├─ Literal(Int(4)): int
-   │        │  ├─ Literal(Int(5)): int
-   │        │  └─ Literal(Int(6)): int
-   │        └─ Block(1 stmts): void
-   │           └─ ExprStmt
-   │              └─ Binary(Add): int
-   │                 ├─ Path(result): int
-   │                 └─ Binary(Mul): int
-   │                    ├─ Path(i): int
-   │                    └─ Path(j): int
-   └─ Return
-      └─ Path(result): int
-
-function ConditionalLogic(age: int) -> string
-├─ param age: int
-└─ Block(0 stmts + tail): void
-   └─ If + else: void
-      ├─ condition:
-      │  └─ Binary(Lt): bool
-      │     ├─ Path(age): int
-      │     └─ Literal(Int(18)): int
-      ├─ then:
-      │  └─ Block(1 stmts): void
-      │     └─ Return
-      │        └─ Literal(String(" \"minor\"")): string
-      └─ else:
-         └─ If + else: void
-            ├─ condition:
-            │  └─ Binary(Lt): bool
-            │     ├─ Path(age): int
-            │     └─ Literal(Int(65)): int
-            ├─ then:
-            │  └─ Block(1 stmts): void
-            │     └─ Return
-            │        └─ Literal(String(" \"adult\"")): string
-            └─ else:
-               └─ Block(1 stmts): void
-                  └─ Return
-                     └─ Literal(String(" \"senior\"")): string
-
-function let_statements() -> int
-└─ Block(5 stmts): void
-   ├─ Let x: int
-   │  └─ Literal(Int(1)): int
-   ├─ Let y: int
-   │  └─ Literal(Int(2)): int
-   ├─ Let z: int[]
-   │  └─ Array[3]: int[]
-   │     ├─ Literal(Int(1)): int
-   │     ├─ Literal(Int(2)): int
-   │     └─ Literal(Int(3)): int
-   ├─ Let point: unknown
-   │  └─ Object(Point { 2 fields }): unknown
-   │     ├─ x:
-   │     │  └─ Literal(Int(1)): int
-   │     └─ y:
-   │        └─ Literal(Int(2)): int
-   └─ Return
-      └─ Binary(Add): int
-         ├─ Path(point::x): unknown
-         └─ Path(point::y): unknown
-  Errors:
-    • Unknown variable: point::x
-    • Unknown variable: point::y
-
-function simple_while_loop() -> int
-└─ Block(3 stmts): void
-   ├─ Let i: int
-   │  └─ Literal(Int(0)): int
-   ├─ While
-   │  ├─ Binary(Lt): bool
-   │  │  ├─ Path(i): int
-   │  │  └─ Literal(Int(10)): int
-   │  └─ Block(1 stmts): void
-   │     └─ ExprStmt
-   │        └─ Binary(Add): int
-   │           ├─ Path(i): int
-   │           └─ Binary(Add): int
-   │              ├─ Path(i): int
-   │              └─ Literal(Int(1)): int
-   └─ Return
-      └─ Path(i): int
-
-function nested_while_loop() -> int
-└─ Block(3 stmts): void
-   ├─ Let i: int
-   │  └─ Literal(Int(0)): int
-   ├─ While
-   │  ├─ Binary(Lt): bool
-   │  │  ├─ Path(i): int
-   │  │  └─ Literal(Int(10)): int
-   │  └─ Block(2 stmts): void
-   │     ├─ Let j: int
-   │     │  └─ Literal(Int(0)): int
-   │     └─ While
-   │        ├─ Binary(Lt): bool
-   │        │  ├─ Path(j): int
-   │        │  └─ Literal(Int(10)): int
-   │        └─ Block(1 stmts): void
-   │           └─ ExprStmt
-   │              └─ Binary(Add): int
-   │                 ├─ Path(j): int
-   │                 └─ Binary(Add): int
-   │                    ├─ Path(j): int
-   │                    └─ Literal(Int(1)): int
-   └─ Return
-      └─ Path(i): int
+  Function c_style_for_loop:
+    Return: Void
+  Function iterator_style_for_loop:
+    Return: Void
+  Function nested_for_loop:
+    Return: Void
+  Function ConditionalLogic:
+    Return: Void
+  Function let_statements:
+    Return: Void
+    Errors:
+      - Unknown variable: point::x
+      - Unknown variable: point::y
+  Function simple_while_loop:
+    Return: Void
+  Function nested_while_loop:
+    Return: Void

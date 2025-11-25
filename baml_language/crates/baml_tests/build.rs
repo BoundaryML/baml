@@ -504,6 +504,15 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
         "        writeln!(output, \"=== TYPE INFERENCE ===\").unwrap();"
     )?;
     writeln!(file)?;
+    writeln!(
+        file,
+        "        // Build initial typing context with all function types"
+    )?;
+    writeln!(
+        file,
+        "        let globals = baml_db::build_typing_context_from_files(&db, &source_files);"
+    )?;
+    writeln!(file)?;
     writeln!(file, "        // Iterate over files and their functions")?;
     writeln!(file, "        for source_file in &source_files {{")?;
     writeln!(
@@ -526,19 +535,32 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
     )?;
     writeln!(
         file,
-        "                    let result = baml_thir::infer_function(&db, &signature, &body);"
+        "                    let result = baml_thir::infer_function_with_context(&db, &signature, &body, Some(globals.clone()));"
     )?;
     writeln!(file)?;
     writeln!(
         file,
-        "                    // Use tree rendering for rich output"
+        "                    writeln!(output, \"  Function {{}}:\", signature.name).unwrap();"
     )?;
     writeln!(
         file,
-        "                    let tree = baml_thir::render_function_tree(&db, &signature.name, &signature, &body, &result);"
+        "                    writeln!(output, \"    Return: {{:?}}\", result.return_type).unwrap();"
     )?;
-    writeln!(file, "                    output.push_str(&tree);")?;
-    writeln!(file, "                    output.push('\\n');")?;
+    writeln!(file, "                    if !result.errors.is_empty() {{")?;
+    writeln!(
+        file,
+        "                        writeln!(output, \"    Errors:\").unwrap();"
+    )?;
+    writeln!(
+        file,
+        "                        for error in &result.errors {{"
+    )?;
+    writeln!(
+        file,
+        "                            writeln!(output, \"      - {{}}\", error.message()).unwrap();"
+    )?;
+    writeln!(file, "                        }}")?;
+    writeln!(file, "                    }}")?;
     writeln!(file, "                }}")?;
     writeln!(file, "            }}")?;
     writeln!(file, "        }}")?;

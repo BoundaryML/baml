@@ -23,32 +23,6 @@ use regex::Regex;
 use rowan::{GreenNode, NodeCache, ast::AstNode};
 use salsa::{Event, EventKind, Setter};
 
-/// Display mode for the THIR phase
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum ThirDisplayMode {
-    /// Tree view showing expression structure with types
-    #[default]
-    Tree,
-    /// Interactive cursor mode for exploring types
-    Interactive,
-}
-
-impl ThirDisplayMode {
-    pub(crate) fn name(self) -> &'static str {
-        match self {
-            ThirDisplayMode::Tree => "Tree",
-            ThirDisplayMode::Interactive => "Interactive",
-        }
-    }
-
-    pub(crate) fn toggle(self) -> Self {
-        match self {
-            ThirDisplayMode::Tree => ThirDisplayMode::Interactive,
-            ThirDisplayMode::Interactive => ThirDisplayMode::Tree,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum CompilerPhase {
     Lexer,
@@ -171,6 +145,26 @@ pub(crate) enum VisualizationMode {
     Incremental,
 }
 
+/// Display mode for the THIR tab
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ThirDisplayMode {
+    /// Show the tree view (default)
+    #[default]
+    Tree,
+    /// Interactive mode with cursor navigation
+    Interactive,
+}
+
+impl ThirDisplayMode {
+    /// Get the display name for this mode
+    pub fn name(&self) -> &'static str {
+        match self {
+            ThirDisplayMode::Tree => "Tree",
+            ThirDisplayMode::Interactive => "Interactive",
+        }
+    }
+}
+
 impl CompilerRunner {
     pub(crate) fn new(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref();
@@ -216,22 +210,6 @@ impl CompilerRunner {
             thir_display_mode: ThirDisplayMode::default(),
             thir_interactive_state: ThirInteractiveState::default(),
         }
-    }
-
-    pub(crate) fn thir_display_mode(&self) -> ThirDisplayMode {
-        self.thir_display_mode
-    }
-
-    pub(crate) fn set_thir_display_mode(&mut self, mode: ThirDisplayMode) {
-        self.thir_display_mode = mode;
-    }
-
-    pub(crate) fn thir_interactive_state(&self) -> &ThirInteractiveState {
-        &self.thir_interactive_state
-    }
-
-    pub(crate) fn thir_interactive_state_mut(&mut self) -> &mut ThirInteractiveState {
-        &mut self.thir_interactive_state
     }
 
     /// Compile files from a "fake filesystem" (`HashMap` of path -> content)
@@ -589,6 +567,10 @@ impl CompilerRunner {
         let mut output_annotated = Vec::new();
         let mut interactive_state = ThirInteractiveState::default();
 
+        // Build initial typing context with all function types
+        let file_list: Vec<_> = self.source_files.values().copied().collect();
+        let globals = baml_db::build_typing_context_from_files(&self.db, &file_list);
+
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
         sorted_files.sort_by_key(|(path, _)| path.as_path());
@@ -618,47 +600,35 @@ impl CompilerRunner {
                     let func_name = signature.name.to_string();
                     let body = function_body(&self.db, *source_file, *func_id);
 
-                    // Run type inference
-                    let inference_result = baml_thir::infer_function(&self.db, &signature, &body);
+                    // Run type inference with global function types
+                    let inference_result = baml_thir::infer_function_with_context(
+                        &self.db,
+                        &signature,
+                        &body,
+                        Some(globals.clone()),
+                    );
 
-                    match self.thir_display_mode {
-                        ThirDisplayMode::Tree => {
-                            // Tree view: use baml_thir's render_function_tree
-                            let tree_output = baml_thir::render_function_tree(
-                                &self.db,
-                                &func_name,
-                                &signature,
-                                &body,
-                                &inference_result,
-                            );
+                    // Use tree view for both modes - interactive mode parses this afterward
+                    let tree_output = baml_thir::render_function_tree(
+                        &self.db,
+                        &func_name,
+                        &signature,
+                        &body,
+                        &inference_result,
+                    );
 
-                            let status = if file_recomputed {
-                                LineStatus::Recomputed
-                            } else {
-                                LineStatus::Cached
-                            };
+                    let status = if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    };
 
-                            for line in tree_output.lines() {
-                                writeln!(output, "{}", line).ok();
-                                output_annotated.push((line.to_string(), status));
-                            }
-                            writeln!(output).ok();
-                            output_annotated.push((String::new(), LineStatus::Unknown));
-                        }
-                        ThirDisplayMode::Interactive => {
-                            // Interactive view: show source-like representation
-                            self.format_thir_interactive(
-                                &func_name,
-                                &signature,
-                                &body,
-                                &inference_result,
-                                &mut output,
-                                &mut output_annotated,
-                                &mut interactive_state,
-                                file_recomputed,
-                            );
-                        }
+                    for line in tree_output.lines() {
+                        writeln!(output, "{}", line).ok();
+                        output_annotated.push((line.to_string(), status));
                     }
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
                 }
             }
 
@@ -678,613 +648,6 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Thir, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Thir, output_annotated);
-    }
-
-    /// Format THIR for interactive mode (source-like with cursor support)
-    #[allow(clippy::too_many_arguments)]
-    fn format_thir_interactive(
-        &self,
-        func_name: &str,
-        signature: &baml_hir::FunctionSignature,
-        body: &FunctionBody,
-        result: &InferenceResult<'_>,
-        output: &mut String,
-        output_annotated: &mut Vec<(String, LineStatus)>,
-        state: &mut ThirInteractiveState,
-        file_recomputed: bool,
-    ) {
-        let status = if file_recomputed {
-            LineStatus::Recomputed
-        } else {
-            LineStatus::Cached
-        };
-
-        // Function header
-        let return_type = baml_thir::lower_type_ref(&self.db, &signature.return_type);
-        let params_str: Vec<String> = signature
-            .params
-            .iter()
-            .map(|p| {
-                let ty = baml_thir::lower_type_ref(&self.db, &p.type_ref);
-                format!("{}: {ty}", p.name)
-            })
-            .collect();
-        let header = format!(
-            "function {func_name}({}) -> {return_type} {{",
-            params_str.join(", ")
-        );
-        writeln!(output, "{header}").ok();
-        output_annotated.push((header.clone(), status));
-        state.source_lines.push(header);
-        state.line_info.push(ThirLineInfo {
-            function_name: func_name.to_string(),
-            expr_type: Some(return_type.to_string()),
-            description: format!("Function signature: returns {return_type}"),
-        });
-
-        // Format body
-        match body {
-            FunctionBody::Expr(expr_body) => {
-                if let Some(root_expr) = expr_body.root_expr {
-                    self.format_expr_interactive(
-                        root_expr,
-                        expr_body,
-                        result,
-                        output,
-                        output_annotated,
-                        state,
-                        func_name,
-                        1,
-                        status,
-                    );
-                }
-            }
-            FunctionBody::Llm(llm_body) => {
-                let client = llm_body
-                    .client
-                    .as_ref()
-                    .map(|n| n.to_string())
-                    .unwrap_or_else(|| "none".to_string());
-                let line = format!("  client {client}");
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: None,
-                    description: format!("LLM client: {client}"),
-                });
-            }
-            FunctionBody::Missing => {
-                let line = "  <missing body>".to_string();
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: None,
-                    description: "Missing function body".to_string(),
-                });
-            }
-        }
-
-        // Closing brace
-        let close = "}".to_string();
-        writeln!(output, "{close}").ok();
-        output_annotated.push((close.clone(), status));
-        state.source_lines.push(close);
-        state.line_info.push(ThirLineInfo {
-            function_name: func_name.to_string(),
-            expr_type: None,
-            description: "End of function".to_string(),
-        });
-
-        // Show errors if any
-        if !result.errors.is_empty() {
-            let errors_header = "  // Errors:".to_string();
-            writeln!(output, "{errors_header}").ok();
-            output_annotated.push((errors_header.clone(), LineStatus::Recomputed));
-            state.source_lines.push(errors_header);
-            state.line_info.push(ThirLineInfo {
-                function_name: func_name.to_string(),
-                expr_type: None,
-                description: "Type errors".to_string(),
-            });
-
-            for error in &result.errors {
-                let error_line = format!("  // • {}", error.message());
-                writeln!(output, "{error_line}").ok();
-                output_annotated.push((error_line.clone(), LineStatus::Recomputed));
-                state.source_lines.push(error_line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: None,
-                    description: error.message(),
-                });
-            }
-        }
-
-        writeln!(output).ok();
-        output_annotated.push((String::new(), LineStatus::Unknown));
-        state.source_lines.push(String::new());
-        state.line_info.push(ThirLineInfo {
-            function_name: String::new(),
-            expr_type: None,
-            description: String::new(),
-        });
-    }
-
-    /// Format an expression for interactive mode
-    #[allow(clippy::too_many_arguments)]
-    fn format_expr_interactive(
-        &self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        result: &InferenceResult<'_>,
-        output: &mut String,
-        output_annotated: &mut Vec<(String, LineStatus)>,
-        state: &mut ThirInteractiveState,
-        func_name: &str,
-        indent: usize,
-        status: LineStatus,
-    ) {
-        let expr = &body.exprs[expr_id];
-        let ty = result
-            .expr_types
-            .get(&expr_id)
-            .cloned()
-            .unwrap_or(Ty::Unknown);
-        let ty_str = ty.to_string();
-        let indent_str = "  ".repeat(indent);
-
-        match expr {
-            Expr::Block { stmts, tail_expr } => {
-                // Don't add extra braces for top-level block, just format contents
-                for stmt_id in stmts {
-                    self.format_stmt_interactive(
-                        *stmt_id,
-                        body,
-                        result,
-                        output,
-                        output_annotated,
-                        state,
-                        func_name,
-                        indent,
-                        status,
-                    );
-                }
-                if let Some(tail) = tail_expr {
-                    self.format_expr_interactive(
-                        *tail,
-                        body,
-                        result,
-                        output,
-                        output_annotated,
-                        state,
-                        func_name,
-                        indent,
-                        status,
-                    );
-                }
-            }
-            Expr::Literal(lit) => {
-                let lit_str = match lit {
-                    baml_hir::Literal::Int(n) => n.to_string(),
-                    baml_hir::Literal::Float(s) => s.clone(),
-                    baml_hir::Literal::String(s) => format!("\"{s}\""),
-                    baml_hir::Literal::Bool(b) => b.to_string(),
-                    baml_hir::Literal::Null => "null".to_string(),
-                };
-                let line = format!("{indent_str}{lit_str}");
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: Some(ty_str.clone()),
-                    description: format!("Literal: {ty_str}"),
-                });
-            }
-            Expr::Path(name) => {
-                let line = format!("{indent_str}{name}");
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: Some(ty_str.clone()),
-                    description: format!("Variable '{name}': {ty_str}"),
-                });
-            }
-            Expr::Binary { op, lhs, rhs } => {
-                let lhs_str = self.expr_to_inline_string(*lhs, body, result);
-                let rhs_str = self.expr_to_inline_string(*rhs, body, result);
-                let op_str = format!("{op:?}").to_lowercase();
-                let line = format!("{indent_str}{lhs_str} {op_str} {rhs_str}");
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: Some(ty_str.clone()),
-                    description: format!("Binary {op_str}: {ty_str}"),
-                });
-            }
-            Expr::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                let cond_str = self.expr_to_inline_string(*condition, body, result);
-                let if_line = format!("{indent_str}if ({cond_str}) {{");
-                writeln!(output, "{if_line}").ok();
-                output_annotated.push((if_line.clone(), status));
-                state.source_lines.push(if_line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: Some(ty_str.clone()),
-                    description: format!("If expression: {ty_str}"),
-                });
-
-                self.format_expr_interactive(
-                    *then_branch,
-                    body,
-                    result,
-                    output,
-                    output_annotated,
-                    state,
-                    func_name,
-                    indent + 1,
-                    status,
-                );
-
-                if let Some(else_expr) = else_branch {
-                    let else_line = format!("{indent_str}}} else {{");
-                    writeln!(output, "{else_line}").ok();
-                    output_annotated.push((else_line.clone(), status));
-                    state.source_lines.push(else_line);
-                    state.line_info.push(ThirLineInfo {
-                        function_name: func_name.to_string(),
-                        expr_type: None,
-                        description: "Else branch".to_string(),
-                    });
-
-                    self.format_expr_interactive(
-                        *else_expr,
-                        body,
-                        result,
-                        output,
-                        output_annotated,
-                        state,
-                        func_name,
-                        indent + 1,
-                        status,
-                    );
-                }
-
-                let close_line = format!("{indent_str}}}");
-                writeln!(output, "{close_line}").ok();
-                output_annotated.push((close_line.clone(), status));
-                state.source_lines.push(close_line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: None,
-                    description: "End of if".to_string(),
-                });
-            }
-            Expr::Call { callee, args } => {
-                let callee_str = self.expr_to_inline_string(*callee, body, result);
-                let args_str: Vec<String> = args
-                    .iter()
-                    .map(|a| self.expr_to_inline_string(*a, body, result))
-                    .collect();
-                let line = format!("{indent_str}{callee_str}({})", args_str.join(", "));
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: Some(ty_str.clone()),
-                    description: format!("Function call: {ty_str}"),
-                });
-            }
-            Expr::Array { elements } => {
-                let elems_str: Vec<String> = elements
-                    .iter()
-                    .map(|e| self.expr_to_inline_string(*e, body, result))
-                    .collect();
-                let line = format!("{indent_str}[{}]", elems_str.join(", "));
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: Some(ty_str.clone()),
-                    description: format!("Array literal: {ty_str}"),
-                });
-            }
-            _ => {
-                // Fallback for other expressions
-                let line = format!("{indent_str}<expr>: {ty_str}");
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: Some(ty_str.clone()),
-                    description: format!("Expression: {ty_str}"),
-                });
-            }
-        }
-    }
-
-    /// Format a statement for interactive mode
-    #[allow(clippy::too_many_arguments)]
-    fn format_stmt_interactive(
-        &self,
-        stmt_id: StmtId,
-        body: &ExprBody,
-        result: &InferenceResult<'_>,
-        output: &mut String,
-        output_annotated: &mut Vec<(String, LineStatus)>,
-        state: &mut ThirInteractiveState,
-        func_name: &str,
-        indent: usize,
-        status: LineStatus,
-    ) {
-        let stmt = &body.stmts[stmt_id];
-        let indent_str = "  ".repeat(indent);
-
-        match stmt {
-            Stmt::Let {
-                pattern,
-                type_annotation,
-                initializer,
-            } => {
-                let pat = &body.patterns[*pattern];
-                let var_name = match pat {
-                    Pattern::Binding(name) => name.to_string(),
-                };
-
-                let ty_str = if let Some(type_ref) = type_annotation {
-                    let ty = baml_thir::lower_type_ref(&self.db, type_ref);
-                    ty.to_string()
-                } else if let Some(init) = initializer {
-                    result
-                        .expr_types
-                        .get(init)
-                        .map(|t| t.to_string())
-                        .unwrap_or_else(|| "?".to_string())
-                } else {
-                    "?".to_string()
-                };
-
-                let init_str = initializer
-                    .map(|i| self.expr_to_inline_string(i, body, result))
-                    .unwrap_or_default();
-
-                let line = if init_str.is_empty() {
-                    format!("{indent_str}let {var_name}: {ty_str};")
-                } else {
-                    format!("{indent_str}let {var_name}: {ty_str} = {init_str};")
-                };
-
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: Some(ty_str.clone()),
-                    description: format!("Variable '{var_name}': {ty_str}"),
-                });
-            }
-            Stmt::Return(expr) => {
-                let ret_str = expr
-                    .map(|e| self.expr_to_inline_string(e, body, result))
-                    .unwrap_or_default();
-                let ty_str = expr
-                    .and_then(|e| result.expr_types.get(&e))
-                    .map(|t| t.to_string())
-                    .unwrap_or_else(|| "void".to_string());
-
-                let line = if ret_str.is_empty() {
-                    format!("{indent_str}return;")
-                } else {
-                    format!("{indent_str}return {ret_str};")
-                };
-
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: Some(ty_str.clone()),
-                    description: format!("Return: {ty_str}"),
-                });
-            }
-            Stmt::Expr(expr_id) => {
-                self.format_expr_interactive(
-                    *expr_id,
-                    body,
-                    result,
-                    output,
-                    output_annotated,
-                    state,
-                    func_name,
-                    indent,
-                    status,
-                );
-            }
-            Stmt::While {
-                condition,
-                body: while_body,
-            } => {
-                let cond_str = self.expr_to_inline_string(*condition, body, result);
-                let line = format!("{indent_str}while ({cond_str}) {{");
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: None,
-                    description: "While loop".to_string(),
-                });
-
-                self.format_expr_interactive(
-                    *while_body,
-                    body,
-                    result,
-                    output,
-                    output_annotated,
-                    state,
-                    func_name,
-                    indent + 1,
-                    status,
-                );
-
-                let close_line = format!("{indent_str}}}");
-                writeln!(output, "{close_line}").ok();
-                output_annotated.push((close_line.clone(), status));
-                state.source_lines.push(close_line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: None,
-                    description: "End of while".to_string(),
-                });
-            }
-            Stmt::ForIn {
-                pattern,
-                iterator,
-                body: for_body,
-            } => {
-                let pat = &body.patterns[*pattern];
-                let var_name = match pat {
-                    Pattern::Binding(name) => name.to_string(),
-                };
-                let iter_str = self.expr_to_inline_string(*iterator, body, result);
-                let line = format!("{indent_str}for (let {var_name} in {iter_str}) {{");
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: None,
-                    description: format!("For-in loop over '{var_name}'"),
-                });
-
-                self.format_expr_interactive(
-                    *for_body,
-                    body,
-                    result,
-                    output,
-                    output_annotated,
-                    state,
-                    func_name,
-                    indent + 1,
-                    status,
-                );
-
-                let close_line = format!("{indent_str}}}");
-                writeln!(output, "{close_line}").ok();
-                output_annotated.push((close_line.clone(), status));
-                state.source_lines.push(close_line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: None,
-                    description: "End of for".to_string(),
-                });
-            }
-            _ => {
-                let line = format!("{indent_str}<stmt>;");
-                writeln!(output, "{line}").ok();
-                output_annotated.push((line.clone(), status));
-                state.source_lines.push(line);
-                state.line_info.push(ThirLineInfo {
-                    function_name: func_name.to_string(),
-                    expr_type: None,
-                    description: "Statement".to_string(),
-                });
-            }
-        }
-    }
-
-    /// Convert an expression to inline string representation
-    fn expr_to_inline_string(
-        &self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        result: &InferenceResult<'_>,
-    ) -> String {
-        let expr = &body.exprs[expr_id];
-
-        match expr {
-            Expr::Literal(lit) => match lit {
-                baml_hir::Literal::Int(n) => n.to_string(),
-                baml_hir::Literal::Float(s) => s.clone(),
-                baml_hir::Literal::String(s) => format!("\"{s}\""),
-                baml_hir::Literal::Bool(b) => b.to_string(),
-                baml_hir::Literal::Null => "null".to_string(),
-            },
-            Expr::Path(name) => name.to_string(),
-            Expr::Binary { op, lhs, rhs } => {
-                let lhs_str = self.expr_to_inline_string(*lhs, body, result);
-                let rhs_str = self.expr_to_inline_string(*rhs, body, result);
-                let op_str = match op {
-                    baml_hir::BinaryOp::Add => "+",
-                    baml_hir::BinaryOp::Sub => "-",
-                    baml_hir::BinaryOp::Mul => "*",
-                    baml_hir::BinaryOp::Div => "/",
-                    baml_hir::BinaryOp::Mod => "%",
-                    baml_hir::BinaryOp::Eq => "==",
-                    baml_hir::BinaryOp::Ne => "!=",
-                    baml_hir::BinaryOp::Lt => "<",
-                    baml_hir::BinaryOp::Le => "<=",
-                    baml_hir::BinaryOp::Gt => ">",
-                    baml_hir::BinaryOp::Ge => ">=",
-                    baml_hir::BinaryOp::And => "&&",
-                    baml_hir::BinaryOp::Or => "||",
-                    baml_hir::BinaryOp::BitAnd => "&",
-                    baml_hir::BinaryOp::BitOr => "|",
-                    baml_hir::BinaryOp::BitXor => "^",
-                    baml_hir::BinaryOp::Shl => "<<",
-                    baml_hir::BinaryOp::Shr => ">>",
-                };
-                format!("{lhs_str} {op_str} {rhs_str}")
-            }
-            Expr::Unary { op, expr: inner } => {
-                let inner_str = self.expr_to_inline_string(*inner, body, result);
-                let op_str = match op {
-                    baml_hir::UnaryOp::Not => "!",
-                    baml_hir::UnaryOp::Neg => "-",
-                };
-                format!("{op_str}{inner_str}")
-            }
-            Expr::Call { callee, args } => {
-                let callee_str = self.expr_to_inline_string(*callee, body, result);
-                let args_str: Vec<String> = args
-                    .iter()
-                    .map(|a| self.expr_to_inline_string(*a, body, result))
-                    .collect();
-                format!("{callee_str}({})", args_str.join(", "))
-            }
-            Expr::FieldAccess { base, field } => {
-                let base_str = self.expr_to_inline_string(*base, body, result);
-                format!("{base_str}.{field}")
-            }
-            Expr::Index { base, index } => {
-                let base_str = self.expr_to_inline_string(*base, body, result);
-                let index_str = self.expr_to_inline_string(*index, body, result);
-                format!("{base_str}[{index_str}]")
-            }
-            Expr::Array { elements } => {
-                let elems: Vec<String> = elements
-                    .iter()
-                    .map(|e| self.expr_to_inline_string(*e, body, result))
-                    .collect();
-                format!("[{}]", elems.join(", "))
-            }
-            _ => "<expr>".to_string(),
-        }
     }
 
     fn run_diagnostics(&mut self) {
@@ -1400,6 +763,40 @@ impl CompilerRunner {
             .get(&phase)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// Get the current THIR display mode
+    pub(crate) fn thir_display_mode(&self) -> ThirDisplayMode {
+        self.thir_display_mode
+    }
+
+    /// Set the THIR display mode
+    pub(crate) fn set_thir_display_mode(&mut self, mode: ThirDisplayMode) {
+        self.thir_display_mode = mode;
+    }
+
+    /// Get the THIR interactive state
+    pub(crate) fn thir_interactive_state(&self) -> &ThirInteractiveState {
+        &self.thir_interactive_state
+    }
+
+    /// Get mutable reference to THIR interactive state
+    pub(crate) fn thir_interactive_state_mut(&mut self) -> &mut ThirInteractiveState {
+        &mut self.thir_interactive_state
+    }
+
+    /// Format THIR output for interactive mode
+    pub(crate) fn format_thir_interactive(&mut self) {
+        // Get the THIR tree output and parse it into interactive state
+        if let Some(output) = self.phase_outputs.get(&CompilerPhase::Thir) {
+            let lines: Vec<String> = output.lines().map(|s| s.to_string()).collect();
+            self.thir_interactive_state.source_lines = lines.clone();
+            self.thir_interactive_state.total_lines = lines.len();
+            // Reset cursor if needed
+            if self.thir_interactive_state.cursor_line >= self.thir_interactive_state.total_lines {
+                self.thir_interactive_state.cursor_line = 0;
+            }
+        }
     }
 
     /// Get annotated output with mode-specific coloring

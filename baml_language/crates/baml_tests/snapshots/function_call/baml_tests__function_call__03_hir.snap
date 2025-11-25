@@ -7,14 +7,16 @@ function Bar {
   return: Int
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Call { callee: Idx::<Expr>(0), args: [] }
-      Idx::<Expr>(2): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
+      Idx::<Expr>(0): Path("Foo")
+      Idx::<Expr>(1): Literal(Int(1))
+      Idx::<Expr>(2): Call { callee: Idx::<Expr>(0), args: [Idx::<Expr>(1)] }
+      Idx::<Expr>(3): Path("x")
+      Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(3)) }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
     ]
-    root: Idx::<Expr>(2)
+    root: Idx::<Expr>(4)
   }
 }
 function Foo {

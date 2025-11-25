@@ -24,6 +24,17 @@ pub use lower::lower_type_ref;
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use types::*;
 
+//
+// ──────────────────────────────────────────────────────────── DATABASE ─────
+//
+
+/// Database trait for THIR queries.
+///
+/// This trait extends `baml_hir::Db` and provides access to all THIR-related
+/// Salsa queries, including type inference and the initial typing context.
+#[salsa::db]
+pub trait Db: baml_hir::Db {}
+
 // ============================================================================
 // Type Inference Results
 // ============================================================================
@@ -164,7 +175,7 @@ impl baml_base::Diagnostic for TypeError<'_> {
 
 /// Context for type inference, tracking scopes and accumulated results.
 pub struct TypeContext<'db> {
-    db: &'db dyn baml_hir::Db,
+    db: &'db dyn Db,
     /// Stack of variable scopes (innermost last).
     scopes: Vec<HashMap<Name, Ty<'db>>>,
     /// Inferred types for expressions.
@@ -175,10 +186,23 @@ pub struct TypeContext<'db> {
 
 impl<'db> TypeContext<'db> {
     /// Create a new type context.
-    pub fn new(db: &'db dyn baml_hir::Db) -> Self {
+    pub fn new(db: &'db dyn Db) -> Self {
         TypeContext {
             db,
             scopes: vec![HashMap::new()], // Start with one scope
+            expr_types: HashMap::new(),
+            errors: Vec::new(),
+        }
+    }
+
+    /// Create a new type context with an initial scope of global bindings.
+    ///
+    /// The initial scope typically contains top-level function types, allowing
+    /// function calls to be properly typed.
+    pub fn with_globals(db: &'db dyn Db, globals: HashMap<Name, Ty<'db>>) -> Self {
+        TypeContext {
+            db,
+            scopes: vec![globals],
             expr_types: HashMap::new(),
             errors: Vec::new(),
         }
@@ -230,7 +254,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Get the database reference.
-    pub fn db(&self) -> &'db dyn baml_hir::Db {
+    pub fn db(&self) -> &'db dyn Db {
         self.db
     }
 }
@@ -247,14 +271,31 @@ impl<'db> TypeContext<'db> {
 /// Note: In a full implementation, this would be a Salsa tracked function.
 /// For now, it's a regular function that takes the body directly.
 pub fn infer_function_body<'db>(
-    db: &'db dyn baml_hir::Db,
+    db: &'db dyn Db,
     body: &FunctionBody,
     param_types: HashMap<Name, Ty<'db>>,
     expected_return: Ty<'db>,
 ) -> InferenceResult<'db> {
-    let mut ctx = TypeContext::new(db);
+    infer_function_body_with_context(db, body, param_types, expected_return, None)
+}
 
-    // Add parameters to the initial scope
+/// Infer types for a function body with an optional global typing context.
+///
+/// The `globals` parameter provides types for top-level functions, allowing
+/// function calls to be properly typed.
+pub fn infer_function_body_with_context<'db>(
+    db: &'db dyn Db,
+    body: &FunctionBody,
+    param_types: HashMap<Name, Ty<'db>>,
+    expected_return: Ty<'db>,
+    globals: Option<HashMap<Name, Ty<'db>>>,
+) -> InferenceResult<'db> {
+    let mut ctx = match globals {
+        Some(g) => TypeContext::with_globals(db, g),
+        None => TypeContext::new(db),
+    };
+
+    // Add parameters to the current scope (on top of globals)
     for (name, ty) in &param_types {
         ctx.define(name.clone(), ty.clone());
     }
@@ -294,14 +335,26 @@ pub fn infer_function_body<'db>(
 
 /// Infer types for a function given its signature and body.
 ///
-///
 /// This is the entry point for type inference from the test suite.
 /// It takes pre-fetched signature and body data, allowing the caller (baml_db)
 /// to handle the Salsa queries for fetching this data.
 pub fn infer_function<'db>(
-    db: &'db dyn baml_hir::Db,
+    db: &'db dyn Db,
     signature: &FunctionSignature,
     body: &FunctionBody,
+) -> InferenceResult<'db> {
+    infer_function_with_context(db, signature, body, None)
+}
+
+/// Infer types for a function with an optional global typing context.
+///
+/// The `globals` parameter provides types for top-level functions, allowing
+/// function calls to be properly typed.
+pub fn infer_function_with_context<'db>(
+    db: &'db dyn Db,
+    signature: &FunctionSignature,
+    body: &FunctionBody,
+    globals: Option<HashMap<Name, Ty<'db>>>,
 ) -> InferenceResult<'db> {
     // Convert parameter TypeRefs to Tys
     let param_types: HashMap<Name, Ty<'db>> = signature
@@ -317,7 +370,7 @@ pub fn infer_function<'db>(
     let expected_return = lower_type_ref(db, &signature.return_type);
 
     // Delegate to the body inference function
-    infer_function_body(db, body, param_types, expected_return)
+    infer_function_body_with_context(db, body, param_types, expected_return, globals)
 }
 
 /// Infer the type of an expression (synthesize mode).
@@ -359,13 +412,47 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
         }
 
         Expr::Call { callee, args } => {
-            let _callee_ty = infer_expr(ctx, *callee, body);
+            let callee_ty = infer_expr(ctx, *callee, body);
+
             // Infer argument types
-            for arg in args {
-                infer_expr(ctx, *arg, body);
+            let arg_types: Vec<Ty<'db>> =
+                args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
+
+            // If the callee is a function type, check arguments and return the return type
+            match &callee_ty {
+                Ty::Function { params, ret } => {
+                    // Check argument count
+                    if arg_types.len() != params.len() {
+                        ctx.push_error(TypeError::ArgumentCountMismatch {
+                            expected: params.len(),
+                            found: arg_types.len(),
+                            span,
+                        });
+                    }
+
+                    // Check argument types
+                    for (arg_ty, param_ty) in arg_types.iter().zip(params.iter()) {
+                        if !arg_ty.is_subtype_of(param_ty) {
+                            ctx.push_error(TypeError::TypeMismatch {
+                                expected: param_ty.clone(),
+                                found: arg_ty.clone(),
+                                span, // Ideally we'd have the span of each arg
+                            });
+                        }
+                    }
+
+                    // Return the function's return type
+                    (**ret).clone()
+                }
+                Ty::Unknown => Ty::Unknown,
+                _ => {
+                    ctx.push_error(TypeError::NotCallable {
+                        ty: callee_ty,
+                        span,
+                    });
+                    Ty::Unknown
+                }
             }
-            // For now, return Unknown since we don't have function type info
-            Ty::Unknown
         }
 
         Expr::FieldAccess { base, field } => {
@@ -831,11 +918,11 @@ fn check_stmt<'db>(ctx: &mut TypeContext<'db>, stmt_id: StmtId, body: &ExprBody)
 // ============================================================================
 
 /// Helper function for class type resolution.
-pub fn class_type<'db>(_db: &'db dyn baml_hir::Db, class: ClassId<'db>) -> Ty<'db> {
+pub fn class_type<'db>(_db: &'db dyn Db, class: ClassId<'db>) -> Ty<'db> {
     Ty::Class(class)
 }
 
 /// Helper function for enum type resolution.
-pub fn enum_type<'db>(_db: &'db dyn baml_hir::Db, enum_id: EnumId<'db>) -> Ty<'db> {
+pub fn enum_type<'db>(_db: &'db dyn Db, enum_id: EnumId<'db>) -> Ty<'db> {
     Ty::Enum(enum_id)
 }

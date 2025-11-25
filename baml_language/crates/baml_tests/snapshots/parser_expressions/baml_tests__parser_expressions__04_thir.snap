@@ -3,105 +3,16 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
-function Calculate() -> int
-└─ Block(5 stmts): void
-   ├─ Let a: int
-   │  └─ Binary(Add): int
-   │     ├─ Literal(Int(1)): int
-   │     └─ Literal(Int(2)): int
-   ├─ Let b: int
-   │  └─ Binary(Mul): int
-   │     ├─ Path(a): int
-   │     └─ Literal(Int(3)): int
-   ├─ Let c: int
-   │  └─ Binary(Sub): int
-   │     ├─ Binary(Div): int
-   │     │  ├─ Path(b): int
-   │     │  └─ Literal(Int(2)): int
-   │     └─ Literal(Int(1)): int
-   ├─ Let d: int
-   │  └─ Binary(Mul): int
-   │     ├─ Binary(Add): int
-   │     │  ├─ Path(a): int
-   │     │  └─ Path(b): int
-   │     └─ Path(c): int
-   └─ Return
-      └─ Path(d): int
-
-function FieldAccess(user: unknown) -> string
-├─ param user: unknown
-└─ Block(5 stmts): void
-   ├─ Let name: unknown
-   │  └─ Path(user::name): unknown
-   ├─ Let bio: unknown
-   │  └─ Path(user::profile::bio): unknown
-   ├─ Let theme: unknown
-   │  └─ Path(user::profile::settings::theme): unknown
-   ├─ Let firstTag: unknown
-   │  └─ Index: unknown
-   │     ├─ Path(user::tags): unknown
-   │     └─ Literal(Int(0)): int
-   └─ Return
-      └─ Path(theme): unknown
-  Errors:
-    • Unknown variable: user::name
-    • Unknown variable: user::profile::bio
-    • Unknown variable: user::profile::settings::theme
-    • Unknown variable: user::tags
-
-function IndexAccess(users: unknown[]) -> string
-├─ param users: unknown[]
-└─ Block(6 stmts): void
-   ├─ Let first: unknown
-   │  └─ Index: unknown
-   │     ├─ Path(users): unknown[]
-   │     └─ Literal(Int(0)): int
-   ├─ Let idx: int
-   │  └─ Literal(Int(1)): int
-   ├─ Let second: unknown
-   │  └─ Index: unknown
-   │     ├─ Path(users): unknown[]
-   │     └─ Path(idx): int
-   ├─ Let firstName: unknown
-   │  └─ FieldAccess(.name): unknown
-   │     └─ Index: unknown
-   │        ├─ Path(users): unknown[]
-   │        └─ Literal(Int(0)): int
-   ├─ Let tag: unknown
-   │  └─ Index: unknown
-   │     ├─ FieldAccess(.tags): unknown
-   │     │  └─ Index: unknown
-   │     │     ├─ Path(users): unknown[]
-   │     │     └─ Literal(Int(0)): int
-   │     └─ Literal(Int(0)): int
-   └─ Return
-      └─ Path(firstName): unknown
-
-function TestPrecedence() -> bool
-└─ Block(5 stmts): void
-   ├─ Let a: int
-   │  └─ Binary(Add): int
-   │     ├─ Literal(Int(2)): int
-   │     └─ Binary(Mul): int
-   │        ├─ Literal(Int(3)): int
-   │        └─ Literal(Int(4)): int
-   ├─ Let c: int
-   │  └─ Binary(Add): int
-   │     ├─ Binary(Mul): int
-   │     │  ├─ Literal(Int(2)): int
-   │     │  └─ Literal(Int(3)): int
-   │     └─ Literal(Int(4)): int
-   ├─ Let b: bool
-   │  └─ Binary(Gt): bool
-   │     ├─ Path(a): int
-   │     └─ Binary(Add): int
-   │        ├─ Literal(Int(10)): int
-   │        └─ Literal(Int(2)): int
-   ├─ Let d: bool
-   │  └─ Binary(Or): bool
-   │     ├─ Literal(Bool(true)): bool
-   │     └─ Binary(And): bool
-   │        ├─ Literal(Bool(false)): bool
-   │        └─ Literal(Bool(false)): bool
-   └─ Return
-      └─ Path(d): bool
+  Function Calculate:
+    Return: Void
+  Function FieldAccess:
+    Return: Void
+    Errors:
+      - Unknown variable: user::name
+      - Unknown variable: user::profile::bio
+      - Unknown variable: user::profile::settings::theme
+      - Unknown variable: user::tags
+  Function IndexAccess:
+    Return: Void
+  Function TestPrecedence:
+    Return: Void

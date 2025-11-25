@@ -194,157 +194,58 @@ fn draw_single_view(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(paragraph, area);
 }
 
+/// Draw the THIR interactive view with cursor navigation
 fn draw_thir_interactive_view(frame: &mut Frame, area: Rect, app: &App) {
     let state = app.thir_interactive_state();
-    let is_active = app.thir_interactive_active();
+    let cursor_line = state.cursor_line;
+    let cursor_col = state.cursor_col;
 
-    // Split the area: main content on left, type info panel on right
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
-        .split(area);
-
-    // Build styled lines with cursor highlighting
+    // Build styled lines with cursor highlight
     let mut lines: Vec<Line> = Vec::new();
     for (i, line_text) in state.source_lines.iter().enumerate() {
-        let is_cursor_line = i == state.cursor_line;
-
-        // Add line number prefix
-        let line_num = format!("{:3} ", i + 1);
-
-        if is_cursor_line && is_active {
-            // Show character-level cursor when active
-            let cursor_col = state.cursor_col.min(line_text.len());
-            let before_cursor = &line_text[..cursor_col];
-            let cursor_char = line_text.chars().nth(cursor_col).unwrap_or(' ');
-            let after_cursor = if cursor_col < line_text.len() {
-                &line_text[cursor_col + cursor_char.len_utf8()..]
-            } else {
-                ""
-            };
-
-            let spans = vec![
-                Span::styled(line_num, Style::default().fg(Color::DarkGray)),
-                Span::styled(
-                    before_cursor.to_string(),
-                    Style::default().bg(Color::DarkGray).fg(Color::White),
-                ),
-                Span::styled(
-                    cursor_char.to_string(),
-                    Style::default()
-                        .bg(Color::Yellow)
-                        .fg(Color::Black)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    after_cursor.to_string(),
-                    Style::default().bg(Color::DarkGray).fg(Color::White),
-                ),
-            ];
-            lines.push(Line::from(spans));
-        } else if is_cursor_line {
-            // Line highlighted but not character cursor (inactive mode)
-            let style = Style::default()
-                .bg(Color::DarkGray)
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD);
-            let spans = vec![
-                Span::styled(line_num, Style::default().fg(Color::DarkGray)),
-                Span::styled(line_text.clone(), style),
-            ];
+        if i == cursor_line {
+            // This is the cursor line - highlight the cursor position
+            let mut spans = Vec::new();
+            for (j, ch) in line_text.chars().enumerate() {
+                if j == cursor_col {
+                    // Cursor position - highlight with inverted colors
+                    spans.push(Span::styled(
+                        ch.to_string(),
+                        Style::default().bg(Color::Yellow).fg(Color::Black),
+                    ));
+                } else {
+                    spans.push(Span::raw(ch.to_string()));
+                }
+            }
+            // If cursor is at end of line, show cursor there
+            if cursor_col >= line_text.len() {
+                spans.push(Span::styled(
+                    " ",
+                    Style::default().bg(Color::Yellow).fg(Color::Black),
+                ));
+            }
             lines.push(Line::from(spans));
         } else {
-            let spans = vec![
-                Span::styled(line_num, Style::default().fg(Color::DarkGray)),
-                Span::raw(line_text.clone()),
-            ];
-            lines.push(Line::from(spans));
+            lines.push(Line::from(line_text.as_str()));
         }
     }
 
-    let title = if is_active {
-        "THIR (Interactive ACTIVE - hjkl/arrows to move, Esc to exit)"
-    } else {
-        "THIR (Interactive - press 't' to activate cursor)"
-    };
-
-    let border_style = if is_active {
+    let border_style = if app.thir_interactive_active() {
         Style::default().fg(Color::Yellow)
     } else {
         Style::default()
     };
 
-    let source_paragraph = Paragraph::new(Text::from(lines))
+    let paragraph = Paragraph::new(lines)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(title)
-                .style(border_style),
+                .title("THIR (Interactive - hjkl/arrows to move, Esc to exit)")
+                .border_style(border_style),
         )
         .scroll((app.scroll_offset(), 0));
 
-    frame.render_widget(source_paragraph, chunks[0]);
-
-    // Type info panel
-    let cursor_info = if state.cursor_line < state.line_info.len() {
-        let info = &state.line_info[state.cursor_line];
-        let mut info_lines = vec![Line::from(vec![
-            Span::styled("Position: ", Style::default().fg(Color::Cyan)),
-            Span::raw(format!(
-                "Ln {}, Col {}",
-                state.cursor_line + 1,
-                state.cursor_col + 1
-            )),
-        ])];
-
-        if !info.function_name.is_empty() {
-            info_lines.push(Line::from(vec![
-                Span::styled("Function: ", Style::default().fg(Color::Cyan)),
-                Span::raw(info.function_name.clone()),
-            ]));
-        }
-
-        if let Some(ty) = &info.expr_type {
-            info_lines.push(Line::from(vec![
-                Span::styled(
-                    "Type: ",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    ty.clone(),
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ]));
-        }
-
-        if !info.description.is_empty() {
-            info_lines.push(Line::from(""));
-            info_lines.push(Line::from(vec![Span::styled(
-                "Description: ",
-                Style::default().fg(Color::Cyan),
-            )]));
-            info_lines.push(Line::from(vec![Span::raw(info.description.clone())]));
-        }
-
-        Text::from(info_lines)
-    } else {
-        Text::from("No selection")
-    };
-
-    let info_paragraph = Paragraph::new(cursor_info)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Type Info")
-                .style(Style::default().fg(Color::Cyan)),
-        )
-        .wrap(Wrap { trim: false });
-
-    frame.render_widget(info_paragraph, chunks[1]);
+    frame.render_widget(paragraph, area);
 }
 
 fn draw_diff_view(frame: &mut Frame, area: Rect, app: &App) {

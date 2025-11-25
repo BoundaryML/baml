@@ -3,85 +3,25 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
-function floatArray() -> float[]
-└─ Block(0 stmts + tail): float[]
-   └─ Array[3]: float[]
-      ├─ Literal(Float("1.0")): float
-      ├─ Literal(Float("2.0")): float
-      └─ Literal(Float("3.0")): float
-
-function stringArray() -> string[]
-└─ Block(0 stmts + tail): string[]
-   └─ Array[3]: string[]
-      ├─ Literal(String("hello")): string
-      ├─ Literal(String(" \"world\"")): string
-      └─ Literal(String(" \"test\"")): string
-
-function pointArray() -> unknown[]
-└─ Block(0 stmts + tail): unknown[]
-   └─ Array[3]: unknown[]
-      ├─ Object(Point { 2 fields }): unknown
-      │  ├─ x:
-      │  │  └─ Literal(Int(1)): int
-      │  └─ y:
-      │     └─ Literal(Int(2)): int
-      ├─ Object(Point { 2 fields }): unknown
-      │  ├─ x:
-      │  │  └─ Literal(Int(3)): int
-      │  └─ y:
-      │     └─ Literal(Int(4)): int
-      └─ Object(Point { 2 fields }): unknown
-         ├─ x:
-         │  └─ Literal(Int(5)): int
-         └─ y:
-            └─ Literal(Int(6)): int
-
-function boolArray() -> bool[]
-└─ Block(0 stmts + tail): bool[]
-   └─ Array[3]: bool[]
-      ├─ Literal(Bool(true)): bool
-      ├─ Literal(Bool(false)): bool
-      └─ Literal(Bool(true)): bool
-
-function intArray() -> int[]
-└─ Block(0 stmts + tail): int[]
-   └─ Array[3]: int[]
-      ├─ Literal(Int(1)): int
-      ├─ Literal(Int(2)): int
-      └─ Literal(Int(3)): int
-
-function point() -> unknown
-└─ Block(0 stmts + tail): unknown
-   └─ Object(Point { 2 fields }): unknown
-      ├─ x:
-      │  └─ Literal(Int(1)): int
-      └─ y:
-         └─ Literal(Int(2)): int
-
-function vec2d() -> unknown
-└─ Block(0 stmts + tail): unknown
-   └─ Object(Vec2D { 2 fields }): unknown
-      ├─ p:
-      │  └─ Object(Point { 2 fields }): unknown
-      │     ├─ x:
-      │     │  └─ Literal(Int(1)): int
-      │     └─ y:
-      │        └─ Literal(Int(2)): int
-      └─ q:
-         └─ Object(Point { 2 fields }): unknown
-            ├─ x:
-            │  └─ Literal(Int(3)): int
-            └─ y:
-               └─ Literal(Int(4)): int
-
-function boolValues() -> unknown
-└─ Block(0 stmts): void
-
-function intValues() -> unknown
-└─ Block(0 stmts): void
-
-function stringValues() -> unknown
-└─ Block(0 stmts): void
-
-function floatValues() -> unknown
-└─ Block(0 stmts): void
+  Function floatArray:
+    Return: List(Float)
+  Function stringArray:
+    Return: List(String)
+  Function pointArray:
+    Return: List(Unknown)
+  Function boolArray:
+    Return: List(Bool)
+  Function intArray:
+    Return: List(Int)
+  Function point:
+    Return: Unknown
+  Function vec2d:
+    Return: Unknown
+  Function boolValues:
+    Return: Void
+  Function intValues:
+    Return: Void
+  Function stringValues:
+    Return: Void
+  Function floatValues:
+    Return: Void

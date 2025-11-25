@@ -33,6 +33,12 @@ pub enum Ty<'db> {
     },
     Union(Vec<Ty<'db>>),
 
+    /// Function/arrow type: `(T1, T2, ...) -> R`
+    Function {
+        params: Vec<Ty<'db>>,
+        ret: Box<Ty<'db>>,
+    },
+
     // Special types
     Unknown,
     Error,
@@ -176,6 +182,11 @@ impl fmt::Display for Ty<'_> {
             Ty::Union(types) => {
                 let parts: Vec<std::string::String> = types.iter().map(|t| t.to_string()).collect();
                 write!(f, "{}", parts.join(" | "))
+            }
+            Ty::Function { params, ret } => {
+                let param_strs: Vec<std::string::String> =
+                    params.iter().map(|t| t.to_string()).collect();
+                write!(f, "({}) -> {}", param_strs.join(", "), ret)
             }
             Ty::Unknown => write!(f, "unknown"),
             Ty::Error => write!(f, "error"),

@@ -3,445 +3,211 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
-function ComplexType() -> unknown?
-└─ <missing body>
-
-function DeepExpression() -> int
-└─ Block(1 stmts): void
-   └─ Return
-      └─ Binary(Add): int
-         ├─ Binary(Div): int
-         │  ├─ Binary(Sub): int
-         │  │  ├─ Binary(Mul): int
-         │  │  │  ├─ Binary(Add): int
-         │  │  │  │  ├─ Binary(Div): int
-         │  │  │  │  │  ├─ Binary(Sub): int
-         │  │  │  │  │  │  ├─ Binary(Mul): int
-         │  │  │  │  │  │  │  ├─ Binary(Add): int
-         │  │  │  │  │  │  │  │  ├─ Literal(Int(1)): int
-         │  │  │  │  │  │  │  │  └─ Literal(Int(2)): int
-         │  │  │  │  │  │  │  └─ Literal(Int(3)): int
-         │  │  │  │  │  │  └─ Literal(Int(4)): int
-         │  │  │  │  │  └─ Literal(Int(5)): int
-         │  │  │  │  └─ Literal(Int(6)): int
-         │  │  │  └─ Literal(Int(7)): int
-         │  │  └─ Literal(Int(8)): int
-         │  └─ Literal(Int(9)): int
-         └─ Literal(Int(10)): int
-
-function Process22(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process54(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process95(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process60(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process68(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process14(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process79(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process84(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process33(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process12(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process74(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process99(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process64(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process52(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process7(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process80(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process58(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process97(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process36(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process63(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process19(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process83(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process18(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process26(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process43(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process46(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process62(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process87(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process44(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process47(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process35(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process38(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process41(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process28(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process65(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process6(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process32(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process92(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process55(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process66(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process56(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process67(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process3(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process75(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process48(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process49(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process61(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process96(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process34(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process59(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process89(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process45(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process86(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process16(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process39(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process82(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process2(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process27(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process53(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process23(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process9(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process72(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process77(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process40(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process30(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process8(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process11(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process37(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process4(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process91(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process31(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process50(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process20(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process98(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process85(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process78(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process1(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process90(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process17(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process81(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process71(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process15(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process42(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process51(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process5(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process13(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process29(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process93(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process70(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process76(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process10(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process21(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process100(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process94(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process25(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process69(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process24(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process88(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process73(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function Process57(input: string) -> string
-├─ param input: string
-└─ LLM Body (client: GPT4)
-
-function BodyTorture() -> int
-└─ Block(2 stmts): void
-   ├─ Let x
-   └─ While
-      ├─ Block(1 stmts): void
-      │  └─ ExprStmt
-      │     └─ Binary(Add): int
-      │        ├─ Path(x): unknown
-      │        └─ Literal(Int(1)): int
-      └─ Block(1 stmts): void
-         └─ ExprStmt
-            └─ Binary(Add): int
-               ├─ Path(x): unknown
-               └─ Literal(Int(1)): int
-  Errors:
-    • Type mismatch: expected bool, found void
+  Function ComplexType:
+    Return: Unknown
+  Function DeepExpression:
+    Return: Void
+  Function Process22:
+    Return: String
+  Function Process54:
+    Return: String
+  Function Process95:
+    Return: String
+  Function Process60:
+    Return: String
+  Function Process68:
+    Return: String
+  Function Process14:
+    Return: String
+  Function Process79:
+    Return: String
+  Function Process84:
+    Return: String
+  Function Process33:
+    Return: String
+  Function Process12:
+    Return: String
+  Function Process74:
+    Return: String
+  Function Process99:
+    Return: String
+  Function Process64:
+    Return: String
+  Function Process52:
+    Return: String
+  Function Process7:
+    Return: String
+  Function Process80:
+    Return: String
+  Function Process58:
+    Return: String
+  Function Process97:
+    Return: String
+  Function Process36:
+    Return: String
+  Function Process63:
+    Return: String
+  Function Process19:
+    Return: String
+  Function Process83:
+    Return: String
+  Function Process18:
+    Return: String
+  Function Process26:
+    Return: String
+  Function Process43:
+    Return: String
+  Function Process46:
+    Return: String
+  Function Process62:
+    Return: String
+  Function Process87:
+    Return: String
+  Function Process44:
+    Return: String
+  Function Process47:
+    Return: String
+  Function Process35:
+    Return: String
+  Function Process38:
+    Return: String
+  Function Process41:
+    Return: String
+  Function Process28:
+    Return: String
+  Function Process65:
+    Return: String
+  Function Process6:
+    Return: String
+  Function Process32:
+    Return: String
+  Function Process92:
+    Return: String
+  Function Process55:
+    Return: String
+  Function Process66:
+    Return: String
+  Function Process56:
+    Return: String
+  Function Process67:
+    Return: String
+  Function Process3:
+    Return: String
+  Function Process75:
+    Return: String
+  Function Process48:
+    Return: String
+  Function Process49:
+    Return: String
+  Function Process61:
+    Return: String
+  Function Process96:
+    Return: String
+  Function Process34:
+    Return: String
+  Function Process59:
+    Return: String
+  Function Process89:
+    Return: String
+  Function Process45:
+    Return: String
+  Function Process86:
+    Return: String
+  Function Process16:
+    Return: String
+  Function Process39:
+    Return: String
+  Function Process82:
+    Return: String
+  Function Process2:
+    Return: String
+  Function Process27:
+    Return: String
+  Function Process53:
+    Return: String
+  Function Process23:
+    Return: String
+  Function Process9:
+    Return: String
+  Function Process72:
+    Return: String
+  Function Process77:
+    Return: String
+  Function Process40:
+    Return: String
+  Function Process30:
+    Return: String
+  Function Process8:
+    Return: String
+  Function Process11:
+    Return: String
+  Function Process37:
+    Return: String
+  Function Process4:
+    Return: String
+  Function Process91:
+    Return: String
+  Function Process31:
+    Return: String
+  Function Process50:
+    Return: String
+  Function Process20:
+    Return: String
+  Function Process98:
+    Return: String
+  Function Process85:
+    Return: String
+  Function Process78:
+    Return: String
+  Function Process1:
+    Return: String
+  Function Process90:
+    Return: String
+  Function Process17:
+    Return: String
+  Function Process81:
+    Return: String
+  Function Process71:
+    Return: String
+  Function Process15:
+    Return: String
+  Function Process42:
+    Return: String
+  Function Process51:
+    Return: String
+  Function Process5:
+    Return: String
+  Function Process13:
+    Return: String
+  Function Process29:
+    Return: String
+  Function Process93:
+    Return: String
+  Function Process70:
+    Return: String
+  Function Process76:
+    Return: String
+  Function Process10:
+    Return: String
+  Function Process21:
+    Return: String
+  Function Process100:
+    Return: String
+  Function Process94:
+    Return: String
+  Function Process25:
+    Return: String
+  Function Process69:
+    Return: String
+  Function Process24:
+    Return: String
+  Function Process88:
+    Return: String
+  Function Process73:
+    Return: String
+  Function Process57:
+    Return: String
+  Function BodyTorture:
+    Return: Void
+    Errors:
+      - Type mismatch: expected bool, found void

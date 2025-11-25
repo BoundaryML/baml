@@ -3,14 +3,9 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
-function Foo() -> unknown
-└─ LLM Body (client: GPT4)
-
-function Incomplete(param1: string) -> unknown
-└─ param param1: string
-└─ <missing body>
-
-function NextFunction() -> string
-└─ Block(1 stmts): void
-   └─ Return
-      └─ Literal(String(" \"parsed\"")): string
+  Function Foo:
+    Return: Unknown
+  Function Incomplete:
+    Return: Unknown
+  Function NextFunction:
+    Return: Void
