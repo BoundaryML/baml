@@ -132,15 +132,16 @@ describe('buildControlFlowArtifacts', () => {
     );
 
     expect(result).toBeTruthy();
-    expect(result?.callGraph.id).toBe('SimpleWorkflow');
+    // Root node now uses lexical_id format with |root:0
+    expect(result?.callGraph.id).toBe('SimpleWorkflow|root:0');
     expect(result?.callGraph.type).toBe('block');
 
     const rootNode = result?.nodes[0];
-    expect(rootNode?.id).toBe('SimpleWorkflow');
+    expect(rootNode?.id).toBe('SimpleWorkflow|root:0');
     expect(rootNode?.type).toBe('group');
 
     const child = result?.nodes.find((n) => n.id.includes('gather-applicant-context'));
-    expect(child?.parent).toBe('SimpleWorkflow');
+    expect(child?.parent).toBe('SimpleWorkflow|root:0');
 
     expect(result?.edges[0]).toMatchObject({
       source: 'SimpleWorkflow|root:0|hdr:gather-applicant-context:0',

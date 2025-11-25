@@ -206,9 +206,9 @@ export function buildControlFlowArtifacts(
 
   for (const node of nodes) {
     nodeById.set(node.id, node);
-    const key = node.parent_id === undefined
-      ? options.rootName
-      : deriveNodeKey(node, options.rootName);
+    // Use lexical_id for all nodes including root - this ensures we get
+    // IDs like "SimpleWorkflow|root:0" instead of just "SimpleWorkflow"
+    const key = deriveNodeKey(node, options.rootName);
     nodeKeyById.set(node.id, key);
     if (node.parent_id !== undefined) {
       const siblings = childrenByParent.get(node.parent_id) ?? [];

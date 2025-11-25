@@ -4,9 +4,10 @@ import type { GraphNode, GraphEdge } from '../interface';
 
 describe('Graph conversion integration', () => {
   it('converts ConditionalWorkflow graph to expected structure', () => {
+    // Root node now has lexical_id format with |root:0
     const nodes: GraphNode[] = [
       {
-        id: 'ConditionalWorkflow',
+        id: 'ConditionalWorkflow|root:0',
         type: 'group',
         label: 'ConditionalWorkflow',
         functionName: 'ConditionalWorkflow',
@@ -18,7 +19,7 @@ describe('Graph conversion integration', () => {
         type: 'group',
         label: 'validate payload structure',
         functionName: 'ConditionalWorkflow',
-        parent: 'ConditionalWorkflow',
+        parent: 'ConditionalWorkflow|root:0',
         codeHash: '',
         lastModified: 0,
       },
@@ -27,7 +28,7 @@ describe('Graph conversion integration', () => {
         type: 'conditional',
         label: 'check summary confidence',
         functionName: 'ConditionalWorkflow',
-        parent: 'ConditionalWorkflow',
+        parent: 'ConditionalWorkflow|root:0',
         codeHash: '',
         lastModified: 0,
       },
@@ -44,8 +45,8 @@ describe('Graph conversion integration', () => {
 
     const edges: GraphEdge[] = [
       {
-        id: 'ConditionalWorkflow->ConditionalWorkflow|root:0|hdr:validate-payload-structure:0',
-        source: 'ConditionalWorkflow',
+        id: 'ConditionalWorkflow|root:0->ConditionalWorkflow|root:0|hdr:validate-payload-structure:0',
+        source: 'ConditionalWorkflow|root:0',
         target: 'ConditionalWorkflow|root:0|hdr:validate-payload-structure:0',
       },
       {
@@ -63,13 +64,13 @@ describe('Graph conversion integration', () => {
     const reactflow = sdkGraphToReactflow(nodes, edges);
 
     expect(reactflow.nodes).toHaveLength(nodes.length);
-    const rootNode = reactflow.nodes.find((node) => node.id === 'ConditionalWorkflow');
+    const rootNode = reactflow.nodes.find((node) => node.id === 'ConditionalWorkflow|root:0');
     expect(rootNode?.type).toBe('group');
 
     const headerNode = reactflow.nodes.find((node) =>
       node.id === 'ConditionalWorkflow|root:0|hdr:validate-payload-structure:0'
     );
-    expect(headerNode?.data?.parentId).toBe('ConditionalWorkflow');
+    expect(headerNode?.data?.parentId).toBe('ConditionalWorkflow|root:0');
 
     const branchGroup = reactflow.nodes.find((node) =>
       node.id === 'ConditionalWorkflow|root:0|hdr:check-summary-confidence:1|bg:if-checkcondition-validation-summary:0'

@@ -23,7 +23,8 @@ describe('WASM graph generation', () => {
     expect(simpleWorkflow?.type).toBe('workflow');
 
     const nodeIds = new Set(simpleWorkflow?.nodes.map((node) => node.id));
-    expect(nodeIds.has('SimpleWorkflow')).toBe(true);
+    // Root node should have lexical_id format with |root:0
+    expect(nodeIds.has('SimpleWorkflow|root:0')).toBe(true);
     expect(
       nodeIds.has('SimpleWorkflow|root:0|hdr:gather-applicant-context:0')
     ).toBe(true);
@@ -48,7 +49,8 @@ describe('WASM graph generation', () => {
     expect(conditionalWorkflow?.type).toBe('workflow');
 
     const nodeIds = new Set(conditionalWorkflow?.nodes.map((node) => node.id));
-    expect(nodeIds.has('ConditionalWorkflow')).toBe(true);
+    // Root node should have lexical_id format with |root:0
+    expect(nodeIds.has('ConditionalWorkflow|root:0')).toBe(true);
     expect(
       nodeIds.has('ConditionalWorkflow|root:0|hdr:check-summary-confidence:1')
     ).toBe(true);
