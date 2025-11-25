@@ -6280,8 +6280,8 @@ enum Item {
   EnumVariant { name: "TypeAlias" }
   EnumVariant { name: "TypeAliasDef" }
 }
-type TypeAlias = Unknown
-type TypeAlias = Unknown
+type Language = Path(Path { segments: ["crate"], kind: Plain })
+type Language = Path(Path { segments: ["crate"], kind: Plain })
 function BodyTorture {
   return: Int
   body: Expr {

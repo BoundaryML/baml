@@ -320,10 +320,10 @@ fn lower_class(node: &SyntaxNode) -> Option<Class> {
         }
     }
 
-    // Check for @@dynamic attribute
+    // Check for @@dynamic attribute using AST accessor
     let is_dynamic = class
         .block_attributes()
-        .any(|attr| attr.syntax().text().to_string().contains("dynamic"));
+        .any(|attr| attr.name().map(|n| n.text() == "dynamic").unwrap_or(false));
 
     Some(Class {
         name,
@@ -334,50 +334,31 @@ fn lower_class(node: &SyntaxNode) -> Option<Class> {
 
 /// Extract enum definition from CST.
 fn lower_enum(node: &SyntaxNode) -> Option<Enum> {
-    use baml_syntax::ast::{EnumDef, EnumVariant};
+    use baml_syntax::ast::EnumDef;
 
     let enum_def = EnumDef::cast(node.clone())?;
 
     // Check if the enum has proper structure (braces)
     // Malformed enums from error recovery (e.g., "enum" without name/braces) should be skipped
-    let has_braces = enum_def
-        .syntax()
-        .children_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .any(|t| t.kind() == baml_syntax::SyntaxKind::L_BRACE);
-
-    if !has_braces {
+    if !enum_def.has_body() {
         return None;
     }
 
-    // Extract name manually (EnumDef doesn't have accessor methods yet)
-    // Pattern: enum <NAME> { ... }
-    // The name is the first WORD token after the "enum" keyword
+    // Extract name using AST accessor
     let name = enum_def
-        .syntax()
-        .children_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .find(|token| token.kind() == baml_syntax::SyntaxKind::WORD) // Get the first WORD (which is the name, not "enum" - enum is KW_ENUM)
+        .name()
         .map(|t| Name::new(t.text()))
         .unwrap_or_else(|| Name::new("UnnamedEnum"));
 
-    // Extract variants
-    let mut variants = Vec::new();
-    for child in enum_def.syntax().children() {
-        if let Some(variant_node) = EnumVariant::cast(child) {
-            // Get the variant name (first WORD token in the variant)
-            if let Some(name_token) = variant_node
-                .syntax()
-                .children_with_tokens()
-                .filter_map(rowan::NodeOrToken::into_token)
-                .find(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
-            {
-                variants.push(crate::EnumVariant {
-                    name: Name::new(name_token.text()),
-                });
-            }
-        }
-    }
+    // Extract variants using AST accessor
+    let variants = enum_def
+        .variants()
+        .filter_map(|variant| {
+            variant.name().map(|name_token| crate::EnumVariant {
+                name: Name::new(name_token.text()),
+            })
+        })
+        .collect();
 
     Some(Enum { name, variants })
 }
@@ -397,51 +378,44 @@ fn lower_function(node: &SyntaxNode) -> Option<Function> {
 fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
     use baml_syntax::ast::TypeAliasDef;
 
-    let _alias = TypeAliasDef::cast(node.clone())?;
-    // TODO: Extract name and type once AST has methods
-    // For now, use placeholder - name-based IDs handle stability
-    let name = Name::new("TypeAlias");
-    let type_ref = TypeRef::Unknown;
+    let alias = TypeAliasDef::cast(node.clone())?;
+
+    // Extract name using AST accessor
+    let name = alias
+        .name()
+        .map(|t| Name::new(t.text()))
+        .unwrap_or_else(|| Name::new("UnnamedTypeAlias"));
+
+    // Extract type using AST accessor
+    let type_ref = alias
+        .ty()
+        .map(|t| lower_type_ref(&t))
+        .unwrap_or(TypeRef::Unknown);
 
     Some(TypeAlias { name, type_ref })
 }
 
 /// Extract client configuration from CST.
 fn lower_client(node: &SyntaxNode) -> Option<Client> {
-    use baml_syntax::ast::{ClientDef, ConfigItem};
+    use baml_syntax::ast::ClientDef;
 
     let client_def = ClientDef::cast(node.clone())?;
 
-    // Extract name manually (ClientDef doesn't have accessor methods yet)
-    // Pattern: client <NAME> { ... }
-    // The name is the first WORD token ("client" is KW_CLIENT, not WORD)
+    // Extract name using AST accessor
     let name = client_def
-        .syntax()
-        .children_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .find(|token| token.kind() == baml_syntax::SyntaxKind::WORD) // Get the first WORD (the name)
+        .name()
         .map(|t| Name::new(t.text()))
         .unwrap_or_else(|| Name::new("UnnamedClient"));
 
-    // Extract provider from config block
-    // Pattern: provider <provider_name>
+    // Extract provider from config block using AST accessors
     let provider = client_def
-        .syntax()
-        .descendants()
-        .filter_map(ConfigItem::cast)
-        .find_map(|item| {
-            let text = item.syntax().text().to_string();
-            if text.trim().starts_with("provider") {
-                // Extract the provider name after "provider"
-                item.syntax()
-                    .children_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
-                    .nth(1) // Skip "provider" keyword
-                    .map(|t| Name::new(t.text()))
-            } else {
-                None
-            }
+        .config_block()
+        .and_then(|block| {
+            block
+                .items()
+                .find(|item| item.key().map(|k| k.text() == "provider").unwrap_or(false))
+                .and_then(|item| item.value_word())
+                .map(|t| Name::new(t.text()))
         })
         .unwrap_or_else(|| Name::new("unknown"));
 
@@ -452,10 +426,19 @@ fn lower_client(node: &SyntaxNode) -> Option<Client> {
 fn lower_test(node: &SyntaxNode) -> Option<Test> {
     use baml_syntax::ast::TestDef;
 
-    let _test = TestDef::cast(node.clone())?;
-    // TODO: Extract name and functions once AST has methods
-    let name = Name::new("Test");
-    let function_refs = vec![];
+    let test = TestDef::cast(node.clone())?;
+
+    // Extract name using AST accessor
+    let name = test
+        .name()
+        .map(|t| Name::new(t.text()))
+        .unwrap_or_else(|| Name::new("UnnamedTest"));
+
+    // Extract function reference using AST accessor
+    let function_refs = test
+        .function_name()
+        .map(|t| vec![Name::new(t.text())])
+        .unwrap_or_default();
 
     Some(Test {
         name,

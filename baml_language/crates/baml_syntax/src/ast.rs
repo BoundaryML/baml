@@ -197,6 +197,166 @@ impl Field {
     }
 }
 
+impl EnumDef {
+    /// Get the enum name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+            })
+            .nth(0) // Get the first WORD (enum keyword is KW_ENUM, not WORD)
+    }
+
+    /// Check if this enum has a body (braces).
+    /// Malformed enums from error recovery may not have braces.
+    pub fn has_body(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::L_BRACE)
+    }
+
+    /// Get all variants.
+    pub fn variants(&self) -> impl Iterator<Item = EnumVariant> {
+        self.syntax.children().filter_map(EnumVariant::cast)
+    }
+
+    /// Get block attributes.
+    pub fn block_attributes(&self) -> impl Iterator<Item = BlockAttribute> {
+        self.syntax.children().filter_map(BlockAttribute::cast)
+    }
+}
+
+impl EnumVariant {
+    /// Get the variant name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get variant attributes (@alias, @description, etc.).
+    pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
+        self.syntax.children().filter_map(Attribute::cast)
+    }
+}
+
+impl ClientDef {
+    /// Get the client name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+            })
+            .nth(0) // Get the first WORD (client keyword is KW_CLIENT, not WORD)
+    }
+
+    /// Get the config block.
+    pub fn config_block(&self) -> Option<ConfigBlock> {
+        self.syntax.children().find_map(ConfigBlock::cast)
+    }
+}
+
+impl ConfigBlock {
+    /// Get all config items.
+    pub fn items(&self) -> impl Iterator<Item = ConfigItem> {
+        self.syntax.children().filter_map(ConfigItem::cast)
+    }
+}
+
+impl ConfigItem {
+    /// Get the config item key (first WORD token).
+    pub fn key(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the config item value (second WORD token, if present).
+    /// For simple `key value` patterns like `provider openai`.
+    pub fn value_word(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+            .nth(1)
+    }
+}
+
+impl TestDef {
+    /// Get the test name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+            })
+            .nth(0) // Get the first WORD (test keyword is KW_TEST, not WORD)
+    }
+
+    /// Get the function name that this test is for.
+    /// Pattern: test <TestName> { functions [<FunctionName>] ... }
+    pub fn function_name(&self) -> Option<SyntaxToken> {
+        // Look for a ConfigItem with key "functions" and extract the function name
+        self.syntax
+            .descendants()
+            .filter_map(ConfigItem::cast)
+            .find(|item| item.key().map(|k| k.text() == "functions").unwrap_or(false))
+            .and_then(|item| item.value_word())
+    }
+
+    /// Get the config block.
+    pub fn config_block(&self) -> Option<ConfigBlock> {
+        self.syntax.children().find_map(ConfigBlock::cast)
+    }
+}
+
+impl TypeAliasDef {
+    /// Get the type alias name.
+    /// Note: "type" is parsed as a WORD token, not a keyword, so we skip it.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+            })
+            .nth(1) // Skip "type" keyword (which is a WORD), get the actual name
+    }
+
+    /// Get the aliased type expression.
+    pub fn ty(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
+    }
+}
+
+impl BlockAttribute {
+    /// Get the attribute name (e.g., "dynamic" from @@dynamic).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+}
+
+impl Attribute {
+    /// Get the attribute name (e.g., "alias" from @alias).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+}
+
 /// Enum for any top-level item.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
