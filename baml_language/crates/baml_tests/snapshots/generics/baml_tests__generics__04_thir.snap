@@ -4,4 +4,4 @@ expression: output
 ---
 === TYPE INFERENCE ===
   Function GetTodo:
-    Return: unknown
+    Return: Unknown

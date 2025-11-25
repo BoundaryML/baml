@@ -3,409 +3,211 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
-  Function DeepExpression:
-    Return: unknown
   Function ComplexType:
-    Return: unknown
-  Function Process1:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process2:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process3:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process4:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process5:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process6:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process7:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process8:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process9:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process10:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process11:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process12:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process13:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process14:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process15:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process16:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process17:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process18:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process19:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process20:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process21:
-    Return: unknown
-    Params:
-      - input: unknown
+    Return: Unknown
+  Function DeepExpression:
+    Return: Void
   Function Process22:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process23:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process24:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process25:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process26:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process27:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process28:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process29:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process30:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process31:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process32:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process33:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process34:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process35:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process36:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process37:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process38:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process39:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process40:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process41:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process42:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process43:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process44:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process45:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process46:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process47:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process48:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process49:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process50:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process51:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process52:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process53:
-    Return: unknown
-    Params:
-      - input: unknown
+    Return: String
   Function Process54:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process55:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process56:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process57:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process58:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process59:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process60:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process61:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process62:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process63:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process64:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process65:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process66:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process67:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process68:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process69:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process70:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process71:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process72:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process73:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process74:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process75:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process76:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process77:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process78:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process79:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process80:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process81:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process82:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process83:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process84:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process85:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process86:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process87:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process88:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process89:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process90:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process91:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process92:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process93:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process94:
-    Return: unknown
-    Params:
-      - input: unknown
+    Return: String
   Function Process95:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process96:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process97:
-    Return: unknown
-    Params:
-      - input: unknown
-  Function Process98:
-    Return: unknown
-    Params:
-      - input: unknown
+    Return: String
+  Function Process60:
+    Return: String
+  Function Process68:
+    Return: String
+  Function Process14:
+    Return: String
+  Function Process79:
+    Return: String
+  Function Process84:
+    Return: String
+  Function Process33:
+    Return: String
+  Function Process12:
+    Return: String
+  Function Process74:
+    Return: String
   Function Process99:
-    Return: unknown
-    Params:
-      - input: unknown
+    Return: String
+  Function Process64:
+    Return: String
+  Function Process52:
+    Return: String
+  Function Process7:
+    Return: String
+  Function Process80:
+    Return: String
+  Function Process58:
+    Return: String
+  Function Process97:
+    Return: String
+  Function Process36:
+    Return: String
+  Function Process63:
+    Return: String
+  Function Process19:
+    Return: String
+  Function Process83:
+    Return: String
+  Function Process18:
+    Return: String
+  Function Process26:
+    Return: String
+  Function Process43:
+    Return: String
+  Function Process46:
+    Return: String
+  Function Process62:
+    Return: String
+  Function Process87:
+    Return: String
+  Function Process44:
+    Return: String
+  Function Process47:
+    Return: String
+  Function Process35:
+    Return: String
+  Function Process38:
+    Return: String
+  Function Process41:
+    Return: String
+  Function Process28:
+    Return: String
+  Function Process65:
+    Return: String
+  Function Process6:
+    Return: String
+  Function Process32:
+    Return: String
+  Function Process92:
+    Return: String
+  Function Process55:
+    Return: String
+  Function Process66:
+    Return: String
+  Function Process56:
+    Return: String
+  Function Process67:
+    Return: String
+  Function Process3:
+    Return: String
+  Function Process75:
+    Return: String
+  Function Process48:
+    Return: String
+  Function Process49:
+    Return: String
+  Function Process61:
+    Return: String
+  Function Process96:
+    Return: String
+  Function Process34:
+    Return: String
+  Function Process59:
+    Return: String
+  Function Process89:
+    Return: String
+  Function Process45:
+    Return: String
+  Function Process86:
+    Return: String
+  Function Process16:
+    Return: String
+  Function Process39:
+    Return: String
+  Function Process82:
+    Return: String
+  Function Process2:
+    Return: String
+  Function Process27:
+    Return: String
+  Function Process53:
+    Return: String
+  Function Process23:
+    Return: String
+  Function Process9:
+    Return: String
+  Function Process72:
+    Return: String
+  Function Process77:
+    Return: String
+  Function Process40:
+    Return: String
+  Function Process30:
+    Return: String
+  Function Process8:
+    Return: String
+  Function Process11:
+    Return: String
+  Function Process37:
+    Return: String
+  Function Process4:
+    Return: String
+  Function Process91:
+    Return: String
+  Function Process31:
+    Return: String
+  Function Process50:
+    Return: String
+  Function Process20:
+    Return: String
+  Function Process98:
+    Return: String
+  Function Process85:
+    Return: String
+  Function Process78:
+    Return: String
+  Function Process1:
+    Return: String
+  Function Process90:
+    Return: String
+  Function Process17:
+    Return: String
+  Function Process81:
+    Return: String
+  Function Process71:
+    Return: String
+  Function Process15:
+    Return: String
+  Function Process42:
+    Return: String
+  Function Process51:
+    Return: String
+  Function Process5:
+    Return: String
+  Function Process13:
+    Return: String
+  Function Process29:
+    Return: String
+  Function Process93:
+    Return: String
+  Function Process70:
+    Return: String
+  Function Process76:
+    Return: String
+  Function Process10:
+    Return: String
+  Function Process21:
+    Return: String
   Function Process100:
-    Return: unknown
-    Params:
-      - input: unknown
+    Return: String
+  Function Process94:
+    Return: String
+  Function Process25:
+    Return: String
+  Function Process69:
+    Return: String
+  Function Process24:
+    Return: String
+  Function Process88:
+    Return: String
+  Function Process73:
+    Return: String
+  Function Process57:
+    Return: String
   Function BodyTorture:
-    Return: unknown
+    Return: Void
+    Errors:
+      - Type mismatch: expected bool, found void

@@ -470,9 +470,10 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
         file,
         "        let root = db.set_project_root(std::path::PathBuf::from(\".\"));"
     )?;
+    writeln!(file, "        let mut source_files = Vec::new();")?;
     writeln!(file)?;
 
-    // Load all files
+    // Load all files and track SourceFiles
     for baml_file in &project.files {
         writeln!(file, "        {{")?;
         writeln!(
@@ -484,7 +485,7 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
             file,
             "            let content = content.replace(\"\\r\\n\", \"\\n\");"
         )?;
-        writeln!(file, "            db.add_file(")?;
+        writeln!(file, "            let sf = db.add_file(")?;
         writeln!(
             file,
             "                \"{}\",",
@@ -492,48 +493,63 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
         )?;
         writeln!(file, "                &content,")?;
         writeln!(file, "            );")?;
+        writeln!(file, "            source_files.push(sf);")?;
         writeln!(file, "        }}")?;
     }
 
     writeln!(file)?;
-    writeln!(
-        file,
-        "        let items_struct = baml_hir::project_items(&db, root);"
-    )?;
-    writeln!(file, "        let items = items_struct.items(&db);")?;
     writeln!(file, "        let mut output = String::new();")?;
     writeln!(
         file,
         "        writeln!(output, \"=== TYPE INFERENCE ===\").unwrap();"
     )?;
     writeln!(file)?;
-    writeln!(file, "        for item in items.iter() {{")?;
+    writeln!(file, "        // Iterate over files and their functions")?;
+    writeln!(file, "        for source_file in &source_files {{")?;
     writeln!(
         file,
-        "            if let baml_hir::ItemId::Function(func_id) = item {{"
+        "            let items_struct = baml_hir::file_items(&db, *source_file);"
+    )?;
+    writeln!(file, "            let items = items_struct.items(&db);")?;
+    writeln!(file, "            for item in items.iter() {{")?;
+    writeln!(
+        file,
+        "                if let baml_hir::ItemId::Function(func_id) = item {{"
     )?;
     writeln!(
         file,
-        "                let result = baml_thir::infer_function(&db, *func_id);"
+        "                    let signature = baml_db::function_signature(&db, *source_file, *func_id);"
     )?;
     writeln!(
         file,
-        "                writeln!(output, \"  Function {{:?}}:\", func_id).unwrap();"
+        "                    let body = baml_db::function_body(&db, *source_file, *func_id);"
     )?;
     writeln!(
         file,
-        "                writeln!(output, \"    Return: {{:?}}\", result.return_type).unwrap();"
+        "                    let result = baml_thir::infer_function(&db, &signature, &body);"
     )?;
-    writeln!(file, "                if !result.errors.is_empty() {{")?;
     writeln!(
         file,
-        "                    writeln!(output, \"    Errors:\").unwrap();"
+        "                    writeln!(output, \"  Function {{}}:\", signature.name).unwrap();"
     )?;
-    writeln!(file, "                    for error in &result.errors {{")?;
     writeln!(
         file,
-        "                        writeln!(output, \"      - {{}}\", error.message()).unwrap();"
+        "                    writeln!(output, \"    Return: {{:?}}\", result.return_type).unwrap();"
     )?;
+    writeln!(file, "                    if !result.errors.is_empty() {{")?;
+    writeln!(
+        file,
+        "                        writeln!(output, \"    Errors:\").unwrap();"
+    )?;
+    writeln!(
+        file,
+        "                        for error in &result.errors {{"
+    )?;
+    writeln!(
+        file,
+        "                            writeln!(output, \"      - {{}}\", error.message()).unwrap();"
+    )?;
+    writeln!(file, "                        }}")?;
     writeln!(file, "                    }}")?;
     writeln!(file, "                }}")?;
     writeln!(file, "            }}")?;

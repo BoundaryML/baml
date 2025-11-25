@@ -4,6 +4,4 @@ expression: output
 ---
 === TYPE INFERENCE ===
   Function HelloWorld:
-    Return: string
-    Params:
-      - name: string
+    Return: String

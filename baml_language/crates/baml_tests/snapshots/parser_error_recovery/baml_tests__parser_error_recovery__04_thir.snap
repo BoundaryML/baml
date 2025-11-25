@@ -4,10 +4,8 @@ expression: output
 ---
 === TYPE INFERENCE ===
   Function Foo:
-    Return: unknown
+    Return: Unknown
   Function Incomplete:
-    Return: unknown
-    Params:
-      - param1: unknown
+    Return: Unknown
   Function NextFunction:
-    Return: unknown
+    Return: Void

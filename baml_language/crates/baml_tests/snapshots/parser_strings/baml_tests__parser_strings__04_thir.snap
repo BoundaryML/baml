@@ -4,12 +4,8 @@ expression: output
 ---
 === TYPE INFERENCE ===
   Function FormatMessage:
-    Return: unknown
-    Params:
-      - name: unknown
+    Return: String
   Function ProcessText:
-    Return: unknown
-    Params:
-      - input: unknown
+    Return: String
   Function GetRole:
-    Return: unknown
+    Return: Void

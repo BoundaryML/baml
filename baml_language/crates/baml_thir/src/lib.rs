@@ -11,7 +11,9 @@
 //! This follows patterns from rust-analyzer and ruff for incremental type checking.
 
 use baml_base::{Name, Span};
-use baml_hir::{ClassId, EnumId, ExprBody, ExprId, FunctionBody, Pattern, StmtId};
+use baml_hir::{
+    ClassId, EnumId, ExprBody, ExprId, FunctionBody, FunctionSignature, Pattern, StmtId,
+};
 use std::collections::HashMap;
 
 mod lower;
@@ -286,6 +288,34 @@ pub fn infer_function_body<'db>(
         expr_types: ctx.expr_types,
         errors: ctx.errors,
     }
+}
+
+/// Infer types for a function given its signature and body.
+///
+///
+/// This is the entry point for type inference from the test suite.
+/// It takes pre-fetched signature and body data, allowing the caller (baml_db)
+/// to handle the Salsa queries for fetching this data.
+pub fn infer_function<'db>(
+    db: &'db dyn baml_hir::Db,
+    signature: &FunctionSignature,
+    body: &FunctionBody,
+) -> InferenceResult<'db> {
+    // Convert parameter TypeRefs to Tys
+    let param_types: HashMap<Name, Ty<'db>> = signature
+        .params
+        .iter()
+        .map(|param| {
+            let ty = lower_type_ref(db, &param.type_ref);
+            (param.name.clone(), ty)
+        })
+        .collect();
+
+    // Convert return type
+    let expected_return = lower_type_ref(db, &signature.return_type);
+
+    // Delegate to the body inference function
+    infer_function_body(db, body, param_types, expected_return)
 }
 
 /// Infer the type of an expression (synthesize mode).
