@@ -172,6 +172,7 @@ name = "baml_onionskin"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "baml_base",
  "baml_codegen",
  "baml_db",
  "baml_diagnostics",

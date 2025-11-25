@@ -528,29 +528,17 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
         file,
         "                    let result = baml_thir::infer_function(&db, &signature, &body);"
     )?;
+    writeln!(file)?;
     writeln!(
         file,
-        "                    writeln!(output, \"  Function {{}}:\", signature.name).unwrap();"
+        "                    // Use tree rendering for rich output"
     )?;
     writeln!(
         file,
-        "                    writeln!(output, \"    Return: {{:?}}\", result.return_type).unwrap();"
+        "                    let tree = baml_thir::render_function_tree(&db, &signature.name, &signature, &body, &result);"
     )?;
-    writeln!(file, "                    if !result.errors.is_empty() {{")?;
-    writeln!(
-        file,
-        "                        writeln!(output, \"    Errors:\").unwrap();"
-    )?;
-    writeln!(
-        file,
-        "                        for error in &result.errors {{"
-    )?;
-    writeln!(
-        file,
-        "                            writeln!(output, \"      - {{}}\", error.message()).unwrap();"
-    )?;
-    writeln!(file, "                        }}")?;
-    writeln!(file, "                    }}")?;
+    writeln!(file, "                    output.push_str(&tree);")?;
+    writeln!(file, "                    output.push('\\n');")?;
     writeln!(file, "                }}")?;
     writeln!(file, "            }}")?;
     writeln!(file, "        }}")?;

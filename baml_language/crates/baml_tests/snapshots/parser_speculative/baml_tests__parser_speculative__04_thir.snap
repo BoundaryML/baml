@@ -3,32 +3,113 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
-  Function AnotherLLM:
-    Return: String
-  Function Ambiguous:
-    Return: String
-  Function ProcessData:
-    Return: Void
-    Errors:
-      - Unknown variable: data::field1
-      - Unknown variable: data::field2
-  Function ExtractData:
-    Return: Unknown
-  Function SimpleCalc:
-    Return: Void
-  Function ProcessAnalysis:
-    Return: Void
-    Errors:
-      - Unknown variable: analysis::score
-      - Unknown variable: analysis::sentiment
-      - Cannot apply operator 'Add' to types string and unknown
-      - Unknown variable: analysis::sentiment
-      - Cannot apply operator 'Add' to types string and unknown
-      - Unknown variable: analysis::sentiment
-      - Cannot apply operator 'Add' to types string and unknown
-      - Unknown variable: analysis::sentiment
-      - Cannot apply operator 'Add' to types string and unknown
-  Function LLMAnalyze:
-    Return: Unknown
-  Function ChainedProcess:
-    Return: String
+function AnotherLLM(input: string) -> string
+├─ param input: string
+└─ LLM Body (client: none)
+
+function Ambiguous(input: string) -> string
+├─ param input: string
+└─ LLM Body (client: GPT4)
+
+function ProcessData(data: unknown) -> string
+├─ param data: unknown
+└─ Block(3 stmts): void
+   ├─ Let result: int
+   │  └─ Binary(Add): int
+   │     ├─ Path(data::field1): unknown
+   │     └─ Path(data::field2): unknown
+   ├─ ExprStmt
+   │  └─ If: void
+   │     ├─ condition:
+   │     │  └─ Binary(Gt): bool
+   │     │     ├─ Path(result): int
+   │     │     └─ Literal(Int(100)): int
+   │     └─ then:
+   │        └─ Block(1 stmts): void
+   │           └─ Return
+   │              └─ Literal(String(" \"high\"")): string
+   └─ Return
+      └─ Literal(String(" \"low\"")): string
+  Errors:
+    • Unknown variable: data::field1
+    • Unknown variable: data::field2
+
+function ExtractData(text: string) -> unknown
+├─ param text: string
+└─ LLM Body (client: GPT4)
+
+function SimpleCalc(a: int, b: int) -> int
+├─ param a: int
+├─ param b: int
+└─ Block(1 stmts): void
+   └─ Return
+      └─ Binary(Add): int
+         ├─ Path(a): int
+         └─ Binary(Mul): int
+            ├─ Path(b): int
+            └─ Literal(Int(2)): int
+
+function ProcessAnalysis(analysis: unknown) -> string
+├─ param analysis: unknown
+└─ Block(1 stmts + tail): void
+   ├─ Let score: unknown
+   │  └─ Path(analysis::score): unknown
+   └─ If + else: void
+      ├─ condition:
+      │  └─ Binary(Gt): bool
+      │     ├─ Path(score): unknown
+      │     └─ Literal(Float("0.8")): float
+      ├─ then:
+      │  └─ Block(1 stmts): void
+      │     └─ Return
+      │        └─ Binary(Add): error
+      │           ├─ Literal(String(" \"Very positive: \"")): string
+      │           └─ Path(analysis::sentiment): unknown
+      └─ else:
+         └─ If + else: void
+            ├─ condition:
+            │  └─ Binary(Gt): bool
+            │     ├─ Path(score): unknown
+            │     └─ Literal(Float("0.5")): float
+            ├─ then:
+            │  └─ Block(1 stmts): void
+            │     └─ Return
+            │        └─ Binary(Add): error
+            │           ├─ Literal(String(" \"Positive: \"")): string
+            │           └─ Path(analysis::sentiment): unknown
+            └─ else:
+               └─ If + else: void
+                  ├─ condition:
+                  │  └─ Binary(Gt): bool
+                  │     ├─ Path(score): unknown
+                  │     └─ Literal(Float("0.2")): float
+                  ├─ then:
+                  │  └─ Block(1 stmts): void
+                  │     └─ Return
+                  │        └─ Binary(Add): error
+                  │           ├─ Literal(String(" \"Neutral: \"")): string
+                  │           └─ Path(analysis::sentiment): unknown
+                  └─ else:
+                     └─ Block(1 stmts): void
+                        └─ Return
+                           └─ Binary(Add): error
+                              ├─ Literal(String(" \"Negative: \"")): string
+                              └─ Path(analysis::sentiment): unknown
+  Errors:
+    • Unknown variable: analysis::score
+    • Unknown variable: analysis::sentiment
+    • Cannot apply operator 'Add' to types string and unknown
+    • Unknown variable: analysis::sentiment
+    • Cannot apply operator 'Add' to types string and unknown
+    • Unknown variable: analysis::sentiment
+    • Cannot apply operator 'Add' to types string and unknown
+    • Unknown variable: analysis::sentiment
+    • Cannot apply operator 'Add' to types string and unknown
+
+function LLMAnalyze(text: string) -> unknown
+├─ param text: string
+└─ LLM Body (client: GPT4)
+
+function ChainedProcess(input: string) -> string
+├─ param input: string
+└─ LLM Body (client: GPT4)

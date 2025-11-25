@@ -17,9 +17,11 @@ use baml_hir::{
 use std::collections::HashMap;
 
 mod lower;
+mod pretty;
 mod types;
 
 pub use lower::lower_type_ref;
+pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use types::*;
 
 // ============================================================================

@@ -10,7 +10,8 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{
     compiler::{
-        CompilerPhase, CompilerRunner, GreenElementId, VisualizationMode, read_files_from_disk,
+        CompilerPhase, CompilerRunner, GreenElementId, ThirDisplayMode, ThirInteractiveState,
+        VisualizationMode, read_files_from_disk,
     },
     ui,
     watcher::FileWatcher,
@@ -34,6 +35,8 @@ pub(crate) struct App {
     /// Visualization mode: Diff or Incremental
     visualization_mode: VisualizationMode,
     last_compiled_files: HashMap<PathBuf, String>,
+    /// Whether we are in THIR interactive sub-mode (cursor navigation active)
+    thir_interactive_active: bool,
 }
 
 impl App {
@@ -61,6 +64,7 @@ impl App {
             scroll_offset: 0,
             visualization_mode: VisualizationMode::Diff, // Start in Diff mode
             last_compiled_files: initial_files,
+            thir_interactive_active: false,
         })
     }
 
@@ -103,11 +107,22 @@ impl App {
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) {
+        // Check if we're in THIR interactive sub-mode
+        let in_thir_interactive = self.current_phase == CompilerPhase::Thir
+            && self.compiler.thir_display_mode() == ThirDisplayMode::Interactive
+            && self.thir_interactive_active;
+
         match (key.code, key.modifiers) {
             // Quit on Ctrl+C or 'q'
             (KeyCode::Char('c'), KeyModifiers::CONTROL)
             | (KeyCode::Char('q'), KeyModifiers::NONE) => {
                 self.should_quit = true;
+            }
+            // Escape exits THIR interactive mode
+            (KeyCode::Esc, _) => {
+                if in_thir_interactive {
+                    self.thir_interactive_active = false;
+                }
             }
             // Toggle snapshot on 's'
             (KeyCode::Char('s'), KeyModifiers::NONE) => {
@@ -126,21 +141,41 @@ impl App {
             (KeyCode::Char('r'), KeyModifiers::NONE) => {
                 self.recompile();
             }
-            // Navigate phases with left/right arrow keys
+            // Navigate phases with left/right arrow keys (only when not in THIR interactive mode)
             (KeyCode::Left, _) => {
-                self.current_phase = self.current_phase.prev();
-                self.scroll_offset = 0;
+                if in_thir_interactive {
+                    self.thir_cursor_left();
+                } else {
+                    self.current_phase = self.current_phase.prev();
+                    self.scroll_offset = 0;
+                    // Exit interactive mode when switching tabs
+                    self.thir_interactive_active = false;
+                }
             }
             (KeyCode::Right, _) => {
-                self.current_phase = self.current_phase.next();
-                self.scroll_offset = 0;
+                if in_thir_interactive {
+                    self.thir_cursor_right();
+                } else {
+                    self.current_phase = self.current_phase.next();
+                    self.scroll_offset = 0;
+                    // Exit interactive mode when switching tabs
+                    self.thir_interactive_active = false;
+                }
             }
-            // Scroll with up/down arrow keys
+            // Up/Down: scroll normally, or move cursor in THIR interactive mode
             (KeyCode::Up, _) => {
-                self.scroll_offset = self.scroll_offset.saturating_sub(1);
+                if in_thir_interactive {
+                    self.thir_cursor_up();
+                } else {
+                    self.scroll_offset = self.scroll_offset.saturating_sub(1);
+                }
             }
             (KeyCode::Down, _) => {
-                self.scroll_offset = self.scroll_offset.saturating_add(1);
+                if in_thir_interactive {
+                    self.thir_cursor_down();
+                } else {
+                    self.scroll_offset = self.scroll_offset.saturating_add(1);
+                }
             }
             // Page up/down
             (KeyCode::PageUp, _) => {
@@ -156,6 +191,40 @@ impl App {
             (KeyCode::Char('m'), _) => {
                 self.toggle_visualization_mode();
             }
+            // THIR: 't' enters interactive mode when on THIR tab with Interactive display
+            (KeyCode::Char('t'), KeyModifiers::NONE) => {
+                if self.current_phase == CompilerPhase::Thir {
+                    if self.compiler.thir_display_mode() == ThirDisplayMode::Interactive {
+                        // Toggle interactive sub-mode
+                        self.thir_interactive_active = !self.thir_interactive_active;
+                    } else {
+                        // Switch to Interactive display mode and activate it
+                        self.toggle_thir_display_mode();
+                        self.thir_interactive_active = true;
+                    }
+                }
+            }
+            // Vim-style cursor navigation in THIR interactive mode
+            (KeyCode::Char('j'), KeyModifiers::NONE) => {
+                if in_thir_interactive {
+                    self.thir_cursor_down();
+                }
+            }
+            (KeyCode::Char('k'), KeyModifiers::NONE) => {
+                if in_thir_interactive {
+                    self.thir_cursor_up();
+                }
+            }
+            (KeyCode::Char('h'), KeyModifiers::NONE) => {
+                if in_thir_interactive {
+                    self.thir_cursor_left();
+                }
+            }
+            (KeyCode::Char('l'), KeyModifiers::NONE) => {
+                if in_thir_interactive {
+                    self.thir_cursor_right();
+                }
+            }
             _ => {}
         }
     }
@@ -165,6 +234,72 @@ impl App {
             VisualizationMode::Diff => VisualizationMode::Incremental,
             VisualizationMode::Incremental => VisualizationMode::Diff,
         };
+    }
+
+    fn toggle_thir_display_mode(&mut self) {
+        let current_mode = self.compiler.thir_display_mode();
+        self.compiler.set_thir_display_mode(current_mode.toggle());
+        // Recompile to regenerate THIR output in the new mode
+        self.last_compiled_files.clear();
+        self.compile_current_state();
+    }
+
+    fn thir_cursor_up(&mut self) {
+        let state = self.compiler.thir_interactive_state_mut();
+        if state.cursor_line > 0 {
+            state.cursor_line -= 1;
+            // Clamp column to the new line's length
+            let line_len = state
+                .source_lines
+                .get(state.cursor_line)
+                .map(|l| l.len())
+                .unwrap_or(0);
+            if state.cursor_col > line_len {
+                state.cursor_col = line_len;
+            }
+            // Adjust scroll to keep cursor visible
+            if (state.cursor_line as u16) < self.scroll_offset {
+                self.scroll_offset = state.cursor_line as u16;
+            }
+        }
+    }
+
+    fn thir_cursor_down(&mut self) {
+        let state = self.compiler.thir_interactive_state_mut();
+        if state.cursor_line + 1 < state.total_lines {
+            state.cursor_line += 1;
+            // Clamp column to the new line's length
+            let line_len = state
+                .source_lines
+                .get(state.cursor_line)
+                .map(|l| l.len())
+                .unwrap_or(0);
+            if state.cursor_col > line_len {
+                state.cursor_col = line_len;
+            }
+            // We'd need terminal height to properly adjust scroll
+            // For now, just increment scroll if cursor goes past visible area
+            // This is a simplified version - proper implementation would use terminal size
+        }
+    }
+
+    fn thir_cursor_left(&mut self) {
+        let state = self.compiler.thir_interactive_state_mut();
+        if state.cursor_col > 0 {
+            state.cursor_col -= 1;
+        }
+    }
+
+    fn thir_cursor_right(&mut self) {
+        let state = self.compiler.thir_interactive_state_mut();
+        let line_len = state
+            .source_lines
+            .get(state.cursor_line)
+            .map(|l| l.len())
+            .unwrap_or(0);
+        if state.cursor_col < line_len {
+            state.cursor_col += 1;
+        }
     }
 
     fn handle_mouse_event(&mut self, mouse: crossterm::event::MouseEvent) {
@@ -258,6 +393,18 @@ impl App {
             VisualizationMode::Diff => "Diff",
             VisualizationMode::Incremental => "Incremental",
         }
+    }
+
+    pub(crate) fn thir_display_mode(&self) -> ThirDisplayMode {
+        self.compiler.thir_display_mode()
+    }
+
+    pub(crate) fn thir_interactive_state(&self) -> &ThirInteractiveState {
+        self.compiler.thir_interactive_state()
+    }
+
+    pub(crate) fn thir_interactive_active(&self) -> bool {
+        self.thir_interactive_active
     }
 
     fn compile_current_state(&mut self) {

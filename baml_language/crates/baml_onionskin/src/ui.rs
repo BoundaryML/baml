@@ -17,7 +17,7 @@ use similar::{ChangeTag, TextDiff};
 
 use crate::{
     app::App,
-    compiler::{CompilerPhase, LineStatus, VisualizationMode},
+    compiler::{CompilerPhase, LineStatus, ThirDisplayMode, VisualizationMode},
 };
 
 pub(crate) fn init_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
@@ -151,6 +151,13 @@ fn draw_phase_tabs(frame: &mut Frame, area: Rect, app: &App) {
 
 fn draw_single_view(frame: &mut Frame, area: Rect, app: &App) {
     let phase = app.current_phase();
+
+    // Special handling for THIR interactive mode
+    if phase == CompilerPhase::Thir && app.thir_display_mode() == ThirDisplayMode::Interactive {
+        draw_thir_interactive_view(frame, area, app);
+        return;
+    }
+
     if app.visualization_mode() == VisualizationMode::Incremental && phase == CompilerPhase::Parser
     {
         let annotated = app.get_output_annotated(phase);
@@ -185,6 +192,159 @@ fn draw_single_view(frame: &mut Frame, area: Rect, app: &App) {
         .wrap(Wrap { trim: false });
 
     frame.render_widget(paragraph, area);
+}
+
+fn draw_thir_interactive_view(frame: &mut Frame, area: Rect, app: &App) {
+    let state = app.thir_interactive_state();
+    let is_active = app.thir_interactive_active();
+
+    // Split the area: main content on left, type info panel on right
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+        .split(area);
+
+    // Build styled lines with cursor highlighting
+    let mut lines: Vec<Line> = Vec::new();
+    for (i, line_text) in state.source_lines.iter().enumerate() {
+        let is_cursor_line = i == state.cursor_line;
+
+        // Add line number prefix
+        let line_num = format!("{:3} ", i + 1);
+
+        if is_cursor_line && is_active {
+            // Show character-level cursor when active
+            let cursor_col = state.cursor_col.min(line_text.len());
+            let before_cursor = &line_text[..cursor_col];
+            let cursor_char = line_text.chars().nth(cursor_col).unwrap_or(' ');
+            let after_cursor = if cursor_col < line_text.len() {
+                &line_text[cursor_col + cursor_char.len_utf8()..]
+            } else {
+                ""
+            };
+
+            let spans = vec![
+                Span::styled(line_num, Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    before_cursor.to_string(),
+                    Style::default().bg(Color::DarkGray).fg(Color::White),
+                ),
+                Span::styled(
+                    cursor_char.to_string(),
+                    Style::default()
+                        .bg(Color::Yellow)
+                        .fg(Color::Black)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    after_cursor.to_string(),
+                    Style::default().bg(Color::DarkGray).fg(Color::White),
+                ),
+            ];
+            lines.push(Line::from(spans));
+        } else if is_cursor_line {
+            // Line highlighted but not character cursor (inactive mode)
+            let style = Style::default()
+                .bg(Color::DarkGray)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD);
+            let spans = vec![
+                Span::styled(line_num, Style::default().fg(Color::DarkGray)),
+                Span::styled(line_text.clone(), style),
+            ];
+            lines.push(Line::from(spans));
+        } else {
+            let spans = vec![
+                Span::styled(line_num, Style::default().fg(Color::DarkGray)),
+                Span::raw(line_text.clone()),
+            ];
+            lines.push(Line::from(spans));
+        }
+    }
+
+    let title = if is_active {
+        "THIR (Interactive ACTIVE - hjkl/arrows to move, Esc to exit)"
+    } else {
+        "THIR (Interactive - press 't' to activate cursor)"
+    };
+
+    let border_style = if is_active {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+
+    let source_paragraph = Paragraph::new(Text::from(lines))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .style(border_style),
+        )
+        .scroll((app.scroll_offset(), 0));
+
+    frame.render_widget(source_paragraph, chunks[0]);
+
+    // Type info panel
+    let cursor_info = if state.cursor_line < state.line_info.len() {
+        let info = &state.line_info[state.cursor_line];
+        let mut info_lines = vec![Line::from(vec![
+            Span::styled("Position: ", Style::default().fg(Color::Cyan)),
+            Span::raw(format!(
+                "Ln {}, Col {}",
+                state.cursor_line + 1,
+                state.cursor_col + 1
+            )),
+        ])];
+
+        if !info.function_name.is_empty() {
+            info_lines.push(Line::from(vec![
+                Span::styled("Function: ", Style::default().fg(Color::Cyan)),
+                Span::raw(info.function_name.clone()),
+            ]));
+        }
+
+        if let Some(ty) = &info.expr_type {
+            info_lines.push(Line::from(vec![
+                Span::styled(
+                    "Type: ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    ty.clone(),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]));
+        }
+
+        if !info.description.is_empty() {
+            info_lines.push(Line::from(""));
+            info_lines.push(Line::from(vec![Span::styled(
+                "Description: ",
+                Style::default().fg(Color::Cyan),
+            )]));
+            info_lines.push(Line::from(vec![Span::raw(info.description.clone())]));
+        }
+
+        Text::from(info_lines)
+    } else {
+        Text::from("No selection")
+    };
+
+    let info_paragraph = Paragraph::new(cursor_info)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Type Info")
+                .style(Style::default().fg(Color::Cyan)),
+        )
+        .wrap(Wrap { trim: false });
+
+    frame.render_widget(info_paragraph, chunks[1]);
 }
 
 fn draw_diff_view(frame: &mut Frame, area: Rect, app: &App) {
@@ -312,12 +472,35 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         "[s] Create"
     };
 
+    // Build mode string, including THIR mode when on THIR phase
+    let mode_str = if app.current_phase() == CompilerPhase::Thir {
+        format!(
+            "[m] Mode: {}  |  [t] THIR: {}",
+            app.visualization_mode_name(),
+            app.thir_display_mode().name()
+        )
+    } else {
+        format!("[m] Mode: {}", app.visualization_mode_name())
+    };
+
     let line1 = format!(
-        "Snapshot: {}  |  [r] Recompile  |  [m] Mode: {}  |  [Tab] Next File",
-        snapshot_help,
-        app.visualization_mode_name()
+        "Snapshot: {}  |  [r] Recompile  |  {}  |  [Tab] Next File",
+        snapshot_help, mode_str
     );
-    let line2 = "Navigate: [←→] Phases  [↑↓] Scroll  [PgUp/PgDn] Page  [Home] Top  [Wheel] Mouse  |  [q/Ctrl+C] Quit";
+
+    // Show THIR-specific navigation help when in interactive mode
+    let line2 = if app.current_phase() == CompilerPhase::Thir
+        && app.thir_display_mode() == ThirDisplayMode::Interactive
+    {
+        if app.thir_interactive_active() {
+            "Navigate: [hjkl/arrows] Cursor  [Esc] Exit cursor mode  [PgUp/PgDn] Page  |  [q/Ctrl+C] Quit"
+        } else {
+            "Navigate: [←→] Phases  [↑↓] Scroll  [t] Activate cursor  [PgUp/PgDn] Page  |  [q/Ctrl+C] Quit"
+        }
+    } else {
+        "Navigate: [←→] Phases  [↑↓] Scroll  [PgUp/PgDn] Page  [Home] Top  [Wheel] Mouse  |  [q/Ctrl+C] Quit"
+    };
+
     let line3_parts = vec![
         Span::raw("Phase Colors: "),
         Span::styled(
@@ -345,7 +528,7 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
 
     let text = vec![
         Line::from(line1),
-        Line::from(line2),
+        Line::from(line2.to_string()),
         Line::from(line3_parts),
     ];
 
