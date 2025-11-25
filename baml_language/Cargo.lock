@@ -229,6 +229,7 @@ dependencies = [
  "baml_base",
  "baml_hir",
  "salsa",
+ "text-size",
 ]
 
 [[package]]
