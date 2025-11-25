@@ -16,6 +16,8 @@ fn format_syntax_tree(node: &baml_db::baml_syntax::SyntaxNode) -> String {
 }
 
 fn format_node_recursive(node: &baml_db::baml_syntax::SyntaxNode, depth: usize) -> String {
+    use baml_db::baml_syntax::NodeOrToken;
+
     let mut result = String::new();
     let indent = "  ".repeat(depth);
 
@@ -31,8 +33,24 @@ fn format_node_recursive(node: &baml_db::baml_syntax::SyntaxNode, depth: usize) 
 
     result.push('\n');
 
-    for child in node.children() {
-        result.push_str(&format_node_recursive(&child, depth + 1));
+    // Iterate over both nodes and tokens
+    for child in node.children_with_tokens() {
+        match child {
+            NodeOrToken::Node(child_node) => {
+                result.push_str(&format_node_recursive(&child_node, depth + 1));
+            }
+            NodeOrToken::Token(token) => {
+                // Show tokens (but skip trivia for readability)
+                if !token.kind().is_trivia() {
+                    result.push_str(&format!(
+                        "{}{:?} \"{}\"\n",
+                        "  ".repeat(depth + 1),
+                        token.kind(),
+                        token.text()
+                    ));
+                }
+            }
+        }
     }
 
     result

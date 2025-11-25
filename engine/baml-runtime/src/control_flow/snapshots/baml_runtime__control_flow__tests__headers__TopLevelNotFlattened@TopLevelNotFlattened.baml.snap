@@ -25,7 +25,7 @@ expr:
         start: 66
         end: 81
   edges: {}
-mermaid: "flowchart TD\nsubgraph n0[\"TopLevelNotFlattened\"]\n  direction TB\n  n1[\"Only Child\"]\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: TopLevelNotFlattened\"]\n  direction TB\n  n1[\"1: Only Child\"]\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -50,9 +50,30 @@ flattening:
             start: 66
             end: 81
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"TopLevelNotFlattened\"]\n  direction TB\n  n1[\"Only Child\"]\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
+    json:
+      nodes:
+        "0":
+          label: TopLevelNotFlattened
+          lexical_id: "TopLevelNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 18
+            end: 94
+        "1":
+          label: Only Child
+          lexical_id: "TopLevelNotFlattened|root:0|hdr:only-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 66
+            end: 81
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: TopLevelNotFlattened\"]\n  direction TB\n  n1[\"1: Only Child\"]\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
     expr:
       nodes:
         "0":
@@ -74,7 +95,28 @@ flattening:
             start: 66
             end: 81
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"TopLevelNotFlattened\"]\n  direction TB\n  n1[\"Only Child\"]\nend\n"
+    json:
+      nodes:
+        "0":
+          label: TopLevelNotFlattened
+          lexical_id: "TopLevelNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 18
+            end: 94
+        "1":
+          label: Only Child
+          lexical_id: "TopLevelNotFlattened|root:0|hdr:only-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 66
+            end: 81
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: TopLevelNotFlattened\"]\n  direction TB\n  n1[\"1: Only Child\"]\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -98,4 +140,25 @@ flattening:
             start: 66
             end: 81
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"TopLevelNotFlattened\"]\n  direction TB\n  n1[\"Only Child\"]\nend\n"
+    json:
+      nodes:
+        "0":
+          label: TopLevelNotFlattened
+          lexical_id: "TopLevelNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 18
+            end: 94
+        "1":
+          label: Only Child
+          lexical_id: "TopLevelNotFlattened|root:0|hdr:only-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 66
+            end: 81
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: TopLevelNotFlattened\"]\n  direction TB\n  n1[\"1: Only Child\"]\nend\n"

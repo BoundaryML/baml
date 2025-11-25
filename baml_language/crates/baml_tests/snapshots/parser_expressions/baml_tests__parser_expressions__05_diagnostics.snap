@@ -1,6 +1,140 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 2318
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [parse] Expected Expected type annotation (:), found Expected type annotation (:)
+  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
+  [parse] Expected Expected return type (->), found Expected return type (->)
+  [parse] Expected Expected function body, found Expected function body
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected type annotation (:), found Expected type annotation (:)
+  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
+  [parse] Expected Expected return type (->), found Expected return type (->)
+  [parse] Expected Expected function body, found Expected function body
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected type annotation (:), found Expected type annotation (:)
+  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
+  [parse] Expected Expected return type (->), found Expected return type (->)
+  [parse] Expected Expected function body, found Expected function body
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Expected Expected top-level declaration, found Expected top-level declaration

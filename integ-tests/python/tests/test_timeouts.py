@@ -250,3 +250,39 @@ async def test_timeout_on_idle_with_mock_server():
         # Clean up server
         server.shutdown()
         server_thread.join(timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_streaming_timeout_3_seconds():
+    """Test that streaming with a timeout of 3 seconds triggers a timeout error.
+
+    This test uses a real streaming LLM function with a client that specifies a 3-second timeout.
+    """
+
+    start_time = time.time()
+
+    with pytest.raises(BamlTimeoutError) as exc_info:
+        stream = b.stream.TestDefaultStreamingTimeout(
+            "test default timeout", {}
+        )
+
+        chunk_count = 0
+        async for chunk in stream:
+            chunk_count += 1
+            print(f"Received chunk {chunk_count}: {str(chunk)[:50]}")
+
+        await stream.get_final_response()
+
+    elapsed = time.time() - start_time
+
+    error = exc_info.value
+    print(f"Default timeout test took {elapsed:.3f} seconds")
+    print(f"Error type: {type(error).__name__}")
+    print(f"Error message: {str(error)}")
+
+    # Should timeout around 3 seconds (default timeout)
+    assert 2 < elapsed < 4, f"Expected ~3s timeout, but took {elapsed}s"
+
+    # Verify it's a timeout error
+    assert "timeout" in str(error).lower()
+    assert isinstance(error, BamlTimeoutError)

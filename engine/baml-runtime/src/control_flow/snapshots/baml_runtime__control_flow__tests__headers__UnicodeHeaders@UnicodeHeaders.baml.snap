@@ -43,7 +43,7 @@ expr:
         start: 176
         end: 208
   edges: {}
-mermaid: "flowchart TD\nsubgraph n0[\"UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"你好世界\"]\n    direction TB\n    subgraph n2[\"Émojis 🎉🎊\"]\n      direction TB\n      n3[\"Special «Characters» ™\"]\n    end\n  end\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"1: 你好世界\"]\n    direction TB\n    subgraph n2[\"2: Émojis 🎉🎊\"]\n      direction TB\n      n3[\"3: Special «Characters» ™\"]\n    end\n  end\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -86,9 +86,48 @@ flattening:
             start: 176
             end: 208
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"你好世界\"]\n    direction TB\n    subgraph n2[\"Émojis 🎉🎊\"]\n      direction TB\n      n3[\"Special «Characters» ™\"]\n    end\n  end\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
+    json:
+      nodes:
+        "0":
+          label: UnicodeHeaders
+          lexical_id: "UnicodeHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 31
+            end: 222
+        "1":
+          label: 你好世界
+          lexical_id: "UnicodeHeaders|root:0|hdr:header-0:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 73
+            end: 89
+        "2":
+          label: Émojis 🎉🎊
+          lexical_id: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 122
+            end: 143
+        "3":
+          label: Special «Characters» ™
+          lexical_id: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0|hdr:special-characters:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 176
+            end: 208
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"1: 你好世界\"]\n    direction TB\n    subgraph n2[\"2: Émojis 🎉🎊\"]\n      direction TB\n      n3[\"3: Special «Characters» ™\"]\n    end\n  end\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
     expr:
       nodes:
         "0":
@@ -128,7 +167,46 @@ flattening:
             start: 176
             end: 208
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"你好世界\"]\n    direction TB\n    subgraph n2[\"Émojis 🎉🎊\"]\n      direction TB\n      n3[\"Special «Characters» ™\"]\n    end\n  end\nend\n"
+    json:
+      nodes:
+        "0":
+          label: UnicodeHeaders
+          lexical_id: "UnicodeHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 31
+            end: 222
+        "1":
+          label: 你好世界
+          lexical_id: "UnicodeHeaders|root:0|hdr:header-0:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 73
+            end: 89
+        "2":
+          label: Émojis 🎉🎊
+          lexical_id: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 122
+            end: 143
+        "3":
+          label: Special «Characters» ™
+          lexical_id: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0|hdr:special-characters:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 176
+            end: 208
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"1: 你好世界\"]\n    direction TB\n    subgraph n2[\"2: Émojis 🎉🎊\"]\n      direction TB\n      n3[\"3: Special «Characters» ™\"]\n    end\n  end\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -170,4 +248,43 @@ flattening:
             start: 176
             end: 208
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"你好世界\"]\n    direction TB\n    subgraph n2[\"Émojis 🎉🎊\"]\n      direction TB\n      n3[\"Special «Characters» ™\"]\n    end\n  end\nend\n"
+    json:
+      nodes:
+        "0":
+          label: UnicodeHeaders
+          lexical_id: "UnicodeHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 31
+            end: 222
+        "1":
+          label: 你好世界
+          lexical_id: "UnicodeHeaders|root:0|hdr:header-0:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 73
+            end: 89
+        "2":
+          label: Émojis 🎉🎊
+          lexical_id: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 122
+            end: 143
+        "3":
+          label: Special «Characters» ™
+          lexical_id: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0|hdr:special-characters:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 176
+            end: 208
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"1: 你好世界\"]\n    direction TB\n    subgraph n2[\"2: Émojis 🎉🎊\"]\n      direction TB\n      n3[\"3: Special «Characters» ™\"]\n    end\n  end\nend\n"

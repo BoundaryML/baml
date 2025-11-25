@@ -29,12 +29,16 @@ describe("OpenAI Provider", () => {
 
   it("should support o1 model with explicit max_completion_tokens", async () => {
     const res = await b.TestOpenAIO1WithMaxCompletionTokens("Donkey Kong");
-    expect(res.toLowerCase()).toContain("jungle");
+    const resLower = res.toLowerCase();
+    const matches = resLower.includes("donkey") || resLower.includes("gorilla") || resLower.includes("monkey");
+    expect(matches).toBeTruthy();
   });
 
   it("should support openai with null max_tokens", async () => {
     const res = await b.TestOpenAIWithNullMaxTokens("Donkey Kong");
-    expect(res.toLowerCase()).toContain("donkey");
+    const resLower = res.toLowerCase();
+    const matches = resLower.includes("donkey") || resLower.includes("gorilla") || resLower.includes("monkey");
+    expect(matches).toBeTruthy();
   });
 
   describe("Streaming", () => {

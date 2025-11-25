@@ -2144,6 +2144,19 @@ paths:
                 title: TestCachingResponse
                 type: string
       operationId: TestCaching
+  /call/TestDefaultStreamingTimeout:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestDefaultStreamingTimeout'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestDefaultStreamingTimeoutResponse
+                type: string
+      operationId: TestDefaultStreamingTimeout
   /call/TestFallbackClient:
     post:
       requestBody:
@@ -5745,6 +5758,22 @@ components:
             required:
             - input
             - not_cached
+            additionalProperties: false
+    TestDefaultStreamingTimeout:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestDefaultStreamingTimeoutRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     TestFallbackClient:
       required: true

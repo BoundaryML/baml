@@ -139,6 +139,7 @@ impl FunctionResultStream {
 
         let curr_call_id = call.curr_call_id();
         let call_stack = call.new_call_id_stack.clone();
+        let function_type = call.function_type.clone();
         #[cfg(not(target_arch = "wasm32"))]
         match self.tracer.finish_baml_call(call, ctx, &res) {
             Ok(id) => {}
@@ -161,6 +162,7 @@ impl FunctionResultStream {
                 },
                 Err(e) => Err(e.to_baml_error()),
             },
+            function_type,
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 

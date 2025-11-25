@@ -199,11 +199,11 @@ raw_string_literal_content_3 = @{ (!"\"###" ~ ANY)* }
 raw_string_literal_content_4 = @{ (!"\"####" ~ ANY)* }
 raw_string_literal_content_5 = @{ (!"\"#####" ~ ANY)* }
 
-raw_string_start_5 = _{ (single_word)? ~ "#####\"" }
-raw_string_start_4 = _{ (single_word)? ~ "####\"" }
-raw_string_start_3 = _{ (single_word)? ~ "###\"" }
-raw_string_start_2 = _{ (single_word)? ~ "##\"" }
-raw_string_start_1 = _{ (single_word)? ~ "#\"" }
+raw_string_start_5 = _{ "#####\"" }
+raw_string_start_4 = _{ "####\"" }
+raw_string_start_3 = _{ "###\"" }
+raw_string_start_2 = _{ "##\"" }
+raw_string_start_1 = _{ "#\"" }
 
 raw_string_literal                 =  {
     (raw_string_start_5 ~ raw_string_literal_content_5 ~ "\"#####")

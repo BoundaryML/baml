@@ -65,7 +65,7 @@ expr:
       - "2"
     "2":
       - "5"
-mermaid: "flowchart TD\nsubgraph n0[\"MultipleHeaderLevels\"]\n  direction TB\n  n1[\"Section One\"]\n  subgraph n2[\"Section Two\"]\n    direction TB\n    subgraph n3[\"Subsection 2.1\"]\n      direction TB\n      n4[\"Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: MultipleHeaderLevels\"]\n  direction TB\n  n1[\"1: Section One\"]\n  subgraph n2[\"2: Section Two\"]\n    direction TB\n    subgraph n3[\"3: Subsection 2.1\"]\n      direction TB\n      n4[\"4: Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"5: Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -130,9 +130,70 @@ flattening:
           - "2"
         "2":
           - "5"
-    mermaid: "flowchart TD\nsubgraph n0[\"MultipleHeaderLevels\"]\n  direction TB\n  n1[\"Section One\"]\n  subgraph n2[\"Section Two\"]\n    direction TB\n    subgraph n3[\"Subsection 2.1\"]\n      direction TB\n      n4[\"Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
+    json:
+      nodes:
+        "0":
+          label: MultipleHeaderLevels
+          lexical_id: "MultipleHeaderLevels|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 0
+            end: 262
+        "1":
+          label: Section One
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-one:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 48
+            end: 63
+        "2":
+          label: Section Two
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-two:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 88
+            end: 103
+        "3":
+          label: Subsection 2.1
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 128
+            end: 147
+        "4":
+          label: Subsubsection 2.1.1
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0|hdr:subsubsection-2-1-1:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 174
+            end: 199
+        "5":
+          label: Section Three
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-three:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 225
+            end: 242
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: MultipleHeaderLevels\"]\n  direction TB\n  n1[\"1: Section One\"]\n  subgraph n2[\"2: Section Two\"]\n    direction TB\n    subgraph n3[\"3: Subsection 2.1\"]\n      direction TB\n      n4[\"4: Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"5: Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
     expr:
       nodes:
         "0":
@@ -194,7 +255,68 @@ flattening:
           - "2"
         "2":
           - "5"
-    mermaid: "flowchart TD\nsubgraph n0[\"MultipleHeaderLevels\"]\n  direction TB\n  n1[\"Section One\"]\n  subgraph n2[\"Section Two\"]\n    direction TB\n    subgraph n3[\"Subsection 2.1\"]\n      direction TB\n      n4[\"Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"
+    json:
+      nodes:
+        "0":
+          label: MultipleHeaderLevels
+          lexical_id: "MultipleHeaderLevels|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 0
+            end: 262
+        "1":
+          label: Section One
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-one:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 48
+            end: 63
+        "2":
+          label: Section Two
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-two:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 88
+            end: 103
+        "3":
+          label: Subsection 2.1
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 128
+            end: 147
+        "4":
+          label: Subsubsection 2.1.1
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0|hdr:subsubsection-2-1-1:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 174
+            end: 199
+        "5":
+          label: Section Three
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-three:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 225
+            end: 242
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: MultipleHeaderLevels\"]\n  direction TB\n  n1[\"1: Section One\"]\n  subgraph n2[\"2: Section Two\"]\n    direction TB\n    subgraph n3[\"3: Subsection 2.1\"]\n      direction TB\n      n4[\"4: Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"5: Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -258,4 +380,65 @@ flattening:
           - "2"
         "2":
           - "5"
-    mermaid: "flowchart TD\nsubgraph n0[\"MultipleHeaderLevels\"]\n  direction TB\n  n1[\"Section One\"]\n  subgraph n2[\"Section Two\"]\n    direction TB\n    subgraph n3[\"Subsection 2.1\"]\n      direction TB\n      n4[\"Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"
+    json:
+      nodes:
+        "0":
+          label: MultipleHeaderLevels
+          lexical_id: "MultipleHeaderLevels|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 0
+            end: 262
+        "1":
+          label: Section One
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-one:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 48
+            end: 63
+        "2":
+          label: Section Two
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-two:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 88
+            end: 103
+        "3":
+          label: Subsection 2.1
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 128
+            end: 147
+        "4":
+          label: Subsubsection 2.1.1
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0|hdr:subsubsection-2-1-1:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 174
+            end: 199
+        "5":
+          label: Section Three
+          lexical_id: "MultipleHeaderLevels|root:0|hdr:section-three:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 225
+            end: 242
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: MultipleHeaderLevels\"]\n  direction TB\n  n1[\"1: Section One\"]\n  subgraph n2[\"2: Section Two\"]\n    direction TB\n    subgraph n3[\"3: Subsection 2.1\"]\n      direction TB\n      n4[\"4: Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"5: Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"

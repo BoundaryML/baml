@@ -63,6 +63,11 @@ class TraceEvent(BaseModel):
         return self.content.type == "function_end"
 
     @property
+    def is_set_tags(self) -> bool:
+        """Check if this is a SetTags event"""
+        return self.content.type == "intermediate" and "SetTags" in self.content.data
+
+    @property
     def function_name(self) -> str:
         """Get the function display name"""
         return self.content.data.get("function_display_name", "")
@@ -72,6 +77,13 @@ class TraceEvent(BaseModel):
         """Get tags from function_start events"""
         if self.is_function_start:
             return self.content.data.get("tags", {})
+        return {}
+
+    @property
+    def set_tags(self) -> Dict[str, str]:
+        """Get tags from SetTags events"""
+        if self.is_set_tags:
+            return self.content.data.get("SetTags", {})
         return {}
 
     @property
@@ -262,10 +274,39 @@ class TraceFileReader:
             f"✓ {child.function_name}: call_stack = [{parent.function_name}, {child.call_id}]"
         )
 
+    def get_set_tags_events(self, call_id: str) -> List[TraceEvent]:
+        """Get all SetTags events for a specific call_id"""
+        return [
+            e
+            for e in self.load_events()
+            if e.call_id == call_id and e.is_set_tags
+        ]
+
+    def get_merged_tags(self, event: TraceEvent) -> Dict[str, str]:
+        """
+        Get merged tags for an event: function_start tags + all SetTags events.
+        This matches the behavior of the Collector which merges tags from all events.
+        """
+        # Start with function_start tags
+        merged_tags = event.tags.copy()
+
+        # Find and merge all SetTags events for this call_id
+        set_tags_events = self.get_set_tags_events(event.call_id)
+        for set_tags_event in set_tags_events:
+            merged_tags.update(set_tags_event.set_tags)
+
+        return merged_tags
+
     def verify_tags(self, event: TraceEvent, expected_tags: Dict[str, str]) -> None:
-        """Verify that an event has the expected tags"""
+        """
+        Verify that an event has the expected tags.
+        This checks both function_start tags AND SetTags events for the call_id.
+        """
+        # Get merged tags (function_start + SetTags events)
+        merged_tags = self.get_merged_tags(event)
+
         for key, value in expected_tags.items():
-            assert_that(event.tags).contains_entry({key: value})
+            assert_that(merged_tags).contains_entry({key: value})
         print(f"✓ {event.function_name} has tags: {expected_tags}")
 
     def print_trace_hierarchy(
@@ -322,10 +363,13 @@ class TraceFileReader:
 
             print("".join(parts))
 
-            if show_tags and event.tags:
-                tag_indent = indent_str * (indent_level + 1)
-                for key, value in event.tags.items():
-                    print(f"{tag_indent}@{key}={value}")
+            if show_tags:
+                # Use merged tags (function_start + SetTags events)
+                merged_tags = self.get_merged_tags(event)
+                if merged_tags:
+                    tag_indent = indent_str * (indent_level + 1)
+                    for key, value in merged_tags.items():
+                        print(f"{tag_indent}@{key}={value}")
 
             # Print children
             if event.call_id in tree:
@@ -1212,6 +1256,64 @@ async def test_event_log_hook():
     flush()  # clear the hook
     on_log_event(None)
 
+# ============================================================================
+# TEST 13: Reproduce big unions issue
+# ============================================================================
+@pytest.mark.asyncio
+async def test_tracing_big_union():
+    """Test tracing a big union"""
+
+    @trace
+    async def child_function(arg: Any):
+        await asyncio.sleep(0.1)
+        return f"child: {arg}"
+
+    @trace
+    async def root_function(arg: Any):
+        result = await child_function(arg)
+        return f"root: {result}"
+
+    # Set up trace file for verification
+    trace_file = os.environ["BAML_TRACE_FILE"]
+    if os.path.exists(trace_file):
+        os.remove(trace_file)
+    print(f"Trace file: {trace_file}")
+
+    try:
+        # Clear any existing traces
+        flush()
+        _ = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.drain_stats()
+
+        res = await root_function({"a": 10, "b": { "c": 20, "d": "hi"}, "e": [1, 2, "hi", {"f": 30, "g": "hello"}]})
+        # res = await root_function([1, "hello"])
+        assert_that(res).contains("hello")
+
+        flush()
+
+        # Verify trace events using helper
+        reader = TraceFileReader(trace_file)
+        print("\n=== Trace Hierarchy ===")
+        reader.print_trace_hierarchy(show_ids=True, show_depth=True)
+        event_counts = reader.count_events()
+        print(f"Trace event counts: {event_counts}")
+        assert_that(event_counts["function_start"]).is_equal_to(2)  # root + child
+        assert_that(event_counts["function_end"]).is_equal_to(2)
+
+        # Find root and verify
+        root = reader.find_root("root_function")
+        assert_that(root).is_not_none()
+        assert_that(root.is_root()).is_true()
+        print(f"✓ root_function: call_stack = [{root.call_id}]")
+
+        # Find child and verify parent-child relationship
+        children = reader.find_children(root.call_id, "child_function")
+        assert_that(len(children)).is_equal_to(1)
+        child = children[0]
+        reader.verify_parent_child(root, child)
+
+        print("✓ Callstack verification complete!")
+    finally:
+        pass
 
 # ============================================================================
 # Cleanup fixture

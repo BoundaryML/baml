@@ -25,6 +25,10 @@ type ExampleRow = {
   };
   flattenStages?: {
     label: string;
+    graph?: {
+      source: string;
+      json: unknown;
+    };
     mermaid?: {
       source: string;
       contents: string;
@@ -122,7 +126,7 @@ async function loadExamples(): Promise<ExampleRow[]> {
     if (flatteningValue && typeof flatteningValue === "object") {
       const stages: Array<[string, string]> = [
         ["pass1_remove_implicit", "Pass 1 – Remove implicit"],
-        ["pass2_expand_branch_groups", "Pass 2 – Expand branch groups"],
+        ["pass2_hoist_branch_arms", "Pass 2 – Hoist branch arms"],
         ["pass3_flatten_scopes", "Pass 3 – Flatten arms & scopes"],
       ];
 
@@ -134,6 +138,17 @@ async function loadExamples(): Promise<ExampleRow[]> {
         const mermaidStage = (stageData as { mermaid?: unknown }).mermaid;
         const stageEntry = {
           label: stageLabel,
+          graph: (() => {
+            const jsonStage =
+              (stageData as { json?: unknown }).json ?? (stageData as { expr?: unknown }).expr;
+            if (typeof jsonStage === "undefined") {
+              return undefined;
+            }
+            return {
+              source: `${snapshotFile}::${String(stageKey)}::json`,
+              json: jsonStage,
+            };
+          })(),
           mermaid:
             typeof mermaidStage === "string"
               ? {
@@ -224,29 +239,57 @@ export default async function Home() {
                 </section>
               </div>
               <div className="space-y-4 border-t border-gray-200 px-4 py-4">
-                <h3 className="font-semibold text-sm text-gray-700 uppercase tracking-wide">Mermaid Diagrams</h3>
+                <h3 className="font-semibold text-sm text-gray-700 uppercase tracking-wide">Visualizations</h3>
                 {example.error ? (
                   <p className="text-sm text-red-600">{example.error}</p>
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    {[{ label: "Original CFG", mermaid: example.mermaid }, ...(example.flattenStages ?? [])].map(
-                      (diagram, index) => (
-                        <figure
-                          key={`${example.baseName}-diagram-${index}-${diagram.label}`}
-                          className="border border-gray-200 rounded-md overflow-hidden"
-                        >
-                          <figcaption className="px-3 py-2 text-sm font-medium bg-gray-50 border-b border-gray-200">
-                            {diagram.label}
-                          </figcaption>
-                          <div className="p-4 bg-white">
-                            {diagram.mermaid ? (
-                              <MermaidDiagram chart={diagram.mermaid.contents} className="w-full overflow-auto" />
-                            ) : (
-                              <p className="text-sm text-gray-500">No diagram data.</p>
-                            )}
-                          </div>
-                        </figure>
-                      ),
+                  <div className="space-y-6">
+                    <section className="border border-gray-200 rounded-md overflow-hidden">
+                      <header className="px-3 py-2 text-sm font-medium bg-gray-50 border-b border-gray-200">
+                        Original CFG
+                      </header>
+                      <div className="p-4 bg-white">
+                        {example.mermaid ? (
+                          <MermaidDiagram chart={example.mermaid.contents} className="w-full overflow-auto" />
+                        ) : (
+                          <p className="text-sm text-gray-500">No diagram data.</p>
+                        )}
+                      </div>
+                    </section>
+                    {!!example.flattenStages?.length && (
+                      <section className="space-y-4">
+                        <h4 className="text-base font-semibold text-gray-800">Flattening Stages</h4>
+                        {example.flattenStages.map((stage, index) => (
+                          <article
+                            key={`${example.baseName}-stage-${index}-${stage.label}`}
+                            className="border border-gray-200 rounded-md overflow-hidden"
+                          >
+                            <header className="px-3 py-2 text-sm font-medium bg-gray-50 border-b border-gray-200">
+                              {stage.label}
+                            </header>
+                            <div className="grid gap-4 md:grid-cols-2 p-4 bg-white">
+                              <div className="space-y-2">
+                                <h5 className="font-semibold text-xs text-gray-700 uppercase tracking-wide">JSON</h5>
+                                <pre className="overflow-auto rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-800">
+                                  <code>
+                                    {stage.graph
+                                      ? JSON.stringify(stage.graph.json, null, 2)
+                                      : "// No JSON snapshot available."}
+                                  </code>
+                                </pre>
+                              </div>
+                              <div className="space-y-2">
+                                <h5 className="font-semibold text-xs text-gray-700 uppercase tracking-wide">Mermaid</h5>
+                                {stage.mermaid ? (
+                                  <MermaidDiagram chart={stage.mermaid.contents} className="w-full overflow-auto" />
+                                ) : (
+                                  <p className="text-sm text-gray-500">No diagram data.</p>
+                                )}
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </section>
                     )}
                   </div>
                 )}

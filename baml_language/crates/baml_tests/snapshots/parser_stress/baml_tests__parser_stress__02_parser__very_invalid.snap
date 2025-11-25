@@ -1,0 +1,48 @@
+---
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BodyTorture"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT "
+  let x = ¿"
+          KW_LET "let"
+          WORD "x"
+          EQUALS "="
+          ERROR_TOKEN "¿"
+        SEMICOLON ";"
+        WHILE_STMT
+          KW_WHILE "while"
+          OBJECT_LITERAL
+            ERROR_TOKEN "\"
+            L_BRACE "{"
+            OBJECT_FIELD "
+      x"
+              WORD "x"
+            PLUS_EQUALS "+="
+            INTEGER_LITERAL "1"
+            SEMICOLON ";"
+            R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+  Expected Expected expression, found Expected expression
+  Expected Expected expression, found Expected expression
+  Expected Expected expression, found Expected expression
+  Expected Expected Colon, found PlusEquals, found Expected Colon, found PlusEquals
+  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
+  Expected Expected field name or '}', found Expected field name or '}'
+  Expected Expected field name or '}', found Expected field name or '}'
+  Expected Expected block after while condition, found Expected block after while condition

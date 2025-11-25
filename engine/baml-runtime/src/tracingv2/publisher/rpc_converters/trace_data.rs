@@ -7,23 +7,35 @@ use baml_types::{
     type_meta, HasType,
 };
 
-use super::{IRRpcState, IntoRpcEvent};
+use super::{types::to_rpc_event_without_types, IRRpcState, IntoRpcEvent};
 
-impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
+impl<'a, T: std::fmt::Debug + HasType<type_meta::NonStreaming>>
+    IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
     for baml_types::tracing::events::FunctionStart<T>
 {
     fn to_rpc_event(
         &'a self,
         lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::TraceData<'a> {
+        // For Native functions, skip generating expensive type references
+        // For LLM functions, include full type information
+        let args: Vec<(String, baml_rpc::runtime_api::BamlValue)> =
+            if self.function_type == FunctionType::Native {
+                self.args
+                    .iter()
+                    .map(|(k, v)| (k.clone(), to_rpc_event_without_types(v, lookup)))
+                    .collect()
+            } else {
+                self.args
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.to_rpc_event(lookup)))
+                    .collect()
+            };
+
         baml_rpc::runtime_api::TraceData::FunctionStart {
             function_display_name: self.name.clone(),
             function_type: function_type_to_rpc(&self.function_type),
-            args: self
-                .args
-                .iter()
-                .map(|(k, v)| (k.clone(), v.to_rpc_event(lookup)))
-                .collect(),
+            args,
             is_stream: self.is_stream,
             tags: self
                 .options
@@ -90,7 +102,8 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::EvaluationContext>
         }
     }
 }
-impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
+impl<'a, T: std::fmt::Debug + HasType<type_meta::NonStreaming>>
+    IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
     for baml_types::tracing::events::FunctionEnd<'a, T>
 {
     fn to_rpc_event(
@@ -98,16 +111,24 @@ impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime
         lookup: &(impl IRRpcState + ?Sized),
     ) -> baml_rpc::runtime_api::TraceData<'a> {
         let end = match self {
-            baml_types::tracing::events::FunctionEnd::Success(baml_value_with_meta) => {
-                baml_rpc::runtime_api::FunctionEnd::Success {
-                    result: baml_value_with_meta.to_rpc_event(lookup),
-                }
+            baml_types::tracing::events::FunctionEnd::Success {
+                value,
+                function_type,
+            } => {
+                // For Native functions, skip generating expensive type references
+                let result = if *function_type == FunctionType::Native {
+                    to_rpc_event_without_types(value, lookup)
+                } else {
+                    value.to_rpc_event(lookup)
+                };
+                baml_rpc::runtime_api::FunctionEnd::Success { result }
             }
-            baml_types::tracing::events::FunctionEnd::Error(baml_error) => {
-                baml_rpc::runtime_api::FunctionEnd::Error {
-                    error: baml_error.to_rpc_event(lookup),
-                }
-            }
+            baml_types::tracing::events::FunctionEnd::Error {
+                error,
+                function_type: _,
+            } => baml_rpc::runtime_api::FunctionEnd::Error {
+                error: error.to_rpc_event(lookup),
+            },
         };
 
         baml_rpc::runtime_api::TraceData::FunctionEnd(end)

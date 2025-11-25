@@ -8,7 +8,10 @@ use anyhow::Result;
 use notify_debouncer_full::{new_debouncer, notify::*};
 
 use super::serve::Server;
-use crate::{cli::generate::GenerateArgs, BamlRuntime};
+use crate::{
+    cli::{dotenv::DotenvArgs, generate::GenerateArgs},
+    BamlRuntime,
+};
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct DevArgs {
@@ -16,6 +19,8 @@ pub struct DevArgs {
     pub from: PathBuf,
     #[arg(long, help = "port to expose BAML on", default_value = "2024")]
     port: u16,
+    #[command(flatten)]
+    dotenv: DotenvArgs,
 }
 
 impl DevArgs {
@@ -24,6 +29,8 @@ impl DevArgs {
         defaults: crate::RuntimeCliDefaults,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<()> {
+        self.dotenv.load()?;
+
         baml_log::info!("Starting BAML development server on port {}", self.port);
 
         let t = BamlRuntime::get_tokio_singleton()?;

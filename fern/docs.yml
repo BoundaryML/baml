@@ -486,6 +486,9 @@ navigation:
           - page: Symbol Tuning
             icon: fa-regular fa-adjust
             path: 01-guide/06-prompt-engineering/symbol-tuning.mdx
+          - page: Token Optimization
+            icon: fa-regular fa-coins
+            path: 01-guide/06-prompt-engineering/token-optimization.mdx
           - page: PII Data Extraction / Scrubbing
             icon: fa-regular fa-user-cog
             path: 01-guide/06-prompt-engineering/pii-data-extraction.mdx
@@ -778,9 +781,9 @@ navigation:
             path: 03-reference/baml/clients/providers/azure.mdx
           - page: "openai-generic"
             path: 03-reference/baml/clients/providers/openai-generic.mdx
-          - page: "Azure AI Foundary (openai-generic)"
-            slug: azure-ai-foundary
-            path: 03-reference/baml/clients/providers/azure-ai-foundary.mdx
+          - page: "Microsoft Foundry (openai-generic)"
+            slug: microsoft-foundry
+            path: 03-reference/baml/clients/providers/microsoft-foundry.mdx
           - page: "Cerebras (openai-generic)"
             slug: cerebras
             path: 03-reference/baml/clients/providers/cerebras.mdx
@@ -839,6 +842,8 @@ navigation:
         contents:
           - page: What is jinja?
             path: 03-reference/baml/prompt-syntax/what-is-jinja.mdx
+          - page: Jinja Filters
+            path: 03-reference/baml/prompt-syntax/jinja-filters.mdx
           - page: "ctx.output_format"
             path: 03-reference/baml/prompt-syntax/output-format.mdx
           - page: "ctx.client"
@@ -1164,8 +1169,8 @@ redirects:
     destination: "/ref/boundary-extraction-api/extract"
   - source: "/document-extraction-api/overview/docs/api/extraction-examples"
     destination: "/ref/boundary-extraction-api/extract/examples"
-  - source: "/ref/llm-client-providers/openai-generic-azure-ai-foundary"
-    destination: "/ref/llm-client-providers/azure-ai-foundary"
+  - source: "/ref/llm-client-providers/openai-generic-microsoft-foundry"
+    destination: "/ref/llm-client-providers/microsoft-foundry"
   - source: "/ref/llm-client-providers/openai-generic-groq"
     destination: "/ref/llm-client-providers/groq"
   - source: "/ref/llm-client-providers/openai-generic-hugging-face"

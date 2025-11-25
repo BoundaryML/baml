@@ -1,0 +1,18 @@
+class Point {
+  x int
+  y int
+}
+
+class Vec2D {
+  p Point
+  q Point
+}
+
+function point() -> Point {
+  Point { x: 1, y: 2 }
+}
+
+// Nested constructor
+function vec2d() -> Vec2D {
+  Vec2D { p: Point { x: 1, y: 2 }, q: Point { x: 3, y: 4 } }
+}

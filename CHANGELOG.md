@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.214.0](https://github.com/boundaryml/baml/compare/0.213.0..0.214.0) - 2025-11-24
+
+### Bug Fixes
+- Reduce logging in playground to prevent freezes - ([43960d4](https://github.com/boundaryml/baml/commit/43960d472466bd0ae16c73af222043f9424ed63b)) - Aaron Villalpando
+- fix ask baaaml (#2711)- ([ef62656](https://github.com/boundaryml/baml/commit/ef6265649d8ab593527d9d7646c5c2eb41fd83fc)) - Greg Hale
+
+### Documentation
+
+- documentation fixups (#2735)
+- Fixing doc - invalid options for gpt-4.1 model (#2708) - ([5d45cc9](https://github.com/boundaryml/baml/commit/5d45cc9dccbf334062e60fedde140d8e69c75bd9)) - yasonk
+- Add docs for OpenAI region selection via base_url
+- Fix docs for media constructor functions
+- Add example code and description for `media_url_handler` - ([386a5d9](https://github.com/boundaryml/baml/commit/386a5d915c6ff2c5e15f36aa76a2f9396b85a799)) - Greg Hale
+
+### Features
+
+- **(baml)** implement static control flow visualizer (#2716) - ([4c9d507](https://github.com/boundaryml/baml/commit/4c9d50795563748952263a1ce4423f62460e2923)) - Sam Lijin
+- **(cli)** load dotenv in baml-cli dev and baml-cli serve (#2703) - ([e6fff13](https://github.com/boundaryml/baml/commit/e6fff13b7a7685e987c4a68a626984b7495ece33)) - Sam Lijin
+- **(cli)** hide internal subcommands by default (#2704) - ([a61d28c](https://github.com/boundaryml/baml/commit/a61d28c7b2e06059875605c3ea30d37aad17a7a2)) - Sam Lijin
+- **(engine)** Compress serialized logs for boundary studio (#2729) - ([d75255a](https://github.com/boundaryml/baml/commit/d75255a2212c6662f2512a69e4ad132ebfeff020)) - hellovai
+- Add toon Jinja filter for token-efficient data serialization (#2720) - ([c2f31a4](https://github.com/boundaryml/baml/commit/c2f31a4c1d2264c9caca610a5f326dc3e547f8d1)) - hellovai
+
+### Miscellaneous Chores
+
+- fix zed release infra (#2705) - ([8aae697](https://github.com/boundaryml/baml/commit/8aae69735617fd9d95e95fe8e543671358d8eb68)) - Sam Lijin
+
+
+## [0.213.0](https://github.com/boundaryml/baml/compare/0.212.0..0.213.0) - 2025-11-05
+
+### Bug Fixes
+
+- fix bug in baml-cli init not working with claude code (#2697) ([0333467](https://github.com/boundaryml/baml/commit/03334676728ba27704a4e53be062807fb39b2854)) - aaronvg
+- select earliest successful LLM call by lexicographic request_id order (#2692) - ([516ef6f](https://github.com/boundaryml/baml/commit/516ef6f76f97774734f4d0a86fc33aae01fa550d)) - Shawn McDonald
+- default request timeout is too low (#2698) - ([50c7026](https://github.com/boundaryml/baml/commit/50c7026dc338dedd3b64d3d03129493d40099259)) - aaronvg
+- Fix timeout exceptions for streaming LLM calls (#2699) - ([2b751db](https://github.com/boundaryml/baml/commit/2b751db4f97e15dc7afa6b5670b0e4b380eece2c)) - Greg Hale
+- [Python] expose BamlAbortError (#2674) - ([1b6efb3](https://github.com/boundaryml/baml/commit/1b6efb3931cd9d5b68de4949f8fff16e3d007a40)) - hellovai
+
+### Features
+- expose better error messages out of the runtime so folks can better understand isseus (i/e can plumb cancel messages more correctly) (#2679) - ([af2d872](https://github.com/boundaryml/baml/commit/af2d872cd93ccd4123a79fdcef61a4f5e9989172)) - hellovai
+- bedrock video support (#2681) - ([38cfe9b](https://github.com/boundaryml/baml/commit/38cfe9b2eb9196c90558e4461947d270e894f2e0)) - Sam Lijin
+
+### Miscellaneous Chores
+
+- add apache-2 license to engine/zed (#2670) - ([c1ec923](https://github.com/boundaryml/baml/commit/c1ec923b9be2e1f3ac2b3dddb7f7c0acc27d5132)) - Sam Lijin
+
+
 ## [0.212.0](https://github.com/boundaryml/baml/compare/0.211.2..0.212.0) - 2025-10-27
 
 ### Bug Fixes

@@ -81,7 +81,7 @@ expr:
   edges:
     "1":
       - "2"
-mermaid: "flowchart TD\nsubgraph n0[\"ExampleHeaders\"]\n  direction TB\n  n1[\"setup\"]\n  subgraph n2[\"branching\"]\n    direction TB\n    subgraph n3[\"BranchGroup: if (x > 0)\"]\n      direction TB\n      subgraph n4[\"BranchArm: if (x > 0)\"]\n        direction TB\n        n5[\"positive path\"]\n      end\n      subgraph n6[\"BranchArm: else\"]\n        direction TB\n        n7[\"non-positive path\"]\n      end\n    end\n  end\n  n1 --> n2\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: ExampleHeaders\"]\n  direction TB\n  n1[\"1: setup\"]\n  subgraph n2[\"2: branching\"]\n    direction TB\n    subgraph n3[\"3: BranchGroup: if (x > 0)\"]\n      direction TB\n      subgraph n4[\"4: BranchArm: if (x > 0)\"]\n        direction TB\n        n5[\"5: positive path\"]\n      end\n      subgraph n6[\"6: BranchArm: else\"]\n        direction TB\n        n7[\"7: non-positive path\"]\n      end\n    end\n  end\n  n1 --> n2\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -162,10 +162,7 @@ flattening:
       edges:
         "1":
           - "2"
-    mermaid: "flowchart TD\nsubgraph n0[\"ExampleHeaders\"]\n  direction TB\n  n1[\"setup\"]\n  subgraph n2[\"branching\"]\n    direction TB\n    subgraph n3[\"BranchGroup: if (x > 0)\"]\n      direction TB\n      subgraph n4[\"BranchArm: if (x > 0)\"]\n        direction TB\n        n5[\"positive path\"]\n      end\n      subgraph n6[\"BranchArm: else\"]\n        direction TB\n        n7[\"non-positive path\"]\n      end\n    end\n  end\n  n1 --> n2\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
-    expr:
+    json:
       nodes:
         "0":
           label: ExampleHeaders
@@ -242,10 +239,170 @@ flattening:
       edges:
         "1":
           - "2"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: ExampleHeaders\"]\n  direction TB\n  n1[\"1: setup\"]\n  subgraph n2[\"2: branching\"]\n    direction TB\n    subgraph n3[\"3: BranchGroup: if (x > 0)\"]\n      direction TB\n      subgraph n4[\"4: BranchArm: if (x > 0)\"]\n        direction TB\n        n5[\"5: positive path\"]\n      end\n      subgraph n6[\"6: BranchArm: else\"]\n        direction TB\n        n7[\"7: non-positive path\"]\n      end\n    end\n  end\n  n1 --> n2\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: ExampleHeaders
+          lexical_id: "ExampleHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 0
+            end: 212
+        "1":
+          label: setup
+          lexical_id: "ExampleHeaders|root:0|hdr:setup:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 49
+            end: 58
+        "2":
+          label: branching
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 83
+            end: 96
+        "3":
+          label: if (x > 0)
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 101
+            end: 210
+        "4":
+          label: if (x > 0)
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 112
+            end: 156
+        "5":
+          label: positive path
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 122
+            end: 140
+        "6":
+          label: else
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 162
+            end: 210
+        "7":
+          label: non-positive path
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 172
+            end: 194
+      edges:
+        "1":
+          - "2"
         "3":
           - "4"
           - "6"
-    mermaid: "flowchart TD\nsubgraph n0[\"ExampleHeaders\"]\n  direction TB\n  n1[\"setup\"]\n  subgraph n2[\"branching\"]\n    direction TB\n    subgraph n3[\"BranchGroup: if (x > 0)\"]\n      direction TB\n      subgraph n4[\"BranchArm: if (x > 0)\"]\n        direction TB\n        n5[\"positive path\"]\n      end\n      subgraph n6[\"BranchArm: else\"]\n        direction TB\n        n7[\"non-positive path\"]\n      end\n    end\n    n3 --> n4\n    n3 --> n6\n  end\n  n1 --> n2\nend\n"
+    json:
+      nodes:
+        "0":
+          label: ExampleHeaders
+          lexical_id: "ExampleHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 0
+            end: 212
+        "1":
+          label: setup
+          lexical_id: "ExampleHeaders|root:0|hdr:setup:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 49
+            end: 58
+        "2":
+          label: branching
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 83
+            end: 96
+        "3":
+          label: if (x > 0)
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 101
+            end: 210
+        "4":
+          label: if (x > 0)
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 112
+            end: 156
+        "5":
+          label: positive path
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 122
+            end: 140
+        "6":
+          label: else
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 162
+            end: 210
+        "7":
+          label: non-positive path
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 172
+            end: 194
+      edges:
+        "1":
+          - "2"
+        "3":
+          - "4"
+          - "6"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: ExampleHeaders\"]\n  direction TB\n  n1[\"1: setup\"]\n  subgraph n2[\"2: branching\"]\n    direction TB\n    n3[\"3: BranchGroup: if (x > 0)\"]\n    subgraph n4[\"4: BranchArm: if (x > 0)\"]\n      direction TB\n      n5[\"5: positive path\"]\n    end\n    subgraph n6[\"6: BranchArm: else\"]\n      direction TB\n      n7[\"7: non-positive path\"]\n    end\n    n3 --> n4\n    n3 --> n6\n  end\n  n1 --> n2\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -290,7 +447,7 @@ flattening:
           label: positive path
           lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
           node_type: header
-          parent: "3"
+          parent: "2"
           span:
             file: src/control_flow/testdata/ExampleHeaders.baml
             start: 122
@@ -299,7 +456,7 @@ flattening:
           label: non-positive path
           lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
           node_type: header
-          parent: "3"
+          parent: "2"
           span:
             file: src/control_flow/testdata/ExampleHeaders.baml
             start: 172
@@ -310,4 +467,66 @@ flattening:
         "3":
           - "5"
           - "7"
-    mermaid: "flowchart TD\nsubgraph n0[\"ExampleHeaders\"]\n  direction TB\n  n1[\"setup\"]\n  subgraph n2[\"branching\"]\n    direction TB\n    subgraph n3[\"BranchGroup: if (x > 0)\"]\n      direction TB\n      n4[\"positive path\"]\n      n5[\"non-positive path\"]\n    end\n    n3 --> n4\n    n3 --> n5\n  end\n  n1 --> n2\nend\n"
+    json:
+      nodes:
+        "0":
+          label: ExampleHeaders
+          lexical_id: "ExampleHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 0
+            end: 212
+        "1":
+          label: setup
+          lexical_id: "ExampleHeaders|root:0|hdr:setup:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 49
+            end: 58
+        "2":
+          label: branching
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 83
+            end: 96
+        "3":
+          label: if (x > 0)
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 101
+            end: 210
+        "5":
+          label: positive path
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 122
+            end: 140
+        "7":
+          label: non-positive path
+          lexical_id: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 172
+            end: 194
+      edges:
+        "1":
+          - "2"
+        "3":
+          - "5"
+          - "7"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: ExampleHeaders\"]\n  direction TB\n  n1[\"1: setup\"]\n  subgraph n2[\"2: branching\"]\n    direction TB\n    n3[\"3: BranchGroup: if (x > 0)\"]\n    n4[\"5: positive path\"]\n    n5[\"7: non-positive path\"]\n    n3 --> n4\n    n3 --> n5\n  end\n  n1 --> n2\nend\n"

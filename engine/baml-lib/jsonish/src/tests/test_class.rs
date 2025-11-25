@@ -74,7 +74,7 @@ test_deserializer!(
     test_obj_from_str_with_string_foo,
     FOO_FILE,
     r#"
-{  
+{
   "foo": "Here is how you can build the API call:\n```json\n{\n  \"foo\": {\n    \"world\": [\n      \"bar\"\n    ]\n  }\n}\n```"
 }
 "#,
@@ -137,14 +137,14 @@ test_deserializer!(
         "two": "hello"
     }
     ```
-    
+
     ```json
         {
             "test2": {
                 "key2": "value"
             },
             "test21": [
-            ]    
+            ]
         }
     ```"#,
     TypeIR::class("Foo"),
@@ -196,7 +196,7 @@ test_deserializer!(
         }
     }
     ```
-    
+
     and this
     ```json
     {
@@ -217,7 +217,7 @@ test_deserializer!(
             "a": "hi"
         }
     }
-    
+
     and this
     {
         "foo": {
@@ -234,10 +234,10 @@ class Resume {
     name string
     email string?
     phone string?
-    experience string[] 
-    education string[] 
-    skills string[] 
-    
+    experience string[]
+    education string[]
+    skills string[]
+
     @@stream.not_null
 }
 "#;
@@ -355,7 +355,7 @@ const CLASS_SIMPLE: &str = r#"
 class SimpleTest {
     answer Answer
 }
-  
+
 class Answer {
     content float
 }
@@ -379,7 +379,7 @@ class Resume {
     education Education[]
     skills string[]
   }
-  
+
   class Education {
     school string
     degree string
@@ -525,7 +525,7 @@ test_deserializer!(
       // Calculate the circumference of a circle based on the diameter.
       function_name: 'circle.calculate_circumference',
       // The diameter of the circle. (with a ", ")
-      diameter: 10, 
+      diameter: 10,
     }
     "#,
     TypeIR::class("Function2"),
@@ -543,7 +543,7 @@ test_deserializer!(
       // Calculate the circumference of a circle based on the diameter.
       function_name: 'circle.calculate_circumference',
       // The diameter of the circle. (with a ", ")
-      diameter: 10, 
+      diameter: 10,
       Some key: "Some value"
     }
     and this
@@ -816,95 +816,95 @@ enum ColumnType  {
 enum BookmarkType {
     Bookmark @alias("bookmark")
   }
-  
+
   enum BreadcrumbType {
     Breadcrumb @alias("breadcrumb")
   }
-  
+
   enum BulletedListItemType {
     BulletedListItem @alias("bulleted_list_item")
   }
-  
+
   enum CalloutType {
     Callout @alias("callout")
   }
-  
+
   enum CodeType {
     Code @alias("code")
   }
-  
+
   enum ColumnListType {
     ColumnList @alias("column_list")
   }
-  
+
   enum DividerType {
     Divider @alias("divider")
   }
-  
+
   enum EmbedType {
     Embed @alias("embed")
   }
-  
+
   enum EquationType {
     Equation @alias("equation")
   }
-  
+
   enum FileType {
     File @alias("file")
   }
-  
+
   enum Heading1Type {
     Heading1 @alias("heading1")
   }
-  
+
   enum Heading2Type {
     Heading2 @alias("heading2")
   }
-  
+
   enum Heading3Type {
     Heading3 @alias("heading_3")
   }
-  
+
   enum ImageFileType {
     ImageFile @alias("image_file")
   }
-  
+
   enum NumberedListItemType {
     NumberedListItem @alias("numbered_list_item")
   }
-  
+
   enum ParagraphType {
     Paragraph @alias("paragraph")
   }
-  
+
   enum PdfType {
     Pdf @alias("pdf")
   }
-  
+
   enum QuoteType {
     Quote @alias("quote")
   }
-  
+
   enum RichTextType {
     RichText @alias("text")
   }
-  
+
   enum TableType {
     Table @alias("table")
   }
-  
+
   enum TableOfContentsType {
     TableOfContents @alias("table_of_contents")
   }
-  
+
   enum ToDoType {
     ToDo @alias("to_do")
   }
-  
+
   enum ToggleType {
     Toggle @alias("toggle")
   }
-  
+
   enum VideoType {
     Video @alias("video")
   }
@@ -1059,7 +1059,7 @@ class DoCommandACReturnType {
   "#,
   r#"
 Certainly! I'll redesign the UI to make it more appealing to a female audience. I'll focus on color schemes, fonts, and imagery that are generally more attractive to women. Here's my thought process and suggestions:
-    
+
 Thoughts: "The current design is quite neutral. We can make it more feminine by using softer colors, curved shapes, and adding some playful elements. We should also consider updating the trending items to be more relevant to a female audience."
 
 "We can use a pastel color scheme, which is often associated with femininity. Let's go with a soft pink as the primary color, with accents of lavender and mint green."
@@ -1195,7 +1195,7 @@ test_deserializer!(
         "pointer": null
       }
     },
-  
+
     Anything else I can help with?
   "#,
   TypeIR::class("Foo"),
@@ -1216,7 +1216,7 @@ test_deserializer!(
     {
       "pointer": {
         pointer: null,
-  
+
     Anything else I can help with?
   "#,
   TypeIR::class("Foo"),
@@ -1255,7 +1255,7 @@ test_deserializer!(
   r#"class Foo {
       b Bar | int
   }
-  
+
   class Bar {
     f Foo | int
   }
@@ -1658,5 +1658,20 @@ test_deserializer!(
       "answer": {
           "content": 78.54
       }
+  }
+);
+
+test_deserializer!(
+  test_skip_field,
+  r#"class SkipField {
+    dont_skip string
+    skip_this_one string? @skip
+  }
+  "#,
+  r#"{"dont_skip": "ok"}"#,
+  TypeIR::class("SkipField"),
+  {
+    "dont_skip": "ok",
+    "skip_this_one": null
   }
 );

@@ -6,8 +6,7 @@ use text_size::{TextRange, TextSize};
 
 /// Token kinds for BAML.
 ///
-/// The lexer produces structural tokens only - it does not detect keywords.
-/// The parser is responsible for checking if a Word token is a keyword.
+/// The lexer recognizes keywords as distinct tokens per the BAML specification.
 ///
 /// # Note on Unquoted Strings and Raw Strings
 ///
@@ -36,9 +35,59 @@ use text_size::{TextRange, TextSize};
 /// This keeps the lexer simple, context-free, and fast.
 #[derive(Logos, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenKind {
+    // ============ Keywords ============
+    // Top-level declaration keywords
+    #[token("class")]
+    Class,
+    #[token("enum")]
+    Enum,
+    #[token("function")]
+    Function,
+    #[token("client")]
+    Client,
+    #[token("generator")]
+    Generator,
+    #[token("test")]
+    Test,
+    #[token("retry_policy")]
+    RetryPolicy,
+    #[token("template_string")]
+    TemplateString,
+    #[token("type_builder")]
+    TypeBuilder,
+
+    // Control flow keywords
+    #[token("if")]
+    If,
+    #[token("else")]
+    Else,
+    #[token("for")]
+    For,
+    #[token("while")]
+    While,
+    #[token("let")]
+    Let,
+    #[token("in")]
+    In,
+    #[token("break")]
+    Break,
+    #[token("continue")]
+    Continue,
+    #[token("return")]
+    Return,
+
+    // Other keywords
+    #[token("watch")]
+    Watch,
+    #[token("instanceof")]
+    Instanceof,
+    #[token("env")]
+    Env,
+    #[token("dynamic")]
+    Dynamic,
+
     // ============ Identifiers and Literals ============
-    /// Any identifier-like word (includes what were keywords!)
-    /// Parser will check text to determine if it's a keyword
+    /// Any identifier-like word (non-keyword)
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*")]
     Word,
 
@@ -56,11 +105,11 @@ pub enum TokenKind {
 
     /// Integer literal
     #[regex(r"[0-9]+")]
-    Integer,
+    IntegerLiteral,
 
     /// Float literal (must come after Integer in regex priority)
     #[regex(r"[0-9]+\.[0-9]+")]
-    Float,
+    FloatLiteral,
 
     // ============ Operators and Punctuation ============
 
@@ -89,6 +138,8 @@ pub enum TokenKind {
     Semicolon,
     #[token(".")]
     Dot,
+    #[token("$")]
+    Dollar,
 
     // Operators (order matters! Longer tokens first)
     #[token("->")]
@@ -176,13 +227,6 @@ pub enum TokenKind {
     #[token("%")]
     Percent,
 
-    // ============ Comments (for lossless lexing) ============
-    #[regex(r"//[^\n]*")]
-    LineComment,
-
-    #[regex(r"/\*([^*]|\*[^/])*\*/")]
-    BlockComment,
-
     // ============ Whitespace (preserved for losslessness) ============
     #[regex(r"[ \t]+")]
     Whitespace,
@@ -249,38 +293,6 @@ mod tests {
         let tokens = lex_lossless(source, file_id);
         let reconstructed = reconstruct_source(&tokens);
         assert_eq!(source, reconstructed);
-    }
-
-    #[test]
-    fn test_words_not_keywords() {
-        let source = "function class enum client";
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
-
-        // All should be Word tokens now
-        assert_eq!(
-            kinds,
-            vec![
-                TokenKind::Word,
-                TokenKind::Word,
-                TokenKind::Word,
-                TokenKind::Word,
-            ]
-        );
-
-        // Verify text is preserved
-        let words: Vec<&str> = tokens
-            .iter()
-            .filter(|t| t.kind == TokenKind::Word)
-            .map(|t| t.text.as_str())
-            .collect();
-        assert_eq!(words, vec!["function", "class", "enum", "client"]);
     }
 
     #[test]
@@ -617,6 +629,84 @@ mod tests {
         for kind in kinds.iter().skip(kinds.len() - 5) {
             assert_eq!(*kind, TokenKind::Hash);
         }
+        assert_eq!(reconstruct_source(&tokens), source);
+    }
+
+    #[test]
+    fn test_url_in_string() {
+        // Test that URLs with // inside strings are not treated as comments
+        let source = r#""https://google.com""#;
+        let file_id = FileId::new(0);
+        let tokens = lex_lossless(source, file_id);
+
+        let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind).collect();
+
+        // Should be: Quote, Word("https"), Colon, Slash, Slash, Word("google"), Dot, Word("com"), Quote
+        // NOT: Quote, Word("https"), Colon, LineComment
+        assert_eq!(kinds[0], TokenKind::Quote);
+        assert_eq!(kinds[1], TokenKind::Word); // https
+        assert_eq!(kinds[2], TokenKind::Colon);
+        assert_eq!(kinds[3], TokenKind::Slash); // First slash
+        assert_eq!(kinds[4], TokenKind::Slash); // Second slash (NOT LineComment!)
+        assert_eq!(kinds[5], TokenKind::Word); // google
+        assert_eq!(kinds[6], TokenKind::Dot);
+        assert_eq!(kinds[7], TokenKind::Word); // com
+        assert_eq!(kinds[8], TokenKind::Quote);
+
+        // Verify lossless
+        assert_eq!(reconstruct_source(&tokens), source);
+    }
+
+    #[test]
+    fn test_line_comment() {
+        // Test that actual line comments (outside strings) are lexed as individual tokens
+        let source = "// This is a comment\ncode";
+        let file_id = FileId::new(0);
+        let tokens = lex_lossless(source, file_id);
+
+        // Should be: Slash, Slash, Whitespace, Word("This"), ..., Newline, Word("code")
+        // The parser will recognize Slash Slash as a comment pattern
+        assert_eq!(tokens[0].kind, TokenKind::Slash);
+        assert_eq!(tokens[1].kind, TokenKind::Slash);
+
+        // Find the newline
+        let newline_pos = tokens
+            .iter()
+            .position(|t| t.kind == TokenKind::Newline)
+            .unwrap();
+        assert!(newline_pos > 2); // Should have comment content before newline
+
+        // After newline should be the code
+        assert_eq!(tokens[newline_pos + 1].kind, TokenKind::Word);
+        assert_eq!(tokens[newline_pos + 1].text, "code");
+
+        // Verify lossless
+        assert_eq!(reconstruct_source(&tokens), source);
+    }
+
+    #[test]
+    fn test_block_comment() {
+        // Test that block comments are lexed as individual tokens
+        let source = "/* block comment */ code";
+        let file_id = FileId::new(0);
+        let tokens = lex_lossless(source, file_id);
+
+        // Should be: Slash, Star, ..., Star, Slash, Whitespace, Word("code")
+        // The parser will recognize Slash Star as block comment start
+        assert_eq!(tokens[0].kind, TokenKind::Slash);
+        assert_eq!(tokens[1].kind, TokenKind::Star);
+
+        // Find the closing */
+        let mut star_slash_pos = None;
+        for i in 0..tokens.len() - 1 {
+            if tokens[i].kind == TokenKind::Star && tokens[i + 1].kind == TokenKind::Slash {
+                star_slash_pos = Some(i);
+                break;
+            }
+        }
+        assert!(star_slash_pos.is_some());
+
+        // Verify lossless
         assert_eq!(reconstruct_source(&tokens), source);
     }
 }

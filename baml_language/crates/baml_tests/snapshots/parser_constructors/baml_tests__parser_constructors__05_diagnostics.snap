@@ -1,0 +1,7 @@
+---
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 1031
+expression: output
+---
+=== DIAGNOSTICS ===
+No errors found.

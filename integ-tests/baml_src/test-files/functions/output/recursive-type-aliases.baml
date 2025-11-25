@@ -8,7 +8,7 @@ type LinkedListAlias = LinkedListAliasNode
 
 function AliasThatPointsToRecursiveType(data: LinkedListAlias) -> LinkedListAlias {
     client "openai/gpt-4o"
-    prompt r#"
+    prompt #"
       Return the given linked list back:
 
       {{ data }}
@@ -24,7 +24,7 @@ class ClassToRecAlias {
 
 function ClassThatPointsToRecursiveClassThroughAlias(cls: ClassToRecAlias) -> ClassToRecAlias {
     client "openai/gpt-4o"
-    prompt r#"
+    prompt #"
       Return the given object back:
 
       {{ cls }}
@@ -44,7 +44,7 @@ type NodeIndirection = NodeWithAliasIndirection
 
 function RecursiveClassWithAliasIndirection(cls: NodeWithAliasIndirection) -> NodeWithAliasIndirection {
     client "openai/gpt-4o"
-    prompt r#"
+    prompt #"
       Return the given object back:
 
       {{ cls }}

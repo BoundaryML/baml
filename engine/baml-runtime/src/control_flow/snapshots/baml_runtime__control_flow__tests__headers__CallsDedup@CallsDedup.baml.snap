@@ -47,7 +47,7 @@ expr:
       - "2"
     "2":
       - "3"
-mermaid: "flowchart TD\nsubgraph n0[\"CallsDedup\"]\n  direction TB\n  n1[\"Step A\"]\n  n2[\"Step B\"]\n  n3[\"Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: CallsDedup\"]\n  direction TB\n  n1[\"1: Step A\"]\n  n2[\"2: Step B\"]\n  n3[\"3: Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -94,9 +94,52 @@ flattening:
           - "2"
         "2":
           - "3"
-    mermaid: "flowchart TD\nsubgraph n0[\"CallsDedup\"]\n  direction TB\n  n1[\"Step A\"]\n  n2[\"Step B\"]\n  n3[\"Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
+    json:
+      nodes:
+        "0":
+          label: CallsDedup
+          lexical_id: "CallsDedup|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 13
+            end: 163
+        "1":
+          label: Step A
+          lexical_id: "CallsDedup|root:0|hdr:step-a:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 48
+            end: 59
+        "2":
+          label: Step B
+          lexical_id: "CallsDedup|root:0|hdr:step-b:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 84
+            end: 95
+        "3":
+          label: Step C
+          lexical_id: "CallsDedup|root:0|hdr:step-c:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 120
+            end: 131
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "3"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: CallsDedup\"]\n  direction TB\n  n1[\"1: Step A\"]\n  n2[\"2: Step B\"]\n  n3[\"3: Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
     expr:
       nodes:
         "0":
@@ -140,7 +183,50 @@ flattening:
           - "2"
         "2":
           - "3"
-    mermaid: "flowchart TD\nsubgraph n0[\"CallsDedup\"]\n  direction TB\n  n1[\"Step A\"]\n  n2[\"Step B\"]\n  n3[\"Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"
+    json:
+      nodes:
+        "0":
+          label: CallsDedup
+          lexical_id: "CallsDedup|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 13
+            end: 163
+        "1":
+          label: Step A
+          lexical_id: "CallsDedup|root:0|hdr:step-a:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 48
+            end: 59
+        "2":
+          label: Step B
+          lexical_id: "CallsDedup|root:0|hdr:step-b:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 84
+            end: 95
+        "3":
+          label: Step C
+          lexical_id: "CallsDedup|root:0|hdr:step-c:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 120
+            end: 131
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "3"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: CallsDedup\"]\n  direction TB\n  n1[\"1: Step A\"]\n  n2[\"2: Step B\"]\n  n3[\"3: Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -186,4 +272,47 @@ flattening:
           - "2"
         "2":
           - "3"
-    mermaid: "flowchart TD\nsubgraph n0[\"CallsDedup\"]\n  direction TB\n  n1[\"Step A\"]\n  n2[\"Step B\"]\n  n3[\"Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"
+    json:
+      nodes:
+        "0":
+          label: CallsDedup
+          lexical_id: "CallsDedup|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 13
+            end: 163
+        "1":
+          label: Step A
+          lexical_id: "CallsDedup|root:0|hdr:step-a:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 48
+            end: 59
+        "2":
+          label: Step B
+          lexical_id: "CallsDedup|root:0|hdr:step-b:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 84
+            end: 95
+        "3":
+          label: Step C
+          lexical_id: "CallsDedup|root:0|hdr:step-c:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 120
+            end: 131
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "3"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: CallsDedup\"]\n  direction TB\n  n1[\"1: Step A\"]\n  n2[\"2: Step B\"]\n  n3[\"3: Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"

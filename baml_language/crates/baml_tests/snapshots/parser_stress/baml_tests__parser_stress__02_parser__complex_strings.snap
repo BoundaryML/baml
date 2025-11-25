@@ -1,23 +1,173 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "class StringTorture {
-  // Nested quotes in raw strings
-  raw1 string @description(#"She said "Hello""#)
-  raw2 string @description(##"This has #"nested"# raw strings"##)
-  raw3 string @description(###"Even ##"more #"nesting"#"## here"###)
-  
-  // Unicode edge cases  
-  emoji string @alias("🎉🎊🎈")
-  rtl string @alias("مرحبا بالعالم")
-  zalgo string @alias("ẗ̤̈ë̤̈ẍ̤̈ẗ̤̈")
-  
-  // Very long string
-  long string @alias("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-}
-"
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "StringTorture"
+    L_BRACE "{"
+    FIELD
+      WORD "raw1"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "#"She said "Hello""#"
+            HASH "#"
+            QUOTE """
+            WORD "She"
+            WORD "said"
+            QUOTE """
+            WORD "Hello"
+            QUOTE """
+            QUOTE """
+            HASH "#"
+          R_PAREN ")"
+    FIELD
+      WORD "raw2"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "##"This has #"nested"# raw strings"##"
+            HASH "#"
+            HASH "#"
+            QUOTE """
+            WORD "This"
+            WORD "has"
+            HASH "#"
+            QUOTE """
+            WORD "nested"
+            QUOTE """
+            HASH "#"
+            WORD "raw"
+            WORD "strings"
+            QUOTE """
+            HASH "#"
+            HASH "#"
+          R_PAREN ")"
+    FIELD
+      WORD "raw3"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "###"Even ##"more #"nesting"#"## here"###"
+            HASH "#"
+            HASH "#"
+            HASH "#"
+            QUOTE """
+            WORD "Even"
+            HASH "#"
+            HASH "#"
+            QUOTE """
+            WORD "more"
+            HASH "#"
+            QUOTE """
+            WORD "nesting"
+            QUOTE """
+            HASH "#"
+            QUOTE """
+            HASH "#"
+            HASH "#"
+            WORD "here"
+            QUOTE """
+            HASH "#"
+            HASH "#"
+            HASH "#"
+          R_PAREN ")"
+    FIELD
+      WORD "emoji"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""🎉🎊🎈""
+            QUOTE """
+            ERROR_TOKEN "🎉"
+            ERROR_TOKEN "🎊"
+            ERROR_TOKEN "🎈"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "rtl"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""مرحبا بالعالم""
+            QUOTE """
+            ERROR_TOKEN "م"
+            ERROR_TOKEN "ر"
+            ERROR_TOKEN "ح"
+            ERROR_TOKEN "ب"
+            ERROR_TOKEN "ا"
+            ERROR_TOKEN "ب"
+            ERROR_TOKEN "ا"
+            ERROR_TOKEN "ل"
+            ERROR_TOKEN "ع"
+            ERROR_TOKEN "ا"
+            ERROR_TOKEN "ل"
+            ERROR_TOKEN "م"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "zalgo"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""ẗ̤̈ë̤̈ẍ̤̈ẗ̤̈""
+            QUOTE """
+            ERROR_TOKEN "ẗ"
+            ERROR_TOKEN "̤"
+            ERROR_TOKEN "̈"
+            ERROR_TOKEN "ë"
+            ERROR_TOKEN "̤"
+            ERROR_TOKEN "̈"
+            ERROR_TOKEN "ẍ"
+            ERROR_TOKEN "̤"
+            ERROR_TOKEN "̈"
+            ERROR_TOKEN "ẗ"
+            ERROR_TOKEN "̤"
+            ERROR_TOKEN "̈"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "long"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa""
+            QUOTE """
+            WORD "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
 
 === ERRORS ===
 None

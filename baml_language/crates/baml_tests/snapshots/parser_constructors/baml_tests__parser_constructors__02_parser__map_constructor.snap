@@ -1,0 +1,180 @@
+---
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 872
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "stringValues"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR " string"
+          WORD "string"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "hello""
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            STRING_LITERAL " "world""
+              QUOTE """
+              WORD "world"
+              QUOTE """
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "test""
+              QUOTE """
+              KW_TEST "test"
+              QUOTE """
+            COLON ":"
+            STRING_LITERAL " "test""
+              QUOTE """
+              KW_TEST "test"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "intValues"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR " int"
+          WORD "int"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "hello""
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            INTEGER_LITERAL "1"
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "test""
+              QUOTE """
+              KW_TEST "test"
+              QUOTE """
+            COLON ":"
+            INTEGER_LITERAL "2"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "floatValues"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR " float"
+          WORD "float"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "hello""
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            FLOAT_LITERAL "1.0"
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "test""
+              QUOTE """
+              KW_TEST "test"
+              QUOTE """
+            COLON ":"
+            FLOAT_LITERAL "2.0"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "boolValues"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR " bool"
+          WORD "bool"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "hello""
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            COLON ":"
+            WORD "true"
+          COMMA ","
+          OBJECT_FIELD
+            STRING_LITERAL "
+    "test""
+              QUOTE """
+              KW_TEST "test"
+              QUOTE """
+            COLON ":"
+            WORD "false"
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

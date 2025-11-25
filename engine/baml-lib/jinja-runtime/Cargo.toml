@@ -24,9 +24,11 @@ indexmap.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml = "0.9"
 strum.workspace = true
 strsim.workspace = true
 colored.workspace = true
+toon = "0.1.2"
 
 [dev-dependencies]
 env_logger.workspace = true

@@ -1,30 +1,179 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "// Test raw string parsing in prompts and descriptions
-class RawStrings {
-  simple string @description(#"raw string"#)
-  with_quotes string @description(#"contains "quotes" easily"#)
-  multi_hash string @description(##"contains #"hash"# inside"##)
-  multiline string @description(###"
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "RawStrings"
+    L_BRACE "{"
+    FIELD
+      WORD "simple"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "#"raw string"#"
+            HASH "#"
+            QUOTE """
+            WORD "raw"
+            WORD "string"
+            QUOTE """
+            HASH "#"
+          R_PAREN ")"
+    FIELD
+      WORD "with_quotes"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "#"contains "quotes" easily"#"
+            HASH "#"
+            QUOTE """
+            WORD "contains"
+            QUOTE """
+            WORD "quotes"
+            QUOTE """
+            WORD "easily"
+            QUOTE """
+            HASH "#"
+          R_PAREN ")"
+    FIELD
+      WORD "multi_hash"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "##"contains #"hash"# inside"##"
+            HASH "#"
+            HASH "#"
+            QUOTE """
+            WORD "contains"
+            HASH "#"
+            QUOTE """
+            WORD "hash"
+            QUOTE """
+            HASH "#"
+            WORD "inside"
+            QUOTE """
+            HASH "#"
+            HASH "#"
+          R_PAREN ")"
+    FIELD
+      WORD "multiline"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          RAW_STRING_LITERAL "###"
     This is a multiline
     raw string with "quotes"
     and #hashes#
-  "###)
-}
-
-function ProcessText(input string) -> string {
-  client GPT4
-  prompt #"
-    Process the following text:
-    {{ input }}
-    
-    Return the processed result.
-  "#
-}
-"
+  "###"
+            HASH "#"
+            HASH "#"
+            HASH "#"
+            QUOTE """
+            WORD "This"
+            WORD "is"
+            WORD "a"
+            WORD "multiline"
+            WORD "raw"
+            WORD "string"
+            WORD "with"
+            QUOTE """
+            WORD "quotes"
+            QUOTE """
+            WORD "and"
+            HASH "#"
+            WORD "hashes"
+            HASH "#"
+            QUOTE """
+            HASH "#"
+            HASH "#"
+            HASH "#"
+          R_PAREN ")"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ProcessText"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER "input"
+        WORD "input"
+  WORD "string"
+  R_PAREN ")"
+  ARROW "->"
+  WORD "string"
+  L_BRACE "{"
+  CLIENT_DEF "
+  client GPT4"
+    KW_CLIENT "client"
+    WORD "GPT4"
+  WORD "prompt"
+  HASH "#"
+  QUOTE """
+  WORD "Process"
+  WORD "the"
+  WORD "following"
+  WORD "text"
+  COLON ":"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "input"
+  R_BRACE "}"
+  R_BRACE "}"
+  WORD "Return"
+  WORD "the"
+  WORD "processed"
+  WORD "result"
+  DOT "."
+  QUOTE """
+  HASH "#"
+  R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected type annotation (:), found Expected type annotation (:)
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected return type (->), found Expected return type (->)
+  Expected Expected function body, found Expected function body
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected config block, found Expected config block
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration

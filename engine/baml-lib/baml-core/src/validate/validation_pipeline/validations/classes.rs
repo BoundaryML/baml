@@ -26,6 +26,15 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             let field = c.ast_field();
             if let Some(ft) = &field.expr {
                 validate_type(ctx, ft);
+
+                if let Some(skip) = field.attributes.iter().find(|a| a.name.name() == "skip") {
+                    if !ft.is_optional() {
+                        ctx.push_error(DatamodelError::new_validation_error(
+                            &format!("Class field with @skip attribute must be optional. Try making the type nullable: {} {}", field.name(), ft.to_nullable()),
+                            field.span().clone(),
+                        ));
+                    }
+                }
             }
         }
 

@@ -1,16 +1,68 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 2049
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "function Calculate() -> int {
-  let a = 1 + 2
-  let b = a * 3
-  let c = b / 2 - 1
-  let d = (a + b) * c
-  return d
-}
-"
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Calculate"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "a"
+          EQUALS "="
+          BINARY_EXPR "1 + 2"
+            INTEGER_LITERAL "1"
+            PLUS "+"
+            INTEGER_LITERAL "2"
+        LET_STMT
+          KW_LET "let"
+          WORD "b"
+          EQUALS "="
+          BINARY_EXPR "a * 3"
+            WORD "a"
+            STAR "*"
+            INTEGER_LITERAL "3"
+        LET_STMT
+          KW_LET "let"
+          WORD "c"
+          EQUALS "="
+          BINARY_EXPR
+            BINARY_EXPR "b / 2"
+              WORD "b"
+              SLASH "/"
+              INTEGER_LITERAL "2"
+            MINUS "-"
+            INTEGER_LITERAL "1"
+        LET_STMT
+          KW_LET "let"
+          WORD "d"
+          EQUALS "="
+          BINARY_EXPR
+            PAREN_EXPR
+              L_PAREN "("
+              BINARY_EXPR "a + b"
+                WORD "a"
+                PLUS "+"
+                WORD "b"
+              R_PAREN ")"
+            STAR "*"
+            WORD "c"
+        RETURN_STMT "
+  return d"
+          KW_RETURN "return"
+          WORD "d"
+        R_BRACE "}"
 
 === ERRORS ===
 None

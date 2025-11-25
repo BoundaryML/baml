@@ -136,7 +136,7 @@ impl ControlFlowVizBuilder {
     }
 
     fn add_node(&mut self, node: Node) {
-        self.nodes.insert(node.id.clone(), node);
+        self.nodes.insert(node.id, node);
     }
 
     fn add_edge(&mut self, src: NodeId, dst: NodeId) {
@@ -146,7 +146,7 @@ impl ControlFlowVizBuilder {
     fn finish(self) -> ControlFlowVisualization {
         let mut edges_by_src: IndexMap<NodeId, Vec<Edge>> = IndexMap::new();
         for edge in self.edges {
-            edges_by_src.entry(edge.src.clone()).or_default().push(edge);
+            edges_by_src.entry(edge.src).or_default().push(edge);
         }
 
         ControlFlowVisualization {
@@ -340,7 +340,7 @@ fn build_llm_function_graph(func: &hir::LlmFunction) -> ControlFlowVisualization
     let mut builder = ControlFlowVizBuilder::default();
     let root_id = builder.allocate_id();
     let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
-    let root_lexical = encode_segments(&func.name, &[root_segment.clone()]);
+    let root_lexical = encode_segments(&func.name, std::slice::from_ref(&root_segment));
     builder.add_node(Node::root(
         root_id,
         root_lexical,
@@ -377,7 +377,7 @@ impl HirTraversalContext {
         let mut graph = ControlFlowVizBuilder::default();
         let root_id = graph.allocate_id();
         let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
-        let root_lexical = encode_segments(function_name, &[root_segment.clone()]);
+        let root_lexical = encode_segments(function_name, std::slice::from_ref(&root_segment));
         graph.add_node(Node::root(
             root_id,
             root_lexical,
@@ -463,7 +463,7 @@ impl HirTraversalContext {
         let lexical_id = self.build_lexical_id(&segment);
         let node_id = self.graph.allocate_id();
         let parent_id = self.current_parent_id();
-        let node_label = label.unwrap_or_else(|| "".to_string());
+        let node_label = label.unwrap_or_default();
         let node = Node::new(
             node_id,
             parent_id,
@@ -613,7 +613,7 @@ impl HirTraversalContext {
             parent_id,
             lexical_id,
             label,
-            span,
+            span.clone(),
             NodeType::BranchGroup,
         );
         self.graph.add_node(node);
@@ -643,6 +643,16 @@ impl HirTraversalContext {
                     current_else = None;
                 }
             }
+        }
+
+        if else_expr.is_none() {
+            let synthetic_span = span.clone();
+            let synthetic_block = hir::Block {
+                statements: Vec::new(),
+                trailing_expr: None,
+            };
+            let synthetic_expr = hir::Expression::Block(synthetic_block, synthetic_span.clone());
+            self.visit_branch_arm("else".to_string(), &synthetic_expr, synthetic_span);
         }
 
         self.pop_frames_to(parent_depth);
@@ -759,10 +769,10 @@ impl HirTraversalContext {
         if !parent_entry {
             return;
         }
-        if let Some(prev) = self.frames[parent_index].last_linear_child.clone() {
-            self.graph.add_edge(prev, node_id.clone());
+        if let Some(prev) = self.frames[parent_index].last_linear_child {
+            self.graph.add_edge(prev, *node_id);
         }
-        self.frames[parent_index].last_linear_child = Some(node_id.clone());
+        self.frames[parent_index].last_linear_child = Some(*node_id);
     }
 
     fn pop_headers_to_level(&mut self, desired_level: u8) {

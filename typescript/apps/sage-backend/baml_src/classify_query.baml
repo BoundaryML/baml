@@ -57,7 +57,7 @@ class RelevantDoc {
 
 // Create a function to extract the resume from a string.
 function PlanQuery(query: Query) -> QueryActionPlan {
-  client "anthropic/claude-3-5-sonnet-20241022"
+  client "anthropic/claude-sonnet-4-5-20250929"
   prompt #"
     {{ _.role("system") }}
     You are a librarian answering queries a user has about BAML (an AI framework to write LLM prompts as functions).

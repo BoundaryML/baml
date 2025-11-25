@@ -9,14 +9,16 @@ function SequentialImplicit() -> int {
     //# wait for feature flags
     let featureFlags = 15;
   }
-  {
-    let startDatabase = 20;
-    //# Boostrap schemas
-    let bootstrapSchemas = 25;
-  }
   if (false) {
     //# listen to SQS
     let listenToSqs = 30;
+  } else {
+    let k = 5;
+  }
+  {
+    let startDatabase = 20;
+    //# Bootstrap schemas
+    let bootstrapSchemas = 25;
   }
   //# Done
   let finish = 35;

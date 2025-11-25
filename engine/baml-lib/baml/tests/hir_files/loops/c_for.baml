@@ -50,7 +50,9 @@ function Nothing() -> int {
 //   let s = 0;
 //   {
 //   let i = 1;
-//     for (;i <= 10;i += 1;) { s += i;}
+//     for (;i <= 10;{
+//     i += 1;
+//     }) { s += i;}
 //   }
 //
 //   s
@@ -60,7 +62,9 @@ function Nothing() -> int {
 //   let s = 0;
 //   {
 //   let i = 0;
-//     for (;;s += i;) { }
+//     for (;;{
+//     s += i;
+//     }) { }
 //   }
 //
 //   s

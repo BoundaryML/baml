@@ -65,7 +65,7 @@ expr:
       - "3"
     "4":
       - "5"
-mermaid: "flowchart TD\nsubgraph n0[\"BasicSections\"]\n  direction TB\n  subgraph n1[\"Main Processing\"]\n    direction TB\n    n2[\"Generate Summary\"]\n    subgraph n3[\"Make Space\"]\n      direction TB\n      n4[\"Prepare Final Output\"]\n      n5[\"Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: BasicSections\"]\n  direction TB\n  subgraph n1[\"1: Main Processing\"]\n    direction TB\n    n2[\"2: Generate Summary\"]\n    subgraph n3[\"3: Make Space\"]\n      direction TB\n      n4[\"4: Prepare Final Output\"]\n      n5[\"5: Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -130,9 +130,70 @@ flattening:
           - "3"
         "4":
           - "5"
-    mermaid: "flowchart TD\nsubgraph n0[\"BasicSections\"]\n  direction TB\n  subgraph n1[\"Main Processing\"]\n    direction TB\n    n2[\"Generate Summary\"]\n    subgraph n3[\"Make Space\"]\n      direction TB\n      n4[\"Prepare Final Output\"]\n      n5[\"Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
+    json:
+      nodes:
+        "0":
+          label: BasicSections
+          lexical_id: "BasicSections|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 0
+            end: 300
+        "1":
+          label: Main Processing
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 41
+            end: 60
+        "2":
+          label: Generate Summary
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 91
+            end: 112
+        "3":
+          label: Make Space
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 145
+            end: 160
+        "4":
+          label: Prepare Final Output
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:prepare-final-output:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 187
+            end: 213
+        "5":
+          label: Final Output
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:final-output:1"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 252
+            end: 270
+      edges:
+        "2":
+          - "3"
+        "4":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: BasicSections\"]\n  direction TB\n  subgraph n1[\"1: Main Processing\"]\n    direction TB\n    n2[\"2: Generate Summary\"]\n    subgraph n3[\"3: Make Space\"]\n      direction TB\n      n4[\"4: Prepare Final Output\"]\n      n5[\"5: Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
     expr:
       nodes:
         "0":
@@ -194,7 +255,68 @@ flattening:
           - "3"
         "4":
           - "5"
-    mermaid: "flowchart TD\nsubgraph n0[\"BasicSections\"]\n  direction TB\n  subgraph n1[\"Main Processing\"]\n    direction TB\n    n2[\"Generate Summary\"]\n    subgraph n3[\"Make Space\"]\n      direction TB\n      n4[\"Prepare Final Output\"]\n      n5[\"Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"
+    json:
+      nodes:
+        "0":
+          label: BasicSections
+          lexical_id: "BasicSections|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 0
+            end: 300
+        "1":
+          label: Main Processing
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 41
+            end: 60
+        "2":
+          label: Generate Summary
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 91
+            end: 112
+        "3":
+          label: Make Space
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 145
+            end: 160
+        "4":
+          label: Prepare Final Output
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:prepare-final-output:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 187
+            end: 213
+        "5":
+          label: Final Output
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:final-output:1"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 252
+            end: 270
+      edges:
+        "2":
+          - "3"
+        "4":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: BasicSections\"]\n  direction TB\n  subgraph n1[\"1: Main Processing\"]\n    direction TB\n    n2[\"2: Generate Summary\"]\n    subgraph n3[\"3: Make Space\"]\n      direction TB\n      n4[\"4: Prepare Final Output\"]\n      n5[\"5: Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -258,4 +380,65 @@ flattening:
           - "3"
         "4":
           - "5"
-    mermaid: "flowchart TD\nsubgraph n0[\"BasicSections\"]\n  direction TB\n  subgraph n1[\"Main Processing\"]\n    direction TB\n    n2[\"Generate Summary\"]\n    subgraph n3[\"Make Space\"]\n      direction TB\n      n4[\"Prepare Final Output\"]\n      n5[\"Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"
+    json:
+      nodes:
+        "0":
+          label: BasicSections
+          lexical_id: "BasicSections|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 0
+            end: 300
+        "1":
+          label: Main Processing
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 41
+            end: 60
+        "2":
+          label: Generate Summary
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 91
+            end: 112
+        "3":
+          label: Make Space
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 145
+            end: 160
+        "4":
+          label: Prepare Final Output
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:prepare-final-output:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 187
+            end: 213
+        "5":
+          label: Final Output
+          lexical_id: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:final-output:1"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 252
+            end: 270
+      edges:
+        "2":
+          - "3"
+        "4":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: BasicSections\"]\n  direction TB\n  subgraph n1[\"1: Main Processing\"]\n    direction TB\n    n2[\"2: Generate Summary\"]\n    subgraph n3[\"3: Make Space\"]\n      direction TB\n      n4[\"4: Prepare Final Output\"]\n      n5[\"5: Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"

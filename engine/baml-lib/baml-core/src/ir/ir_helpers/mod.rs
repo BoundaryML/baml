@@ -6,7 +6,7 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use baml_types::{
-    ir_type::{TypeGeneric, UnionConstructor},
+    ir_type::{TypeGeneric, TypeNonStreaming, UnionConstructor},
     BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel,
     LiteralValue, TypeIR, TypeValue, UnionType,
 };
@@ -216,7 +216,7 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
         value: BamlValue,
         field_type: TypeIR,
     ) -> anyhow::Result<BamlValueWithMeta<TypeIR>> {
-        let value_with_empty_meta = BamlValueWithMeta::with_const_meta(&value, ());
+        let value_with_empty_meta = BamlValueWithMeta::with_same_meta_at_all_nodes(&value, ());
         let res = self
             .distribute_type_with_meta(value_with_empty_meta, field_type)?
             .map_meta_owned(|(_, meta)| meta);
@@ -1202,62 +1202,100 @@ fn distribute_infer_class<T: Clone + std::fmt::Debug>(
     ))
 }
 
-pub fn infer_type<Meta: Default + std::cmp::PartialEq + std::fmt::Debug>(
-    value: &BamlValue,
-) -> Option<TypeGeneric<Meta>>
+pub fn infer_type<Meta>(value: &BamlValue) -> Option<TypeGeneric<Meta>>
 where
+    Meta: Clone + Default + PartialEq,
     TypeGeneric<Meta>: UnionConstructor<Meta>,
 {
-    let ret = match value {
-        BamlValue::Int(_) => Some(TypeGeneric::Primitive(TypeValue::Int, Default::default())),
-        BamlValue::Bool(_) => Some(TypeGeneric::Primitive(TypeValue::Bool, Default::default())),
-        BamlValue::Float(_) => Some(TypeGeneric::Primitive(TypeValue::Float, Default::default())),
-        BamlValue::String(_) => Some(TypeGeneric::Primitive(
-            TypeValue::String,
-            Default::default(),
-        )),
-        BamlValue::Null => Some(TypeGeneric::Primitive(TypeValue::Null, Default::default())),
+    let baml_value_with_meta = infer_value_with_type(value);
+    Some(baml_value_with_meta.meta().clone())
+}
+
+pub fn infer_value_with_type<Meta>(value: &BamlValue) -> BamlValueWithMeta<TypeGeneric<Meta>>
+where
+    Meta: Clone + Default + PartialEq,
+    TypeGeneric<Meta>: UnionConstructor<Meta>,
+{
+    match value {
+        BamlValue::Int(i) => BamlValueWithMeta::Int(
+            *i,
+            TypeGeneric::Primitive(TypeValue::Int, Default::default()),
+        ),
+        BamlValue::Bool(b) => BamlValueWithMeta::Bool(
+            *b,
+            TypeGeneric::Primitive(TypeValue::Bool, Default::default()),
+        ),
+        BamlValue::Float(f) => BamlValueWithMeta::Float(
+            *f,
+            TypeGeneric::Primitive(TypeValue::Float, Default::default()),
+        ),
+        BamlValue::String(s) => BamlValueWithMeta::String(
+            s.clone(),
+            TypeGeneric::Primitive(TypeValue::String, Default::default()),
+        ),
+        BamlValue::Null => {
+            BamlValueWithMeta::Null(TypeGeneric::Primitive(TypeValue::Null, Default::default()))
+        }
         BamlValue::Map(pairs) => {
-            let v_tys = pairs
+            let pairs: BamlMap<String, BamlValueWithMeta<TypeGeneric<Meta>>> = pairs
                 .iter()
-                .filter_map(|(_, v)| infer_type::<Meta>(v))
-                .collect::<Vec<_>>();
-            let k_ty = TypeGeneric::Primitive(TypeValue::String, Meta::default());
+                .map(|(k, v)| (k.clone(), infer_value_with_type(v)))
+                .collect();
+            let v_tys = pairs.values().map(|v| v.meta().clone()).collect::<Vec<_>>();
+            let k_ty = TypeGeneric::Primitive(TypeValue::String, Default::default());
             let v_ty = match v_tys.len() {
-                0 => None,
-                _ => Some(TypeGeneric::union(v_tys)),
-            }?;
-            Some(TypeGeneric::map(k_ty, v_ty))
+                0 => TypeGeneric::Primitive(TypeValue::Null, Default::default()),
+                _ => TypeGeneric::union(v_tys.to_vec()),
+            };
+            BamlValueWithMeta::Map(pairs, TypeGeneric::map(k_ty, v_ty))
         }
         BamlValue::List(items) => {
+            let items: Vec<BamlValueWithMeta<TypeGeneric<Meta>>> =
+                items.iter().map(infer_value_with_type).collect();
             let item_tys = items
                 .iter()
-                .filter_map(infer_type)
+                .map(|v| v.meta().clone())
                 .dedup()
                 .collect::<Vec<_>>();
             let item_ty = match item_tys.len() {
-                0 => None,
-                _ => Some(TypeGeneric::union(item_tys)),
-            }?;
-            Some(TypeGeneric::List(Box::new(item_ty), Default::default()))
+                0 => TypeGeneric::Primitive(TypeValue::Null, Default::default()),
+                _ => TypeGeneric::union(item_tys),
+            };
+            BamlValueWithMeta::List(
+                items,
+                TypeGeneric::List(Box::new(item_ty), Default::default()),
+            )
         }
-        BamlValue::Media(m) => Some(TypeGeneric::Primitive(
-            TypeValue::Media(m.media_type),
-            Default::default(),
-        )),
-        BamlValue::Enum(enum_name, _) => Some(TypeGeneric::Enum {
-            name: enum_name.clone(),
-            dynamic: false,
-            meta: Default::default(),
-        }),
-        BamlValue::Class(class_name, _) => Some(TypeGeneric::Class {
-            name: class_name.clone(),
-            mode: baml_types::ir_type::StreamingMode::NonStreaming,
-            dynamic: false,
-            meta: Default::default(),
-        }),
-    };
-    ret
+        BamlValue::Media(m) => BamlValueWithMeta::Media(
+            m.clone(),
+            TypeGeneric::Primitive(TypeValue::Media(m.media_type), Default::default()),
+        ),
+        BamlValue::Enum(enum_name, v) => BamlValueWithMeta::Enum(
+            enum_name.clone(),
+            v.clone(),
+            TypeGeneric::Enum {
+                name: enum_name.clone(),
+                dynamic: false,
+                meta: Default::default(),
+            },
+        ),
+        BamlValue::Class(class_name, fields) => {
+            let fields: BamlMap<String, BamlValueWithMeta<TypeGeneric<Meta>>> = fields
+                .iter()
+                .map(|(k, v)| (k.clone(), infer_value_with_type(v)))
+                .collect();
+            BamlValueWithMeta::Class(
+                class_name.clone(),
+                fields,
+                TypeGeneric::Class {
+                    name: class_name.clone(),
+                    mode: baml_types::ir_type::StreamingMode::NonStreaming,
+                    dynamic: false,
+                    meta: Default::default(),
+                },
+            )
+        }
+    }
 }
 
 /// Derive the simplest type that can categorize a given value. This is meant to be used

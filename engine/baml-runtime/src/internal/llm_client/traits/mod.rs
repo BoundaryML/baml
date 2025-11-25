@@ -88,8 +88,8 @@ pub trait CompletionToProviderBody {
 
 fn merge_messages(chat: &[RenderedChatMessage]) -> Vec<RenderedChatMessage> {
     let mut chat = chat.to_owned();
-    let mut i = 0;
-    while i < chat.len() - 1 {
+    let mut i: usize = 0;
+    while i < chat.len().saturating_sub(1) {
         let (left, right) = chat.split_at_mut(i + 1);
         if left[i].role == right[0].role && !right[0].allow_duplicate_role {
             left[i].parts.append(&mut right[0].parts);
@@ -874,5 +874,53 @@ mod tests_scrub {
             scrubbed.get("api_key").and_then(|v| v.as_str()),
             Some("$REDACTED")
         );
+    }
+}
+
+#[cfg(test)]
+mod tests_merge_messages {
+    use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
+
+    use super::merge_messages;
+
+    #[test]
+    fn test_merge_messages_empty() {
+        // This would trigger the panic: empty vector causes underflow
+        // chat.len() - 1 = usize::MAX, making the loop condition always true
+        let chat: Vec<RenderedChatMessage> = vec![];
+        let result = merge_messages(&chat);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_merge_messages_single() {
+        let chat = vec![RenderedChatMessage {
+            role: "user".to_string(),
+            allow_duplicate_role: false,
+            parts: vec![ChatMessagePart::Text("hello".to_string())],
+        }];
+        let result = merge_messages(&chat);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].parts.len(), 1);
+    }
+
+    #[test]
+    fn test_merge_messages_merge_consecutive_same_role() {
+        // This tests the merge logic with consecutive messages of the same role
+        let chat = vec![
+            RenderedChatMessage {
+                role: "user".to_string(),
+                allow_duplicate_role: false,
+                parts: vec![ChatMessagePart::Text("hello".to_string())],
+            },
+            RenderedChatMessage {
+                role: "user".to_string(),
+                allow_duplicate_role: false,
+                parts: vec![ChatMessagePart::Text("world".to_string())],
+            },
+        ];
+        let result = merge_messages(&chat);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].parts.len(), 2);
     }
 }

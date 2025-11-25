@@ -65,7 +65,7 @@ expr:
       - "5"
     "3":
       - "4"
-mermaid: "flowchart TD\nsubgraph n0[\"ForLoopWithTopLevelHeader\"]\n  direction TB\n  subgraph n1[\"Main Loop\"]\n    direction TB\n    subgraph n2[\"Loop: for (item in items)\"]\n      direction TB\n      n3[\"Item Processing\"]\n      n4[\"Accumulation\"]\n      n3 --> n4\n    end\n  end\n  n5[\"Final Result\"]\n  n1 --> n5\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: ForLoopWithTopLevelHeader\"]\n  direction TB\n  subgraph n1[\"1: Main Loop\"]\n    direction TB\n    subgraph n2[\"2: Loop: for (item in items)\"]\n      direction TB\n      n3[\"3: Item Processing\"]\n      n4[\"4: Accumulation\"]\n      n3 --> n4\n    end\n  end\n  n5[\"5: Final Result\"]\n  n1 --> n5\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -130,9 +130,70 @@ flattening:
           - "5"
         "3":
           - "4"
-    mermaid: "flowchart TD\nsubgraph n0[\"ForLoopWithTopLevelHeader\"]\n  direction TB\n  subgraph n1[\"Main Loop\"]\n    direction TB\n    subgraph n2[\"Loop: for (item in items)\"]\n      direction TB\n      n3[\"Item Processing\"]\n      n4[\"Accumulation\"]\n      n3 --> n4\n    end\n  end\n  n5[\"Final Result\"]\n  n1 --> n5\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
+    json:
+      nodes:
+        "0":
+          label: ForLoopWithTopLevelHeader
+          lexical_id: "ForLoopWithTopLevelHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 20
+            end: 361
+        "1":
+          label: Main Loop
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 124
+            end: 138
+        "2":
+          label: for (item in items)
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0|loop:for-item-in-items:0"
+          node_type: loop
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 143
+            end: 325
+        "3":
+          label: Item Processing
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 177
+            end: 198
+        "4":
+          label: Accumulation
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:accumulation:1"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 242
+            end: 260
+        "5":
+          label: Final Result
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:final-result:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 331
+            end: 348
+      edges:
+        "1":
+          - "5"
+        "3":
+          - "4"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: ForLoopWithTopLevelHeader\"]\n  direction TB\n  subgraph n1[\"1: Main Loop\"]\n    direction TB\n    subgraph n2[\"2: Loop: for (item in items)\"]\n      direction TB\n      n3[\"3: Item Processing\"]\n      n4[\"4: Accumulation\"]\n      n3 --> n4\n    end\n  end\n  n5[\"5: Final Result\"]\n  n1 --> n5\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
     expr:
       nodes:
         "0":
@@ -194,7 +255,68 @@ flattening:
           - "5"
         "3":
           - "4"
-    mermaid: "flowchart TD\nsubgraph n0[\"ForLoopWithTopLevelHeader\"]\n  direction TB\n  subgraph n1[\"Main Loop\"]\n    direction TB\n    subgraph n2[\"Loop: for (item in items)\"]\n      direction TB\n      n3[\"Item Processing\"]\n      n4[\"Accumulation\"]\n      n3 --> n4\n    end\n  end\n  n5[\"Final Result\"]\n  n1 --> n5\nend\n"
+    json:
+      nodes:
+        "0":
+          label: ForLoopWithTopLevelHeader
+          lexical_id: "ForLoopWithTopLevelHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 20
+            end: 361
+        "1":
+          label: Main Loop
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 124
+            end: 138
+        "2":
+          label: for (item in items)
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0|loop:for-item-in-items:0"
+          node_type: loop
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 143
+            end: 325
+        "3":
+          label: Item Processing
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 177
+            end: 198
+        "4":
+          label: Accumulation
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:accumulation:1"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 242
+            end: 260
+        "5":
+          label: Final Result
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:final-result:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 331
+            end: 348
+      edges:
+        "1":
+          - "5"
+        "3":
+          - "4"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: ForLoopWithTopLevelHeader\"]\n  direction TB\n  subgraph n1[\"1: Main Loop\"]\n    direction TB\n    subgraph n2[\"2: Loop: for (item in items)\"]\n      direction TB\n      n3[\"3: Item Processing\"]\n      n4[\"4: Accumulation\"]\n      n3 --> n4\n    end\n  end\n  n5[\"5: Final Result\"]\n  n1 --> n5\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -258,4 +380,65 @@ flattening:
           - "5"
         "3":
           - "4"
-    mermaid: "flowchart TD\nsubgraph n0[\"ForLoopWithTopLevelHeader\"]\n  direction TB\n  subgraph n1[\"Main Loop\"]\n    direction TB\n    subgraph n2[\"Loop: for (item in items)\"]\n      direction TB\n      n3[\"Item Processing\"]\n      n4[\"Accumulation\"]\n      n3 --> n4\n    end\n  end\n  n5[\"Final Result\"]\n  n1 --> n5\nend\n"
+    json:
+      nodes:
+        "0":
+          label: ForLoopWithTopLevelHeader
+          lexical_id: "ForLoopWithTopLevelHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 20
+            end: 361
+        "1":
+          label: Main Loop
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 124
+            end: 138
+        "2":
+          label: for (item in items)
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0|loop:for-item-in-items:0"
+          node_type: loop
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 143
+            end: 325
+        "3":
+          label: Item Processing
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 177
+            end: 198
+        "4":
+          label: Accumulation
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:accumulation:1"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 242
+            end: 260
+        "5":
+          label: Final Result
+          lexical_id: "ForLoopWithTopLevelHeader|root:0|hdr:final-result:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ForLoopWithTopLevelHeader.baml
+            start: 331
+            end: 348
+      edges:
+        "1":
+          - "5"
+        "3":
+          - "4"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: ForLoopWithTopLevelHeader\"]\n  direction TB\n  subgraph n1[\"1: Main Loop\"]\n    direction TB\n    subgraph n2[\"2: Loop: for (item in items)\"]\n      direction TB\n      n3[\"3: Item Processing\"]\n      n4[\"4: Accumulation\"]\n      n3 --> n4\n    end\n  end\n  n5[\"5: Final Result\"]\n  n1 --> n5\nend\n"

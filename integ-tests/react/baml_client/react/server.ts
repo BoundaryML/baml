@@ -2775,6 +2775,24 @@ export const TestCaching = async (
 };
 
 /**
+ * Executes the "TestDefaultStreamingTimeout" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestDefaultStreamingTimeout"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestDefaultStreamingTimeout = async (
+  input: string,
+): Promise<string> => {
+  return b.TestDefaultStreamingTimeout(
+    input,
+  );
+};
+
+/**
  * Executes the "TestFallbackClient" BAML action.
  *
  * This server action calls the underlying BAML function "TestFallbackClient"

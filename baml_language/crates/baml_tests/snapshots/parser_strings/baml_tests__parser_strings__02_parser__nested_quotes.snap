@@ -1,26 +1,261 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 3927
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "// Test nested quote handling in strings
-class NestedQuotes {
-  single_in_double string @alias("He said 'hello'")
-  double_in_single string @alias('She said "hello"')
-  escaped_in_escaped string @alias("The \"quote\" is here")
-  complex_nesting string @description("It's \"really\" 'complex'")
-  json_like string @alias("{\"key\": \"value\"}")
-}
-
-// Test quotes in template strings
-function FormatMessage(name string) -> string {
-  client GPT4
-  prompt #"
-    Generate a message for "{{ name }}"
-    Include quotes like: "Welcome, '{{ name }}'!"
-  "#
-}
-"
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "NestedQuotes"
+    L_BRACE "{"
+    FIELD
+      WORD "single_in_double"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""He said 'hello'""
+            QUOTE """
+            WORD "He"
+            WORD "said"
+            ERROR_TOKEN "'"
+            WORD "hello"
+            ERROR_TOKEN "'"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "double_in_single"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS "("
+          L_PAREN "("
+    ERROR_TOKEN "'"
+    FIELD
+      WORD "She"
+      TYPE_EXPR " said"
+        WORD "said"
+    QUOTE """
+    FIELD
+      WORD "hello"
+      TYPE_EXPR
+        STRING_LITERAL ""')
+  escaped_in_escaped string @alias(""
+          QUOTE """
+          ERROR_TOKEN "'"
+          R_PAREN ")"
+          WORD "escaped_in_escaped"
+          WORD "string"
+          AT "@"
+          WORD "alias"
+          L_PAREN "("
+          QUOTE """
+    FIELD
+      WORD "The"
+      TYPE_EXPR
+    ERROR_TOKEN "\"
+    QUOTE """
+    FIELD
+      WORD "quote"
+      TYPE_EXPR
+    ERROR_TOKEN "\"
+    QUOTE """
+    FIELD
+      WORD "is"
+      TYPE_EXPR " here"
+        WORD "here"
+    QUOTE """
+    R_PAREN ")"
+    FIELD
+      WORD "complex_nesting"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""It's \""
+            QUOTE """
+            WORD "It"
+            ERROR_TOKEN "'"
+            WORD "s"
+            ERROR_TOKEN "\"
+            QUOTE """
+    FIELD
+      WORD "really"
+      TYPE_EXPR
+    ERROR_TOKEN "\"
+    QUOTE """
+    ERROR_TOKEN "'"
+    FIELD
+      WORD "complex"
+      TYPE_EXPR
+    ERROR_TOKEN "'"
+    QUOTE """
+    R_PAREN ")"
+    FIELD
+      WORD "json_like"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""{\""
+            QUOTE """
+            L_BRACE "{"
+            ERROR_TOKEN "\"
+            QUOTE """
+    FIELD
+      WORD "key"
+      TYPE_EXPR
+    ERROR_TOKEN "\"
+    QUOTE """
+    COLON ":"
+    ERROR_TOKEN "\"
+    QUOTE """
+    FIELD
+      WORD "value"
+      TYPE_EXPR
+    ERROR_TOKEN "\"
+    QUOTE """
+    R_BRACE "}"
+  QUOTE """
+  R_PAREN ")"
+  R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "FormatMessage"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER "name"
+        WORD "name"
+  WORD "string"
+  R_PAREN ")"
+  ARROW "->"
+  WORD "string"
+  L_BRACE "{"
+  CLIENT_DEF "
+  client GPT4"
+    KW_CLIENT "client"
+    WORD "GPT4"
+  WORD "prompt"
+  HASH "#"
+  QUOTE """
+  WORD "Generate"
+  WORD "a"
+  WORD "message"
+  KW_FOR "for"
+  QUOTE """
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "name"
+  R_BRACE "}"
+  R_BRACE "}"
+  QUOTE """
+  WORD "Include"
+  WORD "quotes"
+  WORD "like"
+  COLON ":"
+  QUOTE """
+  WORD "Welcome"
+  COMMA ","
+  ERROR_TOKEN "'"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "name"
+  R_BRACE "}"
+  R_BRACE "}"
+  ERROR_TOKEN "'"
+  NOT "!"
+  QUOTE """
+  QUOTE """
+  HASH "#"
+  R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected attribute argument, found Expected attribute argument
+  Expected Expected RParen, found Error, found Expected RParen, found Error
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Expected type, found Expected type
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Expected type, found Expected type
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected type, found Expected type
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Expected type, found Expected type
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected type, found Expected type
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Expected type, found Expected type
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Unexpected token in class body, found Unexpected token in class body
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected type annotation (:), found Expected type annotation (:)
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected return type (->), found Expected return type (->)
+  Expected Expected function body, found Expected function body
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected config block, found Expected config block
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration

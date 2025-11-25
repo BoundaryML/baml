@@ -74,7 +74,7 @@ expr:
       - "2"
     "3":
       - "6"
-mermaid: "flowchart TD\nsubgraph n0[\"IfThenOnlyHeader\"]\n  direction TB\n  n1[\"Before\"]\n  subgraph n2[\"If\"]\n    direction TB\n    subgraph n3[\"BranchGroup: if (false)\"]\n      direction TB\n      n4[\"BranchArm: if (false)\"]\n      n5[\"BranchArm: else\"]\n    end\n    n6[\"After\"]\n    n3 --> n6\n  end\n  n1 --> n2\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenOnlyHeader\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If\"]\n    direction TB\n    subgraph n3[\"3: BranchGroup: if (false)\"]\n      direction TB\n      n4[\"4: BranchArm: if (false)\"]\n      n5[\"5: BranchArm: else\"]\n    end\n    n6[\"6: After\"]\n    n3 --> n6\n  end\n  n1 --> n2\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -119,9 +119,50 @@ flattening:
       edges:
         "1":
           - "2"
-    mermaid: "flowchart TD\nsubgraph n0[\"IfThenOnlyHeader\"]\n  direction TB\n  n1[\"Before\"]\n  subgraph n2[\"If\"]\n    direction TB\n    n3[\"After\"]\n  end\n  n1 --> n2\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
+    json:
+      nodes:
+        "0":
+          label: IfThenOnlyHeader
+          lexical_id: "IfThenOnlyHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 11
+            end: 156
+        "1":
+          label: Before
+          lexical_id: "IfThenOnlyHeader|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 68
+            end: 79
+        "2":
+          label: If
+          lexical_id: "IfThenOnlyHeader|root:0|hdr:if:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 85
+            end: 91
+        "6":
+          label: After
+          lexical_id: "IfThenOnlyHeader|root:0|hdr:if:1|hdr:after:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 138
+            end: 148
+      edges:
+        "1":
+          - "2"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenOnlyHeader\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If\"]\n    direction TB\n    n3[\"6: After\"]\n  end\n  n1 --> n2\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
     expr:
       nodes:
         "0":
@@ -163,7 +204,48 @@ flattening:
       edges:
         "1":
           - "2"
-    mermaid: "flowchart TD\nsubgraph n0[\"IfThenOnlyHeader\"]\n  direction TB\n  n1[\"Before\"]\n  subgraph n2[\"If\"]\n    direction TB\n    n3[\"After\"]\n  end\n  n1 --> n2\nend\n"
+    json:
+      nodes:
+        "0":
+          label: IfThenOnlyHeader
+          lexical_id: "IfThenOnlyHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 11
+            end: 156
+        "1":
+          label: Before
+          lexical_id: "IfThenOnlyHeader|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 68
+            end: 79
+        "2":
+          label: If
+          lexical_id: "IfThenOnlyHeader|root:0|hdr:if:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 85
+            end: 91
+        "6":
+          label: After
+          lexical_id: "IfThenOnlyHeader|root:0|hdr:if:1|hdr:after:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 138
+            end: 148
+      edges:
+        "1":
+          - "2"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenOnlyHeader\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If\"]\n    direction TB\n    n3[\"6: After\"]\n  end\n  n1 --> n2\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -207,4 +289,45 @@ flattening:
       edges:
         "1":
           - "2"
-    mermaid: "flowchart TD\nsubgraph n0[\"IfThenOnlyHeader\"]\n  direction TB\n  n1[\"Before\"]\n  subgraph n2[\"If\"]\n    direction TB\n    n3[\"After\"]\n  end\n  n1 --> n2\nend\n"
+    json:
+      nodes:
+        "0":
+          label: IfThenOnlyHeader
+          lexical_id: "IfThenOnlyHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 11
+            end: 156
+        "1":
+          label: Before
+          lexical_id: "IfThenOnlyHeader|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 68
+            end: 79
+        "2":
+          label: If
+          lexical_id: "IfThenOnlyHeader|root:0|hdr:if:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 85
+            end: 91
+        "6":
+          label: After
+          lexical_id: "IfThenOnlyHeader|root:0|hdr:if:1|hdr:after:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 138
+            end: 148
+      edges:
+        "1":
+          - "2"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenOnlyHeader\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If\"]\n    direction TB\n    n3[\"6: After\"]\n  end\n  n1 --> n2\nend\n"

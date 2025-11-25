@@ -92,7 +92,7 @@ expr:
       - "2"
     "2":
       - "8"
-mermaid: "flowchart TD\nsubgraph n0[\"IfThenElse\"]\n  direction TB\n  n1[\"Before\"]\n  subgraph n2[\"If should always do else\"]\n    direction TB\n    subgraph n3[\"BranchGroup: if (false)\"]\n      direction TB\n      subgraph n4[\"BranchArm: if (false)\"]\n        direction TB\n        n5[\"impossible: return 1\"]\n      end\n      subgraph n6[\"BranchArm: else\"]\n        direction TB\n        n7[\"should always be 5\"]\n      end\n    end\n  end\n  n8[\"After\"]\n  n1 --> n2\n  n2 --> n8\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenElse\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If should always do else\"]\n    direction TB\n    subgraph n3[\"3: BranchGroup: if (false)\"]\n      direction TB\n      subgraph n4[\"4: BranchArm: if (false)\"]\n        direction TB\n        n5[\"5: impossible: return 1\"]\n      end\n      subgraph n6[\"6: BranchArm: else\"]\n        direction TB\n        n7[\"7: should always be 5\"]\n      end\n    end\n  end\n  n8[\"8: After\"]\n  n1 --> n2\n  n2 --> n8\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -184,10 +184,7 @@ flattening:
           - "2"
         "2":
           - "8"
-    mermaid: "flowchart TD\nsubgraph n0[\"IfThenElse\"]\n  direction TB\n  n1[\"Before\"]\n  subgraph n2[\"If should always do else\"]\n    direction TB\n    subgraph n3[\"BranchGroup: if (false)\"]\n      direction TB\n      subgraph n4[\"BranchArm: if (false)\"]\n        direction TB\n        n5[\"impossible: return 1\"]\n      end\n      subgraph n6[\"BranchArm: else\"]\n        direction TB\n        n7[\"should always be 5\"]\n      end\n    end\n  end\n  n8[\"After\"]\n  n1 --> n2\n  n2 --> n8\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
-    expr:
+    json:
       nodes:
         "0":
           label: IfThenElse
@@ -275,10 +272,192 @@ flattening:
           - "2"
         "2":
           - "8"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenElse\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If should always do else\"]\n    direction TB\n    subgraph n3[\"3: BranchGroup: if (false)\"]\n      direction TB\n      subgraph n4[\"4: BranchArm: if (false)\"]\n        direction TB\n        n5[\"5: impossible: return 1\"]\n      end\n      subgraph n6[\"6: BranchArm: else\"]\n        direction TB\n        n7[\"7: should always be 5\"]\n      end\n    end\n  end\n  n8[\"8: After\"]\n  n1 --> n2\n  n2 --> n8\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: IfThenElse
+          lexical_id: "IfThenElse|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 11
+            end: 257
+        "1":
+          label: Before
+          lexical_id: "IfThenElse|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 62
+            end: 73
+        "2":
+          label: If should always do else
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 79
+            end: 107
+        "3":
+          label: if (false)
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 112
+            end: 230
+        "4":
+          label: if (false)
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 123
+            end: 175
+        "5":
+          label: "impossible: return 1"
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 134
+            end: 159
+        "6":
+          label: else
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 181
+            end: 230
+        "7":
+          label: should always be 5
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 191
+            end: 214
+        "8":
+          label: After
+          lexical_id: "IfThenElse|root:0|hdr:after:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 236
+            end: 245
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "8"
         "3":
           - "4"
           - "6"
-    mermaid: "flowchart TD\nsubgraph n0[\"IfThenElse\"]\n  direction TB\n  n1[\"Before\"]\n  subgraph n2[\"If should always do else\"]\n    direction TB\n    subgraph n3[\"BranchGroup: if (false)\"]\n      direction TB\n      subgraph n4[\"BranchArm: if (false)\"]\n        direction TB\n        n5[\"impossible: return 1\"]\n      end\n      subgraph n6[\"BranchArm: else\"]\n        direction TB\n        n7[\"should always be 5\"]\n      end\n    end\n    n3 --> n4\n    n3 --> n6\n  end\n  n8[\"After\"]\n  n1 --> n2\n  n2 --> n8\nend\n"
+    json:
+      nodes:
+        "0":
+          label: IfThenElse
+          lexical_id: "IfThenElse|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 11
+            end: 257
+        "1":
+          label: Before
+          lexical_id: "IfThenElse|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 62
+            end: 73
+        "2":
+          label: If should always do else
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 79
+            end: 107
+        "3":
+          label: if (false)
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 112
+            end: 230
+        "4":
+          label: if (false)
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 123
+            end: 175
+        "5":
+          label: "impossible: return 1"
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 134
+            end: 159
+        "6":
+          label: else
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 181
+            end: 230
+        "7":
+          label: should always be 5
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 191
+            end: 214
+        "8":
+          label: After
+          lexical_id: "IfThenElse|root:0|hdr:after:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 236
+            end: 245
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "8"
+        "3":
+          - "4"
+          - "6"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenElse\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If should always do else\"]\n    direction TB\n    n3[\"3: BranchGroup: if (false)\"]\n    subgraph n4[\"4: BranchArm: if (false)\"]\n      direction TB\n      n5[\"5: impossible: return 1\"]\n    end\n    subgraph n6[\"6: BranchArm: else\"]\n      direction TB\n      n7[\"7: should always be 5\"]\n    end\n    n3 --> n4\n    n3 --> n6\n  end\n  n8[\"8: After\"]\n  n1 --> n2\n  n2 --> n8\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -323,7 +502,7 @@ flattening:
           label: "impossible: return 1"
           lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
           node_type: header
-          parent: "3"
+          parent: "2"
           span:
             file: src/control_flow/testdata/IfThenElse.baml
             start: 134
@@ -332,7 +511,7 @@ flattening:
           label: should always be 5
           lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
           node_type: header
-          parent: "3"
+          parent: "2"
           span:
             file: src/control_flow/testdata/IfThenElse.baml
             start: 191
@@ -354,4 +533,77 @@ flattening:
         "3":
           - "5"
           - "7"
-    mermaid: "flowchart TD\nsubgraph n0[\"IfThenElse\"]\n  direction TB\n  n1[\"Before\"]\n  subgraph n2[\"If should always do else\"]\n    direction TB\n    subgraph n3[\"BranchGroup: if (false)\"]\n      direction TB\n      n4[\"impossible: return 1\"]\n      n5[\"should always be 5\"]\n    end\n    n3 --> n4\n    n3 --> n5\n  end\n  n6[\"After\"]\n  n1 --> n2\n  n2 --> n6\nend\n"
+    json:
+      nodes:
+        "0":
+          label: IfThenElse
+          lexical_id: "IfThenElse|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 11
+            end: 257
+        "1":
+          label: Before
+          lexical_id: "IfThenElse|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 62
+            end: 73
+        "2":
+          label: If should always do else
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 79
+            end: 107
+        "3":
+          label: if (false)
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 112
+            end: 230
+        "5":
+          label: "impossible: return 1"
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 134
+            end: 159
+        "7":
+          label: should always be 5
+          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 191
+            end: 214
+        "8":
+          label: After
+          lexical_id: "IfThenElse|root:0|hdr:after:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 236
+            end: 245
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "8"
+        "3":
+          - "5"
+          - "7"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenElse\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If should always do else\"]\n    direction TB\n    n3[\"3: BranchGroup: if (false)\"]\n    n4[\"5: impossible: return 1\"]\n    n5[\"7: should always be 5\"]\n    n3 --> n4\n    n3 --> n5\n  end\n  n6[\"8: After\"]\n  n1 --> n2\n  n2 --> n6\nend\n"

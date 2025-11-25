@@ -1,18 +1,88 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 2076
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "function ConditionalLogic(age int) -> string {
-  if age < 18 {
-    return "minor"
-  } else if age < 65 {
-    return "adult"
-  } else {
-    return "senior"
-  }
-}
-"
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ConditionalLogic"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER "age"
+        WORD "age"
+  WORD "int"
+  R_PAREN ")"
+  ARROW "->"
+  WORD "string"
+  L_BRACE "{"
+  KW_IF "if"
+  WORD "age"
+  LESS "<"
+  INTEGER_LITERAL "18"
+  L_BRACE "{"
+  KW_RETURN "return"
+  QUOTE """
+  WORD "minor"
+  QUOTE """
+  R_BRACE "}"
+  KW_ELSE "else"
+  KW_IF "if"
+  WORD "age"
+  LESS "<"
+  INTEGER_LITERAL "65"
+  L_BRACE "{"
+  KW_RETURN "return"
+  QUOTE """
+  WORD "adult"
+  QUOTE """
+  R_BRACE "}"
+  KW_ELSE "else"
+  L_BRACE "{"
+  KW_RETURN "return"
+  QUOTE """
+  WORD "senior"
+  QUOTE """
+  R_BRACE "}"
+  R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected type annotation (:), found Expected type annotation (:)
+  Expected Expected RParen, found Word, found Expected RParen, found Word
+  Expected Expected return type (->), found Expected return type (->)
+  Expected Expected function body, found Expected function body
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration

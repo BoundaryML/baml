@@ -20,6 +20,9 @@ pub use baml_thir;
 pub use baml_workspace;
 use salsa::Storage;
 
+/// Type alias for Salsa event callbacks
+pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
+
 /// Root database combining all compiler phases.
 /// With Salsa 2022, we use the #[`salsa::db`] attribute
 #[salsa::db]
@@ -37,6 +40,20 @@ impl RootDatabase {
     pub fn new() -> Self {
         Self {
             storage: Storage::default(),
+            next_file_id: Arc::new(AtomicU32::new(0)),
+        }
+    }
+
+    /// Create a new database with an event callback for tracking query execution.
+    ///
+    /// The callback will be invoked for various Salsa events, including:
+    /// - `WillExecute`: A query is about to be recomputed
+    /// - `DidValidateMemoizedValue`: A cached value was reused
+    ///
+    /// This is useful for tracking incremental compilation behavior.
+    pub fn new_with_event_callback(callback: EventCallback) -> Self {
+        Self {
+            storage: Storage::new(Some(callback)),
             next_file_id: Arc::new(AtomicU32::new(0)),
         }
     }

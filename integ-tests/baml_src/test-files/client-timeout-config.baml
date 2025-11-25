@@ -32,6 +32,18 @@ client<llm> TestRequestTimeoutClient {
   }
 }
 
+// Client with only request timeout
+client<llm> TestRequestTimeoutClient3Seconds {
+  provider openai
+  options {
+    model "gpt-4o-mini"
+    api_key env.OPENAI_API_KEY
+    http {
+      request_timeout_ms 3000  // 3 second timeout
+    }
+  }
+}
+
 function TestRequestTimeout(input: string) -> string {
   client TestRequestTimeoutClient
   prompt #"
@@ -90,5 +102,21 @@ function TestStreamingTimeout(input: string) -> string {
   client TestStreamingTimeoutClient
   prompt #"
     Stream a long response about: {{input}}
+  "#
+}
+
+
+function TestDefaultStreamingTimeout(input: string) -> string {
+  client TestRequestTimeoutClient3Seconds
+  prompt #"
+    Stream a long response about: {{input}}.
+    Try to make it at least 30 pages of text.
+    Cover the full history of timeouts. Who invented them. Go back in time
+    to the first watchmakers and factory wardens. Then explore their
+    relation to Einstein's theory of relativity.
+    Cover every conceivable scenario - multiple threads in a worker pool
+    that share a timeout, how locks relate to timeouts. Safely releasing
+    resources when a timeout occurs.
+
   "#
 }

@@ -8,8 +8,63 @@ use baml_types::{
 
 use super::{IRRpcState, IntoRpcEvent};
 
-impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, runtime_api::BamlValue<'a>>
-    for BamlValueWithMeta<T>
+/// Convert a BamlValueWithMeta to RPC event without generating type references (uses Unknown instead).
+/// This is more efficient for Native functions where type information isn't needed.
+pub(super) fn to_rpc_event_without_types<
+    'a,
+    T: HasType<type_meta::NonStreaming> + std::fmt::Debug,
+>(
+    value: &'a BamlValueWithMeta<T>,
+    lookup: &(impl IRRpcState + ?Sized),
+) -> runtime_api::BamlValue<'a> {
+    let content = match value {
+        BamlValueWithMeta::String(s, _) => {
+            baml_rpc::runtime_api::ValueContent::String(Cow::Borrowed(s))
+        }
+        BamlValueWithMeta::Int(v, _) => baml_rpc::runtime_api::ValueContent::Int(*v),
+        BamlValueWithMeta::Float(v, _) => baml_rpc::runtime_api::ValueContent::Float(*v),
+        BamlValueWithMeta::Bool(v, _) => baml_rpc::runtime_api::ValueContent::Boolean(*v),
+        BamlValueWithMeta::Map(index_map, _) => baml_rpc::runtime_api::ValueContent::Map(
+            index_map
+                .iter()
+                .map(|(k, v)| (k.clone(), to_rpc_event_without_types(v, lookup)))
+                .collect(),
+        ),
+        BamlValueWithMeta::List(baml_value_with_metas, _) => {
+            baml_rpc::runtime_api::ValueContent::List(
+                baml_value_with_metas
+                    .iter()
+                    .map(|v| to_rpc_event_without_types(v, lookup))
+                    .collect(),
+            )
+        }
+        BamlValueWithMeta::Media(baml_media, _) => {
+            baml_rpc::runtime_api::ValueContent::Media(baml_media.to_rpc_event(lookup))
+        }
+        BamlValueWithMeta::Enum(name, value, _) => baml_rpc::runtime_api::ValueContent::Enum {
+            value: value.clone(),
+        },
+        BamlValueWithMeta::Class(_, index_map, _) => baml_rpc::runtime_api::ValueContent::Class {
+            fields: index_map
+                .iter()
+                .map(|(k, v)| (k.clone(), to_rpc_event_without_types(v, lookup)))
+                .collect(),
+        },
+        BamlValueWithMeta::Null(_) => baml_rpc::runtime_api::ValueContent::Null,
+    };
+
+    baml_rpc::runtime_api::BamlValue {
+        metadata: runtime_api::ValueMetadata {
+            type_index: runtime_api::TypeIndex::NotUnion,
+            type_ref: baml_rpc::TypeReference::Unknown,
+            check_results: None,
+        },
+        value: content,
+    }
+}
+
+impl<'a, T: HasType<type_meta::NonStreaming> + std::fmt::Debug>
+    IntoRpcEvent<'a, runtime_api::BamlValue<'a>> for BamlValueWithMeta<T>
 {
     fn to_rpc_event(&'a self, lookup: &(impl IRRpcState + ?Sized)) -> runtime_api::BamlValue<'a> {
         let type_ref = self.field_type().to_rpc_event(lookup);

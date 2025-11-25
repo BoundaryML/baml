@@ -79,12 +79,19 @@ impl<'a, T: HasType<type_meta::NonStreaming>> TraceEvent<'a, T> {
     pub fn new_function_end(
         call_stack: Vec<FunctionCallId>,
         result: Result<BamlValueWithMeta<T>, BamlError<'a>>,
+        function_type: FunctionType,
     ) -> Self {
         Self::from_existing_call(
             call_stack,
             TraceData::FunctionEnd(match result {
-                Ok(value) => FunctionEnd::Success(value),
-                Err(e) => FunctionEnd::Error(e),
+                Ok(value) => FunctionEnd::Success {
+                    value,
+                    function_type,
+                },
+                Err(error) => FunctionEnd::Error {
+                    error,
+                    function_type,
+                },
             }),
         )
         .expect("Failed to create function end event")
@@ -203,8 +210,14 @@ pub struct FunctionStart<T: HasType<type_meta::NonStreaming>> {
 
 #[derive(Debug)]
 pub enum FunctionEnd<'a, T: HasType<type_meta::NonStreaming>> {
-    Success(BamlValueWithMeta<T>),
-    Error(BamlError<'a>),
+    Success {
+        value: BamlValueWithMeta<T>,
+        function_type: FunctionType,
+    },
+    Error {
+        error: BamlError<'a>,
+        function_type: FunctionType,
+    },
 }
 
 // LLM specific events

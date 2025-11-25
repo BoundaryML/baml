@@ -12,7 +12,7 @@ use internal_baml_core::feature_flags::FeatureFlags;
 use serde_json::{json, Value};
 
 use super::{
-    flatten::{expand_branch_groups, flatten_branch_arms_and_scopes, remove_implicit_nodes},
+    flatten::{hoist_branch_arms, inline_branch_arms_and_scopes, remove_implicit_nodes},
     mermaid::to_mermaid,
     *,
 };
@@ -115,8 +115,8 @@ fn test_snapshots() {
                         match build_from_hir(&hir, &target_name) {
                             Ok(viz) => {
                                 let pass1 = remove_implicit_nodes(&viz);
-                                let pass2 = expand_branch_groups(&pass1);
-                                let pass3 = flatten_branch_arms_and_scopes(&pass2);
+                                let pass2 = hoist_branch_arms(&pass1);
+                                let pass3 = inline_branch_arms_and_scopes(&pass2);
 
                                 json!({
                                     "hir": format!("{:#?}", &hir.expr_functions.iter().find(|f| f.name == target_name).map(|f| &f.body)),
@@ -124,7 +124,7 @@ fn test_snapshots() {
                                     "mermaid": to_mermaid(&viz),
                                     "flattening": {
                                         "pass1_remove_implicit": flatten_stage_snapshot("Remove implicit nodes", &pass1),
-                                        "pass2_expand_branch_groups": flatten_stage_snapshot("Expand branch groups", &pass2),
+                                        "pass2_hoist_branch_arms": flatten_stage_snapshot("Hoist branch arms", &pass2),
                                         "pass3_flatten_scopes": flatten_stage_snapshot("Flatten branch arms & scopes", &pass3),
                                     },
                                 })
@@ -144,9 +144,11 @@ fn test_snapshots() {
 }
 
 fn flatten_stage_snapshot(stage: &str, viz: &ControlFlowVisualization) -> Value {
+    let viz_json = viz_snapshot(viz);
     json!({
         "label": stage,
-        "expr": viz_snapshot(viz),
+        "expr": viz_json.clone(),
+        "json": viz_json,
         "mermaid": to_mermaid(viz),
     })
 }

@@ -248,7 +248,7 @@ expr:
       - "11"
     "9":
       - "10"
-mermaid: "flowchart TD\nsubgraph n0[\"AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"Fetch Resources\"]\n    direction TB\n    n2[\"Retrieve Emails and Posts from Database\"]\n    n3[\"Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"Generate Content\"]\n    direction TB\n    subgraph n5[\"Video Summarization\"]\n      direction TB\n      subgraph n6[\"BranchGroup: if (has_transcript)\"]\n        direction TB\n        subgraph n7[\"BranchArm: if (has_transcript)\"]\n          direction TB\n          subgraph n8[\"Generate Summary\"]\n            direction TB\n            n9[\"Create Summary Text\"]\n            n10[\"Label Summary Category\"]\n            n9 --> n10\n          end\n          n11[\"Save Summary\"]\n          n8 --> n11\n        end\n        subgraph n12[\"BranchArm: else\"]\n          direction TB\n          n13[\"Skip Summarization\"]\n        end\n      end\n    end\n    subgraph n14[\"Generate Drafts for Posts\"]\n      direction TB\n      subgraph n15[\"Loop: for (kind in content_types)\"]\n        direction TB\n        n16[\"Get Content Type and Generate Draft\"]\n        n17[\"Save Draft\"]\n        n16 --> n17\n      end\n    end\n    n5 --> n14\n  end\n  subgraph n18[\"Prepare Pull Request\"]\n    direction TB\n    subgraph n19[\"BranchGroup: if (summary != no-transcript)\"]\n      direction TB\n      subgraph n20[\"BranchArm: if (summary != no-transcript)\"]\n        direction TB\n        n21[\"Create GitHub PR\"]\n      end\n      subgraph n22[\"BranchArm: else\"]\n        direction TB\n        n23[\"Missing Summary\"]\n      end\n    end\n  end\n  n24[\"Complete\"]\n  n1 --> n4\n  n4 --> n18\n  n18 --> n24\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"1: Fetch Resources\"]\n    direction TB\n    n2[\"2: Retrieve Emails and Posts from Database\"]\n    n3[\"3: Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"4: Generate Content\"]\n    direction TB\n    subgraph n5[\"5: Video Summarization\"]\n      direction TB\n      subgraph n6[\"6: BranchGroup: if (has_transcript)\"]\n        direction TB\n        subgraph n7[\"7: BranchArm: if (has_transcript)\"]\n          direction TB\n          subgraph n8[\"8: Generate Summary\"]\n            direction TB\n            n9[\"9: Create Summary Text\"]\n            n10[\"10: Label Summary Category\"]\n            n9 --> n10\n          end\n          n11[\"11: Save Summary\"]\n          n8 --> n11\n        end\n        subgraph n12[\"12: BranchArm: else\"]\n          direction TB\n          n13[\"13: Skip Summarization\"]\n        end\n      end\n    end\n    subgraph n14[\"14: Generate Drafts for Posts\"]\n      direction TB\n      subgraph n15[\"15: Loop: for (kind in content_types)\"]\n        direction TB\n        n16[\"16: Get Content Type and Generate Draft\"]\n        n17[\"17: Save Draft\"]\n        n16 --> n17\n      end\n    end\n    n5 --> n14\n  end\n  subgraph n18[\"18: Prepare Pull Request\"]\n    direction TB\n    subgraph n19[\"19: BranchGroup: if (summary != no-transcript)\"]\n      direction TB\n      subgraph n20[\"20: BranchArm: if (summary != no-transcript)\"]\n        direction TB\n        n21[\"21: Create GitHub PR\"]\n      end\n      subgraph n22[\"22: BranchArm: else\"]\n        direction TB\n        n23[\"23: Missing Summary\"]\n      end\n    end\n  end\n  n24[\"24: Complete\"]\n  n1 --> n4\n  n4 --> n18\n  n18 --> n24\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -496,10 +496,7 @@ flattening:
           - "11"
         "9":
           - "10"
-    mermaid: "flowchart TD\nsubgraph n0[\"AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"Fetch Resources\"]\n    direction TB\n    n2[\"Retrieve Emails and Posts from Database\"]\n    n3[\"Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"Generate Content\"]\n    direction TB\n    subgraph n5[\"Video Summarization\"]\n      direction TB\n      subgraph n6[\"BranchGroup: if (has_transcript)\"]\n        direction TB\n        subgraph n7[\"BranchArm: if (has_transcript)\"]\n          direction TB\n          subgraph n8[\"Generate Summary\"]\n            direction TB\n            n9[\"Create Summary Text\"]\n            n10[\"Label Summary Category\"]\n            n9 --> n10\n          end\n          n11[\"Save Summary\"]\n          n8 --> n11\n        end\n        subgraph n12[\"BranchArm: else\"]\n          direction TB\n          n13[\"Skip Summarization\"]\n        end\n      end\n    end\n    subgraph n14[\"Generate Drafts for Posts\"]\n      direction TB\n      subgraph n15[\"Loop: for (kind in content_types)\"]\n        direction TB\n        n16[\"Get Content Type and Generate Draft\"]\n        n17[\"Save Draft\"]\n        n16 --> n17\n      end\n    end\n    n5 --> n14\n  end\n  subgraph n18[\"Prepare Pull Request\"]\n    direction TB\n    subgraph n19[\"BranchGroup: if (summary != no-transcript)\"]\n      direction TB\n      subgraph n20[\"BranchArm: if (summary != no-transcript)\"]\n        direction TB\n        n21[\"Create GitHub PR\"]\n      end\n      subgraph n22[\"BranchArm: else\"]\n        direction TB\n        n23[\"Missing Summary\"]\n      end\n    end\n  end\n  n24[\"Complete\"]\n  n1 --> n4\n  n4 --> n18\n  n18 --> n24\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
-    expr:
+    json:
       nodes:
         "0":
           label: AIContentPipeline
@@ -733,6 +730,253 @@ flattening:
           - "17"
         "18":
           - "24"
+        "2":
+          - "3"
+        "4":
+          - "18"
+        "5":
+          - "14"
+        "8":
+          - "11"
+        "9":
+          - "10"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"1: Fetch Resources\"]\n    direction TB\n    n2[\"2: Retrieve Emails and Posts from Database\"]\n    n3[\"3: Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"4: Generate Content\"]\n    direction TB\n    subgraph n5[\"5: Video Summarization\"]\n      direction TB\n      subgraph n6[\"6: BranchGroup: if (has_transcript)\"]\n        direction TB\n        subgraph n7[\"7: BranchArm: if (has_transcript)\"]\n          direction TB\n          subgraph n8[\"8: Generate Summary\"]\n            direction TB\n            n9[\"9: Create Summary Text\"]\n            n10[\"10: Label Summary Category\"]\n            n9 --> n10\n          end\n          n11[\"11: Save Summary\"]\n          n8 --> n11\n        end\n        subgraph n12[\"12: BranchArm: else\"]\n          direction TB\n          n13[\"13: Skip Summarization\"]\n        end\n      end\n    end\n    subgraph n14[\"14: Generate Drafts for Posts\"]\n      direction TB\n      subgraph n15[\"15: Loop: for (kind in content_types)\"]\n        direction TB\n        n16[\"16: Get Content Type and Generate Draft\"]\n        n17[\"17: Save Draft\"]\n        n16 --> n17\n      end\n    end\n    n5 --> n14\n  end\n  subgraph n18[\"18: Prepare Pull Request\"]\n    direction TB\n    subgraph n19[\"19: BranchGroup: if (summary != no-transcript)\"]\n      direction TB\n      subgraph n20[\"20: BranchArm: if (summary != no-transcript)\"]\n        direction TB\n        n21[\"21: Create GitHub PR\"]\n      end\n      subgraph n22[\"22: BranchArm: else\"]\n        direction TB\n        n23[\"23: Missing Summary\"]\n      end\n    end\n  end\n  n24[\"24: Complete\"]\n  n1 --> n4\n  n4 --> n18\n  n18 --> n24\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: AIContentPipeline
+          lexical_id: "AIContentPipeline|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 24
+            end: 1530
+        "1":
+          label: Fetch Resources
+          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 145
+            end: 164
+        "10":
+          label: Label Summary Category
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 677
+            end: 706
+        "11":
+          label: Save Summary
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 764
+            end: 782
+        "12":
+          label: else
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 827
+            end: 891
+        "13":
+          label: Skip Summarization
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          node_type: header
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 837
+            end: 861
+        "14":
+          label: Generate Drafts for Posts
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 951
+            end: 981
+        "15":
+          label: for (kind in content_types)
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          node_type: loop
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 986
+            end: 1282
+        "16":
+          label: Get Content Type and Generate Draft
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1028
+            end: 1069
+        "17":
+          label: Save Draft
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1185
+            end: 1201
+        "18":
+          label: Prepare Pull Request
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1288
+            end: 1312
+        "19":
+          label: "if (summary != \"no-transcript\")"
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          node_type: branch-group
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1333
+            end: 1498
+        "2":
+          label: Retrieve Emails and Posts from Database
+          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 170
+            end: 214
+        "20":
+          label: "if (summary != \"no-transcript\")"
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+          node_type: branch-arm
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1365
+            end: 1439
+        "21":
+          label: Create GitHub PR
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          node_type: header
+          parent: "20"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1375
+            end: 1397
+        "22":
+          label: else
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1445
+            end: 1498
+        "23":
+          label: Missing Summary
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          node_type: header
+          parent: "22"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1455
+            end: 1476
+        "24":
+          label: Complete
+          lexical_id: "AIContentPipeline|root:0|hdr:complete:3"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1505
+            end: 1517
+        "3":
+          label: Process and Load Video
+          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 278
+            end: 305
+        "4":
+          label: Generate Content
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 416
+            end: 436
+        "5":
+          label: Video Summarization
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 442
+            end: 466
+        "6":
+          label: if (has_transcript)
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          node_type: branch-group
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 528
+            end: 891
+        "7":
+          label: if (has_transcript)
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 548
+            end: 821
+        "8":
+          label: Generate Summary
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 558
+            end: 580
+        "9":
+          label: Create Summary Text
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 590
+            end: 616
+      edges:
+        "1":
+          - "4"
+        "16":
+          - "17"
+        "18":
+          - "24"
         "19":
           - "20"
           - "22"
@@ -749,7 +993,257 @@ flattening:
           - "11"
         "9":
           - "10"
-    mermaid: "flowchart TD\nsubgraph n0[\"AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"Fetch Resources\"]\n    direction TB\n    n2[\"Retrieve Emails and Posts from Database\"]\n    n3[\"Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"Generate Content\"]\n    direction TB\n    subgraph n5[\"Video Summarization\"]\n      direction TB\n      subgraph n6[\"BranchGroup: if (has_transcript)\"]\n        direction TB\n        subgraph n7[\"BranchArm: if (has_transcript)\"]\n          direction TB\n          subgraph n8[\"Generate Summary\"]\n            direction TB\n            n9[\"Create Summary Text\"]\n            n10[\"Label Summary Category\"]\n            n9 --> n10\n          end\n          n11[\"Save Summary\"]\n          n8 --> n11\n        end\n        subgraph n12[\"BranchArm: else\"]\n          direction TB\n          n13[\"Skip Summarization\"]\n        end\n      end\n      n6 --> n7\n      n6 --> n12\n    end\n    subgraph n14[\"Generate Drafts for Posts\"]\n      direction TB\n      subgraph n15[\"Loop: for (kind in content_types)\"]\n        direction TB\n        n16[\"Get Content Type and Generate Draft\"]\n        n17[\"Save Draft\"]\n        n16 --> n17\n      end\n    end\n    n5 --> n14\n  end\n  subgraph n18[\"Prepare Pull Request\"]\n    direction TB\n    subgraph n19[\"BranchGroup: if (summary != no-transcript)\"]\n      direction TB\n      subgraph n20[\"BranchArm: if (summary != no-transcript)\"]\n        direction TB\n        n21[\"Create GitHub PR\"]\n      end\n      subgraph n22[\"BranchArm: else\"]\n        direction TB\n        n23[\"Missing Summary\"]\n      end\n    end\n    n19 --> n20\n    n19 --> n22\n  end\n  n24[\"Complete\"]\n  n1 --> n4\n  n4 --> n18\n  n18 --> n24\nend\n"
+    json:
+      nodes:
+        "0":
+          label: AIContentPipeline
+          lexical_id: "AIContentPipeline|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 24
+            end: 1530
+        "1":
+          label: Fetch Resources
+          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 145
+            end: 164
+        "10":
+          label: Label Summary Category
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 677
+            end: 706
+        "11":
+          label: Save Summary
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 764
+            end: 782
+        "12":
+          label: else
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 827
+            end: 891
+        "13":
+          label: Skip Summarization
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          node_type: header
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 837
+            end: 861
+        "14":
+          label: Generate Drafts for Posts
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 951
+            end: 981
+        "15":
+          label: for (kind in content_types)
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          node_type: loop
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 986
+            end: 1282
+        "16":
+          label: Get Content Type and Generate Draft
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1028
+            end: 1069
+        "17":
+          label: Save Draft
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1185
+            end: 1201
+        "18":
+          label: Prepare Pull Request
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1288
+            end: 1312
+        "19":
+          label: "if (summary != \"no-transcript\")"
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          node_type: branch-group
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1333
+            end: 1498
+        "2":
+          label: Retrieve Emails and Posts from Database
+          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 170
+            end: 214
+        "20":
+          label: "if (summary != \"no-transcript\")"
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+          node_type: branch-arm
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1365
+            end: 1439
+        "21":
+          label: Create GitHub PR
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          node_type: header
+          parent: "20"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1375
+            end: 1397
+        "22":
+          label: else
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1445
+            end: 1498
+        "23":
+          label: Missing Summary
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          node_type: header
+          parent: "22"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1455
+            end: 1476
+        "24":
+          label: Complete
+          lexical_id: "AIContentPipeline|root:0|hdr:complete:3"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1505
+            end: 1517
+        "3":
+          label: Process and Load Video
+          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 278
+            end: 305
+        "4":
+          label: Generate Content
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 416
+            end: 436
+        "5":
+          label: Video Summarization
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 442
+            end: 466
+        "6":
+          label: if (has_transcript)
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          node_type: branch-group
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 528
+            end: 891
+        "7":
+          label: if (has_transcript)
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 548
+            end: 821
+        "8":
+          label: Generate Summary
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 558
+            end: 580
+        "9":
+          label: Create Summary Text
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 590
+            end: 616
+      edges:
+        "1":
+          - "4"
+        "16":
+          - "17"
+        "18":
+          - "24"
+        "19":
+          - "20"
+          - "22"
+        "2":
+          - "3"
+        "4":
+          - "18"
+        "5":
+          - "14"
+        "6":
+          - "12"
+          - "7"
+        "8":
+          - "11"
+        "9":
+          - "10"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"1: Fetch Resources\"]\n    direction TB\n    n2[\"2: Retrieve Emails and Posts from Database\"]\n    n3[\"3: Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"4: Generate Content\"]\n    direction TB\n    subgraph n5[\"5: Video Summarization\"]\n      direction TB\n      n6[\"6: BranchGroup: if (has_transcript)\"]\n      subgraph n7[\"7: BranchArm: if (has_transcript)\"]\n        direction TB\n        subgraph n8[\"8: Generate Summary\"]\n          direction TB\n          n9[\"9: Create Summary Text\"]\n          n10[\"10: Label Summary Category\"]\n          n9 --> n10\n        end\n        n11[\"11: Save Summary\"]\n        n8 --> n11\n      end\n      subgraph n12[\"12: BranchArm: else\"]\n        direction TB\n        n13[\"13: Skip Summarization\"]\n      end\n      n6 --> n7\n      n6 --> n12\n    end\n    subgraph n14[\"14: Generate Drafts for Posts\"]\n      direction TB\n      subgraph n15[\"15: Loop: for (kind in content_types)\"]\n        direction TB\n        n16[\"16: Get Content Type and Generate Draft\"]\n        n17[\"17: Save Draft\"]\n        n16 --> n17\n      end\n    end\n    n5 --> n14\n  end\n  subgraph n18[\"18: Prepare Pull Request\"]\n    direction TB\n    n19[\"19: BranchGroup: if (summary != no-transcript)\"]\n    subgraph n20[\"20: BranchArm: if (summary != no-transcript)\"]\n      direction TB\n      n21[\"21: Create GitHub PR\"]\n    end\n    subgraph n22[\"22: BranchArm: else\"]\n      direction TB\n      n23[\"23: Missing Summary\"]\n    end\n    n19 --> n20\n    n19 --> n22\n  end\n  n24[\"24: Complete\"]\n  n1 --> n4\n  n4 --> n18\n  n18 --> n24\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -785,7 +1279,7 @@ flattening:
           label: Save Summary
           lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
           node_type: header
-          parent: "6"
+          parent: "5"
           span:
             file: src/control_flow/testdata/AIContentPipeline.baml
             start: 764
@@ -794,7 +1288,7 @@ flattening:
           label: Skip Summarization
           lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
           node_type: header
-          parent: "6"
+          parent: "5"
           span:
             file: src/control_flow/testdata/AIContentPipeline.baml
             start: 837
@@ -866,7 +1360,7 @@ flattening:
           label: Create GitHub PR
           lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
           node_type: header
-          parent: "19"
+          parent: "18"
           span:
             file: src/control_flow/testdata/AIContentPipeline.baml
             start: 1375
@@ -875,7 +1369,7 @@ flattening:
           label: Missing Summary
           lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
           node_type: header
-          parent: "19"
+          parent: "18"
           span:
             file: src/control_flow/testdata/AIContentPipeline.baml
             start: 1455
@@ -929,7 +1423,7 @@ flattening:
           label: Generate Summary
           lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
           node_type: header
-          parent: "6"
+          parent: "5"
           span:
             file: src/control_flow/testdata/AIContentPipeline.baml
             start: 558
@@ -966,4 +1460,218 @@ flattening:
           - "11"
         "9":
           - "10"
-    mermaid: "flowchart TD\nsubgraph n0[\"AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"Fetch Resources\"]\n    direction TB\n    n2[\"Retrieve Emails and Posts from Database\"]\n    n3[\"Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"Generate Content\"]\n    direction TB\n    subgraph n5[\"Video Summarization\"]\n      direction TB\n      subgraph n6[\"BranchGroup: if (has_transcript)\"]\n        direction TB\n        subgraph n7[\"Generate Summary\"]\n          direction TB\n          n8[\"Create Summary Text\"]\n          n9[\"Label Summary Category\"]\n          n8 --> n9\n        end\n        n10[\"Save Summary\"]\n        n11[\"Skip Summarization\"]\n        n7 --> n10\n      end\n      n6 --> n7\n      n6 --> n11\n    end\n    subgraph n12[\"Generate Drafts for Posts\"]\n      direction TB\n      subgraph n13[\"Loop: for (kind in content_types)\"]\n        direction TB\n        n14[\"Get Content Type and Generate Draft\"]\n        n15[\"Save Draft\"]\n        n14 --> n15\n      end\n    end\n    n5 --> n12\n  end\n  subgraph n16[\"Prepare Pull Request\"]\n    direction TB\n    subgraph n17[\"BranchGroup: if (summary != no-transcript)\"]\n      direction TB\n      n18[\"Create GitHub PR\"]\n      n19[\"Missing Summary\"]\n    end\n    n17 --> n18\n    n17 --> n19\n  end\n  n20[\"Complete\"]\n  n1 --> n4\n  n4 --> n16\n  n16 --> n20\nend\n"
+    json:
+      nodes:
+        "0":
+          label: AIContentPipeline
+          lexical_id: "AIContentPipeline|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 24
+            end: 1530
+        "1":
+          label: Fetch Resources
+          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 145
+            end: 164
+        "10":
+          label: Label Summary Category
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 677
+            end: 706
+        "11":
+          label: Save Summary
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          node_type: header
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 764
+            end: 782
+        "13":
+          label: Skip Summarization
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          node_type: header
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 837
+            end: 861
+        "14":
+          label: Generate Drafts for Posts
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 951
+            end: 981
+        "15":
+          label: for (kind in content_types)
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          node_type: loop
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 986
+            end: 1282
+        "16":
+          label: Get Content Type and Generate Draft
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1028
+            end: 1069
+        "17":
+          label: Save Draft
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1185
+            end: 1201
+        "18":
+          label: Prepare Pull Request
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1288
+            end: 1312
+        "19":
+          label: "if (summary != \"no-transcript\")"
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          node_type: branch-group
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1333
+            end: 1498
+        "2":
+          label: Retrieve Emails and Posts from Database
+          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 170
+            end: 214
+        "21":
+          label: Create GitHub PR
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          node_type: header
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1375
+            end: 1397
+        "23":
+          label: Missing Summary
+          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          node_type: header
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1455
+            end: 1476
+        "24":
+          label: Complete
+          lexical_id: "AIContentPipeline|root:0|hdr:complete:3"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1505
+            end: 1517
+        "3":
+          label: Process and Load Video
+          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 278
+            end: 305
+        "4":
+          label: Generate Content
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 416
+            end: 436
+        "5":
+          label: Video Summarization
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 442
+            end: 466
+        "6":
+          label: if (has_transcript)
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          node_type: branch-group
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 528
+            end: 891
+        "8":
+          label: Generate Summary
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 558
+            end: 580
+        "9":
+          label: Create Summary Text
+          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 590
+            end: 616
+      edges:
+        "1":
+          - "4"
+        "16":
+          - "17"
+        "18":
+          - "24"
+        "19":
+          - "21"
+          - "23"
+        "2":
+          - "3"
+        "4":
+          - "18"
+        "5":
+          - "14"
+        "6":
+          - "13"
+          - "8"
+        "8":
+          - "11"
+        "9":
+          - "10"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"1: Fetch Resources\"]\n    direction TB\n    n2[\"2: Retrieve Emails and Posts from Database\"]\n    n3[\"3: Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"4: Generate Content\"]\n    direction TB\n    subgraph n5[\"5: Video Summarization\"]\n      direction TB\n      n6[\"6: BranchGroup: if (has_transcript)\"]\n      subgraph n7[\"8: Generate Summary\"]\n        direction TB\n        n8[\"9: Create Summary Text\"]\n        n9[\"10: Label Summary Category\"]\n        n8 --> n9\n      end\n      n10[\"11: Save Summary\"]\n      n11[\"13: Skip Summarization\"]\n      n7 --> n10\n      n6 --> n7\n      n6 --> n11\n    end\n    subgraph n12[\"14: Generate Drafts for Posts\"]\n      direction TB\n      subgraph n13[\"15: Loop: for (kind in content_types)\"]\n        direction TB\n        n14[\"16: Get Content Type and Generate Draft\"]\n        n15[\"17: Save Draft\"]\n        n14 --> n15\n      end\n    end\n    n5 --> n12\n  end\n  subgraph n16[\"18: Prepare Pull Request\"]\n    direction TB\n    n17[\"19: BranchGroup: if (summary != no-transcript)\"]\n    n18[\"21: Create GitHub PR\"]\n    n19[\"23: Missing Summary\"]\n    n17 --> n18\n    n17 --> n19\n  end\n  n20[\"24: Complete\"]\n  n1 --> n4\n  n4 --> n16\n  n16 --> n20\nend\n"

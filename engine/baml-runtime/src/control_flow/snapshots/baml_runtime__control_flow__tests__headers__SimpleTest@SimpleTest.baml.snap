@@ -25,7 +25,7 @@ expr:
         start: 38
         end: 53
   edges: {}
-mermaid: "flowchart TD\nsubgraph n0[\"SimpleTest\"]\n  direction TB\n  n1[\"Main Header\"]\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: SimpleTest\"]\n  direction TB\n  n1[\"1: Main Header\"]\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -50,9 +50,30 @@ flattening:
             start: 38
             end: 53
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"SimpleTest\"]\n  direction TB\n  n1[\"Main Header\"]\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
+    json:
+      nodes:
+        "0":
+          label: SimpleTest
+          lexical_id: "SimpleTest|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/SimpleTest.baml
+            start: 0
+            end: 82
+        "1":
+          label: Main Header
+          lexical_id: "SimpleTest|root:0|hdr:main-header:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/SimpleTest.baml
+            start: 38
+            end: 53
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: SimpleTest\"]\n  direction TB\n  n1[\"1: Main Header\"]\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
     expr:
       nodes:
         "0":
@@ -74,7 +95,28 @@ flattening:
             start: 38
             end: 53
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"SimpleTest\"]\n  direction TB\n  n1[\"Main Header\"]\nend\n"
+    json:
+      nodes:
+        "0":
+          label: SimpleTest
+          lexical_id: "SimpleTest|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/SimpleTest.baml
+            start: 0
+            end: 82
+        "1":
+          label: Main Header
+          lexical_id: "SimpleTest|root:0|hdr:main-header:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/SimpleTest.baml
+            start: 38
+            end: 53
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: SimpleTest\"]\n  direction TB\n  n1[\"1: Main Header\"]\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -98,4 +140,25 @@ flattening:
             start: 38
             end: 53
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"SimpleTest\"]\n  direction TB\n  n1[\"Main Header\"]\nend\n"
+    json:
+      nodes:
+        "0":
+          label: SimpleTest
+          lexical_id: "SimpleTest|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/SimpleTest.baml
+            start: 0
+            end: 82
+        "1":
+          label: Main Header
+          lexical_id: "SimpleTest|root:0|hdr:main-header:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/SimpleTest.baml
+            start: 38
+            end: 53
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: SimpleTest\"]\n  direction TB\n  n1[\"1: Main Header\"]\nend\n"

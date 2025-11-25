@@ -534,12 +534,12 @@ impl BamlRuntime {
         abort_controller: Option<&crate::abort_controller::AbortController>,
         #[allow(unused_variables)] watchers: Option<PyObject>,
     ) -> PyResult<FunctionResult> {
-        let Some(args) = parse_py_type(args, false)? else {
+        let Some(baml_args) = parse_py_type(args, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
                 "Failed to parse args, perhaps you used a non-serializable type?",
             ));
         };
-        let Some(args_map) = args.as_map_owned() else {
+        let Some(args_map) = baml_args.as_map_owned() else {
             return Err(BamlInvalidArgumentError::new_err(
                 "Failed to parse args as a map",
             ));

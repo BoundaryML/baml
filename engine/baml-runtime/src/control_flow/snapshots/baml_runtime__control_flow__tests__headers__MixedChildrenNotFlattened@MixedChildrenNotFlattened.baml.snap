@@ -43,7 +43,7 @@ expr:
         start: 138
         end: 152
   edges: {}
-mermaid: "flowchart TD\nsubgraph n0[\"MixedChildrenNotFlattened\"]\n  direction TB\n  subgraph n1[\"MD Child\"]\n    direction TB\n    subgraph n2[\"Loop: for (item in items)\"]\n      direction TB\n      n3[\"Loop Child\"]\n    end\n  end\nend\n"
+mermaid: "flowchart TD\nsubgraph n0[\"0: MixedChildrenNotFlattened\"]\n  direction TB\n  subgraph n1[\"1: MD Child\"]\n    direction TB\n    subgraph n2[\"2: Loop: for (item in items)\"]\n      direction TB\n      n3[\"3: Loop Child\"]\n    end\n  end\nend\n"
 flattening:
   pass1_remove_implicit:
     label: Remove implicit nodes
@@ -86,9 +86,48 @@ flattening:
             start: 138
             end: 152
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"MixedChildrenNotFlattened\"]\n  direction TB\n  subgraph n1[\"MD Child\"]\n    direction TB\n    subgraph n2[\"Loop: for (item in items)\"]\n      direction TB\n      n3[\"Loop Child\"]\n    end\n  end\nend\n"
-  pass2_expand_branch_groups:
-    label: Expand branch groups
+    json:
+      nodes:
+        "0":
+          label: MixedChildrenNotFlattened
+          lexical_id: "MixedChildrenNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 11
+            end: 184
+        "1":
+          label: MD Child
+          lexical_id: "MixedChildrenNotFlattened|root:0|hdr:md-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 64
+            end: 77
+        "2":
+          label: for (item in items)
+          lexical_id: "MixedChildrenNotFlattened|root:0|hdr:md-child:0|loop:for-item-in-items:0"
+          node_type: loop
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 104
+            end: 171
+        "3":
+          label: Loop Child
+          lexical_id: "MixedChildrenNotFlattened|root:0|hdr:md-child:0|loop:for-item-in-items:0|hdr:loop-child:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 138
+            end: 152
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: MixedChildrenNotFlattened\"]\n  direction TB\n  subgraph n1[\"1: MD Child\"]\n    direction TB\n    subgraph n2[\"2: Loop: for (item in items)\"]\n      direction TB\n      n3[\"3: Loop Child\"]\n    end\n  end\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
     expr:
       nodes:
         "0":
@@ -128,7 +167,46 @@ flattening:
             start: 138
             end: 152
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"MixedChildrenNotFlattened\"]\n  direction TB\n  subgraph n1[\"MD Child\"]\n    direction TB\n    subgraph n2[\"Loop: for (item in items)\"]\n      direction TB\n      n3[\"Loop Child\"]\n    end\n  end\nend\n"
+    json:
+      nodes:
+        "0":
+          label: MixedChildrenNotFlattened
+          lexical_id: "MixedChildrenNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 11
+            end: 184
+        "1":
+          label: MD Child
+          lexical_id: "MixedChildrenNotFlattened|root:0|hdr:md-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 64
+            end: 77
+        "2":
+          label: for (item in items)
+          lexical_id: "MixedChildrenNotFlattened|root:0|hdr:md-child:0|loop:for-item-in-items:0"
+          node_type: loop
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 104
+            end: 171
+        "3":
+          label: Loop Child
+          lexical_id: "MixedChildrenNotFlattened|root:0|hdr:md-child:0|loop:for-item-in-items:0|hdr:loop-child:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 138
+            end: 152
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: MixedChildrenNotFlattened\"]\n  direction TB\n  subgraph n1[\"1: MD Child\"]\n    direction TB\n    subgraph n2[\"2: Loop: for (item in items)\"]\n      direction TB\n      n3[\"3: Loop Child\"]\n    end\n  end\nend\n"
   pass3_flatten_scopes:
     label: Flatten branch arms & scopes
     expr:
@@ -170,4 +248,43 @@ flattening:
             start: 138
             end: 152
       edges: {}
-    mermaid: "flowchart TD\nsubgraph n0[\"MixedChildrenNotFlattened\"]\n  direction TB\n  subgraph n1[\"MD Child\"]\n    direction TB\n    subgraph n2[\"Loop: for (item in items)\"]\n      direction TB\n      n3[\"Loop Child\"]\n    end\n  end\nend\n"
+    json:
+      nodes:
+        "0":
+          label: MixedChildrenNotFlattened
+          lexical_id: "MixedChildrenNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 11
+            end: 184
+        "1":
+          label: MD Child
+          lexical_id: "MixedChildrenNotFlattened|root:0|hdr:md-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 64
+            end: 77
+        "2":
+          label: for (item in items)
+          lexical_id: "MixedChildrenNotFlattened|root:0|hdr:md-child:0|loop:for-item-in-items:0"
+          node_type: loop
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 104
+            end: 171
+        "3":
+          label: Loop Child
+          lexical_id: "MixedChildrenNotFlattened|root:0|hdr:md-child:0|loop:for-item-in-items:0|hdr:loop-child:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MixedChildrenNotFlattened.baml
+            start: 138
+            end: 152
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: MixedChildrenNotFlattened\"]\n  direction TB\n  subgraph n1[\"1: MD Child\"]\n    direction TB\n    subgraph n2[\"2: Loop: for (item in items)\"]\n      direction TB\n      n3[\"3: Loop Child\"]\n    end\n  end\nend\n"

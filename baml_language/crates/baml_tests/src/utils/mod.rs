@@ -1,7 +1,8 @@
 //! Test utilities for parser testing, especially incremental parsing verification.
 
-use baml_db::baml_syntax::SyntaxNode;
 use std::collections::HashSet;
+
+use baml_db::baml_syntax::SyntaxNode;
 
 /// Metrics for measuring node reuse in incremental parsing
 #[derive(Debug)]

@@ -1,40 +1,178 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+assertion_line: 3395
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "// Deeply nested type references
-class Level5 {
-  value string
-}
-
-class Level4 {
-  field Level5
-}
-
-class Level3 {
-  field Level4
-}
-
-class Level2 {
-  field Level3
-}
-
-class Level1 {
-  field Level2
-}
-
-// Deeply nested expressions
-function DeepExpression() -> int {
-  return ((((((((((1 + 2) * 3) - 4) / 5) + 6) * 7) - 8) / 9) + 10))
-}
-
-// Deeply nested type expression
-function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-  // Type with deep generic nesting
-  return {}
-}
-"
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Level5"
+    L_BRACE "{"
+    FIELD
+      WORD "value"
+      TYPE_EXPR " string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Level4"
+    L_BRACE "{"
+    FIELD
+      WORD "field"
+      TYPE_EXPR " Level5"
+        WORD "Level5"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Level3"
+    L_BRACE "{"
+    FIELD
+      WORD "field"
+      TYPE_EXPR " Level4"
+        WORD "Level4"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Level2"
+    L_BRACE "{"
+    FIELD
+      WORD "field"
+      TYPE_EXPR " Level3"
+        WORD "Level3"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Level1"
+    L_BRACE "{"
+    FIELD
+      WORD "field"
+      TYPE_EXPR " Level2"
+        WORD "Level2"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "DeepExpression"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        RETURN_STMT
+          KW_RETURN "return"
+          PAREN_EXPR
+            L_PAREN "("
+            PAREN_EXPR
+              L_PAREN "("
+              BINARY_EXPR
+                PAREN_EXPR
+                  L_PAREN "("
+                  BINARY_EXPR
+                    PAREN_EXPR
+                      L_PAREN "("
+                      BINARY_EXPR
+                        PAREN_EXPR
+                          L_PAREN "("
+                          BINARY_EXPR
+                            PAREN_EXPR
+                              L_PAREN "("
+                              BINARY_EXPR
+                                PAREN_EXPR
+                                  L_PAREN "("
+                                  BINARY_EXPR
+                                    PAREN_EXPR
+                                      L_PAREN "("
+                                      BINARY_EXPR
+                                        PAREN_EXPR
+                                          L_PAREN "("
+                                          BINARY_EXPR
+                                            PAREN_EXPR
+                                              L_PAREN "("
+                                              BINARY_EXPR "1 + 2"
+                                                INTEGER_LITERAL "1"
+                                                PLUS "+"
+                                                INTEGER_LITERAL "2"
+                                              R_PAREN ")"
+                                            STAR "*"
+                                            INTEGER_LITERAL "3"
+                                          R_PAREN ")"
+                                        MINUS "-"
+                                        INTEGER_LITERAL "4"
+                                      R_PAREN ")"
+                                    SLASH "/"
+                                    INTEGER_LITERAL "5"
+                                  R_PAREN ")"
+                                PLUS "+"
+                                INTEGER_LITERAL "6"
+                              R_PAREN ")"
+                            STAR "*"
+                            INTEGER_LITERAL "7"
+                          R_PAREN ")"
+                        MINUS "-"
+                        INTEGER_LITERAL "8"
+                      R_PAREN ")"
+                    SLASH "/"
+                    INTEGER_LITERAL "9"
+                  R_PAREN ")"
+                PLUS "+"
+                INTEGER_LITERAL "10"
+              R_PAREN ")"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ComplexType"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR " int[]?"
+                  WORD "int"
+                  L_BRACKET "["
+                  R_BRACKET "]"
+                  QUESTION "?"
+  GREATER_GREATER ">>"
+  GREATER ">"
+  L_BRACE "{"
+  KW_RETURN "return"
+  L_BRACE "{"
+  R_BRACE "}"
+  R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
+  Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
+  Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
+  Expected Expected function body, found Expected function body
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration

@@ -1,40 +1,325 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
-SOURCE_FILE "// Test Unicode and special character handling
-class UnicodeStrings {
-  // Emoji support
-  emoji_basic string @alias("🎉")
-  emoji_multiple string @alias("🎉🎊🎈")
-  emoji_in_text string @description("Hello 👋 World 🌍")
-  
-  // Different languages
-  chinese string @alias("你好世界")
-  arabic string @alias("مرحبا بالعالم")
-  japanese string @alias("こんにちは世界")
-  russian string @alias("Привет мир")
-  
-  // Special characters
-  math_symbols string @description("α + β = γ")
-  currency string @alias("Price: €100 or $120 or ¥1000")
-  arrows string @description("→ ← ↑ ↓ ⇒ ⇐")
-  
-  // Zero-width and special Unicode
-  zero_width string @alias("Hello​World") // Contains zero-width space
-  rtl_override string @alias("‏Hello World‏") // RTL override characters
-}
-
-// Test Unicode in function names and prompts
-function 处理文本(输入 string) -> string {
-  client GPT4
-  prompt #"
-    Process the text: {{ 输入 }}
-    Return result with emojis: ✅ or ❌
-  "#
-}
-"
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "UnicodeStrings"
+    L_BRACE "{"
+    FIELD
+      WORD "emoji_basic"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""🎉""
+            QUOTE """
+            ERROR_TOKEN "🎉"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "emoji_multiple"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""🎉🎊🎈""
+            QUOTE """
+            ERROR_TOKEN "🎉"
+            ERROR_TOKEN "🎊"
+            ERROR_TOKEN "🎈"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "emoji_in_text"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""Hello 👋 World 🌍""
+            QUOTE """
+            WORD "Hello"
+            ERROR_TOKEN "👋"
+            WORD "World"
+            ERROR_TOKEN "🌍"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "chinese"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""你好世界""
+            QUOTE """
+            ERROR_TOKEN "你"
+            ERROR_TOKEN "好"
+            ERROR_TOKEN "世"
+            ERROR_TOKEN "界"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "arabic"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""مرحبا بالعالم""
+            QUOTE """
+            ERROR_TOKEN "م"
+            ERROR_TOKEN "ر"
+            ERROR_TOKEN "ح"
+            ERROR_TOKEN "ب"
+            ERROR_TOKEN "ا"
+            ERROR_TOKEN "ب"
+            ERROR_TOKEN "ا"
+            ERROR_TOKEN "ل"
+            ERROR_TOKEN "ع"
+            ERROR_TOKEN "ا"
+            ERROR_TOKEN "ل"
+            ERROR_TOKEN "م"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "japanese"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""こんにちは世界""
+            QUOTE """
+            ERROR_TOKEN "こ"
+            ERROR_TOKEN "ん"
+            ERROR_TOKEN "に"
+            ERROR_TOKEN "ち"
+            ERROR_TOKEN "は"
+            ERROR_TOKEN "世"
+            ERROR_TOKEN "界"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "russian"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""Привет мир""
+            QUOTE """
+            ERROR_TOKEN "П"
+            ERROR_TOKEN "р"
+            ERROR_TOKEN "и"
+            ERROR_TOKEN "в"
+            ERROR_TOKEN "е"
+            ERROR_TOKEN "т"
+            ERROR_TOKEN "м"
+            ERROR_TOKEN "и"
+            ERROR_TOKEN "р"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "math_symbols"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""α + β = γ""
+            QUOTE """
+            ERROR_TOKEN "α"
+            PLUS "+"
+            ERROR_TOKEN "β"
+            EQUALS "="
+            ERROR_TOKEN "γ"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "currency"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""Price: €100 or $120 or ¥1000""
+            QUOTE """
+            WORD "Price"
+            COLON ":"
+            ERROR_TOKEN "€"
+            INTEGER_LITERAL "100"
+            WORD "or"
+            DOLLAR "$"
+            INTEGER_LITERAL "120"
+            WORD "or"
+            ERROR_TOKEN "¥"
+            INTEGER_LITERAL "1000"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "arrows"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""→ ← ↑ ↓ ⇒ ⇐""
+            QUOTE """
+            ERROR_TOKEN "→"
+            ERROR_TOKEN "←"
+            ERROR_TOKEN "↑"
+            ERROR_TOKEN "↓"
+            ERROR_TOKEN "⇒"
+            ERROR_TOKEN "⇐"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "zero_width"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""Hello​World""
+            QUOTE """
+            WORD "Hello"
+            ERROR_TOKEN "​"
+            WORD "World"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "rtl_override"
+      TYPE_EXPR " string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL ""‏Hello World‏""
+            QUOTE """
+            ERROR_TOKEN "‏"
+            WORD "Hello"
+            WORD "World"
+            ERROR_TOKEN "‏"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    PARAMETER_LIST
+      PARAMETER
+  ERROR_TOKEN "处"
+  ERROR_TOKEN "理"
+  ERROR_TOKEN "文"
+  ERROR_TOKEN "本"
+  L_PAREN "("
+  ERROR_TOKEN "输"
+  ERROR_TOKEN "入"
+  WORD "string"
+  R_PAREN ")"
+  ARROW "->"
+  WORD "string"
+  L_BRACE "{"
+  CLIENT_DEF "
+  client GPT4"
+    KW_CLIENT "client"
+    WORD "GPT4"
+  WORD "prompt"
+  HASH "#"
+  QUOTE """
+  WORD "Process"
+  WORD "the"
+  WORD "text"
+  COLON ":"
+  L_BRACE "{"
+  L_BRACE "{"
+  ERROR_TOKEN "输"
+  ERROR_TOKEN "入"
+  R_BRACE "}"
+  R_BRACE "}"
+  WORD "Return"
+  WORD "result"
+  WORD "with"
+  WORD "emojis"
+  COLON ":"
+  ERROR_TOKEN "✅"
+  WORD "or"
+  ERROR_TOKEN "❌"
+  QUOTE """
+  HASH "#"
+  R_BRACE "}"
 
 === ERRORS ===
-None
+  Expected Expected function name, found Expected function name
+  Expected Expected LParen, found Error, found Expected LParen, found Error
+  Expected Expected parameter name, found Expected parameter name
+  Expected Expected type annotation (:), found Expected type annotation (:)
+  Expected Expected RParen, found Error, found Expected RParen, found Error
+  Expected Expected return type (->), found Expected return type (->)
+  Expected Expected function body, found Expected function body
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected config block, found Expected config block
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
+  Expected Expected top-level declaration, found Expected top-level declaration
