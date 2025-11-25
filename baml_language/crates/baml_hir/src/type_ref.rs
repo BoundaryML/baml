@@ -81,4 +81,44 @@ impl TypeRef {
     pub fn union(types: Vec<TypeRef>) -> Self {
         TypeRef::Union(types)
     }
+
+    /// Create a `TypeRef` from an AST `TypeExpr` node.
+    pub fn from_ast(type_expr: &baml_syntax::ast::TypeExpr) -> Self {
+        use rowan::ast::AstNode;
+
+        // Get the text content of the type expression
+        let text = type_expr.syntax().text().to_string().trim().to_string();
+
+        // Check for array type (e.g., "int[]")
+        if text.ends_with("[]") {
+            let inner_text = &text[..text.len() - 2];
+            let inner = Self::from_type_name(inner_text);
+            return TypeRef::List(Box::new(inner));
+        }
+
+        // Check for optional type (e.g., "int?")
+        if text.ends_with('?') {
+            let inner_text = &text[..text.len() - 1];
+            let inner = Self::from_type_name(inner_text);
+            return TypeRef::Optional(Box::new(inner));
+        }
+
+        Self::from_type_name(&text)
+    }
+
+    /// Create a `TypeRef` from a type name string.
+    fn from_type_name(name: &str) -> Self {
+        match name.to_lowercase().as_str() {
+            "int" => TypeRef::Int,
+            "float" => TypeRef::Float,
+            "string" => TypeRef::String,
+            "bool" => TypeRef::Bool,
+            "null" => TypeRef::Null,
+            "image" => TypeRef::Image,
+            "audio" => TypeRef::Audio,
+            "video" => TypeRef::Video,
+            "pdf" => TypeRef::Pdf,
+            _ => TypeRef::Path(Path::single(Name::new(name))),
+        }
+    }
 }

@@ -491,12 +491,45 @@ impl LetStmt {
         self.syntax.children().find_map(TypeExpr::cast)
     }
 
-    /// Get the initializer expression.
+    /// Get the initializer expression as a node.
+    /// This finds the first child node that is an expression (not `TYPE_EXPR`).
     pub fn initializer(&self) -> Option<SyntaxNode> {
-        // The initializer is a child node that's not a TYPE_EXPR
+        self.syntax.children().find(|n| {
+            matches!(
+                n.kind(),
+                SyntaxKind::EXPR
+                    | SyntaxKind::BINARY_EXPR
+                    | SyntaxKind::UNARY_EXPR
+                    | SyntaxKind::CALL_EXPR
+                    | SyntaxKind::PATH_EXPR
+                    | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::INDEX_EXPR
+                    | SyntaxKind::IF_EXPR
+                    | SyntaxKind::BLOCK_EXPR
+                    | SyntaxKind::PAREN_EXPR
+                    | SyntaxKind::ARRAY_LITERAL
+                    | SyntaxKind::OBJECT_LITERAL
+                    | SyntaxKind::STRING_LITERAL
+                    | SyntaxKind::RAW_STRING_LITERAL
+            )
+        })
+    }
+
+    /// Get the initializer as a token (for direct literals like integers).
+    /// Returns the literal token if the initializer is a simple literal.
+    pub fn initializer_token(&self) -> Option<SyntaxToken> {
         self.syntax
-            .children()
-            .find(|n| n.kind() != SyntaxKind::TYPE_EXPR)
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::INTEGER_LITERAL
+                        | SyntaxKind::FLOAT_LITERAL
+                        | SyntaxKind::STRING_LITERAL
+                        | SyntaxKind::RAW_STRING_LITERAL
+                )
+            })
     }
 }
 

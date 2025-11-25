@@ -765,16 +765,62 @@ impl LoweringContext {
     }
 
     fn lower_array_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        let elements = node
-            .children()
-            .filter(|n| {
-                !matches!(
-                    n.kind(),
-                    baml_syntax::SyntaxKind::L_BRACKET | baml_syntax::SyntaxKind::R_BRACKET
-                )
-            })
-            .map(|n| self.lower_expr(&n))
-            .collect();
+        use baml_syntax::SyntaxKind;
+
+        // Collect elements from both child nodes and direct tokens
+        let mut elements = Vec::new();
+
+        // First, collect expression nodes
+        for child in node.children() {
+            if !matches!(child.kind(), SyntaxKind::L_BRACKET | SyntaxKind::R_BRACKET) {
+                elements.push(self.lower_expr(&child));
+            }
+        }
+
+        // If no child nodes found, check for direct literal tokens
+        if elements.is_empty() {
+            for elem in node.children_with_tokens() {
+                if let rowan::NodeOrToken::Token(token) = elem {
+                    match token.kind() {
+                        SyntaxKind::INTEGER_LITERAL => {
+                            let value = token.text().parse::<i64>().unwrap_or(0);
+                            elements.push(self.exprs.alloc(Expr::Literal(Literal::Int(value))));
+                        }
+                        SyntaxKind::FLOAT_LITERAL => {
+                            elements
+                                .push(self.exprs.alloc(Expr::Literal(Literal::Float(
+                                    token.text().to_string(),
+                                ))));
+                        }
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                            let text = token.text();
+                            let content = if text.starts_with("#\"") && text.ends_with("\"#") {
+                                &text[2..text.len() - 2]
+                            } else if text.starts_with('"') && text.ends_with('"') {
+                                &text[1..text.len() - 1]
+                            } else {
+                                text
+                            };
+                            elements.push(
+                                self.exprs
+                                    .alloc(Expr::Literal(Literal::String(content.to_string()))),
+                            );
+                        }
+                        SyntaxKind::WORD => {
+                            let text = token.text();
+                            let expr = match text {
+                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
+                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
+                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
+                                _ => self.exprs.alloc(Expr::Path(Name::new(text))),
+                            };
+                            elements.push(expr);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
 
         self.exprs.alloc(Expr::Array { elements })
     }
@@ -790,26 +836,57 @@ impl LoweringContext {
             .map(|token| Name::new(token.text()));
 
         // Extract fields from OBJECT_FIELD children
-        let fields = node
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::OBJECT_FIELD)
-            .filter_map(|field_node| {
-                // OBJECT_FIELD has: WORD (field name), COLON, EXPR (value)
-                let field_name = field_node
-                    .children_with_tokens()
-                    .filter_map(baml_syntax::NodeOrToken::into_token)
-                    .find(|token| token.kind() == SyntaxKind::WORD)
-                    .map(|token| Name::new(token.text()))?;
+        let fields =
+            node.children()
+                .filter(|n| n.kind() == SyntaxKind::OBJECT_FIELD)
+                .filter_map(|field_node| {
+                    // OBJECT_FIELD has: WORD (field name), COLON, value (EXPR or literal token)
+                    let field_name = field_node
+                        .children_with_tokens()
+                        .filter_map(baml_syntax::NodeOrToken::into_token)
+                        .find(|token| token.kind() == SyntaxKind::WORD)
+                        .map(|token| Name::new(token.text()))?;
 
-                let value = field_node
-                    .children()
-                    .next()
-                    .map(|n| self.lower_expr(&n))
-                    .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+                    // Try to get value as a child node first
+                    let value = field_node
+                        .children()
+                        .next()
+                        .map(|n| self.lower_expr(&n))
+                        .or_else(|| {
+                            // Try to get value as a direct literal token
+                            field_node
+                                .children_with_tokens()
+                                .filter_map(baml_syntax::NodeOrToken::into_token)
+                                .find_map(|token| match token.kind() {
+                                    SyntaxKind::INTEGER_LITERAL => {
+                                        let value = token.text().parse::<i64>().unwrap_or(0);
+                                        Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))))
+                                    }
+                                    SyntaxKind::FLOAT_LITERAL => Some(self.exprs.alloc(
+                                        Expr::Literal(Literal::Float(token.text().to_string())),
+                                    )),
+                                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                                        let text = token.text();
+                                        let content =
+                                            if text.starts_with("#\"") && text.ends_with("\"#") {
+                                                &text[2..text.len() - 2]
+                                            } else if text.starts_with('"') && text.ends_with('"') {
+                                                &text[1..text.len() - 1]
+                                            } else {
+                                                text
+                                            };
+                                        Some(self.exprs.alloc(Expr::Literal(Literal::String(
+                                            content.to_string(),
+                                        ))))
+                                    }
+                                    _ => None,
+                                })
+                        })
+                        .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
-                Some((field_name, value))
-            })
-            .collect();
+                    Some((field_name, value))
+                })
+                .collect();
 
         self.exprs.alloc(Expr::Object { type_name, fields })
     }
@@ -850,13 +927,13 @@ impl LoweringContext {
     fn lower_let_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
         use baml_syntax::SyntaxKind;
 
-        // LET_STMT structure: let, pattern (WORD), =, initializer (EXPR)
+        // Use the LetStmt AST wrapper for cleaner access
+        let let_stmt = baml_syntax::ast::LetStmt::cast(node.clone());
 
-        // Extract pattern (for now, just a simple binding)
-        let pattern = node
-            .children_with_tokens()
-            .filter_map(baml_syntax::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
+        // Extract pattern (variable name)
+        let pattern = let_stmt
+            .as_ref()
+            .and_then(baml_syntax::LetStmt::name)
             .map(|token| {
                 let name = Name::new(token.text());
                 self.patterns.alloc(Pattern::Binding(name))
@@ -866,31 +943,49 @@ impl LoweringContext {
                     .alloc(Pattern::Binding(Name::new("missing_let")))
             });
 
-        // Extract initializer expression
-        let initializer = node
-            .children()
-            .find(|n| {
-                matches!(
-                    n.kind(),
-                    SyntaxKind::EXPR
-                        | SyntaxKind::BINARY_EXPR
-                        | SyntaxKind::UNARY_EXPR
-                        | SyntaxKind::CALL_EXPR
-                        | SyntaxKind::PATH_EXPR
-                        | SyntaxKind::FIELD_ACCESS_EXPR
-                        | SyntaxKind::INDEX_EXPR
-                        | SyntaxKind::IF_EXPR
-                        | SyntaxKind::BLOCK_EXPR
-                        | SyntaxKind::PAREN_EXPR
-                        | SyntaxKind::ARRAY_LITERAL
-                        | SyntaxKind::OBJECT_LITERAL
-                )
-            })
-            .map(|n| self.lower_expr(&n));
+        // Extract type annotation if present
+        let type_annotation = let_stmt
+            .as_ref()
+            .and_then(baml_syntax::LetStmt::ty)
+            .map(|type_expr| crate::type_ref::TypeRef::from_ast(&type_expr));
+
+        // Extract initializer expression - first try as a node, then as a token
+        let initializer = let_stmt
+            .as_ref()
+            .and_then(baml_syntax::LetStmt::initializer)
+            .map(|n| self.lower_expr(&n))
+            .or_else(|| {
+                // Try to get initializer as a direct token (for simple literals)
+                let_stmt
+                    .as_ref()
+                    .and_then(baml_syntax::LetStmt::initializer_token)
+                    .map(|token| match token.kind() {
+                        SyntaxKind::INTEGER_LITERAL => {
+                            let value = token.text().parse::<i64>().unwrap_or(0);
+                            self.exprs.alloc(Expr::Literal(Literal::Int(value)))
+                        }
+                        SyntaxKind::FLOAT_LITERAL => self
+                            .exprs
+                            .alloc(Expr::Literal(Literal::Float(token.text().to_string()))),
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                            let text = token.text();
+                            let content = if text.starts_with("#\"") && text.ends_with("\"#") {
+                                &text[2..text.len() - 2]
+                            } else if text.starts_with('"') && text.ends_with('"') {
+                                &text[1..text.len() - 1]
+                            } else {
+                                text
+                            };
+                            self.exprs
+                                .alloc(Expr::Literal(Literal::String(content.to_string())))
+                        }
+                        _ => self.exprs.alloc(Expr::Missing),
+                    })
+            });
 
         self.stmts.alloc(Stmt::Let {
             pattern,
-            type_annotation: None, // TODO: Extract type annotation if present
+            type_annotation,
             initializer,
         })
     }
