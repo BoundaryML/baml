@@ -1834,7 +1834,22 @@ impl BamlRuntime {
                 let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
 
                 let mut required_env_vars = HashMap::new();
+
+                let uses_proxy_server = ctx.proxy_url().is_some();
+
+                // If the client is Vertex or AWS Bedrock, we don't fail on
+                // missing required environment variables because we run a bunch
+                // of additional logic to resolve required values (i.e for
+                // Vertex if GOOGLE_CLOUD_PROJECT is not provided it can be
+                // found on the credentials property).
+                //
+                // If called with modular API, we don't fail either. User might
+                // want to insert the values later.
+                //
+                // When a proxy server is used, don't fail on missing required
+                // env vars because the proxy server is likely to provide them.
                 let fail_on_missing_required_env_vars = !ctx.is_modular_api()
+                    && !uses_proxy_server
                     && !matches!(
                         walker.item.elem.provider,
                         internal_llm_client::ClientProvider::AwsBedrock

@@ -1,6 +1,0 @@
----
-source: baml-runtime/src/control_flow/tests.rs
-expression: snapshot_value
-input_file: baml-runtime/src/control_flow/testdata/BasicIf copy.baml
----
-__error: "function `BasicIf copy` not found in fixture"
