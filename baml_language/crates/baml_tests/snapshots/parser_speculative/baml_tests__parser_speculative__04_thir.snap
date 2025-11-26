@@ -10,9 +10,9 @@ expression: output
   Function ProcessData:
     Return: Void
     Errors:
-      - Unknown variable: data::field1
-      - Unknown variable: data::field2
-      - Cannot apply operator 'Add' to types unknown and unknown
+      - Unknown type data::field1
+      - Unknown type data::field2
+      - Invalid op Add for unknown and unknown
   Function ExtractData:
     Return: Unknown
   Function SimpleCalc:
@@ -20,15 +20,15 @@ expression: output
   Function ProcessAnalysis:
     Return: Void
     Errors:
-      - Unknown variable: analysis::score
-      - Unknown variable: analysis::sentiment
-      - Cannot apply operator 'Add' to types string and unknown
-      - Unknown variable: analysis::sentiment
-      - Cannot apply operator 'Add' to types string and unknown
-      - Unknown variable: analysis::sentiment
-      - Cannot apply operator 'Add' to types string and unknown
-      - Unknown variable: analysis::sentiment
-      - Cannot apply operator 'Add' to types string and unknown
+      - Unknown type analysis::score
+      - Unknown type analysis::sentiment
+      - Invalid op Add for string and unknown
+      - Unknown type analysis::sentiment
+      - Invalid op Add for string and unknown
+      - Unknown type analysis::sentiment
+      - Invalid op Add for string and unknown
+      - Unknown type analysis::sentiment
+      - Invalid op Add for string and unknown
   Function LLMAnalyze:
     Return: Unknown
   Function ChainedProcess:

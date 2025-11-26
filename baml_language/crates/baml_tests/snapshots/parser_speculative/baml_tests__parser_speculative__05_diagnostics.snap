@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -9,6 +9,8 @@ expression: output
  5 │ }
    │ ┬  
    │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
@@ -17,6 +19,8 @@ expression: output
  9 │   clent GPT4  // Typo in "client"
    │   ──┬──  
    │     ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
@@ -25,6 +29,8 @@ expression: output
  9 │   clent GPT4  // Typo in "client"
    │         ──┬─  
    │           ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected LLM function missing 'client' field, found RBrace
@@ -33,4 +39,126 @@ expression: output
  11 │ }
     │ ┬  
     │ ╰── Expected LLM function missing 'client' field, found RBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
+
+  [type] Error: Unknown variable data::field1
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Unknown variable data::field1
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Unknown variable data::field2
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Unknown variable data::field2
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Cannot apply operator 'Add' to types unknown and unknown
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Cannot apply operator 'Add' to types unknown and unknown
+   │ 
+   │ Note: Error code: E0004
+───╯
+
+  [type] Error: Unknown variable analysis::score
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Unknown variable analysis::score
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Unknown variable analysis::sentiment
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Unknown variable analysis::sentiment
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Cannot apply operator 'Add' to types string and unknown
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Cannot apply operator 'Add' to types string and unknown
+   │ 
+   │ Note: Error code: E0004
+───╯
+
+  [type] Error: Unknown variable analysis::sentiment
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Unknown variable analysis::sentiment
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Cannot apply operator 'Add' to types string and unknown
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Cannot apply operator 'Add' to types string and unknown
+   │ 
+   │ Note: Error code: E0004
+───╯
+
+  [type] Error: Unknown variable analysis::sentiment
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Unknown variable analysis::sentiment
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Cannot apply operator 'Add' to types string and unknown
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Cannot apply operator 'Add' to types string and unknown
+   │ 
+   │ Note: Error code: E0004
+───╯
+
+  [type] Error: Unknown variable analysis::sentiment
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Unknown variable analysis::sentiment
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Cannot apply operator 'Add' to types string and unknown
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // This could initially look like either type
+   │ │ 
+   │ ╰─ Cannot apply operator 'Add' to types string and unknown
+   │ 
+   │ Note: Error code: E0004
+───╯

@@ -8,10 +8,10 @@ expression: output
   Function FieldAccess:
     Return: Void
     Errors:
-      - Unknown variable: user::name
-      - Unknown variable: user::profile::bio
-      - Unknown variable: user::profile::settings::theme
-      - Unknown variable: user::tags
+      - Unknown type user::name
+      - Unknown type user::profile::bio
+      - Unknown type user::profile::settings::theme
+      - Unknown type user::tags
   Function IndexAccess:
     Return: Void
   Function TestPrecedence:

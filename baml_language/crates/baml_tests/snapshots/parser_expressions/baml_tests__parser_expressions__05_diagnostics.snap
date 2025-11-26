@@ -1,6 +1,44 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [type] Error: Unknown variable user::name
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Unknown variable user::name
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Unknown variable user::profile::bio
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Unknown variable user::profile::bio
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Unknown variable user::profile::settings::theme
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Unknown variable user::profile::settings::theme
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Unknown variable user::tags
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function Calculate() -> int {
+   │ │ 
+   │ ╰─ Unknown variable user::tags
+   │ 
+   │ Note: Error code: E0003
+───╯

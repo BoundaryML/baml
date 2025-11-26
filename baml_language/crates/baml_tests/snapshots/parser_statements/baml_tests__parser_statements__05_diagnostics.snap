@@ -1,6 +1,34 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [type] Error: Unknown variable point::x
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function c_style_for_loop() -> int {
+   │ │ 
+   │ ╰─ Unknown variable point::x
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Unknown variable point::y
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function c_style_for_loop() -> int {
+   │ │ 
+   │ ╰─ Unknown variable point::y
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Cannot apply operator 'Add' to types unknown and unknown
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ function c_style_for_loop() -> int {
+   │ │ 
+   │ ╰─ Cannot apply operator 'Add' to types unknown and unknown
+   │ 
+   │ Note: Error code: E0004
+───╯
