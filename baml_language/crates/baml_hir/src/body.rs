@@ -3,10 +3,12 @@
 //! The CST already distinguishes `LLM_FUNCTION_BODY` from `EXPR_FUNCTION_BODY`,
 //! so we just need to lower each type appropriately.
 
-use crate::Name;
+use std::sync::Arc;
+
 use la_arena::{Arena, Idx};
 use rowan::ast::AstNode;
-use std::sync::Arc;
+
+use crate::Name;
 
 /// The body of a function - determined by CST node type.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -346,133 +348,60 @@ impl LoweringContext {
     }
 
     fn lower_block_expr(&mut self, block: &baml_syntax::ast::BlockExpr) -> ExprId {
-        use baml_syntax::SyntaxKind;
-        use rowan::ast::AstNode;
+        use baml_syntax::{SyntaxKind, ast::BlockElement};
 
         let mut stmts = Vec::new();
         let mut tail_expr = None;
 
-        // Collect all significant children (nodes and certain tokens)
-        // We need to use children_with_tokens() to see WORD tokens that may be
-        // tail expressions (e.g., `{ let x = 1; x }` where `x` is just a WORD token)
-        let elements: Vec<_> = block
-            .syntax()
-            .children_with_tokens()
-            .filter(|el| {
-                // Filter out braces, whitespace, etc.
-                match el {
-                    baml_syntax::NodeOrToken::Node(n) => {
-                        // Keep all statement and expression nodes
-                        matches!(
-                            n.kind(),
-                            SyntaxKind::LET_STMT
-                                | SyntaxKind::RETURN_STMT
-                                | SyntaxKind::WHILE_STMT
-                                | SyntaxKind::FOR_EXPR
-                                | SyntaxKind::EXPR
-                                | SyntaxKind::BINARY_EXPR
-                                | SyntaxKind::UNARY_EXPR
-                                | SyntaxKind::CALL_EXPR
-                                | SyntaxKind::IF_EXPR
-                                | SyntaxKind::BLOCK_EXPR
-                                | SyntaxKind::PATH_EXPR
-                                | SyntaxKind::FIELD_ACCESS_EXPR
-                                | SyntaxKind::INDEX_EXPR
-                                | SyntaxKind::PAREN_EXPR
-                                | SyntaxKind::ARRAY_LITERAL
-                                | SyntaxKind::OBJECT_LITERAL
-                        )
-                    }
-                    baml_syntax::NodeOrToken::Token(t) => {
-                        // Keep literals and identifiers (potential tail expressions)
-                        matches!(
-                            t.kind(),
-                            SyntaxKind::WORD
-                                | SyntaxKind::INTEGER_LITERAL
-                                | SyntaxKind::FLOAT_LITERAL
-                                | SyntaxKind::STRING_LITERAL
-                                | SyntaxKind::RAW_STRING_LITERAL
-                        )
-                    }
-                }
-            })
-            .collect();
+        let elements: Vec<_> = block.elements().collect();
 
         for (idx, element) in elements.iter().enumerate() {
             let is_last = idx == elements.len() - 1;
 
             match element {
-                baml_syntax::NodeOrToken::Node(child) => {
-                    match child.kind() {
-                        SyntaxKind::LET_STMT => {
-                            let stmt_id = self.lower_let_stmt(child);
-                            stmts.push(stmt_id);
-                        }
-                        SyntaxKind::RETURN_STMT => {
-                            let stmt_id = self.lower_return_stmt(child);
-                            stmts.push(stmt_id);
-                        }
-                        SyntaxKind::WHILE_STMT => {
-                            let stmt_id = self.lower_while_stmt(child);
-                            stmts.push(stmt_id);
-                        }
-                        SyntaxKind::FOR_EXPR => {
-                            let stmt_id = self.lower_for_stmt(child);
-                            stmts.push(stmt_id);
-                        }
-                        SyntaxKind::EXPR
-                        | SyntaxKind::BINARY_EXPR
-                        | SyntaxKind::UNARY_EXPR
-                        | SyntaxKind::CALL_EXPR
-                        | SyntaxKind::IF_EXPR
-                        | SyntaxKind::BLOCK_EXPR
-                        | SyntaxKind::PATH_EXPR
-                        | SyntaxKind::FIELD_ACCESS_EXPR
-                        | SyntaxKind::INDEX_EXPR
-                        | SyntaxKind::PAREN_EXPR
-                        | SyntaxKind::ARRAY_LITERAL
-                        | SyntaxKind::OBJECT_LITERAL => {
-                            let expr_id = self.lower_expr(child);
+                BlockElement::Stmt(node) => {
+                    let stmt_id = match node.kind() {
+                        SyntaxKind::LET_STMT => self.lower_let_stmt(node),
+                        SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
+                        SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
+                        SyntaxKind::FOR_EXPR => self.lower_for_stmt(node),
+                        _ => self.stmts.alloc(Stmt::Missing),
+                    };
+                    stmts.push(stmt_id);
+                }
+                BlockElement::ExprNode(node) => {
+                    let expr_id = self.lower_expr(node);
 
-                            // Check if this expression is followed by a semicolon
-                            let has_semicolon = Self::has_trailing_semicolon(child);
+                    // Check if this expression is followed by a semicolon
+                    let has_semicolon = element.has_trailing_semicolon();
 
-                            // Last expression without semicolon becomes tail expression
-                            if is_last && !has_semicolon {
-                                tail_expr = Some(expr_id);
-                            } else {
-                                // Expression statement (with semicolon or not last)
-                                stmts.push(self.stmts.alloc(Stmt::Expr(expr_id)));
-                            }
-                        }
-                        _ => {
-                            // Skip other node types
-                        }
+                    // Last expression without semicolon becomes tail expression
+                    if is_last && !has_semicolon {
+                        tail_expr = Some(expr_id);
+                    } else {
+                        // Expression statement (with semicolon or not last)
+                        stmts.push(self.stmts.alloc(Stmt::Expr(expr_id)));
                     }
                 }
-                baml_syntax::NodeOrToken::Token(token) => {
+                BlockElement::ExprToken(token) => {
                     // Handle bare tokens as potential tail expressions
                     let expr_id = match token.kind() {
                         SyntaxKind::WORD => {
                             let text = token.text();
                             match text {
-                                "true" => {
-                                    Some(self.exprs.alloc(Expr::Literal(Literal::Bool(true))))
-                                }
-                                "false" => {
-                                    Some(self.exprs.alloc(Expr::Literal(Literal::Bool(false))))
-                                }
-                                "null" => Some(self.exprs.alloc(Expr::Literal(Literal::Null))),
-                                _ => Some(self.exprs.alloc(Expr::Path(Name::new(text)))),
+                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
+                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
+                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
+                                _ => self.exprs.alloc(Expr::Path(Name::new(text))),
                             }
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
-                            Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))))
+                            self.exprs.alloc(Expr::Literal(Literal::Int(value)))
                         }
                         SyntaxKind::FLOAT_LITERAL => {
                             let text = token.text().to_string();
-                            Some(self.exprs.alloc(Expr::Literal(Literal::Float(text))))
+                            self.exprs.alloc(Expr::Literal(Literal::Float(text)))
                         }
                         SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                             let text = token.text().to_string();
@@ -483,19 +412,17 @@ impl LoweringContext {
                             } else {
                                 text
                             };
-                            Some(self.exprs.alloc(Expr::Literal(Literal::String(content))))
+                            self.exprs.alloc(Expr::Literal(Literal::String(content)))
                         }
-                        _ => None,
+                        _ => self.exprs.alloc(Expr::Missing),
                     };
 
-                    if let Some(expr_id) = expr_id {
-                        // Tokens are never followed by semicolons in the same position
-                        // If it's the last significant element, it's a tail expression
-                        if is_last {
-                            tail_expr = Some(expr_id);
-                        } else {
-                            stmts.push(self.stmts.alloc(Stmt::Expr(expr_id)));
-                        }
+                    // Check if this is a tail expression
+                    // Last element without semicolon becomes tail expression
+                    if is_last && !element.has_trailing_semicolon() {
+                        tail_expr = Some(expr_id);
+                    } else {
+                        stmts.push(self.stmts.alloc(Stmt::Expr(expr_id)));
                     }
                 }
             }
@@ -1336,16 +1263,5 @@ impl LoweringContext {
                 body,
             })
         }
-    }
-
-    fn has_trailing_semicolon(node: &baml_syntax::SyntaxNode) -> bool {
-        use baml_syntax::SyntaxKind;
-        use rowan::Direction;
-
-        // Check if the next sibling token is a semicolon
-        node.siblings_with_tokens(Direction::Next)
-            .skip(1) // Skip the node itself
-            .filter_map(baml_syntax::NodeOrToken::into_token)
-            .any(|token| token.kind() == SyntaxKind::SEMICOLON)
     }
 }

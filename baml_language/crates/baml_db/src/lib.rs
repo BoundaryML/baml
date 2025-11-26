@@ -161,7 +161,7 @@ pub fn function_body<'db>(
 // ────────────────────────────────────────────────── TYPING CONTEXT ─────
 //
 
-/// Build the initial typing context for a project.
+/// Build typing context from a list of source files.
 ///
 /// This maps function names to their arrow types, e.g.:
 /// `Foo` -> `(int) -> int` for `function Foo(x: int) -> int`
@@ -171,18 +171,6 @@ pub fn function_body<'db>(
 ///
 /// Note: This is not a Salsa query because it returns `Ty<'db>` which contains
 /// lifetime-parameterized data. Callers should cache the result if needed.
-pub fn build_initial_typing_context<'db>(
-    db: &'db dyn baml_thir::Db,
-    root: baml_workspace::ProjectRoot,
-) -> std::collections::HashMap<baml_base::Name, baml_thir::Ty<'db>> {
-    let files = baml_workspace::project_files(db, root);
-    build_typing_context_from_files(db, &files)
-}
-
-/// Build typing context from a list of source files.
-///
-/// This is useful when you have direct access to the source files
-/// (e.g., from a test or when `project_files` isn't populated).
 pub fn build_typing_context_from_files<'db>(
     db: &'db dyn baml_thir::Db,
     files: &[SourceFile],

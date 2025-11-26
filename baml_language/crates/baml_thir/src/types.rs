@@ -176,16 +176,19 @@ impl fmt::Display for Ty<'_> {
             Ty::Pdf => write!(f, "pdf"),
             Ty::Class(_) => write!(f, "<class>"),
             Ty::Enum(_) => write!(f, "<enum>"),
-            Ty::Optional(inner) => write!(f, "{}?", inner),
-            Ty::List(inner) => write!(f, "{}[]", inner),
-            Ty::Map { key, value } => write!(f, "map<{}, {}>", key, value),
+            Ty::Optional(inner) => write!(f, "{inner}?"),
+            Ty::List(inner) => write!(f, "{inner}[]"),
+            Ty::Map { key, value } => write!(f, "map<{key}, {value}>"),
             Ty::Union(types) => {
-                let parts: Vec<std::string::String> = types.iter().map(|t| t.to_string()).collect();
+                let parts: Vec<std::string::String> =
+                    types.iter().map(std::string::ToString::to_string).collect();
                 write!(f, "{}", parts.join(" | "))
             }
             Ty::Function { params, ret } => {
-                let param_strs: Vec<std::string::String> =
-                    params.iter().map(|t| t.to_string()).collect();
+                let param_strs: Vec<std::string::String> = params
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect();
                 write!(f, "({}) -> {}", param_strs.join(", "), ret)
             }
             Ty::Unknown => write!(f, "unknown"),

@@ -601,7 +601,7 @@ impl CompilerRunner {
                     let body = function_body(&self.db, *source_file, *func_id);
 
                     // Run type inference with global function types
-                    let inference_result = baml_thir::infer_function_with_context(
+                    let inference_result = baml_thir::infer_function(
                         &self.db,
                         &signature,
                         &body,

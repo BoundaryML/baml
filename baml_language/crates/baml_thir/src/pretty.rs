@@ -137,9 +137,9 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         let client = llm_body
             .client
             .as_ref()
-            .map(|n| n.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| "none".to_string());
-        writeln!(self.output, "└─ LLM Body (client: {})", client).ok();
+        writeln!(self.output, "└─ LLM Body (client: {client})").ok();
     }
 
     fn render_expr(
@@ -153,12 +153,12 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         let ty = result
             .expr_types
             .get(&expr_id)
-            .map(|t| t.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| "?".to_string());
 
         let prefix = self.make_prefix(is_last);
-        let expr_desc = self.describe_expr(expr, &ty);
-        writeln!(self.output, "{}{}", prefix, expr_desc).ok();
+        let expr_desc = TreeRenderer::describe_expr(expr, &ty);
+        writeln!(self.output, "{prefix}{expr_desc}").ok();
 
         // Track continuation for children: if this node is_last, children don't need │
         self.push_continuation(!is_last);
@@ -166,20 +166,20 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         self.pop_continuation();
     }
 
-    fn describe_expr(&self, expr: &Expr, ty: &str) -> String {
+    fn describe_expr(expr: &Expr, ty: &str) -> String {
         match expr {
-            Expr::Literal(lit) => format!("Literal({:?}): {}", lit, ty),
-            Expr::Path(name) => format!("Path({}): {}", name, ty),
-            Expr::Binary { op, .. } => format!("Binary({:?}): {}", op, ty),
-            Expr::Unary { op, .. } => format!("Unary({:?}): {}", op, ty),
-            Expr::Call { .. } => format!("Call: {}", ty),
-            Expr::FieldAccess { field, .. } => format!("FieldAccess(.{}): {}", field, ty),
-            Expr::Index { .. } => format!("Index: {}", ty),
+            Expr::Literal(lit) => format!("Literal({lit:?}): {ty}"),
+            Expr::Path(name) => format!("Path({name}): {ty}"),
+            Expr::Binary { op, .. } => format!("Binary({op:?}): {ty}"),
+            Expr::Unary { op, .. } => format!("Unary({op:?}): {ty}"),
+            Expr::Call { .. } => format!("Call: {ty}"),
+            Expr::FieldAccess { field, .. } => format!("FieldAccess(.{field}): {ty}"),
+            Expr::Index { .. } => format!("Index: {ty}"),
             Expr::Array { elements } => format!("Array[{}]: {}", elements.len(), ty),
             Expr::Object { type_name, fields } => {
                 let name = type_name
                     .as_ref()
-                    .map(|n| n.to_string())
+                    .map(std::string::ToString::to_string)
                     .unwrap_or_default();
                 format!("Object({} {{ {} fields }}): {}", name, fields.len(), ty)
             }
@@ -189,9 +189,9 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
             }
             Expr::If { else_branch, .. } => {
                 let has_else = if else_branch.is_some() { " + else" } else { "" };
-                format!("If{}: {}", has_else, ty)
+                format!("If{has_else}: {ty}")
             }
-            Expr::Missing => format!("<missing>: {}", ty),
+            Expr::Missing => format!("<missing>: {ty}"),
         }
     }
 
@@ -226,7 +226,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 for (i, (name, value)) in fields.iter().enumerate() {
                     let is_last = i == fields.len() - 1;
                     let field_prefix = self.make_prefix(is_last);
-                    writeln!(self.output, "{}{name}:", field_prefix).ok();
+                    writeln!(self.output, "{field_prefix}{name}:").ok();
                     self.push_continuation(!is_last);
                     self.render_expr(*value, body, result, true);
                     self.pop_continuation();
@@ -248,7 +248,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
             } => {
                 // Condition
                 let cond_prefix = self.make_prefix(false);
-                writeln!(self.output, "{}condition:", cond_prefix).ok();
+                writeln!(self.output, "{cond_prefix}condition:").ok();
                 self.push_continuation(true);
                 self.render_expr(*condition, body, result, true);
                 self.pop_continuation();
@@ -256,7 +256,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 // Then branch
                 let then_is_last = else_branch.is_none();
                 let then_prefix = self.make_prefix(then_is_last);
-                writeln!(self.output, "{}then:", then_prefix).ok();
+                writeln!(self.output, "{then_prefix}then:").ok();
                 self.push_continuation(!then_is_last);
                 self.render_expr(*then_branch, body, result, true);
                 self.pop_continuation();
@@ -264,7 +264,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 // Else branch
                 if let Some(else_expr) = else_branch {
                     let else_prefix = self.make_prefix(true);
-                    writeln!(self.output, "{}else:", else_prefix).ok();
+                    writeln!(self.output, "{else_prefix}else:").ok();
                     self.push_continuation(false);
                     self.render_expr(*else_expr, body, result, true);
                     self.pop_continuation();
@@ -299,18 +299,18 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
 
                 let ty_str = if let Some(type_ref) = type_annotation {
                     let ty = lower_type_ref(self.db, type_ref);
-                    format!(": {}", ty)
+                    format!(": {ty}")
                 } else if let Some(init) = initializer {
                     result
                         .expr_types
                         .get(init)
-                        .map(|t| format!(": {}", t))
+                        .map(|t| format!(": {t}"))
                         .unwrap_or_default()
                 } else {
                     String::new()
                 };
 
-                writeln!(self.output, "{}Let {}{}", prefix, var_name, ty_str).ok();
+                writeln!(self.output, "{prefix}Let {var_name}{ty_str}").ok();
 
                 if let Some(init) = initializer {
                     self.push_continuation(!is_last);
@@ -319,13 +319,13 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 }
             }
             Stmt::Expr(expr_id) => {
-                writeln!(self.output, "{}ExprStmt", prefix).ok();
+                writeln!(self.output, "{prefix}ExprStmt").ok();
                 self.push_continuation(!is_last);
                 self.render_expr(*expr_id, body, result, true);
                 self.pop_continuation();
             }
             Stmt::Return(expr) => {
-                writeln!(self.output, "{}Return", prefix).ok();
+                writeln!(self.output, "{prefix}Return").ok();
                 if let Some(e) = expr {
                     self.push_continuation(!is_last);
                     self.render_expr(*e, body, result, true);
@@ -336,7 +336,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 condition,
                 body: while_body,
             } => {
-                writeln!(self.output, "{}While", prefix).ok();
+                writeln!(self.output, "{prefix}While").ok();
                 self.push_continuation(!is_last);
                 self.render_expr(*condition, body, result, false);
                 self.render_expr(*while_body, body, result, true);
@@ -351,7 +351,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 let var_name = match pat {
                     Pattern::Binding(name) => name.to_string(),
                 };
-                writeln!(self.output, "{}ForIn ({})", prefix, var_name).ok();
+                writeln!(self.output, "{prefix}ForIn ({var_name})").ok();
                 self.push_continuation(!is_last);
                 self.render_expr(*iterator, body, result, false);
                 self.render_expr(*for_body, body, result, true);
@@ -363,7 +363,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 update,
                 body: for_body,
             } => {
-                writeln!(self.output, "{}ForCStyle", prefix).ok();
+                writeln!(self.output, "{prefix}ForCStyle").ok();
                 self.push_continuation(!is_last);
                 if let Some(init) = initializer {
                     self.render_stmt(*init, body, result, false);
@@ -378,7 +378,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 self.pop_continuation();
             }
             Stmt::Missing => {
-                writeln!(self.output, "{}<missing stmt>", prefix).ok();
+                writeln!(self.output, "{prefix}<missing stmt>").ok();
             }
         }
     }
@@ -416,7 +416,7 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
         Expr::Literal(lit) => match lit {
             Literal::Int(n) => n.to_string(),
             Literal::Float(s) => s.clone(),
-            Literal::String(s) => format!("\"{}\"", s),
+            Literal::String(s) => format!("\"{s}\""),
             Literal::Bool(b) => b.to_string(),
             Literal::Null => "null".to_string(),
         },
@@ -425,12 +425,12 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
             let lhs_str = expr_to_string(*lhs, body);
             let rhs_str = expr_to_string(*rhs, body);
             let op_str = binary_op_to_str(*op);
-            format!("{} {} {}", lhs_str, op_str, rhs_str)
+            format!("{lhs_str} {op_str} {rhs_str}")
         }
         Expr::Unary { op, expr: inner } => {
             let inner_str = expr_to_string(*inner, body);
             let op_str = unary_op_to_str(*op);
-            format!("{}{}", op_str, inner_str)
+            format!("{op_str}{inner_str}")
         }
         Expr::Call { callee, args } => {
             let callee_str = expr_to_string(*callee, body);
@@ -439,12 +439,12 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
         }
         Expr::FieldAccess { base, field } => {
             let base_str = expr_to_string(*base, body);
-            format!("{}.{}", base_str, field)
+            format!("{base_str}.{field}")
         }
         Expr::Index { base, index } => {
             let base_str = expr_to_string(*base, body);
             let index_str = expr_to_string(*index, body);
-            format!("{}[{}]", base_str, index_str)
+            format!("{base_str}[{index_str}]")
         }
         Expr::Array { elements } => {
             let elems: Vec<String> = elements.iter().map(|e| expr_to_string(*e, body)).collect();
@@ -453,7 +453,7 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
         Expr::Object { type_name, fields } => {
             let name = type_name
                 .as_ref()
-                .map(|n| format!("{} ", n))
+                .map(|n| format!("{n} "))
                 .unwrap_or_default();
             let field_strs: Vec<String> = fields
                 .iter()

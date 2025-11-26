@@ -10,11 +10,10 @@
 //!
 //! This follows patterns from rust-analyzer and ruff for incremental type checking.
 
-use baml_base::{Name, Span};
-use baml_hir::{
-    ClassId, EnumId, ExprBody, ExprId, FunctionBody, FunctionSignature, Pattern, StmtId,
-};
 use std::collections::HashMap;
+
+use baml_base::{Name, Span};
+use baml_hir::{ExprBody, ExprId, FunctionBody, FunctionSignature, Pattern, StmtId};
 
 mod lower;
 mod pretty;
@@ -50,18 +49,6 @@ pub struct InferenceResult<'db> {
     pub expr_types: HashMap<ExprId, Ty<'db>>,
     /// Type checking errors.
     pub errors: Vec<TypeError<'db>>,
-}
-
-impl<'db> InferenceResult<'db> {
-    /// Create an empty inference result.
-    pub fn empty() -> Self {
-        InferenceResult {
-            return_type: Ty::Unknown,
-            param_types: HashMap::new(),
-            expr_types: HashMap::new(),
-            errors: Vec::new(),
-        }
-    }
 }
 
 // ============================================================================
@@ -185,21 +172,11 @@ pub struct TypeContext<'db> {
 }
 
 impl<'db> TypeContext<'db> {
-    /// Create a new type context.
-    pub fn new(db: &'db dyn Db) -> Self {
-        TypeContext {
-            db,
-            scopes: vec![HashMap::new()], // Start with one scope
-            expr_types: HashMap::new(),
-            errors: Vec::new(),
-        }
-    }
-
     /// Create a new type context with an initial scope of global bindings.
     ///
     /// The initial scope typically contains top-level function types, allowing
-    /// function calls to be properly typed.
-    pub fn with_globals(db: &'db dyn Db, globals: HashMap<Name, Ty<'db>>) -> Self {
+    /// function calls to be properly typed. Pass an empty `HashMap` for no globals.
+    pub fn new(db: &'db dyn Db, globals: HashMap<Name, Ty<'db>>) -> Self {
         TypeContext {
             db,
             scopes: vec![globals],
@@ -263,10 +240,13 @@ impl<'db> TypeContext<'db> {
 // Type Inference
 // ============================================================================
 
-/// Infer types for a function given its body.
+/// Infer types for a function body.
 ///
 /// This is the main entry point for type inference. It takes a pre-lowered
 /// function body and infers types for all expressions.
+///
+/// The `globals` parameter provides types for top-level functions, allowing
+/// function calls to be properly typed. Pass `None` if no global context is needed.
 ///
 /// Note: In a full implementation, this would be a Salsa tracked function.
 /// For now, it's a regular function that takes the body directly.
@@ -274,26 +254,10 @@ pub fn infer_function_body<'db>(
     db: &'db dyn Db,
     body: &FunctionBody,
     param_types: HashMap<Name, Ty<'db>>,
-    expected_return: Ty<'db>,
-) -> InferenceResult<'db> {
-    infer_function_body_with_context(db, body, param_types, expected_return, None)
-}
-
-/// Infer types for a function body with an optional global typing context.
-///
-/// The `globals` parameter provides types for top-level functions, allowing
-/// function calls to be properly typed.
-pub fn infer_function_body_with_context<'db>(
-    db: &'db dyn Db,
-    body: &FunctionBody,
-    param_types: HashMap<Name, Ty<'db>>,
-    expected_return: Ty<'db>,
+    expected_return: &Ty<'db>,
     globals: Option<HashMap<Name, Ty<'db>>>,
 ) -> InferenceResult<'db> {
-    let mut ctx = match globals {
-        Some(g) => TypeContext::with_globals(db, g),
-        None => TypeContext::new(db),
-    };
+    let mut ctx = TypeContext::new(db, globals.unwrap_or_default());
 
     // Add parameters to the current scope (on top of globals)
     for (name, ty) in &param_types {
@@ -317,7 +281,7 @@ pub fn infer_function_body_with_context<'db>(
     };
 
     // Check return type matches (if we have span info, we'd report errors here)
-    if !return_type.is_subtype_of(&expected_return)
+    if !return_type.is_subtype_of(expected_return)
         && !return_type.is_unknown()
         && !expected_return.is_unknown()
     {
@@ -336,21 +300,12 @@ pub fn infer_function_body_with_context<'db>(
 /// Infer types for a function given its signature and body.
 ///
 /// This is the entry point for type inference from the test suite.
-/// It takes pre-fetched signature and body data, allowing the caller (baml_db)
+/// It takes pre-fetched signature and body data, allowing the caller (`baml_db`)
 /// to handle the Salsa queries for fetching this data.
-pub fn infer_function<'db>(
-    db: &'db dyn Db,
-    signature: &FunctionSignature,
-    body: &FunctionBody,
-) -> InferenceResult<'db> {
-    infer_function_with_context(db, signature, body, None)
-}
-
-/// Infer types for a function with an optional global typing context.
 ///
 /// The `globals` parameter provides types for top-level functions, allowing
-/// function calls to be properly typed.
-pub fn infer_function_with_context<'db>(
+/// function calls to be properly typed. Pass `None` if no global context is needed.
+pub fn infer_function<'db>(
     db: &'db dyn Db,
     signature: &FunctionSignature,
     body: &FunctionBody,
@@ -370,7 +325,7 @@ pub fn infer_function_with_context<'db>(
     let expected_return = lower_type_ref(db, &signature.return_type);
 
     // Delegate to the body inference function
-    infer_function_body_with_context(db, body, param_types, expected_return, globals)
+    infer_function_body(db, body, param_types, &expected_return, globals)
 }
 
 /// Infer the type of an expression (synthesize mode).
@@ -578,29 +533,27 @@ fn infer_binary_op<'db>(
     rhs: &Ty<'db>,
     span: Span,
 ) -> Ty<'db> {
-    use baml_hir::BinaryOp::*;
+    use baml_hir::BinaryOp::{
+        Add, And, BitAnd, BitOr, BitXor, Div, Eq, Ge, Gt, Le, Lt, Mod, Mul, Ne, Or, Shl, Shr, Sub,
+    };
 
     match op {
         // Arithmetic operations
-        Add | Sub | Mul | Div | Mod => {
-            if lhs.is_subtype_of(&Ty::Int) && rhs.is_subtype_of(&Ty::Int) {
-                Ty::Int
-            } else if lhs.is_subtype_of(&Ty::Float) && rhs.is_subtype_of(&Ty::Float) {
-                Ty::Float
-            } else if lhs.is_subtype_of(&Ty::Int) && rhs.is_subtype_of(&Ty::Float) {
-                Ty::Float
-            } else if lhs.is_subtype_of(&Ty::Float) && rhs.is_subtype_of(&Ty::Int) {
-                Ty::Float
-            } else {
+        Add | Sub | Mul | Div | Mod => match (lhs, rhs) {
+            (Ty::Int, Ty::Int) => Ty::Int,
+            (Ty::Float, Ty::Float) => Ty::Float,
+            (Ty::Int, Ty::Float) => Ty::Float,
+            (Ty::Float, Ty::Int) => Ty::Float,
+            _ => {
                 ctx.push_error(TypeError::InvalidBinaryOp {
-                    op: format!("{:?}", op),
+                    op: format!("{op:?}"),
                     lhs: lhs.clone(),
                     rhs: rhs.clone(),
                     span,
                 });
                 Ty::Error
             }
-        }
+        },
 
         // Comparison operations
         Eq | Ne => Ty::Bool,
@@ -612,7 +565,7 @@ fn infer_binary_op<'db>(
                 Ty::Bool
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
-                    op: format!("{:?}", op),
+                    op: format!("{op:?}"),
                     lhs: lhs.clone(),
                     rhs: rhs.clone(),
                     span,
@@ -627,7 +580,7 @@ fn infer_binary_op<'db>(
                 Ty::Bool
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
-                    op: format!("{:?}", op),
+                    op: format!("{op:?}"),
                     lhs: lhs.clone(),
                     rhs: rhs.clone(),
                     span,
@@ -642,7 +595,7 @@ fn infer_binary_op<'db>(
                 Ty::Int
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
-                    op: format!("{:?}", op),
+                    op: format!("{op:?}"),
                     lhs: lhs.clone(),
                     rhs: rhs.clone(),
                     span,
@@ -660,7 +613,7 @@ fn infer_unary_op<'db>(
     operand: &Ty<'db>,
     span: Span,
 ) -> Ty<'db> {
-    use baml_hir::UnaryOp::*;
+    use baml_hir::UnaryOp::{Neg, Not};
 
     match op {
         Not => {
@@ -770,7 +723,7 @@ fn infer_index_access<'db>(
 }
 
 /// Type check a statement.
-fn check_stmt<'db>(ctx: &mut TypeContext<'db>, stmt_id: StmtId, body: &ExprBody) {
+fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
     use baml_hir::Stmt;
 
     let stmt = &body.stmts[stmt_id];
@@ -911,18 +864,4 @@ fn check_stmt<'db>(ctx: &mut TypeContext<'db>, stmt_id: StmtId, body: &ExprBody)
 
         Stmt::Missing => {}
     }
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/// Helper function for class type resolution.
-pub fn class_type<'db>(_db: &'db dyn Db, class: ClassId<'db>) -> Ty<'db> {
-    Ty::Class(class)
-}
-
-/// Helper function for enum type resolution.
-pub fn enum_type<'db>(_db: &'db dyn Db, enum_id: EnumId<'db>) -> Ty<'db> {
-    Ty::Enum(enum_id)
 }

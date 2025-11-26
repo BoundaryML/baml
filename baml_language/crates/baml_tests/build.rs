@@ -535,7 +535,7 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
     )?;
     writeln!(
         file,
-        "                    let result = baml_thir::infer_function_with_context(&db, &signature, &body, Some(globals.clone()));"
+        "                    let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()));"
     )?;
     writeln!(file)?;
     writeln!(
