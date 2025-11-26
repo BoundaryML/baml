@@ -1,5 +1,18 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
+  Function Calculate:
+    Return: Void
+  Function FieldAccess:
+    Return: Void
+    Errors:
+      - Unknown variable: user::name
+      - Unknown variable: user::profile::bio
+      - Unknown variable: user::profile::settings::theme
+      - Unknown variable: user::tags
+  Function IndexAccess:
+    Return: Void
+  Function TestPrecedence:
+    Return: Void

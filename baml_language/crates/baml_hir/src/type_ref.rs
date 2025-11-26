@@ -3,8 +3,9 @@
 //! These are type references before name resolution.
 //! `TypeRef` -> Ty happens during THIR construction.
 
-use crate::path::Path;
 use baml_base::Name;
+
+use crate::path::Path;
 
 /// A type reference before name resolution.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

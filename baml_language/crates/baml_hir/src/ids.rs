@@ -8,28 +8,22 @@
 
 use std::marker::PhantomData;
 
+/// Identifier for a class definition.
+pub use crate::loc::ClassLoc as ClassId;
+/// Identifier for a client configuration.
+pub use crate::loc::ClientLoc as ClientId;
+/// Identifier for an enum definition.
+pub use crate::loc::EnumLoc as EnumId;
 // Note: In Salsa 2022, interned types are their own IDs.
 // The #[salsa::interned] macro in loc.rs creates these types directly.
 // We re-export them here as type aliases for clarity.
-
 /// Identifier for a function (LLM or expression).
 /// This is the interned `FunctionLoc` from loc.rs.
 pub use crate::loc::FunctionLoc as FunctionId;
-
-/// Identifier for a class definition.
-pub use crate::loc::ClassLoc as ClassId;
-
-/// Identifier for an enum definition.
-pub use crate::loc::EnumLoc as EnumId;
-
-/// Identifier for a type alias.
-pub use crate::loc::TypeAliasLoc as TypeAliasId;
-
-/// Identifier for a client configuration.
-pub use crate::loc::ClientLoc as ClientId;
-
 /// Identifier for a test definition.
 pub use crate::loc::TestLoc as TestId;
+/// Identifier for a type alias.
+pub use crate::loc::TypeAliasLoc as TypeAliasId;
 
 // Manual Debug implementations for Salsa interned types
 // These types don't auto-derive Debug, so we provide simple implementations
@@ -138,8 +132,10 @@ impl<T> LocalItemId<T> {
 
 /// Hash a name to 16 bits for use in `LocalItemId`.
 pub fn hash_name(name: &baml_base::Name) -> u16 {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
 
     let mut hasher = DefaultHasher::new();
     name.hash(&mut hasher);

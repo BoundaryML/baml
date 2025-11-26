@@ -1,5 +1,34 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
+  Function AnotherLLM:
+    Return: String
+  Function Ambiguous:
+    Return: String
+  Function ProcessData:
+    Return: Void
+    Errors:
+      - Unknown variable: data::field1
+      - Unknown variable: data::field2
+  Function ExtractData:
+    Return: Unknown
+  Function SimpleCalc:
+    Return: Void
+  Function ProcessAnalysis:
+    Return: Void
+    Errors:
+      - Unknown variable: analysis::score
+      - Unknown variable: analysis::sentiment
+      - Cannot apply operator 'Add' to types string and unknown
+      - Unknown variable: analysis::sentiment
+      - Cannot apply operator 'Add' to types string and unknown
+      - Unknown variable: analysis::sentiment
+      - Cannot apply operator 'Add' to types string and unknown
+      - Unknown variable: analysis::sentiment
+      - Cannot apply operator 'Add' to types string and unknown
+  Function LLMAnalyze:
+    Return: Unknown
+  Function ChainedProcess:
+    Return: String

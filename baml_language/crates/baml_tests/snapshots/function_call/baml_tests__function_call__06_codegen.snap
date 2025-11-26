@@ -2,6 +2,6 @@
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
-=== TYPE INFERENCE ===
-  Function Invalid:
-    Return: Void
+=== BYTECODE ===
+Instructions: 0 bytes
+Constants: 0

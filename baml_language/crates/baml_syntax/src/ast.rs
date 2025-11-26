@@ -540,6 +540,114 @@ impl ReturnStmt {
     }
 }
 
+/// An element within a block expression - either a statement node or an expression token.
+#[derive(Debug, Clone)]
+pub enum BlockElement {
+    /// A statement node (`LET_STMT`, `RETURN_STMT`, `WHILE_STMT`, `FOR_EXPR`)
+    Stmt(SyntaxNode),
+    /// An expression node (various expression kinds)
+    ExprNode(SyntaxNode),
+    /// A literal or identifier token that forms an expression
+    ExprToken(SyntaxToken),
+}
+
+impl BlockElement {
+    /// Returns true if this element is a statement (has no value).
+    pub fn is_stmt(&self) -> bool {
+        matches!(self, BlockElement::Stmt(_))
+    }
+
+    /// Returns true if this element is an expression (has a value).
+    pub fn is_expr(&self) -> bool {
+        matches!(self, BlockElement::ExprNode(_) | BlockElement::ExprToken(_))
+    }
+
+    /// Get the syntax node if this is a node-based element.
+    pub fn as_node(&self) -> Option<&SyntaxNode> {
+        match self {
+            BlockElement::Stmt(n) | BlockElement::ExprNode(n) => Some(n),
+            BlockElement::ExprToken(_) => None,
+        }
+    }
+
+    /// Get the syntax token if this is a token-based element.
+    pub fn as_token(&self) -> Option<&SyntaxToken> {
+        match self {
+            BlockElement::ExprToken(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// Check if this element has a trailing semicolon.
+    pub fn has_trailing_semicolon(&self) -> bool {
+        use rowan::Direction;
+
+        match self {
+            BlockElement::Stmt(node) | BlockElement::ExprNode(node) => {
+                node.siblings_with_tokens(Direction::Next)
+                    .skip(1) // Skip the node itself
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .any(|token| token.kind() == SyntaxKind::SEMICOLON)
+            }
+            BlockElement::ExprToken(token) => {
+                // For tokens, check siblings
+                token
+                    .siblings_with_tokens(Direction::Next)
+                    .skip(1)
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .any(|t| t.kind() == SyntaxKind::SEMICOLON)
+            }
+        }
+    }
+}
+
+impl BlockExpr {
+    /// Iterate over all significant elements in this block (statements and expressions).
+    ///
+    /// This filters out braces, whitespace, and other structural tokens, returning
+    /// only the meaningful content of the block.
+    pub fn elements(&self) -> impl Iterator<Item = BlockElement> + '_ {
+        self.syntax.children_with_tokens().filter_map(|el| {
+            match el {
+                rowan::NodeOrToken::Node(n) => {
+                    match n.kind() {
+                        // Statement nodes
+                        SyntaxKind::LET_STMT
+                        | SyntaxKind::RETURN_STMT
+                        | SyntaxKind::WHILE_STMT
+                        | SyntaxKind::FOR_EXPR => Some(BlockElement::Stmt(n)),
+                        // Expression nodes
+                        SyntaxKind::EXPR
+                        | SyntaxKind::BINARY_EXPR
+                        | SyntaxKind::UNARY_EXPR
+                        | SyntaxKind::CALL_EXPR
+                        | SyntaxKind::IF_EXPR
+                        | SyntaxKind::BLOCK_EXPR
+                        | SyntaxKind::PATH_EXPR
+                        | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::INDEX_EXPR
+                        | SyntaxKind::PAREN_EXPR
+                        | SyntaxKind::ARRAY_LITERAL
+                        | SyntaxKind::OBJECT_LITERAL => Some(BlockElement::ExprNode(n)),
+                        _ => None,
+                    }
+                }
+                rowan::NodeOrToken::Token(t) => {
+                    // Keep literals and identifiers (potential tail expressions)
+                    match t.kind() {
+                        SyntaxKind::WORD
+                        | SyntaxKind::INTEGER_LITERAL
+                        | SyntaxKind::FLOAT_LITERAL
+                        | SyntaxKind::STRING_LITERAL
+                        | SyntaxKind::RAW_STRING_LITERAL => Some(BlockElement::ExprToken(t)),
+                        _ => None,
+                    }
+                }
+            }
+        })
+    }
+}
+
 /// Enum for any top-level item.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
