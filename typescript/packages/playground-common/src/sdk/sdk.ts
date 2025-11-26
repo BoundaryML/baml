@@ -1050,6 +1050,7 @@ export class BAMLSDK {
       this.storage.clearWatchNotifications();
       this.storage.clearHighlightedBlocks();
       this.storage.clearFlashRanges();
+      this.storage.clearExecutionLog();
 
       // Create test history run with all tests
       const historyRun: testAtoms.TestHistoryRun = {
@@ -1105,6 +1106,24 @@ export class BAMLSDK {
         watchNotificationsByTest[testKey] = [];
         // Mark as running - execution is about to begin
         this.storage.updateTestInHistory(0, i, { status: 'running' });
+
+        // Emit node.enter to execution log
+        const testCase = this.runtime!.getTestCases(test.functionName).find((tc) => tc.name === test.testName);
+        // Convert ParameterInfo[] to Record<string, unknown>
+        const inputsRecord: Record<string, unknown> = {};
+        if (testCase?.inputs) {
+          for (const param of testCase.inputs) {
+            inputsRecord[param.name] = param.value;
+          }
+        }
+        this.storage.appendExecutionLog({
+          type: 'node.enter',
+          nodeId: test.functionName,
+          timestamp: Date.now(),
+          iteration: 0,
+          executionId: `test-${testKey}`,
+          inputs: inputsRecord,
+        });
       }
 
       try {
@@ -1146,6 +1165,20 @@ export class BAMLSDK {
                 latency_ms: latencyMs,
                 watchNotifications: watchNotificationsByTest[testKey] || [],
               });
+
+              // Also emit to execution log
+              const isError = status !== 'passed';
+              this.storage.appendExecutionLog({
+                type: 'node.exit',
+                nodeId: functionName,
+                timestamp: Date.now(),
+                iteration: 0,
+                executionId: `test-${testKey}`,
+                outputs: { result: response } as Record<string, unknown>,
+                duration: latencyMs,
+                error: isError ? { message: `Test ${status}` } : undefined,
+                responseData: response,
+              });
             }
           },
 
@@ -1161,6 +1194,64 @@ export class BAMLSDK {
             this.storage.addWatchNotification(enriched);
             if (enriched.lexicalNodeId) {
               this.storage.addHighlightedBlock(enriched.lexicalNodeId);
+            }
+
+            // Emit proper event types based on notification content
+            const now = Date.now();
+            const functionName = notification.functionName ?? 'unknown';
+
+            if (enriched.parsedValue?.type === 'header') {
+              // Header enter event
+              const nodeId = this.findNodeIdByLabel(functionName, enriched.parsedValue.label) || enriched.parsedValue.label;
+              this.storage.appendExecutionLog({
+                type: 'header.enter',
+                nodeId,
+                timestamp: now,
+                iteration: 0,
+                executionId: `test-${functionName}`,
+                label: enriched.parsedValue.label,
+                level: enriched.parsedValue.level,
+                span: enriched.parsedValue.span ? {
+                  filePath: enriched.parsedValue.span.filePath,
+                  startLine: enriched.parsedValue.span.startLine,
+                  startColumn: enriched.parsedValue.span.startColumn,
+                  start: enriched.parsedValue.span.startColumn,
+                  endLine: enriched.parsedValue.span.endLine,
+                  endColumn: enriched.parsedValue.span.endColumn,
+                  end: enriched.parsedValue.span.endColumn,
+                } : undefined,
+              });
+            } else if (enriched.parsedValue?.type === 'header_stopped') {
+              // Header exit event
+              const nodeId = this.findNodeIdByLabel(functionName, enriched.parsedValue.label) || enriched.parsedValue.label;
+              this.storage.appendExecutionLog({
+                type: 'header.exit',
+                nodeId,
+                timestamp: now,
+                iteration: 0,
+                executionId: `test-${functionName}`,
+                label: enriched.parsedValue.label,
+                level: enriched.parsedValue.level,
+              });
+            } else if (notification.variableName) {
+              // Variable update event
+              let parsedValue: unknown;
+              try {
+                parsedValue = JSON.parse(notification.value);
+              } catch {
+                parsedValue = notification.value;
+              }
+
+              this.storage.appendExecutionLog({
+                type: 'variable.update',
+                nodeId: enriched.lexicalNodeId || functionName,
+                timestamp: now,
+                iteration: 0,
+                executionId: `test-${functionName}`,
+                name: notification.variableName,
+                value: parsedValue,
+                parentHeaderId: enriched.lexicalNodeId,
+              });
             }
           },
 

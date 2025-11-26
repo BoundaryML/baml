@@ -130,11 +130,49 @@ export interface PartialResponseEvent extends BaseExecutionEvent {
 }
 
 /**
- * Watch notification event (from BAML watch blocks)
+ * Header enter event (section/block started)
+ * Headers are rendered as cards with status like graph nodes
  */
-export interface WatchNotificationEvent extends BaseExecutionEvent {
-  type: 'watch.notification';
-  notification: WatchNotification;
+export interface HeaderEnterEvent extends BaseExecutionEvent {
+  type: 'header.enter';
+  /** Header label/title (e.g., "gather applicant context") */
+  label: string;
+  /** Nesting level (1-based) */
+  level: number;
+  /** Source code span for navigation */
+  span?: SpanInfo;
+}
+
+/**
+ * Header exit event (section/block completed)
+ */
+export interface HeaderExitEvent extends BaseExecutionEvent {
+  type: 'header.exit';
+  /** Header label/title */
+  label: string;
+  /** Nesting level */
+  level: number;
+  /** Duration in milliseconds */
+  duration?: number;
+  /** Error if failed */
+  error?: {
+    message: string;
+    code?: string;
+  };
+}
+
+/**
+ * Variable update event (watch variable changed)
+ * These are grouped under the current active header
+ */
+export interface VariableUpdateEvent extends BaseExecutionEvent {
+  type: 'variable.update';
+  /** Variable name */
+  name: string;
+  /** Variable value (already parsed) */
+  value: unknown;
+  /** Parent header nodeId (for grouping) */
+  parentHeaderId?: string;
 }
 
 /**
@@ -167,6 +205,8 @@ export type RichExecutionEvent =
   | LLMResponseEvent
   | LLMFailureEvent
   | PartialResponseEvent
-  | WatchNotificationEvent
+  | HeaderEnterEvent
+  | HeaderExitEvent
+  | VariableUpdateEvent
   | HighlightEvent
   | LogEvent;

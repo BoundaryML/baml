@@ -24,12 +24,12 @@ import { useActiveWorkflow, useLayoutDirection, useNavigation } from '../../../.
 import { flowStore } from '../../../../states/reactflow';
 import { Loader as Spinner } from '@baml/ui/custom/loader';
 import { useGraphSync } from '../../../../features/graph/hooks';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { graphControlsTipDismissedAtom, unifiedSelectionAtom } from '../atoms';
 import { MousePointer2, ZoomIn, X, ChevronLeft } from 'lucide-react';
 import type { NavigationInput } from '../../../../sdk/navigation';
 import { panToNodeIfNeeded } from '../../../../utils/cameraPan';
-import { allNodeStatesAtom, currentGraphAtom } from '../../../../sdk/atoms/core.atoms';
+import { allNodeStatesAtom, currentGraphAtom, scrollToNodeIdAtom } from '../../../../sdk/atoms/core.atoms';
 
 /**
  * GraphView - ReactFlow graph component for the Graph tab
@@ -58,6 +58,7 @@ export const GraphView = () => {
   const selectedNodeId = selection.mode === 'workflow' ? selection.selectedNodeId : null;
   const nodeStates = useAtomValue(allNodeStatesAtom);
   const currentGraph = useAtomValue(currentGraphAtom);
+  const setScrollToNodeId = useSetAtom(scrollToNodeIdAtom);
 
   // Get workflow ID from the displayed graph (more reliable than selection state)
   const displayedWorkflowId = currentGraph.workflow?.id ?? activeWorkflowId;
@@ -181,6 +182,9 @@ export const GraphView = () => {
       functionName: node.id, // May or may not be an actual function name
     };
     navigate(input);
+
+    // Also trigger scroll-to in execution log panel
+    setScrollToNodeId(node.id);
   };
 
   useLayoutEffect(() => {

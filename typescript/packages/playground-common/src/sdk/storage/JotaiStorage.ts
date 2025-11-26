@@ -43,7 +43,10 @@ import {
   selectedTestCaseNameAtom,
   unifiedSelectionStateAtom,
   lastCursorPositionAtom,
+  executionLogAtom,
 } from '../atoms/core.atoms';
+
+import type { RichExecutionEvent } from '../interface/events';
 
 import type {
   DiagnosticError,
@@ -502,5 +505,23 @@ export class JotaiStorage implements SDKStorage {
 
   getLastCursorPosition() {
     return this.store.get(lastCursorPositionAtom);
+  }
+
+  // ============================================================================
+  // Execution Log (for timeline view)
+  // ============================================================================
+
+  appendExecutionLog(events: RichExecutionEvent | RichExecutionEvent[]) {
+    const currentLog = this.store.get(executionLogAtom);
+    const newEvents = Array.isArray(events) ? events : [events];
+    this.store.set(executionLogAtom, [...currentLog, ...newEvents]);
+  }
+
+  clearExecutionLog() {
+    this.store.set(executionLogAtom, []);
+  }
+
+  getExecutionLog() {
+    return this.store.get(executionLogAtom);
   }
 }

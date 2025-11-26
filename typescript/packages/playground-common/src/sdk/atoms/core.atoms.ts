@@ -838,3 +838,42 @@ export interface CursorPositionState {
  * Only restore if timestamp is less than 3 seconds old
  */
 export const lastCursorPositionAtom = atom<CursorPositionState | null>(null);
+
+// ============================================================================
+// EXECUTION LOG (for workflow execution timeline view)
+// ============================================================================
+
+import type { RichExecutionEvent } from '../interface/events';
+
+/**
+ * Execution log stores ALL events in chronological order for the current execution.
+ * This enables a timeline view of the entire workflow execution.
+ */
+export const executionLogAtom = atom<RichExecutionEvent[]>([]);
+
+/**
+ * Write-only atom to append events to the execution log
+ */
+export const appendExecutionLogAtom = atom(
+  null,
+  (get, set, events: RichExecutionEvent | RichExecutionEvent[]) => {
+    const currentLog = get(executionLogAtom);
+    const newEvents = Array.isArray(events) ? events : [events];
+    set(executionLogAtom, [...currentLog, ...newEvents]);
+  }
+);
+
+/**
+ * Write-only atom to clear the execution log (for new executions)
+ */
+export const clearExecutionLogAtom = atom(
+  null,
+  (_get, set) => {
+    set(executionLogAtom, []);
+  }
+);
+
+/**
+ * Node ID to scroll to in the execution log (set when clicking a graph node)
+ */
+export const scrollToNodeIdAtom = atom<string | null>(null);

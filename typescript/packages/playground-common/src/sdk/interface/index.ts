@@ -94,7 +94,9 @@ export type {
 
   // Other Events
   PartialResponseEvent,
-  WatchNotificationEvent,
+  HeaderEnterEvent,
+  HeaderExitEvent,
+  VariableUpdateEvent,
   HighlightEvent,
   LogEvent,
 

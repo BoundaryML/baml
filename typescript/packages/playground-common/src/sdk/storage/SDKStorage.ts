@@ -12,6 +12,8 @@ import type {
   CacheEntry,
 } from '../types';
 
+import type { RichExecutionEvent } from '../interface/events';
+
 import type {
   DiagnosticError,
   GeneratedFile,
@@ -214,4 +216,12 @@ export interface SDKStorage {
 
   setLastCursorPosition(position: { fileName: string; line: number; column: number; timestamp: number } | null): void;
   getLastCursorPosition(): { fileName: string; line: number; column: number; timestamp: number } | null;
+
+  // ============================================================================
+  // Execution Log (for timeline view)
+  // ============================================================================
+
+  appendExecutionLog(events: RichExecutionEvent | RichExecutionEvent[]): void;
+  clearExecutionLog(): void;
+  getExecutionLog(): RichExecutionEvent[];
 }

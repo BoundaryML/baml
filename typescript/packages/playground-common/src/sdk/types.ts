@@ -58,7 +58,9 @@ export type {
   LLMResponseEvent,
   LLMFailureEvent,
   PartialResponseEvent,
-  WatchNotificationEvent,
+  HeaderEnterEvent,
+  HeaderExitEvent,
+  VariableUpdateEvent,
   HighlightEvent,
   LogEvent,
 
