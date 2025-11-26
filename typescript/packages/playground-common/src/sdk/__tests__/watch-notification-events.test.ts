@@ -110,7 +110,7 @@ function enrichNotificationWithContext(
   enriched.parsedValue = parsedValue;
 
   if (parsedValue?.type === 'header') {
-    enriched.blockName = parsedValue.label;
+    enriched.lexicalNodeId = parsedValue.label;
   }
 
   return enriched;
@@ -330,7 +330,7 @@ describe('Watch Notification Enrichment', () => {
   ];
 
   describe('enrichNotificationWithContext', () => {
-    it('should enrich header notification with blockName', () => {
+    it('should enrich header notification with lexicalNodeId', () => {
       const notification: WatchNotification = {
         functionName: 'TestWorkflow',
         isStream: false,
@@ -343,7 +343,7 @@ describe('Watch Notification Enrichment', () => {
 
       const enriched = enrichNotificationWithContext(notification, mockNodes);
 
-      expect(enriched.blockName).toBe('Section One');
+      expect(enriched.lexicalNodeId).toBe('Section One');
       expect(enriched.parsedValue).toBeDefined();
       expect(enriched.parsedValue?.type).toBe('header');
     });
@@ -369,7 +369,7 @@ describe('Watch Notification Enrichment', () => {
       expect(enriched.value).toBe(notification.value);
     });
 
-    it('should not set blockName for non-header events', () => {
+    it('should not set lexicalNodeId for non-header events', () => {
       const notification: WatchNotification = {
         functionName: 'TestWorkflow',
         isStream: false,
@@ -380,7 +380,7 @@ describe('Watch Notification Enrichment', () => {
 
       const enriched = enrichNotificationWithContext(notification, mockNodes);
 
-      expect(enriched.blockName).toBeUndefined();
+      expect(enriched.lexicalNodeId).toBeUndefined();
     });
   });
 });
@@ -521,10 +521,10 @@ describe('End-to-End Watch Notification Flow', () => {
     };
 
     const enriched1 = enrichNotificationWithContext(notification1, mockNodes);
-    expect(enriched1.blockName).toBe('gather applicant context');
+    expect(enriched1.lexicalNodeId).toBe('gather applicant context');
 
     // Find node and update state
-    const nodeId1 = findNodeIdByLabel(mockNodes, enriched1.blockName!);
+    const nodeId1 = findNodeIdByLabel(mockNodes, enriched1.lexicalNodeId!);
     expect(nodeId1).toBe('SimpleWorkflow|root:0|hdr:gather-applicant-context:0');
 
     if (nodeId1) {
@@ -553,9 +553,9 @@ describe('End-to-End Watch Notification Flow', () => {
     };
 
     const enriched2 = enrichNotificationWithContext(notification2, mockNodes);
-    expect(enriched2.blockName).toBe('normalize profile signals');
+    expect(enriched2.lexicalNodeId).toBe('normalize profile signals');
 
-    const nodeId2 = findNodeIdByLabel(mockNodes, enriched2.blockName!);
+    const nodeId2 = findNodeIdByLabel(mockNodes, enriched2.lexicalNodeId!);
     expect(nodeId2).toBe('SimpleWorkflow|root:0|hdr:normalize-profile-signals:1');
 
     if (nodeId2) {

@@ -261,7 +261,12 @@ export interface TestResponseData {
 export interface WatchNotification {
   variableName?: string;
   channelName?: string;
-  blockName?: string;
+  /**
+   * The lexical node ID (header title) this notification belongs to.
+   * For variable/stream notifications, this is set by the WASM runtime
+   * based on the most recent header that was entered.
+   */
+  lexicalNodeId?: string;
   /** Function name that emitted this notification */
   functionName?: string;
   isStream: boolean;

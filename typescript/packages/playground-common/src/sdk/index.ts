@@ -30,6 +30,7 @@ export type {
 // Re-export hooks and provider
 export * from './hooks';
 export * from './provider';
+export { BAMLSDKContext } from './context';
 
 // Re-export debug fixtures for testing
 export { DEBUG_BAML_FILES } from './debugFixtures';

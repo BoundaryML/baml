@@ -17,19 +17,24 @@ const directNodeClick: NavigationRule = {
   id: 'direct-node-click',
   priority: 0,
   matches: (target) => target.kind === 'node',
-  resolve: (target) => {
+  resolve: (target, current) => {
     if (!target.workflowId || !target.nodeId) {
       throw new Error('Node click requires workflowId and nodeId');
     }
 
     const membership = target.workflowMemberships[0];
 
+    // Preserve current test name when clicking nodes
+    const currentTestName = (current.mode === 'workflow' || current.mode === 'function')
+      ? current.testName
+      : null;
+
     return {
       mode: 'workflow',
       workflowId: target.workflowId,
       selectedNodeId: target.nodeId,
       functionName: membership ? getPrimaryFunction(membership.calledFunctions) : null,
-      testName: selectPreferredTest(target.availableTests, null),
+      testName: selectPreferredTest(target.availableTests, currentTestName),
     };
   },
   explain: (target) =>

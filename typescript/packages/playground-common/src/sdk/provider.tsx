@@ -6,8 +6,7 @@
  */
 
 import { Provider as JotaiProvider, createStore } from 'jotai';
-import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { BAMLSDK } from './sdk';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createMockSDK, createRealBAMLSDK } from './factory';
 import {
   DebugBanner,
@@ -17,9 +16,7 @@ import {
   type RuntimeMode,
 } from './DebugBanner';
 import { DEBUG_BAML_FILES } from './debugFixtures';
-
-// Export context for use in hooks
-export const BAMLSDKContext = createContext<BAMLSDK | null>(null);
+import { BAMLSDKContext } from './context';
 
 interface BAMLSDKProviderProps {
   children: ReactNode;

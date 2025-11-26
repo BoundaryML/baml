@@ -129,13 +129,28 @@ export class TargetEnricher {
   private findTests(input: NavigationInput): string[] {
     const tests: string[] = [];
 
-    // Get the function name (either from input or from test)
+    // Get the function name (either from input or from test or from node)
     let functionName = input.functionName;
 
     if (input.kind === 'test') {
       // For test clicks, find the function being tested
       const test = this.context.tests.find((t) => t.name === input.testName);
       functionName = test?.functionName;
+    }
+
+    if (input.kind === 'node' && input.workflowId && input.nodeId) {
+      // For node clicks, extract function names from the node
+      const workflow = this.context.workflows.find(
+        (w) => w.id === input.workflowId
+      );
+      if (workflow) {
+        const node = workflow.nodes?.find((n) => n.id === input.nodeId);
+        if (node) {
+          const calledFunctions = extractCalledFunctions(node, this.context.workflows);
+          // Use the first called function to find tests
+          functionName = calledFunctions[0] ?? workflow.id;
+        }
+      }
     }
 
     if (!functionName) return tests;

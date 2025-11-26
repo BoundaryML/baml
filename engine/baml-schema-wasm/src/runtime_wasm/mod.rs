@@ -154,13 +154,23 @@ impl HeaderTracker {
 
     /// Flush all remaining active headers (e.g., at end of execution).
     /// Returns headers that should be marked as stopped (deepest first).
-    #[allow(dead_code)]
     fn flush(&mut self) -> Vec<HeaderContext> {
         let mut stopped = Vec::new();
         while let Some(header) = self.active_headers.pop() {
             stopped.push(header);
         }
         stopped
+    }
+
+    /// Get count of active headers (for debugging)
+    fn active_count(&self) -> usize {
+        self.active_headers.len()
+    }
+
+    /// Get the current (deepest) active header, if any.
+    /// This is the header that variable notifications should be associated with.
+    fn current_header(&self) -> Option<&HeaderContext> {
+        self.active_headers.last()
     }
 }
 
@@ -2178,10 +2188,21 @@ impl WasmRuntime {
                         if let baml_compiler::watch::WatchBamlValue::Header(header) =
                             &notification.value
                         {
+                            log::info!(
+                                "[WASM run_tests] Header enter: level={} title={:?}",
+                                header.level,
+                                header.title
+                            );
                             // Get headers that need to be stopped
                             let stopped_headers = header_tracker_clone
                                 .borrow_mut()
                                 .on_header_enter(header.clone());
+
+                            log::info!(
+                                "[WASM run_tests] After on_header_enter: {} headers to stop, {} active",
+                                stopped_headers.len(),
+                                header_tracker_clone.borrow().active_count()
+                            );
 
                             // Emit stopped notifications for each (deepest first)
                             for stopped_header in stopped_headers {
@@ -2226,6 +2247,25 @@ impl WasmRuntime {
                             &JsValue::from_bool(notification.is_stream),
                         )
                         .unwrap();
+
+                        // HACK: For variable notifications, include the current header's title
+                        // as lexical_node_id so the UI knows which block the variable belongs to
+                        if matches!(
+                            &notification.value,
+                            baml_compiler::watch::WatchBamlValue::Value(_)
+                                | baml_compiler::watch::WatchBamlValue::StreamStart(_)
+                                | baml_compiler::watch::WatchBamlValue::StreamUpdate(_, _)
+                                | baml_compiler::watch::WatchBamlValue::StreamEnd(_)
+                        ) {
+                            if let Some(current_header) = header_tracker_clone.borrow().current_header() {
+                                js_sys::Reflect::set(
+                                    &js_notification,
+                                    &JsValue::from_str("lexical_node_id"),
+                                    &JsValue::from_str(&current_header.title),
+                                )
+                                .unwrap();
+                            }
+                        }
 
                         // Serialize the value as JSON
                         let value_json = match &notification.value {
@@ -2285,6 +2325,11 @@ impl WasmRuntime {
 
                         // HACK: Flush remaining active headers after execution completes
                         let remaining_headers = header_tracker_for_flush.borrow_mut().flush();
+                        log::info!(
+                            "[WASM run_tests] Flushing {} remaining headers for function={}",
+                            remaining_headers.len(),
+                            function_name_for_flush
+                        );
                         for stopped_header in remaining_headers {
                             let js_notification = js_sys::Object::new();
 

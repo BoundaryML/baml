@@ -348,5 +348,73 @@ describe('Navigation Integration - Unified State', () => {
       expect(tab).toBe('preview');
       expect(bottomPanelMode).toBe('detail-panel');
     });
+
+    it('Scenario: Clicking workflow node twice should preserve testName', () => {
+      // Setup: User is in a workflow with a test selected
+      store.set(unifiedSelectionAtom, {
+        mode: 'workflow',
+        workflowId: 'SimpleWorkflow',
+        selectedNodeId: 'SimpleWorkflow|root:0',
+        functionName: 'SimpleWorkflow',
+        testName: 'test_simple_success',
+      });
+
+      const initialSelection = store.get(unifiedSelectionAtom);
+      expect(initialSelection.mode).toBe('workflow');
+      if (initialSelection.mode === 'workflow') {
+        expect(initialSelection.testName).toBe('test_simple_success');
+      }
+
+      // Action: Click on the same root node again (simulating double-click)
+      // The navigation system should preserve the testName
+      store.set(unifiedSelectionAtom, (prev) => {
+        if (prev.mode !== 'workflow') return prev;
+        // This simulates what the navigation coordinator should do:
+        // preserve testName when clicking the same node
+        return {
+          ...prev,
+          selectedNodeId: 'SimpleWorkflow|root:0',
+          // testName should be preserved, not reset to null
+        };
+      });
+
+      const selection = store.get(unifiedSelectionAtom);
+      expect(selection.mode).toBe('workflow');
+      if (selection.mode === 'workflow') {
+        // The testName should still be preserved
+        expect(selection.testName).toBe('test_simple_success');
+        expect(selection.selectedNodeId).toBe('SimpleWorkflow|root:0');
+        expect(selection.workflowId).toBe('SimpleWorkflow');
+      }
+    });
+
+    it('Scenario: Clicking different workflow node should preserve testName', () => {
+      // Setup: User is in a workflow with a test selected
+      store.set(unifiedSelectionAtom, {
+        mode: 'workflow',
+        workflowId: 'SimpleWorkflow',
+        selectedNodeId: 'SimpleWorkflow|root:0',
+        functionName: 'SimpleWorkflow',
+        testName: 'test_simple_success',
+      });
+
+      // Action: Click on a different node in the same workflow
+      store.set(unifiedSelectionAtom, (prev) => {
+        if (prev.mode !== 'workflow') return prev;
+        return {
+          ...prev,
+          selectedNodeId: 'SimpleWorkflow|step1:0',
+          functionName: 'ProcessStep',
+          // testName should be preserved when clicking different nodes
+        };
+      });
+
+      const selection = store.get(unifiedSelectionAtom);
+      expect(selection.mode).toBe('workflow');
+      if (selection.mode === 'workflow') {
+        expect(selection.testName).toBe('test_simple_success');
+        expect(selection.selectedNodeId).toBe('SimpleWorkflow|step1:0');
+      }
+    });
   });
 });

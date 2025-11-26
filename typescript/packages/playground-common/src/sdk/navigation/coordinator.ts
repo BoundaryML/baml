@@ -46,6 +46,8 @@ export class NavigationCoordinator {
       const current = atomGet(unifiedSelectionStateAtom);
       // 3. Decide where to go
       const { state: targetState, rule } = this.engine.decide(target, current);
+      console.log('[NavigationCoordinator] targetState:', targetState);
+      console.log('[NavigationCoordinator] rule:', rule);
       // 4. Build transaction (pass input and context for side effects)
       const effects = this.stateManager.buildTransaction(
         targetState,

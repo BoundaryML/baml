@@ -981,9 +981,9 @@ export class BAMLSDK {
     const parsedValue = this.parseWatchValue(notification.value);
     enriched.parsedValue = parsedValue;
 
-    // Handle header events - update blockName and node state
+    // Handle header events - update lexicalNodeId and node state
     if (parsedValue?.type === 'header') {
-      enriched.blockName = parsedValue.label;
+      enriched.lexicalNodeId = parsedValue.label;
 
       // Find the matching node by label and update its state to 'running'
       const nodeId = this.findNodeIdByLabel(functionName, parsedValue.label);
@@ -996,7 +996,7 @@ export class BAMLSDK {
     // HACK: Handle header_stopped events - set node state to 'success'
     // This is emitted synthetically when a new header comes in at the same or shallower level
     if (parsedValue?.type === 'header_stopped') {
-      enriched.blockName = parsedValue.label;
+      enriched.lexicalNodeId = parsedValue.label;
 
       // Find the matching node by label and update its state to 'success'
       const nodeId = this.findNodeIdByLabel(functionName, parsedValue.label);
@@ -1159,8 +1159,8 @@ export class BAMLSDK {
               notification.functionName ?? ''
             );
             this.storage.addWatchNotification(enriched);
-            if (enriched.blockName) {
-              this.storage.addHighlightedBlock(enriched.blockName);
+            if (enriched.lexicalNodeId) {
+              this.storage.addHighlightedBlock(enriched.lexicalNodeId);
             }
           },
 

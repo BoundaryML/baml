@@ -6,7 +6,7 @@
 
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useMemo, useContext } from 'react';
-import { BAMLSDKContext } from './provider';
+import { BAMLSDKContext } from './context';
 import type { BAMLSDK } from './sdk';
 
 // Re-export provider component for convenience

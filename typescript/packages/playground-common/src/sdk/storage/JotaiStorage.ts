@@ -469,10 +469,10 @@ export class JotaiStorage implements SDKStorage {
     return this.store.get(highlightedBlocksAtom);
   }
 
-  addHighlightedBlock(blockName: string) {
+  addHighlightedBlock(lexicalNodeId: string) {
     const current = this.store.get(highlightedBlocksAtom);
     const newSet = new Set(current);
-    newSet.add(blockName);
+    newSet.add(lexicalNodeId);
     this.store.set(highlightedBlocksAtom, newSet);
   }
 
