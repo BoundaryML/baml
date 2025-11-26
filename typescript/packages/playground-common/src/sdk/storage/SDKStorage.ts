@@ -17,6 +17,7 @@ import type {
   GeneratedFile,
   WasmPanicState,
   VSCodeSettings,
+  SelectionState,
 } from '../atoms/core.atoms';
 
 import type {
@@ -171,10 +172,9 @@ export interface SDKStorage {
   // Selection State (Function & Test Case)
   // ============================================================================
 
-  setSelectedFunctionName(name: string | null): void;
   getSelectedFunctionName(): string | null;
-  setSelectedTestCaseName(name: string | null): void;
   getSelectedTestCaseName(): string | null;
+  getUnifiedSelectionState(): SelectionState;
 
   // ============================================================================
   // Test Execution State

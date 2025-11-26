@@ -7,7 +7,20 @@
 
 import type { SDKStorage } from './storage/SDKStorage';
 import type { BamlRuntimeInterface, BamlRuntimeFactory } from './runtime/BamlRuntimeInterface';
-import type { FunctionWithCallGraph, TestResponseData, WatchNotification, TestCaseMetadata } from './interface';
+import type {
+  FunctionWithCallGraph,
+  TestResponseData,
+  WatchNotification,
+  TestCaseMetadata,
+  RichWatchNotification,
+  WatchNotificationValue,
+  WatchHeaderValue,
+  WatchHeaderStoppedValue,
+  WatchStreamStartValue,
+  WatchStreamUpdateValue,
+  WatchStreamEndValue,
+  WatchEventSpan,
+} from './interface';
 import type {
   ExecutionSnapshot,
   CacheEntry,
@@ -620,28 +633,74 @@ export class BAMLSDK {
   selection = {
     /**
      * Set the currently selected function
+     * @deprecated Use navigate() instead for proper state management
      */
-    setFunction: (functionName: string | null): void => {
-      this.storage.setSelectedFunctionName(functionName);
-      // Clear test case selection when changing function
+    setFunction: async (functionName: string | null): Promise<void> => {
       if (functionName === null) {
-        this.storage.setSelectedTestCaseName(null);
+        // Clear selection by setting empty state directly (no navigation target)
+        this.storage.store.set(coreAtoms.unifiedSelectionStateAtom, { mode: 'empty' });
+      } else {
+        await this.navigate({
+          kind: 'function',
+          functionName,
+          source: 'api',
+          timestamp: Date.now(),
+        });
       }
     },
 
     /**
      * Set the currently selected test case
+     * @deprecated Use navigate() instead for proper state management
      */
-    setTestCase: (testCaseName: string | null): void => {
-      this.storage.setSelectedTestCaseName(testCaseName);
+    setTestCase: async (testCaseName: string | null): Promise<void> => {
+      const current = this.storage.getUnifiedSelectionState();
+      if (testCaseName === null) {
+        // Just clear the test name from current selection
+        if (current.mode === 'function') {
+          this.storage.store.set(coreAtoms.unifiedSelectionStateAtom, { ...current, testName: null });
+        } else if (current.mode === 'workflow') {
+          this.storage.store.set(coreAtoms.unifiedSelectionStateAtom, { ...current, testName: null });
+        }
+      } else {
+        // Get the function name from current selection
+        const functionName = current.mode === 'function' ? current.functionName :
+          current.mode === 'workflow' ? current.workflowId : null;
+        if (functionName) {
+          await this.navigate({
+            kind: 'test',
+            functionName,
+            testName: testCaseName,
+            source: 'api',
+            timestamp: Date.now(),
+          });
+        }
+      }
     },
 
     /**
      * Set both function and test case at once
+     * @deprecated Use navigate() instead for proper state management
      */
-    set: (functionName: string | null, testCaseName: string | null): void => {
-      this.storage.setSelectedFunctionName(functionName);
-      this.storage.setSelectedTestCaseName(testCaseName);
+    set: async (functionName: string | null, testCaseName: string | null): Promise<void> => {
+      if (functionName === null) {
+        this.storage.store.set(coreAtoms.unifiedSelectionStateAtom, { mode: 'empty' });
+      } else if (testCaseName) {
+        await this.navigate({
+          kind: 'test',
+          functionName,
+          testName: testCaseName,
+          source: 'api',
+          timestamp: Date.now(),
+        });
+      } else {
+        await this.navigate({
+          kind: 'function',
+          functionName,
+          source: 'api',
+          timestamp: Date.now(),
+        });
+      }
     },
 
     /**
@@ -658,8 +717,7 @@ export class BAMLSDK {
      * Clear selection
      */
     clear: (): void => {
-      this.storage.setSelectedFunctionName(null);
-      this.storage.setSelectedTestCaseName(null);
+      this.storage.store.set(coreAtoms.unifiedSelectionStateAtom, { mode: 'empty' });
     },
   };
 
@@ -807,18 +865,148 @@ export class BAMLSDK {
   // ============================================================================
 
   /**
-   * Enrich watch notification with blockName from JSON parsing
+   * Parse the watch notification value JSON into a typed structure
    */
-  private enrichNotification(notification: WatchNotification): WatchNotification {
-    if (!notification.blockName) {
-      try {
-        const parsed = JSON.parse(notification.value) as { type?: string; label?: string } | undefined;
-        if (parsed?.type === 'block' && typeof parsed.label === 'string') {
-          notification.blockName = parsed.label;
+  private parseWatchValue(value: string): WatchNotificationValue | undefined {
+    try {
+      const parsed = JSON.parse(value) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object' && 'type' in parsed) {
+        switch (parsed.type) {
+          case 'header': {
+            const result: WatchHeaderValue = {
+              type: 'header',
+              label: typeof parsed.label === 'string' ? parsed.label : '',
+              level: typeof parsed.level === 'number' ? parsed.level : 1,
+            };
+            // Parse span if present
+            if (parsed.span && typeof parsed.span === 'object') {
+              const spanData = parsed.span as Record<string, unknown>;
+              result.span = {
+                filePath: typeof spanData.file_path === 'string' ? spanData.file_path : '',
+                startLine: typeof spanData.start_line === 'number' ? spanData.start_line : 0,
+                startColumn: typeof spanData.start_column === 'number' ? spanData.start_column : 0,
+                endLine: typeof spanData.end_line === 'number' ? spanData.end_line : 0,
+                endColumn: typeof spanData.end_column === 'number' ? spanData.end_column : 0,
+              };
+            }
+            return result;
+          }
+          // HACK: header_stopped is emitted synthetically when a new header comes in
+          // at the same or shallower level
+          case 'header_stopped': {
+            const result: WatchHeaderStoppedValue = {
+              type: 'header_stopped',
+              label: typeof parsed.label === 'string' ? parsed.label : '',
+              level: typeof parsed.level === 'number' ? parsed.level : 1,
+            };
+            // Parse span if present
+            if (parsed.span && typeof parsed.span === 'object') {
+              const spanData = parsed.span as Record<string, unknown>;
+              result.span = {
+                filePath: typeof spanData.file_path === 'string' ? spanData.file_path : '',
+                startLine: typeof spanData.start_line === 'number' ? spanData.start_line : 0,
+                startColumn: typeof spanData.start_column === 'number' ? spanData.start_column : 0,
+                endLine: typeof spanData.end_line === 'number' ? spanData.end_line : 0,
+                endColumn: typeof spanData.end_column === 'number' ? spanData.end_column : 0,
+              };
+            }
+            return result;
+          }
+          case 'stream_start': {
+            const result: WatchStreamStartValue = {
+              type: 'stream_start',
+              id: typeof parsed.id === 'string' ? parsed.id : '',
+            };
+            return result;
+          }
+          case 'stream_update': {
+            const result: WatchStreamUpdateValue = {
+              type: 'stream_update',
+              id: typeof parsed.id === 'string' ? parsed.id : '',
+              value: typeof parsed.value === 'string' ? parsed.value : '',
+            };
+            return result;
+          }
+          case 'stream_end': {
+            const result: WatchStreamEndValue = {
+              type: 'stream_end',
+              id: typeof parsed.id === 'string' ? parsed.id : '',
+            };
+            return result;
+          }
         }
-      } catch { }
+      }
+      // Regular value without type field
+      return undefined;
+    } catch {
+      return undefined;
     }
-    return notification;
+  }
+
+  /**
+   * Find graph node ID by matching label (header title) to control flow graph nodes
+   * Returns the node id (which is the lexical_id) of the matching node
+   */
+  private findNodeIdByLabel(
+    functionName: string,
+    label: string
+  ): string | undefined {
+    // Get the function's control flow graph
+    const functions = this.storage.getFunctions();
+    const func = functions.find((f) => f.name === functionName);
+    if (!func || !func.nodes) {
+      return undefined;
+    }
+
+    // Find a node whose label matches the header title
+    // Node labels are set from the header title during control flow graph building
+    for (const node of func.nodes) {
+      if (node.label === label) {
+        return node.id;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Enrich watch notification with parsed value and blockName
+   * Also updates node state when header events are received
+   */
+  private enrichNotificationWithContext(
+    notification: WatchNotification,
+    functionName: string
+  ): RichWatchNotification {
+    const enriched: RichWatchNotification = { ...notification };
+    const parsedValue = this.parseWatchValue(notification.value);
+    enriched.parsedValue = parsedValue;
+
+    // Handle header events - update blockName and node state
+    if (parsedValue?.type === 'header') {
+      enriched.blockName = parsedValue.label;
+
+      // Find the matching node by label and update its state to 'running'
+      const nodeId = this.findNodeIdByLabel(functionName, parsedValue.label);
+      if (nodeId) {
+        console.log(`[SDK] Header event: setting node ${nodeId} to 'running'`);
+        this.storage.setNodeState(nodeId, 'running');
+      }
+    }
+
+    // HACK: Handle header_stopped events - set node state to 'success'
+    // This is emitted synthetically when a new header comes in at the same or shallower level
+    if (parsedValue?.type === 'header_stopped') {
+      enriched.blockName = parsedValue.label;
+
+      // Find the matching node by label and update its state to 'success'
+      const nodeId = this.findNodeIdByLabel(functionName, parsedValue.label);
+      if (nodeId) {
+        console.log(`[SDK] Header stopped event: setting node ${nodeId} to 'success'`);
+        this.storage.setNodeState(nodeId, 'success');
+      }
+    }
+
+    return enriched;
   }
 
   tests = {
@@ -881,9 +1069,22 @@ export class BAMLSDK {
       this.storage.addTestHistoryRun(historyRun);
       this.storage.setSelectedHistoryIndex(0);
 
-      // Set first test as selected
-      this.storage.setSelectedFunctionName(tests[0]!.functionName);
-      this.storage.setSelectedTestCaseName(tests[0]!.testName);
+      // Only navigate to first test if no test is currently selected
+      // This preserves the user's current selection when running tests
+      const currentSelection = this.storage.getUnifiedSelectionState();
+      const hasTestSelected =
+        (currentSelection.mode === 'function' || currentSelection.mode === 'workflow') &&
+        currentSelection.testName !== null;
+
+      if (!hasTestSelected) {
+        await this.navigate({
+          kind: 'test',
+          functionName: tests[0]!.functionName,
+          testName: tests[0]!.testName,
+          source: 'api',
+          timestamp: Date.now(),
+        });
+      }
 
       // Send telemetry
       vscode.sendTelemetry({
@@ -950,7 +1151,13 @@ export class BAMLSDK {
 
           // Called when a watch notification is received
           onWatchNotification: (notification) => {
-            const enriched = this.enrichNotification(notification);
+            console.log('[SDK] onWatchNotification:', notification);
+            // Use the function name from the notification to update node states
+            // If functionName is missing, use empty string (won't match any nodes for state updates)
+            const enriched = this.enrichNotificationWithContext(
+              notification,
+              notification.functionName ?? ''
+            );
             this.storage.addWatchNotification(enriched);
             if (enriched.blockName) {
               this.storage.addHighlightedBlock(enriched.blockName);

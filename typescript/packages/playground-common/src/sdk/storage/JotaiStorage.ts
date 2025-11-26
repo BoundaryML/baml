@@ -367,45 +367,16 @@ export class JotaiStorage implements SDKStorage {
   // Selection State (Function & Test Case)
   // ============================================================================
 
-  setSelectedFunctionName(name: string | null) {
-    const current = this.store.get(unifiedSelectionStateAtom);
-    if (name === null) {
-      console.log('setting selected function name to null');
-      this.store.set(unifiedSelectionStateAtom, { mode: 'empty' });
-    } else {
-      // Preserve testName if we're already in function mode
-      const testName = current.mode === 'function' ? current.testName : null;
-      this.store.set(unifiedSelectionStateAtom, {
-        mode: 'function',
-        functionName: name,
-        testName,
-      });
-    }
-  }
-
   getSelectedFunctionName() {
     return this.store.get(selectedFunctionNameAtom);
   }
 
-  setSelectedTestCaseName(name: string | null) {
-    const current = this.store.get(unifiedSelectionStateAtom);
-    // Update testName based on current mode
-    if (current.mode === 'workflow') {
-      this.store.set(unifiedSelectionStateAtom, {
-        ...current,
-        testName: name,
-      });
-    } else if (current.mode === 'function') {
-      this.store.set(unifiedSelectionStateAtom, {
-        ...current,
-        testName: name,
-      });
-    }
-    // If mode is 'empty', do nothing - can't set testName without a function/workflow
-  }
-
   getSelectedTestCaseName() {
     return this.store.get(selectedTestCaseNameAtom);
+  }
+
+  getUnifiedSelectionState() {
+    return this.store.get(unifiedSelectionStateAtom);
   }
 
   // ============================================================================

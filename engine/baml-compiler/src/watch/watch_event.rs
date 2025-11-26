@@ -89,6 +89,10 @@ pub fn shared_noop_handler() -> SharedWatchHandler {
 pub enum WatchBamlValue {
     Value(BamlValueWithMeta<WatchValueMetadata>),
     Header(HeaderContext),
+    /// HACK: Emitted synthetically when a new header comes in at the same or shallower level.
+    /// This signals that the previous header's scope has ended. This is a workaround until
+    /// proper exit events are emitted from the interpreter.
+    HeaderStopped(HeaderContext),
     StreamStart(StreamId),
     StreamUpdate(StreamId, BamlValueWithMeta<WatchValueMetadata>),
     StreamEnd(StreamId),
@@ -145,6 +149,15 @@ impl fmt::Display for WatchNotification {
                     title = header.title
                 )
             }
+            WatchBamlValue::HeaderStopped(header) => {
+                write!(
+                    f,
+                    "(header stopped L{level}) {function}.{title}",
+                    level = header.level,
+                    function = self.function_name,
+                    title = header.title
+                )
+            }
             WatchBamlValue::StreamStart(stream_id) => {
                 write!(f, "(stream start) {stream_id}")
             }
@@ -196,6 +209,18 @@ impl WatchNotification {
     pub fn new_block(header: HeaderContext, function_name: String) -> Self {
         Self {
             value: WatchBamlValue::Header(header),
+            variable_name: None,
+            channel_name: None,
+            function_name,
+            is_stream: false,
+        }
+    }
+
+    /// HACK: Create a synthetic "stopped" notification for a header block.
+    /// Used when a new header at the same or shallower level comes in.
+    pub fn new_block_stopped(header: HeaderContext, function_name: String) -> Self {
+        Self {
+            value: WatchBamlValue::HeaderStopped(header),
             variable_name: None,
             channel_name: None,
             function_name,

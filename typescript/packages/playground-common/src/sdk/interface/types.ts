@@ -262,8 +262,110 @@ export interface WatchNotification {
   variableName?: string;
   channelName?: string;
   blockName?: string;
+  /** Function name that emitted this notification */
+  functionName?: string;
   isStream: boolean;
   value: string;
+}
+
+// ============================================================================
+// WATCH NOTIFICATION VALUE TYPES (Discriminated Union)
+// ============================================================================
+
+/**
+ * Span information from watch events (for code location mapping)
+ */
+export interface WatchEventSpan {
+  filePath: string;
+  startLine: number;
+  startColumn: number;
+  endLine: number;
+  endColumn: number;
+}
+
+/**
+ * Header event - workflow section entered
+ * Emitted when execution enters a header section (e.g., //# gather applicant context)
+ */
+export interface WatchHeaderValue {
+  type: 'header';
+  /** Header title/label */
+  label: string;
+  /** Hierarchical level (1, 2, 3, etc.) */
+  level: number;
+  /** Span for code location mapping */
+  span?: WatchEventSpan;
+}
+
+/**
+ * Header stopped event - workflow section exited
+ * HACK: Emitted synthetically when a new header comes in at the same or shallower level.
+ * This is a workaround until proper exit events are emitted from the interpreter.
+ */
+export interface WatchHeaderStoppedValue {
+  type: 'header_stopped';
+  /** Header title/label */
+  label: string;
+  /** Hierarchical level (1, 2, 3, etc.) */
+  level: number;
+  /** Span for code location mapping */
+  span?: WatchEventSpan;
+}
+
+/**
+ * Stream start event - beginning of a streaming value
+ */
+export interface WatchStreamStartValue {
+  type: 'stream_start';
+  /** Unique stream identifier */
+  id: string;
+}
+
+/**
+ * Stream update event - partial value during streaming
+ */
+export interface WatchStreamUpdateValue {
+  type: 'stream_update';
+  /** Unique stream identifier */
+  id: string;
+  /** Partial value as JSON string */
+  value: string;
+}
+
+/**
+ * Stream end event - streaming completed
+ */
+export interface WatchStreamEndValue {
+  type: 'stream_end';
+  /** Unique stream identifier */
+  id: string;
+}
+
+/**
+ * Regular variable value (no type field means it's a plain value)
+ */
+export interface WatchVariableValue {
+  type?: undefined;
+  [key: string]: unknown;
+}
+
+/**
+ * Discriminated union for all parsed watch value types
+ */
+export type WatchNotificationValue =
+  | WatchHeaderValue
+  | WatchHeaderStoppedValue
+  | WatchStreamStartValue
+  | WatchStreamUpdateValue
+  | WatchStreamEndValue
+  | WatchVariableValue;
+
+/**
+ * Extended watch notification with parsed value
+ */
+export interface RichWatchNotification extends WatchNotification {
+  /** Parsed and typed value (if parseable) */
+  parsedValue?: WatchNotificationValue;
 }
 
 export interface TestExecutionContext {

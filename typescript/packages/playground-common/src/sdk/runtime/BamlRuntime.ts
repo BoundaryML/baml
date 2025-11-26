@@ -318,7 +318,8 @@ function mapNodeTypeToGraphNodeType(
 ): GraphNode['type'] {
   if (nodeType === WasmControlFlowNodeType.FunctionRoot) {
     if (rootType === 'llm_function') return 'llm_function';
-    if (rootType === 'workflow') return 'group';
+    // Workflow roots are still functions - they have inputs and can be run
+    if (rootType === 'workflow') return 'function';
     return 'function';
   }
   switch (nodeType) {
@@ -766,7 +767,7 @@ export class BamlRuntime implements BamlRuntimeInterface {
 
     // Execute all tests via run_tests
     // Callbacks fire in real-time during execution!
-    // Note: WASM handles parallel vs sequential internally based on the test cases
+    // Note: WASM handles parallel vs sequential internally based on context.parallel
     const results = await this.wasmRuntime.run_tests(
         testCases,
         // on_partial_response callback
@@ -792,13 +793,16 @@ export class BamlRuntime implements BamlRuntimeInterface {
             variableName: notification.variable_name,
             channelName: notification.channel_name,
             blockName: notification.block_name,
+            functionName: notification.function_name,
             isStream: notification.is_stream,
             value: notification.value,
           };
           if (context.onWatchNotification) {
             context.onWatchNotification(watchNotification);
           }
-        }
+        },
+        // parallel - whether to run tests in parallel (default: false, optional in WASM)
+        context.parallel ?? false
       );
 
     // Process final results and call onTestComplete for each test

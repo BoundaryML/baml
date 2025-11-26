@@ -29,6 +29,7 @@ import { graphControlsTipDismissedAtom, unifiedSelectionAtom } from '../atoms';
 import { MousePointer2, ZoomIn, X, ChevronLeft } from 'lucide-react';
 import type { NavigationInput } from '../../../../sdk/navigation';
 import { panToNodeIfNeeded } from '../../../../utils/cameraPan';
+import { allNodeStatesAtom, currentGraphAtom } from '../../../../sdk/atoms/core.atoms';
 
 /**
  * GraphView - ReactFlow graph component for the Graph tab
@@ -55,6 +56,11 @@ export const GraphView = () => {
   );
   const selection = useAtomValue(unifiedSelectionAtom);
   const selectedNodeId = selection.mode === 'workflow' ? selection.selectedNodeId : null;
+  const nodeStates = useAtomValue(allNodeStatesAtom);
+  const currentGraph = useAtomValue(currentGraphAtom);
+
+  // Get workflow ID from the displayed graph (more reliable than selection state)
+  const displayedWorkflowId = currentGraph.workflow?.id ?? activeWorkflowId;
 
   const { getEdges, setNodes } = useReactFlow();
   const viewport = useViewport();
@@ -81,6 +87,30 @@ export const GraphView = () => {
       }))
     );
   }, [activeWorkflowId]);
+
+  // Update ReactFlow nodes when SDK node states change
+  useEffect(() => {
+    if (!nodesInitialized) return;
+    if (nodeStates.size === 0) return;
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        const state = nodeStates.get(node.id);
+        if (state && state !== node.data.executionState) {
+          console.log(`[GraphView] Updating node ${node.id} state to ${state}`);
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              executionState: state,
+              isExecutionActive: state === 'running',
+            },
+          };
+        }
+        return node;
+      })
+    );
+  }, [nodeStates, setNodes, nodesInitialized]);
 
   // set selected node id if it changes
   useEffect(() => {
@@ -134,12 +164,19 @@ export const GraphView = () => {
 
   // Handle node click - select the node and open detail panel
   const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
-    console.log('Node clicked in workflow:', { workflowId: activeWorkflowId, nodeId: node.id });
+    console.log('Node clicked in workflow:', { workflowId: displayedWorkflowId, nodeId: node.id });
+
+    // Use displayedWorkflowId from the current graph (more reliable than selection state)
+    if (!displayedWorkflowId) {
+      console.error('No workflow ID available for node click. Selection state may be out of sync.');
+      return;
+    }
+
     const input: NavigationInput = {
       kind: 'node',
       source: 'graph',
       timestamp: Date.now(),
-      workflowId: activeWorkflowId || undefined,
+      workflowId: displayedWorkflowId,
       nodeId: node.id,
       functionName: node.id, // May or may not be an actual function name
     };

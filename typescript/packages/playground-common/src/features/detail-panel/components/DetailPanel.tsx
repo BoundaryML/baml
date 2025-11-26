@@ -23,6 +23,7 @@ import {
   type LucideIcon
 } from 'lucide-react';
 import { useActiveNode, useDetailPanel, useNodeInputSources, useSelectedInputSource } from '../../../sdk/hooks';
+import { useRunBamlTests } from '../../../shared/baml-project-panel/playground-panel/prompt-preview/test-panel/test-runner';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useAtomValue } from 'jotai';
 import { selectedTestCaseNameAtom, selectedTestFunctionNameAtom } from '../../../sdk/atoms/core.atoms';
@@ -139,9 +140,63 @@ export function DetailPanel() {
       <div className="p-2 flex-1 overflow-auto text-xs">
         {node.type === 'llm_function' ? (
           <LLMNodeContent node={node} execution={execution} />
-        ) : (
+        ) : node.type === 'function' ? (
           <StandardNodeContent node={node} execution={execution} />
+        ) : (
+          <NonFunctionNodeContent node={node} state={state} />
         )}
+      </div>
+    </div>
+  );
+}
+
+// Non-function node content (groups, headers, loops, conditionals)
+// These nodes don't have direct inputs - they're control flow structures
+function NonFunctionNodeContent({ node, state }: { node: GraphNode; state: string | null }) {
+  const nodeTypeLabels: Record<string, string> = {
+    group: 'Section',
+    conditional: 'Conditional Block',
+    loop: 'Loop Block',
+    return: 'Return Statement',
+  };
+
+  const nodeTypeDescriptions: Record<string, string> = {
+    group: 'This is a workflow section marker. It groups related operations together.',
+    conditional: 'This block contains conditional logic (if/else). Child nodes will execute based on conditions.',
+    loop: 'This block contains a loop. Child nodes will execute for each iteration.',
+    return: 'This is a return statement that produces the final output.',
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="px-2 py-1 rounded text-[10px] font-medium bg-muted text-muted-foreground">
+          {nodeTypeLabels[node.type] || node.type}
+        </span>
+        {state && state !== 'not-started' && (
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded ${
+              state === 'running'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                : state === 'success'
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                  : state === 'error'
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                    : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+            }`}
+          >
+            {state}
+          </span>
+        )}
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        {nodeTypeDescriptions[node.type] || 'Control flow node.'}
+      </p>
+
+      <div className="text-[10px] text-muted-foreground border border-dashed border-border rounded p-2">
+        <p className="mb-1 font-medium">Tip:</p>
+        <p>Select a function node (LLM or regular) within this section to see its inputs, outputs, and run options.</p>
       </div>
     </div>
   );
@@ -156,6 +211,7 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const testName = useAtomValue(selectedTestCaseNameAtom);
   const testFunctionName = useAtomValue(selectedTestFunctionNameAtom);
+  const { runTests: runBamlTests } = useRunBamlTests();
 
   // Fetch test cases and merge with execution inputs
   // Include tests from both the node's function AND the selected test's function
@@ -386,16 +442,15 @@ function LLMNodeContent({ node, execution }: IOTabProps) {
         {/* Compact Action Buttons */}
         <button
           className="px-1.5 py-0.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded flex items-center gap-0.5 shrink-0"
-          disabled={!currentSource}
-          onClick={async () => {
-            if (!currentSource) return;
-            const activeWorkflow = sdk.workflows.getActive();
-            if (!activeWorkflow) return;
-            await sdk.executions.start(activeWorkflow.id, currentSource.inputs, { startFromNodeId: node.id });
+          disabled={!testFunctionName || !testName}
+          onClick={() => {
+            if (testFunctionName && testName) {
+              runBamlTests([{ functionName: testFunctionName, testName }]);
+            }
           }}
         >
           <Play className="w-2.5 h-2.5" />
-          Run from here
+          Run Test
         </button>
         <button
           className="px-1.5 py-0.5 text-xs font-medium bg-muted hover:bg-muted/80 disabled:opacity-50 rounded flex items-center gap-0.5 shrink-0 border border-border"
@@ -490,6 +545,7 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const testName = useAtomValue(selectedTestCaseNameAtom);
   const testFunctionName = useAtomValue(selectedTestFunctionNameAtom);
+  const { runTests: runBamlTests } = useRunBamlTests();
   const logs = execution?.logs || [];
 
   // Fetch test cases and merge with execution inputs
@@ -716,16 +772,15 @@ function StandardNodeContent({ node, execution }: IOTabProps) {
         {/* Compact Action Buttons */}
         <button
           className="px-1.5 py-0.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded flex items-center gap-0.5 shrink-0"
-          disabled={!currentSource}
-          onClick={async () => {
-            if (!currentSource) return;
-            const activeWorkflow = sdk.workflows.getActive();
-            if (!activeWorkflow) return;
-            await sdk.executions.start(activeWorkflow.id, currentSource.inputs, { startFromNodeId: node.id });
+          disabled={!testFunctionName || !testName}
+          onClick={() => {
+            if (testFunctionName && testName) {
+              runBamlTests([{ functionName: testFunctionName, testName }]);
+            }
           }}
         >
           <Play className="w-2.5 h-2.5" />
-          Run from here
+          Run Test
         </button>
         <button
           className="px-1.5 py-0.5 text-xs font-medium bg-muted hover:bg-muted/80 disabled:opacity-50 rounded flex items-center gap-0.5 shrink-0 border border-border"

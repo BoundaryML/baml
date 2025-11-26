@@ -56,6 +56,17 @@ export type {
   WatchNotification,
   TestResponseData,
 
+  // Watch Notification Value Types
+  WatchEventSpan,
+  WatchHeaderValue,
+  WatchHeaderStoppedValue,
+  WatchStreamStartValue,
+  WatchStreamUpdateValue,
+  WatchStreamEndValue,
+  WatchVariableValue,
+  WatchNotificationValue,
+  RichWatchNotification,
+
   // Function Call
   FunctionCall,
 } from './types';

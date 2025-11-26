@@ -37,6 +37,16 @@ export type {
   TestExecutionContext,
   WatchNotification,
 
+  // Watch notification value types
+  WatchEventSpan,
+  WatchHeaderValue,
+  WatchStreamStartValue,
+  WatchStreamUpdateValue,
+  WatchStreamEndValue,
+  WatchVariableValue,
+  WatchNotificationValue,
+  RichWatchNotification,
+
   // Event types
   RichExecutionEvent,
   BaseExecutionEvent,

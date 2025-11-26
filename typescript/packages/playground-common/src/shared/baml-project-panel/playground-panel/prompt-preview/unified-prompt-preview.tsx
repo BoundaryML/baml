@@ -157,7 +157,7 @@ export const UnifiedPromptPreview = () => {
           onValueChange={(v) => setActiveTab(v as any)}
           className="absolute inset-0 flex flex-col pointer-events-none gap-0"
         >
-          <div className="pointer-events-auto flex items-center justify-between gap-2 bg-background/90 px-2 py-0">
+          <div className="pointer-events-auto flex items-center justify-between gap-2 px-2 py-0">
             <div className="flex items-center gap-2">
               <TabsList>
                 {viewMode.showLLMTabs && (

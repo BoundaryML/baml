@@ -399,7 +399,20 @@ impl BamlRuntime {
                             for handler in &callbacks.block_handlers {
                                 let block_event = BlockEvent {
                                     block_label: header.title.clone(),
-                                    event_type: "enter".to_string(), // TODO: track enter/exit
+                                    event_type: "enter".to_string(),
+                                };
+                                let _ = handler
+                                    .call(block_event, ThreadsafeFunctionCallMode::NonBlocking);
+                            }
+                        }
+                        // HACK: HeaderStopped is emitted synthetically when a new header
+                        // comes in at the same or shallower level
+                        baml_compiler::watch::WatchBamlValue::HeaderStopped(header) => {
+                            // Fire block exit events to all registered block handlers
+                            for handler in &callbacks.block_handlers {
+                                let block_event = BlockEvent {
+                                    block_label: header.title.clone(),
+                                    event_type: "exit".to_string(),
                                 };
                                 let _ = handler
                                     .call(block_event, ThreadsafeFunctionCallMode::NonBlocking);
@@ -590,6 +603,21 @@ impl BamlRuntime {
                                 let block_event = BlockEvent {
                                     block_label: header.title.clone(),
                                     event_type: "enter".to_string(),
+                                };
+                                let _ = handler.call(
+                                    block_event,
+                                    napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+                                );
+                            }
+                        }
+                        // HACK: HeaderStopped is emitted synthetically when a new header
+                        // comes in at the same or shallower level
+                        baml_compiler::watch::WatchBamlValue::HeaderStopped(header) => {
+                            // Fire block exit events to all registered block handlers
+                            for handler in &callbacks.block_handlers {
+                                let block_event = BlockEvent {
+                                    block_label: header.title.clone(),
+                                    event_type: "exit".to_string(),
                                 };
                                 let _ = handler.call(
                                     block_event,
