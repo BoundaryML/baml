@@ -13,15 +13,6 @@
 
 package types
 
-import (
-    "encoding/json"
-    "fmt"
-
-    baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-    "github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-)
-
-
 type Amount = int64
 
 type Combination = Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
@@ -63,4 +54,3 @@ type RecursiveMapAlias = map[string]any
 type RecursiveUnion = Union2MapStringKeyRecursiveUnionValueOrString
 
 type TodoTool = Union2AddTodoItemOrTodoMessageToUser
-
