@@ -20,8 +20,8 @@ use baml_runtime::{
         prompt_renderer::PromptRenderer,
     },
     internal_baml_diagnostics::SerializedSpan,
-    BamlSrcReader, DiagnosticsError, IRHelper, InternalRuntimeInterface,
-    RenderCurlSettings, RenderedPrompt,
+    BamlSrcReader, DiagnosticsError, IRHelper, InternalRuntimeInterface, RenderCurlSettings,
+    RenderedPrompt,
 };
 use baml_types::{BamlValue, GeneratorOutputType, ResponseCheck};
 use generators_lib::version_check::{check_version, GeneratorType, VersionCheckMode};
@@ -391,7 +391,6 @@ impl WasmProject {
         let js_value = serde_wasm_bindgen::to_value(&fake_map).unwrap();
         let empty_flags = JsValue::undefined();
         let runtime = self.runtime(js_value, empty_flags);
-        log::info!("Files are: {:#?}", self.files);
         let res = match runtime {
             Ok(runtime) => runtime.run_generators(&self.files, no_version_check),
             Err(e) => Err(wasm_bindgen::JsError::new(
@@ -464,10 +463,18 @@ impl WasmSpan {
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Clone, Debug)]
 pub struct WasmEntityAtPosition {
+    /// The type of entity: "function", "node", or "test"
     #[wasm_bindgen(readonly)]
     pub entity_type: String,
+    /// The name of the entity (function name, node label, or test name)
     #[wasm_bindgen(readonly)]
     pub entity_name: String,
+    /// The name of the function this entity belongs to.
+    /// For function entities, this equals entity_name.
+    /// For node entities, this is the parent function name.
+    /// For test entities, this is the parent function name.
+    #[wasm_bindgen(readonly)]
+    pub function_name: String,
     #[wasm_bindgen(readonly)]
     pub span: WasmSpan,
     #[wasm_bindgen(readonly)]
@@ -476,6 +483,9 @@ pub struct WasmEntityAtPosition {
     pub node_id: Option<String>,
     #[wasm_bindgen(readonly)]
     pub node_label: Option<String>,
+    /// For test entities, the name of the test case
+    #[wasm_bindgen(readonly)]
+    pub test_name: Option<String>,
 }
 
 #[wasm_bindgen]
@@ -1729,7 +1739,7 @@ impl WasmRuntime {
             .collect()
     }
 
-    #[wasm_bindgen]
+    // Use get_entity_at_position instead. This is internal.
     pub fn get_function_at_position(
         &self,
         file_name: &str,
@@ -1799,6 +1809,25 @@ impl WasmRuntime {
         file_name: &str,
         cursor_idx: usize,
     ) -> Option<WasmEntityAtPosition> {
+        // First check if cursor is in a test case
+        let testcases = self.list_testcases();
+        for tc in &testcases {
+            if tc.span.contains(file_name, cursor_idx) {
+                // Found a test case - get the parent function name
+                let parent_function = tc.parent_functions.first()?;
+                return Some(WasmEntityAtPosition {
+                    entity_type: "test".to_string(),
+                    entity_name: tc.name.clone(),
+                    function_name: parent_function.name.clone(),
+                    span: tc.span.clone(),
+                    function_type: None,
+                    node_id: None,
+                    node_label: None,
+                    test_name: Some(tc.name.clone()),
+                });
+            }
+        }
+
         // Find the function at this position
         let function = self.get_function_at_position(file_name, "", cursor_idx)?;
 
@@ -1828,11 +1857,13 @@ impl WasmRuntime {
                     if cursor_idx >= span_start && cursor_idx < span_end {
                         return Some(WasmEntityAtPosition {
                             entity_type: "node".to_string(),
-                            entity_name: function.name.clone(),
+                            entity_name: node.label.clone(),
+                            function_name: function.name.clone(),
                             span: node.span.clone(),
                             function_type: Some(function.function_type),
                             node_id: Some(node.lexical_id.clone()),
                             node_label: Some(node.label.clone()),
+                            test_name: None,
                         });
                     }
                 }
@@ -1843,20 +1874,24 @@ impl WasmRuntime {
             return Some(WasmEntityAtPosition {
                 entity_type: "function".to_string(),
                 entity_name: function.name.clone(),
+                function_name: function.name.clone(),
                 span: function.span.clone(),
                 function_type: Some(function.function_type),
                 node_id: None,
                 node_label: None,
+                test_name: None,
             });
         }
         // Return the function as the entity
         Some(WasmEntityAtPosition {
             entity_type: "function".to_string(),
             entity_name: function.name.clone(),
+            function_name: function.name.clone(),
             span: function.span.clone(),
             function_type: Some(function.function_type),
             node_id: None,
             node_label: None,
+            test_name: None,
         })
     }
 
@@ -2107,7 +2142,6 @@ impl WasmRuntime {
                     // Create a closure to handle partial responses for this test
                     let on_partial_response_clone = on_partial_response.clone();
                     let cb = Box::new(move |r| {
-                        log::info!("on_partial_response: {:#?}", r);
                         let this = JsValue::NULL;
                         let res = WasmFunctionResponse {
                             function_response: r,
@@ -2208,7 +2242,11 @@ impl WasmRuntime {
                             for stopped_header in stopped_headers {
                                 let stopped_json =
                                     serialize_header_to_json(&stopped_header, "header_stopped");
-                                send_notification(&notification.function_name, false, &stopped_json);
+                                send_notification(
+                                    &notification.function_name,
+                                    false,
+                                    &stopped_json,
+                                );
                             }
                         }
 
@@ -2257,7 +2295,9 @@ impl WasmRuntime {
                                 | baml_compiler::watch::WatchBamlValue::StreamUpdate(_, _)
                                 | baml_compiler::watch::WatchBamlValue::StreamEnd(_)
                         ) {
-                            if let Some(current_header) = header_tracker_clone.borrow().current_header() {
+                            if let Some(current_header) =
+                                header_tracker_clone.borrow().current_header()
+                            {
                                 js_sys::Reflect::set(
                                     &js_notification,
                                     &JsValue::from_str("lexical_node_id"),

@@ -146,7 +146,6 @@ export function PreviewToolbar() {
 
   const hasSelection = selectedFn !== null || isWorkflowContext;
 
-  console.log('blahhh2', { selectedFn, unifiedSelection, isWorkflowContext, hasSelection });
 
   return (
     <div className="flex flex-col gap-1 overflow-hidden w-full">

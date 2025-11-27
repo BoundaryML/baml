@@ -77,10 +77,10 @@ export const envKeyValuesAtom = atom(
       | { itemIndex: number; remove: true }
       // Insert key
       | {
-          itemIndex: null;
-          key: string;
-          value?: string;
-        },
+        itemIndex: null;
+        key: string;
+        value?: string;
+      },
   ) => {
     if (update.itemIndex !== null) {
       const keyValues = [...get(envKeyValueStorage)];
@@ -166,7 +166,6 @@ export const apiKeysAtom = atom(
     const { proxyEnabled, proxyUrl } = get(proxyUrlAtom);
     const userEnvVarsUnescaped = get(userApiKeysAtom);
 
-    console.log('[apiKeysAtom] Computing env vars:', { proxyEnabled, proxyUrl });
 
     // escape env vars that may have \n,\t in them
     // we don't replace \" because its a bit trickier, but if users report bugs, we should fix this.

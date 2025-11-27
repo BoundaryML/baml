@@ -42,7 +42,7 @@ export function BAMLSDKProvider({ children, mode: initialMode = 'wasm' }: BAMLSD
 
   // Create SDK whenever mode changes
   const sdk = useMemo(() => {
-    console.log('aaron: [BAMLSDKProvider] Creating SDK with mode:', runtimeMode, store);
+    console.log('[BAMLSDKProvider] Creating SDK with mode:', runtimeMode, store);
     console.log('🚀 Creating BAML SDK with mode:', runtimeMode);
     if (runtimeMode === 'mock') {
       return createMockSDK(store);

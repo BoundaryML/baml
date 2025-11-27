@@ -137,8 +137,7 @@ export class WebviewPanelHost {
     if (!this._isInitialized) {
       if (
         cmd.source === 'lsp_message' &&
-        cmd.payload.method === 'workspace/executeCommand' &&
-        cmd.payload.params.command === 'baml.openBamlPanel' || (cmd.source == 'lsp_message' && cmd.payload.method === 'runtime_updated')
+        cmd.payload.method === 'workspace/executeCommand' || (cmd.source == 'lsp_message' && cmd.payload.method === 'runtime_updated')
       ) {
         console.log('Queueing command until webview is initialized', cmd);
         // Queue select_function commands until initialized

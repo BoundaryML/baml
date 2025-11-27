@@ -23,7 +23,6 @@ export const WorkflowNodeName: React.FC<WorkflowNodeNameProps> = ({
   const node = activeWorkflow?.nodes?.find((n) => n.id === nodeId);
   const nodeLabel = node?.label;
 
-  console.log('blahhh333333', { workflowId, nodeId, node, nodeLabel });
 
   return (
     <Breadcrumb>

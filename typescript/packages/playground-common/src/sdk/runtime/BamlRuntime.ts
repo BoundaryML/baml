@@ -30,7 +30,6 @@ import type {
   BamlRuntimeInterface,
   CursorPosition,
   CursorNavigationResult,
-  EntityAtPosition,
   ExecutionOptions,
 } from './BamlRuntimeInterface';
 import type {
@@ -379,6 +378,11 @@ export class BamlRuntime implements BamlRuntimeInterface {
   private wasm: BamlWasmModule;
   private adapter: WasmTypeAdapter;
 
+  // Lazy caches - computed once per runtime instance (cleared on file changes via new instance)
+  private functionsCache: FunctionWithCallGraph[] | null = null;
+  private testCasesCache: TestCaseMetadata[] | null = null;
+  private bamlFilesCache: BAMLFile[] | null = null;
+
   private constructor(
     wasm: BamlWasmModule,
     wasmProject: WasmProject,
@@ -484,19 +488,33 @@ export class BamlRuntime implements BamlRuntimeInterface {
   }
 
   getWorkflows(): FunctionWithCallGraph[] {
+    const startTime = performance.now();
     // Workflows are just root functions with call graphs
     // For now, return all functions (naive implementation)
     // TODO: Filter by isRoot: true when we properly analyze call relationships
-    return this.getFunctions();
+    const workflows = this.getFunctions();
+    const endTime = performance.now();
+    console.log(`[BamlRuntime] getWorkflows() took ${(endTime - startTime).toFixed(2)}ms`);
+    return workflows;
   }
 
   getCallGraph(functionName: string): CallGraphNode | undefined {
+    const startTime = performance.now();
     const functions = this.getFunctions();
     const func = functions.find(f => f.name === functionName);
-    return func?.callGraph;
+    const callGraph = func?.callGraph;
+    const endTime = performance.now();
+    console.log(`[BamlRuntime] getCallGraph('${functionName}') took ${(endTime - startTime).toFixed(2)}ms`);
+    return callGraph;
   }
 
   getFunctions(): FunctionWithCallGraph[] {
+    // Return cached result if available
+    if (this.functionsCache !== null) {
+      return this.functionsCache;
+    }
+
+    const startTime = performance.now();
     if (!this.wasmRuntime) {
       console.log('[BamlRuntime] Cannot get functions - runtime is invalid');
       return [];
@@ -523,6 +541,11 @@ export class BamlRuntime implements BamlRuntimeInterface {
         pushFn(fn, metadata);
       }
 
+      const endTime = performance.now();
+      console.log(`[BamlRuntime] getFunctions() took ${(endTime - startTime).toFixed(2)}ms (cached for future calls)`);
+
+      // Cache the result
+      this.functionsCache = combined;
       return combined;
     } catch (e) {
       console.error('[BamlRuntime] Error getting functions:', e);
@@ -610,32 +633,44 @@ export class BamlRuntime implements BamlRuntimeInterface {
       return [];
     }
 
-    try {
-      // Get all test cases from WASM runtime
-      const allTestCases: WasmTestCase[] = this.wasmRuntime.list_testcases();
-
-      return allTestCases
-        .filter((tc) => {
-          if (!functionName) return true;
-          // Filter by functionName - check if this test belongs to the specified function
-          return tc.parent_functions.some((pf) => pf.name === functionName);
-        })
-        .map((tc) => this.adapter.convertTestCase(tc));
-    } catch (e) {
-      console.error('[BamlRuntime] Error getting test cases:', e);
-      return [];
+    // Populate cache if needed
+    if (this.testCasesCache === null) {
+      const startTime = performance.now();
+      try {
+        // Get all test cases from WASM runtime and cache them
+        const allTestCases: WasmTestCase[] = this.wasmRuntime.list_testcases();
+        this.testCasesCache = allTestCases.map((tc) => this.adapter.convertTestCase(tc));
+        const endTime = performance.now();
+        console.log(`[BamlRuntime] getTestCases() took ${(endTime - startTime).toFixed(2)}ms (cached for future calls)`);
+      } catch (e) {
+        console.error('[BamlRuntime] Error getting test cases:', e);
+        return [];
+      }
     }
+
+    // Filter by functionName if provided
+    if (!functionName) {
+      return this.testCasesCache;
+    }
+    return this.testCasesCache.filter((tc) => tc.functionId === functionName);
   }
 
   getBAMLFiles(): BAMLFile[] {
+    // Return cached result if available
+    if (this.bamlFilesCache !== null) {
+      return this.bamlFilesCache;
+    }
+
     if (!this.wasmRuntime) {
       console.log('[BamlRuntime] Cannot get BAML files - runtime is invalid');
       return [];
     }
 
+    const startTime = performance.now();
     try {
+      // getFunctions() and getTestCases() are cached, so this is efficient
       const functions: FunctionWithCallGraph[] = this.getFunctions();
-      const testCases: WasmTestCase[] = this.wasmRuntime.list_testcases();
+      const testCases: TestCaseMetadata[] = this.getTestCases();
 
       const fileMap = new Map<string, { functions: FunctionWithCallGraph[], tests: BAMLTest[] }>();
       const functionTypeByName = new Map(functions.map(fn => [fn.name, fn.type]));
@@ -652,12 +687,11 @@ export class BamlRuntime implements BamlRuntimeInterface {
       }
 
       for (const tc of testCases) {
-        const filePath = tc.span?.file_path || 'unknown.baml';
+        const filePath = tc.span?.filePath || 'unknown.baml';
         if (!fileMap.has(filePath)) {
           fileMap.set(filePath, { functions: [], tests: [] });
         }
-        const parentFn = tc.parent_functions[0];
-        const parentName = parentFn?.name || 'unknown';
+        const parentName = tc.functionId || 'unknown';
         const parentType = functionTypeByName.get(parentName) ?? 'function';
         const nodeType: 'llm_function' | 'function' = parentType === 'llm_function' ? 'llm_function' : 'function';
 
@@ -671,12 +705,17 @@ export class BamlRuntime implements BamlRuntimeInterface {
         fileMap.get(filePath)!.tests.push(bamlTest);
       }
 
-      // Convert map to array of BAMLFile objects
-      return Array.from(fileMap.entries()).map(([path, data]) => ({
+      // Convert map to array of BAMLFile objects and cache
+      this.bamlFilesCache = Array.from(fileMap.entries()).map(([path, data]) => ({
         path,
         functions: data.functions,
         tests: data.tests,
       }));
+
+      const endTime = performance.now();
+      console.log(`[BamlRuntime] getBAMLFiles() took ${(endTime - startTime).toFixed(2)}ms (cached for future calls)`);
+
+      return this.bamlFilesCache;
     } catch (e) {
       console.error('[BamlRuntime] Error getting BAML files:', e);
       return [];
@@ -769,41 +808,41 @@ export class BamlRuntime implements BamlRuntimeInterface {
     // Callbacks fire in real-time during execution!
     // Note: WASM handles parallel vs sequential internally based on context.parallel
     const results = await this.wasmRuntime.run_tests(
-        testCases,
-        // on_partial_response callback
-        (partial: WasmPartialResponse & { func_test_pair: () => { function_name: string; test_name: string } }) => {
-          console.log('[BamlRuntime] on_partial_response:', partial);
-          const pair = partial.func_test_pair();
-          const convertedPartial = this.adapter.convertResponseToData(partial);
+      testCases,
+      // on_partial_response callback
+      (partial: WasmPartialResponse & { func_test_pair: () => { function_name: string; test_name: string } }) => {
+        // console.log('[BamlRuntime] on_partial_response:', partial);
+        const pair = partial.func_test_pair();
+        const convertedPartial = this.adapter.convertResponseToData(partial);
 
-          if (context.onPartialResponse) {
-            console.log('[BamlRuntime] calling context.onPartialResponse for', pair.function_name, pair.test_name);
-            context.onPartialResponse(pair.function_name, pair.test_name, convertedPartial);
-          }
-        },
-        // get_baml_src_cb - load media files
-        context.loadMediaFile || vscode.loadMediaFile,
-        // env - API keys / environment
-        context.apiKeys || {},
-        // abort_signal
-        context.abortSignal || null,
-        // watch_handler - for watch notifications
-        (notification: WasmNotification & { function_name?: string; test_name?: string }) => {
-          const watchNotification = {
-            variableName: notification.variable_name,
-            channelName: notification.channel_name,
-            blockName: notification.block_name,
-            functionName: notification.function_name,
-            isStream: notification.is_stream,
-            value: notification.value,
-          };
-          if (context.onWatchNotification) {
-            context.onWatchNotification(watchNotification);
-          }
-        },
-        // parallel - whether to run tests in parallel (default: false, optional in WASM)
-        context.parallel ?? false
-      );
+        if (context.onPartialResponse) {
+          console.log('[BamlRuntime] calling context.onPartialResponse for', pair.function_name, pair.test_name);
+          context.onPartialResponse(pair.function_name, pair.test_name, convertedPartial);
+        }
+      },
+      // get_baml_src_cb - load media files
+      context.loadMediaFile || vscode.loadMediaFile,
+      // env - API keys / environment
+      context.apiKeys || {},
+      // abort_signal
+      context.abortSignal || null,
+      // watch_handler - for watch notifications
+      (notification: WasmNotification & { function_name?: string; test_name?: string }) => {
+        const watchNotification = {
+          variableName: notification.variable_name,
+          channelName: notification.channel_name,
+          blockName: notification.block_name,
+          functionName: notification.function_name,
+          isStream: notification.is_stream,
+          value: notification.value,
+        };
+        if (context.onWatchNotification) {
+          context.onWatchNotification(watchNotification);
+        }
+      },
+      // parallel - whether to run tests in parallel (default: false, optional in WASM)
+      context.parallel ?? false
+    );
 
     // Process final results and call onTestComplete for each test
     let response: WasmTestResponse | undefined;
@@ -917,14 +956,13 @@ export class BamlRuntime implements BamlRuntimeInterface {
   updateCursor(
     cursor: CursorPosition,
     fileContents: Record<string, string>,
-    currentSelection: string | null
+    _currentSelection: string | null
   ): CursorNavigationResult {
     if (!this.wasmRuntime) {
       console.log('no wasm runtime');
       return { functionName: null, testCaseName: null, nodeId: null };
     }
     try {
-
       const fileContent = fileContents[cursor.fileName];
       if (!fileContent) {
         console.log('no file content');
@@ -939,135 +977,34 @@ export class BamlRuntime implements BamlRuntimeInterface {
       }
       cursorIdx += cursor.column;
 
-      const entity = this.wasmRuntime.get_entity_at_position(
-        cursor.fileName,
-        cursorIdx
-      );
-      if (entity) {
-        console.log('[BamlRuntime] Entity at cursor:', {
-          entity_type: entity.entity_type,
-          entity_name: entity.entity_name,
-          node_id: entity.node_id,
-          node_label: entity.node_label,
-        });
-      }
-
-      // Get function at cursor position
-      const selectedFunc = this.wasmRuntime.get_function_at_position(
-        cursor.fileName,
-        currentSelection ?? '',
-        cursorIdx
-      );
-
-      if (!selectedFunc) {
-        console.log('aaron: clicked on something that is not a function');
-        return { functionName: null, testCaseName: null, nodeId: null };
-      }
-
-      // IMPORTANT, if we dont extract the name here, when we try doing selectedFunc.name after passing selectedFunc to get_testcase_from_position, it will throw a 'passed null pointer to rust' error.
-      const name = selectedFunc.name;
-
-      // Check if cursor is in a test case
-      const selectedTestcase = this.wasmRuntime.get_testcase_from_position(
-        selectedFunc,
-        cursorIdx
-      );
-
-
-      if (selectedTestcase) {
-        // Check for nested function in test case
-        const nestedFunc = this.wasmRuntime.get_function_of_testcase(
-          cursor.fileName,
-          cursorIdx
-        );
-
-
-        return {
-          functionName: nestedFunc ? nestedFunc.name : name,
-          testCaseName: selectedTestcase.name,
-          nodeId: null,
-        };
-      }
-      // selectedFunc.name; // uncomment to repro the 'null pointer passed to rust error'.
-
-      // Extract node_id from entity if available (for workflow nodes)
-      const nodeId = entity?.node_id ?? null;
-
-      console.log('[BamlRuntime] updateCursor returning:', {
-        functionName: name,
-        nodeId,
-        entity_type: entity?.entity_type,
-        entity_name: entity?.entity_name,
-        node_label: entity?.node_label,
-      });
-
-      // Just a function, no test case
-      return {
-        functionName: name,
-        testCaseName: null,
-        nodeId,
-      };
-    } catch (error) {
-      console.error('[BamlRuntime] Error updating cursor:', error);
-      throw error;
-    }
-  }
-
-  getEntityAtPosition(
-    cursor: CursorPosition,
-    fileContents: Record<string, string>
-  ): EntityAtPosition | null {
-    if (!this.wasmRuntime) {
-      return null;
-    }
-    try {
-
-      const fileContent = fileContents[cursor.fileName];
-      if (!fileContent) {
-        return null;
-      }
-
-      // Convert line/column to character index
-      const lines = fileContent.split('\n');
-      let cursorIdx = 0;
-      for (let i = 0; i < cursor.line; i++) {
-        cursorIdx += (lines[i]?.length ?? 0) + 1; // +1 for newline
-      }
-      cursorIdx += cursor.column;
-
-      // Get entity at cursor position from WASM
+      // get_entity_at_position now handles functions, nodes, AND test cases
       const entity = this.wasmRuntime.get_entity_at_position(
         cursor.fileName,
         cursorIdx
       );
 
       if (!entity) {
-        return null;
-
-
+        console.warn('clicked on something that is not a function, node, or test case');
+        return { functionName: null, testCaseName: null, nodeId: null };
       }
 
-
-      const wasmKinds = this.wasm?.WasmFunctionKind;
-      let functionType: 'Llm' | 'Expr' | undefined;
-      if (wasmKinds != null) {
-        if (entity.function_type === wasmKinds.Llm) {
-          functionType = 'Llm';
-        } else if (entity.function_type === wasmKinds.Expr) {
-          functionType = 'Expr';
-        }
-      }
-
-      return {
-        entity_type: entity.entity_type as 'function' | 'node',
+      console.log('[BamlRuntime] Entity at cursor:', {
+        entity_type: entity.entity_type,
         entity_name: entity.entity_name,
-        function_type: functionType,
-        node_id: entity.node_id ?? undefined,
-        node_label: entity.node_label ?? undefined,
-        span: entity.span,
+        function_name: entity.function_name,
+        node_id: entity.node_id,
+        node_label: entity.node_label,
+        test_name: entity.test_name,
+      });
+
+      // Handle all entity types uniformly
+      return {
+        functionName: entity.function_name,
+        testCaseName: entity.test_name ?? null,
+        nodeId: entity.node_id ?? null,
       };
     } catch (error) {
-      console.error('[BamlRuntime] Error getting entity at position:', error);
+      console.error('[BamlRuntime] Error updating cursor:', error);
       throw error;
     }
   }

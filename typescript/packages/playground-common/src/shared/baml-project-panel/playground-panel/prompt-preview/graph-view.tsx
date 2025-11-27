@@ -73,7 +73,6 @@ export const GraphView = () => {
 
   // Clear node states when workflow changes
   useEffect(() => {
-    console.log('aaron: useEffect: activeWorkflowId:', activeWorkflowId);
     // Clear all node states AND outputs in UI when switching workflows
     setNodes((currentNodes) =>
       [...currentNodes].map((node) => ({
@@ -98,7 +97,6 @@ export const GraphView = () => {
       currentNodes.map((node) => {
         const state = nodeStates.get(node.id);
         if (state && state !== node.data.executionState) {
-          console.log(`[GraphView] Updating node ${node.id} state to ${state}`);
           return {
             ...node,
             data: {
@@ -118,7 +116,6 @@ export const GraphView = () => {
     if (selectedNodeId && nodesInitialized) {
 
       setNodes((currentNodes) => {
-        console.log("Nodes before updating selection:", currentNodes, "selectedNodeId:", selectedNodeId);
         return currentNodes.map((node) => ({ ...node, selected: node.id === selectedNodeId }));
       });
 
@@ -165,7 +162,6 @@ export const GraphView = () => {
 
   // Handle node click - select the node and open detail panel
   const handleNodeClick = (_event: React.MouseEvent, node: Node) => {
-    console.log('Node clicked in workflow:', { workflowId: displayedWorkflowId, nodeId: node.id });
 
     // Use displayedWorkflowId from the current graph (more reliable than selection state)
     if (!displayedWorkflowId) {

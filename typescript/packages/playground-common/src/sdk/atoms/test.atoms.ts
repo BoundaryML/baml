@@ -147,3 +147,19 @@ export const categorizedNotificationsAtom = atom<CategorizedNotifications>((get)
     regular: notifications.filter((n) => !isBlock(n) && !isStream(n)),
   };
 });
+
+// ============================================================================
+// Pending Test Command
+// ============================================================================
+
+/**
+ * Pending test command to execute after runtime initialization
+ * Used when a run_test codelens is received before the runtime is ready
+ */
+export interface PendingTestCommand {
+  functionName: string;
+  testName: string;
+  timestamp: number;
+}
+
+export const pendingTestCommandAtom = atom<PendingTestCommand | null>(null);

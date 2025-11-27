@@ -3,10 +3,13 @@ import { CopyButton } from '@baml/ui/custom/copy-button';
 import { SidebarInset, SidebarProvider } from '@baml/ui/sidebar';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@baml/ui/resizable';
 import { useAtom, useAtomValue } from 'jotai';
+import { useEffect, useRef } from 'react';
+import type { ImperativePanelHandle } from 'react-resizable-panels';
 import { ApiKeysDialog } from '../../../../components/api-keys-dialog/dialog';
 import { StatusBar } from '../../../../components/status-bar';
 import { vscode } from '../../vscode';
-import { functionTestSnippetAtom, selectionAtom, viewModeAtom } from '../atoms';
+import { areTestsRunningAtom, functionTestSnippetAtom, selectionAtom, viewModeAtom } from '../atoms';
+import { wasmAtom } from '../../atoms';
 import { PreviewToolbar } from '../preview-toolbar';
 import { TestingSidebar, isSidebarOpenAtom } from '../side-bar';
 import { UnifiedPromptPreview } from './unified-prompt-preview';
@@ -14,6 +17,13 @@ import { AdaptiveBottomPanel } from './adaptive-bottom-panel';
 import { SelectionBridge } from '../SelectionBridge';
 // disable the react-flow handle CSS
 import '../../../../workflow-styles.css';
+
+const RuntimeLoadingScreen = () => (
+  <div className="h-full flex flex-col items-center justify-center gap-4 text-muted-foreground">
+    <div className="h-8 w-8 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
+    <div className="text-sm">Loading BAML runtime...</div>
+  </div>
+);
 
 export const NoTestsContent = () => {
   const { selectedFn } = useAtomValue(selectionAtom);
@@ -74,12 +84,27 @@ export const PromptPreview = () => {
   const { selectedTc } = useAtomValue(selectionAtom);
   const viewMode = useAtomValue(viewModeAtom);
   const [isSidebarOpen, setIsSidebarOpen] = useAtom(isSidebarOpenAtom);
+  const areTestsRunning = useAtomValue(areTestsRunningAtom);
+  const wasm = useAtomValue(wasmAtom);
+  const bottomPanelRef = useRef<ImperativePanelHandle>(null);
 
-  console.log('viewMode', viewMode);
-  console.log('selectedTc', selectedTc);
+  // Auto-expand bottom panel when tests start running
+  useEffect(() => {
+    if (bottomPanelRef.current && areTestsRunning) {
+      const currentSize = bottomPanelRef.current.getSize();
+      if (currentSize < 60) {
+        bottomPanelRef.current.resize(60);
+      }
+    }
+  }, [areTestsRunning]);
+
+  // Show loading screen when WASM module hasn't loaded yet
+  if (!wasm) {
+    return <RuntimeLoadingScreen />;
+  }
+
   // Check if we have content to render (tests or graph) vs showing "no tests" empty state
   const hasContentToRender = viewMode.showGraphTab || !!selectedTc;
-  console.log('hasContentToRender', hasContentToRender);
 
   return (
     <>
@@ -108,8 +133,8 @@ export const PromptPreview = () => {
                   </ResizablePanel>
 
                   {/* Bottom Panel - Adaptive (TestPanel or DetailPanel) */}
-                  <ResizableHandle className="hover:bg-blue-500 hover:h-1 transition-all" />
-                  <ResizablePanel defaultSize={40} minSize={20} maxSize={70}>
+                  <ResizableHandle withHandle className="cursor-row-resize after:cursor-row-resize hover:bg-blue-500 transition-all data-[panel-group-direction=vertical]:after:h-3" />
+                  <ResizablePanel ref={bottomPanelRef} defaultSize={40} minSize={20} maxSize={70}>
                     <div className="h-full overflow-y-auto px-1">
                       <AdaptiveBottomPanel />
                     </div>

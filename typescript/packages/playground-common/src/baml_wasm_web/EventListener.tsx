@@ -59,11 +59,9 @@ export const EventListener: React.FC = () => {
   const debouncedUpdateFiles = useDebounceCallback(
     (files: Record<string, string>) => {
       console.debug('[EventListener] Debounced file update');
-      console.log('aaron: debouncedUpdateFiles', Object.keys(files).length);
       const simpleBamlEntry = Object.entries(files).find(([name]) => name.endsWith('simple.baml'));
       if (simpleBamlEntry) {
         const [name, content] = simpleBamlEntry;
-        console.log('aaron: [AFTER DEBOUNCE] simple.baml content length:', content.length);
       }
       sdk.files.update(files);
     },

@@ -10,7 +10,6 @@ import type {
   ExecutionOptions,
   CursorPosition,
   CursorNavigationResult,
-  EntityAtPosition,
 } from './BamlRuntimeInterface';
 import type { MockRuntimeConfig } from '../mock-config/types';
 import type { DiagnosticError, GeneratedFile } from '../atoms/core.atoms';
@@ -198,20 +197,12 @@ export class MockBamlRuntime implements BamlRuntimeInterface {
   }
 
   updateCursor(
-    cursor: CursorPosition,
-    fileContents: Record<string, string>,
-    currentSelection: string | null
+    _cursor: CursorPosition,
+    _fileContents: Record<string, string>,
+    _currentSelection: string | null
   ): CursorNavigationResult {
     // Mock implementation - could be enhanced to parse the file and find functions/tests
     // For now, just return null (no navigation)
     return { functionName: null, testCaseName: null, nodeId: null };
-  }
-
-  getEntityAtPosition(
-    cursor: CursorPosition,
-    fileContents: Record<string, string>
-  ): EntityAtPosition | null {
-    // Mock implementation - returns null (no entity found)
-    return null;
   }
 }

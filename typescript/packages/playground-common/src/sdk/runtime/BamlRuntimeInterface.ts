@@ -56,27 +56,6 @@ export interface CursorNavigationResult {
   nodeId?: string | null;
 }
 
-/**
- * Entity information at a cursor position
- * Returned by get_entity_at_position WASM API
- */
-export interface EntityAtPosition {
-  entity_type: 'function' | 'node';
-  entity_name: string;
-  function_type?: 'Llm' | 'Expr';
-  node_id?: string;
-  node_label?: string;
-  span: {
-    file_path: string;
-    start: number;
-    end: number;
-    start_line: number;
-    start_column: number;
-    end_line: number;
-    end_column: number;
-  };
-}
-
 export interface ExecutionOptions {
   clearCache?: boolean;
   startFromNodeId?: string;
@@ -253,17 +232,6 @@ export interface BamlRuntimeInterface {
     currentSelection: string | null
   ): CursorNavigationResult;
 
-  /**
-   * Get entity at a cursor position
-   *
-   * @param cursor - Cursor position (fileName, line, column)
-   * @param fileContents - Map of file paths to their contents
-   * @returns Entity information at the cursor position (function or workflow node)
-   */
-  getEntityAtPosition(
-    cursor: CursorPosition,
-    fileContents: Record<string, string>
-  ): EntityAtPosition | null;
 }
 
 /**

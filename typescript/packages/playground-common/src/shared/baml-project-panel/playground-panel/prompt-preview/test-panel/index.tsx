@@ -14,7 +14,6 @@ export const TestPanel = () => {
   const [selectedHistoryIndex] = useAtom(selectedHistoryIndexAtom);
   const testHistory = useAtomValue(testHistoryAtom);
   const viewType = useAtomValue(testPanelViewTypeAtom);
-  console.log('viewType', viewType);
 
   // TODO: still render the client graph view even if no tests are running.
   if (testHistory.length === 0) {

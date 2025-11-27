@@ -15,8 +15,11 @@ import { inlineCopilot } from 'codemirror-copilot';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { hyperLink } from '@uiw/codemirror-extensions-hyper-link';
-import { langs } from '@uiw/codemirror-extensions-langs';
 import { useAtomValue, useSetAtom, useStore } from 'jotai';
+// Import specific language support instead of all languages
+import { javascript as jsLang } from '@codemirror/lang-javascript';
+import { python as pythonLang } from '@codemirror/lang-python';
+import { json as jsonLang } from '@codemirror/lang-json';
 import type { ICodeBlock } from '../types';
 import { CodeMirrorDiagnosticsAtom } from './atoms';
 
@@ -40,11 +43,11 @@ import ts from 'typescript';
 import { flashRangesAtom } from '../playground-panel/atoms';
 
 const extensionMap = {
-  js: [langs.javascript()],
-  jsx: [langs.jsx()],
-  py: [langs.python()],
-  python: [langs.python()],
-  json: [langs.json()],
+  js: [jsLang()],
+  jsx: [jsLang({ jsx: true })],
+  py: [pythonLang()],
+  python: [pythonLang()],
+  json: [jsonLang()],
   baml: [BAML()],
 };
 

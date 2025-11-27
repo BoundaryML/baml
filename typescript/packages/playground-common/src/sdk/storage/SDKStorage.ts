@@ -28,6 +28,7 @@ import type {
   TestState,
   WatchNotification,
   FlashRange,
+  PendingTestCommand,
 } from '../atoms/test.atoms';
 
 import type { BamlRuntimeInterface } from '../runtime/BamlRuntimeInterface';
@@ -224,4 +225,11 @@ export interface SDKStorage {
   appendExecutionLog(events: RichExecutionEvent | RichExecutionEvent[]): void;
   clearExecutionLog(): void;
   getExecutionLog(): RichExecutionEvent[];
+
+  // ============================================================================
+  // Pending Test Command (for run_test before runtime ready)
+  // ============================================================================
+
+  setPendingTestCommand(command: PendingTestCommand | null): void;
+  getPendingTestCommand(): PendingTestCommand | null;
 }

@@ -9,7 +9,9 @@ import { consoleForwardPlugin } from "vite-console-forward-plugin";
 import jotaiReactRefresh from 'jotai/babel/plugin-react-refresh'
 import jotaiDebugLabel from 'jotai/babel/plugin-debug-label'
 import tailwindcss from '@tailwindcss/vite';
+import { visualizer } from 'rollup-plugin-visualizer';
 const isWatchMode = process.argv.includes('--watch');
+const analyzeBundle = process.env.ANALYZE === 'true';
 const srcPath = normalizePath(path.resolve(__dirname, './dist/'));
 const destPath = normalizePath(path.resolve(__dirname, '../vscode-ext/dist/playground'));
 
@@ -30,6 +32,13 @@ export default defineConfig({
     // !isWatchMode && consoleForwardPlugin(),
     tailwindcss(),
     // topLevelAwait(),
+    // Bundle analyzer - run with ANALYZE=true pnpm build
+    analyzeBundle && visualizer({
+      open: true,
+      filename: 'bundle-stats.html',
+      gzipSize: true,
+      brotliSize: true,
+    }),
   ].filter(Boolean),
   // root: path.resolve(process.cwd(), './src'),
   server: {

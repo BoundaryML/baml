@@ -64,6 +64,7 @@ import {
   currentWatchNotificationsAtom,
   highlightedBlocksAtom,
   flashRangesAtom,
+  pendingTestCommandAtom,
 } from '../atoms/test.atoms';
 
 import type {
@@ -71,6 +72,7 @@ import type {
   TestState,
   WatchNotification,
   FlashRange,
+  PendingTestCommand,
 } from '../atoms/test.atoms';
 import type { BamlRuntimeInterface } from '../runtime/BamlRuntimeInterface';
 import type { FunctionWithCallGraph } from '../interface';
@@ -523,5 +525,17 @@ export class JotaiStorage implements SDKStorage {
 
   getExecutionLog() {
     return this.store.get(executionLogAtom);
+  }
+
+  // ============================================================================
+  // Pending Test Command
+  // ============================================================================
+
+  setPendingTestCommand(command: PendingTestCommand | null) {
+    this.store.set(pendingTestCommandAtom, command);
+  }
+
+  getPendingTestCommand() {
+    return this.store.get(pendingTestCommandAtom);
   }
 }

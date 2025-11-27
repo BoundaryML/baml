@@ -38,7 +38,6 @@ export async function handleIDEMessage(
   switch (command) {
     case 'update_cursor':
       // Use SDK navigation update cursor method
-      console.log('looking: update_cursor', content);
       const updateCursorHandler =
         debouncedUpdateCursor ??
         ((cursor: UpdateCursorContent) => {
@@ -89,7 +88,6 @@ export async function handleLSPMessage(
       const simpleBamlEntry = Object.entries(params.files).find(([name]) => name.endsWith('simple.baml'));
       if (simpleBamlEntry) {
         const [name, content] = simpleBamlEntry;
-        console.log('aaron: simple.baml content length:', content.length);
       }
       // Debounce file updates to prevent excessive WASM recompilation
       // This is a platform quirk (LSP sends rapid updates during typing)
@@ -180,6 +178,13 @@ async function handleWorkspaceCommand(
       case 'baml.runBamlTest': {
         if (!firstArg?.functionName || !firstArg?.testCaseName) {
           console.warn('[MessageHandler] baml.runBamlTest: missing functionName or testCaseName');
+          return;
+        }
+
+        // If runtime isn't ready yet (webview is initializing), queue the command
+        // to be executed after runtime initialization completes
+        if (!sdk.isRuntimeReady()) {
+          sdk.queueTestCommand(firstArg.functionName, firstArg.testCaseName);
           return;
         }
 

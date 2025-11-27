@@ -150,15 +150,14 @@ export class BAMLSDK {
 
     // Populate parsed BAML files atom (for navigation, DebugPanel, etc.)
     const parsedFiles = this.runtime.getBAMLFiles();
-    console.log('aaron: [SDK] Parsed files:', parsedFiles.map((file: any) => file.path));
-    parsedFiles.forEach((file: any) => {
-      file.functions.forEach((fn: any) => {
-        console.log(
-          `aaron: ParsedFiles: Function: ${fn.displayName || fn.name}, Nodes:`,
-          Array.isArray(fn.nodes) ? fn.nodes.map((node: any) => node.id).join(', ') : []
-        );
-      });
-    });
+    // parsedFiles.forEach((file: any) => {
+    //   file.functions.forEach((fn: any) => {
+    //     console.log(
+    //       `aaron: ParsedFiles: Function: ${fn.displayName || fn.name}, Nodes:`,
+    //       Array.isArray(fn.nodes) ? fn.nodes.map((node: any) => node.id).join(', ') : []
+    //     );
+    //   });
+    // });
     this.storage.setParsedBAMLFiles(parsedFiles);
 
     // Store last valid WASM instance if no errors
@@ -176,11 +175,14 @@ export class BAMLSDK {
     const functions = this.runtime.getFunctions();
     const allTestCases = this.runtime.getTestCases();
     console.log('SDK: Runtime recreated with', workflows.length, 'workflows,', diagnostics.length, 'diagnostics');
-    console.log('SDK: Extracted', functions.length, 'functions:', functions.map(f => f.name));
-    console.log('SDK: Extracted', allTestCases.length, 'test cases:', allTestCases.map(tc => `${tc.name} (${tc.functionId})`));
+    console.log('SDK: Extracted', functions.length, 'functions');
+    console.log('SDK: Extracted', allTestCases.length, 'test cases');
 
     // Retry pending navigation if in loading state
     await this.retryPendingNavigation();
+
+    // Execute pending test command if one was queued before runtime was ready
+    await this.executePendingTestCommand();
 
     // Restore cursor position if it was updated recently (< 3 seconds ago)
     const lastCursorPosition = this.storage.getLastCursorPosition();
@@ -189,7 +191,7 @@ export class BAMLSDK {
       const THREE_SECONDS = 3000;
 
       if (timeSinceLastUpdate < THREE_SECONDS) {
-        console.log('aaron: [SDK] Restoring cursor position after runtime recreation:', lastCursorPosition);
+        console.log('[SDK] Restoring cursor position after runtime recreation:', lastCursorPosition);
         // Re-apply the cursor position to restore navigation state
         setTimeout(() => {
           this.navigation.updateCursor({
@@ -199,7 +201,7 @@ export class BAMLSDK {
           });
         }, 100);
       } else {
-        console.log('aaron: [SDK] Cursor position too old to restore (age:', timeSinceLastUpdate, 'ms)');
+        console.log('[SDK] Cursor position too old to restore (age:', timeSinceLastUpdate, 'ms)');
       }
     }
   }
@@ -226,6 +228,47 @@ export class BAMLSDK {
       this.storage.store.get,
       this.storage.store.set
     );
+  }
+
+  /**
+   * Execute pending test command if one was queued before runtime was ready
+   * Called after runtime recreation to run tests that were requested during initialization
+   */
+  private async executePendingTestCommand() {
+    const pendingCommand = this.storage.getPendingTestCommand();
+
+    if (!pendingCommand) {
+      return; // No pending command
+    }
+
+    // Clear the pending command before executing
+    this.storage.setPendingTestCommand(null);
+
+    // Check if the command is stale (older than 30 seconds)
+    const THIRTY_SECONDS = 30000;
+    const commandAge = Date.now() - pendingCommand.timestamp;
+    if (commandAge > THIRTY_SECONDS) {
+      console.log('[SDK] Pending test command is stale (age:', commandAge, 'ms), skipping');
+      return;
+    }
+
+    console.log('🔄 Executing pending test command:', pendingCommand);
+
+    // First select the function
+    this.navigation.selectFunction(pendingCommand.functionName);
+
+    // Small delay to allow navigation to complete (similar to the JetBrains quirk delay)
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Run the test
+    try {
+      await this.tests.runAll([{
+        functionName: pendingCommand.functionName,
+        testName: pendingCommand.testName,
+      }]);
+    } catch (error) {
+      console.error('[SDK] Pending test execution failed:', error);
+    }
   }
 
   // ============================================================================
@@ -543,6 +586,13 @@ export class BAMLSDK {
     updateVSCodeSettings: (settings: Partial<coreAtoms.VSCodeSettings>) => {
       const current = this.storage.getVSCodeSettings() || {};
       const updated = { ...current, ...settings };
+
+      // Only recreate runtime if settings actually changed
+      if (JSON.stringify(current) === JSON.stringify(updated)) {
+        console.log('[SDK] VSCode settings unchanged, skipping runtime recreation');
+        return;
+      }
+
       console.log('[SDK] Updating VSCode settings:', { current, settings, updated });
       this.storage.setVSCodeSettings(updated);
       this.recreateRuntime();
@@ -789,7 +839,6 @@ export class BAMLSDK {
 
       // Resolve what's at the cursor position via runtime
       const result = this.runtime.updateCursor(cursor, fileContents, currentSelection);
-      console.log('[SDK] updateCursor result', result);
 
       if (!result.functionName) {
         console.debug('aaron: [SDK] Cursor not on any function');
@@ -821,7 +870,6 @@ export class BAMLSDK {
       };
 
       // Navigate to the target
-      console.log('[SDK] navigating to', navigationInput);
       this.navigate(navigationInput);
     },
 
@@ -859,6 +907,30 @@ export class BAMLSDK {
       this.navigate(navigationInput);
     },
   };
+
+  // ============================================================================
+  // Runtime Status API
+  // ============================================================================
+
+  /**
+   * Check if the runtime is ready for operations
+   */
+  isRuntimeReady(): boolean {
+    return this.runtime !== null;
+  }
+
+  /**
+   * Queue a test command to be executed after runtime initialization
+   * Use this when a run_test codelens is received before the runtime is ready
+   */
+  queueTestCommand(functionName: string, testName: string): void {
+    console.log('[SDK] Queuing test command for after runtime initialization:', { functionName, testName });
+    this.storage.setPendingTestCommand({
+      functionName,
+      testName,
+      timestamp: Date.now(),
+    });
+  }
 
   // ============================================================================
   // Tests API

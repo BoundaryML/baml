@@ -307,11 +307,7 @@ export function useActiveNode() {
   // First try to find node in current graph (for workflow nodes)
   let node = currentGraph.nodes.find((n) => n.id === selectedNodeId);
 
-  console.log('[useActiveNode] Looking for node:', {
-    selectedNodeId,
-    found: !!node,
-    availableNodeIds: currentGraph.nodes.map(n => ({ id: n.id, label: n.label })),
-  });
+
 
   // If not found in graph, check if it's a standalone function
   if (!node) {

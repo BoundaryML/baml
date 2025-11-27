@@ -297,7 +297,6 @@ export const activeWorkflowAtom = atom((get) => {
   const id = get(activeWorkflowIdAtom);
   if (!id) return null;
   const workflows = get(workflowsAtom);
-  console.log('aaron: activeWorkflowAtom: workflows:', workflows.map((w) => ({ id: w.id, nodes: w.nodes.map((n) => n.id).join(', ') })));
   return workflows.find((w) => w.id === id) || null;
 });
 
