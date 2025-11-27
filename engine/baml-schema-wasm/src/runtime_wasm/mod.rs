@@ -3,8 +3,7 @@ pub mod runtime_prompt;
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, str::FromStr};
 
 use anyhow::Context;
-use baml_compiler::hir::HeaderContext;
-use baml_compiler::watch::shared_handler;
+use baml_compiler::{hir::HeaderContext, watch::shared_handler};
 // Conditional runtime selection based on the "thir-interpreter" feature flag
 #[cfg(feature = "thir-interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;

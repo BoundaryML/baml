@@ -44,7 +44,8 @@ impl CachedClient {
 
     pub fn has_env_vars_changed(&self, new_env_vars: &HashMap<String, String>) -> bool {
         // Check if any existing env vars have different values
-        let values_changed = self.env_vars
+        let values_changed = self
+            .env_vars
             .iter()
             .any(|(k, v)| new_env_vars.get(k).is_some_and(|v2| v2 != v));
 
