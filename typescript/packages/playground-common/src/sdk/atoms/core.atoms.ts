@@ -103,16 +103,14 @@ export function getFunctionOrNodeName(state: SelectionState): string | null {
 
 /**
  * All available workflows (derived from runtime)
- * Returns only multi-node workflows (excludes standalone LLM functions)
+ * Returns all expr functions (workflows)
  */
 export const workflowsAtom = atom((get) => {
   const runtime = get(runtimeInstanceAtom);
   const allWorkflows = runtime?.getWorkflows() ?? [];
-  // Filter to only multi-node workflows (exclude standalone LLM functions)
-  return allWorkflows.filter(wf =>
-    wf.type === 'workflow' && (wf.nodes?.length ?? 0) > 1
-  );
-}, (get, set, update: FunctionWithCallGraph[]) => {
+  // Filter to expr functions (workflows)
+  return allWorkflows.filter(wf => wf.type === 'workflow');
+}, (_get, set, update: FunctionWithCallGraph[]) => {
   set(workflowsAtom, update);
 });
 
@@ -360,7 +358,15 @@ export const currentGraphAtom = atom((get) => {
 
   // If in workflow mode, return the workflow's graph
   if (selection.mode === 'workflow') {
-    const workflow = workflows.find((w) => w.id === selection.workflowId);
+    // First try to find in workflowsAtom (filtered list)
+    let workflow = workflows.find((w) => w.id === selection.workflowId);
+
+    // If not found, try functionsAtom (full list) as fallback
+    if (!workflow) {
+      const functions = get(functionsAtom);
+      workflow = functions.find((f) => f.name === selection.workflowId);
+    }
+
     return {
       nodes: workflow?.nodes ?? [],
       edges: workflow?.edges ?? [],
@@ -453,12 +459,13 @@ export const allFunctionsMapAtom = atom((get): Map<string, FunctionWithCallGraph
 
 /**
  * Currently selected function name (derived - read-only from unified selection state)
- * Returns the function name in function mode, or the selected node ID in workflow mode
+ * Returns the function name in both function and workflow modes
  */
 export const selectedFunctionNameAtom = atom((get) => {
   const state = get(unifiedSelectionStateAtom);
-  if (state.mode === 'function') return state.functionName;
-  if (state.mode === 'workflow') return state.selectedNodeId;
+  if (state.mode === 'function' || state.mode === 'workflow') {
+    return state.functionName;
+  }
   return null;
 });
 

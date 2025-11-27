@@ -88,7 +88,7 @@ export interface NavigationRule {
   matches: (target: EnrichedTarget, current: SelectionState) => boolean;
 
   // What should we do?
-  resolve: (target: EnrichedTarget, current: SelectionState) => SelectionState;
+  resolve: (target: EnrichedTarget, current: SelectionState, context?: NavigationContext) => SelectionState;
 
   // Optional: Why did this rule match? (for debugging)
   explain?: (target: EnrichedTarget, current: SelectionState) => string;

@@ -105,6 +105,9 @@ export const PromptPreview = () => {
 
   // Check if we have content to render (tests or graph) vs showing "no tests" empty state
   const hasContentToRender = viewMode.showGraphTab || !!selectedTc;
+  console.log('viewMode', viewMode);
+  console.log('selectedTc', selectedTc);
+  console.log('hasContentToRender', hasContentToRender);
 
   return (
     <>

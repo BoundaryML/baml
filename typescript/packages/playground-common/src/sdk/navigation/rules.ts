@@ -33,7 +33,8 @@ const directNodeClick: NavigationRule = {
       mode: 'workflow',
       workflowId: target.workflowId,
       selectedNodeId: target.nodeId,
-      functionName: membership ? getPrimaryFunction(membership.calledFunctions) : null,
+      // Use function name from input, fallback to membership's called functions
+      functionName: target.functionName ?? (membership ? getPrimaryFunction(membership.calledFunctions) : null),
       testName: selectPreferredTest(target.availableTests, currentTestName),
     };
   },
@@ -50,7 +51,7 @@ const testClick: NavigationRule = {
   id: 'test-click',
   priority: 1,
   matches: (target) => target.kind === 'test',
-  resolve: (target, current) => {
+  resolve: (target, current, context) => {
     // If function is in a workflow, show workflow mode
     if (target.workflowMemberships.length > 0) {
       const membership = selectBestWorkflow(
@@ -71,10 +72,40 @@ const testClick: NavigationRule = {
       };
     }
 
+    // Check if the function itself IS a workflow (expr function)
+    // This handles tests for workflow functions directly
+    const functionName = target.functionName ?? target.name;
+
+
+    // Check in workflows first
+    let workflow = context?.workflows?.find(
+      (w) => w.name === functionName && w.type === 'workflow'
+    );
+
+    // Also check in functions list - check for expr functions (workflows)
+    // Only expr functions should be shown in workflow mode, not LLM functions
+    if (!workflow) {
+      workflow = context?.functions?.find(
+        (f) => f.name === functionName && (f.type === 'workflow' || f.functionFlavor === 'expr')
+      );
+    }
+
+    if (workflow) {
+      // Find the root node ID
+      const rootNode = workflow.nodes?.find((n) => n.id.includes('|root:'));
+      return {
+        mode: 'workflow',
+        workflowId: workflow.id,
+        selectedNodeId: rootNode?.id ?? `${workflow.id}|root:0`,
+        functionName: workflow.name,
+        testName: target.testName ?? null,
+      };
+    }
+
     // Otherwise, show function mode
     return {
       mode: 'function',
-      functionName: target.functionName ?? target.name,
+      functionName,
       testName: target.testName ?? null,
     };
   },

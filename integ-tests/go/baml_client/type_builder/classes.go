@@ -15,12 +15,13 @@ package type_builder
 
 import baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 
+
 type AddTodoItemClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *AddTodoItemClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -31,21 +32,25 @@ func (t *AddTodoItemClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *AddTodoItemClassView) PropertyType() (ClassPropertyView, error) {
-	return t.inner.Property("type")
+    return t.inner.Property("type")
 }
 
 func (t *AddTodoItemClassView) PropertyItem() (ClassPropertyView, error) {
-	return t.inner.Property("item")
+    return t.inner.Property("item")
 }
 
 func (t *AddTodoItemClassView) PropertyTime() (ClassPropertyView, error) {
-	return t.inner.Property("time")
+    return t.inner.Property("time")
 }
 
 func (t *AddTodoItemClassView) PropertyDescription() (ClassPropertyView, error) {
-	return t.inner.Property("description")
+    return t.inner.Property("description")
 }
+
 
 func (t *TypeBuilder) AddTodoItem() (*AddTodoItemClassView, error) {
 	bld, err := t.inner.Class("AddTodoItem")
@@ -60,11 +65,11 @@ func (t *AddTodoItemClassView) Type() (baml.Type, error) {
 }
 
 type AnotherObjectClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *AnotherObjectClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -75,17 +80,21 @@ func (t *AnotherObjectClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *AnotherObjectClassView) PropertyId() (ClassPropertyView, error) {
-	return t.inner.Property("id")
+    return t.inner.Property("id")
 }
 
 func (t *AnotherObjectClassView) PropertyThingy2() (ClassPropertyView, error) {
-	return t.inner.Property("thingy2")
+    return t.inner.Property("thingy2")
 }
 
 func (t *AnotherObjectClassView) PropertyThingy3() (ClassPropertyView, error) {
-	return t.inner.Property("thingy3")
+    return t.inner.Property("thingy3")
 }
+
 
 func (t *TypeBuilder) AnotherObject() (*AnotherObjectClassView, error) {
 	bld, err := t.inner.Class("AnotherObject")
@@ -100,11 +109,11 @@ func (t *AnotherObjectClassView) Type() (baml.Type, error) {
 }
 
 type BigNumbersClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *BigNumbersClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -115,13 +124,17 @@ func (t *BigNumbersClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *BigNumbersClassView) PropertyA() (ClassPropertyView, error) {
-	return t.inner.Property("a")
+    return t.inner.Property("a")
 }
 
 func (t *BigNumbersClassView) PropertyB() (ClassPropertyView, error) {
-	return t.inner.Property("b")
+    return t.inner.Property("b")
 }
+
 
 func (t *TypeBuilder) BigNumbers() (*BigNumbersClassView, error) {
 	bld, err := t.inner.Class("BigNumbers")
@@ -136,11 +149,11 @@ func (t *BigNumbersClassView) Type() (baml.Type, error) {
 }
 
 type BinaryNodeClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *BinaryNodeClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -151,17 +164,21 @@ func (t *BinaryNodeClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *BinaryNodeClassView) PropertyData() (ClassPropertyView, error) {
-	return t.inner.Property("data")
+    return t.inner.Property("data")
 }
 
 func (t *BinaryNodeClassView) PropertyLeft() (ClassPropertyView, error) {
-	return t.inner.Property("left")
+    return t.inner.Property("left")
 }
 
 func (t *BinaryNodeClassView) PropertyRight() (ClassPropertyView, error) {
-	return t.inner.Property("right")
+    return t.inner.Property("right")
 }
+
 
 func (t *TypeBuilder) BinaryNode() (*BinaryNodeClassView, error) {
 	bld, err := t.inner.Class("BinaryNode")
@@ -176,11 +193,11 @@ func (t *BinaryNodeClassView) Type() (baml.Type, error) {
 }
 
 type BlahClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *BlahClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -191,9 +208,13 @@ func (t *BlahClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *BlahClassView) PropertyProp4() (ClassPropertyView, error) {
-	return t.inner.Property("prop4")
+    return t.inner.Property("prop4")
 }
+
 
 func (t *TypeBuilder) Blah() (*BlahClassView, error) {
 	bld, err := t.inner.Class("Blah")
@@ -208,11 +229,11 @@ func (t *BlahClassView) Type() (baml.Type, error) {
 }
 
 type BlockConstraintClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *BlockConstraintClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -223,13 +244,17 @@ func (t *BlockConstraintClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
+
+
+
 func (t *BlockConstraintClassView) PropertyFoo() (ClassPropertyView, error) {
-	return t.inner.Property("foo")
+    return t.inner.Property("foo")
 }
 
 func (t *BlockConstraintClassView) PropertyBar() (ClassPropertyView, error) {
-	return t.inner.Property("bar")
+    return t.inner.Property("bar")
 }
+
 
 func (t *TypeBuilder) BlockConstraint() (*BlockConstraintClassView, error) {
 	bld, err := t.inner.Class("BlockConstraint")
@@ -244,11 +269,11 @@ func (t *BlockConstraintClassView) Type() (baml.Type, error) {
 }
 
 type BlockConstraintForParamClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *BlockConstraintForParamClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -259,13 +284,17 @@ func (t *BlockConstraintForParamClassView) ListProperties() ([]ClassPropertyView
 	return builders, nil
 }
 
+
+
+
 func (t *BlockConstraintForParamClassView) PropertyBcfp() (ClassPropertyView, error) {
-	return t.inner.Property("bcfp")
+    return t.inner.Property("bcfp")
 }
 
 func (t *BlockConstraintForParamClassView) PropertyBcfp2() (ClassPropertyView, error) {
-	return t.inner.Property("bcfp2")
+    return t.inner.Property("bcfp2")
 }
+
 
 func (t *TypeBuilder) BlockConstraintForParam() (*BlockConstraintForParamClassView, error) {
 	bld, err := t.inner.Class("BlockConstraintForParam")
@@ -280,11 +309,11 @@ func (t *BlockConstraintForParamClassView) Type() (baml.Type, error) {
 }
 
 type BookOrderClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *BookOrderClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -295,21 +324,25 @@ func (t *BookOrderClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *BookOrderClassView) PropertyOrderId() (ClassPropertyView, error) {
-	return t.inner.Property("orderId")
+    return t.inner.Property("orderId")
 }
 
 func (t *BookOrderClassView) PropertyTitle() (ClassPropertyView, error) {
-	return t.inner.Property("title")
+    return t.inner.Property("title")
 }
 
 func (t *BookOrderClassView) PropertyQuantity() (ClassPropertyView, error) {
-	return t.inner.Property("quantity")
+    return t.inner.Property("quantity")
 }
 
 func (t *BookOrderClassView) PropertyPrice() (ClassPropertyView, error) {
-	return t.inner.Property("price")
+    return t.inner.Property("price")
 }
+
 
 func (t *TypeBuilder) BookOrder() (*BookOrderClassView, error) {
 	bld, err := t.inner.Class("BookOrder")
@@ -324,11 +357,11 @@ func (t *BookOrderClassView) Type() (baml.Type, error) {
 }
 
 type ClassForNullLiteralClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ClassForNullLiteralClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -339,9 +372,13 @@ func (t *ClassForNullLiteralClassView) ListProperties() ([]ClassPropertyView, er
 	return builders, nil
 }
 
+
+
+
 func (t *ClassForNullLiteralClassView) PropertyA() (ClassPropertyView, error) {
-	return t.inner.Property("a")
+    return t.inner.Property("a")
 }
+
 
 func (t *TypeBuilder) ClassForNullLiteral() (*ClassForNullLiteralClassView, error) {
 	bld, err := t.inner.Class("ClassForNullLiteral")
@@ -356,11 +393,11 @@ func (t *ClassForNullLiteralClassView) Type() (baml.Type, error) {
 }
 
 type ClassOptionalOutputClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ClassOptionalOutputClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -371,13 +408,17 @@ func (t *ClassOptionalOutputClassView) ListProperties() ([]ClassPropertyView, er
 	return builders, nil
 }
 
+
+
+
 func (t *ClassOptionalOutputClassView) PropertyProp1() (ClassPropertyView, error) {
-	return t.inner.Property("prop1")
+    return t.inner.Property("prop1")
 }
 
 func (t *ClassOptionalOutputClassView) PropertyProp2() (ClassPropertyView, error) {
-	return t.inner.Property("prop2")
+    return t.inner.Property("prop2")
 }
+
 
 func (t *TypeBuilder) ClassOptionalOutput() (*ClassOptionalOutputClassView, error) {
 	bld, err := t.inner.Class("ClassOptionalOutput")
@@ -392,11 +433,11 @@ func (t *ClassOptionalOutputClassView) Type() (baml.Type, error) {
 }
 
 type ClassOptionalOutput2ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ClassOptionalOutput2ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -407,17 +448,21 @@ func (t *ClassOptionalOutput2ClassView) ListProperties() ([]ClassPropertyView, e
 	return builders, nil
 }
 
+
+
+
 func (t *ClassOptionalOutput2ClassView) PropertyProp1() (ClassPropertyView, error) {
-	return t.inner.Property("prop1")
+    return t.inner.Property("prop1")
 }
 
 func (t *ClassOptionalOutput2ClassView) PropertyProp2() (ClassPropertyView, error) {
-	return t.inner.Property("prop2")
+    return t.inner.Property("prop2")
 }
 
 func (t *ClassOptionalOutput2ClassView) PropertyProp3() (ClassPropertyView, error) {
-	return t.inner.Property("prop3")
+    return t.inner.Property("prop3")
 }
+
 
 func (t *TypeBuilder) ClassOptionalOutput2() (*ClassOptionalOutput2ClassView, error) {
 	bld, err := t.inner.Class("ClassOptionalOutput2")
@@ -432,11 +477,11 @@ func (t *ClassOptionalOutput2ClassView) Type() (baml.Type, error) {
 }
 
 type ClassToRecAliasClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ClassToRecAliasClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -447,9 +492,13 @@ func (t *ClassToRecAliasClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
+
+
+
 func (t *ClassToRecAliasClassView) PropertyList() (ClassPropertyView, error) {
-	return t.inner.Property("list")
+    return t.inner.Property("list")
 }
+
 
 func (t *TypeBuilder) ClassToRecAlias() (*ClassToRecAliasClassView, error) {
 	bld, err := t.inner.Class("ClassToRecAlias")
@@ -464,11 +513,11 @@ func (t *ClassToRecAliasClassView) Type() (baml.Type, error) {
 }
 
 type ClassWithBlockDoneClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ClassWithBlockDoneClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -479,13 +528,17 @@ func (t *ClassWithBlockDoneClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
+
+
+
 func (t *ClassWithBlockDoneClassView) PropertyI_16_digits() (ClassPropertyView, error) {
-	return t.inner.Property("i_16_digits")
+    return t.inner.Property("i_16_digits")
 }
 
 func (t *ClassWithBlockDoneClassView) PropertyS_20_words() (ClassPropertyView, error) {
-	return t.inner.Property("s_20_words")
+    return t.inner.Property("s_20_words")
 }
+
 
 func (t *TypeBuilder) ClassWithBlockDone() (*ClassWithBlockDoneClassView, error) {
 	bld, err := t.inner.Class("ClassWithBlockDone")
@@ -500,11 +553,11 @@ func (t *ClassWithBlockDoneClassView) Type() (baml.Type, error) {
 }
 
 type ClassWithImageClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ClassWithImageClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -515,17 +568,21 @@ func (t *ClassWithImageClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
+
+
+
 func (t *ClassWithImageClassView) PropertyMyImage() (ClassPropertyView, error) {
-	return t.inner.Property("myImage")
+    return t.inner.Property("myImage")
 }
 
 func (t *ClassWithImageClassView) PropertyParam2() (ClassPropertyView, error) {
-	return t.inner.Property("param2")
+    return t.inner.Property("param2")
 }
 
 func (t *ClassWithImageClassView) PropertyFake_image() (ClassPropertyView, error) {
-	return t.inner.Property("fake_image")
+    return t.inner.Property("fake_image")
 }
+
 
 func (t *TypeBuilder) ClassWithImage() (*ClassWithImageClassView, error) {
 	bld, err := t.inner.Class("ClassWithImage")
@@ -540,11 +597,11 @@ func (t *ClassWithImageClassView) Type() (baml.Type, error) {
 }
 
 type ClassWithoutDoneClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ClassWithoutDoneClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -555,13 +612,17 @@ func (t *ClassWithoutDoneClassView) ListProperties() ([]ClassPropertyView, error
 	return builders, nil
 }
 
+
+
+
 func (t *ClassWithoutDoneClassView) PropertyI_16_digits() (ClassPropertyView, error) {
-	return t.inner.Property("i_16_digits")
+    return t.inner.Property("i_16_digits")
 }
 
 func (t *ClassWithoutDoneClassView) PropertyS_20_words() (ClassPropertyView, error) {
-	return t.inner.Property("s_20_words")
+    return t.inner.Property("s_20_words")
 }
+
 
 func (t *TypeBuilder) ClassWithoutDone() (*ClassWithoutDoneClassView, error) {
 	bld, err := t.inner.Class("ClassWithoutDone")
@@ -576,11 +637,11 @@ func (t *ClassWithoutDoneClassView) Type() (baml.Type, error) {
 }
 
 type ClientDetails1559ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ClientDetails1559ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -591,33 +652,37 @@ func (t *ClientDetails1559ClassView) ListProperties() ([]ClassPropertyView, erro
 	return builders, nil
 }
 
+
+
+
 func (t *ClientDetails1559ClassView) PropertyClient_name() (ClassPropertyView, error) {
-	return t.inner.Property("client_name")
+    return t.inner.Property("client_name")
 }
 
 func (t *ClientDetails1559ClassView) PropertyClient_address() (ClassPropertyView, error) {
-	return t.inner.Property("client_address")
+    return t.inner.Property("client_address")
 }
 
 func (t *ClientDetails1559ClassView) PropertyClient_postal_code() (ClassPropertyView, error) {
-	return t.inner.Property("client_postal_code")
+    return t.inner.Property("client_postal_code")
 }
 
 func (t *ClientDetails1559ClassView) PropertyClient_city() (ClassPropertyView, error) {
-	return t.inner.Property("client_city")
+    return t.inner.Property("client_city")
 }
 
 func (t *ClientDetails1559ClassView) PropertyClient_country() (ClassPropertyView, error) {
-	return t.inner.Property("client_country")
+    return t.inner.Property("client_country")
 }
 
 func (t *ClientDetails1559ClassView) PropertyClient_phone() (ClassPropertyView, error) {
-	return t.inner.Property("client_phone")
+    return t.inner.Property("client_phone")
 }
 
 func (t *ClientDetails1559ClassView) PropertyClient_email() (ClassPropertyView, error) {
-	return t.inner.Property("client_email")
+    return t.inner.Property("client_email")
 }
+
 
 func (t *TypeBuilder) ClientDetails1559() (*ClientDetails1559ClassView, error) {
 	bld, err := t.inner.Class("ClientDetails1559")
@@ -632,11 +697,11 @@ func (t *ClientDetails1559ClassView) Type() (baml.Type, error) {
 }
 
 type ComplexMemoryObjectClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ComplexMemoryObjectClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -647,21 +712,25 @@ func (t *ComplexMemoryObjectClassView) ListProperties() ([]ClassPropertyView, er
 	return builders, nil
 }
 
+
+
+
 func (t *ComplexMemoryObjectClassView) PropertyId() (ClassPropertyView, error) {
-	return t.inner.Property("id")
+    return t.inner.Property("id")
 }
 
 func (t *ComplexMemoryObjectClassView) PropertyName() (ClassPropertyView, error) {
-	return t.inner.Property("name")
+    return t.inner.Property("name")
 }
 
 func (t *ComplexMemoryObjectClassView) PropertyDescription() (ClassPropertyView, error) {
-	return t.inner.Property("description")
+    return t.inner.Property("description")
 }
 
 func (t *ComplexMemoryObjectClassView) PropertyMetadata() (ClassPropertyView, error) {
-	return t.inner.Property("metadata")
+    return t.inner.Property("metadata")
 }
+
 
 func (t *TypeBuilder) ComplexMemoryObject() (*ComplexMemoryObjectClassView, error) {
 	bld, err := t.inner.Class("ComplexMemoryObject")
@@ -676,11 +745,11 @@ func (t *ComplexMemoryObjectClassView) Type() (baml.Type, error) {
 }
 
 type CompoundBigNumbersClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *CompoundBigNumbersClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -691,17 +760,21 @@ func (t *CompoundBigNumbersClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
+
+
+
 func (t *CompoundBigNumbersClassView) PropertyBig() (ClassPropertyView, error) {
-	return t.inner.Property("big")
+    return t.inner.Property("big")
 }
 
 func (t *CompoundBigNumbersClassView) PropertyBig_nums() (ClassPropertyView, error) {
-	return t.inner.Property("big_nums")
+    return t.inner.Property("big_nums")
 }
 
 func (t *CompoundBigNumbersClassView) PropertyAnother() (ClassPropertyView, error) {
-	return t.inner.Property("another")
+    return t.inner.Property("another")
 }
+
 
 func (t *TypeBuilder) CompoundBigNumbers() (*CompoundBigNumbersClassView, error) {
 	bld, err := t.inner.Class("CompoundBigNumbers")
@@ -716,11 +789,11 @@ func (t *CompoundBigNumbersClassView) Type() (baml.Type, error) {
 }
 
 type ContactInfoClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ContactInfoClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -731,13 +804,17 @@ func (t *ContactInfoClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *ContactInfoClassView) PropertyPrimary() (ClassPropertyView, error) {
-	return t.inner.Property("primary")
+    return t.inner.Property("primary")
 }
 
 func (t *ContactInfoClassView) PropertySecondary() (ClassPropertyView, error) {
-	return t.inner.Property("secondary")
+    return t.inner.Property("secondary")
 }
+
 
 func (t *TypeBuilder) ContactInfo() (*ContactInfoClassView, error) {
 	bld, err := t.inner.Class("ContactInfo")
@@ -752,11 +829,11 @@ func (t *ContactInfoClassView) Type() (baml.Type, error) {
 }
 
 type CustomStoryClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *CustomStoryClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -767,17 +844,21 @@ func (t *CustomStoryClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *CustomStoryClassView) PropertyTitle() (ClassPropertyView, error) {
-	return t.inner.Property("title")
+    return t.inner.Property("title")
 }
 
 func (t *CustomStoryClassView) PropertyCharacters() (ClassPropertyView, error) {
-	return t.inner.Property("characters")
+    return t.inner.Property("characters")
 }
 
 func (t *CustomStoryClassView) PropertyContent() (ClassPropertyView, error) {
-	return t.inner.Property("content")
+    return t.inner.Property("content")
 }
+
 
 func (t *TypeBuilder) CustomStory() (*CustomStoryClassView, error) {
 	bld, err := t.inner.Class("CustomStory")
@@ -792,11 +873,11 @@ func (t *CustomStoryClassView) Type() (baml.Type, error) {
 }
 
 type CustomTaskResultClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *CustomTaskResultClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -807,17 +888,21 @@ func (t *CustomTaskResultClassView) ListProperties() ([]ClassPropertyView, error
 	return builders, nil
 }
 
+
+
+
 func (t *CustomTaskResultClassView) PropertyBookOrder() (ClassPropertyView, error) {
-	return t.inner.Property("bookOrder")
+    return t.inner.Property("bookOrder")
 }
 
 func (t *CustomTaskResultClassView) PropertyFlightConfirmation() (ClassPropertyView, error) {
-	return t.inner.Property("flightConfirmation")
+    return t.inner.Property("flightConfirmation")
 }
 
 func (t *CustomTaskResultClassView) PropertyGroceryReceipt() (ClassPropertyView, error) {
-	return t.inner.Property("groceryReceipt")
+    return t.inner.Property("groceryReceipt")
 }
+
 
 func (t *TypeBuilder) CustomTaskResult() (*CustomTaskResultClassView, error) {
 	bld, err := t.inner.Class("CustomTaskResult")
@@ -832,11 +917,11 @@ func (t *CustomTaskResultClassView) Type() (baml.Type, error) {
 }
 
 type Document1559ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *Document1559ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -847,13 +932,17 @@ func (t *Document1559ClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *Document1559ClassView) PropertyClient_details() (ClassPropertyView, error) {
-	return t.inner.Property("client_details")
+    return t.inner.Property("client_details")
 }
 
 func (t *Document1559ClassView) PropertyNotes() (ClassPropertyView, error) {
-	return t.inner.Property("notes")
+    return t.inner.Property("notes")
 }
+
 
 func (t *TypeBuilder) Document1559() (*Document1559ClassView, error) {
 	bld, err := t.inner.Class("Document1559")
@@ -868,11 +957,11 @@ func (t *Document1559ClassView) Type() (baml.Type, error) {
 }
 
 type DummyJsonTodoClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *DummyJsonTodoClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -883,21 +972,25 @@ func (t *DummyJsonTodoClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *DummyJsonTodoClassView) PropertyId() (ClassPropertyView, error) {
-	return t.inner.Property("id")
+    return t.inner.Property("id")
 }
 
 func (t *DummyJsonTodoClassView) PropertyTodo() (ClassPropertyView, error) {
-	return t.inner.Property("todo")
+    return t.inner.Property("todo")
 }
 
 func (t *DummyJsonTodoClassView) PropertyCompleted() (ClassPropertyView, error) {
-	return t.inner.Property("completed")
+    return t.inner.Property("completed")
 }
 
 func (t *DummyJsonTodoClassView) PropertyUserId() (ClassPropertyView, error) {
-	return t.inner.Property("userId")
+    return t.inner.Property("userId")
 }
+
 
 func (t *TypeBuilder) DummyJsonTodo() (*DummyJsonTodoClassView, error) {
 	bld, err := t.inner.Class("DummyJsonTodo")
@@ -912,11 +1005,11 @@ func (t *DummyJsonTodoClassView) Type() (baml.Type, error) {
 }
 
 type DummyJsonTodoUpdateClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *DummyJsonTodoUpdateClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -927,17 +1020,21 @@ func (t *DummyJsonTodoUpdateClassView) ListProperties() ([]ClassPropertyView, er
 	return builders, nil
 }
 
+
+
+
 func (t *DummyJsonTodoUpdateClassView) PropertyTodo() (ClassPropertyView, error) {
-	return t.inner.Property("todo")
+    return t.inner.Property("todo")
 }
 
 func (t *DummyJsonTodoUpdateClassView) PropertyCompleted() (ClassPropertyView, error) {
-	return t.inner.Property("completed")
+    return t.inner.Property("completed")
 }
 
 func (t *DummyJsonTodoUpdateClassView) PropertyUserId() (ClassPropertyView, error) {
-	return t.inner.Property("userId")
+    return t.inner.Property("userId")
 }
+
 
 func (t *TypeBuilder) DummyJsonTodoUpdate() (*DummyJsonTodoUpdateClassView, error) {
 	bld, err := t.inner.Class("DummyJsonTodoUpdate")
@@ -952,11 +1049,11 @@ func (t *DummyJsonTodoUpdateClassView) Type() (baml.Type, error) {
 }
 
 type DummyOutputClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *DummyOutputClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -967,17 +1064,21 @@ func (t *DummyOutputClassBuilder) ListProperties() ([]ClassPropertyBuilder, erro
 	return builders, nil
 }
 
+
 func (t *DummyOutputClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
 
+
+
 func (t *DummyOutputClassBuilder) PropertyNonce() (ClassPropertyBuilder, error) {
-	return t.inner.Property("nonce")
+    return t.inner.Property("nonce")
 }
 
 func (t *DummyOutputClassBuilder) PropertyNonce2() (ClassPropertyBuilder, error) {
-	return t.inner.Property("nonce2")
+    return t.inner.Property("nonce2")
 }
+
 
 func (t *TypeBuilder) DummyOutput() (*DummyOutputClassBuilder, error) {
 	bld, err := t.inner.Class("DummyOutput")
@@ -992,11 +1093,11 @@ func (t *DummyOutputClassBuilder) Type() (baml.Type, error) {
 }
 
 type DynInputOutputClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *DynInputOutputClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1007,13 +1108,17 @@ func (t *DynInputOutputClassBuilder) ListProperties() ([]ClassPropertyBuilder, e
 	return builders, nil
 }
 
+
 func (t *DynInputOutputClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
 
+
+
 func (t *DynInputOutputClassBuilder) PropertyTestKey() (ClassPropertyBuilder, error) {
-	return t.inner.Property("testKey")
+    return t.inner.Property("testKey")
 }
+
 
 func (t *TypeBuilder) DynInputOutput() (*DynInputOutputClassBuilder, error) {
 	bld, err := t.inner.Class("DynInputOutput")
@@ -1028,11 +1133,11 @@ func (t *DynInputOutputClassBuilder) Type() (baml.Type, error) {
 }
 
 type DynamicClassOneClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *DynamicClassOneClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1043,9 +1148,13 @@ func (t *DynamicClassOneClassBuilder) ListProperties() ([]ClassPropertyBuilder, 
 	return builders, nil
 }
 
+
 func (t *DynamicClassOneClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
+
+
+
 
 func (t *TypeBuilder) DynamicClassOne() (*DynamicClassOneClassBuilder, error) {
 	bld, err := t.inner.Class("DynamicClassOne")
@@ -1060,11 +1169,11 @@ func (t *DynamicClassOneClassBuilder) Type() (baml.Type, error) {
 }
 
 type DynamicClassTwoClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *DynamicClassTwoClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1075,21 +1184,25 @@ func (t *DynamicClassTwoClassBuilder) ListProperties() ([]ClassPropertyBuilder, 
 	return builders, nil
 }
 
+
 func (t *DynamicClassTwoClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
 
+
+
 func (t *DynamicClassTwoClassBuilder) PropertyHi() (ClassPropertyBuilder, error) {
-	return t.inner.Property("hi")
+    return t.inner.Property("hi")
 }
 
 func (t *DynamicClassTwoClassBuilder) PropertySome_class() (ClassPropertyBuilder, error) {
-	return t.inner.Property("some_class")
+    return t.inner.Property("some_class")
 }
 
 func (t *DynamicClassTwoClassBuilder) PropertyStatus() (ClassPropertyBuilder, error) {
-	return t.inner.Property("status")
+    return t.inner.Property("status")
 }
+
 
 func (t *TypeBuilder) DynamicClassTwo() (*DynamicClassTwoClassBuilder, error) {
 	bld, err := t.inner.Class("DynamicClassTwo")
@@ -1104,11 +1217,11 @@ func (t *DynamicClassTwoClassBuilder) Type() (baml.Type, error) {
 }
 
 type DynamicOutputClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *DynamicOutputClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1119,9 +1232,13 @@ func (t *DynamicOutputClassBuilder) ListProperties() ([]ClassPropertyBuilder, er
 	return builders, nil
 }
 
+
 func (t *DynamicOutputClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
+
+
+
 
 func (t *TypeBuilder) DynamicOutput() (*DynamicOutputClassBuilder, error) {
 	bld, err := t.inner.Class("DynamicOutput")
@@ -1136,11 +1253,11 @@ func (t *DynamicOutputClassBuilder) Type() (baml.Type, error) {
 }
 
 type DynamicSchemaClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *DynamicSchemaClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1151,9 +1268,13 @@ func (t *DynamicSchemaClassBuilder) ListProperties() ([]ClassPropertyBuilder, er
 	return builders, nil
 }
 
+
 func (t *DynamicSchemaClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
+
+
+
 
 func (t *TypeBuilder) DynamicSchema() (*DynamicSchemaClassBuilder, error) {
 	bld, err := t.inner.Class("DynamicSchema")
@@ -1168,11 +1289,11 @@ func (t *DynamicSchemaClassBuilder) Type() (baml.Type, error) {
 }
 
 type EarthlingClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *EarthlingClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1183,9 +1304,13 @@ func (t *EarthlingClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *EarthlingClassView) PropertyAge() (ClassPropertyView, error) {
-	return t.inner.Property("age")
+    return t.inner.Property("age")
 }
+
 
 func (t *TypeBuilder) Earthling() (*EarthlingClassView, error) {
 	bld, err := t.inner.Class("Earthling")
@@ -1200,11 +1325,11 @@ func (t *EarthlingClassView) Type() (baml.Type, error) {
 }
 
 type EducationClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *EducationClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1215,25 +1340,29 @@ func (t *EducationClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *EducationClassView) PropertyInstitution() (ClassPropertyView, error) {
-	return t.inner.Property("institution")
+    return t.inner.Property("institution")
 }
 
 func (t *EducationClassView) PropertyLocation() (ClassPropertyView, error) {
-	return t.inner.Property("location")
+    return t.inner.Property("location")
 }
 
 func (t *EducationClassView) PropertyDegree() (ClassPropertyView, error) {
-	return t.inner.Property("degree")
+    return t.inner.Property("degree")
 }
 
 func (t *EducationClassView) PropertyMajor() (ClassPropertyView, error) {
-	return t.inner.Property("major")
+    return t.inner.Property("major")
 }
 
 func (t *EducationClassView) PropertyGraduation_date() (ClassPropertyView, error) {
-	return t.inner.Property("graduation_date")
+    return t.inner.Property("graduation_date")
 }
+
 
 func (t *TypeBuilder) Education() (*EducationClassView, error) {
 	bld, err := t.inner.Class("Education")
@@ -1248,11 +1377,11 @@ func (t *EducationClassView) Type() (baml.Type, error) {
 }
 
 type EmailClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *EmailClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1263,17 +1392,21 @@ func (t *EmailClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *EmailClassView) PropertySubject() (ClassPropertyView, error) {
-	return t.inner.Property("subject")
+    return t.inner.Property("subject")
 }
 
 func (t *EmailClassView) PropertyBody() (ClassPropertyView, error) {
-	return t.inner.Property("body")
+    return t.inner.Property("body")
 }
 
 func (t *EmailClassView) PropertyFrom_address() (ClassPropertyView, error) {
-	return t.inner.Property("from_address")
+    return t.inner.Property("from_address")
 }
+
 
 func (t *TypeBuilder) Email() (*EmailClassView, error) {
 	bld, err := t.inner.Class("Email")
@@ -1288,11 +1421,11 @@ func (t *EmailClassView) Type() (baml.Type, error) {
 }
 
 type EmailAddressClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *EmailAddressClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1303,9 +1436,13 @@ func (t *EmailAddressClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *EmailAddressClassView) PropertyValue() (ClassPropertyView, error) {
-	return t.inner.Property("value")
+    return t.inner.Property("value")
 }
+
 
 func (t *TypeBuilder) EmailAddress() (*EmailAddressClassView, error) {
 	bld, err := t.inner.Class("EmailAddress")
@@ -1320,11 +1457,11 @@ func (t *EmailAddressClassView) Type() (baml.Type, error) {
 }
 
 type EventClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *EventClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1335,21 +1472,25 @@ func (t *EventClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *EventClassView) PropertyTitle() (ClassPropertyView, error) {
-	return t.inner.Property("title")
+    return t.inner.Property("title")
 }
 
 func (t *EventClassView) PropertyDate() (ClassPropertyView, error) {
-	return t.inner.Property("date")
+    return t.inner.Property("date")
 }
 
 func (t *EventClassView) PropertyLocation() (ClassPropertyView, error) {
-	return t.inner.Property("location")
+    return t.inner.Property("location")
 }
 
 func (t *EventClassView) PropertyDescription() (ClassPropertyView, error) {
-	return t.inner.Property("description")
+    return t.inner.Property("description")
 }
+
 
 func (t *TypeBuilder) Event() (*EventClassView, error) {
 	bld, err := t.inner.Class("Event")
@@ -1364,11 +1505,11 @@ func (t *EventClassView) Type() (baml.Type, error) {
 }
 
 type FakeImageClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *FakeImageClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1379,9 +1520,13 @@ func (t *FakeImageClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *FakeImageClassView) PropertyUrl() (ClassPropertyView, error) {
-	return t.inner.Property("url")
+    return t.inner.Property("url")
 }
+
 
 func (t *TypeBuilder) FakeImage() (*FakeImageClassView, error) {
 	bld, err := t.inner.Class("FakeImage")
@@ -1396,11 +1541,11 @@ func (t *FakeImageClassView) Type() (baml.Type, error) {
 }
 
 type FlightConfirmationClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *FlightConfirmationClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1411,25 +1556,29 @@ func (t *FlightConfirmationClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
+
+
+
 func (t *FlightConfirmationClassView) PropertyConfirmationNumber() (ClassPropertyView, error) {
-	return t.inner.Property("confirmationNumber")
+    return t.inner.Property("confirmationNumber")
 }
 
 func (t *FlightConfirmationClassView) PropertyFlightNumber() (ClassPropertyView, error) {
-	return t.inner.Property("flightNumber")
+    return t.inner.Property("flightNumber")
 }
 
 func (t *FlightConfirmationClassView) PropertyDepartureTime() (ClassPropertyView, error) {
-	return t.inner.Property("departureTime")
+    return t.inner.Property("departureTime")
 }
 
 func (t *FlightConfirmationClassView) PropertyArrivalTime() (ClassPropertyView, error) {
-	return t.inner.Property("arrivalTime")
+    return t.inner.Property("arrivalTime")
 }
 
 func (t *FlightConfirmationClassView) PropertySeatNumber() (ClassPropertyView, error) {
-	return t.inner.Property("seatNumber")
+    return t.inner.Property("seatNumber")
 }
+
 
 func (t *TypeBuilder) FlightConfirmation() (*FlightConfirmationClassView, error) {
 	bld, err := t.inner.Class("FlightConfirmation")
@@ -1444,11 +1593,11 @@ func (t *FlightConfirmationClassView) Type() (baml.Type, error) {
 }
 
 type FooAnyClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *FooAnyClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1459,17 +1608,21 @@ func (t *FooAnyClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *FooAnyClassView) PropertyPlanetary_age() (ClassPropertyView, error) {
-	return t.inner.Property("planetary_age")
+    return t.inner.Property("planetary_age")
 }
 
 func (t *FooAnyClassView) PropertyCertainty() (ClassPropertyView, error) {
-	return t.inner.Property("certainty")
+    return t.inner.Property("certainty")
 }
 
 func (t *FooAnyClassView) PropertySpecies() (ClassPropertyView, error) {
-	return t.inner.Property("species")
+    return t.inner.Property("species")
 }
+
 
 func (t *TypeBuilder) FooAny() (*FooAnyClassView, error) {
 	bld, err := t.inner.Class("FooAny")
@@ -1484,11 +1637,11 @@ func (t *FooAnyClassView) Type() (baml.Type, error) {
 }
 
 type ForestClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ForestClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1499,9 +1652,13 @@ func (t *ForestClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *ForestClassView) PropertyTrees() (ClassPropertyView, error) {
-	return t.inner.Property("trees")
+    return t.inner.Property("trees")
 }
+
 
 func (t *TypeBuilder) Forest() (*ForestClassView, error) {
 	bld, err := t.inner.Class("Forest")
@@ -1516,11 +1673,11 @@ func (t *ForestClassView) Type() (baml.Type, error) {
 }
 
 type FormatterTest0ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *FormatterTest0ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1531,13 +1688,17 @@ func (t *FormatterTest0ClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
+
+
+
 func (t *FormatterTest0ClassView) PropertyLorem() (ClassPropertyView, error) {
-	return t.inner.Property("lorem")
+    return t.inner.Property("lorem")
 }
 
 func (t *FormatterTest0ClassView) PropertyIpsum() (ClassPropertyView, error) {
-	return t.inner.Property("ipsum")
+    return t.inner.Property("ipsum")
 }
+
 
 func (t *TypeBuilder) FormatterTest0() (*FormatterTest0ClassView, error) {
 	bld, err := t.inner.Class("FormatterTest0")
@@ -1552,11 +1713,11 @@ func (t *FormatterTest0ClassView) Type() (baml.Type, error) {
 }
 
 type FormatterTest1ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *FormatterTest1ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1567,13 +1728,17 @@ func (t *FormatterTest1ClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
+
+
+
 func (t *FormatterTest1ClassView) PropertyLorem() (ClassPropertyView, error) {
-	return t.inner.Property("lorem")
+    return t.inner.Property("lorem")
 }
 
 func (t *FormatterTest1ClassView) PropertyIpsum() (ClassPropertyView, error) {
-	return t.inner.Property("ipsum")
+    return t.inner.Property("ipsum")
 }
+
 
 func (t *TypeBuilder) FormatterTest1() (*FormatterTest1ClassView, error) {
 	bld, err := t.inner.Class("FormatterTest1")
@@ -1588,11 +1753,11 @@ func (t *FormatterTest1ClassView) Type() (baml.Type, error) {
 }
 
 type FormatterTest2ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *FormatterTest2ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1603,13 +1768,17 @@ func (t *FormatterTest2ClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
+
+
+
 func (t *FormatterTest2ClassView) PropertyLorem() (ClassPropertyView, error) {
-	return t.inner.Property("lorem")
+    return t.inner.Property("lorem")
 }
 
 func (t *FormatterTest2ClassView) PropertyIpsum() (ClassPropertyView, error) {
-	return t.inner.Property("ipsum")
+    return t.inner.Property("ipsum")
 }
+
 
 func (t *TypeBuilder) FormatterTest2() (*FormatterTest2ClassView, error) {
 	bld, err := t.inner.Class("FormatterTest2")
@@ -1624,11 +1793,11 @@ func (t *FormatterTest2ClassView) Type() (baml.Type, error) {
 }
 
 type FormatterTest3ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *FormatterTest3ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1639,13 +1808,17 @@ func (t *FormatterTest3ClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
+
+
+
 func (t *FormatterTest3ClassView) PropertyLorem() (ClassPropertyView, error) {
-	return t.inner.Property("lorem")
+    return t.inner.Property("lorem")
 }
 
 func (t *FormatterTest3ClassView) PropertyIpsum() (ClassPropertyView, error) {
-	return t.inner.Property("ipsum")
+    return t.inner.Property("ipsum")
 }
+
 
 func (t *TypeBuilder) FormatterTest3() (*FormatterTest3ClassView, error) {
 	bld, err := t.inner.Class("FormatterTest3")
@@ -1660,11 +1833,11 @@ func (t *FormatterTest3ClassView) Type() (baml.Type, error) {
 }
 
 type GroceryReceiptClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *GroceryReceiptClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1675,21 +1848,25 @@ func (t *GroceryReceiptClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
+
+
+
 func (t *GroceryReceiptClassView) PropertyReceiptId() (ClassPropertyView, error) {
-	return t.inner.Property("receiptId")
+    return t.inner.Property("receiptId")
 }
 
 func (t *GroceryReceiptClassView) PropertyStoreName() (ClassPropertyView, error) {
-	return t.inner.Property("storeName")
+    return t.inner.Property("storeName")
 }
 
 func (t *GroceryReceiptClassView) PropertyItems() (ClassPropertyView, error) {
-	return t.inner.Property("items")
+    return t.inner.Property("items")
 }
 
 func (t *GroceryReceiptClassView) PropertyTotalAmount() (ClassPropertyView, error) {
-	return t.inner.Property("totalAmount")
+    return t.inner.Property("totalAmount")
 }
+
 
 func (t *TypeBuilder) GroceryReceipt() (*GroceryReceiptClassView, error) {
 	bld, err := t.inner.Class("GroceryReceipt")
@@ -1704,11 +1881,11 @@ func (t *GroceryReceiptClassView) Type() (baml.Type, error) {
 }
 
 type HaikuClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *HaikuClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1719,17 +1896,21 @@ func (t *HaikuClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *HaikuClassView) PropertyLine1() (ClassPropertyView, error) {
-	return t.inner.Property("line1")
+    return t.inner.Property("line1")
 }
 
 func (t *HaikuClassView) PropertyLine2() (ClassPropertyView, error) {
-	return t.inner.Property("line2")
+    return t.inner.Property("line2")
 }
 
 func (t *HaikuClassView) PropertyLine3() (ClassPropertyView, error) {
-	return t.inner.Property("line3")
+    return t.inner.Property("line3")
 }
+
 
 func (t *TypeBuilder) Haiku() (*HaikuClassView, error) {
 	bld, err := t.inner.Class("Haiku")
@@ -1744,11 +1925,11 @@ func (t *HaikuClassView) Type() (baml.Type, error) {
 }
 
 type InnerClassClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *InnerClassClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1759,17 +1940,21 @@ func (t *InnerClassClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *InnerClassClassView) PropertyProp1() (ClassPropertyView, error) {
-	return t.inner.Property("prop1")
+    return t.inner.Property("prop1")
 }
 
 func (t *InnerClassClassView) PropertyProp2() (ClassPropertyView, error) {
-	return t.inner.Property("prop2")
+    return t.inner.Property("prop2")
 }
 
 func (t *InnerClassClassView) PropertyInner() (ClassPropertyView, error) {
-	return t.inner.Property("inner")
+    return t.inner.Property("inner")
 }
+
 
 func (t *TypeBuilder) InnerClass() (*InnerClassClassView, error) {
 	bld, err := t.inner.Class("InnerClass")
@@ -1784,11 +1969,11 @@ func (t *InnerClassClassView) Type() (baml.Type, error) {
 }
 
 type InnerClass2ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *InnerClass2ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1799,13 +1984,17 @@ func (t *InnerClass2ClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *InnerClass2ClassView) PropertyProp2() (ClassPropertyView, error) {
-	return t.inner.Property("prop2")
+    return t.inner.Property("prop2")
 }
 
 func (t *InnerClass2ClassView) PropertyProp3() (ClassPropertyView, error) {
-	return t.inner.Property("prop3")
+    return t.inner.Property("prop3")
 }
+
 
 func (t *TypeBuilder) InnerClass2() (*InnerClass2ClassView, error) {
 	bld, err := t.inner.Class("InnerClass2")
@@ -1820,11 +2009,11 @@ func (t *InnerClass2ClassView) Type() (baml.Type, error) {
 }
 
 type InputClassClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *InputClassClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1835,13 +2024,17 @@ func (t *InputClassClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *InputClassClassView) PropertyKey() (ClassPropertyView, error) {
-	return t.inner.Property("key")
+    return t.inner.Property("key")
 }
 
 func (t *InputClassClassView) PropertyKey2() (ClassPropertyView, error) {
-	return t.inner.Property("key2")
+    return t.inner.Property("key2")
 }
+
 
 func (t *TypeBuilder) InputClass() (*InputClassClassView, error) {
 	bld, err := t.inner.Class("InputClass")
@@ -1856,11 +2049,11 @@ func (t *InputClassClassView) Type() (baml.Type, error) {
 }
 
 type InputClassNestedClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *InputClassNestedClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1871,13 +2064,17 @@ func (t *InputClassNestedClassView) ListProperties() ([]ClassPropertyView, error
 	return builders, nil
 }
 
+
+
+
 func (t *InputClassNestedClassView) PropertyKey() (ClassPropertyView, error) {
-	return t.inner.Property("key")
+    return t.inner.Property("key")
 }
 
 func (t *InputClassNestedClassView) PropertyNested() (ClassPropertyView, error) {
-	return t.inner.Property("nested")
+    return t.inner.Property("nested")
 }
+
 
 func (t *TypeBuilder) InputClassNested() (*InputClassNestedClassView, error) {
 	bld, err := t.inner.Class("InputClassNested")
@@ -1892,11 +2089,11 @@ func (t *InputClassNestedClassView) Type() (baml.Type, error) {
 }
 
 type LinkedListClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *LinkedListClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1907,13 +2104,17 @@ func (t *LinkedListClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *LinkedListClassView) PropertyHead() (ClassPropertyView, error) {
-	return t.inner.Property("head")
+    return t.inner.Property("head")
 }
 
 func (t *LinkedListClassView) PropertyLen() (ClassPropertyView, error) {
-	return t.inner.Property("len")
+    return t.inner.Property("len")
 }
+
 
 func (t *TypeBuilder) LinkedList() (*LinkedListClassView, error) {
 	bld, err := t.inner.Class("LinkedList")
@@ -1928,11 +2129,11 @@ func (t *LinkedListClassView) Type() (baml.Type, error) {
 }
 
 type LinkedListAliasNodeClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *LinkedListAliasNodeClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1943,13 +2144,17 @@ func (t *LinkedListAliasNodeClassView) ListProperties() ([]ClassPropertyView, er
 	return builders, nil
 }
 
+
+
+
 func (t *LinkedListAliasNodeClassView) PropertyValue() (ClassPropertyView, error) {
-	return t.inner.Property("value")
+    return t.inner.Property("value")
 }
 
 func (t *LinkedListAliasNodeClassView) PropertyNext() (ClassPropertyView, error) {
-	return t.inner.Property("next")
+    return t.inner.Property("next")
 }
+
 
 func (t *TypeBuilder) LinkedListAliasNode() (*LinkedListAliasNodeClassView, error) {
 	bld, err := t.inner.Class("LinkedListAliasNode")
@@ -1964,11 +2169,11 @@ func (t *LinkedListAliasNodeClassView) Type() (baml.Type, error) {
 }
 
 type LiteralClassHelloClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *LiteralClassHelloClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -1979,9 +2184,13 @@ func (t *LiteralClassHelloClassView) ListProperties() ([]ClassPropertyView, erro
 	return builders, nil
 }
 
+
+
+
 func (t *LiteralClassHelloClassView) PropertyProp() (ClassPropertyView, error) {
-	return t.inner.Property("prop")
+    return t.inner.Property("prop")
 }
+
 
 func (t *TypeBuilder) LiteralClassHello() (*LiteralClassHelloClassView, error) {
 	bld, err := t.inner.Class("LiteralClassHello")
@@ -1996,11 +2205,11 @@ func (t *LiteralClassHelloClassView) Type() (baml.Type, error) {
 }
 
 type LiteralClassOneClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *LiteralClassOneClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2011,9 +2220,13 @@ func (t *LiteralClassOneClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
+
+
+
 func (t *LiteralClassOneClassView) PropertyProp() (ClassPropertyView, error) {
-	return t.inner.Property("prop")
+    return t.inner.Property("prop")
 }
+
 
 func (t *TypeBuilder) LiteralClassOne() (*LiteralClassOneClassView, error) {
 	bld, err := t.inner.Class("LiteralClassOne")
@@ -2028,11 +2241,11 @@ func (t *LiteralClassOneClassView) Type() (baml.Type, error) {
 }
 
 type LiteralClassTwoClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *LiteralClassTwoClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2043,9 +2256,13 @@ func (t *LiteralClassTwoClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
+
+
+
 func (t *LiteralClassTwoClassView) PropertyProp() (ClassPropertyView, error) {
-	return t.inner.Property("prop")
+    return t.inner.Property("prop")
 }
+
 
 func (t *TypeBuilder) LiteralClassTwo() (*LiteralClassTwoClassView, error) {
 	bld, err := t.inner.Class("LiteralClassTwo")
@@ -2060,11 +2277,11 @@ func (t *LiteralClassTwoClassView) Type() (baml.Type, error) {
 }
 
 type MaintainFieldOrderClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *MaintainFieldOrderClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2075,17 +2292,21 @@ func (t *MaintainFieldOrderClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
+
+
+
 func (t *MaintainFieldOrderClassView) PropertyA() (ClassPropertyView, error) {
-	return t.inner.Property("a")
+    return t.inner.Property("a")
 }
 
 func (t *MaintainFieldOrderClassView) PropertyB() (ClassPropertyView, error) {
-	return t.inner.Property("b")
+    return t.inner.Property("b")
 }
 
 func (t *MaintainFieldOrderClassView) PropertyC() (ClassPropertyView, error) {
-	return t.inner.Property("c")
+    return t.inner.Property("c")
 }
+
 
 func (t *TypeBuilder) MaintainFieldOrder() (*MaintainFieldOrderClassView, error) {
 	bld, err := t.inner.Class("MaintainFieldOrder")
@@ -2100,11 +2321,11 @@ func (t *MaintainFieldOrderClassView) Type() (baml.Type, error) {
 }
 
 type MalformedConstraintsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *MalformedConstraintsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2115,9 +2336,13 @@ func (t *MalformedConstraintsClassView) ListProperties() ([]ClassPropertyView, e
 	return builders, nil
 }
 
+
+
+
 func (t *MalformedConstraintsClassView) PropertyFoo() (ClassPropertyView, error) {
-	return t.inner.Property("foo")
+    return t.inner.Property("foo")
 }
+
 
 func (t *TypeBuilder) MalformedConstraints() (*MalformedConstraintsClassView, error) {
 	bld, err := t.inner.Class("MalformedConstraints")
@@ -2132,11 +2357,11 @@ func (t *MalformedConstraintsClassView) Type() (baml.Type, error) {
 }
 
 type MalformedConstraints2ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *MalformedConstraints2ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2147,9 +2372,13 @@ func (t *MalformedConstraints2ClassView) ListProperties() ([]ClassPropertyView, 
 	return builders, nil
 }
 
+
+
+
 func (t *MalformedConstraints2ClassView) PropertyFoo() (ClassPropertyView, error) {
-	return t.inner.Property("foo")
+    return t.inner.Property("foo")
 }
+
 
 func (t *TypeBuilder) MalformedConstraints2() (*MalformedConstraints2ClassView, error) {
 	bld, err := t.inner.Class("MalformedConstraints2")
@@ -2164,11 +2393,11 @@ func (t *MalformedConstraints2ClassView) Type() (baml.Type, error) {
 }
 
 type MartianClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *MartianClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2179,9 +2408,13 @@ func (t *MartianClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *MartianClassView) PropertyAge() (ClassPropertyView, error) {
-	return t.inner.Property("age")
+    return t.inner.Property("age")
 }
+
 
 func (t *TypeBuilder) Martian() (*MartianClassView, error) {
 	bld, err := t.inner.Class("Martian")
@@ -2196,11 +2429,11 @@ func (t *MartianClassView) Type() (baml.Type, error) {
 }
 
 type MemoryObjectClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *MemoryObjectClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2211,17 +2444,21 @@ func (t *MemoryObjectClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *MemoryObjectClassView) PropertyId() (ClassPropertyView, error) {
-	return t.inner.Property("id")
+    return t.inner.Property("id")
 }
 
 func (t *MemoryObjectClassView) PropertyName() (ClassPropertyView, error) {
-	return t.inner.Property("name")
+    return t.inner.Property("name")
 }
 
 func (t *MemoryObjectClassView) PropertyDescription() (ClassPropertyView, error) {
-	return t.inner.Property("description")
+    return t.inner.Property("description")
 }
+
 
 func (t *TypeBuilder) MemoryObject() (*MemoryObjectClassView, error) {
 	bld, err := t.inner.Class("MemoryObject")
@@ -2236,11 +2473,11 @@ func (t *MemoryObjectClassView) Type() (baml.Type, error) {
 }
 
 type MergeAttrsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *MergeAttrsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2251,9 +2488,13 @@ func (t *MergeAttrsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *MergeAttrsClassView) PropertyAmount() (ClassPropertyView, error) {
-	return t.inner.Property("amount")
+    return t.inner.Property("amount")
 }
+
 
 func (t *TypeBuilder) MergeAttrs() (*MergeAttrsClassView, error) {
 	bld, err := t.inner.Class("MergeAttrs")
@@ -2268,11 +2509,11 @@ func (t *MergeAttrsClassView) Type() (baml.Type, error) {
 }
 
 type NamedArgsSingleClassClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *NamedArgsSingleClassClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2283,17 +2524,21 @@ func (t *NamedArgsSingleClassClassView) ListProperties() ([]ClassPropertyView, e
 	return builders, nil
 }
 
+
+
+
 func (t *NamedArgsSingleClassClassView) PropertyKey() (ClassPropertyView, error) {
-	return t.inner.Property("key")
+    return t.inner.Property("key")
 }
 
 func (t *NamedArgsSingleClassClassView) PropertyKey_two() (ClassPropertyView, error) {
-	return t.inner.Property("key_two")
+    return t.inner.Property("key_two")
 }
 
 func (t *NamedArgsSingleClassClassView) PropertyKey_three() (ClassPropertyView, error) {
-	return t.inner.Property("key_three")
+    return t.inner.Property("key_three")
 }
+
 
 func (t *TypeBuilder) NamedArgsSingleClass() (*NamedArgsSingleClassClassView, error) {
 	bld, err := t.inner.Class("NamedArgsSingleClass")
@@ -2308,11 +2553,11 @@ func (t *NamedArgsSingleClassClassView) Type() (baml.Type, error) {
 }
 
 type NestedClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *NestedClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2323,17 +2568,21 @@ func (t *NestedClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *NestedClassView) PropertyProp3() (ClassPropertyView, error) {
-	return t.inner.Property("prop3")
+    return t.inner.Property("prop3")
 }
 
 func (t *NestedClassView) PropertyProp4() (ClassPropertyView, error) {
-	return t.inner.Property("prop4")
+    return t.inner.Property("prop4")
 }
 
 func (t *NestedClassView) PropertyProp20() (ClassPropertyView, error) {
-	return t.inner.Property("prop20")
+    return t.inner.Property("prop20")
 }
+
 
 func (t *TypeBuilder) Nested() (*NestedClassView, error) {
 	bld, err := t.inner.Class("Nested")
@@ -2348,11 +2597,11 @@ func (t *NestedClassView) Type() (baml.Type, error) {
 }
 
 type Nested2ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *Nested2ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2363,13 +2612,17 @@ func (t *Nested2ClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *Nested2ClassView) PropertyProp11() (ClassPropertyView, error) {
-	return t.inner.Property("prop11")
+    return t.inner.Property("prop11")
 }
 
 func (t *Nested2ClassView) PropertyProp12() (ClassPropertyView, error) {
-	return t.inner.Property("prop12")
+    return t.inner.Property("prop12")
 }
+
 
 func (t *TypeBuilder) Nested2() (*Nested2ClassView, error) {
 	bld, err := t.inner.Class("Nested2")
@@ -2384,11 +2637,11 @@ func (t *Nested2ClassView) Type() (baml.Type, error) {
 }
 
 type NestedBlockConstraintClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *NestedBlockConstraintClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2399,9 +2652,13 @@ func (t *NestedBlockConstraintClassView) ListProperties() ([]ClassPropertyView, 
 	return builders, nil
 }
 
+
+
+
 func (t *NestedBlockConstraintClassView) PropertyNbc() (ClassPropertyView, error) {
-	return t.inner.Property("nbc")
+    return t.inner.Property("nbc")
 }
+
 
 func (t *TypeBuilder) NestedBlockConstraint() (*NestedBlockConstraintClassView, error) {
 	bld, err := t.inner.Class("NestedBlockConstraint")
@@ -2416,11 +2673,11 @@ func (t *NestedBlockConstraintClassView) Type() (baml.Type, error) {
 }
 
 type NestedBlockConstraintForParamClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *NestedBlockConstraintForParamClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2431,9 +2688,13 @@ func (t *NestedBlockConstraintForParamClassView) ListProperties() ([]ClassProper
 	return builders, nil
 }
 
+
+
+
 func (t *NestedBlockConstraintForParamClassView) PropertyNbcfp() (ClassPropertyView, error) {
-	return t.inner.Property("nbcfp")
+    return t.inner.Property("nbcfp")
 }
+
 
 func (t *TypeBuilder) NestedBlockConstraintForParam() (*NestedBlockConstraintForParamClassView, error) {
 	bld, err := t.inner.Class("NestedBlockConstraintForParam")
@@ -2448,11 +2709,11 @@ func (t *NestedBlockConstraintForParamClassView) Type() (baml.Type, error) {
 }
 
 type NodeClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *NodeClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2463,13 +2724,17 @@ func (t *NodeClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *NodeClassView) PropertyData() (ClassPropertyView, error) {
-	return t.inner.Property("data")
+    return t.inner.Property("data")
 }
 
 func (t *NodeClassView) PropertyNext() (ClassPropertyView, error) {
-	return t.inner.Property("next")
+    return t.inner.Property("next")
 }
+
 
 func (t *TypeBuilder) Node() (*NodeClassView, error) {
 	bld, err := t.inner.Class("Node")
@@ -2484,11 +2749,11 @@ func (t *NodeClassView) Type() (baml.Type, error) {
 }
 
 type NodeWithAliasIndirectionClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *NodeWithAliasIndirectionClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2499,13 +2764,17 @@ func (t *NodeWithAliasIndirectionClassView) ListProperties() ([]ClassPropertyVie
 	return builders, nil
 }
 
+
+
+
 func (t *NodeWithAliasIndirectionClassView) PropertyValue() (ClassPropertyView, error) {
-	return t.inner.Property("value")
+    return t.inner.Property("value")
 }
 
 func (t *NodeWithAliasIndirectionClassView) PropertyNext() (ClassPropertyView, error) {
-	return t.inner.Property("next")
+    return t.inner.Property("next")
 }
+
 
 func (t *TypeBuilder) NodeWithAliasIndirection() (*NodeWithAliasIndirectionClassView, error) {
 	bld, err := t.inner.Class("NodeWithAliasIndirection")
@@ -2520,11 +2789,11 @@ func (t *NodeWithAliasIndirectionClassView) Type() (baml.Type, error) {
 }
 
 type Note1599ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *Note1599ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2535,17 +2804,21 @@ func (t *Note1599ClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *Note1599ClassView) PropertyNote_title() (ClassPropertyView, error) {
-	return t.inner.Property("note_title")
+    return t.inner.Property("note_title")
 }
 
 func (t *Note1599ClassView) PropertyNote_description() (ClassPropertyView, error) {
-	return t.inner.Property("note_description")
+    return t.inner.Property("note_description")
 }
 
 func (t *Note1599ClassView) PropertyNote_amount() (ClassPropertyView, error) {
-	return t.inner.Property("note_amount")
+    return t.inner.Property("note_amount")
 }
+
 
 func (t *TypeBuilder) Note1599() (*Note1599ClassView, error) {
 	bld, err := t.inner.Class("Note1599")
@@ -2560,11 +2833,11 @@ func (t *Note1599ClassView) Type() (baml.Type, error) {
 }
 
 type OptionalListAndMapClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *OptionalListAndMapClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2575,13 +2848,17 @@ func (t *OptionalListAndMapClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
+
+
+
 func (t *OptionalListAndMapClassView) PropertyP() (ClassPropertyView, error) {
-	return t.inner.Property("p")
+    return t.inner.Property("p")
 }
 
 func (t *OptionalListAndMapClassView) PropertyQ() (ClassPropertyView, error) {
-	return t.inner.Property("q")
+    return t.inner.Property("q")
 }
+
 
 func (t *TypeBuilder) OptionalListAndMap() (*OptionalListAndMapClassView, error) {
 	bld, err := t.inner.Class("OptionalListAndMap")
@@ -2596,11 +2873,11 @@ func (t *OptionalListAndMapClassView) Type() (baml.Type, error) {
 }
 
 type OptionalTest_Prop1ClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *OptionalTest_Prop1ClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2611,13 +2888,17 @@ func (t *OptionalTest_Prop1ClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
+
+
+
 func (t *OptionalTest_Prop1ClassView) PropertyOmega_a() (ClassPropertyView, error) {
-	return t.inner.Property("omega_a")
+    return t.inner.Property("omega_a")
 }
 
 func (t *OptionalTest_Prop1ClassView) PropertyOmega_b() (ClassPropertyView, error) {
-	return t.inner.Property("omega_b")
+    return t.inner.Property("omega_b")
 }
+
 
 func (t *TypeBuilder) OptionalTest_Prop1() (*OptionalTest_Prop1ClassView, error) {
 	bld, err := t.inner.Class("OptionalTest_Prop1")
@@ -2632,11 +2913,11 @@ func (t *OptionalTest_Prop1ClassView) Type() (baml.Type, error) {
 }
 
 type OptionalTest_ReturnTypeClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *OptionalTest_ReturnTypeClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2647,17 +2928,21 @@ func (t *OptionalTest_ReturnTypeClassView) ListProperties() ([]ClassPropertyView
 	return builders, nil
 }
 
+
+
+
 func (t *OptionalTest_ReturnTypeClassView) PropertyOmega_1() (ClassPropertyView, error) {
-	return t.inner.Property("omega_1")
+    return t.inner.Property("omega_1")
 }
 
 func (t *OptionalTest_ReturnTypeClassView) PropertyOmega_2() (ClassPropertyView, error) {
-	return t.inner.Property("omega_2")
+    return t.inner.Property("omega_2")
 }
 
 func (t *OptionalTest_ReturnTypeClassView) PropertyOmega_3() (ClassPropertyView, error) {
-	return t.inner.Property("omega_3")
+    return t.inner.Property("omega_3")
 }
+
 
 func (t *TypeBuilder) OptionalTest_ReturnType() (*OptionalTest_ReturnTypeClassView, error) {
 	bld, err := t.inner.Class("OptionalTest_ReturnType")
@@ -2672,11 +2957,11 @@ func (t *OptionalTest_ReturnTypeClassView) Type() (baml.Type, error) {
 }
 
 type OrderInfoClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *OrderInfoClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2687,17 +2972,21 @@ func (t *OrderInfoClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *OrderInfoClassView) PropertyOrder_status() (ClassPropertyView, error) {
-	return t.inner.Property("order_status")
+    return t.inner.Property("order_status")
 }
 
 func (t *OrderInfoClassView) PropertyTracking_number() (ClassPropertyView, error) {
-	return t.inner.Property("tracking_number")
+    return t.inner.Property("tracking_number")
 }
 
 func (t *OrderInfoClassView) PropertyEstimated_arrival_date() (ClassPropertyView, error) {
-	return t.inner.Property("estimated_arrival_date")
+    return t.inner.Property("estimated_arrival_date")
 }
+
 
 func (t *TypeBuilder) OrderInfo() (*OrderInfoClassView, error) {
 	bld, err := t.inner.Class("OrderInfo")
@@ -2712,11 +3001,11 @@ func (t *OrderInfoClassView) Type() (baml.Type, error) {
 }
 
 type OriginalAClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *OriginalAClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2727,9 +3016,13 @@ func (t *OriginalAClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *OriginalAClassView) PropertyValue() (ClassPropertyView, error) {
-	return t.inner.Property("value")
+    return t.inner.Property("value")
 }
+
 
 func (t *TypeBuilder) OriginalA() (*OriginalAClassView, error) {
 	bld, err := t.inner.Class("OriginalA")
@@ -2744,11 +3037,11 @@ func (t *OriginalAClassView) Type() (baml.Type, error) {
 }
 
 type OriginalBClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *OriginalBClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2759,13 +3052,17 @@ func (t *OriginalBClassBuilder) ListProperties() ([]ClassPropertyBuilder, error)
 	return builders, nil
 }
 
+
 func (t *OriginalBClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
 
+
+
 func (t *OriginalBClassBuilder) PropertyValue() (ClassPropertyBuilder, error) {
-	return t.inner.Property("value")
+    return t.inner.Property("value")
 }
+
 
 func (t *TypeBuilder) OriginalB() (*OriginalBClassBuilder, error) {
 	bld, err := t.inner.Class("OriginalB")
@@ -2780,11 +3077,11 @@ func (t *OriginalBClassBuilder) Type() (baml.Type, error) {
 }
 
 type PersonClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *PersonClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2795,17 +3092,21 @@ func (t *PersonClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
 	return builders, nil
 }
 
+
 func (t *PersonClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
 
+
+
 func (t *PersonClassBuilder) PropertyName() (ClassPropertyBuilder, error) {
-	return t.inner.Property("name")
+    return t.inner.Property("name")
 }
 
 func (t *PersonClassBuilder) PropertyHair_color() (ClassPropertyBuilder, error) {
-	return t.inner.Property("hair_color")
+    return t.inner.Property("hair_color")
 }
+
 
 func (t *TypeBuilder) Person() (*PersonClassBuilder, error) {
 	bld, err := t.inner.Class("Person")
@@ -2820,11 +3121,11 @@ func (t *PersonClassBuilder) Type() (baml.Type, error) {
 }
 
 type PhoneNumberClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *PhoneNumberClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2835,9 +3136,13 @@ func (t *PhoneNumberClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *PhoneNumberClassView) PropertyValue() (ClassPropertyView, error) {
-	return t.inner.Property("value")
+    return t.inner.Property("value")
 }
+
 
 func (t *TypeBuilder) PhoneNumber() (*PhoneNumberClassView, error) {
 	bld, err := t.inner.Class("PhoneNumber")
@@ -2852,11 +3157,11 @@ func (t *PhoneNumberClassView) Type() (baml.Type, error) {
 }
 
 type QuantityClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *QuantityClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2867,13 +3172,17 @@ func (t *QuantityClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *QuantityClassView) PropertyAmount() (ClassPropertyView, error) {
-	return t.inner.Property("amount")
+    return t.inner.Property("amount")
 }
 
 func (t *QuantityClassView) PropertyUnit() (ClassPropertyView, error) {
-	return t.inner.Property("unit")
+    return t.inner.Property("unit")
 }
+
 
 func (t *TypeBuilder) Quantity() (*QuantityClassView, error) {
 	bld, err := t.inner.Class("Quantity")
@@ -2888,11 +3197,11 @@ func (t *QuantityClassView) Type() (baml.Type, error) {
 }
 
 type RaysDataClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *RaysDataClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2903,13 +3212,17 @@ func (t *RaysDataClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *RaysDataClassView) PropertyDataType() (ClassPropertyView, error) {
-	return t.inner.Property("dataType")
+    return t.inner.Property("dataType")
 }
 
 func (t *RaysDataClassView) PropertyValue() (ClassPropertyView, error) {
-	return t.inner.Property("value")
+    return t.inner.Property("value")
 }
+
 
 func (t *TypeBuilder) RaysData() (*RaysDataClassView, error) {
 	bld, err := t.inner.Class("RaysData")
@@ -2924,11 +3237,11 @@ func (t *RaysDataClassView) Type() (baml.Type, error) {
 }
 
 type ReceiptInfoClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ReceiptInfoClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2939,17 +3252,21 @@ func (t *ReceiptInfoClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *ReceiptInfoClassView) PropertyItems() (ClassPropertyView, error) {
-	return t.inner.Property("items")
+    return t.inner.Property("items")
 }
 
 func (t *ReceiptInfoClassView) PropertyTotal_cost() (ClassPropertyView, error) {
-	return t.inner.Property("total_cost")
+    return t.inner.Property("total_cost")
 }
 
 func (t *ReceiptInfoClassView) PropertyVenue() (ClassPropertyView, error) {
-	return t.inner.Property("venue")
+    return t.inner.Property("venue")
 }
+
 
 func (t *TypeBuilder) ReceiptInfo() (*ReceiptInfoClassView, error) {
 	bld, err := t.inner.Class("ReceiptInfo")
@@ -2964,11 +3281,11 @@ func (t *ReceiptInfoClassView) Type() (baml.Type, error) {
 }
 
 type ReceiptItemClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ReceiptItemClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -2979,21 +3296,25 @@ func (t *ReceiptItemClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *ReceiptItemClassView) PropertyName() (ClassPropertyView, error) {
-	return t.inner.Property("name")
+    return t.inner.Property("name")
 }
 
 func (t *ReceiptItemClassView) PropertyDescription() (ClassPropertyView, error) {
-	return t.inner.Property("description")
+    return t.inner.Property("description")
 }
 
 func (t *ReceiptItemClassView) PropertyQuantity() (ClassPropertyView, error) {
-	return t.inner.Property("quantity")
+    return t.inner.Property("quantity")
 }
 
 func (t *ReceiptItemClassView) PropertyPrice() (ClassPropertyView, error) {
-	return t.inner.Property("price")
+    return t.inner.Property("price")
 }
+
 
 func (t *TypeBuilder) ReceiptItem() (*ReceiptItemClassView, error) {
 	bld, err := t.inner.Class("ReceiptItem")
@@ -3008,11 +3329,11 @@ func (t *ReceiptItemClassView) Type() (baml.Type, error) {
 }
 
 type RecipeClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *RecipeClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3023,13 +3344,17 @@ func (t *RecipeClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *RecipeClassView) PropertyIngredients() (ClassPropertyView, error) {
-	return t.inner.Property("ingredients")
+    return t.inner.Property("ingredients")
 }
 
 func (t *RecipeClassView) PropertyRecipe_type() (ClassPropertyView, error) {
-	return t.inner.Property("recipe_type")
+    return t.inner.Property("recipe_type")
 }
+
 
 func (t *TypeBuilder) Recipe() (*RecipeClassView, error) {
 	bld, err := t.inner.Class("Recipe")
@@ -3044,11 +3369,11 @@ func (t *RecipeClassView) Type() (baml.Type, error) {
 }
 
 type RecursiveAliasDependencyClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *RecursiveAliasDependencyClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3059,9 +3384,13 @@ func (t *RecursiveAliasDependencyClassView) ListProperties() ([]ClassPropertyVie
 	return builders, nil
 }
 
+
+
+
 func (t *RecursiveAliasDependencyClassView) PropertyValue() (ClassPropertyView, error) {
-	return t.inner.Property("value")
+    return t.inner.Property("value")
 }
+
 
 func (t *TypeBuilder) RecursiveAliasDependency() (*RecursiveAliasDependencyClassView, error) {
 	bld, err := t.inner.Class("RecursiveAliasDependency")
@@ -3076,11 +3405,11 @@ func (t *RecursiveAliasDependencyClassView) Type() (baml.Type, error) {
 }
 
 type RenderEnumInputClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *RenderEnumInputClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3091,13 +3420,17 @@ func (t *RenderEnumInputClassBuilder) ListProperties() ([]ClassPropertyBuilder, 
 	return builders, nil
 }
 
+
 func (t *RenderEnumInputClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
 
+
+
 func (t *RenderEnumInputClassBuilder) PropertyTestKey() (ClassPropertyBuilder, error) {
-	return t.inner.Property("testKey")
+    return t.inner.Property("testKey")
 }
+
 
 func (t *TypeBuilder) RenderEnumInput() (*RenderEnumInputClassBuilder, error) {
 	bld, err := t.inner.Class("RenderEnumInput")
@@ -3112,11 +3445,11 @@ func (t *RenderEnumInputClassBuilder) Type() (baml.Type, error) {
 }
 
 type RenderTestClassClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *RenderTestClassClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3127,17 +3460,21 @@ func (t *RenderTestClassClassBuilder) ListProperties() ([]ClassPropertyBuilder, 
 	return builders, nil
 }
 
+
 func (t *RenderTestClassClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
 
+
+
 func (t *RenderTestClassClassBuilder) PropertyName() (ClassPropertyBuilder, error) {
-	return t.inner.Property("name")
+    return t.inner.Property("name")
 }
 
 func (t *RenderTestClassClassBuilder) PropertyStatus() (ClassPropertyBuilder, error) {
-	return t.inner.Property("status")
+    return t.inner.Property("status")
 }
+
 
 func (t *TypeBuilder) RenderTestClass() (*RenderTestClassClassBuilder, error) {
 	bld, err := t.inner.Class("RenderTestClass")
@@ -3152,11 +3489,11 @@ func (t *RenderTestClassClassBuilder) Type() (baml.Type, error) {
 }
 
 type ResumeClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *ResumeClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3167,29 +3504,33 @@ func (t *ResumeClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *ResumeClassView) PropertyName() (ClassPropertyView, error) {
-	return t.inner.Property("name")
+    return t.inner.Property("name")
 }
 
 func (t *ResumeClassView) PropertyEmail() (ClassPropertyView, error) {
-	return t.inner.Property("email")
+    return t.inner.Property("email")
 }
 
 func (t *ResumeClassView) PropertyPhone() (ClassPropertyView, error) {
-	return t.inner.Property("phone")
+    return t.inner.Property("phone")
 }
 
 func (t *ResumeClassView) PropertyExperience() (ClassPropertyView, error) {
-	return t.inner.Property("experience")
+    return t.inner.Property("experience")
 }
 
 func (t *ResumeClassView) PropertyEducation() (ClassPropertyView, error) {
-	return t.inner.Property("education")
+    return t.inner.Property("education")
 }
 
 func (t *ResumeClassView) PropertySkills() (ClassPropertyView, error) {
-	return t.inner.Property("skills")
+    return t.inner.Property("skills")
 }
+
 
 func (t *TypeBuilder) Resume() (*ResumeClassView, error) {
 	bld, err := t.inner.Class("Resume")
@@ -3204,11 +3545,11 @@ func (t *ResumeClassView) Type() (baml.Type, error) {
 }
 
 type SchemaClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *SchemaClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3219,33 +3560,37 @@ func (t *SchemaClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *SchemaClassView) PropertyProp1() (ClassPropertyView, error) {
-	return t.inner.Property("prop1")
+    return t.inner.Property("prop1")
 }
 
 func (t *SchemaClassView) PropertyProp2() (ClassPropertyView, error) {
-	return t.inner.Property("prop2")
+    return t.inner.Property("prop2")
 }
 
 func (t *SchemaClassView) PropertyProp5() (ClassPropertyView, error) {
-	return t.inner.Property("prop5")
+    return t.inner.Property("prop5")
 }
 
 func (t *SchemaClassView) PropertyProp6() (ClassPropertyView, error) {
-	return t.inner.Property("prop6")
+    return t.inner.Property("prop6")
 }
 
 func (t *SchemaClassView) PropertyNested_attrs() (ClassPropertyView, error) {
-	return t.inner.Property("nested_attrs")
+    return t.inner.Property("nested_attrs")
 }
 
 func (t *SchemaClassView) PropertyParens() (ClassPropertyView, error) {
-	return t.inner.Property("parens")
+    return t.inner.Property("parens")
 }
 
 func (t *SchemaClassView) PropertyOther_group() (ClassPropertyView, error) {
-	return t.inner.Property("other_group")
+    return t.inner.Property("other_group")
 }
+
 
 func (t *TypeBuilder) Schema() (*SchemaClassView, error) {
 	bld, err := t.inner.Class("Schema")
@@ -3260,11 +3605,11 @@ func (t *SchemaClassView) Type() (baml.Type, error) {
 }
 
 type SearchParamsClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *SearchParamsClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3275,29 +3620,33 @@ func (t *SearchParamsClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *SearchParamsClassView) PropertyDateRange() (ClassPropertyView, error) {
-	return t.inner.Property("dateRange")
+    return t.inner.Property("dateRange")
 }
 
 func (t *SearchParamsClassView) PropertyLocation() (ClassPropertyView, error) {
-	return t.inner.Property("location")
+    return t.inner.Property("location")
 }
 
 func (t *SearchParamsClassView) PropertyJobTitle() (ClassPropertyView, error) {
-	return t.inner.Property("jobTitle")
+    return t.inner.Property("jobTitle")
 }
 
 func (t *SearchParamsClassView) PropertyCompany() (ClassPropertyView, error) {
-	return t.inner.Property("company")
+    return t.inner.Property("company")
 }
 
 func (t *SearchParamsClassView) PropertyDescription() (ClassPropertyView, error) {
-	return t.inner.Property("description")
+    return t.inner.Property("description")
 }
 
 func (t *SearchParamsClassView) PropertyTags() (ClassPropertyView, error) {
-	return t.inner.Property("tags")
+    return t.inner.Property("tags")
 }
+
 
 func (t *TypeBuilder) SearchParams() (*SearchParamsClassView, error) {
 	bld, err := t.inner.Class("SearchParams")
@@ -3312,11 +3661,11 @@ func (t *SearchParamsClassView) Type() (baml.Type, error) {
 }
 
 type SemanticContainerClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *SemanticContainerClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3327,37 +3676,41 @@ func (t *SemanticContainerClassView) ListProperties() ([]ClassPropertyView, erro
 	return builders, nil
 }
 
+
+
+
 func (t *SemanticContainerClassView) PropertySixteen_digit_number() (ClassPropertyView, error) {
-	return t.inner.Property("sixteen_digit_number")
+    return t.inner.Property("sixteen_digit_number")
 }
 
 func (t *SemanticContainerClassView) PropertyString_with_twenty_words() (ClassPropertyView, error) {
-	return t.inner.Property("string_with_twenty_words")
+    return t.inner.Property("string_with_twenty_words")
 }
 
 func (t *SemanticContainerClassView) PropertyClass_1() (ClassPropertyView, error) {
-	return t.inner.Property("class_1")
+    return t.inner.Property("class_1")
 }
 
 func (t *SemanticContainerClassView) PropertyClass_2() (ClassPropertyView, error) {
-	return t.inner.Property("class_2")
+    return t.inner.Property("class_2")
 }
 
 func (t *SemanticContainerClassView) PropertyClass_done_needed() (ClassPropertyView, error) {
-	return t.inner.Property("class_done_needed")
+    return t.inner.Property("class_done_needed")
 }
 
 func (t *SemanticContainerClassView) PropertyClass_needed() (ClassPropertyView, error) {
-	return t.inner.Property("class_needed")
+    return t.inner.Property("class_needed")
 }
 
 func (t *SemanticContainerClassView) PropertyThree_small_things() (ClassPropertyView, error) {
-	return t.inner.Property("three_small_things")
+    return t.inner.Property("three_small_things")
 }
 
 func (t *SemanticContainerClassView) PropertyFinal_string() (ClassPropertyView, error) {
-	return t.inner.Property("final_string")
+    return t.inner.Property("final_string")
 }
+
 
 func (t *TypeBuilder) SemanticContainer() (*SemanticContainerClassView, error) {
 	bld, err := t.inner.Class("SemanticContainer")
@@ -3372,11 +3725,11 @@ func (t *SemanticContainerClassView) Type() (baml.Type, error) {
 }
 
 type SimpleTagClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *SimpleTagClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3387,9 +3740,13 @@ func (t *SimpleTagClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *SimpleTagClassView) PropertyField() (ClassPropertyView, error) {
-	return t.inner.Property("field")
+    return t.inner.Property("field")
 }
+
 
 func (t *TypeBuilder) SimpleTag() (*SimpleTagClassView, error) {
 	bld, err := t.inner.Class("SimpleTag")
@@ -3404,11 +3761,11 @@ func (t *SimpleTagClassView) Type() (baml.Type, error) {
 }
 
 type SmallThingClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *SmallThingClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3419,13 +3776,17 @@ func (t *SmallThingClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *SmallThingClassView) PropertyI_16_digits() (ClassPropertyView, error) {
-	return t.inner.Property("i_16_digits")
+    return t.inner.Property("i_16_digits")
 }
 
 func (t *SmallThingClassView) PropertyI_8_digits() (ClassPropertyView, error) {
-	return t.inner.Property("i_8_digits")
+    return t.inner.Property("i_8_digits")
 }
+
 
 func (t *TypeBuilder) SmallThing() (*SmallThingClassView, error) {
 	bld, err := t.inner.Class("SmallThing")
@@ -3440,11 +3801,11 @@ func (t *SmallThingClassView) Type() (baml.Type, error) {
 }
 
 type SomeClassNestedDynamicClassBuilder struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *SomeClassNestedDynamicClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3455,13 +3816,17 @@ func (t *SomeClassNestedDynamicClassBuilder) ListProperties() ([]ClassPropertyBu
 	return builders, nil
 }
 
+
 func (t *SomeClassNestedDynamicClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
 	return t.inner.AddProperty(name, propertyType)
 }
 
+
+
 func (t *SomeClassNestedDynamicClassBuilder) PropertyHi() (ClassPropertyBuilder, error) {
-	return t.inner.Property("hi")
+    return t.inner.Property("hi")
 }
+
 
 func (t *TypeBuilder) SomeClassNestedDynamic() (*SomeClassNestedDynamicClassBuilder, error) {
 	bld, err := t.inner.Class("SomeClassNestedDynamic")
@@ -3476,11 +3841,11 @@ func (t *SomeClassNestedDynamicClassBuilder) Type() (baml.Type, error) {
 }
 
 type StringToClassEntryClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *StringToClassEntryClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3491,9 +3856,13 @@ func (t *StringToClassEntryClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
+
+
+
 func (t *StringToClassEntryClassView) PropertyWord() (ClassPropertyView, error) {
-	return t.inner.Property("word")
+    return t.inner.Property("word")
 }
+
 
 func (t *TypeBuilder) StringToClassEntry() (*StringToClassEntryClassView, error) {
 	bld, err := t.inner.Class("StringToClassEntry")
@@ -3508,11 +3877,11 @@ func (t *StringToClassEntryClassView) Type() (baml.Type, error) {
 }
 
 type TestClassAliasClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *TestClassAliasClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3523,25 +3892,29 @@ func (t *TestClassAliasClassView) ListProperties() ([]ClassPropertyView, error) 
 	return builders, nil
 }
 
+
+
+
 func (t *TestClassAliasClassView) PropertyKey() (ClassPropertyView, error) {
-	return t.inner.Property("key")
+    return t.inner.Property("key")
 }
 
 func (t *TestClassAliasClassView) PropertyKey2() (ClassPropertyView, error) {
-	return t.inner.Property("key2")
+    return t.inner.Property("key2")
 }
 
 func (t *TestClassAliasClassView) PropertyKey3() (ClassPropertyView, error) {
-	return t.inner.Property("key3")
+    return t.inner.Property("key3")
 }
 
 func (t *TestClassAliasClassView) PropertyKey4() (ClassPropertyView, error) {
-	return t.inner.Property("key4")
+    return t.inner.Property("key4")
 }
 
 func (t *TestClassAliasClassView) PropertyKey5() (ClassPropertyView, error) {
-	return t.inner.Property("key5")
+    return t.inner.Property("key5")
 }
+
 
 func (t *TypeBuilder) TestClassAlias() (*TestClassAliasClassView, error) {
 	bld, err := t.inner.Class("TestClassAlias")
@@ -3556,11 +3929,11 @@ func (t *TestClassAliasClassView) Type() (baml.Type, error) {
 }
 
 type TestClassNestedClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *TestClassNestedClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3571,13 +3944,17 @@ func (t *TestClassNestedClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
+
+
+
 func (t *TestClassNestedClassView) PropertyProp1() (ClassPropertyView, error) {
-	return t.inner.Property("prop1")
+    return t.inner.Property("prop1")
 }
 
 func (t *TestClassNestedClassView) PropertyProp2() (ClassPropertyView, error) {
-	return t.inner.Property("prop2")
+    return t.inner.Property("prop2")
 }
+
 
 func (t *TypeBuilder) TestClassNested() (*TestClassNestedClassView, error) {
 	bld, err := t.inner.Class("TestClassNested")
@@ -3592,11 +3969,11 @@ func (t *TestClassNestedClassView) Type() (baml.Type, error) {
 }
 
 type TestClassWithEnumClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *TestClassWithEnumClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3607,13 +3984,17 @@ func (t *TestClassWithEnumClassView) ListProperties() ([]ClassPropertyView, erro
 	return builders, nil
 }
 
+
+
+
 func (t *TestClassWithEnumClassView) PropertyProp1() (ClassPropertyView, error) {
-	return t.inner.Property("prop1")
+    return t.inner.Property("prop1")
 }
 
 func (t *TestClassWithEnumClassView) PropertyProp2() (ClassPropertyView, error) {
-	return t.inner.Property("prop2")
+    return t.inner.Property("prop2")
 }
+
 
 func (t *TypeBuilder) TestClassWithEnum() (*TestClassWithEnumClassView, error) {
 	bld, err := t.inner.Class("TestClassWithEnum")
@@ -3628,11 +4009,11 @@ func (t *TestClassWithEnumClassView) Type() (baml.Type, error) {
 }
 
 type TestMemoryOutputClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *TestMemoryOutputClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3643,13 +4024,17 @@ func (t *TestMemoryOutputClassView) ListProperties() ([]ClassPropertyView, error
 	return builders, nil
 }
 
+
+
+
 func (t *TestMemoryOutputClassView) PropertyItems() (ClassPropertyView, error) {
-	return t.inner.Property("items")
+    return t.inner.Property("items")
 }
 
 func (t *TestMemoryOutputClassView) PropertyMore_items() (ClassPropertyView, error) {
-	return t.inner.Property("more_items")
+    return t.inner.Property("more_items")
 }
+
 
 func (t *TypeBuilder) TestMemoryOutput() (*TestMemoryOutputClassView, error) {
 	bld, err := t.inner.Class("TestMemoryOutput")
@@ -3664,11 +4049,11 @@ func (t *TestMemoryOutputClassView) Type() (baml.Type, error) {
 }
 
 type TestOutputClassClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *TestOutputClassClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3679,13 +4064,17 @@ func (t *TestOutputClassClassView) ListProperties() ([]ClassPropertyView, error)
 	return builders, nil
 }
 
+
+
+
 func (t *TestOutputClassClassView) PropertyProp1() (ClassPropertyView, error) {
-	return t.inner.Property("prop1")
+    return t.inner.Property("prop1")
 }
 
 func (t *TestOutputClassClassView) PropertyProp2() (ClassPropertyView, error) {
-	return t.inner.Property("prop2")
+    return t.inner.Property("prop2")
 }
+
 
 func (t *TypeBuilder) TestOutputClass() (*TestOutputClassClassView, error) {
 	bld, err := t.inner.Class("TestOutputClass")
@@ -3700,11 +4089,11 @@ func (t *TestOutputClassClassView) Type() (baml.Type, error) {
 }
 
 type TodoMessageToUserClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *TodoMessageToUserClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3715,13 +4104,17 @@ func (t *TodoMessageToUserClassView) ListProperties() ([]ClassPropertyView, erro
 	return builders, nil
 }
 
+
+
+
 func (t *TodoMessageToUserClassView) PropertyType() (ClassPropertyView, error) {
-	return t.inner.Property("type")
+    return t.inner.Property("type")
 }
 
 func (t *TodoMessageToUserClassView) PropertyMessage() (ClassPropertyView, error) {
-	return t.inner.Property("message")
+    return t.inner.Property("message")
 }
+
 
 func (t *TypeBuilder) TodoMessageToUser() (*TodoMessageToUserClassView, error) {
 	bld, err := t.inner.Class("TodoMessageToUser")
@@ -3736,11 +4129,11 @@ func (t *TodoMessageToUserClassView) Type() (baml.Type, error) {
 }
 
 type TreeClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *TreeClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3751,13 +4144,17 @@ func (t *TreeClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *TreeClassView) PropertyData() (ClassPropertyView, error) {
-	return t.inner.Property("data")
+    return t.inner.Property("data")
 }
 
 func (t *TreeClassView) PropertyChildren() (ClassPropertyView, error) {
-	return t.inner.Property("children")
+    return t.inner.Property("children")
 }
+
 
 func (t *TypeBuilder) Tree() (*TreeClassView, error) {
 	bld, err := t.inner.Class("Tree")
@@ -3772,11 +4169,11 @@ func (t *TreeClassView) Type() (baml.Type, error) {
 }
 
 type TwoStoriesOneTitleClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *TwoStoriesOneTitleClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3787,17 +4184,21 @@ func (t *TwoStoriesOneTitleClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
+
+
+
 func (t *TwoStoriesOneTitleClassView) PropertyTitle() (ClassPropertyView, error) {
-	return t.inner.Property("title")
+    return t.inner.Property("title")
 }
 
 func (t *TwoStoriesOneTitleClassView) PropertyStory_a() (ClassPropertyView, error) {
-	return t.inner.Property("story_a")
+    return t.inner.Property("story_a")
 }
 
 func (t *TwoStoriesOneTitleClassView) PropertyStory_b() (ClassPropertyView, error) {
-	return t.inner.Property("story_b")
+    return t.inner.Property("story_b")
 }
+
 
 func (t *TypeBuilder) TwoStoriesOneTitle() (*TwoStoriesOneTitleClassView, error) {
 	bld, err := t.inner.Class("TwoStoriesOneTitle")
@@ -3812,11 +4213,11 @@ func (t *TwoStoriesOneTitleClassView) Type() (baml.Type, error) {
 }
 
 type TwoStoriesOneTitleCheckClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *TwoStoriesOneTitleCheckClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3827,17 +4228,21 @@ func (t *TwoStoriesOneTitleCheckClassView) ListProperties() ([]ClassPropertyView
 	return builders, nil
 }
 
+
+
+
 func (t *TwoStoriesOneTitleCheckClassView) PropertyTitle() (ClassPropertyView, error) {
-	return t.inner.Property("title")
+    return t.inner.Property("title")
 }
 
 func (t *TwoStoriesOneTitleCheckClassView) PropertyStory_a() (ClassPropertyView, error) {
-	return t.inner.Property("story_a")
+    return t.inner.Property("story_a")
 }
 
 func (t *TwoStoriesOneTitleCheckClassView) PropertyStory_b() (ClassPropertyView, error) {
-	return t.inner.Property("story_b")
+    return t.inner.Property("story_b")
 }
+
 
 func (t *TypeBuilder) TwoStoriesOneTitleCheck() (*TwoStoriesOneTitleCheckClassView, error) {
 	bld, err := t.inner.Class("TwoStoriesOneTitleCheck")
@@ -3852,11 +4257,11 @@ func (t *TwoStoriesOneTitleCheckClassView) Type() (baml.Type, error) {
 }
 
 type UnionTest_ReturnTypeClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *UnionTest_ReturnTypeClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3867,17 +4272,21 @@ func (t *UnionTest_ReturnTypeClassView) ListProperties() ([]ClassPropertyView, e
 	return builders, nil
 }
 
+
+
+
 func (t *UnionTest_ReturnTypeClassView) PropertyProp1() (ClassPropertyView, error) {
-	return t.inner.Property("prop1")
+    return t.inner.Property("prop1")
 }
 
 func (t *UnionTest_ReturnTypeClassView) PropertyProp2() (ClassPropertyView, error) {
-	return t.inner.Property("prop2")
+    return t.inner.Property("prop2")
 }
 
 func (t *UnionTest_ReturnTypeClassView) PropertyProp3() (ClassPropertyView, error) {
-	return t.inner.Property("prop3")
+    return t.inner.Property("prop3")
 }
+
 
 func (t *TypeBuilder) UnionTest_ReturnType() (*UnionTest_ReturnTypeClassView, error) {
 	bld, err := t.inner.Class("UnionTest_ReturnType")
@@ -3892,11 +4301,11 @@ func (t *UnionTest_ReturnTypeClassView) Type() (baml.Type, error) {
 }
 
 type UniverseQuestionClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *UniverseQuestionClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3907,13 +4316,17 @@ func (t *UniverseQuestionClassView) ListProperties() ([]ClassPropertyView, error
 	return builders, nil
 }
 
+
+
+
 func (t *UniverseQuestionClassView) PropertyQuestion() (ClassPropertyView, error) {
-	return t.inner.Property("question")
+    return t.inner.Property("question")
 }
 
 func (t *UniverseQuestionClassView) PropertyAnswer() (ClassPropertyView, error) {
-	return t.inner.Property("answer")
+    return t.inner.Property("answer")
 }
+
 
 func (t *TypeBuilder) UniverseQuestion() (*UniverseQuestionClassView, error) {
 	bld, err := t.inner.Class("UniverseQuestion")
@@ -3928,11 +4341,11 @@ func (t *UniverseQuestionClassView) Type() (baml.Type, error) {
 }
 
 type UniverseQuestionInputClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *UniverseQuestionInputClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3943,9 +4356,13 @@ func (t *UniverseQuestionInputClassView) ListProperties() ([]ClassPropertyView, 
 	return builders, nil
 }
 
+
+
+
 func (t *UniverseQuestionInputClassView) PropertyQuestion() (ClassPropertyView, error) {
-	return t.inner.Property("question")
+    return t.inner.Property("question")
 }
+
 
 func (t *TypeBuilder) UniverseQuestionInput() (*UniverseQuestionInputClassView, error) {
 	bld, err := t.inner.Class("UniverseQuestionInput")
@@ -3960,11 +4377,11 @@ func (t *UniverseQuestionInputClassView) Type() (baml.Type, error) {
 }
 
 type WithReasoningClassView struct {
-	inner baml.ClassBuilder
+    inner baml.ClassBuilder
 }
 
 func (t *WithReasoningClassView) ListProperties() ([]ClassPropertyView, error) {
-	result, err := t.inner.ListProperties()
+    result, err := t.inner.ListProperties()
 	if err != nil {
 		return nil, err
 	}
@@ -3975,13 +4392,17 @@ func (t *WithReasoningClassView) ListProperties() ([]ClassPropertyView, error) {
 	return builders, nil
 }
 
+
+
+
 func (t *WithReasoningClassView) PropertyValue() (ClassPropertyView, error) {
-	return t.inner.Property("value")
+    return t.inner.Property("value")
 }
 
 func (t *WithReasoningClassView) PropertyReasoning() (ClassPropertyView, error) {
-	return t.inner.Property("reasoning")
+    return t.inner.Property("reasoning")
 }
+
 
 func (t *TypeBuilder) WithReasoning() (*WithReasoningClassView, error) {
 	bld, err := t.inner.Class("WithReasoning")

@@ -54,22 +54,15 @@ export const activeTabAtom = atom<TabValue>('preview');
 export const viewModeAtom = atom((get) => {
   const selection = get(unifiedSelectionAtom);
   const { selectedFn } = get(originalSelectionAtom);
-  const activeWorkflow = get(activeWorkflowAtom);
 
   // Is the selected function part of a workflow?
   const isInWorkflow = selection.mode === 'workflow';
 
-  console.log(selection, selectedFn, activeWorkflow, isInWorkflow);
   const isLLMFunction = selectedFn?.functionFlavor === 'llm';
-  const hasWorkflowStructure =
-    selectedFn?.type === 'workflow' && (selectedFn.nodes?.length ?? 0) > 1;
-  const activeWorkflowHasStructure =
-    activeWorkflow?.nodes && activeWorkflow.nodes.length > 1;
-  // HACK: Treat single-node workflows as LLM-only so the UI doesn't expose the graph view
-  // until we have richer structure from the runtime.
-  const shouldShowWorkflow = hasWorkflowStructure;
-  const showGraph =
-    shouldShowWorkflow || (isInWorkflow && !!activeWorkflowHasStructure);
+  const isExprFunction = selectedFn?.functionFlavor === 'expr' || selectedFn?.type === 'workflow';
+
+  // Show graph for expr functions (workflows) - they always have a graph view
+  const showGraph = isExprFunction || isInWorkflow;
 
   return {
     showGraphTab: showGraph,

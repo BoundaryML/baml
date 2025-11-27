@@ -554,27 +554,35 @@ export class BamlRuntime implements BamlRuntimeInterface {
   }
 
   private buildFunctionRecord(
-    fn: WasmFunction,
+    fn: RichWasmFunction,
     metadata: FunctionMetadata
   ): FunctionWithCallGraph {
     const timestamp = Date.now();
     let controlFlow = createFallbackControlFlowArtifacts(metadata, timestamp);
-    try {
-      const wasmGraph = fn.function_graph_v2(this.wasmRuntime!);
-      const converted = buildControlFlowArtifacts(wasmGraph, this.adapter, {
-        rootName: fn.name,
-        rootType: metadata.type,
-        llmClient: metadata.clientName,
-        timestamp,
-      });
-      if (converted) {
-        controlFlow = converted;
+
+    // Only compute full graph for Expr functions (workflows)
+    // LLM functions are simple and don't need complex control flow graphs
+    const isExprFunction = fn.function_type === WasmFunctionKind.Expr;
+    if (isExprFunction) {
+      try {
+        const wasmGraph = fn.function_graph_v2(this.wasmRuntime!);
+        const converted = buildControlFlowArtifacts(wasmGraph, this.adapter, {
+          rootName: fn.name,
+          rootType: metadata.type,
+          llmClient: metadata.clientName,
+          timestamp,
+        });
+        console.log('[BamlRuntime] converted:', converted);
+        if (converted && converted.nodes.length > 0) {
+          controlFlow = converted;
+        }
+        // If converted is null or has no nodes, keep the fallback which has 1 node
+      } catch (graphErr) {
+        console.warn(
+          `[BamlRuntime] Failed to build control flow graph for ${fn.name}`,
+          graphErr
+        );
       }
-    } catch (graphErr) {
-      console.warn(
-        `[BamlRuntime] Failed to build control flow graph for ${fn.name}`,
-        graphErr
-      );
     }
 
     const resolvedSpan = (() => {

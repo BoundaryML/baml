@@ -5,7 +5,7 @@
  */
 
 import type { SelectionState } from '../atoms/core.atoms';
-import type { NavigationRule, EnrichedTarget } from './types';
+import type { NavigationRule, EnrichedTarget, NavigationContext } from './types';
 
 export class NavigationError extends Error {
   constructor(
@@ -27,7 +27,8 @@ export class RuleEngine {
    */
   decide(
     target: EnrichedTarget,
-    current: SelectionState
+    current: SelectionState,
+    context?: NavigationContext
   ): { state: SelectionState; rule: string } {
     // Sort by priority (ascending - lower number = higher priority)
     const sorted = [...this.rules].sort((a, b) => a.priority - b.priority);
@@ -35,7 +36,7 @@ export class RuleEngine {
     // Find first matching rule
     for (const rule of sorted) {
       if (rule.matches(target, current)) {
-        const state = rule.resolve(target, current);
+        const state = rule.resolve(target, current, context);
 
         return {
           state,
