@@ -1,6 +1,5 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 3395
 expression: output
 ---
 === SYNTAX TREE ===
@@ -165,14 +164,90 @@ SOURCE_FILE
   R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
-  Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
-  Expected Expected Greater, found GreaterGreater, found Expected Greater, found GreaterGreater
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
+Error: Expected Greater, found GreaterGreater
+    ╭─[ 0:28:69 ]
+    │
+ 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
+    │                                                                     ─┬  
+    │                                                                      ╰── Expected Greater, found GreaterGreater
+────╯
+
+Error: Expected Greater, found GreaterGreater
+    ╭─[ 0:28:69 ]
+    │
+ 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
+    │                                                                     ─┬  
+    │                                                                      ╰── Expected Greater, found GreaterGreater
+────╯
+
+Error: Expected Greater, found GreaterGreater
+    ╭─[ 0:28:69 ]
+    │
+ 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
+    │                                                                     ─┬  
+    │                                                                      ╰── Expected Greater, found GreaterGreater
+────╯
+
+Error: Expected function body, found GreaterGreater
+    ╭─[ 0:28:69 ]
+    │
+ 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
+    │                                                                     ─┬  
+    │                                                                      ╰── Expected function body, found GreaterGreater
+────╯
+
+Error: Expected top-level declaration, found GreaterGreater
+    ╭─[ 0:28:69 ]
+    │
+ 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
+    │                                                                     ─┬  
+    │                                                                      ╰── Expected top-level declaration, found GreaterGreater
+────╯
+
+Error: Expected top-level declaration, found Greater
+    ╭─[ 0:28:71 ]
+    │
+ 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
+    │                                                                       ┬  
+    │                                                                       ╰── Expected top-level declaration, found Greater
+────╯
+
+Error: Expected top-level declaration, found LBrace
+    ╭─[ 0:28:73 ]
+    │
+ 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
+    │                                                                         ┬  
+    │                                                                         ╰── Expected top-level declaration, found LBrace
+────╯
+
+Error: Expected top-level declaration, found Return
+    ╭─[ 0:30:3 ]
+    │
+ 30 │   return {}
+    │   ───┬──  
+    │      ╰──── Expected top-level declaration, found Return
+────╯
+
+Error: Expected top-level declaration, found LBrace
+    ╭─[ 0:30:10 ]
+    │
+ 30 │   return {}
+    │          ┬  
+    │          ╰── Expected top-level declaration, found LBrace
+────╯
+
+Error: Expected top-level declaration, found RBrace
+    ╭─[ 0:30:11 ]
+    │
+ 30 │   return {}
+    │           ┬  
+    │           ╰── Expected top-level declaration, found RBrace
+────╯
+
+Error: Expected top-level declaration, found RBrace
+    ╭─[ 0:31:1 ]
+    │
+ 31 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration, found RBrace
+────╯

@@ -1,6 +1,43 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-No items found.
+class FieldAttributes {
+  money: Int
+  currency: String
+  name: String
+  summary: String
+  details: Optional(Path(Path { segments: ["string"], kind: Plain }))
+  state: String
+  multiple: Optional(Path(Path { segments: ["string"], kind: Plain }))
+}
+class ClassAttributes {
+  name: String
+  @@dynamic
+}
+function GetStatus {
+  return: Path(Path { segments: ["Status"], kind: Plain })
+  body: Llm {
+    client: GPT4
+    prompt: "Get status"
+  }
+}
+function GetUser {
+  params: [id: Int]
+  return: Path(Path { segments: ["User"], kind: Plain })
+  body: Llm {
+    client: GPT4
+    prompt: "Get user {{id}}"
+    interpolations: [id]
+  }
+}
+class User {
+  id: Int
+  name: String
+  email: String
+}
+enum Status {
+  EnumVariant { name: "Active" }
+  EnumVariant { name: "Inactive" }
+}

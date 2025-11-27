@@ -1,6 +1,146 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-No items found.
+function AnotherLLM {
+  params: [input: String]
+  return: String
+  body: Llm {
+    prompt: "Process: {{ input }}"
+    interpolations: [input]
+  }
+}
+function Ambiguous {
+  params: [input: String]
+  return: String
+  body: Llm {
+    client: GPT4
+  }
+}
+function ProcessData {
+  params: [data: Path(Path { segments: ["JsonData"], kind: Plain })]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path("data::field1")
+      Idx::<Expr>(1): Path("data::field2")
+      Idx::<Expr>(2): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(1) }
+      Idx::<Expr>(3): Path("result")
+      Idx::<Expr>(4): Literal(Int(100))
+      Idx::<Expr>(5): Binary { op: Gt, lhs: Idx::<Expr>(3), rhs: Idx::<Expr>(4) }
+      Idx::<Expr>(6): Literal(String(" \"high\""))
+      Idx::<Expr>(7): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
+      Idx::<Expr>(8): If { condition: Idx::<Expr>(5), then_branch: Idx::<Expr>(7), else_branch: None }
+      Idx::<Expr>(9): Literal(String(" \"low\""))
+      Idx::<Expr>(10): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
+      Idx::<Stmt>(1): Return(Some(Idx::<Expr>(6)))
+      Idx::<Stmt>(2): Expr(Idx::<Expr>(8))
+      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(9)))
+    ]
+    root: Idx::<Expr>(10)
+  }
+}
+class JsonData {
+  field1: Int
+  field2: Int
+}
+function ExtractData {
+  params: [text: String]
+  return: Path(Path { segments: ["JsonData"], kind: Plain })
+  body: Llm {
+    client: GPT4
+    prompt: "\n    Extract structured data from: {{ text }}\n    Return as JSON.\n  "
+    interpolations: [text]
+  }
+}
+function SimpleCalc {
+  params: [a: Int, b: Int]
+  return: Int
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path("a")
+      Idx::<Expr>(1): Path("b")
+      Idx::<Expr>(2): Literal(Int(2))
+      Idx::<Expr>(3): Binary { op: Mul, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
+      Idx::<Expr>(4): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(3) }
+      Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Return(Some(Idx::<Expr>(4)))
+    ]
+    root: Idx::<Expr>(5)
+  }
+}
+function ProcessAnalysis {
+  params: [analysis: Path(Path { segments: ["Analysis"], kind: Plain })]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path("analysis::score")
+      Idx::<Expr>(1): Path("score")
+      Idx::<Expr>(2): Literal(Float("0.8"))
+      Idx::<Expr>(3): Binary { op: Gt, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
+      Idx::<Expr>(4): Literal(String(" \"Very positive: \""))
+      Idx::<Expr>(5): Path("analysis::sentiment")
+      Idx::<Expr>(6): Binary { op: Add, lhs: Idx::<Expr>(4), rhs: Idx::<Expr>(5) }
+      Idx::<Expr>(7): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
+      Idx::<Expr>(8): Path("score")
+      Idx::<Expr>(9): Literal(Float("0.5"))
+      Idx::<Expr>(10): Binary { op: Gt, lhs: Idx::<Expr>(8), rhs: Idx::<Expr>(9) }
+      Idx::<Expr>(11): Literal(String(" \"Positive: \""))
+      Idx::<Expr>(12): Path("analysis::sentiment")
+      Idx::<Expr>(13): Binary { op: Add, lhs: Idx::<Expr>(11), rhs: Idx::<Expr>(12) }
+      Idx::<Expr>(14): Block { stmts: [Idx::<Stmt>(2)], tail_expr: None }
+      Idx::<Expr>(15): Path("score")
+      Idx::<Expr>(16): Literal(Float("0.2"))
+      Idx::<Expr>(17): Binary { op: Gt, lhs: Idx::<Expr>(15), rhs: Idx::<Expr>(16) }
+      Idx::<Expr>(18): Literal(String(" \"Neutral: \""))
+      Idx::<Expr>(19): Path("analysis::sentiment")
+      Idx::<Expr>(20): Binary { op: Add, lhs: Idx::<Expr>(18), rhs: Idx::<Expr>(19) }
+      Idx::<Expr>(21): Block { stmts: [Idx::<Stmt>(3)], tail_expr: None }
+      Idx::<Expr>(22): Literal(String(" \"Negative: \""))
+      Idx::<Expr>(23): Path("analysis::sentiment")
+      Idx::<Expr>(24): Binary { op: Add, lhs: Idx::<Expr>(22), rhs: Idx::<Expr>(23) }
+      Idx::<Expr>(25): Block { stmts: [Idx::<Stmt>(4)], tail_expr: None }
+      Idx::<Expr>(26): If { condition: Idx::<Expr>(17), then_branch: Idx::<Expr>(21), else_branch: Some(Idx::<Expr>(25)) }
+      Idx::<Expr>(27): If { condition: Idx::<Expr>(10), then_branch: Idx::<Expr>(14), else_branch: Some(Idx::<Expr>(26)) }
+      Idx::<Expr>(28): If { condition: Idx::<Expr>(3), then_branch: Idx::<Expr>(7), else_branch: Some(Idx::<Expr>(27)) }
+      Idx::<Expr>(29): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(28)) }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(1): Return(Some(Idx::<Expr>(6)))
+      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(13)))
+      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(20)))
+      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(24)))
+    ]
+    root: Idx::<Expr>(29)
+  }
+}
+function LLMAnalyze {
+  params: [text: String]
+  return: Path(Path { segments: ["Analysis"], kind: Plain })
+  body: Llm {
+    client: GPT4
+    prompt: "\n    Analyze the following text:\n    {{ text }}\n    \n    Return an Analysis object with sentiment and keywords.\n  "
+    interpolations: [text]
+  }
+}
+function ChainedProcess {
+  params: [input: String]
+  return: String
+  body: Llm {
+    client: GPT4
+    prompt: "\n    Process this through multiple steps:\n    1. {{ input }}\n    2. Transform it\n    3. Return result\n  "
+    interpolations: [input]
+  }
+}
+class Analysis {
+  sentiment: String
+  keywords: List(Path(Path { segments: ["string"], kind: Plain }))
+  score: Float
+}

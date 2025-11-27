@@ -1,6 +1,5 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 1458
 expression: output
 ---
 === SYNTAX TREE ===
@@ -64,6 +63,26 @@ SOURCE_FILE
           R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Unclosed string literal, found Unclosed string literal
-  Expected Expected RBrace, found EOF, found Expected RBrace, found EOF
+Error: Expected RParen, found Word
+   ╭─[ 0:4:25 ]
+   │
+ 4 │   field3 string @alias("another closed string")  // Should still parse this
+   │                         ───┬───  
+   │                            ╰───── Expected RParen, found Word
+───╯
+
+Error: Expected Unclosed string literal, found EOF
+   ╭─[ 0:5:2 ]
+   │
+ 5 │ }
+   │  ┬  
+   │  ╰── Expected Unclosed string literal, found EOF
+───╯
+
+Error: Expected RBrace, found EOF
+   ╭─[ 0:5:2 ]
+   │
+ 5 │ }
+   │  ┬  
+   │  ╰── Expected RBrace, found EOF
+───╯

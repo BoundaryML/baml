@@ -1,0 +1,76 @@
+---
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ConditionalLogic"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "age"
+        TYPE_EXPR " int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "age < 18"
+              WORD "age"
+              LESS "<"
+              INTEGER_LITERAL "18"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT
+              KW_RETURN "return"
+              STRING_LITERAL " "minor""
+                QUOTE """
+                WORD "minor"
+                QUOTE """
+              SEMICOLON ";"
+            R_BRACE "}"
+          KW_ELSE "else"
+          IF_EXPR
+            KW_IF "if"
+            PAREN_EXPR
+              L_PAREN "("
+              BINARY_EXPR "age < 65"
+                WORD "age"
+                LESS "<"
+                INTEGER_LITERAL "65"
+              R_PAREN ")"
+            BLOCK_EXPR
+              L_BRACE "{"
+              RETURN_STMT
+                KW_RETURN "return"
+                STRING_LITERAL " "adult""
+                  QUOTE """
+                  WORD "adult"
+                  QUOTE """
+                SEMICOLON ";"
+              R_BRACE "}"
+            KW_ELSE "else"
+            BLOCK_EXPR
+              L_BRACE "{"
+              RETURN_STMT
+                KW_RETURN "return"
+                STRING_LITERAL " "senior""
+                  QUOTE """
+                  WORD "senior"
+                  QUOTE """
+                SEMICOLON ";"
+              R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

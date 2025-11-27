@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 3981
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -123,12 +122,54 @@ SOURCE_FILE
             QUOTE """
             WORD "user"
             QUOTE """
+          SEMICOLON ";"
         R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected type, found Expected type
-  Expected Unexpected token in class body, found Unexpected token in class body
-  Expected Unexpected token in class body, found Unexpected token in class body
-  Expected Unexpected token in class body, found Unexpected token in class body
-  Expected Unexpected token in class body, found Unexpected token in class body
+Error: Expected RParen, found Word
+   ╭─[ 0:7:41 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                         ──┬──  
+   │                                           ╰──── Expected RParen, found Word
+───╯
+
+Error: Expected type, found Error
+   ╭─[ 0:7:46 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                              ┬  
+   │                                              ╰── Expected type, found Error
+───╯
+
+Error: Expected Unexpected token in class body, found Error
+   ╭─[ 0:7:46 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                              ┬  
+   │                                              ╰── Expected Unexpected token in class body, found Error
+───╯
+
+Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:7:47 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                               ┬  
+   │                                               ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:7:48 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                                ┬  
+   │                                                ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+Error: Expected Unexpected token in class body, found RParen
+   ╭─[ 0:7:49 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                                 ┬  
+   │                                                 ╰── Expected Unexpected token in class body, found RParen
+───╯

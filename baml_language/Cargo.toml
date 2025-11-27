@@ -36,9 +36,11 @@ divan = { package = "codspeed-divan-compat", version = "*" }
 glob = { version = "0.3" }
 insta = { version = "1.34", features = ["yaml", "redactions"] }
 insta-cmd = { version = "0.6.0" }
+la-arena = { version = "0.3" }
 logos = { version = "0.15" }
 pretty_assertions = { version = "1.4" }
 rowan = { version = "0.16" }
+rustc-hash = { version = "2.1" }
 # When updating salsa, make sure to also update the revision in `fuzz/Cargo.toml`
 salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18b8a6d17a2279a96ed6c3e198", default-features = false, features = [
     "compact_str",

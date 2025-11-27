@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 2130
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -28,6 +27,19 @@ SOURCE_FILE
               INTEGER_LITERAL "3"
               STAR "*"
               INTEGER_LITERAL "4"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "c"
+          EQUALS "="
+          BINARY_EXPR
+            BINARY_EXPR "2 * 3"
+              INTEGER_LITERAL "2"
+              STAR "*"
+              INTEGER_LITERAL "3"
+            PLUS "+"
+            INTEGER_LITERAL "4"
+          SEMICOLON ";"
         LET_STMT
           KW_LET "let"
           WORD "b"
@@ -39,9 +51,10 @@ SOURCE_FILE
               INTEGER_LITERAL "10"
               PLUS "+"
               INTEGER_LITERAL "2"
+          SEMICOLON ";"
         LET_STMT
           KW_LET "let"
-          WORD "c"
+          WORD "d"
           EQUALS "="
           BINARY_EXPR
             WORD "true"
@@ -50,11 +63,13 @@ SOURCE_FILE
               WORD "false"
               AND_AND "&&"
               WORD "false"
+          SEMICOLON ";"
         RETURN_STMT "  // Should be true (AND before OR)
-  
-  return c"
+
+  return d;"
           KW_RETURN "return"
-          WORD "c"
+          WORD "d"
+          SEMICOLON ";"
         R_BRACE "}"
 
 === ERRORS ===

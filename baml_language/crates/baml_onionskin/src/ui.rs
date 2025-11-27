@@ -17,7 +17,7 @@ use similar::{ChangeTag, TextDiff};
 
 use crate::{
     app::App,
-    compiler::{CompilerPhase, LineStatus, VisualizationMode},
+    compiler::{CompilerPhase, LineStatus, ThirDisplayMode, VisualizationMode},
 };
 
 pub(crate) fn init_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
@@ -151,6 +151,13 @@ fn draw_phase_tabs(frame: &mut Frame, area: Rect, app: &App) {
 
 fn draw_single_view(frame: &mut Frame, area: Rect, app: &App) {
     let phase = app.current_phase();
+
+    // Special handling for THIR interactive mode
+    if phase == CompilerPhase::Thir && app.thir_display_mode() == ThirDisplayMode::Interactive {
+        draw_thir_interactive_view(frame, area, app);
+        return;
+    }
+
     if app.visualization_mode() == VisualizationMode::Incremental && phase == CompilerPhase::Parser
     {
         let annotated = app.get_output_annotated(phase);
@@ -183,6 +190,60 @@ fn draw_single_view(frame: &mut Frame, area: Rect, app: &App) {
         )
         .scroll((app.scroll_offset(), 0))
         .wrap(Wrap { trim: false });
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Draw the THIR interactive view with cursor navigation
+fn draw_thir_interactive_view(frame: &mut Frame, area: Rect, app: &App) {
+    let state = app.thir_interactive_state();
+    let cursor_line = state.cursor_line;
+    let cursor_col = state.cursor_col;
+
+    // Build styled lines with cursor highlight
+    let mut lines: Vec<Line> = Vec::new();
+    for (i, line_text) in state.source_lines.iter().enumerate() {
+        if i == cursor_line {
+            // This is the cursor line - highlight the cursor position
+            let mut spans = Vec::new();
+            for (j, ch) in line_text.chars().enumerate() {
+                if j == cursor_col {
+                    // Cursor position - highlight with inverted colors
+                    spans.push(Span::styled(
+                        ch.to_string(),
+                        Style::default().bg(Color::Yellow).fg(Color::Black),
+                    ));
+                } else {
+                    spans.push(Span::raw(ch.to_string()));
+                }
+            }
+            // If cursor is at end of line, show cursor there
+            if cursor_col >= line_text.len() {
+                spans.push(Span::styled(
+                    " ",
+                    Style::default().bg(Color::Yellow).fg(Color::Black),
+                ));
+            }
+            lines.push(Line::from(spans));
+        } else {
+            lines.push(Line::from(line_text.as_str()));
+        }
+    }
+
+    let border_style = if app.thir_interactive_active() {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+
+    let paragraph = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("THIR (Interactive - hjkl/arrows to move, Esc to exit)")
+                .border_style(border_style),
+        )
+        .scroll((app.scroll_offset(), 0));
 
     frame.render_widget(paragraph, area);
 }
@@ -312,12 +373,35 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         "[s] Create"
     };
 
+    // Build mode string, including THIR mode when on THIR phase
+    let mode_str = if app.current_phase() == CompilerPhase::Thir {
+        format!(
+            "[m] Mode: {}  |  [t] THIR: {}",
+            app.visualization_mode_name(),
+            app.thir_display_mode().name()
+        )
+    } else {
+        format!("[m] Mode: {}", app.visualization_mode_name())
+    };
+
     let line1 = format!(
-        "Snapshot: {}  |  [r] Recompile  |  [m] Mode: {}  |  [Tab] Next File",
-        snapshot_help,
-        app.visualization_mode_name()
+        "Snapshot: {}  |  [r] Recompile  |  {}  |  [Tab] Next File",
+        snapshot_help, mode_str
     );
-    let line2 = "Navigate: [←→] Phases  [↑↓] Scroll  [PgUp/PgDn] Page  [Home] Top  [Wheel] Mouse  |  [q/Ctrl+C] Quit";
+
+    // Show THIR-specific navigation help when in interactive mode
+    let line2 = if app.current_phase() == CompilerPhase::Thir
+        && app.thir_display_mode() == ThirDisplayMode::Interactive
+    {
+        if app.thir_interactive_active() {
+            "Navigate: [hjkl/arrows] Cursor  [Esc] Exit cursor mode  [PgUp/PgDn] Page  |  [q/Ctrl+C] Quit"
+        } else {
+            "Navigate: [←→] Phases  [↑↓] Scroll  [t] Activate cursor  [PgUp/PgDn] Page  |  [q/Ctrl+C] Quit"
+        }
+    } else {
+        "Navigate: [←→] Phases  [↑↓] Scroll  [PgUp/PgDn] Page  [Home] Top  [Wheel] Mouse  |  [q/Ctrl+C] Quit"
+    };
+
     let line3_parts = vec![
         Span::raw("Phase Colors: "),
         Span::styled(
@@ -345,7 +429,7 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
 
     let text = vec![
         Line::from(line1),
-        Line::from(line2),
+        Line::from(line2.to_string()),
         Line::from(line3_parts),
     ];
 

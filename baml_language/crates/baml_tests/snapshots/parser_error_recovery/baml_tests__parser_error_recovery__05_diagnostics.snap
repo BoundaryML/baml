@@ -1,34 +1,196 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 1646
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Expected Expected class name, found Expected class name
-  [parse] Expected Expected LBrace, found IntegerLiteral, found Expected LBrace, found IntegerLiteral
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Expected expression, found Expected expression
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Expected type annotation (:), found Expected type annotation (:)
-  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
-  [parse] Expected Expected return type (->), found Expected return type (->)
-  [parse] Expected Expected function body, found Expected function body
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected LBrace, found Word, found Expected LBrace, found Word
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
-  [parse] Expected Unclosed string literal, found Unclosed string literal
-  [parse] Expected Expected RBrace, found EOF, found Expected RBrace, found EOF
+  [parse] Error: Expected class name, found IntegerLiteral
+   ╭─[ 0:1:7 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │       ─┬─  
+   │        ╰─── Expected class name, found IntegerLiteral
+───╯
+
+  [parse] Error: Expected LBrace, found IntegerLiteral
+   ╭─[ 0:1:7 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │       ─┬─  
+   │        ╰─── Expected LBrace, found IntegerLiteral
+───╯
+
+  [parse] Error: Expected top-level declaration, found IntegerLiteral
+   ╭─[ 0:1:7 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │       ─┬─  
+   │        ╰─── Expected top-level declaration, found IntegerLiteral
+───╯
+
+  [parse] Error: Expected top-level declaration, found Word
+   ╭─[ 0:1:10 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │          ───┬───  
+   │             ╰───── Expected top-level declaration, found Word
+───╯
+
+  [parse] Error: Expected top-level declaration, found LBrace
+   ╭─[ 0:1:18 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │                  ┬  
+   │                  ╰── Expected top-level declaration, found LBrace
+───╯
+
+  [parse] Error: Expected top-level declaration, found Word
+   ╭─[ 0:2:3 ]
+   │
+ 2 │   field string
+   │   ──┬──  
+   │     ╰──── Expected top-level declaration, found Word
+───╯
+
+  [parse] Error: Expected top-level declaration, found Word
+   ╭─[ 0:2:9 ]
+   │
+ 2 │   field string
+   │         ───┬──  
+   │            ╰──── Expected top-level declaration, found Word
+───╯
+
+  [parse] Error: Expected top-level declaration, found RBrace
+   ╭─[ 0:3:1 ]
+   │
+ 3 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration, found RBrace
+───╯
+
+  [parse] Error: Expected type, found LBrace
+    ╭─[ 0:10:19 ]
+    │
+ 10 │ function Foo() -> {  // Missing return type
+    │                   ┬  
+    │                   ╰── Expected type, found LBrace
+────╯
+
+  [parse] Error: Expected LLM function missing 'prompt' field, found RBrace
+    ╭─[ 0:12:1 ]
+    │
+ 12 │ }
+    │ ┬  
+    │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+────╯
+
+  [parse] Error: Expected RBrace, found Class
+   ╭─[ 1:5:1 ]
+   │
+ 5 │ class Another {  // Should still parse this class
+   │ ──┬──  
+   │   ╰──── Expected RBrace, found Class
+───╯
+
+  [parse] Error: Expected type, found At
+   ╭─[ 2:5:17 ]
+   │
+ 5 │   field3 string @  // Incomplete attribute
+   │                 ┬  
+   │                 ╰── Expected type, found At
+───╯
+
+  [parse] Error: Expected type, found At
+   ╭─[ 2:6:17 ]
+   │
+ 6 │   field4 string @alias(  // Unclosed attribute
+   │                 ┬  
+   │                 ╰── Expected type, found At
+───╯
+
+  [parse] Error: Expected RParen, found Word
+   ╭─[ 2:7:10 ]
+   │
+ 7 │   field5 string  // This should parse correctly
+   │          ───┬──  
+   │             ╰──── Expected RParen, found Word
+───╯
+
+  [parse] Error: Expected type, found RBrace
+   ╭─[ 2:8:1 ]
+   │
+ 8 │ }
+   │ ┬  
+   │ ╰── Expected type, found RBrace
+───╯
+
+  [parse] Error: Expected RParen, found Function
+    ╭─[ 2:13:1 ]
+    │
+ 13 │ function NextFunction() -> string {  // Should still parse this
+    │ ────┬───  
+    │     ╰───── Expected RParen, found Function
+────╯
+
+  [parse] Error: Expected return type (->), found Function
+    ╭─[ 2:13:1 ]
+    │
+ 13 │ function NextFunction() -> string {  // Should still parse this
+    │ ────┬───  
+    │     ╰───── Expected return type (->), found Function
+────╯
+
+  [parse] Error: Expected function body, found Function
+    ╭─[ 2:13:1 ]
+    │
+ 13 │ function NextFunction() -> string {  // Should still parse this
+    │ ────┬───  
+    │     ╰───── Expected function body, found Function
+────╯
+
+  [parse] Error: Expected LBrace, found Word
+    ╭─[ 2:19:3 ]
+    │
+ 19 │   VALUE2
+    │   ───┬──  
+    │      ╰──── Expected LBrace, found Word
+────╯
+
+  [parse] Error: Expected top-level declaration, found Word
+    ╭─[ 2:19:3 ]
+    │
+ 19 │   VALUE2
+    │   ───┬──  
+    │      ╰──── Expected top-level declaration, found Word
+────╯
+
+  [parse] Error: Expected top-level declaration, found RBrace
+    ╭─[ 2:20:1 ]
+    │
+ 20 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration, found RBrace
+────╯
+
+  [parse] Error: Expected RParen, found Word
+   ╭─[ 3:4:25 ]
+   │
+ 4 │   field3 string @alias("another closed string")  // Should still parse this
+   │                         ───┬───  
+   │                            ╰───── Expected RParen, found Word
+───╯
+
+  [parse] Error: Expected Unclosed string literal, found EOF
+   ╭─[ 3:5:2 ]
+   │
+ 5 │ }
+   │  ┬  
+   │  ╰── Expected Unclosed string literal, found EOF
+───╯
+
+  [parse] Error: Expected RBrace, found EOF
+   ╭─[ 3:5:2 ]
+   │
+ 5 │ }
+   │  ┬  
+   │  ╰── Expected RBrace, found EOF
+───╯

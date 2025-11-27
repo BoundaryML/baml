@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 2748
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -23,71 +22,59 @@ SOURCE_FILE
     WORD "ProcessData"
     PARAMETER_LIST
       L_PAREN "("
-      PARAMETER "data"
+      PARAMETER
         WORD "data"
-  WORD "JsonData"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "string"
-  L_BRACE "{"
-  KW_LET "let"
-  WORD "result"
-  EQUALS "="
-  WORD "data"
-  DOT "."
-  WORD "field1"
-  PLUS "+"
-  WORD "data"
-  DOT "."
-  WORD "field2"
-  KW_IF "if"
-  WORD "result"
-  GREATER ">"
-  INTEGER_LITERAL "100"
-  L_BRACE "{"
-  KW_RETURN "return"
-  QUOTE """
-  WORD "high"
-  QUOTE """
-  R_BRACE "}"
-  KW_RETURN "return"
-  QUOTE """
-  WORD "low"
-  QUOTE """
-  R_BRACE "}"
+        TYPE_EXPR " JsonData"
+          WORD "JsonData"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "result"
+          EQUALS "="
+          BINARY_EXPR
+            PATH_EXPR " data.field1"
+              WORD "data"
+              DOT "."
+              WORD "field1"
+            PLUS "+"
+            PATH_EXPR " data.field2"
+              WORD "data"
+              DOT "."
+              WORD "field2"
+          SEMICOLON ";"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "result > 100"
+              WORD "result"
+              GREATER ">"
+              INTEGER_LITERAL "100"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT
+              KW_RETURN "return"
+              STRING_LITERAL " "high""
+                QUOTE """
+                WORD "high"
+                QUOTE """
+              SEMICOLON ";"
+            R_BRACE "}"
+        RETURN_STMT
+          KW_RETURN "return"
+          STRING_LITERAL " "low""
+            QUOTE """
+            WORD "low"
+            QUOTE """
+          SEMICOLON ";"
+        R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected type annotation (:), found Expected type annotation (:)
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected return type (->), found Expected return type (->)
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
+None

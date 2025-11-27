@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 2802
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -10,42 +9,52 @@ SOURCE_FILE
     WORD "LLMAnalyze"
     PARAMETER_LIST
       L_PAREN "("
-      PARAMETER "text"
+      PARAMETER
         WORD "text"
-  WORD "string"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "Analysis"
-  L_BRACE "{"
-  CLIENT_DEF "
+        TYPE_EXPR " string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " Analysis"
+      WORD "Analysis"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "
   client GPT4"
-    KW_CLIENT "client"
-    WORD "GPT4"
-  WORD "prompt"
-  HASH "#"
-  QUOTE """
-  WORD "Analyze"
-  WORD "the"
-  WORD "following"
-  WORD "text"
-  COLON ":"
-  L_BRACE "{"
-  L_BRACE "{"
-  WORD "text"
-  R_BRACE "}"
-  R_BRACE "}"
-  WORD "Return"
-  WORD "an"
-  WORD "Analysis"
-  WORD "object"
-  WORD "with"
-  WORD "sentiment"
-  WORD "and"
-  WORD "keywords"
-  DOT "."
-  QUOTE """
-  HASH "#"
-  R_BRACE "}"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL " #"
+    Analyze the following text:
+    {{ text }}
+    
+    Return an Analysis object with sentiment and keywords.
+  "#"
+          HASH "#"
+          QUOTE """
+          WORD "Analyze"
+          WORD "the"
+          WORD "following"
+          WORD "text"
+          COLON ":"
+          L_BRACE "{"
+          L_BRACE "{"
+          WORD "text"
+          R_BRACE "}"
+          R_BRACE "}"
+          WORD "Return"
+          WORD "an"
+          WORD "Analysis"
+          WORD "object"
+          WORD "with"
+          WORD "sentiment"
+          WORD "and"
+          WORD "keywords"
+          DOT "."
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
     WORD "Analysis"
@@ -70,311 +79,196 @@ SOURCE_FILE
     WORD "ProcessAnalysis"
     PARAMETER_LIST
       L_PAREN "("
-      PARAMETER "analysis"
+      PARAMETER
         WORD "analysis"
-  WORD "Analysis"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "string"
-  L_BRACE "{"
-  KW_LET "let"
-  WORD "score"
-  EQUALS "="
-  WORD "analysis"
-  DOT "."
-  WORD "score"
-  KW_IF "if"
-  WORD "score"
-  GREATER ">"
-  FLOAT_LITERAL "0.8"
-  L_BRACE "{"
-  KW_RETURN "return"
-  QUOTE """
-  WORD "Very"
-  WORD "positive"
-  COLON ":"
-  QUOTE """
-  PLUS "+"
-  WORD "analysis"
-  DOT "."
-  WORD "sentiment"
-  R_BRACE "}"
-  KW_ELSE "else"
-  KW_IF "if"
-  WORD "score"
-  GREATER ">"
-  FLOAT_LITERAL "0.5"
-  L_BRACE "{"
-  KW_RETURN "return"
-  QUOTE """
-  WORD "Positive"
-  COLON ":"
-  QUOTE """
-  PLUS "+"
-  WORD "analysis"
-  DOT "."
-  WORD "sentiment"
-  R_BRACE "}"
-  KW_ELSE "else"
-  KW_IF "if"
-  WORD "score"
-  GREATER ">"
-  FLOAT_LITERAL "0.2"
-  L_BRACE "{"
-  KW_RETURN "return"
-  QUOTE """
-  WORD "Neutral"
-  COLON ":"
-  QUOTE """
-  PLUS "+"
-  WORD "analysis"
-  DOT "."
-  WORD "sentiment"
-  R_BRACE "}"
-  KW_ELSE "else"
-  L_BRACE "{"
-  KW_RETURN "return"
-  QUOTE """
-  WORD "Negative"
-  COLON ":"
-  QUOTE """
-  PLUS "+"
-  WORD "analysis"
-  DOT "."
-  WORD "sentiment"
-  R_BRACE "}"
-  R_BRACE "}"
+        TYPE_EXPR " Analysis"
+          WORD "Analysis"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "score"
+          EQUALS "="
+          PATH_EXPR " analysis.score"
+            WORD "analysis"
+            DOT "."
+            WORD "score"
+        IF_EXPR
+          KW_IF "if"
+          BINARY_EXPR "score > 0.8"
+            WORD "score"
+            GREATER ">"
+            FLOAT_LITERAL "0.8"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT
+              KW_RETURN "return"
+              BINARY_EXPR
+                STRING_LITERAL " "Very positive: ""
+                  QUOTE """
+                  WORD "Very"
+                  WORD "positive"
+                  COLON ":"
+                  QUOTE """
+                PLUS "+"
+                PATH_EXPR " analysis.sentiment"
+                  WORD "analysis"
+                  DOT "."
+                  WORD "sentiment"
+            R_BRACE "}"
+          KW_ELSE "else"
+          IF_EXPR
+            KW_IF "if"
+            BINARY_EXPR "score > 0.5"
+              WORD "score"
+              GREATER ">"
+              FLOAT_LITERAL "0.5"
+            BLOCK_EXPR
+              L_BRACE "{"
+              RETURN_STMT
+                KW_RETURN "return"
+                BINARY_EXPR
+                  STRING_LITERAL " "Positive: ""
+                    QUOTE """
+                    WORD "Positive"
+                    COLON ":"
+                    QUOTE """
+                  PLUS "+"
+                  PATH_EXPR " analysis.sentiment"
+                    WORD "analysis"
+                    DOT "."
+                    WORD "sentiment"
+              R_BRACE "}"
+            KW_ELSE "else"
+            IF_EXPR
+              KW_IF "if"
+              BINARY_EXPR "score > 0.2"
+                WORD "score"
+                GREATER ">"
+                FLOAT_LITERAL "0.2"
+              BLOCK_EXPR
+                L_BRACE "{"
+                RETURN_STMT
+                  KW_RETURN "return"
+                  BINARY_EXPR
+                    STRING_LITERAL " "Neutral: ""
+                      QUOTE """
+                      WORD "Neutral"
+                      COLON ":"
+                      QUOTE """
+                    PLUS "+"
+                    PATH_EXPR " analysis.sentiment"
+                      WORD "analysis"
+                      DOT "."
+                      WORD "sentiment"
+                R_BRACE "}"
+              KW_ELSE "else"
+              BLOCK_EXPR
+                L_BRACE "{"
+                RETURN_STMT
+                  KW_RETURN "return"
+                  BINARY_EXPR
+                    STRING_LITERAL " "Negative: ""
+                      QUOTE """
+                      WORD "Negative"
+                      COLON ":"
+                      QUOTE """
+                    PLUS "+"
+                    PATH_EXPR " analysis.sentiment"
+                      WORD "analysis"
+                      DOT "."
+                      WORD "sentiment"
+                R_BRACE "}"
+        R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "ChainedProcess"
     PARAMETER_LIST
       L_PAREN "("
-      PARAMETER "input"
+      PARAMETER
         WORD "input"
-  WORD "string"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "string"
-  L_BRACE "{"
-  CLIENT_DEF "
+        TYPE_EXPR " string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "
   client GPT4"
-    KW_CLIENT "client"
-    WORD "GPT4"
-  WORD "prompt"
-  HASH "#"
-  QUOTE """
-  WORD "Process"
-  WORD "this"
-  WORD "through"
-  WORD "multiple"
-  WORD "steps"
-  COLON ":"
-  INTEGER_LITERAL "1"
-  DOT "."
-  L_BRACE "{"
-  L_BRACE "{"
-  WORD "input"
-  R_BRACE "}"
-  R_BRACE "}"
-  INTEGER_LITERAL "2"
-  DOT "."
-  WORD "Transform"
-  WORD "it"
-  INTEGER_LITERAL "3"
-  DOT "."
-  WORD "Return"
-  WORD "result"
-  QUOTE """
-  HASH "#"
-  R_BRACE "}"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL " #"
+    Process this through multiple steps:
+    1. {{ input }}
+    2. Transform it
+    3. Return result
+  "#"
+          HASH "#"
+          QUOTE """
+          WORD "Process"
+          WORD "this"
+          WORD "through"
+          WORD "multiple"
+          WORD "steps"
+          COLON ":"
+          INTEGER_LITERAL "1"
+          DOT "."
+          L_BRACE "{"
+          L_BRACE "{"
+          WORD "input"
+          R_BRACE "}"
+          R_BRACE "}"
+          INTEGER_LITERAL "2"
+          DOT "."
+          WORD "Transform"
+          WORD "it"
+          INTEGER_LITERAL "3"
+          DOT "."
+          WORD "Return"
+          WORD "result"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "SimpleCalc"
     PARAMETER_LIST
       L_PAREN "("
-      PARAMETER "a"
+      PARAMETER
         WORD "a"
-  WORD "int"
-  COMMA ","
-  WORD "b"
-  WORD "int"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "int"
-  L_BRACE "{"
-  KW_RETURN "return"
-  WORD "a"
-  PLUS "+"
-  WORD "b"
-  STAR "*"
-  INTEGER_LITERAL "2"
-  R_BRACE "}"
+        TYPE_EXPR " int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        TYPE_EXPR " int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        RETURN_STMT
+          KW_RETURN "return"
+          BINARY_EXPR
+            WORD "a"
+            PLUS "+"
+            BINARY_EXPR "b * 2"
+              WORD "b"
+              STAR "*"
+              INTEGER_LITERAL "2"
+        R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected type annotation (:), found Expected type annotation (:)
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected return type (->), found Expected return type (->)
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected config block, found Expected config block
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected type annotation (:), found Expected type annotation (:)
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected return type (->), found Expected return type (->)
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected type annotation (:), found Expected type annotation (:)
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected return type (->), found Expected return type (->)
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected config block, found Expected config block
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected type annotation (:), found Expected type annotation (:)
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected return type (->), found Expected return type (->)
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
+None

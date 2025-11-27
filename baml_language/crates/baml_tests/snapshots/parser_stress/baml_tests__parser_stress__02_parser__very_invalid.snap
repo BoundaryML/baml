@@ -17,32 +17,38 @@ SOURCE_FILE
       BLOCK_EXPR
         L_BRACE "{"
         LET_STMT "
-  let x = ¿"
+  let x = ¿;"
           KW_LET "let"
           WORD "x"
           EQUALS "="
           ERROR_TOKEN "¿"
-        SEMICOLON ";"
+          SEMICOLON ";"
         WHILE_STMT
           KW_WHILE "while"
-          OBJECT_LITERAL
-            ERROR_TOKEN "\"
+          ERROR_TOKEN "\"
+          BLOCK_EXPR
             L_BRACE "{"
-            OBJECT_FIELD "
-      x"
+            BINARY_EXPR "x += 1"
               WORD "x"
-            PLUS_EQUALS "+="
-            INTEGER_LITERAL "1"
+              PLUS_EQUALS "+="
+              INTEGER_LITERAL "1"
             SEMICOLON ";"
             R_BRACE "}"
         R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected expression, found Expected expression
-  Expected Expected Colon, found PlusEquals, found Expected Colon, found PlusEquals
-  Expected Expected ',' or '}' after object field, found Expected ',' or '}' after object field
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected field name or '}', found Expected field name or '}'
-  Expected Expected block after while condition, found Expected block after while condition
+Error: Expected expression, found Error
+   ╭─[ 0:6:11 ]
+   │
+ 6 │   let x = ¿;
+   │           ─┬  
+   │            ╰── Expected expression, found Error
+───╯
+
+Error: Expected expression, found Error
+   ╭─[ 0:8:10 ]
+   │
+ 8 │   while \ {
+   │          ┬  
+   │          ╰── Expected expression, found Error
+───╯

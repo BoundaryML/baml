@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 2775
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -10,66 +9,45 @@ SOURCE_FILE
     WORD "ExtractData"
     PARAMETER_LIST
       L_PAREN "("
-      PARAMETER "text"
+      PARAMETER
         WORD "text"
-  WORD "string"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "JsonData"
-  L_BRACE "{"
-  CLIENT_DEF "
+        TYPE_EXPR " string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " JsonData"
+      WORD "JsonData"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "
   client GPT4"
-    KW_CLIENT "client"
-    WORD "GPT4"
-  WORD "prompt"
-  HASH "#"
-  QUOTE """
-  WORD "Extract"
-  WORD "structured"
-  WORD "data"
-  WORD "from"
-  COLON ":"
-  L_BRACE "{"
-  L_BRACE "{"
-  WORD "text"
-  R_BRACE "}"
-  R_BRACE "}"
-  WORD "Return"
-  WORD "as"
-  WORD "JSON"
-  DOT "."
-  QUOTE """
-  HASH "#"
-  R_BRACE "}"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL " #"
+    Extract structured data from: {{ text }}
+    Return as JSON.
+  "#"
+          HASH "#"
+          QUOTE """
+          WORD "Extract"
+          WORD "structured"
+          WORD "data"
+          WORD "from"
+          COLON ":"
+          L_BRACE "{"
+          L_BRACE "{"
+          WORD "text"
+          R_BRACE "}"
+          R_BRACE "}"
+          WORD "Return"
+          WORD "as"
+          WORD "JSON"
+          DOT "."
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected type annotation (:), found Expected type annotation (:)
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected return type (->), found Expected return type (->)
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected config block, found Expected config block
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
+None

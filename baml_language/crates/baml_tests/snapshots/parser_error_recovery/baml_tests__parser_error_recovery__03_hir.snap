@@ -1,6 +1,57 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-No items found.
+function Foo {
+  return: Path(Path { segments: [""], kind: Plain })
+  body: Llm {
+    client: GPT4
+  }
+}
+enum Status {
+  EnumVariant { name: "ACTIVE" }
+  EnumVariant { name: "INACTIVE" }
+  EnumVariant { name: "PENDING" }
+}
+class Another {
+  field: Int
+}
+class User {
+  name: String
+}
+function Incomplete {
+  params: [param1: String]
+  return: Unknown
+  body: Missing
+}
+function NextFunction {
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Literal(String(" \"parsed\""))
+      Idx::<Expr>(1): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Return(Some(Idx::<Expr>(0)))
+    ]
+    root: Idx::<Expr>(1)
+  }
+}
+class Partial {
+  field1: Path(Path { segments: ["str"], kind: Plain })
+  field2: Path(Path { segments: ["// Missing type entirely\n  field3"], kind: Plain })
+  string: Path(Path { segments: [""], kind: Plain })
+  string: Path(Path { segments: [""], kind: Plain })
+  string: Path(Path { segments: [""], kind: Plain })
+}
+enum ValidEnum {
+  EnumVariant { name: "OPTION1" }
+  EnumVariant { name: "OPTION2" }
+}
+class Test {
+  field1: String
+  field2: String
+  another: Path(Path { segments: ["closed"], kind: Plain })
+  string: Path(Path { segments: ["\")  // Should still parse this\n}"], kind: Plain })
+}

@@ -9,5 +9,5 @@ class Messages {
 
 // String literal union types
 function GetRole() -> "admin" | "user" | "guest" {
-  return "user"
+  return "user";
 }

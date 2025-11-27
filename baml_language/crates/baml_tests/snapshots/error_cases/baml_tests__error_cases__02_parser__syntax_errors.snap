@@ -1,6 +1,5 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 360
 expression: output
 ---
 === SYNTAX TREE ===
@@ -13,19 +12,39 @@ SOURCE_FILE
       WORD "field"
       TYPE_EXPR " int"
         WORD "int"
+  FUNCTION_DEF
     KW_FUNCTION "function"
     INTEGER_LITERAL "123"
-    FIELD
-      WORD "Invalid"
-      TYPE_EXPR
-        L_PAREN "("
-        TYPE_EXPR
-        R_PAREN ")"
-    L_BRACE "{"
-    R_BRACE "}"
+    WORD "Invalid"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR " {}"
+        L_BRACE "{"
+        R_BRACE "}"
 
 === ERRORS ===
-  Expected Unexpected token in class body, found Unexpected token in class body
-  Expected Unexpected token in class body, found Unexpected token in class body
-  Expected Expected type, found Expected type
-  Expected Unexpected token in class body, found Unexpected token in class body
+Error: Expected RBrace, found Function
+   ╭─[ 0:6:1 ]
+   │
+ 6 │ function 123Invalid() {}
+   │ ────┬───  
+   │     ╰───── Expected RBrace, found Function
+───╯
+
+Error: Expected function name, found IntegerLiteral
+   ╭─[ 0:6:10 ]
+   │
+ 6 │ function 123Invalid() {}
+   │          ─┬─  
+   │           ╰─── Expected function name, found IntegerLiteral
+───╯
+
+Error: Expected return type (->), found LBrace
+   ╭─[ 0:6:23 ]
+   │
+ 6 │ function 123Invalid() {}
+   │                       ┬  
+   │                       ╰── Expected return type (->), found LBrace
+───╯

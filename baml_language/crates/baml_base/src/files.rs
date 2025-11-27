@@ -20,7 +20,10 @@ pub struct SourceFile {
     /// File path (for diagnostics and error reporting)
     pub path: PathBuf,
 
-    /// The FileId associated with this source file
-    /// This is used to maintain compatibility with existing code
+    /// The FileId associated with this source file.
+    ///
+    /// Used to create lightweight Span values that can be embedded in tokens.
+    /// This allows spans to identify their source file without carrying
+    /// the full SourceFile reference (which is a Salsa-tracked entity).
     pub file_id: FileId,
 }

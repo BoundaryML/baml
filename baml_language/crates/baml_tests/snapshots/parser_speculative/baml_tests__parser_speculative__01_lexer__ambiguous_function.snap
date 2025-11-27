@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 2619
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 Slash "/"
@@ -77,6 +76,7 @@ Quote "\""
 Client "client"
 Quote "\""
 Word "prompt"
+Hash "#"
 Quote "\""
 Word "Process"
 Colon ":"
@@ -86,6 +86,7 @@ Word "input"
 RBrace "}"
 RBrace "}"
 Quote "\""
+Hash "#"
 Slash "/"
 Slash "/"
 Quote "\""

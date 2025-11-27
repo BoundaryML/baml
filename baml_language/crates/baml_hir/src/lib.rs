@@ -1,85 +1,487 @@
 //! High-level Intermediate Representation.
 //!
 //! Provides name resolution and semantic analysis after parsing.
+//!
+//! ## Architecture
+//!
+//! The HIR is built in layers:
+//! 1. **`ItemTree`**: Position-independent item storage (signatures only)
+//! 2. **Interning**: Locations → Stable IDs via Salsa
+//! 3. **Name Resolution**: Paths → Item IDs (future)
+//!
+//! ## Key Design Choices
+//!
+//! - **Salsa-based incrementality**: Only recompute what changed
+//! - **Stable IDs**: Content-based interning survives edits
+//! - **Future-proof**: Ready for modules and generics
+
+use std::sync::Arc;
 
 use baml_base::{Name, SourceFile};
 use baml_parser::syntax_tree;
-use baml_workspace::project_files;
+use baml_syntax::SyntaxNode;
+use rowan::ast::AstNode;
 
+// Module declarations
+mod body;
+mod generics;
 mod ids;
-mod types;
+mod item_tree;
+mod loc;
+mod path;
+mod signature;
+mod type_ref;
 
+// Re-exports
+pub use body::*;
+pub use generics::*;
 pub use ids::*;
-pub use types::*;
+pub use item_tree::*;
+pub use loc::*;
+pub use path::*;
+// Re-export signature types explicitly (no wildcards to avoid conflicts)
+pub use signature::{FunctionSignature, Param};
+pub use type_ref::*;
 
-/// Tracked: get all items defined in a file
+//
+// ──────────────────────────────────────────────────────────── DATABASE ─────
+//
+
+/// Database trait for HIR queries.
+///
+/// This trait is implemented by the root database and provides access
+/// to all HIR-related Salsa queries and interned types.
+///
+/// For now, this just extends `salsa::Database`. In the future, we can add
+/// dependencies on other crate Db traits when they're implemented.
+#[salsa::db]
+pub trait Db: salsa::Database {}
+
+//
+// ───────────────────────────────────────────────────── TRACKED STRUCTS ─────
+//
+
+/// Tracked struct holding all items defined in a file.
+///
+/// This follows the Salsa 2022 pattern: instead of returning Vec<ItemId<'db>>
+/// directly from a tracked function, we wrap it in a tracked struct with
+/// #[returns(ref)] to avoid lifetime issues.
 #[salsa::tracked]
-pub fn file_items(db: &dyn salsa::Database, file: SourceFile) -> Vec<ItemId> {
-    // TODO: Extract items from syntax tree
-    let _tree = syntax_tree(db, file);
-    vec![]
+pub struct FileItems<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub items: Vec<ItemId<'db>>,
 }
 
-/// Tracked: get all items in the entire project
+/// Tracked struct holding all items in a project.
 #[salsa::tracked]
-pub fn project_items(db: &dyn salsa::Database, root: baml_workspace::ProjectRoot) -> Vec<ItemId> {
-    let files = project_files(db, root);
+pub struct ProjectItems<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub items: Vec<ItemId<'db>>,
+}
+
+//
+// ────────────────────────────────────────────────────────── SALSA QUERIES ─────
+//
+
+/// Tracked: Extract `ItemTree` from a file's syntax tree.
+///
+/// This query is the "invalidation barrier" - it only changes when
+/// item signatures change, not when whitespace/comments/bodies change.
+#[salsa::tracked]
+pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+    let tree = syntax_tree(db, file);
+    let item_tree = lower_file(&tree);
+    Arc::new(item_tree)
+}
+
+// Future: When we add modules, we'll need a function like this:
+// #[salsa::tracked]
+// pub fn container_item_tree(db: &dyn Db, container: ContainerId) -> Arc<ItemTree>
+
+/// Tracked: Get all items defined in a file.
+///
+/// Returns a tracked struct containing interned IDs for all top-level items.
+#[salsa::tracked]
+pub fn file_items(db: &dyn Db, file: SourceFile) -> FileItems<'_> {
+    let item_tree = file_item_tree(db, file);
+    let file_id = file.file_id(db);
+    let items = intern_all_items(db, file_id, &item_tree);
+    FileItems::new(db, items)
+}
+
+/// Tracked: Get all items in the entire project.
+#[salsa::tracked]
+pub fn project_items(db: &dyn Db, root: baml_workspace::ProjectRoot) -> ProjectItems<'_> {
+    let files = baml_workspace::project_files(db, root);
     let mut all_items = Vec::new();
 
     for file in files {
-        let items = file_items(db, file);
-        all_items.extend(items);
+        let items_struct = file_items(db, file);
+        all_items.extend(items_struct.items(db).iter().copied());
     }
 
-    all_items
+    ProjectItems::new(db, all_items)
 }
 
-/// Tracked: resolve a name to an item
+/// Tracked: Get generic parameters for a function.
+///
+/// This is queried separately from `ItemTree` for incrementality - changes to
+/// generic parameters don't invalidate the `ItemTree`.
+///
+/// For now, this returns empty generic parameters since BAML doesn't currently
+/// parse generic syntax. Future work will extract `<T>` from the CST.
 #[salsa::tracked]
-pub fn resolve_name(db: &dyn salsa::Database, from: SourceFile, _name: Name) -> Option<ItemId> {
-    // TODO: Implement name resolution
-    // For now, just check items in the current file
-    let _items = file_items(db, from);
-
-    // This is a stub - real implementation would check item names
-    None
+pub fn function_generic_params(_db: &dyn Db, _func: FunctionId<'_>) -> Arc<GenericParams> {
+    // TODO: Extract generic parameters from CST when BAML adds generic syntax
+    Arc::new(GenericParams::new())
 }
 
-/// Tracked struct for function definitions
+/// Tracked: Get generic parameters for a class.
 #[salsa::tracked]
-pub struct FunctionDef<'db> {
-    pub name: Name,
-
-    #[returns(ref)]
-    pub params: Vec<Parameter>,
-
-    pub return_type: TypeRef,
+pub fn class_generic_params(_db: &dyn Db, _class: ClassId<'_>) -> Arc<GenericParams> {
+    // TODO: Extract generic parameters from CST when BAML adds generic syntax
+    Arc::new(GenericParams::new())
 }
 
-/// Tracked struct for class definitions
+/// Tracked: Get generic parameters for an enum.
 #[salsa::tracked]
-pub struct ClassDef<'db> {
-    pub name: Name,
-
-    #[returns(ref)]
-    pub fields: Vec<Field>,
+pub fn enum_generic_params(_db: &dyn Db, _enum: EnumId<'_>) -> Arc<GenericParams> {
+    // TODO: Extract generic parameters from CST when BAML adds generic syntax
+    Arc::new(GenericParams::new())
 }
 
-/// Helper to get function data (for compatibility)
-pub fn function_data(_db: &dyn salsa::Database, _func: FunctionId) -> FunctionData {
-    // TODO: Convert from tracked struct to data
-    FunctionData {
-        name: Name::new("stub"),
-        params: vec![],
-        return_type: TypeRef::Unknown,
+/// Tracked: Get generic parameters for a type alias.
+#[salsa::tracked]
+pub fn type_alias_generic_params(_db: &dyn Db, _alias: TypeAliasId<'_>) -> Arc<GenericParams> {
+    // TODO: Extract generic parameters from CST when BAML adds generic syntax
+    Arc::new(GenericParams::new())
+}
+
+//
+// ──────────────────────────────────────────────────────── INTERN HELPERS ─────
+//
+
+/// Intern all items from an `ItemTree` and return their IDs.
+///
+/// Uses name-based `LocalItemIds` for position-independence.
+/// Items are returned sorted by their ID value for deterministic ordering.
+fn intern_all_items<'db>(
+    db: &'db dyn Db,
+    file: baml_base::FileId,
+    tree: &ItemTree,
+) -> Vec<ItemId<'db>> {
+    let mut items = Vec::new();
+
+    // Intern functions - sort by ID for deterministic order
+    let mut funcs: Vec<_> = tree.functions.keys().copied().collect();
+    funcs.sort_by_key(|id| id.as_u32());
+    for local_id in funcs {
+        let loc = FunctionLoc::new(db, file, local_id);
+        items.push(ItemId::Function(loc));
+    }
+
+    // Intern classes
+    let mut classes: Vec<_> = tree.classes.keys().copied().collect();
+    classes.sort_by_key(|id| id.as_u32());
+    for local_id in classes {
+        let loc = ClassLoc::new(db, file, local_id);
+        items.push(ItemId::Class(loc));
+    }
+
+    // Intern enums
+    let mut enums: Vec<_> = tree.enums.keys().copied().collect();
+    enums.sort_by_key(|id| id.as_u32());
+    for local_id in enums {
+        let loc = EnumLoc::new(db, file, local_id);
+        items.push(ItemId::Enum(loc));
+    }
+
+    // Intern type aliases
+    let mut aliases: Vec<_> = tree.type_aliases.keys().copied().collect();
+    aliases.sort_by_key(|id| id.as_u32());
+    for local_id in aliases {
+        let loc = TypeAliasLoc::new(db, file, local_id);
+        items.push(ItemId::TypeAlias(loc));
+    }
+
+    // Intern clients
+    let mut clients: Vec<_> = tree.clients.keys().copied().collect();
+    clients.sort_by_key(|id| id.as_u32());
+    for local_id in clients {
+        let loc = ClientLoc::new(db, file, local_id);
+        items.push(ItemId::Client(loc));
+    }
+
+    // Intern tests
+    let mut tests: Vec<_> = tree.tests.keys().copied().collect();
+    tests.sort_by_key(|id| id.as_u32());
+    for local_id in tests {
+        let loc = TestLoc::new(db, file, local_id);
+        items.push(ItemId::Test(loc));
+    }
+
+    items
+}
+
+//
+// ──────────────────────────────────────────────────────── ITEM LOOKUP ─────
+//
+
+// Note: With the Index implementations on ItemTree, you can now use:
+//   let item_tree = file_item_tree(db, source_file);
+//   let func = &item_tree[func_id.id(db)];
+//
+// The old lookup helper functions are removed in favor of direct indexing.
+
+//
+// ──────────────────────────────────────────────────── CST → HIR LOWERING ─────
+//
+
+/// Lower a syntax tree into an `ItemTree`.
+///
+/// This is the main extraction logic that walks the CST and builds
+/// position-independent item representations.
+fn lower_file(root: &SyntaxNode) -> ItemTree {
+    let mut tree = ItemTree::new();
+
+    // Walk only direct children of the root (top-level items)
+    // Don't use descendants() because that would pick up nested items like
+    // CLIENT_DEF nodes inside function bodies
+    for child in root.children() {
+        lower_item(&mut tree, &child);
+    }
+
+    tree
+}
+
+/// Lower a single item from the CST.
+fn lower_item(tree: &mut ItemTree, node: &SyntaxNode) {
+    use baml_syntax::SyntaxKind;
+
+    match node.kind() {
+        SyntaxKind::CLASS_DEF => {
+            if let Some(class) = lower_class(node) {
+                tree.alloc_class(class);
+            }
+        }
+        SyntaxKind::ENUM_DEF => {
+            if let Some(enum_def) = lower_enum(node) {
+                tree.alloc_enum(enum_def);
+            }
+        }
+        SyntaxKind::FUNCTION_DEF => {
+            if let Some(func) = lower_function(node) {
+                tree.alloc_function(func);
+            }
+        }
+        SyntaxKind::TYPE_ALIAS_DEF => {
+            if let Some(alias) = lower_type_alias(node) {
+                tree.alloc_type_alias(alias);
+            }
+        }
+        SyntaxKind::CLIENT_DEF => {
+            if let Some(client) = lower_client(node) {
+                tree.alloc_client(client);
+            }
+        }
+        SyntaxKind::TEST_DEF => {
+            if let Some(test) = lower_test(node) {
+                tree.alloc_test(test);
+            }
+        }
+        _ => {
+            // Skip other nodes (whitespace, comments, etc.)
+        }
     }
 }
 
-/// Helper to get class data (for compatibility)
-pub fn class_data(_db: &dyn salsa::Database, _class: ClassId) -> ClassData {
-    // TODO: Convert from tracked struct to data
-    ClassData {
-        name: Name::new("stub"),
-        fields: vec![],
+/// Extract class definition from CST.
+fn lower_class(node: &SyntaxNode) -> Option<Class> {
+    use baml_syntax::ast::ClassDef;
+
+    let class = ClassDef::cast(node.clone())?;
+    let name = class.name()?.text().into();
+    let mut fields = Vec::new();
+
+    // Extract fields
+    for field_node in class.fields() {
+        if let Some(field_name) = field_node.name() {
+            let type_ref = field_node
+                .ty()
+                .map(|t| lower_type_ref(&t))
+                .unwrap_or(TypeRef::Unknown);
+
+            fields.push(crate::Field {
+                name: field_name.text().into(),
+                type_ref,
+            });
+        }
+    }
+
+    // Check for @@dynamic attribute using AST accessor
+    let is_dynamic = class
+        .block_attributes()
+        .any(|attr| attr.name().map(|n| n.text() == "dynamic").unwrap_or(false));
+
+    Some(Class {
+        name,
+        fields,
+        is_dynamic,
+    })
+}
+
+/// Extract enum definition from CST.
+fn lower_enum(node: &SyntaxNode) -> Option<Enum> {
+    use baml_syntax::ast::EnumDef;
+
+    let enum_def = EnumDef::cast(node.clone())?;
+
+    // Check if the enum has proper structure (braces)
+    // Malformed enums from error recovery (e.g., "enum" without name/braces) should be skipped
+    if !enum_def.has_body() {
+        return None;
+    }
+
+    // Extract name using AST accessor
+    let name = enum_def
+        .name()
+        .map(|t| Name::new(t.text()))
+        .unwrap_or_else(|| Name::new("UnnamedEnum"));
+
+    // Extract variants using AST accessor
+    let variants = enum_def
+        .variants()
+        .filter_map(|variant| {
+            variant.name().map(|name_token| crate::EnumVariant {
+                name: Name::new(name_token.text()),
+            })
+        })
+        .collect();
+
+    Some(Enum { name, variants })
+}
+
+/// Extract function definition from CST - MINIMAL VERSION.
+/// Only extracts the name. Signature and body are in separate queries.
+fn lower_function(node: &SyntaxNode) -> Option<Function> {
+    use baml_syntax::ast::FunctionDef;
+
+    let func = FunctionDef::cast(node.clone())?;
+    let name = func.name()?.text().into();
+
+    Some(Function { name })
+}
+
+/// Extract type alias from CST.
+fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
+    use baml_syntax::ast::TypeAliasDef;
+
+    let alias = TypeAliasDef::cast(node.clone())?;
+
+    // Extract name using AST accessor
+    let name = alias
+        .name()
+        .map(|t| Name::new(t.text()))
+        .unwrap_or_else(|| Name::new("UnnamedTypeAlias"));
+
+    // Extract type using AST accessor
+    let type_ref = alias
+        .ty()
+        .map(|t| lower_type_ref(&t))
+        .unwrap_or(TypeRef::Unknown);
+
+    Some(TypeAlias { name, type_ref })
+}
+
+/// Extract client configuration from CST.
+fn lower_client(node: &SyntaxNode) -> Option<Client> {
+    use baml_syntax::ast::ClientDef;
+
+    let client_def = ClientDef::cast(node.clone())?;
+
+    // Extract name using AST accessor
+    let name = client_def
+        .name()
+        .map(|t| Name::new(t.text()))
+        .unwrap_or_else(|| Name::new("UnnamedClient"));
+
+    // Extract provider from config block using AST accessors
+    let provider = client_def
+        .config_block()
+        .and_then(|block| {
+            block
+                .items()
+                .find(|item| item.key().map(|k| k.text() == "provider").unwrap_or(false))
+                .and_then(|item| item.value_word())
+                .map(|t| Name::new(t.text()))
+        })
+        .unwrap_or_else(|| Name::new("unknown"));
+
+    Some(Client { name, provider })
+}
+
+/// Extract test definition from CST.
+fn lower_test(node: &SyntaxNode) -> Option<Test> {
+    use baml_syntax::ast::TestDef;
+
+    let test = TestDef::cast(node.clone())?;
+
+    // Extract name using AST accessor
+    let name = test
+        .name()
+        .map(|t| Name::new(t.text()))
+        .unwrap_or_else(|| Name::new("UnnamedTest"));
+
+    // Extract function reference using AST accessor
+    let function_refs = test
+        .function_name()
+        .map(|t| vec![Name::new(t.text())])
+        .unwrap_or_default();
+
+    Some(Test {
+        name,
+        function_refs,
+    })
+}
+
+/// Lower a type reference from CST.
+///
+/// For now, this is a simplified implementation that extracts just the name.
+/// TODO: Parse complex types (optional, list, union, etc.)
+fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
+    // For now, just extract the text representation
+    // This is a simplification - we'll enhance this later
+    let text = node.syntax().text().to_string();
+    let text = text.trim();
+
+    // Handle primitives
+    match text {
+        "int" => TypeRef::Int,
+        "float" => TypeRef::Float,
+        "string" => TypeRef::String,
+        "bool" => TypeRef::Bool,
+        "null" => TypeRef::Null,
+        "image" => TypeRef::Image,
+        "audio" => TypeRef::Audio,
+        "video" => TypeRef::Video,
+        "pdf" => TypeRef::Pdf,
+        _ => {
+            // Check if it ends with '?' (optional)
+            if let Some(inner_text) = text.strip_suffix('?') {
+                let inner = TypeRef::named(inner_text.into());
+                TypeRef::optional(inner)
+            }
+            // Check if it ends with '[]' (list)
+            else if let Some(inner_text) = text.strip_suffix("[]") {
+                let inner = TypeRef::named(inner_text.into());
+                TypeRef::list(inner)
+            }
+            // Otherwise treat as named type
+            else {
+                TypeRef::named(text.into())
+            }
+        }
     }
 }

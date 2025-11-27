@@ -8,14 +8,17 @@ use std::{
 };
 
 use anyhow::Result;
+use baml_base::Diagnostic;
 use baml_db::{
     RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
-    baml_workspace,
+    baml_thir, baml_workspace, function_body, function_signature,
 };
+use baml_hir::{Expr, ExprBody, ExprId, FunctionBody, ItemId, Pattern, Stmt, StmtId};
 use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
-    ast::{Item, SourceFile as AstSourceFile},
+    ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
+use baml_thir::{InferenceResult, Ty};
 use regex::Regex;
 use rowan::{GreenNode, NodeCache, ast::AstNode};
 use salsa::{Event, EventKind, Setter};
@@ -99,6 +102,32 @@ pub(crate) struct CompilerRunner {
     modified_files: HashSet<PathBuf>,
     node_cache: NodeCache,
     parser_cached_elements: HashMap<PathBuf, HashSet<GreenElementId>>,
+    // THIR display mode
+    thir_display_mode: ThirDisplayMode,
+    // THIR interactive state
+    thir_interactive_state: ThirInteractiveState,
+}
+
+/// State for the interactive THIR cursor mode
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ThirInteractiveState {
+    /// Current cursor line position (0-indexed)
+    pub cursor_line: usize,
+    /// Current cursor column position (0-indexed)
+    pub cursor_col: usize,
+    /// Total number of navigable lines
+    pub total_lines: usize,
+    /// Map from line index to (function_name, expr_id, type)
+    pub line_info: Vec<ThirLineInfo>,
+    /// The source text for display
+    pub source_lines: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ThirLineInfo {
+    pub function_name: String,
+    pub expr_type: Option<String>,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,6 +143,26 @@ pub(crate) enum VisualizationMode {
     Diff,
     /// Show which incremental queries were recomputed vs cached
     Incremental,
+}
+
+/// Display mode for the THIR tab
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ThirDisplayMode {
+    /// Show the tree view (default)
+    #[default]
+    Tree,
+    /// Interactive mode with cursor navigation
+    Interactive,
+}
+
+impl ThirDisplayMode {
+    /// Get the display name for this mode
+    pub fn name(&self) -> &'static str {
+        match self {
+            ThirDisplayMode::Tree => "Tree",
+            ThirDisplayMode::Interactive => "Interactive",
+        }
+    }
 }
 
 impl CompilerRunner {
@@ -158,6 +207,8 @@ impl CompilerRunner {
             modified_files: HashSet::new(),
             node_cache: NodeCache::default(),
             parser_cached_elements: HashMap::new(),
+            thir_display_mode: ThirDisplayMode::default(),
+            thir_interactive_state: ThirInteractiveState::default(),
         }
     }
 
@@ -466,7 +517,8 @@ impl CompilerRunner {
             let file_path = path.display().to_string();
 
             // Use real baml_hir for item extraction
-            let items = baml_hir::file_items(&self.db, *source_file);
+            let items_struct = baml_hir::file_items(&self.db, *source_file);
+            let items = items_struct.items(&self.db);
 
             // Check if THIS specific file was modified
             let file_recomputed = self.modified_files.contains(path);
@@ -476,7 +528,7 @@ impl CompilerRunner {
 
             // Show real HIR items
             if !items.is_empty() {
-                for item in &items {
+                for item in items {
                     let item_line = format!("  {item:?}");
                     writeln!(output, "{item_line}").ok();
                     output_annotated.push((
@@ -511,13 +563,87 @@ impl CompilerRunner {
     }
 
     fn run_thir(&mut self) {
-        // THIR not yet implemented as a tracked function
-        let output = "THIR not yet implemented".to_string();
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+        let mut interactive_state = ThirInteractiveState::default();
 
-        let output_annotated: Vec<_> = output
-            .lines()
-            .map(|line| (line.to_string(), LineStatus::Unknown))
-            .collect();
+        // Build initial typing context with all function types
+        let file_list: Vec<_> = self.source_files.values().copied().collect();
+        let globals = baml_db::build_typing_context_from_files(&self.db, &file_list);
+
+        // Sort files alphabetically
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(path);
+
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
+            interactive_state
+                .source_lines
+                .push(format!("File: {file_path}"));
+            interactive_state.line_info.push(ThirLineInfo {
+                function_name: String::new(),
+                expr_type: None,
+                description: "File header".to_string(),
+            });
+
+            // Get HIR items for this file
+            let items_struct = baml_hir::file_items(&self.db, *source_file);
+            let items = items_struct.items(&self.db);
+
+            for item in items {
+                if let ItemId::Function(func_id) = item {
+                    let signature = function_signature(&self.db, *source_file, *func_id);
+                    let func_name = signature.name.to_string();
+                    let body = function_body(&self.db, *source_file, *func_id);
+
+                    // Run type inference with global function types
+                    let inference_result = baml_thir::infer_function(
+                        &self.db,
+                        &signature,
+                        &body,
+                        Some(globals.clone()),
+                    );
+
+                    // Use tree view for both modes - interactive mode parses this afterward
+                    let tree_output = baml_thir::render_function_tree(
+                        &self.db,
+                        &func_name,
+                        &signature,
+                        &body,
+                        &inference_result,
+                    );
+
+                    let status = if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    };
+
+                    for line in tree_output.lines() {
+                        writeln!(output, "{}", line).ok();
+                        output_annotated.push((line.to_string(), status));
+                    }
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+            }
+
+            writeln!(output).ok();
+            output_annotated.push((String::new(), LineStatus::Unknown));
+            interactive_state.source_lines.push(String::new());
+            interactive_state.line_info.push(ThirLineInfo {
+                function_name: String::new(),
+                expr_type: None,
+                description: String::new(),
+            });
+        }
+
+        interactive_state.total_lines = interactive_state.line_info.len();
+        self.thir_interactive_state = interactive_state;
 
         self.phase_outputs.insert(CompilerPhase::Thir, output);
         self.phase_outputs_annotated
@@ -639,6 +765,40 @@ impl CompilerRunner {
             .unwrap_or_default()
     }
 
+    /// Get the current THIR display mode
+    pub(crate) fn thir_display_mode(&self) -> ThirDisplayMode {
+        self.thir_display_mode
+    }
+
+    /// Set the THIR display mode
+    pub(crate) fn set_thir_display_mode(&mut self, mode: ThirDisplayMode) {
+        self.thir_display_mode = mode;
+    }
+
+    /// Get the THIR interactive state
+    pub(crate) fn thir_interactive_state(&self) -> &ThirInteractiveState {
+        &self.thir_interactive_state
+    }
+
+    /// Get mutable reference to THIR interactive state
+    pub(crate) fn thir_interactive_state_mut(&mut self) -> &mut ThirInteractiveState {
+        &mut self.thir_interactive_state
+    }
+
+    /// Format THIR output for interactive mode
+    pub(crate) fn format_thir_interactive(&mut self) {
+        // Get the THIR tree output and parse it into interactive state
+        if let Some(output) = self.phase_outputs.get(&CompilerPhase::Thir) {
+            let lines: Vec<String> = output.lines().map(|s| s.to_string()).collect();
+            self.thir_interactive_state.source_lines = lines.clone();
+            self.thir_interactive_state.total_lines = lines.len();
+            // Reset cursor if needed
+            if self.thir_interactive_state.cursor_line >= self.thir_interactive_state.total_lines {
+                self.thir_interactive_state.cursor_line = 0;
+            }
+        }
+    }
+
     /// Get annotated output with mode-specific coloring
     pub(crate) fn get_annotated_output_with_mode(
         &self,
@@ -708,14 +868,14 @@ impl CompilerRunner {
 }
 
 /// Format an AST item into a tree-based string representation
-fn format_ast_item(item: &Item) -> String {
+fn format_ast_item(item: &AstItem) -> String {
     let mut output = String::new();
     format_item_tree(item, &mut output, 0);
     output
 }
 
 /// Recursively format an AST item as a tree
-fn format_item_tree(item: &Item, output: &mut String, indent: usize) {
+fn format_item_tree(item: &AstItem, output: &mut String, indent: usize) {
     use baml_syntax::ast::*;
 
     match item {

@@ -1,163 +1,478 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Expected Expected attribute argument, found Expected attribute argument
-  [parse] Expected Expected RParen, found Error, found Expected RParen, found Error
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected type annotation (:), found Expected type annotation (:)
-  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
-  [parse] Expected Expected return type (->), found Expected return type (->)
-  [parse] Expected Expected function body, found Expected function body
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected config block, found Expected config block
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected type annotation (:), found Expected type annotation (:)
-  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
-  [parse] Expected Expected return type (->), found Expected return type (->)
-  [parse] Expected Expected function body, found Expected function body
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected config block, found Expected config block
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected RParen, found Word, found Expected RParen, found Word
-  [parse] Expected Expected type, found Expected type
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Unexpected token in class body, found Unexpected token in class body
-  [parse] Expected Expected function name, found Expected function name
-  [parse] Expected Expected LParen, found Error, found Expected LParen, found Error
-  [parse] Expected Expected parameter name, found Expected parameter name
-  [parse] Expected Expected type annotation (:), found Expected type annotation (:)
-  [parse] Expected Expected RParen, found Error, found Expected RParen, found Error
-  [parse] Expected Expected return type (->), found Expected return type (->)
-  [parse] Expected Expected function body, found Expected function body
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected config block, found Expected config block
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
-  [parse] Expected Expected top-level declaration, found Expected top-level declaration
+  [parse] Error: Expected attribute argument, found Error
+   ╭─[ 0:4:34 ]
+   │
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                                  ┬  
+   │                                  ╰── Expected attribute argument, found Error
+───╯
+
+  [parse] Error: Expected RParen, found Error
+   ╭─[ 0:4:34 ]
+   │
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                                  ┬  
+   │                                  ╰── Expected RParen, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Error
+   ╭─[ 0:4:34 ]
+   │
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                                  ┬  
+   │                                  ╰── Expected Unexpected token in class body, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:4:44 ]
+   │
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                                            ┬  
+   │                                            ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected type, found Error
+   ╭─[ 0:5:41 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                         ┬  
+   │                                         ╰── Expected type, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Error
+   ╭─[ 0:5:41 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                         ┬  
+   │                                         ╰── Expected Unexpected token in class body, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:5:42 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                          ┬  
+   │                                          ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected type, found Error
+   ╭─[ 0:5:48 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                ┬  
+   │                                                ╰── Expected type, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Error
+   ╭─[ 0:5:48 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                ┬  
+   │                                                ╰── Expected Unexpected token in class body, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:5:49 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                 ┬  
+   │                                                 ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:5:58 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                          ┬  
+   │                                                          ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found RParen
+   ╭─[ 0:5:59 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                           ┬  
+   │                                                           ╰── Expected Unexpected token in class body, found RParen
+───╯
+
+  [parse] Error: Expected RParen, found Word
+   ╭─[ 0:6:47 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                               ───┬──  
+   │                                                  ╰──── Expected RParen, found Word
+───╯
+
+  [parse] Error: Expected type, found Error
+   ╭─[ 0:6:53 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                     ┬  
+   │                                                     ╰── Expected type, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Error
+   ╭─[ 0:6:53 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                     ┬  
+   │                                                     ╰── Expected Unexpected token in class body, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:6:54 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                      ┬  
+   │                                                      ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Error
+   ╭─[ 0:6:56 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                        ┬  
+   │                                                        ╰── Expected Unexpected token in class body, found Error
+───╯
+
+  [parse] Error: Expected type, found Error
+   ╭─[ 0:6:64 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                                ┬  
+   │                                                                ╰── Expected type, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Error
+   ╭─[ 0:6:64 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                                ┬  
+   │                                                                ╰── Expected Unexpected token in class body, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:6:65 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                                 ┬  
+   │                                                                 ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found RParen
+   ╭─[ 0:6:66 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                                  ┬  
+   │                                                                  ╰── Expected Unexpected token in class body, found RParen
+───╯
+
+  [parse] Error: Expected RParen, found Word
+   ╭─[ 0:7:31 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                               ─┬─  
+   │                                ╰─── Expected RParen, found Word
+───╯
+
+  [parse] Error: Expected type, found Error
+   ╭─[ 0:7:34 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                  ┬  
+   │                                  ╰── Expected type, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Error
+   ╭─[ 0:7:34 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                  ┬  
+   │                                  ╰── Expected Unexpected token in class body, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:7:35 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                   ┬  
+   │                                   ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Colon
+   ╭─[ 0:7:36 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                    ┬  
+   │                                    ╰── Expected Unexpected token in class body, found Colon
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Error
+   ╭─[ 0:7:38 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                      ┬  
+   │                                      ╰── Expected Unexpected token in class body, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:7:39 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                       ┬  
+   │                                       ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected type, found Error
+   ╭─[ 0:7:45 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                             ┬  
+   │                                             ╰── Expected type, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Error
+   ╭─[ 0:7:45 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                             ┬  
+   │                                             ╰── Expected Unexpected token in class body, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 0:7:46 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                              ┬  
+   │                                              ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected top-level declaration, found Quote
+   ╭─[ 0:7:48 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                                ┬  
+   │                                                ╰── Expected top-level declaration, found Quote
+───╯
+
+  [parse] Error: Expected top-level declaration, found RParen
+   ╭─[ 0:7:49 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                                 ┬  
+   │                                                 ╰── Expected top-level declaration, found RParen
+───╯
+
+  [parse] Error: Expected top-level declaration, found RBrace
+   ╭─[ 0:8:1 ]
+   │
+ 8 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration, found RBrace
+───╯
+
+  [parse] Error: Expected RParen, found Word
+   ╭─[ 2:7:41 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                         ──┬──  
+   │                                           ╰──── Expected RParen, found Word
+───╯
+
+  [parse] Error: Expected type, found Error
+   ╭─[ 2:7:46 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                              ┬  
+   │                                              ╰── Expected type, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Error
+   ╭─[ 2:7:46 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                              ┬  
+   │                                              ╰── Expected Unexpected token in class body, found Error
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 2:7:47 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                               ┬  
+   │                                               ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found Quote
+   ╭─[ 2:7:48 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                                ┬  
+   │                                                ╰── Expected Unexpected token in class body, found Quote
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found RParen
+   ╭─[ 2:7:49 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                                 ┬  
+   │                                                 ╰── Expected Unexpected token in class body, found RParen
+───╯
+
+  [parse] Error: Expected function name, found Error
+    ╭─[ 3:29:1 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │ ─┬─  
+    │  ╰─── Expected function name, found Error
+────╯
+
+  [parse] Error: Expected parameter name, found Error
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected parameter name, found Error
+────╯
+
+  [parse] Error: Expected type annotation, found Error
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected type annotation, found Error
+────╯
+
+  [parse] Error: Expected RParen, found Error
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected RParen, found Error
+────╯
+
+  [parse] Error: Expected return type (->), found Error
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected return type (->), found Error
+────╯
+
+  [parse] Error: Expected function body, found Error
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected function body, found Error
+────╯
+
+  [parse] Error: Expected top-level declaration, found Error
+    ╭─[ 3:29:14 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │              ─┬─  
+    │               ╰─── Expected top-level declaration, found Error
+────╯
+
+  [parse] Error: Expected top-level declaration, found Error
+    ╭─[ 3:29:17 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                 ─┬─  
+    │                  ╰─── Expected top-level declaration, found Error
+────╯
+
+  [parse] Error: Expected top-level declaration, found Word
+    ╭─[ 3:29:21 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                     ───┬──  
+    │                        ╰──── Expected top-level declaration, found Word
+────╯
+
+  [parse] Error: Expected top-level declaration, found RParen
+    ╭─[ 3:29:27 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                           ┬  
+    │                           ╰── Expected top-level declaration, found RParen
+────╯
+
+  [parse] Error: Expected top-level declaration, found Arrow
+    ╭─[ 3:29:29 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                             ─┬   
+    │                              ╰─── Expected top-level declaration, found Arrow
+────╯
+
+  [parse] Error: Expected top-level declaration, found Word
+    ╭─[ 3:29:32 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                                ────┬───  
+    │                                    ╰───── Expected top-level declaration, found Word
+────╯
+
+  [parse] Error: Expected top-level declaration, found LBrace
+    ╭─[ 3:30:1 ]
+    │
+ 30 │   "#
+    │ ┬  
+    │ ╰── Expected top-level declaration, found LBrace
+────╯
+
+  [parse] Error: Expected config block, found Word
+
+  [parse] Error: Expected top-level declaration, found Word
+
+  [parse] Error: Expected top-level declaration, found Hash
+
+  [parse] Error: Expected top-level declaration, found Quote
+
+  [parse] Error: Expected top-level declaration, found Word
+
+  [parse] Error: Expected top-level declaration, found Word
+
+  [parse] Error: Expected top-level declaration, found Word
+
+  [parse] Error: Expected top-level declaration, found Colon
+
+  [parse] Error: Expected top-level declaration, found LBrace
+
+  [parse] Error: Expected top-level declaration, found LBrace
+
+  [parse] Error: Expected top-level declaration, found Error
+
+  [parse] Error: Expected top-level declaration, found Error
+
+  [parse] Error: Expected top-level declaration, found RBrace
+
+  [parse] Error: Expected top-level declaration, found RBrace
+
+  [parse] Error: Expected top-level declaration, found Word
+
+  [parse] Error: Expected top-level declaration, found Word
+
+  [parse] Error: Expected top-level declaration, found Word
+
+  [parse] Error: Expected top-level declaration, found Word
+
+  [parse] Error: Expected top-level declaration, found Colon
+
+  [parse] Error: Expected top-level declaration, found Error
+
+  [parse] Error: Expected top-level declaration, found Word
+
+  [parse] Error: Expected top-level declaration, found Error
+
+  [parse] Error: Expected top-level declaration, found Quote
+
+  [parse] Error: Expected top-level declaration, found Hash
+
+  [parse] Error: Expected top-level declaration, found RBrace
