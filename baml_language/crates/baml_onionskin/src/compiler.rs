@@ -8,17 +8,15 @@ use std::{
 };
 
 use anyhow::Result;
-use baml_base::Diagnostic;
 use baml_db::{
     RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
     baml_thir, baml_workspace, function_body, function_signature,
 };
-use baml_hir::{Expr, ExprBody, ExprId, FunctionBody, ItemId, Pattern, Stmt, StmtId};
+use baml_hir::ItemId;
 use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
-use baml_thir::{InferenceResult, Ty};
 use regex::Regex;
 use rowan::{GreenNode, NodeCache, ast::AstNode};
 use salsa::{Event, EventKind, Setter};
@@ -124,6 +122,7 @@ pub(crate) struct ThirInteractiveState {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub(crate) struct ThirLineInfo {
     pub function_name: String,
     pub expr_type: Option<String>,

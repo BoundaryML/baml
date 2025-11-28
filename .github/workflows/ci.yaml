@@ -7,9 +7,6 @@ on:
   push:
     branches: [main, canary]
   pull_request:
-    paths:
-      - "baml_language/**"
-      - ".github/workflows/ci.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -835,6 +832,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - benchmarks-instrumented
       - cargo-fmt
       - cargo-clippy
       - cargo-test-linux
