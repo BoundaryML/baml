@@ -66,6 +66,7 @@ jobs:
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/**' \
             ':.github/workflows/ci.yaml' \
+            ':.github/workflows/reusable/cargo-tests.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -157,6 +158,7 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':beps/**' \
+            ':.github/workflows/reusable/beps.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -172,614 +174,49 @@ jobs:
             ':fern/**' \
             ':typescript/apps/ask-baml-client/**' \
             ':typescript/apps/sage-backend/**' \
+            ':.github/workflows/reusable/docs.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-  check-beps:
-    name: "check beps"
-    runs-on: ubuntu-latest
+  # Call reusable workflows
+  cargo-tests:
+    name: "Cargo Tests"
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.beps == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+    uses: ./.github/workflows/reusable/cargo-tests.reusable.yaml
+    with:
+      code_changed: ${{ needs.determine_changes.outputs.code }}
+      run_all: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
+    secrets: inherit
 
-      - name: Fetch BEP file history
-        run: git fetch --depth=500 origin ${{ github.ref }} -- beps/
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-
-      - name: "Check BEP index"
-        run: ./beps/scripts/update_bep_readme.py --check
-
-  deploy-beps-canary:
-    name: "deploy beps (canary)"
-    runs-on: ubuntu-latest
-    needs: [determine_changes, check-beps]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Fetch BEP file history
-        run: git fetch --depth=500 origin ${{ github.ref }} -- beps/
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.x
-
-      - name: Install MkDocs and dependencies
-        run: |
-          pip install mkdocs-material mkdocs-awesome-pages-plugin mkdocs-git-revision-date-localized-plugin mkdocs-git-committers-plugin-2
-
-      - name: Build MkDocs
-        working-directory: beps
-        run: mkdocs build
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4 # v4
-        with:
-          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
-          aws-region: us-east-1
-
-      - name: Deploy to S3
-        run: |
-          aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/canary/ --delete --cache-control "public, max-age=3600"
-
-      - name: Invalidate CloudFront cache
-        run: |
-          aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/canary/*"
-
-  deploy-beps-preview:
-    name: "deploy beps (preview)"
-    runs-on: ubuntu-latest
-    needs: [determine_changes, check-beps]
-    if: github.event_name == 'pull_request' && needs.determine_changes.outputs.beps == 'true'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Fetch BEP file history
-        run: git fetch --depth=500 origin ${{ github.ref }} -- beps/
-
-      - name: Get branch name
-        id: branch
-        run: |
-          BRANCH_NAME="${{ github.head_ref }}"
-          SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
-          echo "name=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
-
-      - name: Comment - Building Preview
-        uses: thollander/actions-comment-pull-request@v3.0.1 # v3.0.1
-        with:
-          message: |
-            🏗️ **Building BEPs preview...** (run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))
-          comment-tag: beps-preview
-
-      - name: Fetch canary branch for diff
-        run: |
-          git fetch origin canary:canary || true
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.x
-
-      - name: Install MkDocs and dependencies
-        run: |
-          pip install mkdocs-material mkdocs-awesome-pages-plugin mkdocs-git-revision-date-localized-plugin mkdocs-git-committers-plugin-2
-
-      - name: Build MkDocs
-        working-directory: beps
-        run: mkdocs build
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4 # v4
-        with:
-          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
-          aws-region: us-east-1
-
-      - name: Deploy to S3
-        run: |
-          aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/${{ steps.branch.outputs.name }}/ --delete --cache-control "public, max-age=300"
-
-      - name: Invalidate CloudFront cache
-        run: |
-          aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/${{ steps.branch.outputs.name }}/*"
-
-      - name: Update Building Comment
-        uses: thollander/actions-comment-pull-request@v3.0.1 # v3.0.1
-        with:
-          message: |
-            ✅ **Latest build complete** • [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          comment-tag: beps-preview
-
-      - name: Comment Preview URL
-        uses: thollander/actions-comment-pull-request@v3.0.1 # v3.0.1
-        with:
-          message: |
-            🐑 **BEPs Preview Ready**
-
-            **Preview URL**: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
-
-            <sub>Commit: `${{ github.event.pull_request.head.sha }}` • [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
-
-  publish-docs:
-    name: "publish docs (docs)"
-    runs-on: ubuntu-latest
+  beps:
+    name: "BEPs"
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.docs == 'true' || github.ref == 'refs/heads/canary' }}
-    permissions: write-all
-    environment:
-      name: ${{ github.ref == 'refs/heads/canary' && 'boundary-tools-prod' || 'boundary-tools-dev' }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+    uses: ./.github/workflows/reusable/beps.reusable.yaml
+    with:
+      beps_changed: ${{ needs.determine_changes.outputs.beps }}
+      is_canary: ${{ github.ref == 'refs/heads/canary' }}
+      is_pr: ${{ github.event_name == 'pull_request' }}
+    secrets: inherit
+    permissions:
+      id-token: write
+      pull-requests: write
+      contents: read
 
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node
-        with:
-          install-dependencies: false
-
-      - name: Install Fern
-        run: npm install -g fern-api
-
-      - name: Install dependencies and build custom.js
-        working-directory: ./typescript/apps/ask-baml-client
-        run: pnpm install && pnpm run build
-
-      - name: Generate preview URL
-        env:
-          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
-        run: |
-          fern check --strict-broken-links
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
-            OUTPUT=$(fern generate --docs 2>&1) || true
-          else
-            OUTPUT=$(fern generate --docs --preview 2>&1) || true
-          fi
-          echo "$OUTPUT"
-          URL=$(echo "$OUTPUT" | grep -oP 'Published docs to \K.*(?= \()')
-          echo "🌿 Preview your docs: $URL" | tee preview_url.txt
-
-      - name: Comment URL in PR
-        if: github.event_name == 'pull_request'
-        uses: thollander/actions-comment-pull-request@v3.0.1
-        with:
-          file-path: preview_url.txt
-
-  deploy-backend:
-    name: "deploy backend (docs)"
-    runs-on: ubuntu-latest
+  docs:
+    name: "Docs"
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.docs == 'true' || github.ref == 'refs/heads/canary' }}
-    permissions: write-all
-    environment:
-      name: ${{ github.ref == 'refs/heads/canary' && 'boundary-tools-prod' || 'boundary-tools-dev' }}
-    defaults:
-      run:
-        working-directory: ../sage-backend
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node
-        with:
-          install-dependencies: false
-
-      - name: Install Fern
-        working-directory: .
-        run: npm install -g fern-api
-
-      # We need to do this `deploy` step because we're relying on a pnpm workspace and Vercel doesn't play nice with this:
-      #
-      #   - doing normal `vercel deploy` is confusing, because the monorepo can be either promptfiddle or ask-baml-backend
-      #   - doing `vercel build` in the monorepo and then `deploy --prebuilt` results in this error:
-      #
-      #       Using prebuilt build artifacts...
-      #       [Error: ENOENT: no such file or directory, lstat '/node_modules/.pnpm/next@15.4.3_@opentelemetry+api@1.9.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/jest-worker/processChild.js'] {
-      #         errno: -2,
-      #         code: 'ENOENT',
-      #         syscall: 'lstat',
-      #         path: '/node_modules/.pnpm/next@15.4.3_@opentelemetry+api@1.9.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/jest-worker/processChild.js'
-      #       }}
-      #
-      # So our current solution is to do this mechanism.
-      - name: Pull sage-backend out of monorepo
-        working-directory: ./typescript
-        run: |
-          pnpm --filter=sage-backend install
-          pnpm --filter=sage-backend deploy ../sage-backend
-
-      - name: Install dependencies and build
-        run: |
-          pnpm baml-cli generate
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
-            echo TARGET_ENV=production >>$GITHUB_ENV
-          else
-            echo TARGET_ENV=preview >>$GITHUB_ENV
-          fi
-
-      - name: Build Vercel project
-        env:
-          NOTION_ASK_BAML_LOGS_DATABASE_ID: ${{ secrets.NOTION_ASK_BAML_LOGS_DATABASE_ID }}
-          NOTION_BOUNDARY_BOT_TOKEN: ${{ secrets.NOTION_BOUNDARY_BOT_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-          SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_SAGE_PROJECT_ID }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_SAM }}
-        run: |
-          pnpm vercel pull --environment $TARGET_ENV --yes --token=${{ secrets.VERCEL_TOKEN_SAM }}
-          pnpm vercel build --target $TARGET_ENV --token=${{ secrets.VERCEL_TOKEN_SAM }}
-
-      - name: Deploy preview backend
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_SAGE_PROJECT_ID }}
-        run: |
-          pnpm vercel deploy --target $TARGET_ENV --prebuilt --token=${{ secrets.VERCEL_TOKEN_SAM }} | tee preview_url.txt
-
-      - name: Comment URL in PR
-        if: github.event_name == 'pull_request'
-        uses: thollander/actions-comment-pull-request@v3.0.1
-        with:
-          file-path: ../sage-backend/preview_url.txt
-
-  update-pinecone:
-    name: "update pinecone (docs)"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.docs == 'true' || github.ref == 'refs/heads/canary' }}
-    environment:
-      name: ${{ github.ref == 'refs/heads/canary' && 'boundary-tools-prod' || 'boundary-tools-dev' }}
-    defaults:
-      run:
-        working-directory: typescript/apps/sage-backend
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node
-        with:
-          install-dependencies: false
-
-      - name: Set environment variables
-        run: |
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
-            echo PINECONE_ENV=prod >>$GITHUB_ENV
-          else
-            echo PINECONE_ENV=dev >>$GITHUB_ENV
-          fi
-
-      - name: Update pinecone
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-        run: |
-          pnpm --filter=sage-backend install
-          pnpm tsx tools/update-pinecone.ts ../../../fern/docs.yml
-
-  cargo-fmt:
-    name: "cargo fmt"
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup component add rustfmt
-        working-directory: baml_language
-
-      - name: "Check formatting"
-        run: cargo fmt --all --check
-        working-directory: baml_language
-
-  cargo-clippy:
-    name: "cargo clippy"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup component add clippy
-          rustup target add wasm32-unknown-unknown
-        working-directory: baml_language
-
-      - name: "Clippy"
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-        working-directory: baml_language
-
-      - name: "Clippy (wasm)"
-        run: cargo clippy --workspace --exclude baml_onionskin --target wasm32-unknown-unknown --all-features --locked -- -D warnings
-        working-directory: baml_language
-
-  cargo-test-linux:
-    name: "cargo test (linux)"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo insta"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-insta
-
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
-      - name: "Run tests with nextest"
-        run: cargo nextest run --all-features
-        working-directory: baml_language
-
-      - name: "Run snapshot tests with insta"
-        run: cargo insta test --all-features --unreferenced reject
-        working-directory: baml_language
-
-      - name: "Check documentation"
-        run: cargo doc --all --no-deps
-        working-directory: baml_language
-        env:
-          RUSTDOCFLAGS: "-D warnings"
-
-      - name: "Upload test results on failure"
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-failures-linux
-          path: |
-            baml_language/**/*.snap.new
-            baml_language/**/target/nextest/
-
-  cargo-test-macos:
-    name: "cargo test (macos)"
-    runs-on: macos-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
-      - name: "Run tests"
-        run: |
-          cargo nextest run --all-features
-          cargo test --all-features --doc
-        working-directory: baml_language
-
-  cargo-test-windows:
-    name: "cargo test (windows)"
-    runs-on: windows-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
-      - name: "Run tests"
-        run: |
-          cargo nextest run --all-features
-          cargo test --all-features --doc
-        working-directory: baml_language
-
-  cargo-test-wasm:
-    name: "cargo test (wasm)"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup target add wasm32-unknown-unknown
-        working-directory: baml_language
-
-      - name: "Build for WASM"
-        run: |
-          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_onionskin --no-default-features
-          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_onionskin --no-default-features --release
-        working-directory: baml_language
-
-      - name: "Check WASM size"
-        run: |
-          ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
-          echo "WASM build artifacts:"
-          find target/wasm32-unknown-unknown -name "*.wasm" -exec ls -lh {} \;
-        working-directory: baml_language
-
-  cargo-build-msrv:
-    name: "cargo build (msrv)"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: SebRollen/toml-action@v1.2.0
-        id: msrv
-        with:
-          file: "baml_language/Cargo.toml"
-          field: "workspace.package.rust-version"
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain (MSRV)"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: |
-          rustup toolchain install "${MSRV}"
-          rustup default "${MSRV}"
-        working-directory: baml_language
-
-      - name: "Build with MSRV"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: cargo "+${MSRV}" test --no-run --all-features
-        working-directory: baml_language
-
-  check-dependencies:
-    name: "check dependencies"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo-deny"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny
-
-      - name: "Check dependencies"
-        run: cargo deny check
-        working-directory: baml_language
-        continue-on-error: true # For now, just warn
-
-  snapshot-tests:
-    name: "snapshot tests"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo insta"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-insta
-
-      - name: "Run snapshot tests"
-        run: |
-          cargo insta test --all-features --unreferenced=reject
-          cargo insta test --all-features --review
-        working-directory: baml_language
-
-      - name: "Check for snapshot changes"
-        run: |
-          if [ -n "$(git status --porcelain baml_language/crates/baml_tests/snapshots)" ]; then
-            echo "::error::Snapshot tests have uncommitted changes"
-            git diff baml_language/crates/baml_tests/snapshots
-            exit 1
-          fi
-
-      - name: "Upload snapshot failures"
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: snapshot-failures
-          path: |
-            baml_language/crates/baml_tests/snapshots/**/*.snap.new
-            baml_language/crates/baml_tests/snapshots/**/*.snap
+    uses: ./.github/workflows/reusable/docs.reusable.yaml
+    with:
+      docs_changed: ${{ needs.determine_changes.outputs.docs }}
+      is_canary: ${{ github.ref == 'refs/heads/canary' }}
+    secrets: inherit
+    permissions:
+      id-token: write
+      pull-requests: write
+      contents: read
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
@@ -832,91 +269,30 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - cargo-tests
+      - beps
+      - docs
       - benchmarks-instrumented
-      - cargo-fmt
-      - cargo-clippy
-      - cargo-test-linux
-      - cargo-test-macos
-      - cargo-test-windows
-      - cargo-test-wasm
-      - cargo-build-msrv
-      - snapshot-tests
-      - check-beps
-      - deploy-beps-canary
-      - deploy-beps-preview
-      - publish-docs
-      - deploy-backend
-      - update-pinecone
     steps:
       - name: "Check test results"
         run: |
-          if [[ "${{ needs.check-beps.result }}" != "success" && "${{ needs.check-beps.result }}" != "skipped" ]]; then
-            echo "::error::BEP check failed"
+          if [[ "${{ needs.cargo-tests.result }}" != "success" && "${{ needs.cargo-tests.result }}" != "skipped" ]]; then
+            echo "::error::Cargo tests failed"
             exit 1
           fi
 
-          if [[ "${{ needs.deploy-beps-canary.result }}" != "success" && "${{ needs.deploy-beps-canary.result }}" != "skipped" ]]; then
-            echo "::error::BEP canary deploy failed"
+          if [[ "${{ needs.beps.result }}" != "success" && "${{ needs.beps.result }}" != "skipped" ]]; then
+            echo "::error::BEPs workflow failed"
             exit 1
           fi
 
-          if [[ "${{ needs.deploy-beps-preview.result }}" != "success" && "${{ needs.deploy-beps-preview.result }}" != "skipped" ]]; then
-            echo "::error::BEP preview deploy failed"
+          if [[ "${{ needs.docs.result }}" != "success" && "${{ needs.docs.result }}" != "skipped" ]]; then
+            echo "::error::Docs workflow failed"
             exit 1
           fi
 
-          if [[ "${{ needs.cargo-fmt.result }}" != "success" && "${{ needs.cargo-fmt.result }}" != "skipped" ]]; then
-            echo "::error::Formatting check failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.cargo-clippy.result }}" != "success" && "${{ needs.cargo-clippy.result }}" != "skipped" ]]; then
-            echo "::error::Clippy check failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.cargo-test-linux.result }}" != "success" && "${{ needs.cargo-test-linux.result }}" != "skipped" ]]; then
-            echo "::error::Linux tests failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.cargo-test-macos.result }}" != "success" && "${{ needs.cargo-test-macos.result }}" != "skipped" ]]; then
-            echo "::error::macOS tests failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.cargo-test-windows.result }}" != "success" && "${{ needs.cargo-test-windows.result }}" != "skipped" ]]; then
-            echo "::error::Windows tests failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.cargo-test-wasm.result }}" != "success" && "${{ needs.cargo-test-wasm.result }}" != "skipped" ]]; then
-            echo "::error::WASM build failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.cargo-build-msrv.result }}" != "success" && "${{ needs.cargo-build-msrv.result }}" != "skipped" ]]; then
-            echo "::error::MSRV build failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.snapshot-tests.result }}" != "success" && "${{ needs.snapshot-tests.result }}" != "skipped" ]]; then
-            echo "::error::Snapshot tests failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.publish-docs.result }}" != "success" && "${{ needs.publish-docs.result }}" != "skipped" ]]; then
-            echo "::error::Docs publishing failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.deploy-backend.result }}" != "success" && "${{ needs.deploy-backend.result }}" != "skipped" ]]; then
-            echo "::error::Backend deployment failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.update-pinecone.result }}" != "success" && "${{ needs.update-pinecone.result }}" != "skipped" ]]; then
-            echo "::error::Pinecone update failed"
+          if [[ "${{ needs.benchmarks-instrumented.result }}" != "success" && "${{ needs.benchmarks-instrumented.result }}" != "skipped" ]]; then
+            echo "::error::Benchmarks failed"
             exit 1
           fi
 
