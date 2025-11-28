@@ -650,6 +650,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - benchmarks-instrumented
       - cargo-fmt
       - cargo-clippy
       - cargo-test-linux
