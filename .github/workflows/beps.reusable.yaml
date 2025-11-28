@@ -44,6 +44,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-beps
     if: inputs.is_canary && !inputs.is_pr
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -84,6 +87,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-beps
     if: inputs.is_pr && inputs.beps_changed == 'true'
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:

@@ -202,8 +202,8 @@ jobs:
     secrets: inherit
     permissions:
       id-token: write
-      pull-requests: write
       contents: read
+      pull-requests: write
 
   docs:
     name: "Docs"
@@ -213,10 +213,7 @@ jobs:
       docs_changed: ${{ needs.determine_changes.outputs.docs }}
       is_canary: ${{ github.ref == 'refs/heads/canary' }}
     secrets: inherit
-    permissions:
-      id-token: write
-      pull-requests: write
-      contents: read
+    permissions: write-all
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
