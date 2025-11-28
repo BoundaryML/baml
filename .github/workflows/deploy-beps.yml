@@ -55,25 +55,25 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-west-2
+          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
+          aws-region: us-east-1
 
       - name: Deploy to S3
         if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
         run: |
-          aws s3 sync _site s3://${{ secrets.S3_BUCKET_BEPS }}/canary/ --delete --cache-control "public, max-age=3600"
+          aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/canary/ --delete --cache-control "public, max-age=3600"
 
       - name: Invalidate CloudFront cache (Production)
         if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
         run: |
-          aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID_BEPS }} --paths "/canary/*"
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/canary/*"
 
       - name: Configure AWS credentials (Preview)
         if: github.event_name == 'pull_request'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-west-2
+          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
+          aws-region: us-east-1
 
       - name: Get branch name
         if: github.event_name == 'pull_request'
@@ -88,12 +88,12 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           # Deploy to branch-specific path in S3
-          aws s3 sync _site s3://${{ secrets.S3_BUCKET_BEPS }}/${{ steps.branch.outputs.name }}/ --delete --cache-control "public, max-age=300"
+          aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/${{ steps.branch.outputs.name }}/ --delete --cache-control "public, max-age=300"
 
       - name: Invalidate CloudFront cache (Preview)
         if: github.event_name == 'pull_request'
         run: |
-          aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID_BEPS }} --paths "/${{ steps.branch.outputs.name }}/*"
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/${{ steps.branch.outputs.name }}/*"
 
       - name: Comment Preview URL
         if: github.event_name == 'pull_request'

@@ -24,19 +24,19 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-west-2
+          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
+          aws-region: us-east-1
 
       - name: Delete S3 preview files
         run: |
           echo "Deleting preview files for branch: ${{ steps.branch.outputs.name }}"
-          aws s3 rm s3://${{ secrets.S3_BUCKET_BEPS }}/${{ steps.branch.outputs.name }}/ --recursive
+          aws s3 rm s3://${{ secrets.BEPS_S3_BUCKET }}/${{ steps.branch.outputs.name }}/ --recursive
           echo "✓ Preview files deleted"
 
       - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID_BEPS }} \
+            --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/${{ steps.branch.outputs.name }}/*"
           echo "✓ CloudFront cache invalidated"
 

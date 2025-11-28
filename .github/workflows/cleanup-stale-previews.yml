@@ -21,15 +21,15 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-west-2
+          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
+          aws-region: us-east-1
 
       - name: Find and cleanup stale previews
         run: |
           echo "🔍 Scanning for stale preview deployments..."
 
-          # Get all "folders" (prefixes) in S3, excluding root files
-          PREFIXES=$(aws s3 ls s3://${{ secrets.S3_BUCKET_BEPS }}/ | grep "PRE" | awk '{print $2}' | sed 's/\///g')
+            # Get all "folders" (prefixes) in S3, excluding root files
+            PREFIXES=$(aws s3 ls s3://${{ secrets.BEPS_S3_BUCKET }}/ | grep "PRE" | awk '{print $2}' | sed 's/\///g')
 
           if [ -z "$PREFIXES" ]; then
             echo "No preview folders found in S3"
@@ -64,11 +64,11 @@ jobs:
             
             if [ -z "$BRANCH_EXISTS" ]; then
               echo "🗑️  Branch '$PREFIX' no longer exists - deleting preview..."
-              aws s3 rm s3://${{ secrets.S3_BUCKET_BEPS }}/$PREFIX/ --recursive
+              aws s3 rm s3://${{ secrets.BEPS_S3_BUCKET }}/$PREFIX/ --recursive
               
               # Invalidate CloudFront cache
               aws cloudfront create-invalidation \
-                --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID_BEPS }} \
+                --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} \
                 --paths "/$PREFIX/*" > /dev/null
               
               DELETED_COUNT=$((DELETED_COUNT + 1))
@@ -76,7 +76,7 @@ jobs:
             else
               # Check if files are older than 14 days
               LAST_MODIFIED=$(aws s3api list-objects-v2 \
-                --bucket ${{ secrets.S3_BUCKET_BEPS }} \
+                --bucket ${{ secrets.BEPS_S3_BUCKET }} \
                 --prefix "$PREFIX/" \
                 --query 'sort_by(Contents, &LastModified)[-1].LastModified' \
                 --output text)
@@ -86,11 +86,11 @@ jobs:
                 
                 if [ "$LAST_MODIFIED_EPOCH" -lt "$CUTOFF_DATE" ]; then
                   echo "🗑️  Preview '$PREFIX' is older than 14 days (last modified: $LAST_MODIFIED) - deleting..."
-                  aws s3 rm s3://${{ secrets.S3_BUCKET_BEPS }}/$PREFIX/ --recursive
+                  aws s3 rm s3://${{ secrets.BEPS_S3_BUCKET }}/$PREFIX/ --recursive
                   
                   # Invalidate CloudFront cache
                   aws cloudfront create-invalidation \
-                    --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID_BEPS }} \
+                    --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} \
                     --paths "/$PREFIX/*" > /dev/null
                   
                   DELETED_COUNT=$((DELETED_COUNT + 1))
