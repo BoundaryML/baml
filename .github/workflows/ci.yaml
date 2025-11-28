@@ -663,12 +663,12 @@ jobs:
             exit 1
           fi
 
-          if [[ "${{ needs.deploy-beps-canary.result }}" == "failure" ]]; then
+          if [[ "${{ needs.deploy-beps-canary.result }}" != "success" && "${{ needs.deploy-beps-canary.result }}" != "skipped" ]]; then
             echo "::error::BEP canary deploy failed"
             exit 1
           fi
 
-          if [[ "${{ needs.deploy-beps-preview.result }}" == "failure" ]]; then
+          if [[ "${{ needs.deploy-beps-preview.result }}" != "success" && "${{ needs.deploy-beps-preview.result }}" != "skipped" ]]; then
             echo "::error::BEP preview deploy failed"
             exit 1
           fi
