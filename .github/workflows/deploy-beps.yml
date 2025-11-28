@@ -23,15 +23,63 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  # ============================================
+  # Production deployment (canary branch)
+  # ============================================
+  deploy-canary:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetch all history for git plugins
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Install MkDocs and dependencies
+        run: |
+          pip install mkdocs-material mkdocs-awesome-pages-plugin mkdocs-git-revision-date-localized-plugin mkdocs-git-committers-plugin-2
+
+      - name: Build MkDocs
+        working-directory: beps
+        run: mkdocs build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/canary/ --delete --cache-control "public, max-age=3600"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/canary/*"
+
+  # ============================================
+  # Preview deployment (pull requests)
+  # ============================================
+  deploy-preview:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get branch name
+        id: branch
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+          echo "name=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Comment - Building Preview
-        if: github.event_name == 'pull_request'
         uses: thollander/actions-comment-pull-request@v3.0.1
         with:
           message: |
@@ -52,51 +100,20 @@ jobs:
         run: mkdocs build
 
       - name: Configure AWS credentials
-        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Deploy to S3
-        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
         run: |
-          aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/canary/ --delete --cache-control "public, max-age=3600"
-
-      - name: Invalidate CloudFront cache (Production)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
-        run: |
-          aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/canary/*"
-
-      - name: Configure AWS credentials (Preview)
-        if: github.event_name == 'pull_request'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
-          aws-region: us-east-1
-
-      - name: Get branch name
-        if: github.event_name == 'pull_request'
-        id: branch
-        run: |
-          # Get branch name and sanitize it for use in S3 path
-          BRANCH_NAME="${{ github.head_ref }}"
-          SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
-          echo "name=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
-
-      - name: Deploy to S3 (Preview)
-        if: github.event_name == 'pull_request'
-        run: |
-          # Deploy to branch-specific path in S3
           aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/${{ steps.branch.outputs.name }}/ --delete --cache-control "public, max-age=300"
 
-      - name: Invalidate CloudFront cache (Preview)
-        if: github.event_name == 'pull_request'
+      - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/${{ steps.branch.outputs.name }}/*"
 
       - name: Comment Preview URL
-        if: github.event_name == 'pull_request'
         uses: thollander/actions-comment-pull-request@v3.0.1
         with:
           message: |
