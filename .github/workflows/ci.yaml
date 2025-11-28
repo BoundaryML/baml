@@ -7,9 +7,6 @@ on:
   push:
     branches: [main, canary]
   pull_request:
-    paths:
-      - "baml_language/**"
-      - ".github/workflows/ci.yaml"
   workflow_dispatch:
 
 concurrency:
