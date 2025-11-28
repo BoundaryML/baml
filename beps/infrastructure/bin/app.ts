@@ -10,7 +10,7 @@ const accountId = process.env.CDK_DEFAULT_ACCOUNT;
 const config = {
   // Domain is optional - skip for testing (uses CloudFront default domain)
   domain: process.env.BEPS_DOMAIN, // Set to 'beps.boundaryml.com' for production
-  githubOrg: process.env.GITHUB_ORG || 'boundaryml',
+  githubOrg: process.env.GITHUB_ORG || 'BoundaryML',
   githubRepo: process.env.GITHUB_REPO || 'baml',
   certificateArn: process.env.CERTIFICATE_ARN, // Optional: Use existing certificate
   githubOidcProviderArn: process.env.GITHUB_OIDC_PROVIDER_ARN ||

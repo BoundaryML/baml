@@ -113,11 +113,35 @@ jobs:
         run: |
           aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/${{ steps.branch.outputs.name }}/*"
 
+      - name: Update Building Comment
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          message: |
+            ✅ **Latest build complete** • [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          comment-tag: beps-preview
+
       - name: Comment Preview URL
         uses: thollander/actions-comment-pull-request@v3.0.1
         with:
           message: |
-            ✅ **BEPs Preview Ready**: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
+            🐑 **BEPs Preview Ready**
 
-            <sub>Built from commit ${{ github.event.pull_request.head.sha }} • [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
-          comment-tag: beps-preview
+            **Preview URL**: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
+
+            <sub>Commit: `${{ github.event.pull_request.head.sha }}` • [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
+
+  # ============================================
+  # Status check (for branch protection)
+  # ============================================
+  beps-status:
+    if: always()
+    needs: [deploy-canary, deploy-preview]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check status
+        run: |
+          if [[ "${{ needs.deploy-canary.result }}" == "failure" ]] || [[ "${{ needs.deploy-preview.result }}" == "failure" ]]; then
+            echo "❌ Deployment failed"
+            exit 1
+          fi
+          echo "✅ Deployment successful (or skipped appropriately)"
