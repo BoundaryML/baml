@@ -492,7 +492,7 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     # If no diffs anywhere, just return (but we might want to show the dropdown saying "No changes"?)
     # Actually if there are changes vs SOMETHING we should show UI.
     has_any_change = any(bool(d["added"] or d["removed"]) for d in diffs.values())
-    
+
     if not has_any_change:
         return markdown
 

@@ -86,6 +86,10 @@ jobs:
             🏗️ **Building BEPs preview...** (run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))
           comment-tag: beps-preview
 
+      - name: Fetch canary branch for diff
+        run: |
+          git fetch origin canary:canary || true
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:

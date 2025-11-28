@@ -2,8 +2,6 @@ name: Cleanup BEPs Preview
 
 on:
   delete:
-    branches:
-      - '**'
 
 permissions:
   contents: read
@@ -11,6 +9,7 @@ permissions:
 
 jobs:
   cleanup:
+    if: github.event.ref_type == 'branch'
     runs-on: ubuntu-latest
     steps:
       - name: Get branch name
@@ -39,4 +38,3 @@ jobs:
             --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/${{ steps.branch.outputs.name }}/*"
           echo "✓ CloudFront cache invalidated"
-
