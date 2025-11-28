@@ -1,0 +1,106 @@
+name: Deploy BEPs to S3
+
+on:
+  push:
+    branches:
+      - canary
+    paths:
+      - "beps/**"
+      - ".github/workflows/deploy-beps.yml"
+  pull_request:
+    paths:
+      - "beps/**"
+      - ".github/workflows/deploy-beps.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: "beps-deploy-${{ github.ref }}"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for git plugins
+
+      - name: Comment - Building Preview
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          message: |
+            🏗️ **Building BEPs preview...** (run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))
+          comment-tag: beps-preview
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Install MkDocs and dependencies
+        run: |
+          pip install mkdocs-material mkdocs-awesome-pages-plugin mkdocs-git-revision-date-localized-plugin mkdocs-git-committers-plugin-2
+
+      - name: Build MkDocs
+        working-directory: beps
+        run: mkdocs build
+
+      - name: Configure AWS credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Deploy to S3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
+        run: |
+          aws s3 sync _site s3://${{ secrets.S3_BUCKET_BEPS }}/canary/ --delete --cache-control "public, max-age=3600"
+
+      - name: Invalidate CloudFront cache (Production)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID_BEPS }} --paths "/canary/*"
+
+      - name: Configure AWS credentials (Preview)
+        if: github.event_name == 'pull_request'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Get branch name
+        if: github.event_name == 'pull_request'
+        id: branch
+        run: |
+          # Get branch name and sanitize it for use in S3 path
+          BRANCH_NAME="${{ github.head_ref }}"
+          SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+          echo "name=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Deploy to S3 (Preview)
+        if: github.event_name == 'pull_request'
+        run: |
+          # Deploy to branch-specific path in S3
+          aws s3 sync _site s3://${{ secrets.S3_BUCKET_BEPS }}/${{ steps.branch.outputs.name }}/ --delete --cache-control "public, max-age=300"
+
+      - name: Invalidate CloudFront cache (Preview)
+        if: github.event_name == 'pull_request'
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID_BEPS }} --paths "/${{ steps.branch.outputs.name }}/*"
+
+      - name: Comment Preview URL
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          message: |
+            ✅ **BEPs Preview Ready**: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
+            
+            <sub>Built from commit ${{ github.event.pull_request.head.sha }} • [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
+          comment-tag: beps-preview
