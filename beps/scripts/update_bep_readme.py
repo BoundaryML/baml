@@ -6,6 +6,7 @@ import sys
 import argparse
 import re
 import difflib
+import subprocess
 from pathlib import Path
 
 from pathlib import Path
@@ -67,9 +68,24 @@ def parse_bep_file(path: Path):
                     except ValueError:
                          raise ValueError(f"Invalid created date '{created}' in {path}. Must be YYYY-MM-DD.")
 
-                # Get last modified time from file system
-                mtime = os.path.getmtime(path)
-                last_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+                # Get last modified time from git (more reliable in CI than fs mtime)
+                try:
+                    # Get the last commit date for the file
+                    git_date = subprocess.check_output(
+                        ["git", "log", "-1", "--format=%cd", "--date=format:%Y-%m-%d", str(path)],
+                        text=True,
+                        stderr=subprocess.DEVNULL
+                    ).strip()
+                    if git_date:
+                        last_modified = git_date
+                    else:
+                        # File might be new and not yet committed
+                        mtime = os.path.getmtime(path)
+                        last_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                     # Fallback to file system time if git fails
+                    mtime = os.path.getmtime(path)
+                    last_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
                 
                 # Summary extraction (still heuristic based on markdown structure, or could be metadata)
                 # Let's keep summary as first section after frontmatter for richness, 
