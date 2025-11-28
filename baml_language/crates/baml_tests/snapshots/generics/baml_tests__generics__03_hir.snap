@@ -3,4 +3,20 @@ source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-No items found.
+function GetTodo {
+  return: Path(Path { segments: ["Todo"], kind: Plain })
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Missing
+      Idx::<Expr>(1): Call { callee: Idx::<Expr>(0), args: [] }
+      Idx::<Expr>(2): Block { stmts: [], tail_expr: Some(Idx::<Expr>(1)) }
+    ]
+    root: Idx::<Expr>(2)
+  }
+}
+class Todo {
+  id: Int
+  title: String
+  completed: Bool
+  userId: Int
+}

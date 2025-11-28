@@ -1,6 +1,82 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-No items found.
+function FormatMessage {
+  params: [name: String]
+  return: String
+  body: Llm {
+    client: GPT4
+    prompt: "\n    Generate a message for \"{{ name }}\"\n    Include quotes like: \"Welcome, '{{ name }}'!\"\n  "
+    interpolations: [name, name]
+  }
+}
+class NestedQuotes {
+  single_in_double: String
+  double_in_single: String
+  She: Path(Path { segments: ["said"], kind: Plain })
+  hello: Path(Path { segments: ["\"')\n  escaped_in_escaped string @alias(\""], kind: Plain })
+  The: Path(Path { segments: [""], kind: Plain })
+  quote: Path(Path { segments: [""], kind: Plain })
+  is: Path(Path { segments: ["here"], kind: Plain })
+  complex_nesting: String
+  really: Path(Path { segments: [""], kind: Plain })
+  complex: Path(Path { segments: [""], kind: Plain })
+  json_like: String
+  key: Path(Path { segments: [""], kind: Plain })
+  value: Path(Path { segments: [""], kind: Plain })
+}
+function ProcessText {
+  params: [input: String]
+  return: String
+  body: Llm {
+    client: GPT4
+    prompt: "\n    Process the following text:\n    {{ input }}\n    \n    Return the processed result.\n  "
+    interpolations: [input]
+  }
+}
+class RawStrings {
+  simple: String
+  with_quotes: String
+  multi_hash: String
+  multiline: String
+}
+function GetRole {
+  return: Path(Path { segments: ["\"admin\" | \"user\" | \"guest\""], kind: Plain })
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Literal(String(" \"user\""))
+      Idx::<Expr>(1): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Return(Some(Idx::<Expr>(0)))
+    ]
+    root: Idx::<Expr>(1)
+  }
+}
+class Messages {
+  greeting: String
+  empty: String
+  with_spaces: String
+  with_escapes: String
+  with_quotes: String
+  hello: Path(Path { segments: [""], kind: Plain })
+}
+class UnicodeStrings {
+  emoji_basic: String
+  emoji_multiple: String
+  emoji_in_text: String
+  chinese: String
+  arabic: String
+  japanese: String
+  russian: String
+  math_symbols: String
+  currency: String
+  arrows: String
+  zero_width: String
+  rtl_override: String
+}
+client GPT4 {
+  provider: unknown
+}

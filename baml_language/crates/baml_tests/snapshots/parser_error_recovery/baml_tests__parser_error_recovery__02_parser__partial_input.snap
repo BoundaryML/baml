@@ -1,6 +1,5 @@
 ---
 source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 1431
 expression: output
 ---
 === SYNTAX TREE ===
@@ -44,10 +43,10 @@ SOURCE_FILE
     WORD "Incomplete"
     PARAMETER_LIST
       L_PAREN "("
-      PARAMETER "  // Missing parameters closing
-  param1"
+      PARAMETER
         WORD "param1"
-  WORD "string"
+        TYPE_EXPR " string"
+          WORD "string"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "NextFunction"
@@ -88,15 +87,82 @@ enum  // Missing enum name
     R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected type, found Expected type
-  Expected Expected type, found Expected type
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected type, found Expected type
-  Expected Expected type annotation (:), found Expected type annotation (:)
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected return type (->), found Expected return type (->)
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected LBrace, found Word, found Expected LBrace, found Word
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
+Error: Expected type, found At
+   ╭─[ 0:5:17 ]
+   │
+ 5 │   field3 string @  // Incomplete attribute
+   │                 ┬  
+   │                 ╰── Expected type, found At
+───╯
+
+Error: Expected type, found At
+   ╭─[ 0:6:17 ]
+   │
+ 6 │   field4 string @alias(  // Unclosed attribute
+   │                 ┬  
+   │                 ╰── Expected type, found At
+───╯
+
+Error: Expected RParen, found Word
+   ╭─[ 0:7:10 ]
+   │
+ 7 │   field5 string  // This should parse correctly
+   │          ───┬──  
+   │             ╰──── Expected RParen, found Word
+───╯
+
+Error: Expected type, found RBrace
+   ╭─[ 0:8:1 ]
+   │
+ 8 │ }
+   │ ┬  
+   │ ╰── Expected type, found RBrace
+───╯
+
+Error: Expected RParen, found Function
+    ╭─[ 0:13:1 ]
+    │
+ 13 │ function NextFunction() -> string {  // Should still parse this
+    │ ────┬───  
+    │     ╰───── Expected RParen, found Function
+────╯
+
+Error: Expected return type (->), found Function
+    ╭─[ 0:13:1 ]
+    │
+ 13 │ function NextFunction() -> string {  // Should still parse this
+    │ ────┬───  
+    │     ╰───── Expected return type (->), found Function
+────╯
+
+Error: Expected function body, found Function
+    ╭─[ 0:13:1 ]
+    │
+ 13 │ function NextFunction() -> string {  // Should still parse this
+    │ ────┬───  
+    │     ╰───── Expected function body, found Function
+────╯
+
+Error: Expected LBrace, found Word
+    ╭─[ 0:19:3 ]
+    │
+ 19 │   VALUE2
+    │   ───┬──  
+    │      ╰──── Expected LBrace, found Word
+────╯
+
+Error: Expected top-level declaration, found Word
+    ╭─[ 0:19:3 ]
+    │
+ 19 │   VALUE2
+    │   ───┬──  
+    │      ╰──── Expected top-level declaration, found Word
+────╯
+
+Error: Expected top-level declaration, found RBrace
+    ╭─[ 0:20:1 ]
+    │
+ 20 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration, found RBrace
+────╯

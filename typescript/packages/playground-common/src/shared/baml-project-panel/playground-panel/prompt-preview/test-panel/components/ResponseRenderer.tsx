@@ -112,9 +112,9 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({ response, st
 
       {/* Watch Notifications Section */}
       {(() => {
-        console.log('ResponseRenderer - test object:', test);
+        // console.log('ResponseRenderer - test object:', test);
         if (test && 'watchNotifications' in test) {
-          console.log('ResponseRenderer - watchNotifications:', test.watchNotifications);
+          // console.log('ResponseRenderer - watchNotifications:', test.watchNotifications);
           if (test.watchNotifications && test.watchNotifications.length > 0) {
             return (
               <div className="mt-4 border-t pt-4">

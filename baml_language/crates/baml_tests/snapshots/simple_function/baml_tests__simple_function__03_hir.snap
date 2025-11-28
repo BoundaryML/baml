@@ -1,6 +1,18 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-No items found.
+function HelloWorld {
+  params: [name: String]
+  return: String
+  body: Llm {
+    client: GPT4
+    prompt: "\n    Say hello to {{name}}\n  "
+    interpolations: [name]
+  }
+}
+class User {
+  name: String
+  age: Int
+}

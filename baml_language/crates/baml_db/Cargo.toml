@@ -18,6 +18,7 @@ workspace = true
 
 [dependencies]
 salsa = { workspace = true }
+rowan = { workspace = true }
 
 # All compiler crates
 baml_base = { workspace = true }

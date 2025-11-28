@@ -92,7 +92,7 @@ impl ArgCoercer {
                     }
                     BamlValue::List(baml_values) => {
                         // Convert the list values recursively using with_const_meta
-                        let converted_list = BamlValueWithMeta::with_const_meta(
+                        let converted_list = BamlValueWithMeta::with_same_meta_at_all_nodes(
                             &BamlValue::List(baml_values.clone()),
                             TypeIR::string(),
                         );
@@ -116,7 +116,7 @@ impl ArgCoercer {
                     )),
                     BamlValue::Class(name, index_map) => {
                         // Convert the class fields recursively using with_const_meta
-                        let converted_class = BamlValueWithMeta::with_const_meta(
+                        let converted_class = BamlValueWithMeta::with_same_meta_at_all_nodes(
                             &BamlValue::Class(name.clone(), index_map.clone()),
                             TypeIR::string(),
                         );

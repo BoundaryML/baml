@@ -130,6 +130,7 @@ dependencies = [
  "baml_syntax",
  "baml_thir",
  "baml_workspace",
+ "rowan",
  "salsa",
 ]
 
@@ -150,6 +151,9 @@ dependencies = [
  "baml_parser",
  "baml_syntax",
  "baml_workspace",
+ "la-arena",
+ "rowan",
+ "rustc-hash 2.1.1",
  "salsa",
 ]
 
@@ -168,6 +172,7 @@ name = "baml_onionskin"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "baml_base",
  "baml_codegen",
  "baml_db",
  "baml_diagnostics",
@@ -212,8 +217,10 @@ name = "baml_tests"
 version = "0.0.0"
 dependencies = [
  "baml_db",
+ "baml_diagnostics",
  "codspeed-divan-compat",
  "insta",
+ "salsa",
  "walkdir",
 ]
 
@@ -224,6 +231,7 @@ dependencies = [
  "baml_base",
  "baml_hir",
  "salsa",
+ "text-size",
 ]
 
 [[package]]
@@ -896,6 +904,12 @@ dependencies = [
  "bitflags 1.3.2",
  "libc",
 ]
+
+[[package]]
+name = "la-arena"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3752f229dcc5a481d60f385fa479ff46818033d881d2d801aa27dffcfb5e8306"
 
 [[package]]
 name = "lazy_static"

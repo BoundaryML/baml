@@ -45,6 +45,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
         let Ok(project) = session.get_or_create_project(&path) else {
+            tracing::info!("BAML file not in baml_src directory: {}", url);
             notifier
                 .notify::<lsp_types::notification::PublishDiagnostics>(not_in_baml_src_diagnostic(
                     &url,

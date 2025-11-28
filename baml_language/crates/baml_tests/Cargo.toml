@@ -11,6 +11,8 @@ doctest = false
 
 [dependencies]
 baml_db = { workspace = true }
+baml_diagnostics = { workspace = true }
+salsa = { workspace = true }
 
 insta.workspace = true
 

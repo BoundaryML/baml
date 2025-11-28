@@ -286,6 +286,22 @@ mod tests {
 
     use super::*;
 
+    fn lex(source: &str) -> Vec<Token> {
+        lex_lossless(source, FileId::new(0))
+    }
+
+    fn lex_token_kinds(source: &str) -> Vec<TokenKind> {
+        lex(source).iter().map(|t| t.kind).collect()
+    }
+
+    fn lex_no_whitespace(source: &str) -> Vec<TokenKind> {
+        lex(source)
+            .iter()
+            .filter(|t| t.kind != TokenKind::Whitespace)
+            .map(|t| t.kind)
+            .collect()
+    }
+
     #[test]
     fn test_lossless_lexing() {
         let source = "function test() {}";
@@ -297,18 +313,10 @@ mod tests {
 
     #[test]
     fn test_operators() {
-        let source = "-> :: += -= == != <= >= && ||";
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
+        let tokens = lex_no_whitespace("-> :: += -= == != <= >= && ||");
 
         assert_eq!(
-            kinds,
+            tokens,
             vec![
                 TokenKind::Arrow,
                 TokenKind::DoubleColon,
@@ -328,20 +336,14 @@ mod tests {
     fn test_word_with_hyphens() {
         // Words can contain hyphens (e.g., "gpt-4o", "exponential_backoff")
         let source = "gpt-4o model-name";
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
+        let tokens = lex_no_whitespace(source);
 
         // Should tokenize as: WORD("gpt"), MINUS, INTEGER("4"), WORD("o"), WORD("model"), MINUS, WORD("name")
         // Wait, no - the regex is [a-zA-Z_][a-zA-Z0-9_-]* so hyphens inside words should work
-        assert_eq!(kinds, vec![TokenKind::Word, TokenKind::Word,]);
+        assert_eq!(tokens, vec![TokenKind::Word, TokenKind::Word]);
 
-        let words: Vec<&str> = tokens
+        let all_tokens = lex(source);
+        let words: Vec<&str> = all_tokens
             .iter()
             .filter(|t| t.kind == TokenKind::Word)
             .map(|t| t.text.as_str())
@@ -351,18 +353,10 @@ mod tests {
 
     #[test]
     fn test_arithmetic_operators() {
-        let source = "+ - * / % ++ -- += -= *= /= %=";
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
+        let tokens = lex_no_whitespace("+ - * / % ++ -- += -= *= /= %=");
 
         assert_eq!(
-            kinds,
+            tokens,
             vec![
                 TokenKind::Plus,
                 TokenKind::Minus,
@@ -382,18 +376,10 @@ mod tests {
 
     #[test]
     fn test_bitwise_operators() {
-        let source = "& | ^ ~ && || &= |= ^=";
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
+        let tokens = lex_no_whitespace("& | ^ ~ && || &= |= ^=");
 
         assert_eq!(
-            kinds,
+            tokens,
             vec![
                 TokenKind::And,
                 TokenKind::Pipe,
@@ -410,18 +396,10 @@ mod tests {
 
     #[test]
     fn test_shift_operators() {
-        let source = "<< >> <<= >>=";
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
+        let tokens = lex_no_whitespace("<< >> <<= >>=");
 
         assert_eq!(
-            kinds,
+            tokens,
             vec![
                 TokenKind::LessLess,
                 TokenKind::GreaterGreater,
@@ -435,24 +413,16 @@ mod tests {
     fn test_operator_precedence() {
         // Test that longer operators are matched first
         let source = "<<=";
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
+        let all_tokens = lex(source);
 
-        assert_eq!(tokens.len(), 1);
-        assert_eq!(tokens[0].kind, TokenKind::LessLessEquals);
+        assert_eq!(all_tokens.len(), 1);
+        assert_eq!(all_tokens[0].kind, TokenKind::LessLessEquals);
 
         // Test >> vs >=
-        let source2 = ">>= >= >>";
-        let tokens2 = lex_lossless(source2, file_id);
-
-        let kinds: Vec<TokenKind> = tokens2
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
+        let tokens = lex_no_whitespace(">>= >= >>");
 
         assert_eq!(
-            kinds,
+            tokens,
             vec![
                 TokenKind::GreaterGreaterEquals,
                 TokenKind::GreaterEquals,
@@ -464,18 +434,11 @@ mod tests {
     #[test]
     fn test_raw_string_basic() {
         let source = r##"#"Hello World"#"##;
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
+        let tokens = lex_no_whitespace(source);
 
         // Should lex as: Hash, Quote, Word("Hello"), Word("World"), Quote, Hash
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
-
         assert_eq!(
-            kinds,
+            tokens,
             vec![
                 TokenKind::Hash,
                 TokenKind::Quote,
@@ -487,54 +450,57 @@ mod tests {
         );
 
         // Lossless
-        assert_eq!(reconstruct_source(&tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
     fn test_raw_string_multiple_hashes() {
         // With Quote tokens, quotes inside are just more tokens
         let source = r###"##"String with quotes inside"##"###;
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
+        let tokens = lex_no_whitespace(source);
 
         // Hash, Hash, Quote, ...(words)..., Quote, Hash, Hash
-        assert_eq!(kinds[0], TokenKind::Hash);
-        assert_eq!(kinds[1], TokenKind::Hash);
-        assert_eq!(kinds[2], TokenKind::Quote);
-        // ... words in between ...
-        assert_eq!(kinds[kinds.len() - 3], TokenKind::Quote);
-        assert_eq!(kinds[kinds.len() - 2], TokenKind::Hash);
-        assert_eq!(kinds[kinds.len() - 1], TokenKind::Hash);
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Hash,
+                TokenKind::Hash,
+                TokenKind::Quote,
+                TokenKind::Word, // String
+                TokenKind::Word, // with
+                TokenKind::Word, // quotes
+                TokenKind::Word, // inside
+                TokenKind::Quote,
+                TokenKind::Hash,
+                TokenKind::Hash,
+            ]
+        );
 
-        assert_eq!(reconstruct_source(&tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
     fn test_raw_string_with_jinja() {
         let source = r##"#"Hello {{ name }}"#"##;
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
+        let tokens = lex_no_whitespace(source);
 
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Hash,
+                TokenKind::Quote,
+                TokenKind::Word,   // Hello
+                TokenKind::LBrace, // {
+                TokenKind::LBrace, // {
+                TokenKind::Word,   // name
+                TokenKind::RBrace, // }
+                TokenKind::RBrace, // }
+                TokenKind::Quote,
+                TokenKind::Hash,
+            ]
+        );
 
-        // Should start with: Hash, Quote
-        assert_eq!(kinds[0], TokenKind::Hash);
-        assert_eq!(kinds[1], TokenKind::Quote);
-        // And end with: Quote, Hash
-        assert_eq!(kinds[kinds.len() - 2], TokenKind::Quote);
-        assert_eq!(kinds[kinds.len() - 1], TokenKind::Hash);
-
-        assert_eq!(reconstruct_source(&tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
@@ -558,155 +524,167 @@ mod tests {
     #[test]
     fn test_raw_string_in_context() {
         let source = r##"prompt #"Hello {{ name }}"#"##;
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
+        let tokens = lex_no_whitespace(source);
 
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
-
-        // Should start with: Word("prompt"), Hash, Quote
-        assert_eq!(kinds[0], TokenKind::Word);
-        assert_eq!(kinds[1], TokenKind::Hash);
-        assert_eq!(kinds[2], TokenKind::Quote);
-        // And end with: Quote, Hash
-        assert_eq!(kinds[kinds.len() - 2], TokenKind::Quote);
-        assert_eq!(kinds[kinds.len() - 1], TokenKind::Hash);
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Word, // prompt
+                TokenKind::Hash,
+                TokenKind::Quote,
+                TokenKind::Word,   // Hello
+                TokenKind::LBrace, // {
+                TokenKind::LBrace, // {
+                TokenKind::Word,   // name
+                TokenKind::RBrace, // }
+                TokenKind::RBrace, // }
+                TokenKind::Quote,
+                TokenKind::Hash,
+            ]
+        );
 
         // Lossless
-        assert_eq!(reconstruct_source(&tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
     fn test_multiple_raw_strings() {
         let source = r##"#"First"# #"Second"#"##;
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
+        let tokens = lex_no_whitespace(source);
 
         // Should be: Hash, Quote, Word, Quote, Hash, Hash, Quote, Word, Quote, Hash
-        assert_eq!(kinds[0], TokenKind::Hash);
-        assert_eq!(kinds[1], TokenKind::Quote);
-        assert_eq!(kinds[2], TokenKind::Word);
-        assert_eq!(kinds[3], TokenKind::Quote);
-        assert_eq!(kinds[4], TokenKind::Hash);
-        assert_eq!(kinds[5], TokenKind::Hash);
-        assert_eq!(kinds[6], TokenKind::Quote);
-        assert_eq!(kinds[7], TokenKind::Word);
-        assert_eq!(kinds[8], TokenKind::Quote);
-        assert_eq!(kinds[9], TokenKind::Hash);
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Hash,
+                TokenKind::Quote,
+                TokenKind::Word, // First
+                TokenKind::Quote,
+                TokenKind::Hash,
+                TokenKind::Hash,
+                TokenKind::Quote,
+                TokenKind::Word, // Second
+                TokenKind::Quote,
+                TokenKind::Hash,
+            ]
+        );
 
         // Lossless
-        assert_eq!(reconstruct_source(&tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
     fn test_five_hash_delimiter() {
         let source = r######"#####"Complex content here"#####"######;
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens
-            .iter()
-            .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| t.kind)
-            .collect();
+        let tokens = lex_no_whitespace(source);
 
         // Should be: 5 Hash, Quote, ...(words)..., Quote, 5 Hash
-        for kind in kinds.iter().take(5) {
-            assert_eq!(*kind, TokenKind::Hash);
-        }
-        assert_eq!(kinds[5], TokenKind::Quote);
-        // ... words in middle ...
-        assert_eq!(kinds[kinds.len() - 6], TokenKind::Quote);
-        for kind in kinds.iter().skip(kinds.len() - 5) {
-            assert_eq!(*kind, TokenKind::Hash);
-        }
-        assert_eq!(reconstruct_source(&tokens), source);
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Hash,
+                TokenKind::Hash,
+                TokenKind::Hash,
+                TokenKind::Hash,
+                TokenKind::Hash,
+                TokenKind::Quote,
+                TokenKind::Word, // Complex
+                TokenKind::Word, // content
+                TokenKind::Word, // here
+                TokenKind::Quote,
+                TokenKind::Hash,
+                TokenKind::Hash,
+                TokenKind::Hash,
+                TokenKind::Hash,
+                TokenKind::Hash,
+            ]
+        );
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
     fn test_url_in_string() {
         // Test that URLs with // inside strings are not treated as comments
         let source = r#""https://google.com""#;
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
-
-        let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind).collect();
+        let tokens = lex_token_kinds(source);
 
         // Should be: Quote, Word("https"), Colon, Slash, Slash, Word("google"), Dot, Word("com"), Quote
         // NOT: Quote, Word("https"), Colon, LineComment
-        assert_eq!(kinds[0], TokenKind::Quote);
-        assert_eq!(kinds[1], TokenKind::Word); // https
-        assert_eq!(kinds[2], TokenKind::Colon);
-        assert_eq!(kinds[3], TokenKind::Slash); // First slash
-        assert_eq!(kinds[4], TokenKind::Slash); // Second slash (NOT LineComment!)
-        assert_eq!(kinds[5], TokenKind::Word); // google
-        assert_eq!(kinds[6], TokenKind::Dot);
-        assert_eq!(kinds[7], TokenKind::Word); // com
-        assert_eq!(kinds[8], TokenKind::Quote);
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Quote,
+                TokenKind::Word, // https
+                TokenKind::Colon,
+                TokenKind::Slash, // First slash
+                TokenKind::Slash, // Second slash (NOT LineComment!)
+                TokenKind::Word,  // google
+                TokenKind::Dot,
+                TokenKind::Word, // com
+                TokenKind::Quote,
+            ]
+        );
 
         // Verify lossless
-        assert_eq!(reconstruct_source(&tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
     fn test_line_comment() {
         // Test that actual line comments (outside strings) are lexed as individual tokens
         let source = "// This is a comment\ncode";
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
+        let tokens = lex_token_kinds(source);
 
         // Should be: Slash, Slash, Whitespace, Word("This"), ..., Newline, Word("code")
         // The parser will recognize Slash Slash as a comment pattern
-        assert_eq!(tokens[0].kind, TokenKind::Slash);
-        assert_eq!(tokens[1].kind, TokenKind::Slash);
-
-        // Find the newline
-        let newline_pos = tokens
-            .iter()
-            .position(|t| t.kind == TokenKind::Newline)
-            .unwrap();
-        assert!(newline_pos > 2); // Should have comment content before newline
-
-        // After newline should be the code
-        assert_eq!(tokens[newline_pos + 1].kind, TokenKind::Word);
-        assert_eq!(tokens[newline_pos + 1].text, "code");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Slash,      // /
+                TokenKind::Slash,      // /
+                TokenKind::Whitespace, //
+                TokenKind::Word,       // This
+                TokenKind::Whitespace, //
+                TokenKind::Word,       // is
+                TokenKind::Whitespace, //
+                TokenKind::Word,       // a
+                TokenKind::Whitespace, //
+                TokenKind::Word,       // comment
+                TokenKind::Newline,    // \n
+                TokenKind::Word,       // code
+            ]
+        );
 
         // Verify lossless
-        assert_eq!(reconstruct_source(&tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 
     #[test]
     fn test_block_comment() {
         // Test that block comments are lexed as individual tokens
         let source = "/* block comment */ code";
-        let file_id = FileId::new(0);
-        let tokens = lex_lossless(source, file_id);
+        let tokens = lex_token_kinds(source);
 
         // Should be: Slash, Star, ..., Star, Slash, Whitespace, Word("code")
         // The parser will recognize Slash Star as block comment start
-        assert_eq!(tokens[0].kind, TokenKind::Slash);
-        assert_eq!(tokens[1].kind, TokenKind::Star);
-
-        // Find the closing */
-        let mut star_slash_pos = None;
-        for i in 0..tokens.len() - 1 {
-            if tokens[i].kind == TokenKind::Star && tokens[i + 1].kind == TokenKind::Slash {
-                star_slash_pos = Some(i);
-                break;
-            }
-        }
-        assert!(star_slash_pos.is_some());
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Slash,      // /
+                TokenKind::Star,       // *
+                TokenKind::Whitespace, //
+                TokenKind::Word,       // block
+                TokenKind::Whitespace, //
+                TokenKind::Word,       // comment
+                TokenKind::Whitespace, //
+                TokenKind::Star,       // *
+                TokenKind::Slash,      // /
+                TokenKind::Whitespace, //
+                TokenKind::Word,       // code
+            ]
+        );
 
         // Verify lossless
-        assert_eq!(reconstruct_source(&tokens), source);
+        assert_eq!(reconstruct_source(&lex(source)), source);
     }
 }

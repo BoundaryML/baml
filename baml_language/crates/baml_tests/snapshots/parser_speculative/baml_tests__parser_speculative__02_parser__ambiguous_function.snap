@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 2721
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -10,75 +9,83 @@ SOURCE_FILE
     WORD "Ambiguous"
     PARAMETER_LIST
       L_PAREN "("
-      PARAMETER "input"
+      PARAMETER
         WORD "input"
-  WORD "string"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "string"
-  L_BRACE "{"
-  CLIENT_DEF "
+        TYPE_EXPR " string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "
   client GPT4"
-    KW_CLIENT "client"
-    WORD "GPT4"
-  R_BRACE "}"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "AnotherLLM"
     PARAMETER_LIST
       L_PAREN "("
-      PARAMETER "input"
+      PARAMETER
         WORD "input"
-  WORD "string"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "string"
-  L_BRACE "{"
-  WORD "clent"
-  WORD "GPT4"
-  WORD "prompt"
-  QUOTE """
-  WORD "Process"
-  COLON ":"
-  L_BRACE "{"
-  L_BRACE "{"
-  WORD "input"
-  R_BRACE "}"
-  R_BRACE "}"
-  QUOTE """
-  R_BRACE "}"
+        TYPE_EXPR " string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      WORD "clent"
+      WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL " #"Process: {{ input }}"#"
+          HASH "#"
+          QUOTE """
+          WORD "Process"
+          COLON ":"
+          L_BRACE "{"
+          L_BRACE "{"
+          WORD "input"
+          R_BRACE "}"
+          R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected type annotation (:), found Expected type annotation (:)
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected return type (->), found Expected return type (->)
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected config block, found Expected config block
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected type annotation (:), found Expected type annotation (:)
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected return type (->), found Expected return type (->)
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
+Error: Expected LLM function missing 'prompt' field, found RBrace
+   ╭─[ 0:5:1 ]
+   │
+ 5 │ }
+   │ ┬  
+   │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+───╯
+
+Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
+   ╭─[ 0:9:3 ]
+   │
+ 9 │   clent GPT4  // Typo in "client"
+   │   ──┬──  
+   │     ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
+───╯
+
+Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
+   ╭─[ 0:9:9 ]
+   │
+ 9 │   clent GPT4  // Typo in "client"
+   │         ──┬─  
+   │           ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
+───╯
+
+Error: Expected LLM function missing 'client' field, found RBrace
+    ╭─[ 0:11:1 ]
+    │
+ 11 │ }
+    │ ┬  
+    │ ╰── Expected LLM function missing 'client' field, found RBrace
+────╯

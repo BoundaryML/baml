@@ -1,0 +1,22 @@
+---
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function c_style_for_loop:
+    Return: Void
+  Function iterator_style_for_loop:
+    Return: Void
+  Function nested_for_loop:
+    Return: Void
+  Function ConditionalLogic:
+    Return: Void
+  Function let_statements:
+    Return: Void
+    Errors:
+      - Unknown variable: point::x
+      - Unknown variable: point::y
+  Function simple_while_loop:
+    Return: Void
+  Function nested_while_loop:
+    Return: Void

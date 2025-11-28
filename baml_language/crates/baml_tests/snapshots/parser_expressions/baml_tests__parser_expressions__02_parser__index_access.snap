@@ -1,0 +1,112 @@
+---
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "User"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR " string"
+        WORD "string"
+    FIELD
+      WORD "age"
+      TYPE_EXPR " int"
+        WORD "int"
+    FIELD
+      WORD "tags"
+      TYPE_EXPR " string[]"
+        WORD "string"
+        L_BRACKET "["
+        R_BRACKET "]"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "IndexAccess"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "users"
+        TYPE_EXPR " User[]"
+          WORD "User"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "first"
+          EQUALS "="
+          INDEX_EXPR "users[0]"
+            WORD "users"
+            L_BRACKET "["
+            INTEGER_LITERAL "0"
+            R_BRACKET "]"
+          SEMICOLON ";"
+        LET_STMT "
+
+  // Array indexing with variable
+  let idx = 1;"
+          KW_LET "let"
+          WORD "idx"
+          EQUALS "="
+          INTEGER_LITERAL "1"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "second"
+          EQUALS "="
+          INDEX_EXPR "users[idx]"
+            WORD "users"
+            L_BRACKET "["
+            WORD "idx"
+            R_BRACKET "]"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "firstName"
+          EQUALS "="
+          FIELD_ACCESS_EXPR
+            INDEX_EXPR "users[0]"
+              WORD "users"
+              L_BRACKET "["
+              INTEGER_LITERAL "0"
+              R_BRACKET "]"
+            DOT "."
+            WORD "name"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "tag"
+          EQUALS "="
+          INDEX_EXPR
+            FIELD_ACCESS_EXPR
+              INDEX_EXPR "users[0]"
+                WORD "users"
+                L_BRACKET "["
+                INTEGER_LITERAL "0"
+                R_BRACKET "]"
+              DOT "."
+              WORD "tags"
+            L_BRACKET "["
+            INTEGER_LITERAL "0"
+            R_BRACKET "]"
+          SEMICOLON ";"
+        RETURN_STMT "
+
+  return firstName;"
+          KW_RETURN "return"
+          WORD "firstName"
+          SEMICOLON ";"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

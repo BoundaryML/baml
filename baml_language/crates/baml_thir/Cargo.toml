@@ -18,5 +18,6 @@ workspace = true
 
 [dependencies]
 salsa = { workspace = true }
+text-size = { workspace = true }
 baml_base = { workspace = true }
 baml_hir = { workspace = true }

@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 1377
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -34,23 +33,91 @@ SOURCE_FILE
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR " {  // Missing return type
-  client GPT4
-}"
-        L_BRACE "{"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "  // Missing return type
+  client GPT4"
         KW_CLIENT "client"
         WORD "GPT4"
-        R_BRACE "}"
+      R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected class name, found Expected class name
-  Expected Expected LBrace, found IntegerLiteral, found Expected LBrace, found IntegerLiteral
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected type, found Expected type
-  Expected Expected expression, found Expected expression
+Error: Expected class name, found IntegerLiteral
+   ╭─[ 0:1:7 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │       ─┬─  
+   │        ╰─── Expected class name, found IntegerLiteral
+───╯
+
+Error: Expected LBrace, found IntegerLiteral
+   ╭─[ 0:1:7 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │       ─┬─  
+   │        ╰─── Expected LBrace, found IntegerLiteral
+───╯
+
+Error: Expected top-level declaration, found IntegerLiteral
+   ╭─[ 0:1:7 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │       ─┬─  
+   │        ╰─── Expected top-level declaration, found IntegerLiteral
+───╯
+
+Error: Expected top-level declaration, found Word
+   ╭─[ 0:1:10 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │          ───┬───  
+   │             ╰───── Expected top-level declaration, found Word
+───╯
+
+Error: Expected top-level declaration, found LBrace
+   ╭─[ 0:1:18 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │                  ┬  
+   │                  ╰── Expected top-level declaration, found LBrace
+───╯
+
+Error: Expected top-level declaration, found Word
+   ╭─[ 0:2:3 ]
+   │
+ 2 │   field string
+   │   ──┬──  
+   │     ╰──── Expected top-level declaration, found Word
+───╯
+
+Error: Expected top-level declaration, found Word
+   ╭─[ 0:2:9 ]
+   │
+ 2 │   field string
+   │         ───┬──  
+   │            ╰──── Expected top-level declaration, found Word
+───╯
+
+Error: Expected top-level declaration, found RBrace
+   ╭─[ 0:3:1 ]
+   │
+ 3 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration, found RBrace
+───╯
+
+Error: Expected type, found LBrace
+    ╭─[ 0:10:19 ]
+    │
+ 10 │ function Foo() -> {  // Missing return type
+    │                   ┬  
+    │                   ╰── Expected type, found LBrace
+────╯
+
+Error: Expected LLM function missing 'prompt' field, found RBrace
+    ╭─[ 0:12:1 ]
+    │
+ 12 │ }
+    │ ┬  
+    │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+────╯

@@ -63,9 +63,9 @@ pub fn on_wasm_init() {
     // this is disabled by default because its slows down release mode builds.
     cfg_if::cfg_if! {
         if #[cfg(debug_assertions)] {
-            const LOG_LEVEL: log::Level = log::Level::Debug;
+            const LOG_LEVEL: log::Level = log::Level::Info;
         } else {
-            const LOG_LEVEL: log::Level = log::Level::Debug;
+            const LOG_LEVEL: log::Level = log::Level::Info;
         }
     };
     // I dont think we need this line anymore -- seems to break logging if you add it.

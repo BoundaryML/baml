@@ -15,7 +15,6 @@ use crate::{
 impl Hir {
     /// Convert HIR to a pretty printing document
     pub fn to_doc(&self) -> RcDoc<'static, ()> {
-        dbg!("{:#?}", &self.expr_functions);
         let mut docs = Vec::new();
         // Add expression functions
         for func in &self.expr_functions {

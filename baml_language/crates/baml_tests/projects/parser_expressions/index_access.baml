@@ -1,0 +1,24 @@
+// Test index access expressions
+
+class User {
+  name string
+  age int
+  tags string[]
+}
+
+function IndexAccess(users User[]) -> string {
+  // Array indexing with literal
+  let first = users[0];
+
+  // Array indexing with variable
+  let idx = 1;
+  let second = users[idx];
+
+  // Nested: array element field access
+  let firstName = users[0].name;
+
+  // Deeply nested: array then field then index
+  let tag = users[0].tags[0];
+
+  return firstName;
+}

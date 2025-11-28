@@ -7,5 +7,5 @@ function Ambiguous(input string) -> string {
 // This one has a typo but intent is clear
 function AnotherLLM(input string) -> string {
   clent GPT4  // Typo in "client"
-  prompt "Process: {{ input }}"  // "prompt" keyword helps disambiguate
+  prompt #"Process: {{ input }}"#  // "prompt" keyword helps disambiguate
 }

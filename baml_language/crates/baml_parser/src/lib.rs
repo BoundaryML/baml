@@ -52,20 +52,38 @@ impl baml_base::Diagnostic for ParseError {
     }
 }
 
-/// Tracked: parse file into green tree (immutable, position-independent)
+/// Tracked struct that holds both parse outputs together
 #[salsa::tracked]
-pub fn parse_green(db: &dyn salsa::Database, file: SourceFile) -> GreenNode {
-    let tokens = lex_file(db, file);
-    let (green, _errors) = parse_file(&tokens);
-    green
+pub struct ParseResult<'db> {
+    #[tracked]
+    pub green: GreenNode,
+
+    #[tracked]
+    pub errors: Vec<ParseError>,
 }
 
-/// Tracked: get parse errors for a file
+/// Tracked: parse file and return both green tree and errors.
+///
+/// Note: We can't make this take Vec<Token> directly because Salsa tracked
+/// functions can only take Salsa-tracked types as input. So we take `SourceFile`,
+/// call `lex_file` (tracked), then call `parse_file` (not tracked) with the tokens.
 #[salsa::tracked]
-pub fn parse_errors(db: &dyn salsa::Database, file: SourceFile) -> Vec<ParseError> {
+pub fn parse_result(db: &dyn salsa::Database, file: SourceFile) -> ParseResult<'_> {
     let tokens = lex_file(db, file);
-    let (_green, errors) = parse_file(&tokens);
-    errors
+    let (green, errors) = parse_file(&tokens);
+    ParseResult::new(db, green, errors)
+}
+
+/// Get the green tree from parsing a file
+pub fn parse_green(db: &dyn salsa::Database, file: SourceFile) -> GreenNode {
+    let result = parse_result(db, file);
+    result.green(db)
+}
+
+/// Get parse errors from parsing a file
+pub fn parse_errors(db: &dyn salsa::Database, file: SourceFile) -> Vec<ParseError> {
+    let result = parse_result(db, file);
+    result.errors(db)
 }
 
 /// Helper to build a red tree from the green tree.
