@@ -28,8 +28,8 @@ RUN bundle exec baml-cli generate --from path/to/baml_src
 ```
 
 ```dockerfile Go Dockerfile
-# baml-cli is installed when you add BAML as a dependency
-RUN go get github.com/boundaryml/baml
+# Install BAML CLI
+RUN go install github.com/boundaryml/baml/baml-cli@latest
 # Generate BAML client
 RUN baml-cli generate --from path-to-baml_src
 ```
@@ -59,6 +59,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+RUN go install github.com/boundaryml/baml/baml-cli@latest
 RUN baml-cli generate --from baml_src
 RUN go build -o myapp
 
@@ -81,6 +82,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+RUN go install github.com/boundaryml/baml/baml-cli@latest
 RUN baml-cli generate --from baml_src
 RUN go build -o myapp
 
