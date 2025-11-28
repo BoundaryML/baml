@@ -5,6 +5,7 @@
 import sys
 import argparse
 import re
+import difflib
 from pathlib import Path
 
 from pathlib import Path
@@ -253,7 +254,19 @@ def update_readme(table_md: str, check_only: bool = False):
     if check_only:
         if readme != new_readme:
             print(f"Error: {README_PATH} is out of sync.")
-            print("To fix this, run the following command locally and commit the changes:")
+            
+            print("\nDiff:")
+            diff = difflib.unified_diff(
+                readme.splitlines(),
+                new_readme.splitlines(),
+                fromfile=str(README_PATH),
+                tofile="generated_readme",
+                lineterm=""
+            )
+            for line in diff:
+                print(line)
+
+            print("\nTo fix this, run the following command locally and commit the changes:")
             print("\n    mise run bep:readme\n")
             sys.exit(1)
         else:
