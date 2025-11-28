@@ -118,6 +118,6 @@ jobs:
         with:
           message: |
             ✅ **BEPs Preview Ready**: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
-            
+
             <sub>Built from commit ${{ github.event.pull_request.head.sha }} • [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
           comment-tag: beps-preview
