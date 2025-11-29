@@ -49,6 +49,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      deployments: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,6 +59,14 @@ jobs:
       - name: Fetch base branch history
         run: |
           git fetch --depth=500 origin canary
+
+      - name: Start deployment
+        uses: bobheadxi/deployments@v1
+        id: deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: beps-canary
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -86,6 +95,17 @@ jobs:
         run: |
           aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/canary/*"
 
+      - name: Update deployment status
+        uses: bobheadxi/deployments@v1
+        if: always()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ job.status }}
+          env: ${{ steps.deployment.outputs.env }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+          env_url: https://${{ secrets.BEPS_DOMAIN }}/canary/
+
   deploy-beps-preview:
     name: "deploy beps (preview)"
     runs-on: ubuntu-latest
@@ -95,6 +115,7 @@ jobs:
       id-token: write
       contents: read
       pull-requests: write
+      deployments: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -111,6 +132,14 @@ jobs:
           BRANCH_NAME="${{ github.head_ref }}"
           SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
           echo "name=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Start deployment
+        uses: bobheadxi/deployments@v1
+        id: deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: beps-preview-${{ steps.branch.outputs.name }}
 
       - name: Comment - Building Preview
         uses: thollander/actions-comment-pull-request@v3.0.1
@@ -166,3 +195,14 @@ jobs:
             **Preview URL**: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
 
             <sub>Commit: `${{ github.event.pull_request.head.sha }}` • [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
+
+      - name: Update deployment status
+        uses: bobheadxi/deployments@v1
+        if: always()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ job.status }}
+          env: ${{ steps.deployment.outputs.env }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+          env_url: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
