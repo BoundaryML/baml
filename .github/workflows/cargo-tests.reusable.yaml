@@ -41,7 +41,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Check formatting"
-        run: cargo fmt --all --check
+        run: cargo fmt --all --check -- --config imports_granularity=Crate --config group_imports=StdExternalCrate
         working-directory: baml_language
 
   cargo-clippy:
@@ -317,4 +317,3 @@ jobs:
           path: |
             baml_language/crates/baml_tests/snapshots/**/*.snap.new
             baml_language/crates/baml_tests/snapshots/**/*.snap
-
