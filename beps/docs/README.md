@@ -26,7 +26,7 @@ Below is an auto-generated index of all BEPs.
   </thead>
   <tbody>
     <tr>
-      <td><a href="./proposals/BEP-001-exceptions/README.md"><strong>BEP-001</strong>: Exceptions</a> &nbsp; <img src="https://img.shields.io/badge/Status-Draft-lightgrey" alt="Draft"><br><br>This is a placeholder for the Exceptions design proposal.<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): Vaibhav Gupta <vbv@boundaryml.com> | Created: 2025-11-20 | Updated: 2025-11-21</span></td>
+      <td><a href="./proposals/BEP-001-exceptions/README.md"><strong>BEP-001</strong>: Exceptions</a> &nbsp; <img src="https://img.shields.io/badge/Status-Draft-lightgrey" alt="Draft"><br><br>This is a placeholder for the Exceptions design proposal.<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): Vaibhav Gupta <vbv@boundaryml.com> | Created: 2025-11-20 | Updated: 2025-11-28</span></td>
     </tr>
   </tbody>
 </table>
