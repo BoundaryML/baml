@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { hyperLink } from '@uiw/codemirror-extensions-hyper-link';
 import { useAtomValue, useSetAtom, useStore } from 'jotai';
+import { useBAMLSDK } from '../../../sdk/hooks';
 // Import specific language support instead of all languages
 import { javascript as jsLang } from '@codemirror/lang-javascript';
 import { python as pythonLang } from '@codemirror/lang-python';
@@ -139,6 +140,7 @@ export const CodeMirrorViewer = ({
 
   const ref = useRef<ReactCodeMirrorRef>({});
   const store = useStore();
+  const sdk = useBAMLSDK();
   const flashRanges = useAtomValue(flashRangesAtom);
   const diagnostics = useAtomValue(CodeMirrorDiagnosticsAtom);
 
@@ -426,16 +428,19 @@ export const CodeMirrorViewer = ({
             foldGutter: hideLineNumbers ? false : true,
           }}
           onStatistics={(data) => {
-            const pos = data.selectionAsSingle.from;
+            // Use the selection head (cursor position) for consistency
+            // data.line is the line at the cursor head position
+            const cursorPos = data.selectionAsSingle.head;
             const line = data.line.number;
-            // Calculate column by finding the difference between cursor position and line start
-            const column = pos - data.line.from + 1;
+            // Column is cursor position relative to line start (1-indexed)
+            const column = cursorPos - data.line.from + 1;
 
-            // setUpdateCursor({
-            //   fileName: fileContent.id,
-            //   line,
-            //   column,
-            // });
+            // Update cursor position via SDK navigation
+            sdk.navigation.updateCursor({
+              fileName: fileContent.id,
+              line,
+              column,
+            });
           }}
           value={fileContent.code}
           onChange={(value) => {

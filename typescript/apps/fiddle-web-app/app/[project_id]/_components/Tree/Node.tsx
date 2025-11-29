@@ -55,7 +55,7 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
               nodes.push(tree.get(child.id));
             });
           }
-          if (errors.some((d) => d.file_path === currentNode?.id)) {
+          if (errors.some((d) => d.filePath === currentNode?.id)) {
             return true;
           }
         }

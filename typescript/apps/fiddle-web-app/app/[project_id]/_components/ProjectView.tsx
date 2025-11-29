@@ -3,7 +3,7 @@
 import { CodeMirrorViewer } from '@baml/playground-common/codemirror-viewer';
 import { CustomErrorBoundary } from '@baml/playground-common/custom-error-boundary';
 import { EventListener } from '@baml/playground-common/event-listener';
-import { JotaiProvider } from '@baml/playground-common/jotai-provider';
+import { BAMLSDKProvider } from '@baml/playground-common/sdk';
 import { PromptPreview } from '@baml/playground-common/prompt-preview';
 import {
   ResizableHandle,
@@ -20,9 +20,11 @@ import { activeFileNameAtom, unsavedChangesAtom } from '../_atoms/atoms';
 
 import {
   filesAtom,
-  runtimeStateAtom,
-  selectedFunctionAtom,
+  functionsAtom,
+  unifiedSelectionStateAtom,
+  type SelectionState,
 } from '@baml/playground-common';
+import { useBAMLSDK } from '@baml/playground-common/sdk';
 import { useFeedbackWidget } from '@baml/playground-common/lib/feedback_widget';
 import { ScrollArea } from '@baml/ui/scroll-area';
 import Image from 'next/image';
@@ -39,24 +41,30 @@ const ErrorBoundaryWrapper = ({
 
 // Hook for project file management
 const useProjectFiles = (project: BAMLProject) => {
-  const [files, setFiles] = useAtom(filesAtom);
+  const sdk = useBAMLSDK();
+  const files = useAtomValue(filesAtom);
   const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom);
 
   useEffect(() => {
     if (project) {
-      console.log('Updating files due: project', project.id);
+      console.log('Updating files via SDK: project', project.id);
       setUnsavedChanges(false);
-      setFiles(
-        project.files.reduce(
-          (acc, f) => {
-            acc[f.path] = f.content;
-            return acc;
-          },
-          {} as Record<string, string>,
-        ),
+      const newFiles = project.files.reduce(
+        (acc, f) => {
+          acc[f.path] = f.content;
+          return acc;
+        },
+        {} as Record<string, string>,
       );
+      // Use SDK to update files and recreate runtime
+      sdk.files.update(newFiles);
     }
-  }, [project, setFiles, setUnsavedChanges]);
+  }, [project, sdk, setUnsavedChanges]);
+
+  // Wrapper to update files via SDK
+  const setFiles = (newFiles: Record<string, string>) => {
+    sdk.files.update(newFiles);
+  };
 
   return { files, setFiles, unsavedChanges };
 };
@@ -190,15 +198,55 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 
 export const FunctionSelectorProvider = () => {
   const activeFileName = useAtomValue(activeFileNameAtom);
-  const { functions } = useAtomValue(runtimeStateAtom);
-  const setSelectedFunction = useSetAtom(selectedFunctionAtom);
+  const functions = useAtomValue(functionsAtom);
+  const setSelectionState = useSetAtom(unifiedSelectionStateAtom);
+  const currentSelection = useAtomValue(unifiedSelectionStateAtom);
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
-    const func = functions.find((f) => f.span.file_path === activeFileName);
+    // Find the first function in the active file
+    const func = functions.find((f) => f.span?.filePath === activeFileName);
+
     if (func) {
-      setSelectedFunction(func.name);
+      // Get the first test case if available
+      const firstTestName = func.testCases?.[0]?.name ?? null;
+
+      // Only auto-select on initial load or when file changes
+      // Check if we already have this function selected to avoid loops
+      if (currentSelection.mode === 'function' &&
+          currentSelection.functionName === func.name) {
+        // Already selected this function, only update test if empty
+        if (!currentSelection.testName && firstTestName) {
+          setSelectionState({
+            mode: 'function',
+            functionName: func.name,
+            testName: firstTestName,
+          });
+        }
+        return;
+      }
+
+      // Select the function and its first test
+      setSelectionState({
+        mode: 'function',
+        functionName: func.name,
+        testName: firstTestName,
+      });
+      hasInitializedRef.current = true;
+    } else if (functions.length > 0 && !hasInitializedRef.current) {
+      // No function in active file, but we have functions - select the first one
+      const firstFunc = functions[0];
+      if (firstFunc) {
+        const firstTestName = firstFunc.testCases?.[0]?.name ?? null;
+        setSelectionState({
+          mode: 'function',
+          functionName: firstFunc.name,
+          testName: firstTestName,
+        });
+        hasInitializedRef.current = true;
+      }
     }
-  }, [activeFileName, functions, setSelectedFunction]);
+  }, [activeFileName, functions, setSelectionState, currentSelection]);
 
   return null;
 };
@@ -234,9 +282,9 @@ export const ProjectSidebar = () => (
 );
 
 export const ProjectView = ({ project }: { project: BAMLProject }) => (
-  <JotaiProvider>
+  <BAMLSDKProvider mode="wasm">
     <ProjectViewImpl project={project} />
-  </JotaiProvider>
+  </BAMLSDKProvider>
 );
 
 const PlaygroundView = () => (

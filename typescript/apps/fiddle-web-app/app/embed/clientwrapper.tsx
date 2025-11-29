@@ -1,7 +1,7 @@
 'use client';
-import { filesAtom, useWaitForWasm } from '@baml/playground-common';
+import { bamlFilesTrackedAtom, filesAtom } from '@baml/playground-common';
 import { PromptPreview } from '@baml/playground-common/prompt-preview';
-import { JotaiProvider } from '@baml/playground-common/jotai-provider';
+import { BAMLSDKProvider } from '@baml/playground-common/sdk';
 import { CodeMirrorViewer } from '@baml/playground-common/codemirror-viewer';
 import { EventListener } from '@baml/playground-common/event-listener';
 import { ResizableHandle, ResizablePanelGroup } from '@baml/ui/resizable';
@@ -74,18 +74,19 @@ interface EmbedComponentProps {
 
 export default function EmbedComponent({ files }: EmbedComponentProps) {
   return (
-    <JotaiProvider>
+    <BAMLSDKProvider mode="wasm">
       <EmbedComponentInner files={files} />
-    </JotaiProvider>
+    </BAMLSDKProvider>
   );
 }
 
 function EmbedComponentInner({ files }: EmbedComponentProps) {
-  const [editorFiles, setEditorFiles] = useAtom(filesAtom);
+  const editorFiles = useAtomValue(filesAtom);
+  const setEditorFiles = useSetAtom(bamlFilesTrackedAtom);
   const [isLoading, setIsLoading] = useState(true);
   const [previewReady, setPreviewReady] = useState(false);
-  const isWasmReady = useWaitForWasm();
-  const activeFileNameAtomValue = useAtomValue(activeFileNameAtom);
+  // SDK provider already ensures WASM is loaded before rendering children
+  const activeFileName = useAtomValue(activeFileNameAtom);
   const setActiveFileName = useSetAtom(activeFileNameAtom);
   const searchParams = useSearchParams();
   const uiToggles = useMemo(() => {
@@ -100,10 +101,6 @@ function EmbedComponentInner({ files }: EmbedComponentProps) {
       showPlayground: getBool('showPlayground', true),
     };
   }, [searchParams]);
-
-  // Use fallback active file name when WASM is not ready
-  const fallbackFileName = files.find((f) => f.path.endsWith('.baml'))?.path || 'main.baml';
-  const activeFileName = isWasmReady ? activeFileNameAtomValue : fallbackFileName;
 
   useEffect(() => {
     // Populate files atom from provided project files
@@ -130,11 +127,11 @@ function EmbedComponentInner({ files }: EmbedComponentProps) {
 
   // Mark preview as ready after first paint to avoid flash between loader and preview
   useEffect(() => {
-    if (!isLoading && isWasmReady && !previewReady) {
+    if (!isLoading && !previewReady) {
       const id = requestAnimationFrame(() => setPreviewReady(true));
       return () => cancelAnimationFrame(id);
     }
-  }, [isLoading, isWasmReady, previewReady]);
+  }, [isLoading, previewReady]);
 
   if (isLoading) {
     return <BrandedLoading />;

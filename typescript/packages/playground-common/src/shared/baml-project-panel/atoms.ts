@@ -49,12 +49,17 @@ export {
   selectedTestCaseAtom,
   selectionAtom,
   functionTestSnippetAtom,
+  unifiedSelectionStateAtom,
+
+  // Functions
+  functionsAtom,
 
   // Types
   type DiagnosticError,
   type GeneratedFile,
   type WasmPanicState,
   type VSCodeSettings,
+  type SelectionState,
 } from '../../sdk/atoms/core.atoms';
 
 // Re-export test atoms from SDK
