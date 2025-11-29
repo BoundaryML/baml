@@ -28,6 +28,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Start deployment
+        uses: bobheadxi/deployments@v1
+        id: deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: docs-${{ inputs.is_canary && 'prod' || 'dev' }}
+
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/setup-node
         with:
@@ -60,6 +68,27 @@ jobs:
         with:
           file-path: preview_url.txt
 
+      - name: Extract docs URL
+        id: docs_url
+        run: |
+          if [ -f preview_url.txt ]; then
+            URL=$(cat preview_url.txt | grep -oP '🌿 Preview your docs: \K.*' || echo "")
+            echo "url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "url=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update deployment status
+        uses: bobheadxi/deployments@v1
+        if: always()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ job.status }}
+          env: ${{ steps.deployment.outputs.env }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+          env_url: ${{ steps.docs_url.outputs.url }}
+
   deploy-backend:
     name: "deploy backend"
     runs-on: ubuntu-latest
@@ -75,6 +104,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: Start deployment
+        uses: bobheadxi/deployments@v1
+        id: deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: backend-${{ inputs.is_canary && 'prod' || 'dev' }}
 
       - name: Setup Node.js and pnpm
         uses: ./.github/actions/setup-node
@@ -140,7 +177,28 @@ jobs:
         uses: thollander/actions-comment-pull-request@v3.0.1
         with:
           file-path: ../sage-backend/preview_url.txt
-  
+
+      - name: Extract backend URL
+        id: backend_url
+        run: |
+          if [ -f preview_url.txt ]; then
+            URL=$(cat preview_url.txt | tr -d '\n' || echo "")
+            echo "url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "url=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update deployment status
+        uses: bobheadxi/deployments@v1
+        if: always()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ job.status }}
+          env: ${{ steps.deployment.outputs.env }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+          env_url: ${{ steps.backend_url.outputs.url }}
+
   update-pinecone:
     name: "update pinecone"
     runs-on: ubuntu-latest

@@ -204,6 +204,7 @@ jobs:
       id-token: write
       contents: read
       pull-requests: write
+      deployments: write
 
   docs:
     name: "Docs"
