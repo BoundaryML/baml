@@ -89,6 +89,17 @@ if ! cargo clippy --workspace --all-targets --all-features -- -D warnings; then
 fi
 echo -e "${GREEN}✓ Clippy checks passed${NC}"
 
+# Run bep:readme to keep BEP index up to date
+echo -e "${YELLOW}Checking BEP index...${NC}"
+cd "$REPO_ROOT" || exit 1
+if command -v mise >/dev/null 2>&1; then
+    mise run bep:readme
+    git add beps/README.md 2>/dev/null || true
+    echo -e "${GREEN}✓ BEP index updated${NC}"
+else
+    echo -e "${YELLOW}Warning: mise not found, skipping BEP index update${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREEN}✓ All pre-commit checks passed!${NC}"

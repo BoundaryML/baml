@@ -14,6 +14,7 @@ java = "temurin-23"
 "cargo:cargo-watch" = "latest"
 "cargo:wasm-pack" = "0.13.1"
 "cargo:ripgrep" = "latest"
+"cargo:just" = "latest"
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml
@@ -28,6 +29,13 @@ java = "temurin-23"
 # Node tools
 "npm:pnpm" = "10.14.0"
 "npm:@infisical/cli" = "latest"
+
+[tasks]
+"bep:readme" = "./beps/scripts/update_bep_readme.py"
+"bep:new" = "./beps/scripts/new_bep.py"
+"bep:update" = "./beps/scripts/update_bep.py"
+"bep:check" = "./beps/scripts/update_bep_readme.py --check"
+"bep:serve" = "cd beps && uv run --with mkdocs-material --with mkdocs-awesome-pages-plugin --with click==8.2.1 --with mkdocs-git-revision-date-localized-plugin --with mkdocs-git-committers-plugin-2 mkdocs serve"
 
 [settings]
 experimental = true

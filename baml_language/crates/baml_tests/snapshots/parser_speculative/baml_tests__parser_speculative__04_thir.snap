@@ -12,6 +12,7 @@ expression: output
     Errors:
       - Unknown variable: data::field1
       - Unknown variable: data::field2
+      - Cannot apply operator 'Add' to types unknown and unknown
   Function ExtractData:
     Return: Unknown
   Function SimpleCalc:

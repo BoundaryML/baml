@@ -10,8 +10,8 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{
     compiler::{
-        CompilerPhase, CompilerRunner, GreenElementId, ThirDisplayMode, ThirInteractiveState,
-        VisualizationMode, read_files_from_disk,
+        CompilerPhase, CompilerRunner, GreenElementId, ThirDisplayMode, VisualizationMode,
+        read_files_from_disk,
     },
     ui,
     watcher::FileWatcher,

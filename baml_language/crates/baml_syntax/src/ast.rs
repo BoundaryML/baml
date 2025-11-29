@@ -305,7 +305,7 @@ impl TestDef {
     }
 
     /// Get the function name that this test is for.
-    /// Pattern: test <TestName> { functions [<FunctionName>] ... }
+    /// Pattern: `test <TestName> { functions [<FunctionName>] ... }`
     pub fn function_name(&self) -> Option<SyntaxToken> {
         // Look for a ConfigItem with key "functions" and extract the function name
         self.syntax

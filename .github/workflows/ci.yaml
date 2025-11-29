@@ -1,12 +1,12 @@
 name: CI - BAML Language
-permissions: {}
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
 on:
   push:
     branches: [main, canary]
   pull_request:
-    paths:
-      - "baml_language/**"
-      - ".github/workflows/ci.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -40,6 +40,8 @@ jobs:
       thir: ${{ steps.check_thir.outputs.changed }}
       # Flag for codegen changes
       codegen: ${{ steps.check_codegen.outputs.changed }}
+      # Flag for BEP changes
+      beps: ${{ steps.check_beps.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -145,6 +147,156 @@ jobs:
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Check if BEPs changed
+        id: check_beps
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':beps/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  check-beps:
+    name: "check beps"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.beps == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch BEP file history
+        run: git fetch --depth=500 origin ${{ github.ref }} -- beps/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: "Check BEP index"
+        run: ./beps/scripts/update_bep_readme.py --check
+
+  deploy-beps-canary:
+    name: "deploy beps (canary)"
+    runs-on: ubuntu-latest
+    needs: [determine_changes, check-beps]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch BEP file history
+        run: git fetch --depth=500 origin ${{ github.ref }} -- beps/
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Install MkDocs and dependencies
+        run: |
+          pip install mkdocs-material mkdocs-awesome-pages-plugin mkdocs-git-revision-date-localized-plugin mkdocs-git-committers-plugin-2
+
+      - name: Build MkDocs
+        working-directory: beps
+        run: mkdocs build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4 # v4
+        with:
+          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/canary/ --delete --cache-control "public, max-age=3600"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/canary/*"
+
+  deploy-beps-preview:
+    name: "deploy beps (preview)"
+    runs-on: ubuntu-latest
+    needs: [determine_changes, check-beps]
+    if: github.event_name == 'pull_request' && needs.determine_changes.outputs.beps == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch BEP file history
+        run: git fetch --depth=500 origin ${{ github.ref }} -- beps/
+
+      - name: Get branch name
+        id: branch
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+          echo "name=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Comment - Building Preview
+        uses: thollander/actions-comment-pull-request@v3.0.1 # v3.0.1
+        with:
+          message: |
+            🏗️ **Building BEPs preview...** (run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))
+          comment-tag: beps-preview
+
+      - name: Fetch canary branch for diff
+        run: |
+          git fetch origin canary:canary || true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Install MkDocs and dependencies
+        run: |
+          pip install mkdocs-material mkdocs-awesome-pages-plugin mkdocs-git-revision-date-localized-plugin mkdocs-git-committers-plugin-2
+
+      - name: Build MkDocs
+        working-directory: beps
+        run: mkdocs build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4 # v4
+        with:
+          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/${{ steps.branch.outputs.name }}/ --delete --cache-control "public, max-age=300"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/${{ steps.branch.outputs.name }}/*"
+
+      - name: Update Building Comment
+        uses: thollander/actions-comment-pull-request@v3.0.1 # v3.0.1
+        with:
+          message: |
+            ✅ **Latest build complete** • [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          comment-tag: beps-preview
+
+      - name: Comment Preview URL
+        uses: thollander/actions-comment-pull-request@v3.0.1 # v3.0.1
+        with:
+          message: |
+            🐑 **BEPs Preview Ready**
+
+            **Preview URL**: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
+
+            <sub>Commit: `${{ github.event.pull_request.head.sha }}` • [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
 
   cargo-fmt:
     name: "cargo fmt"
@@ -498,6 +650,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - benchmarks-instrumented
       - cargo-fmt
       - cargo-clippy
       - cargo-test-linux
@@ -506,9 +659,27 @@ jobs:
       - cargo-test-wasm
       - cargo-build-msrv
       - snapshot-tests
+      - check-beps
+      - deploy-beps-canary
+      - deploy-beps-preview
     steps:
       - name: "Check test results"
         run: |
+          if [[ "${{ needs.check-beps.result }}" != "success" && "${{ needs.check-beps.result }}" != "skipped" ]]; then
+            echo "::error::BEP check failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.deploy-beps-canary.result }}" != "success" && "${{ needs.deploy-beps-canary.result }}" != "skipped" ]]; then
+            echo "::error::BEP canary deploy failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.deploy-beps-preview.result }}" != "success" && "${{ needs.deploy-beps-preview.result }}" != "skipped" ]]; then
+            echo "::error::BEP preview deploy failed"
+            exit 1
+          fi
+
           if [[ "${{ needs.cargo-fmt.result }}" != "success" && "${{ needs.cargo-fmt.result }}" != "skipped" ]]; then
             echo "::error::Formatting check failed"
             exit 1

@@ -468,7 +468,7 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
     writeln!(file, "        let mut db = RootDatabase::new();")?;
     writeln!(
         file,
-        "        let root = db.set_project_root(std::path::PathBuf::from(\".\"));"
+        "        let _root = db.set_project_root(std::path::PathBuf::from(\".\"));"
     )?;
     writeln!(file, "        let mut source_files = Vec::new();")?;
     writeln!(file)?;

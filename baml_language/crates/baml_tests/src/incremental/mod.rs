@@ -163,8 +163,9 @@ impl Default for IncrementalTestDb {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_db::baml_hir;
+
+    use super::*;
 
     #[test]
     fn test_basic_event_logging() {

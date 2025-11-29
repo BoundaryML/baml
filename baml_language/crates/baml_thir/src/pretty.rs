@@ -499,8 +499,6 @@ fn unary_op_to_str(op: UnaryOp) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     // Tests would go here, but they require a full HIR setup
     // The snapshot tests in baml_tests will exercise this code
 }
