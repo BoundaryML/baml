@@ -26,7 +26,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          fetch-depth: 500
+          fetch-depth: 0
+
+      - name: Fetch base branch history
+        run: |
+          git fetch --depth=500 origin canary
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -49,7 +53,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          fetch-depth: 500
+          fetch-depth: 0
+
+      - name: Fetch base branch history
+        run: |
+          git fetch --depth=500 origin canary
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -91,7 +99,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          fetch-depth: 500
+          fetch-depth: 0
+
+      - name: Fetch base branch history
+        run: |
+          git fetch --depth=500 origin canary
 
       - name: Get branch name
         id: branch
