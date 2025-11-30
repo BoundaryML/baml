@@ -63,37 +63,57 @@ def _diff_vs_previous_commit(rel_path: str) -> str:
     return _run_git(["diff", prev, head, "--", file_path])
 
 
-def _parse_unified_diff(diff_text: str) -> dict:
+def _parse_unified_diff(diff_text: str) -> set[int]:
     """
-    Parse unified diff and extract line changes.
-    Returns dict with 'added' and 'removed' line contents.
+    Parse unified diff and return a set of 1-based line numbers 
+    in the NEW file that are added or modified.
     """
+    changed_lines = set()
     if not diff_text.strip():
-        return {"added": [], "removed": [], "modified": []}
+        return changed_lines
     
-    added = []
-    removed = []
-    
+    # Initialize for tracking line numbers in the new file
+    current_new_line = 0
+
     for line in diff_text.splitlines():
         # Skip diff metadata lines
+        if line.startswith("@@"):
+            # Parse header: @@ -1,5 +1,5 @@
+            # We care about the +part
+            # +1,5 means starts at line 1, 5 lines
+            try:
+                # Extract the + part
+                parts = line.split(" ")
+                new_hunk = parts[2] # +1,5
+                if "," in new_hunk:
+                    start = int(new_hunk[1:].split(",")[0])
+                else:
+                    start = int(new_hunk[1:])
+                current_new_line = start
+                # print(f"DEBUG: Hunk start {start}")
+            except Exception:
+                # print(f"DEBUG: Hunk parse error {e}")
+                pass
+            continue
+        
         if line.startswith("+++") or line.startswith("---") or \
-           line.startswith("@@") or line.startswith("diff ") or \
-           line.startswith("index ") or line.startswith("new file") or \
-           line.startswith("old file"):
+           line.startswith("diff ") or line.startswith("index ") or \
+           line.startswith("new file") or line.startswith("old file"):
             continue
         
         if line.startswith("+"):
-            # Added line (strip the + prefix)
-            content = line[1:].strip()
-            if content:  # Skip empty additions
-                added.append(content)
+            # Added line
+            changed_lines.add(current_new_line)
+            current_new_line += 1
         elif line.startswith("-"):
-            # Removed line (strip the - prefix)
-            content = line[1:].strip()
-            if content:  # Skip empty removals
-                removed.append(content)
+            # Removed line - doesn't exist in new file, so doesn't advance current_new_line
+            pass
+        else:
+            # Context line (starts with space)
+            current_new_line += 1
     
-    return {"added": added, "removed": removed}
+    # print(f"DEBUG: Total changed lines: {len(changed_lines)}")
+    return changed_lines
 
 
 def _get_file_history(rel_path: str, base_branch: str = "canary") -> list:
@@ -129,31 +149,33 @@ def _highlight_inline_changes_multi(markdown: str, diffs_by_ref: dict) -> str:
     """
     Add visual indicators for changed lines.
     Wraps lines in divs with data attributes for EACH ref that sees a change.
-    diffs_by_ref: {'canary': {'added': [...]}, 'abc1234': {'added': [...]}, ...}
+    diffs_by_ref: {'canary': set([1, 2, 5]), 'abc1234': set([1]), ...}
     """
     # If no diffs anywhere, return original
-    if all(not d["added"] for d in diffs_by_ref.values()):
+    if all(not d for d in diffs_by_ref.values()):
         return markdown
     
     lines = markdown.splitlines()
     result_lines = []
     i = 0
     
+    # 1-based line index
+    current_line_num = 1
+    
     while i < len(lines):
         line = lines[i]
         
-        # Determine which refs consider this line "added"
-        # Filter refs where this line is present in their 'added' list
+        # Determine which refs consider this line "added" (changed)
         active_refs = []
-        for ref, d in diffs_by_ref.items():
-            # Fuzzy match (len > 3)
-            if any(added in line and len(added) > 3 for added in d["added"]):
+        for ref, changed_lines_set in diffs_by_ref.items():
+            if current_line_num in changed_lines_set:
                 active_refs.append(ref)
         
         if active_refs:
             # This line is changed in at least one view
             changed_block = [line]
             i += 1
+            current_line_num += 1
             
             # Collect consecutive lines that share the EXACT SAME set of active refs
             while i < len(lines):
@@ -161,27 +183,19 @@ def _highlight_inline_changes_multi(markdown: str, diffs_by_ref: dict) -> str:
                 
                 # Calculate active refs for next line
                 next_active_refs = []
-                for ref, d in diffs_by_ref.items():
-                    if any(added in next_line and len(added) > 3 for added in d["added"]):
+                for ref, changed_lines_set in diffs_by_ref.items():
+                    if current_line_num in changed_lines_set:
                         next_active_refs.append(ref)
                 
-                # Empty lines inherit the previous block's status for visual continuity
-                is_empty = (next_line.strip() == "")
-                
-                if is_empty:
-                    changed_block.append(next_line)
-                    i += 1
-                    continue
-
                 # If the set of refs is exactly the same, group it
                 if set(next_active_refs) == set(active_refs):
                     changed_block.append(next_line)
                     i += 1
+                    current_line_num += 1
                 else:
                     break
             
             # Build data attributes
-            # data-diff-canary="true" data-diff-abc123="true"
             attrs = ' '.join([f'data-diff-{ref}="true"' for ref in active_refs])
             
             # Wrap block
@@ -193,6 +207,7 @@ def _highlight_inline_changes_multi(markdown: str, diffs_by_ref: dict) -> str:
         else:
             result_lines.append(line)
             i += 1
+            current_line_num += 1
     
     return "\n".join(result_lines)
 
@@ -347,42 +362,7 @@ def _run_diff(ref: str, file_path: str) -> str:
 
 
 
-def _add_diff_summary(markdown: str, rel_path: str) -> str:
-    """
-    Add diff summary and controls.
-    """
-    diff_canary = _diff_vs_branch(rel_path, base_branch="canary")
-    diff_prev = _diff_vs_previous_commit(rel_path)
-    
-    # Count changes
-    c_canary = len([l for l in diff_canary.splitlines() if l.startswith("+") or l.startswith("-")])
-    c_prev = len([l for l in diff_prev.splitlines() if l.startswith("+") or l.startswith("-")])
-    
-    # Build Controls HTML
-    controls = f"""
-<div class="diff-controls">
-    <label for="diff-mode"><strong>Compare against:</strong></label>
-    <select id="diff-mode" class="diff-select" onchange="updateDiffMode(this)">
-        <option value="canary">Canary Branch (Main)</option>
-        <option value="prev">Previous Commit</option>
-        <option value="none">None (Clean View)</option>
-    </select>
-</div>
-"""
-    
-    # Summaries
-    summary_html = ""
-    if c_canary > 0:
-        summary_html += f'<div id="summary-canary" style="display:none" markdown="1">\n\n!!! info "Diff vs Canary"\n    {c_canary} lines changed\n</div>\n'
-    else:
-         summary_html += f'<div id="summary-canary" style="display:none" markdown="1">\n\n!!! success "Diff vs Canary"\n    No changes vs canary\n</div>\n'
 
-    if c_prev > 0:
-        summary_html += f'<div id="summary-prev" style="display:none" markdown="1">\n\n!!! info "Diff vs Previous"\n    {c_prev} lines changed\n</div>\n'
-    else:
-         summary_html += f'<div id="summary-prev" style="display:none" markdown="1">\n\n!!! success "Diff vs Previous"\n    No changes vs previous commit\n</div>\n'
-
-    return _get_diff_ui_assets() + controls + "\n" + summary_html + "\n" + markdown
 
 
 
@@ -461,9 +441,16 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
 
     rel_path = page.file.src_path  # relative to docs/, e.g. 'proposals/.../go.md'
 
+    # EMERGENCY FIX: Disable hook entirely to fix empty pages
+    # return markdown
+
     # Optional: only show diffs for proposals
     if not rel_path.startswith("proposals/"):
         return markdown
+    
+    # DEBUG: Skip go.md to see if it renders
+    # if "go.md" in rel_path:
+    #    return markdown
 
     # 1. Get History
     commits = _get_file_history(rel_path, base_branch="canary")
@@ -491,7 +478,7 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     
     # If no diffs anywhere, just return (but we might want to show the dropdown saying "No changes"?)
     # Actually if there are changes vs SOMETHING we should show UI.
-    has_any_change = any(bool(d["added"] or d["removed"]) for d in diffs.values())
+    has_any_change = any(bool(d) for d in diffs.values())
 
     if not has_any_change:
         return markdown
@@ -548,7 +535,7 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     # Summaries
     summaries = []
     # Canary Summary
-    c_canary = len(parsed_canary["added"]) + len(parsed_canary["removed"])
+    c_canary = len(parsed_canary)
     if c_canary > 0:
         summaries.append(f'<div id="summary-canary" class="diff-summary" style="display:none" markdown="1">\n\n!!! info "Diff vs Canary"\n    {c_canary} lines changed\n</div>')
     else:
@@ -558,7 +545,7 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     for c in commits:
         h = c["hash"]
         p = diffs[h]
-        count = len(p["added"]) + len(p["removed"])
+        count = len(p)
         if count > 0:
              summaries.append(f'<div id="summary-{h}" class="diff-summary" style="display:none" markdown="1">\n\n!!! info "Diff vs {c["short"]}"\n    {count} lines changed\n</div>')
         else:

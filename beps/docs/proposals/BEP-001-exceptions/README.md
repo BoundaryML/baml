@@ -10,12 +10,4 @@ created: 2025-11-20
 
 ## Summary
 
-This is a placeholder for the Exceptions design proposal.
-
-## Motivation
-
-TBD tests fsdffasf fd ff asfd
-
-## Proposed Design
-
-TBD
+Pending until we have a final verdict on which syntax we like
