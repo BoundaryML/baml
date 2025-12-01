@@ -6,6 +6,12 @@ status: Draft
 created: 2025-11-20
 ---
 
+!!! note ""
+    Leave comments on either
+
+      - [internal boundary slack thread](https://gloo-global.slack.com/archives/C0958DV7YPL/p1764615609844069)
+      - [public github discussion](https://github.com/orgs/BoundaryML/discussions/2761)
+
 Exception handling in BAML uses a **scoped catch** syntax that lets you handle errors declaratively without wrapping your code in try-blocks. This guide teaches you how to write resilient BAML functions.
 
 ## Quick Start
@@ -751,7 +757,18 @@ class ParsingResult {
   error string?
 }
 
-function ParseResume(text: string) -> ParsingResult {
+function ParseResume(text: string) -> Resume {
+   client "openai/gpt-4o"
+   prompt #"
+      Extract resume information from the following text.
+      Return a structured format with name, email, experience, and skills.
+      
+      Text:
+      {{ text }}
+   "#
+}
+
+function SafeParseResume(text: string) -> ParsingResult {
    catch {
       TimeoutError() => {
          return ParsingResult {
@@ -778,14 +795,8 @@ function ParseResume(text: string) -> ParsingResult {
       }
    }
 
-   client "openai/gpt-4o"
-   prompt #"
-      Extract resume information from the following text.
-      Return a structured format with name, email, experience, and skills.
-      
-      Text:
-      {{ text }}
-   "#
+   let resume = ParseResume(text)
+   return ParsingResult { success: true, data: resume }
 }
 
 function ParseBatchResumes(texts: string[]) -> ParsingResult[] {
@@ -793,7 +804,7 @@ function ParseBatchResumes(texts: string[]) -> ParsingResult[] {
    
    for (text in texts) {
       // Each resume gets independent error handling
-      results.append(ParseResume(text))
+      results.append(SafeParseResume(text))
    }
    
    return results
@@ -806,6 +817,36 @@ This example demonstrates:
 - User-friendly error messages
 - Logging and metrics for unknown errors
 - Batch processing where individual failures don't stop the batch
+
+## Why not try/catch?
+
+You might wonder why BAML uses this scoped catch syntax instead of the familiar `try/catch` blocks found in other languages.
+
+The decision comes down to **ergonomics for AI engineering**.
+
+### 1. Zero-Refactor Resilience
+
+In traditional languages, moving from a prototype ("happy path" code) to a production-ready system (resilient code) requires structural refactoring:
+- You must wrap risky code in `try` blocks
+- This forces you to indent all the code inside
+- You often need to move variable declarations outside the block to keep them in scope
+
+With scoped catch, error handling is strictly **additive**. You simply paste a `catch` block at the top of the function. Your existing logic stays exactly where it is—no indentation changes, no variable hoisting, and no "diff noise."
+
+This is particularly important for AI-generated code, where minimizing the size of diffs helps LLMs maintain context and reduce errors.
+
+### 2. Declarative "Open Try"
+
+BAML's syntax acts like an "open try"—it declares "here is how we handle failures in this scope" right at the start.
+
+- **Traditional**: "Try to do X, Y, Z... and if something fails, jump down here."
+- **BAML**: "If anything fails in this scope, handle it like this. Now, do X, Y, Z."
+
+This puts the failure recovery logic front-and-center rather than burying it at the bottom of the function.
+
+### 3. Clean Variable Access
+
+Because the catch block sits at the top of the scope, it naturally has access to all function parameters and variables declared in outer scopes. This makes it easy to construct rich error context or fallback values without fighting scoping rules.
 
 ---
 
