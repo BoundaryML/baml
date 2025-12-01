@@ -111,9 +111,15 @@ dependencies = [
 name = "baml_codegen"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "baml_base",
+ "baml_db",
+ "baml_hir",
  "baml_thir",
+ "baml_vm",
  "baml_workspace",
+ "insta",
+ "la-arena",
  "salsa",
 ]
 
@@ -233,6 +239,10 @@ dependencies = [
  "salsa",
  "text-size",
 ]
+
+[[package]]
+name = "baml_vm"
+version = "0.0.0"
 
 [[package]]
 name = "baml_workspace"

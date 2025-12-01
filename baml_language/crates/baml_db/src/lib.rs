@@ -18,7 +18,6 @@ pub use baml_parser;
 pub use baml_syntax;
 pub use baml_thir;
 pub use baml_workspace;
-use rowan::ast::AstNode;
 use salsa::Storage;
 
 /// Type alias for Salsa event callbacks
@@ -92,70 +91,8 @@ impl Default for RootDatabase {
 // ────────────────────────────────────────────────── FUNCTION QUERIES ─────
 //
 
-/// Returns the signature of a function (params, return type, generics).
-///
-/// This is separate from the `ItemTree` to provide fine-grained incrementality.
-/// Changing a function body does NOT invalidate this query.
-#[salsa::tracked]
-pub fn function_signature<'db>(
-    db: &'db dyn baml_hir::Db,
-    file: SourceFile,
-    function: baml_hir::FunctionLoc<'db>,
-) -> Arc<baml_hir::FunctionSignature> {
-    let tree = baml_parser::syntax_tree(db, file);
-    let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
-
-    // Find the function node by name
-    let item_tree = baml_hir::file_item_tree(db, file);
-    let func = &item_tree[function.id(db)];
-
-    for item in source_file.items() {
-        if let baml_syntax::ast::Item::Function(func_node) = item {
-            if let Some(name_token) = func_node.name() {
-                if name_token.text() == func.name.as_str() {
-                    return baml_hir::FunctionSignature::lower(&func_node);
-                }
-            }
-        }
-    }
-
-    // Function not found - return minimal signature
-    Arc::new(baml_hir::FunctionSignature {
-        name: func.name.clone(),
-        params: vec![],
-        return_type: baml_hir::TypeRef::Unknown,
-    })
-}
-
-/// Returns the body of a function (LLM prompt or expression IR).
-///
-/// This is the most frequently invalidated query - it changes whenever
-/// the function body is edited.
-#[salsa::tracked]
-pub fn function_body<'db>(
-    db: &'db dyn baml_hir::Db,
-    file: SourceFile,
-    function: baml_hir::FunctionLoc<'db>,
-) -> Arc<baml_hir::FunctionBody> {
-    let tree = baml_parser::syntax_tree(db, file);
-    let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
-
-    let item_tree = baml_hir::file_item_tree(db, file);
-    let func = &item_tree[function.id(db)];
-
-    for item in source_file.items() {
-        if let baml_syntax::ast::Item::Function(func_node) = item {
-            if let Some(name_token) = func_node.name() {
-                if name_token.text() == func.name.as_str() {
-                    return baml_hir::FunctionBody::lower(&func_node);
-                }
-            }
-        }
-    }
-
-    // No body found
-    Arc::new(baml_hir::FunctionBody::Missing)
-}
+// Re-export function queries from baml_hir
+pub use baml_hir::{function_body, function_signature};
 
 //
 // ────────────────────────────────────────────────── TYPING CONTEXT ─────

@@ -692,7 +692,7 @@ fn generate_codegen_test(file: &mut File, project: &TestProject) -> std::io::Res
     writeln!(file)?;
     writeln!(
         file,
-        "        let module = baml_codegen::generate_project_bytecode(&db, root);"
+        "        let program = baml_codegen::generate_project_bytecode(&db, root);"
     )?;
     writeln!(file)?;
     writeln!(file, "        let mut output = String::new();")?;
@@ -702,27 +702,58 @@ fn generate_codegen_test(file: &mut File, project: &TestProject) -> std::io::Res
     )?;
     writeln!(
         file,
-        "        writeln!(output, \"Instructions: {{}} bytes\", module.instructions.len()).unwrap();"
+        "        writeln!(output, \"Functions: {{}}\", program.function_indices.len()).unwrap();"
     )?;
     writeln!(
         file,
-        "        writeln!(output, \"Constants: {{}}\", module.constants.len()).unwrap();"
+        "        writeln!(output, \"Objects: {{}}\", program.objects.len()).unwrap();"
+    )?;
+    writeln!(
+        file,
+        "        writeln!(output, \"Globals: {{}}\", program.globals.len()).unwrap();"
     )?;
     writeln!(file)?;
-    writeln!(file, "        // Show first few instructions for debugging")?;
-    writeln!(file, "        if !module.instructions.is_empty() {{")?;
+    writeln!(file, "        // Show functions and their bytecode")?;
     writeln!(
         file,
-        "            writeln!(output, \"\\nFirst instructions:\").unwrap();"
+        "        let mut func_names: Vec<_> = program.function_indices.keys().collect();"
+    )?;
+    writeln!(file, "        func_names.sort();")?;
+    writeln!(file, "        for func_name in func_names {{")?;
+    writeln!(
+        file,
+        "            if let Some(&idx) = program.function_indices.get(func_name)"
     )?;
     writeln!(
         file,
-        "            for (i, instr) in module.instructions.iter().take(10).enumerate() {{"
+        "                && let Some(baml_codegen::Object::Function(func)) = program.objects.get(idx)"
+    )?;
+    writeln!(file, "            {{")?;
+    writeln!(
+        file,
+        "                writeln!(output, \"\\nFunction {{}}:\", func_name).unwrap();"
     )?;
     writeln!(
         file,
-        "                writeln!(output, \"  [{{}}] {{:?}}\", i, instr).unwrap();"
+        "                writeln!(output, \"  Arity: {{}}\", func.arity).unwrap();"
     )?;
+    writeln!(
+        file,
+        "                writeln!(output, \"  Instructions: {{}}\", func.bytecode.instructions.len()).unwrap();"
+    )?;
+    writeln!(
+        file,
+        "                writeln!(output, \"  Constants: {{}}\", func.bytecode.constants.len()).unwrap();"
+    )?;
+    writeln!(
+        file,
+        "                for (i, instr) in func.bytecode.instructions.iter().enumerate() {{"
+    )?;
+    writeln!(
+        file,
+        "                    writeln!(output, \"    [{{:3}}] {{}}\", i, instr).unwrap();"
+    )?;
+    writeln!(file, "                }}")?;
     writeln!(file, "            }}")?;
     writeln!(file, "        }}")?;
     writeln!(file)?;

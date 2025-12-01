@@ -160,6 +160,79 @@ pub fn type_alias_generic_params(_db: &dyn Db, _alias: TypeAliasId<'_>) -> Arc<G
 }
 
 //
+// ───────────────────────────────────────────────── FUNCTION QUERIES ─────
+//
+
+/// Tracked: Get the signature of a function (params, return type).
+///
+/// This is separate from the body to provide fine-grained incrementality.
+/// Changing a function body does NOT invalidate this query.
+#[salsa::tracked]
+pub fn function_signature<'db>(
+    db: &'db dyn Db,
+    file: SourceFile,
+    function: FunctionLoc<'db>,
+) -> Arc<FunctionSignature> {
+    use baml_syntax::ast::SourceFile as AstSourceFile;
+    use rowan::ast::AstNode;
+
+    let tree = baml_parser::syntax_tree(db, file);
+    let source_file = AstSourceFile::cast(tree).unwrap();
+
+    let item_tree = file_item_tree(db, file);
+    let func = &item_tree[function.id(db)];
+
+    for item in source_file.items() {
+        if let baml_syntax::ast::Item::Function(func_node) = item {
+            if let Some(name_token) = func_node.name() {
+                if name_token.text() == func.name.as_str() {
+                    return FunctionSignature::lower(&func_node);
+                }
+            }
+        }
+    }
+
+    // Function not found - return minimal signature
+    Arc::new(FunctionSignature {
+        name: func.name.clone(),
+        params: vec![],
+        return_type: TypeRef::Unknown,
+    })
+}
+
+/// Tracked: Get the body of a function (LLM prompt or expression IR).
+///
+/// This is the most frequently invalidated query - it changes whenever
+/// the function body is edited.
+#[salsa::tracked]
+pub fn function_body<'db>(
+    db: &'db dyn Db,
+    file: SourceFile,
+    function: FunctionLoc<'db>,
+) -> Arc<FunctionBody> {
+    use baml_syntax::ast::SourceFile as AstSourceFile;
+    use rowan::ast::AstNode;
+
+    let tree = baml_parser::syntax_tree(db, file);
+    let source_file = AstSourceFile::cast(tree).unwrap();
+
+    let item_tree = file_item_tree(db, file);
+    let func = &item_tree[function.id(db)];
+
+    for item in source_file.items() {
+        if let baml_syntax::ast::Item::Function(func_node) = item {
+            if let Some(name_token) = func_node.name() {
+                if name_token.text() == func.name.as_str() {
+                    return FunctionBody::lower(&func_node);
+                }
+            }
+        }
+    }
+
+    Arc::new(FunctionBody::Missing)
+}
+
+//
 // ──────────────────────────────────────────────────────── INTERN HELPERS ─────
 //
 
