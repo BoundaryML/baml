@@ -115,7 +115,7 @@ catch {
    KnownError() => { return fallback() }
    other => { 
       log.error("Unexpected error", other)
-      throws other  // Re-throw to caller
+      throw other  // Re-throw to caller
    }
 }
 ```
@@ -131,7 +131,7 @@ catch {
 // What BAML compiles it to
 catch {
    MyError() => { return fallback() }
-   __implicit__ => { throws __implicit__ }  // Auto-added
+   __implicit__ => { throw __implicit__ }  // Auto-added
 }
 ```
 
@@ -228,7 +228,7 @@ function TrackedOperation() -> Data {
             message: error.message,
             context: current_context()
          })
-         throws error  // Propagate to caller
+         throw error  // Propagate to caller
       }
    }
 
@@ -352,7 +352,7 @@ function ComplexOperation(id: string) -> Result {
       // Scope-level catch for unexpected errors
       other => {
          log.error("Unexpected error in ComplexOperation", other)
-         throws other
+         throw other
       }
    }
    
@@ -371,7 +371,7 @@ function ComplexOperation(id: string) -> Result {
 }
 ```
 
-**Order of execution:** Inline catches are evaluated first, then scope-level catches. If an inline catch re-throws (via `throws`), the error propagates to the scope-level catch.
+**Order of execution:** Inline catches are evaluated first, then scope-level catches. If an inline catch re-throw (via `throw`), the error propagates to the scope-level catch.
 
 #### Expression Blocks with Inline Catch
 
@@ -506,14 +506,14 @@ function A() -> Data {
             stack: e.stack,  // Full call stack from where error was thrown
             callSite: e.callSite  // Where this error was caught
          })
-         throws e  // Stack is preserved when re-throwing
+         throw e  // Stack is preserved when re-throwing
       }
    }
-   B()  // If B throws, stack will include A -> B -> ...
+   B()  // If B throw, stack will include A -> B -> ...
 }
 
 function B() -> Data {
-   C()  // If C throws, stack will include A -> B -> C -> ...
+   C()  // If C throw, stack will include A -> B -> C -> ...
 }
 
 function C() -> Data {
@@ -525,7 +525,7 @@ function C() -> Data {
 
 - **Stack capture**: Every exception automatically captures where it was thrown
 - **Preserved on propagation**: When errors are implicitly forwarded via the implicit wildcard, the call stack is preserved
-- **Re-throw preserves stack**: Using `throws error` maintains the original stack trace
+- **Re-throw preserves stack**: Using `throw error` maintains the original stack trace
 - **Call site tracking**: At minimum, the call site where an error is caught is always known
 
 This makes debugging much easier, especially when errors propagate through multiple function calls:
@@ -623,6 +623,7 @@ Where `expression` can be:
 | `ErrorType(e)` | Bind error instance | `ParseError(e)` |
 | `ErrorType { fields }` | Destructure fields | `ApiError { code, msg }` |
 | `name` | Named wildcard (matches any error) | `other` |
+| `name` | Named wildcard (matches any error) | `other` |
 
 ### Handlers
 
@@ -639,7 +640,7 @@ Pattern => {
 
 Pattern => { fallback_value() }  // Return from block expression
 
-Pattern => { throws error }  // Re-throw to caller
+Pattern => { throw error }  // Re-throw to caller
 ```
 
 ### Placement Rules
@@ -850,9 +851,12 @@ Because the catch block sits at the top of the scope, it naturally has access to
 
 ---
 
-## Learn More
 
-- **Language Reference**: Full BAML syntax documentation
-- **Error Types**: Built-in error types in BAML
-- **Testing**: How to test error handling in BAML functions
-- **Observability**: Integrating error tracking and monitoring
+## Open Question: Throwing Arbitrary Types
+
+We are currently evaluating two approaches for handling `throw` with arbitrary values (primitives, structs):
+
+1.  **Universal Wrapper**: All thrown values are wrapped in an `Exception<T>` envelope.
+2.  **Interface Restriction**: Only types implementing an `Error` interface can be thrown.
+
+See [ideas/primitive-and-arbitrary-types](ideas/primitive-and-arbitrary-types) for the detailed trade-off analysis.
