@@ -111,6 +111,11 @@ impl ItemTree {
         self.tests.insert(id, test);
         id
     }
+
+    /// Iterate over all classes in the item tree.
+    pub fn iter_classes(&self) -> impl Iterator<Item = (&LocalItemId<ClassMarker>, &Class)> {
+        self.classes.iter()
+    }
 }
 
 /// A function definition in the `ItemTree`.

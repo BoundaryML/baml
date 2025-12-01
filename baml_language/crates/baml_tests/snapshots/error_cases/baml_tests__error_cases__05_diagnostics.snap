@@ -3,16 +3,6 @@ source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Error: Expected RBrace, found Function
-   ╭─[ 0:6:1 ]
-   │
- 6 │ function 123Invalid() {}
-   │ ────┬───  
-   │     ╰───── Expected RBrace, found Function
-   │ 
-   │ Note: Error code: E0010
-───╯
-
   [parse] Error: Expected function name, found IntegerLiteral
    ╭─[ 0:6:10 ]
    │
@@ -29,6 +19,16 @@ expression: output
  6 │ function 123Invalid() {}
    │                       ┬  
    │                       ╰── Expected return type (->), found LBrace
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected RBrace, found EOF
+   ╭─[ 0:6:24 ]
+   │
+ 6 │ function 123Invalid() {}
+   │                        ┬  
+   │                        ╰── Expected RBrace, found EOF
    │ 
    │ Note: Error code: E0010
 ───╯

@@ -265,6 +265,10 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode) {
             if let Some(class) = lower_class(node) {
                 tree.alloc_class(class);
             }
+            // Desugar methods into top-level functions
+            for func in lower_class_methods(node) {
+                tree.alloc_function(func);
+            }
         }
         SyntaxKind::ENUM_DEF => {
             if let Some(enum_def) = lower_enum(node) {
@@ -330,6 +334,29 @@ fn lower_class(node: &SyntaxNode) -> Option<Class> {
         fields,
         is_dynamic,
     })
+}
+
+/// Extract desugared method functions from a class.
+/// Methods like `class Baz { function Greeting(self) }` become top-level functions `Greeting(self: Baz)`.
+/// The method name is NOT namespaced - this keeps HIR lowering simple and type-free.
+fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
+    use baml_syntax::ast::ClassDef;
+
+    let Some(class) = ClassDef::cast(node.clone()) else {
+        return Vec::new();
+    };
+
+    let mut functions = Vec::new();
+    for method_node in class.methods() {
+        if let Some(method_name) = method_node.name() {
+            // Use just the method name (not qualified with class name)
+            // This keeps HIR lowering simple - no type resolution needed
+            functions.push(Function {
+                name: method_name.text().into(),
+            });
+        }
+    }
+    functions
 }
 
 /// Extract enum definition from CST.
@@ -450,7 +477,7 @@ fn lower_test(node: &SyntaxNode) -> Option<Test> {
 ///
 /// For now, this is a simplified implementation that extracts just the name.
 /// TODO: Parse complex types (optional, list, union, etc.)
-fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
+pub fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
     // For now, just extract the text representation
     // This is a simplification - we'll enhance this later
     let text = node.syntax().text().to_string();

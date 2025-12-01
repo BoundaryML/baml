@@ -1024,16 +1024,19 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            // Parse fields and attributes
+            // Parse fields, methods, and attributes
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword() {
+                // Error recovery: if we see a top-level keyword (except function), assume we missed a closing brace
+                if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
 
                 if p.at(TokenKind::AtAt) {
                     // Block attribute: @@dynamic
                     p.parse_block_attribute();
+                } else if p.at(TokenKind::Function) {
+                    // Method definition
+                    p.parse_function();
                 } else if p.at(TokenKind::Word) {
                     // Field declaration
                     p.parse_field();
@@ -1127,6 +1130,9 @@ impl<'a> Parser<'a> {
 
     fn parse_parameter(&mut self) {
         self.with_node(SyntaxKind::PARAMETER, |p| {
+            // Check if this is a 'self' parameter (no type annotation allowed)
+            let is_self = p.current().map(|t| t.text == "self").unwrap_or(false);
+
             // Parameter name
             if p.at(TokenKind::Word) {
                 p.bump();
@@ -1135,7 +1141,10 @@ impl<'a> Parser<'a> {
             }
 
             // Type annotation - supports both "name: type" and "name type" syntax
-            if p.eat(TokenKind::Colon) {
+            // 'self' parameter does not have a type annotation
+            if is_self {
+                // No type annotation for self
+            } else if p.eat(TokenKind::Colon) {
                 // With colon: "name: type"
                 p.parse_type();
             } else if p.at(TokenKind::Word) {

@@ -109,6 +109,7 @@ pub fn function_signature<'db>(
     let item_tree = baml_hir::file_item_tree(db, file);
     let func = &item_tree[function.id(db)];
 
+    // First, look for a top-level function
     for item in source_file.items() {
         if let baml_syntax::ast::Item::Function(func_node) = item {
             if let Some(name_token) = func_node.name() {
@@ -119,11 +120,72 @@ pub fn function_signature<'db>(
         }
     }
 
+    // Then, look for a method inside classes (methods are desugared to top-level functions)
+    for item in source_file.items() {
+        if let baml_syntax::ast::Item::Class(class_node) = item {
+            if let Some(class_name_token) = class_node.name() {
+                let class_name = class_name_token.text();
+                for method_node in class_node.methods() {
+                    if let Some(method_name_token) = method_node.name() {
+                        if method_name_token.text() == func.name.as_str() {
+                            return lower_method_signature(&method_node, &func.name, class_name);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Function not found - return minimal signature
     Arc::new(baml_hir::FunctionSignature {
         name: func.name.clone(),
         params: vec![],
         return_type: baml_hir::TypeRef::Unknown,
+    })
+}
+
+/// Lower a method signature, replacing 'self' parameter with the class type.
+fn lower_method_signature(
+    method_node: &baml_syntax::ast::FunctionDef,
+    method_name: &baml_base::Name,
+    class_name: &str,
+) -> Arc<baml_hir::FunctionSignature> {
+    use baml_hir::{FunctionSignature, Param, TypeRef};
+
+    // Extract parameters, replacing 'self' with the class type
+    let mut params = Vec::new();
+    if let Some(param_list) = method_node.param_list() {
+        for param_node in param_list.params() {
+            if let Some(name_token) = param_node.name() {
+                let param_name = name_token.text();
+                let type_ref = if param_name == "self" {
+                    // 'self' gets the class type
+                    TypeRef::named(class_name.into())
+                } else {
+                    param_node
+                        .ty()
+                        .map(|t| baml_hir::lower_type_ref(&t))
+                        .unwrap_or(TypeRef::Unknown)
+                };
+
+                params.push(Param {
+                    name: baml_base::Name::new(param_name),
+                    type_ref,
+                });
+            }
+        }
+    }
+
+    // Extract return type
+    let return_type = method_node
+        .return_type()
+        .map(|t| baml_hir::lower_type_ref(&t))
+        .unwrap_or(TypeRef::Unknown);
+
+    Arc::new(FunctionSignature {
+        name: method_name.clone(),
+        params,
+        return_type,
     })
 }
 
@@ -143,11 +205,25 @@ pub fn function_body<'db>(
     let item_tree = baml_hir::file_item_tree(db, file);
     let func = &item_tree[function.id(db)];
 
+    // First, look for a top-level function
     for item in source_file.items() {
         if let baml_syntax::ast::Item::Function(func_node) = item {
             if let Some(name_token) = func_node.name() {
                 if name_token.text() == func.name.as_str() {
                     return baml_hir::FunctionBody::lower(&func_node);
+                }
+            }
+        }
+    }
+
+    // Then, look for a method inside classes
+    for item in source_file.items() {
+        if let baml_syntax::ast::Item::Class(class_node) = item {
+            for method_node in class_node.methods() {
+                if let Some(method_name_token) = method_node.name() {
+                    if method_name_token.text() == func.name.as_str() {
+                        return baml_hir::FunctionBody::lower(&method_node);
+                    }
                 }
             }
         }
@@ -205,4 +281,36 @@ pub fn build_typing_context_from_files<'db>(
     }
 
     context
+}
+
+/// Build class fields map from a list of source files.
+///
+/// This maps class names to their field types, e.g.:
+/// `Baz` -> { `name` -> `String` }
+///
+/// Used for field access type checking in tests and onionskin.
+pub fn build_class_fields_from_files<'db>(
+    db: &'db dyn baml_thir::Db,
+    files: &[SourceFile],
+) -> std::collections::HashMap<
+    baml_base::Name,
+    std::collections::HashMap<baml_base::Name, baml_thir::Ty<'db>>,
+> {
+    let mut class_fields = std::collections::HashMap::new();
+
+    for file in files {
+        let item_tree = baml_hir::file_item_tree(db, *file);
+
+        // Iterate over all classes in the item tree
+        for (_, class) in item_tree.iter_classes() {
+            let mut fields = std::collections::HashMap::new();
+            for field in &class.fields {
+                let field_ty = baml_thir::lower_type_ref(db, &field.type_ref);
+                fields.insert(field.name.clone(), field_ty);
+            }
+            class_fields.insert(class.name.clone(), fields);
+        }
+    }
+
+    class_fields
 }

@@ -512,6 +512,10 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
         file,
         "        let globals = baml_db::build_typing_context_from_files(&db, &source_files);"
     )?;
+    writeln!(
+        file,
+        "        let class_fields = baml_db::build_class_fields_from_files(&db, &source_files);"
+    )?;
     writeln!(file)?;
     writeln!(file, "        // Iterate over files and their functions")?;
     writeln!(file, "        for source_file in &source_files {{")?;
@@ -535,7 +539,7 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
     )?;
     writeln!(
         file,
-        "                    let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()));"
+        "                    let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()));"
     )?;
     writeln!(file)?;
     writeln!(
@@ -635,6 +639,10 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
         file,
         "        let globals = baml_db::build_typing_context_from_files(&db, &source_files);"
     )?;
+    writeln!(
+        file,
+        "        let class_fields = baml_db::build_class_fields_from_files(&db, &source_files);"
+    )?;
     writeln!(file, "        for source_file in &source_files {{")?;
     writeln!(
         file,
@@ -656,7 +664,7 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
     )?;
     writeln!(
         file,
-        "                    let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()));"
+        "                    let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()));"
     )?;
     writeln!(file, "                    for error in &result.errors {{")?;
     writeln!(

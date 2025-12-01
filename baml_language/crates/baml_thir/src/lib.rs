@@ -61,6 +61,8 @@ pub struct TypeContext<'db> {
     db: &'db dyn Db,
     /// Stack of variable scopes (innermost last).
     scopes: Vec<HashMap<Name, Ty<'db>>>,
+    /// Class field types: class_name -> (field_name -> field_type)
+    class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
     /// Inferred types for expressions.
     expr_types: HashMap<ExprId, Ty<'db>>,
     /// Accumulated type errors.
@@ -76,9 +78,32 @@ impl<'db> TypeContext<'db> {
         TypeContext {
             db,
             scopes: vec![globals],
+            class_fields: HashMap::new(),
             expr_types: HashMap::new(),
             errors: Vec::new(),
         }
+    }
+
+    /// Create a new type context with global bindings and class field information.
+    pub fn with_class_fields(
+        db: &'db dyn Db,
+        globals: HashMap<Name, Ty<'db>>,
+        class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
+    ) -> Self {
+        TypeContext {
+            db,
+            scopes: vec![globals],
+            class_fields,
+            expr_types: HashMap::new(),
+            errors: Vec::new(),
+        }
+    }
+
+    /// Look up a field in a class.
+    pub fn lookup_class_field(&self, class_name: &Name, field_name: &Name) -> Option<&Ty<'db>> {
+        self.class_fields
+            .get(class_name)
+            .and_then(|fields| fields.get(field_name))
     }
 
     /// Push a new scope.
@@ -152,8 +177,13 @@ pub fn infer_function_body<'db>(
     param_types: HashMap<Name, Ty<'db>>,
     expected_return: &Ty<'db>,
     globals: Option<HashMap<Name, Ty<'db>>>,
+    class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
 ) -> InferenceResult<'db> {
-    let mut ctx = TypeContext::new(db, globals.unwrap_or_default());
+    let mut ctx = TypeContext::with_class_fields(
+        db,
+        globals.unwrap_or_default(),
+        class_fields.unwrap_or_default(),
+    );
 
     // Add parameters to the current scope (on top of globals)
     for (name, ty) in &param_types {
@@ -206,6 +236,7 @@ pub fn infer_function<'db>(
     signature: &FunctionSignature,
     body: &FunctionBody,
     globals: Option<HashMap<Name, Ty<'db>>>,
+    class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
 ) -> InferenceResult<'db> {
     // Convert parameter TypeRefs to Tys
     let param_types: HashMap<Name, Ty<'db>> = signature
@@ -221,7 +252,14 @@ pub fn infer_function<'db>(
     let expected_return = lower_type_ref(db, &signature.return_type);
 
     // Delegate to the body inference function
-    infer_function_body(db, body, param_types, &expected_return, globals)
+    infer_function_body(
+        db,
+        body,
+        param_types,
+        &expected_return,
+        globals,
+        class_fields,
+    )
 }
 
 /// Infer the type of an expression (synthesize mode).
@@ -263,26 +301,44 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
         }
 
         Expr::Call { callee, args } => {
-            let callee_ty = infer_expr(ctx, *callee, body);
+            // Check if this is a method call (callee is a FieldAccess)
+            // If so, we need to pass the receiver as the first argument
+            let (callee_ty, effective_args) = match &body.exprs[*callee] {
+                Expr::FieldAccess { base, field: _ } => {
+                    // Method call: receiver.method(args) -> Type.method(receiver, args)
+                    let receiver_ty = infer_expr(ctx, *base, body);
+                    let callee_ty = infer_expr(ctx, *callee, body);
 
-            // Infer argument types
-            let arg_types: Vec<Ty<'db>> =
-                args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
+                    // Build effective args: [receiver_type, ...explicit_args]
+                    let mut effective_args = vec![receiver_ty];
+                    for arg in args {
+                        effective_args.push(infer_expr(ctx, *arg, body));
+                    }
+                    (callee_ty, effective_args)
+                }
+                _ => {
+                    // Regular function call
+                    let callee_ty = infer_expr(ctx, *callee, body);
+                    let arg_types: Vec<Ty<'db>> =
+                        args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
+                    (callee_ty, arg_types)
+                }
+            };
 
             // If the callee is a function type, check arguments and return the return type
             match &callee_ty {
                 Ty::Function { params, ret } => {
                     // Check argument count
-                    if arg_types.len() != params.len() {
+                    if effective_args.len() != params.len() {
                         ctx.push_error(TypeError::ArgumentCountMismatch {
                             expected: params.len(),
-                            found: arg_types.len(),
+                            found: effective_args.len(),
                             span,
                         });
                     }
 
                     // Check argument types
-                    for (arg_ty, param_ty) in arg_types.iter().zip(params.iter()) {
+                    for (arg_ty, param_ty) in effective_args.iter().zip(params.iter()) {
                         if !arg_ty.is_subtype_of(param_ty) {
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: param_ty.clone(),
@@ -338,16 +394,18 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
             }
         }
 
-        Expr::Object {
-            type_name: _,
-            fields,
-        } => {
+        Expr::Object { type_name, fields } => {
             // Infer field types
             for (_, value_expr) in fields {
                 infer_expr(ctx, *value_expr, body);
             }
-            // For now, return Unknown since we don't have class resolution
-            Ty::Unknown
+            // Return the named type if type_name is provided
+            if let Some(name) = type_name {
+                Ty::Named(name.clone())
+            } else {
+                // Anonymous object - return Unknown for now
+                Ty::Unknown
+            }
         }
 
         Expr::Block { stmts, tail_expr } => {
@@ -434,8 +492,25 @@ fn infer_binary_op<'db>(
     };
 
     match op {
-        // Arithmetic operations
-        Add | Sub | Mul | Div | Mod => match (lhs, rhs) {
+        // Arithmetic operations (and string concatenation for Add)
+        Add => match (lhs, rhs) {
+            (Ty::Int, Ty::Int) => Ty::Int,
+            (Ty::Float, Ty::Float) => Ty::Float,
+            (Ty::Int, Ty::Float) => Ty::Float,
+            (Ty::Float, Ty::Int) => Ty::Float,
+            // String concatenation
+            (Ty::String, Ty::String) => Ty::String,
+            _ => {
+                ctx.push_error(TypeError::InvalidBinaryOp {
+                    op: format!("{op:?}"),
+                    lhs: lhs.clone(),
+                    rhs: rhs.clone(),
+                    span,
+                });
+                Ty::Error
+            }
+        },
+        Sub | Mul | Div | Mod => match (lhs, rhs) {
             (Ty::Int, Ty::Int) => Ty::Int,
             (Ty::Float, Ty::Float) => Ty::Float,
             (Ty::Int, Ty::Float) => Ty::Float,
@@ -542,6 +617,10 @@ fn infer_unary_op<'db>(
 }
 
 /// Infer the type of a field access.
+///
+/// For class types, this handles both field access and method access.
+/// Methods are desugared to top-level functions with simple names (not namespaced),
+/// so we look them up directly in the global context.
 fn infer_field_access<'db>(
     ctx: &mut TypeContext<'db>,
     base: &Ty<'db>,
@@ -549,8 +628,22 @@ fn infer_field_access<'db>(
     span: Span,
 ) -> Ty<'db> {
     match base {
+        Ty::Named(class_name) => {
+            // Try to look up as a method (methods are top-level functions with simple names)
+            if let Some(method_ty) = ctx.lookup(field) {
+                return method_ty.clone();
+            }
+
+            // Try to look up as a field in the class
+            if let Some(field_ty) = ctx.lookup_class_field(class_name, field) {
+                return field_ty.clone();
+            }
+
+            // Field/method not found
+            Ty::Unknown
+        }
         Ty::Class(_class_id) => {
-            // TODO: Look up field in class using ItemTree
+            // TODO: Look up field/method in class using ClassId
             // For now, return Unknown
             Ty::Unknown
         }

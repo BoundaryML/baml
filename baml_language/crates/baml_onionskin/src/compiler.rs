@@ -586,6 +586,7 @@ impl CompilerRunner {
         // Build initial typing context with all function types
         let file_list: Vec<_> = self.source_files.values().copied().collect();
         let globals = baml_db::build_typing_context_from_files(&self.db, &file_list);
+        let class_fields = baml_db::build_class_fields_from_files(&self.db, &file_list);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -622,6 +623,7 @@ impl CompilerRunner {
                         &signature,
                         &body,
                         Some(globals.clone()),
+                        Some(class_fields.clone()),
                     );
 
                     // Collect type errors from inference
