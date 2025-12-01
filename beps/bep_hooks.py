@@ -148,7 +148,7 @@ def _get_file_history(rel_path: str, base_branch: str = "canary") -> list:
 def _highlight_inline_changes_multi(markdown: str, diffs_by_ref: dict) -> str:
     """
     Add visual indicators for changed lines.
-    Wraps lines in divs with data attributes for EACH ref that sees a change.
+    Wraps lines in Admonitions for EACH ref that sees a change.
     diffs_by_ref: {'canary': set([1, 2, 5]), 'abc1234': set([1]), ...}
     """
     # If no diffs anywhere, return original
@@ -162,48 +162,183 @@ def _highlight_inline_changes_multi(markdown: str, diffs_by_ref: dict) -> str:
     # 1-based line index
     current_line_num = 1
     
+    # Track if we're inside a code fence
+    in_code_fence = False
+    code_fence_marker = None
+    
     while i < len(lines):
         line = lines[i]
+        stripped = line.strip()
         
-        # Determine which refs consider this line "added" (changed)
+        # 1. Track Code Fences
+        if stripped.startswith('```') or stripped.startswith('~~~'):
+            if not in_code_fence:
+                in_code_fence = True
+                code_fence_marker = '```' if stripped.startswith('```') else '~~~'
+            elif (code_fence_marker == '```' and stripped.startswith('```')) or \
+                 (code_fence_marker == '~~~' and stripped.startswith('~~~')):
+                in_code_fence = False
+                code_fence_marker = None
+        
+        # 2. Determine active refs for this line
         active_refs = []
         for ref, changed_lines_set in diffs_by_ref.items():
             if current_line_num in changed_lines_set:
                 active_refs.append(ref)
         
-        if active_refs:
+        # 3. Check if line is safe to highlight (Root-level content only)
+        # Skip:
+        # - Inside code fences
+        # - Indented lines (start with space/tab) -> likely blockquotes, lists, or code
+        # - List items (start with -, *, +, 1.)
+        # - Tables (start with |)
+        # - Empty lines (don't wrap empty lines alone)
+        
+        is_safe = True
+        if in_code_fence:
+            is_safe = False
+        elif stripped.startswith('```') or stripped.startswith('~~~'): # Fence markers themselves (opening or closing)
+            is_safe = False
+        elif not line: # Empty line
+            is_safe = False
+        elif line.startswith(' ') or line.startswith('\t'): # Indented
+            is_safe = False
+        elif line.startswith('|'): # Table
+            is_safe = False
+        elif stripped.startswith('- ') or stripped.startswith('* ') or stripped.startswith('+ '): # Unordered list
+            is_safe = False
+        elif stripped[0].isdigit() and '. ' in stripped[:5]: # Ordered list (heuristic)
+            is_safe = False
+            
+        # 4. Wrap if active and safe
+        if active_refs and is_safe:
             # This line is changed in at least one view
             changed_block = [line]
             i += 1
             current_line_num += 1
             
             # Collect consecutive lines that share the EXACT SAME set of active refs
+            # AND are also safe to highlight
             while i < len(lines):
                 next_line = lines[i]
+                next_stripped = next_line.strip()
                 
+                # Check fence state for next line
+                next_in_fence = in_code_fence
+                if next_stripped.startswith('```') or next_stripped.startswith('~~~'):
+                    if not in_code_fence:
+                        next_in_fence = True
+                    elif (code_fence_marker == '```' and next_stripped.startswith('```')) or \
+                         (code_fence_marker == '~~~' and next_stripped.startswith('~~~')):
+                        next_in_fence = False
+                
+                # Check safety for next line
+                next_is_safe = True
+                if next_in_fence:
+                    next_is_safe = False
+                elif not next_line:
+                    next_is_safe = False
+                elif next_line.startswith(' ') or next_line.startswith('\t'):
+                    next_is_safe = False
+                elif next_line.startswith('|'):
+                    next_is_safe = False
+                elif next_stripped.startswith('- ') or next_stripped.startswith('* ') or next_stripped.startswith('+ '):
+                    next_is_safe = False
+                elif next_stripped and next_stripped[0].isdigit() and '. ' in next_stripped[:5]:
+                    next_is_safe = False
+
                 # Calculate active refs for next line
                 next_active_refs = []
                 for ref, changed_lines_set in diffs_by_ref.items():
                     if current_line_num in changed_lines_set:
                         next_active_refs.append(ref)
                 
-                # If the set of refs is exactly the same, group it
-                if set(next_active_refs) == set(active_refs):
+                # Group if refs match AND next line is safe
+                if set(next_active_refs) == set(active_refs) and next_is_safe:
                     changed_block.append(next_line)
                     i += 1
                     current_line_num += 1
+                    
+                    # Update fence state
+                    if next_stripped.startswith('```') or next_stripped.startswith('~~~'):
+                        if not in_code_fence:
+                            in_code_fence = True
+                            code_fence_marker = '```' if next_stripped.startswith('```') else '~~~'
+                        elif (code_fence_marker == '```' and next_stripped.startswith('```')) or \
+                             (code_fence_marker == '~~~' and next_stripped.startswith('~~~')):
+                            in_code_fence = False
+                            code_fence_marker = None
                 else:
                     break
             
-            # Build data attributes
+            # Use Admonition syntax!
+            # We use distinct classes for each ref to avoid attribute issues
+            # !!! diff-canary ""
+            # !!! diff-abc1234 ""
+            
+            # If multiple refs active, we just pick the first one for the class name
+            # The CSS handles showing/hiding based on body class
+            # But wait, if we have multiple refs, we need a class that matches the CURRENTLY VIEWED ref.
+            # Since we can't easily put multiple classes on an admonition without attributes (which failed),
+            # we will generate a GENERIC class `diff-block` and add specific classes if possible,
+            # OR we generate `!!! diff-canary` if canary is active, etc.
+            # But what if both canary and commit X are active?
+            # We need the block to be visible if EITHER is selected.
+            
+            # Solution: Generate a generic `!!! diff-block ""`
+            # And inject a `<div style="display:none" data-diff-refs="canary,abc1234"></div>` inside? No.
+            
+            # Let's go back to the attribute attempt but fix the syntax.
+            # `!!! note "" {: .diff-block .diff-canary .diff-abc1234 }`
+            # This requires `attr_list` extension.
+            # If that failed, we can try the standard class syntax:
+            # `!!! note "Title" class="diff-block"` -> No that's not standard.
+            
+            # Alternative: Just wrap in a raw div again but use `markdown="1"` properly?
+            # We tried that and it failed (horizontal layout).
+            
+            # Let's try the distinct admonition type again.
+            # If we have multiple refs, we can nest them? No.
+            # We can output multiple admonitions? No, duplicates content.
+            
+            # Best bet: Use `!!! diff-block` and rely on the fact that we only care about
+            # the currently selected mode.
+            # But we need to know WHICH refs are active for this block to show/hide it.
+            
+            # Actually, the previous CSS logic was:
+            # body[data-diff-mode="canary"] .diff-wrapper[data-diff-canary="true"]
+            
+            # If we can't use attributes, we can't selectively show/hide blocks that are ONLY changed in canary vs ONLY changed in commit X.
+            # Wait, if a block is changed in BOTH, it should show in BOTH.
+            
+            # Let's try the attribute syntax one more time but simpler.
+            # `!!! diff-block ""` 
+            # `    {: .diff-canary .diff-abc1234 }`
+            # putting the attribute list on the content? No.
+            
+            # Let's try to fix the attribute list syntax.
+            # The screenshot showed `!!! note "" {: data-diff-canary="true" }` literally.
+            # This means `attr_list` is NOT processing it on the admonition line.
+            # `attr_list` usually works on headers, images, lists.
+            # For admonitions, it might not be supported directly on the opening line in all versions.
+            
+            # WORKAROUND:
+            # Use a raw `<div>` wrapper AROUND the admonition?
+            # <div class="diff-container" data-diff-canary="true">
+            # !!! diff-block ""
+            #     Content
+            # </div>
+            # This requires `md_in_html` which we have.
+            
             attrs = ' '.join([f'data-diff-{ref}="true"' for ref in active_refs])
             
-            # Wrap block
-            result_lines.append(f'<div markdown="1" class="diff-wrapper" {attrs}>')
             result_lines.append("")
-            result_lines.extend(changed_block)
+            result_lines.append(f'<div class="diff-container" {attrs} markdown="1">')
+            result_lines.append(f'!!! diff-block ""')
+            for block_line in changed_block:
+                result_lines.append(f'    {block_line}')
+            result_lines.append(f'</div>')
             result_lines.append("")
-            result_lines.append('</div>')
         else:
             result_lines.append(line)
             i += 1
@@ -218,15 +353,54 @@ def _get_diff_ui_assets() -> str:
     """
     return """
 <style>
-    /* Base wrapper style */
-    .diff-wrapper {
-        margin: 8px 0;
-        border-left: 4px solid transparent;
-        transition: border-color 0.2s, background-color 0.2s, padding-left 0.2s;
+    /* Container style - handles visibility */
+    .diff-container {
+        /* Default: transparent/visible? No, we need to hide if not active in current mode */
+        /* Actually, we can't easily hide the container based on body class if we don't have the attribute.
+           But we DO have the attribute on the container now! */
     }
 
-    /* Active Diff State - Logic injected via dynamic styles per page */
-    /* Pattern: body[data-diff-mode="REF"] .diff-wrapper[data-diff-REF="true"] { ... } */
+    /* Admonition style */
+    /* Admonition style */
+    .md-typeset .admonition.diff-block {
+        margin: 0; /* Let container handle margin */
+        border: none; /* Remove all borders */
+        border-left: 4px solid transparent; /* We'll add back left border for highlighting */
+        border-radius: 0;
+        box-shadow: none;
+        padding: 0; /* No padding by default */
+        background: transparent;
+        font-size: inherit;
+        overflow: visible;
+        display: block; /* Override flow-root to allow margin collapsing */
+    }
+    
+    .md-typeset .admonition.diff-block > .admonition-title {
+        display: none;
+    }
+    
+    .md-typeset .admonition.diff-block > .md-typeset {
+        padding: 0;
+    }
+
+    /* Active Diff State */
+    
+    /* None mode - no highlighting */
+    body[data-diff-mode="none"] .diff-container .admonition.diff-block {
+        border-left-color: transparent;
+        background-color: transparent;
+        padding-left: 0; /* Explicitly no padding */
+        border: none !important; /* Remove border to allow margin collapsing */
+    }
+    
+    /* Canary */
+    body[data-diff-mode="canary"] .diff-container[data-diff-canary="true"] .admonition.diff-block {
+        border-left-color: #acf2bd;
+        background-color: rgba(172, 242, 189, 0.1);
+        padding-left: 12px; /* Add padding when highlighting */
+    }
+    
+    /* Commits - Dynamic rules injected below */
 
     /* UI Controls */
     .diff-controls {
@@ -488,10 +662,10 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     # CSS for Canary
     css_rules = []
     css_rules.append("""
-    body[data-diff-mode="canary"] .diff-wrapper[data-diff-canary="true"] {
-        padding-left: 16px;
+    body[data-diff-mode="canary"] .diff-container[data-diff-canary="true"] .admonition.diff-block {
         border-left-color: #acf2bd; /* Green */
         background-color: rgba(172, 242, 189, 0.1);
+        padding-left: 12px; /* Add padding when highlighting */
     }
     """)
     
@@ -499,10 +673,10 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     for c in commits:
         h = c["hash"]
         css_rules.append(f"""
-    body[data-diff-mode="{h}"] .diff-wrapper[data-diff-{h}="true"] {{
-        padding-left: 16px;
+    body[data-diff-mode="{h}"] .diff-container[data-diff-{h}="true"] .admonition.diff-block {{
         border-left-color: #a5d6ff; /* Blue */
         background-color: rgba(165, 214, 255, 0.1);
+        padding-left: 12px; /* Add padding when highlighting */
     }}
     body[data-diff-mode="{h}"] .nav-diff-commit[data-commit="{h}"] {{
         display: inline-block !important;

@@ -2,39 +2,134 @@
 
 ## Overview
 
-This proposal introduces a **scoped catch** syntax that can be placed at the beginning of any scope (function, if, for, while, or arbitrary blocks). Unlike traditional try-catch, the catch block appears at the top of the scope, auto-infers error types, and doesn't require additional indentation for error-prone code.
+This proposal introduces a **scoped catch** syntax that acts as a declarative error handler for the current scope.
+
+The core idea is simple: **A catch block implicitly wraps the remainder of its scope.**
+
+### Constraint: First Statement Only
+
+The `catch` block **must** be the first statement in the scope. It cannot be preceded by other statements (like variable declarations) in the same block.
+
+### Mental Model: "Open Try"
+
+You can view this syntax as syntactic sugar for a traditional `try-catch` block where the `try` automatically extends from the catch block to the end of the scope.
+
+**What you write (BAML):**
+```baml
+function Foo(arg: string) {
+    // Catch must be the first statement
+    catch {
+        Err(e) => { return arg } // Can access parameters or outer variables
+    }
+
+    // Everything below is effectively inside a 'try'
+    let x = 1;
+    risky_operation_1()
+} 
+```
+
+**How to think about it (Desugaring):**
+```javascript
+function Foo(arg) {
+    try {
+        let x = 1;
+        risky_operation_1()
+    } catch (e) {
+        if (e matches Err) return arg;
+        throw e;
+    }
+}
+```
+
+### From Prototype to Production
+
+This syntax is designed to support the lifecycle of AI engineering: moving from fragile prototypes to resilient production systems without rewriting code.
+
+1.  **Prototype (Happy Path)**: You write linear code to test your prompts.
+    ```baml
+    function Extract() {
+       client "openai"
+       prompt #"..."#
+    }
+    ```
+
+2.  **Production (Resilient)**: To handle timeouts or refusals, you don't need to wrap/indent your logic or change call sites. You simply **add** a `catch` block at the top.
+    ```baml
+    function Extract() {
+       catch { ... } // <--- Just added this
+       
+       // Original code remains untouched
+       client "openai"
+       prompt #"..."#
+    }
+    ```
+
+This makes error handling an **additive** layer rather than a structural refactor.
 
 ## Syntax Examples
 
 ### Function-level Catch
 
 ```baml
-function Foo(param: T) -> Bar {
-   // auto infers all error types
+// Data definitions
+class Resume {
+  name string
+  experience string[]
+}
+
+// 1. Function-level Catch (Declarative LLM Function)
+function ExtractResume(text: string) -> Resume {
+   // Catch block handles LLM failures, Parsing errors, etc.
+   // Must be the first statement in the scope
    catch {
-      MyError() => { .. }
-      MyOtherError() => { .. }
+      // Return a default/fallback value on failure
+      LlmError(e) => { 
+        return Resume { name: "Unknown", experience: [] } 
+      }
    }
 
-   // ... rest of my code
+   // Specifies the LLM client
+   client "openai/gpt-4o"
+
+   // The actual prompt (BAML handles the execution and parsing)
+   prompt #"
+     Extract the resume details from the text below:
+     {{ text }}
+   "#
 }
 ```
 
 ### Scope-level Catch
 
 ```baml
-function Foo(param: T) -> Bar {
+// BAML doesn't have a built-in Result type, so we define one
+class Success {
+  value Resume
+}
+class Failure {
+  error string
+}
+type Result = Success | Failure
 
-   if (param < 10) {
-     // catch can be added at the beginning of any scope (if, for, while, arbitrary scopes)
+// 2. Scope-level Catch (Imperative Logic)
+function ProcessBatch(items: string[]) -> Result[] {
+   let results = []
+
+   for (item in items) {
      catch {
-       MyError() => { return Bar.new(...) }
-       // named wildcard for re-throwing
-       other => { throws other }
+       // Capture item-specific errors without failing the batch
+       other => { 
+          results.append(Failure { error: other.message }) 
+          continue 
+       }
      }
+     
+     // Call the declarative function
+     let processed = ExtractResume(item)
+     results.append(Success { value: processed })
   }
 
-   // ... rest of my code
+   return results
 }
 ```
 
@@ -66,14 +161,30 @@ function GetPrice(itemId: string) -> float {
 ### Primary Benefits
 
 1. **Minimal Diff Overhead**: When making code error-prone, no need for:
-    - Adding a `try` keyword at the beginning
+    - Adding a `try` keyword at the beginning or at every call site (unlike Swift/Rust)
+    - Changing the function signature to declare throws (unlike Java/Swift)
     - Indenting the entire scope
     - Adding a `catch` block at the end
-    - This is crucial for AI agents editing code, as small changes don't create massive diffs
+    - This is crucial for AI agents editing code. Transitioning from non-error-handled to error-handled code is a local change (adding the catch block) rather than a global one (updating all call sites and signatures), preventing massive cascading diffs.
 
 2. **Scoped Variable Access**: The catch block has access to all parameters and variables declared above it in the scope, making context more explicit and accessible
 
 3. **Declarative Error Handling**: By placing error handling at the top of a scope, it acts as a declaration of "what can go wrong" rather than wrapping code
+
+### Prototyping to Production for Agents
+
+Building AI agents (code that orchestrates LLMs) typically follows a distinct lifecycle:
+
+1. **Prototyping**: Rapidly iterating on prompts and logic to get the "happy path" working. At this stage, error handling is noise; you want to see if the idea works.
+2. **Productionizing**: The transition to production is almost entirely about adding reliability—handling timeouts, refusals, parsing errors, and edge cases.
+
+In traditional languages, this transition is painful. Adding error handling often requires:
+
+- Wrapping large blocks of code in `try/catch` (indentation changes).
+- Changing function signatures to propagate errors (breaking callers).
+- Refactoring linear logic into complex control flow.
+
+With **Scoped Catch**, "productionizing" an agent function is strictly **additive**: you simply paste a `catch` block at the top of the scope. The original prototyping logic remains untouched, unindented, and linear. This lowers the activation energy for adding reliability, ensuring that "quick prototypes" can actually evolve into robust production systems without a rewrite.
 
 ## Comparison to Other Languages
 
@@ -359,21 +470,23 @@ function Foo() -> Bar {
 ### ✅ 6. Variable Capture and Mutation [RESOLVED]
 **Question**: What variables can the catch block access and modify?
 
-**Decision**: Catch blocks can access all variables declared before the catch
+**Decision**: Catch blocks can access all variables declared in **outer scopes** (and function parameters).
 
 **Example**:
 ```baml
 function Foo(param: T) -> Bar {
    let x = 10
-   catch {
-      MyError() => { 
+   
+   // Create a new scope to capture 'x'
+   {
+      catch {
          // ✅ Can access param (function parameter)
-         // ✅ Can access x (declared before catch)
-         // ❌ Cannot access y (declared after catch)
+         // ✅ Can access x (declared in outer scope)
          return Bar.new(param, x)
       }
+      // Code that uses x and might throw
+      risky_op(x)
    }
-   let y = 20
 }
 ```
 
@@ -381,8 +494,8 @@ function Foo(param: T) -> Bar {
 
 - Makes error handling context-aware - handlers can use available state
 - For function-level catches: access to function parameters
-- For scope-level catches: access to variables declared before the catch
-- Follows natural scoping rules
+- For scope-level catches: access to variables declared in parent scopes
+- Follows natural scoping rules while enforcing the "catch-at-top" constraint
 
 ---
 
