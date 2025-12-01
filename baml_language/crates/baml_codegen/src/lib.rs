@@ -30,7 +30,7 @@ pub use baml_vm::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, Instruction, Object, Program,
     UnaryOp, Value,
 };
-use baml_workspace::ProjectRoot;
+use baml_workspace::Project;
 pub use compiler::{ClassInfo, Compiler, compile_function};
 
 /// Generate bytecode for all functions in a project.
@@ -39,7 +39,7 @@ pub use compiler::{ClassInfo, Compiler, compile_function};
 /// It collects all functions from HIR, type-checks them via THIR,
 /// and compiles them to bytecode.
 #[salsa::tracked]
-pub fn generate_project_bytecode(db: &dyn baml_thir::Db, root: ProjectRoot) -> Program {
+pub fn generate_project_bytecode(db: &dyn baml_thir::Db, root: Project) -> Program {
     let files = baml_workspace::project_files(db, root);
     compile_files(db, &files)
 }
@@ -61,7 +61,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
         let items_struct = baml_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
-                let signature = function_signature(db, *file, *func_loc);
+                let signature = function_signature(db, *func_loc);
                 globals.insert(signature.name.to_string(), global_idx);
                 global_idx += 1;
             }
@@ -111,12 +111,17 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
         let items_struct = baml_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
-                let signature = function_signature(db, *file, *func_loc);
-                let body = function_body(db, *file, *func_loc);
+                let signature = function_signature(db, *func_loc);
+                let body = function_body(db, *func_loc);
 
                 // Run type inference
-                let inference =
-                    baml_thir::infer_function(db, &signature, &body, Some(typing_context.clone()));
+                let inference = baml_thir::infer_function(
+                    db,
+                    &signature,
+                    &body,
+                    Some(typing_context.clone()),
+                    None, // TODO: Pass class fields. Eventually remove this parameter.
+                );
 
                 // Get parameter names
                 let params: Vec<Name> = signature.params.iter().map(|p| p.name.clone()).collect();
@@ -177,7 +182,7 @@ fn build_typing_context<'db>(
         let items_struct = baml_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
-                let signature = function_signature(db, *file, *func_loc);
+                let signature = function_signature(db, *func_loc);
 
                 // Build the arrow type: (param_types) -> return_type
                 let param_types: Vec<baml_thir::Ty<'db>> = signature

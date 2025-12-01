@@ -4,10 +4,9 @@
 
 use std::collections::HashMap;
 
-use baml_db::{
-    RootDatabase, baml_hir, baml_thir, build_typing_context_from_files, function_body,
-    function_signature,
-};
+use baml_db::{RootDatabase, baml_hir, baml_thir};
+use baml_hir::{function_body, function_signature};
+use baml_thir::build_typing_context_from_files;
 use baml_vm::test::{Instruction, Value};
 
 use crate::ClassInfo;
@@ -193,7 +192,7 @@ fn compile_source(source: &str) -> CompileResult {
     let mut global_idx = 0;
     for item in items {
         if let baml_hir::ItemId::Function(func_loc) = item {
-            let sig = function_signature(&db, file, *func_loc);
+            let sig = function_signature(&db, *func_loc);
             globals.insert(sig.name.to_string(), global_idx);
             global_idx += 1;
         }
@@ -246,12 +245,17 @@ fn compile_source(source: &str) -> CompileResult {
     let mut functions = Vec::new();
     for item in items {
         if let baml_hir::ItemId::Function(func_loc) = item {
-            let signature = function_signature(&db, file, *func_loc);
-            let body = function_body(&db, file, *func_loc);
+            let signature = function_signature(&db, *func_loc);
+            let body = function_body(&db, *func_loc);
 
             // Run type inference
-            let inference =
-                baml_thir::infer_function(&db, &signature, &body, Some(typing_context.clone()));
+            let inference = baml_thir::infer_function(
+                &db,
+                &signature,
+                &body,
+                Some(typing_context.clone()),
+                None,
+            );
 
             // Get parameter names
             let params: Vec<baml_base::Name> =

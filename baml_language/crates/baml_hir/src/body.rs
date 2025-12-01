@@ -763,22 +763,21 @@ impl LoweringContext {
     }
 
     fn lower_field_access_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+        use baml_syntax::ast::FieldAccessExpr;
+        use rowan::ast::AstNode;
 
         // FIELD_ACCESS_EXPR structure: base expression, DOT token, field name (WORD)
-        // The parser wraps the left side as a child expression node
-        let base = node
-            .children()
-            .next()
+        let Some(field_access) = FieldAccessExpr::cast(node.clone()) else {
+            return self.exprs.alloc(Expr::Missing);
+        };
+
+        let base = field_access
+            .base()
             .map(|n| self.lower_expr(&n))
             .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
-        // Find the field name (WORD token after DOT)
-        let field = node
-            .children_with_tokens()
-            .filter_map(baml_syntax::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
-            .last() // Get the last WORD (the field name, not part of the base expression)
+        let field = field_access
+            .field()
             .map(|token| Name::new(token.text()))
             .unwrap_or_else(|| Name::new(""));
 
@@ -861,21 +860,44 @@ impl LoweringContext {
     }
 
     fn lower_path_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+        use baml_syntax::ast::PathExpr;
+        use rowan::ast::AstNode;
 
-        // PATH_EXPR can be a simple identifier or a qualified path
-        // Collect all WORD tokens and join them
-        let path_parts: Vec<String> = node
-            .children_with_tokens()
-            .filter_map(baml_syntax::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
+        // PATH_EXPR can be:
+        // 1. A simple identifier: `foo`
+        // 2. A qualified path with `.`: `mod.foo`
+        // 3. A field access chain with `.`: `obj.field.nested`
+
+        let Some(path_expr) = PathExpr::cast(node.clone()) else {
+            return self.exprs.alloc(Expr::Missing);
+        };
+
+        let segments: Vec<String> = path_expr
+            .segments()
             .map(|token| token.text().to_string())
             .collect();
 
-        if path_parts.is_empty() {
-            self.exprs.alloc(Expr::Missing)
+        if segments.is_empty() {
+            return self.exprs.alloc(Expr::Missing);
+        }
+
+        if path_expr.has_dots() {
+            // Field access chain: build nested FieldAccess expressions
+            // Start with the first segment as a Path
+            let mut current = self.exprs.alloc(Expr::Path(Name::new(&segments[0])));
+
+            // Chain the rest as FieldAccess
+            for segment in &segments[1..] {
+                current = self.exprs.alloc(Expr::FieldAccess {
+                    base: current,
+                    field: Name::new(segment),
+                });
+            }
+
+            current
         } else {
-            let path_text = path_parts.join("::");
+            // Module path with :: or simple identifier
+            let path_text = segments.join(".");
             self.exprs.alloc(Expr::Path(Name::new(&path_text)))
         }
     }

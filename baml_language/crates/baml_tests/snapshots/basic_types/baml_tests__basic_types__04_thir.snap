@@ -4,6 +4,6 @@ expression: output
 ---
 === TYPE INFERENCE ===
   Function GetStatus:
-    Return: Unknown
+    Return: Named("Status")
   Function GetUser:
-    Return: Unknown
+    Return: Named("User")

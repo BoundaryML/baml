@@ -20,7 +20,7 @@ use std::sync::Arc;
 use baml_base::{Name, SourceFile};
 use baml_parser::syntax_tree;
 use baml_syntax::SyntaxNode;
-use rowan::ast::AstNode;
+use rowan::{SyntaxToken, ast::AstNode};
 
 // Module declarations
 mod body;
@@ -106,14 +106,13 @@ pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
 #[salsa::tracked]
 pub fn file_items(db: &dyn Db, file: SourceFile) -> FileItems<'_> {
     let item_tree = file_item_tree(db, file);
-    let file_id = file.file_id(db);
-    let items = intern_all_items(db, file_id, &item_tree);
+    let items = intern_all_items(db, file, &item_tree);
     FileItems::new(db, items)
 }
 
 /// Tracked: Get all items in the entire project.
 #[salsa::tracked]
-pub fn project_items(db: &dyn Db, root: baml_workspace::ProjectRoot) -> ProjectItems<'_> {
+pub fn project_items(db: &dyn Db, root: baml_workspace::Project) -> ProjectItems<'_> {
     let files = baml_workspace::project_files(db, root);
     let mut all_items = Vec::new();
 
@@ -160,76 +159,199 @@ pub fn type_alias_generic_params(_db: &dyn Db, _alias: TypeAliasId<'_>) -> Arc<G
 }
 
 //
-// ───────────────────────────────────────────────── FUNCTION QUERIES ─────
+// ────────────────────────────────────────────────── FUNCTION QUERIES ─────
 //
 
-/// Tracked: Get the signature of a function (params, return type).
+/// Returns the signature of a function (params, return type, generics).
 ///
-/// This is separate from the body to provide fine-grained incrementality.
+/// This is separate from the `ItemTree` to provide fine-grained incrementality.
 /// Changing a function body does NOT invalidate this query.
 #[salsa::tracked]
 pub fn function_signature<'db>(
     db: &'db dyn Db,
-    file: SourceFile,
     function: FunctionLoc<'db>,
 ) -> Arc<FunctionSignature> {
-    use baml_syntax::ast::SourceFile as AstSourceFile;
-    use rowan::ast::AstNode;
+    let file = function.file(db);
+    let tree = syntax_tree(db, file);
+    let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
 
-    let tree = baml_parser::syntax_tree(db, file);
-    let source_file = AstSourceFile::cast(tree).unwrap();
-
+    // Find the function node by name
     let item_tree = file_item_tree(db, file);
     let func = &item_tree[function.id(db)];
+    let func_name = func.name.clone();
 
-    for item in source_file.items() {
-        if let baml_syntax::ast::Item::Function(func_node) = item {
-            if let Some(name_token) = func_node.name() {
-                if name_token.text() == func.name.as_str() {
-                    return FunctionSignature::lower(&func_node);
-                }
-            }
-        }
-    }
-
-    // Function not found - return minimal signature
-    Arc::new(FunctionSignature {
+    let default_signature = Arc::new(FunctionSignature {
         name: func.name.clone(),
         params: vec![],
         return_type: TypeRef::Unknown,
-    })
+    });
+
+    let function_def = source_file.items().find_map(|item| match item {
+        baml_syntax::ast::Item::Function(func_node) => {
+            let func_node_name = func_node.name();
+            if func_node_name.as_ref()?.text() == func_name {
+                Some(FunctionSignature::lower(&func_node))
+            } else {
+                None
+            }
+        }
+        baml_syntax::ast::Item::Class(class_node) => class_node.methods().find_map(|method| {
+            let method_name = method.name()?;
+            let class_name = class_node.name();
+            let class_name_text = class_name.as_ref()?.text();
+            if method_name.text() == func_name {
+                Some(lower_method_signature(&method, &func_name, class_name_text))
+            } else {
+                None
+            }
+        }),
+        _ => None,
+    });
+
+    function_def.unwrap_or(default_signature)
 }
 
-/// Tracked: Get the body of a function (LLM prompt or expression IR).
-///
-/// This is the most frequently invalidated query - it changes whenever
-/// the function body is edited.
-#[salsa::tracked]
-pub fn function_body<'db>(
-    db: &'db dyn Db,
-    file: SourceFile,
-    function: FunctionLoc<'db>,
-) -> Arc<FunctionBody> {
-    use baml_syntax::ast::SourceFile as AstSourceFile;
-    use rowan::ast::AstNode;
+/// Lower a method signature, replacing 'self' parameter with the class type.
+fn lower_method_signature(
+    method_node: &baml_syntax::ast::FunctionDef,
+    method_name: &Name,
+    class_name: &str,
+) -> Arc<FunctionSignature> {
+    // Extract parameters, replacing 'self' with the class type
+    let mut params = Vec::new();
+    if let Some(param_list) = method_node.param_list() {
+        for param_node in param_list.params() {
+            if let Some(name_token) = param_node.name() {
+                let param_name = name_token.text();
+                let type_ref = if param_name == "self" {
+                    // 'self' gets the class type
+                    TypeRef::named(class_name.into())
+                } else {
+                    param_node
+                        .ty()
+                        .map(|t| lower_type_ref(&t))
+                        .unwrap_or(TypeRef::Unknown)
+                };
 
-    let tree = baml_parser::syntax_tree(db, file);
-    let source_file = AstSourceFile::cast(tree).unwrap();
-
-    let item_tree = file_item_tree(db, file);
-    let func = &item_tree[function.id(db)];
-
-    for item in source_file.items() {
-        if let baml_syntax::ast::Item::Function(func_node) = item {
-            if let Some(name_token) = func_node.name() {
-                if name_token.text() == func.name.as_str() {
-                    return FunctionBody::lower(&func_node);
-                }
+                params.push(Param {
+                    name: Name::new(param_name),
+                    type_ref,
+                });
             }
         }
     }
 
-    Arc::new(FunctionBody::Missing)
+    // Extract return type
+    let return_type = method_node
+        .return_type()
+        .map(|t| lower_type_ref(&t))
+        .unwrap_or(TypeRef::Unknown);
+
+    Arc::new(FunctionSignature {
+        name: method_name.clone(),
+        params,
+        return_type,
+    })
+}
+
+/// Tracked struct holding the fields of a class.
+///
+/// This follows the Salsa 2022 pattern: we wrap the result in a tracked struct
+/// to enable fine-grained incrementality.
+#[salsa::tracked]
+pub struct ClassFields<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub fields: Vec<(Name, TypeRef)>,
+}
+
+/// Returns the fields of a class as (name, type) pairs.
+///
+/// This query provides access to class field information from HIR,
+/// allowing downstream queries (like type checking) to depend on
+/// specific class field data.
+#[salsa::tracked]
+pub fn class_fields<'db>(db: &'db dyn Db, class: ClassLoc<'db>) -> ClassFields<'db> {
+    let file = class.file(db);
+    let item_tree = file_item_tree(db, file);
+    let class_data = &item_tree[class.id(db)];
+
+    let fields: Vec<(Name, TypeRef)> = class_data
+        .fields
+        .iter()
+        .map(|f| (f.name.clone(), f.type_ref.clone()))
+        .collect();
+
+    ClassFields::new(db, fields)
+}
+
+/// Tracked struct holding all class fields in a project.
+///
+/// Maps class names to their field definitions (as HIR TypeRefs).
+#[salsa::tracked]
+pub struct ProjectClassFields<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub classes: Vec<(Name, Vec<(Name, TypeRef)>)>,
+}
+
+/// Returns all class fields in a project.
+///
+/// This aggregates class field information across all files in the project,
+/// providing a single query point for type checking.
+#[salsa::tracked]
+pub fn project_class_fields(db: &dyn Db, root: baml_workspace::Project) -> ProjectClassFields<'_> {
+    let items = project_items(db, root);
+    let mut classes = Vec::new();
+
+    for item in items.items(db) {
+        if let ItemId::Class(class_loc) = item {
+            let class_fields_data = class_fields(db, *class_loc);
+            let fields = class_fields_data.fields(db).clone();
+
+            // Get the class name from the item tree
+            let file = class_loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let class_data = &item_tree[class_loc.id(db)];
+
+            classes.push((class_data.name.clone(), fields));
+        }
+    }
+
+    ProjectClassFields::new(db, classes)
+}
+
+/// Returns the body of a function (LLM prompt or expression IR).
+///
+/// This is the most frequently invalidated query - it changes whenever
+/// the function body is edited.
+///
+/// TODO: It seems slow, iterating over all the functions every time you want to find one.
+/// Can't we keep a hash map from `FunctionLoc` to `FunctionBody`?
+#[salsa::tracked]
+pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<FunctionBody> {
+    let file = function.file(db);
+    let tree = syntax_tree(db, file);
+    let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
+
+    let item_tree = file_item_tree(db, file);
+    let func = &item_tree[function.id(db)];
+    let func_name = func.name.clone();
+
+    // Find the function among the top-level functions and class methods.
+    let function_def = source_file
+        .items()
+        .flat_map(|item| match item {
+            baml_syntax::ast::Item::Function(func_node) => vec![func_node],
+            baml_syntax::ast::Item::Class(class_node) => class_node.methods().collect(),
+            _ => vec![],
+        })
+        .find(|function_def| {
+            function_def.name().as_ref().map(SyntaxToken::text) == Some(&func_name)
+        });
+
+    // Lower the function.
+    function_def.map_or(Arc::new(FunctionBody::Missing), |f| FunctionBody::lower(&f))
 }
 
 //
@@ -240,11 +362,7 @@ pub fn function_body<'db>(
 ///
 /// Uses name-based `LocalItemIds` for position-independence.
 /// Items are returned sorted by their ID value for deterministic ordering.
-fn intern_all_items<'db>(
-    db: &'db dyn Db,
-    file: baml_base::FileId,
-    tree: &ItemTree,
-) -> Vec<ItemId<'db>> {
+fn intern_all_items<'db>(db: &'db dyn Db, file: SourceFile, tree: &ItemTree) -> Vec<ItemId<'db>> {
     let mut items = Vec::new();
 
     // Intern functions - sort by ID for deterministic order
@@ -338,6 +456,10 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode) {
             if let Some(class) = lower_class(node) {
                 tree.alloc_class(class);
             }
+            // Desugar methods into top-level functions
+            for func in lower_class_methods(node) {
+                tree.alloc_function(func);
+            }
         }
         SyntaxKind::ENUM_DEF => {
             if let Some(enum_def) = lower_enum(node) {
@@ -403,6 +525,29 @@ fn lower_class(node: &SyntaxNode) -> Option<Class> {
         fields,
         is_dynamic,
     })
+}
+
+/// Extract desugared method functions from a class.
+/// Methods like `class Baz { function Greeting(self) }` become top-level functions `Greeting(self: Baz)`.
+/// The method name is NOT namespaced - this keeps HIR lowering simple and type-free.
+fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
+    use baml_syntax::ast::ClassDef;
+
+    let Some(class) = ClassDef::cast(node.clone()) else {
+        return Vec::new();
+    };
+
+    let mut functions = Vec::new();
+    for method_node in class.methods() {
+        if let Some(method_name) = method_node.name() {
+            // Use just the method name (not qualified with class name)
+            // This keeps HIR lowering simple - no type resolution needed
+            functions.push(Function {
+                name: method_name.text().into(),
+            });
+        }
+    }
+    functions
 }
 
 /// Extract enum definition from CST.
@@ -523,7 +668,7 @@ fn lower_test(node: &SyntaxNode) -> Option<Test> {
 ///
 /// For now, this is a simplified implementation that extracts just the name.
 /// TODO: Parse complex types (optional, list, union, etc.)
-fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
+pub fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
     // For now, just extract the text representation
     // This is a simplification - we'll enhance this later
     let text = node.syntax().text().to_string();

@@ -10,16 +10,17 @@ use std::{
 use anyhow::Result;
 use baml_db::{
     FileId, RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
-    baml_thir, baml_workspace, function_body, function_signature,
+    baml_thir, baml_workspace,
 };
 use baml_diagnostics::compiler_error::{
     CompilerError, ParseError, TypeError, render_parse_error, render_type_error,
 };
-use baml_hir::ItemId;
+use baml_hir::{ItemId, function_body, function_signature};
 use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
+use baml_thir::{build_class_fields_from_files, build_typing_context_from_files};
 use regex::Regex;
 use rowan::{GreenNode, NodeCache, ast::AstNode};
 use salsa::{Event, EventKind, Setter};
@@ -93,7 +94,7 @@ pub(crate) type StoredCompilerError = CompilerError<String>;
 
 pub(crate) struct CompilerRunner {
     db: RootDatabase,
-    project_root: baml_workspace::ProjectRoot,
+    project_root: baml_workspace::Project,
     is_directory: bool,
     /// Source files currently in the database (path -> `SourceFile`)
     source_files: HashMap<PathBuf, SourceFile>,
@@ -203,7 +204,7 @@ impl CompilerRunner {
             }));
 
         Self {
-            project_root: baml_workspace::ProjectRoot::new(&db, PathBuf::new()),
+            project_root: baml_workspace::Project::new(&db, PathBuf::new(), vec![]),
             db,
             is_directory,
             source_files: HashMap::new(),
@@ -585,7 +586,8 @@ impl CompilerRunner {
 
         // Build initial typing context with all function types
         let file_list: Vec<_> = self.source_files.values().copied().collect();
-        let globals = baml_db::build_typing_context_from_files(&self.db, &file_list);
+        let globals = build_typing_context_from_files(&self.db, &file_list);
+        let class_fields = build_class_fields_from_files(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -612,9 +614,9 @@ impl CompilerRunner {
 
             for item in items {
                 if let ItemId::Function(func_id) = item {
-                    let signature = function_signature(&self.db, *source_file, *func_id);
+                    let signature = function_signature(&self.db, *func_id);
                     let func_name = signature.name.to_string();
-                    let body = function_body(&self.db, *source_file, *func_id);
+                    let body = function_body(&self.db, *func_id);
 
                     // Run type inference with global function types
                     let inference_result = baml_thir::infer_function(
@@ -622,6 +624,7 @@ impl CompilerRunner {
                         &signature,
                         &body,
                         Some(globals.clone()),
+                        Some(class_fields.clone()),
                     );
 
                     // Collect type errors from inference

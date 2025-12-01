@@ -66,6 +66,7 @@ fn format_hir_file(
     use std::fmt::Write;
 
     use baml_db::baml_hir::ItemId;
+    use baml_hir::{function_body, function_signature};
 
     // Get the ItemTree once and keep it alive for all lookups
     let item_tree = baml_db::baml_hir::file_item_tree(db, source_file);
@@ -75,8 +76,8 @@ fn format_hir_file(
         match item {
             ItemId::Function(func_id) => {
                 let func = &item_tree[func_id.id(db)];
-                let sig = baml_db::function_signature(db, source_file, *func_id);
-                let body = baml_db::function_body(db, source_file, *func_id);
+                let sig = function_signature(db, *func_id);
+                let body = function_body(db, *func_id);
 
                 writeln!(result, "function {} {{", func.name).unwrap();
 

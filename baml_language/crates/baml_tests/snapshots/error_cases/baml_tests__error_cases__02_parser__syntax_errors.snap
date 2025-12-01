@@ -12,29 +12,19 @@ SOURCE_FILE
       WORD "field"
       TYPE_EXPR " int"
         WORD "int"
-  FUNCTION_DEF
-    KW_FUNCTION "function"
-    INTEGER_LITERAL "123"
-    WORD "Invalid"
-    PARAMETER_LIST "()"
-      L_PAREN "("
-      R_PAREN ")"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR " {}"
-        L_BRACE "{"
-        R_BRACE "}"
+    FUNCTION_DEF
+      KW_FUNCTION "function"
+      INTEGER_LITERAL "123"
+      WORD "Invalid"
+      PARAMETER_LIST "()"
+        L_PAREN "("
+        R_PAREN ")"
+      EXPR_FUNCTION_BODY
+        BLOCK_EXPR " {}"
+          L_BRACE "{"
+          R_BRACE "}"
 
 === ERRORS ===
-Error: Expected RBrace, found Function
-   ╭─[ 0:6:1 ]
-   │
- 6 │ function 123Invalid() {}
-   │ ────┬───  
-   │     ╰───── Expected RBrace, found Function
-   │ 
-   │ Note: Error code: E0010
-───╯
-
 Error: Expected function name, found IntegerLiteral
    ╭─[ 0:6:10 ]
    │
@@ -51,6 +41,16 @@ Error: Expected return type (->), found LBrace
  6 │ function 123Invalid() {}
    │                       ┬  
    │                       ╰── Expected return type (->), found LBrace
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected RBrace, found EOF
+   ╭─[ 0:6:24 ]
+   │
+ 6 │ function 123Invalid() {}
+   │                        ┬  
+   │                        ╰── Expected RBrace, found EOF
    │ 
    │ Note: Error code: E0010
 ───╯

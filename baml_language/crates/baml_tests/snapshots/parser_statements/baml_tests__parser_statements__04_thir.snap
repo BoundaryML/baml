@@ -13,10 +13,6 @@ expression: output
     Return: Void
   Function let_statements:
     Return: Void
-    Errors:
-      - Unknown type point::x
-      - Unknown type point::y
-      - Invalid op Add for unknown and unknown
   Function simple_while_loop:
     Return: Void
   Function nested_while_loop:

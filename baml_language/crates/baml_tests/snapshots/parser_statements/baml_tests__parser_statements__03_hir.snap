@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -132,19 +132,21 @@ function let_statements {
       Idx::<Expr>(6): Literal(Int(1))
       Idx::<Expr>(7): Literal(Int(2))
       Idx::<Expr>(8): Object { type_name: Some("Point"), fields: [("x", Idx::<Expr>(6)), ("y", Idx::<Expr>(7))] }
-      Idx::<Expr>(9): Path("point::x")
-      Idx::<Expr>(10): Path("point::y")
-      Idx::<Expr>(11): Binary { op: Add, lhs: Idx::<Expr>(9), rhs: Idx::<Expr>(10) }
-      Idx::<Expr>(12): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
+      Idx::<Expr>(9): Path("point")
+      Idx::<Expr>(10): FieldAccess { base: Idx::<Expr>(9), field: "x" }
+      Idx::<Expr>(11): Path("point")
+      Idx::<Expr>(12): FieldAccess { base: Idx::<Expr>(11), field: "y" }
+      Idx::<Expr>(13): Binary { op: Add, lhs: Idx::<Expr>(10), rhs: Idx::<Expr>(12) }
+      Idx::<Expr>(14): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
       Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: Some(Int), initializer: Some(Idx::<Expr>(1)) }
       Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: Some(List(Int)), initializer: Some(Idx::<Expr>(5)) }
       Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: Some(Path(Path { segments: ["Point"], kind: Plain })), initializer: Some(Idx::<Expr>(8)) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(11)))
+      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(13)))
     ]
-    root: Idx::<Expr>(12)
+    root: Idx::<Expr>(14)
   }
 }
 class Point {

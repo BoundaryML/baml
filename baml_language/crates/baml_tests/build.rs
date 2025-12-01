@@ -223,11 +223,14 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_hir;
             use baml_db::baml_thir;
             use baml_db::baml_codegen;
+            use baml_hir::{function_body, function_signature};
+            use baml_thir::{build_typing_context_from_files};
             use baml_thir::pretty::short_display;
             use baml_diagnostics::{render_parse_error, render_type_error};
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
+            use salsa::Setter;
             #[allow(unused_imports)]
             use crate::utils::*;
             const SNAPSHOT_PATH: &str = #snapshot_path;
@@ -392,16 +395,20 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
         #[test]
         fn test_04_thir() {
             let mut db = RootDatabase::new();
-            let _root = db.set_project_root(std::path::PathBuf::from("."));
+            let root = db.set_project_root(std::path::PathBuf::from("."));
             let mut source_files = Vec::new();
 
             #file_loaders
+
+            // Update project root with the list of files for proper Salsa tracking
+            root.set_files(&mut db).to(source_files.clone());
 
             let mut output = String::new();
             writeln!(output, "=== TYPE INFERENCE ===").unwrap();
 
             // Build initial typing context with all function types
-            let globals = baml_db::build_typing_context_from_files(&db, &source_files);
+            let globals = build_typing_context_from_files(&db, &source_files);
+            let class_fields = baml_thir::lower_project_class_fields(&db, root);
 
             // Iterate over files and their functions
             for source_file in &source_files {
@@ -409,9 +416,9 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
                 let items = items_struct.items(&db);
                 for item in items.iter() {
                     if let baml_hir::ItemId::Function(func_id) = item {
-                        let signature = baml_db::function_signature(&db, *source_file, *func_id);
-                        let body = baml_db::function_body(&db, *source_file, *func_id);
-                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()));
+                        let signature = function_signature(&db, *func_id);
+                        let body = function_body(&db, *func_id);
+                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()));
 
                         writeln!(output, "  Function {}:", signature.name).unwrap();
                         writeln!(output, "    Return: {:?}", result.return_type).unwrap();
@@ -465,22 +472,27 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
         #[test]
         fn test_05_diagnostics() {
             let mut db = RootDatabase::new();
+            let root = db.set_project_root(std::path::PathBuf::from("."));
             let mut sources = HashMap::new();
             let mut source_files = Vec::new();
             let mut all_errors = Vec::new();
 
             #file_loaders
 
+            // Update project root with the list of files for proper Salsa tracking
+            root.set_files(&mut db).to(source_files.clone());
+
             // Build typing context and run type inference
-            let globals = baml_db::build_typing_context_from_files(&db, &source_files);
+            let globals = build_typing_context_from_files(&db, &source_files);
+            let class_fields = baml_thir::lower_project_class_fields(&db, root);
             for source_file in &source_files {
                 let items_struct = baml_hir::file_items(&db, *source_file);
                 let items = items_struct.items(&db);
                 for item in items.iter() {
                     if let baml_hir::ItemId::Function(func_id) = item {
-                        let signature = baml_db::function_signature(&db, *source_file, *func_id);
-                        let body = baml_db::function_body(&db, *source_file, *func_id);
-                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()));
+                        let signature = function_signature(&db, *func_id);
+                        let body = function_body(&db, *func_id);
+                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()));
                         for error in &result.errors {
                             all_errors.push(("type".to_string(), render_type_error(error, &sources, false)));
                         }

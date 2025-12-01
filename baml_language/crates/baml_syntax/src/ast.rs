@@ -78,6 +78,8 @@ ast_node!(BlockExpr, BLOCK_EXPR);
 ast_node!(ReturnStmt, RETURN_STMT);
 ast_node!(BreakStmt, BREAK_STMT);
 ast_node!(ContinueStmt, CONTINUE_STMT);
+ast_node!(PathExpr, PATH_EXPR);
+ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
 
 // Implement accessor methods
 impl SourceFile {
@@ -172,6 +174,11 @@ impl ClassDef {
     /// Get all fields.
     pub fn fields(&self) -> impl Iterator<Item = Field> {
         self.syntax.children().filter_map(Field::cast)
+    }
+
+    /// Get all methods (function definitions inside the class).
+    pub fn methods(&self) -> impl Iterator<Item = FunctionDef> {
+        self.syntax.children().filter_map(FunctionDef::cast)
     }
 
     /// Get block attributes (@@dynamic).
@@ -645,6 +652,42 @@ impl BlockExpr {
                 }
             }
         })
+    }
+}
+
+impl PathExpr {
+    /// Check if this path contains dots (field access syntax).
+    pub fn has_dots(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|token| token.kind() == SyntaxKind::DOT)
+    }
+
+    /// Get all segments of this path (the WORD tokens).
+    /// For `foo.bar.baz`, returns `["foo", "bar", "baz"]`.
+    /// For `mod.func`, returns `["mod", "func"]`.
+    pub fn segments(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+    }
+}
+
+impl FieldAccessExpr {
+    /// Get the base expression being accessed.
+    pub fn base(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+
+    /// Get the field name being accessed.
+    pub fn field(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+            .last() // The field name is the last WORD token
     }
 }
 
