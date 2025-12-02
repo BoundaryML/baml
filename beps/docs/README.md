@@ -29,7 +29,7 @@ Below is an auto-generated index of all BEPs.
       <td><a href="./proposals/BEP-001-exceptions/README.md"><strong>BEP-001</strong>: Exception Handling</a> &nbsp; <img src="https://img.shields.io/badge/Status-Draft-lightgrey" alt="Draft"><br><br><br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): Vaibhav Gupta <vbv@boundaryml.com> | Created: 2025-11-20 | Updated: 2025-12-01</span></td>
     </tr>
     <tr>
-      <td><a href="./proposals/BEP-002-match/README.md"><strong>BEP-002</strong>: match</a> &nbsp; <img src="https://img.shields.io/badge/Status-Draft-lightgrey" alt="Draft"><br><br>A concise explanation (3–8 sentences) of what this proposal does and what it enables for BAML users.<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): hellovai <vbv@boundaryml.com> | Created: 2025-12-01 | Updated: 2025-12-01</span></td>
+      <td><a href="./proposals/BEP-002-match/README.md"><strong>BEP-002</strong>: match</a> &nbsp; <img src="https://img.shields.io/badge/Status-Draft-lightgrey" alt="Draft"><br><br><br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): hellovai <vbv@boundaryml.com> | Created: 2025-12-01 | Updated: 2025-12-01</span></td>
     </tr>
   </tbody>
 </table>
