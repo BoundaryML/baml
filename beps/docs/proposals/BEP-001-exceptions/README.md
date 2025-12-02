@@ -33,20 +33,6 @@ function ExtractResume(text: string) -> Resume {
 
 That's it! The `catch` block handles any LLM errors that occur below it, returning a fallback value instead of propagating the error.
 
-**Alternative: Inline catch** — You can also handle errors at specific call sites:
-
-```baml
-function GetProfile(userId: string) -> Profile {
-   let profile = FetchProfile(userId).catch({
-      NotFound() => { Profile.default(userId) }
-   })
-   
-   return profile
-}
-```
-
-Use scope-level catch (at the top) for multiple operations, or inline `.catch()` for specific calls.
-
 ## Core Concepts
 
 ### How Catch Blocks Work
@@ -254,142 +240,7 @@ function SmartExtract(text: string) -> Data {
 }
 ```
 
-### Call-Site Error Handling
-
-Use inline `.catch()` for handling errors on specific function calls:
-
-```baml
-function GetUserProfile(userId: string) -> Profile {
-   // Primary data source with fallback
-   let userData = FetchFromDatabase(userId).catch({
-      DatabaseError() => { FetchFromCache(userId) }
-   })
-   
-   // Optional enrichment - don't fail if it doesn't work
-   let enriched = EnrichProfile(userData).catch({
-      other => { userData }  // Return un-enriched on any error
-   })
-   
-   return enriched
-}
-```
-
-This keeps error handling close to the operation, making the code more readable when different calls need different error handling strategies.
-
 ## Advanced Features
-
-### Inline Catch at Call Sites
-
-You can append `.catch()` to any function call or expression block to handle errors at the call site:
-
-```baml
-function ProcessData(input: string) -> Result {
-   // Handle errors for this specific call
-   let data = FetchData(input).catch({
-      NetworkError() => { Data.fromCache(input) }
-      TimeoutError() => { Data.empty() }
-   })
-   
-   return process(data)
-}
-```
-
-This is equivalent to:
-
-```baml
-function ProcessData(input: string) -> Result {
-   let data = {
-      catch {
-         NetworkError() => { Data.fromCache(input) }
-         TimeoutError() => { Data.empty() }
-      }
-      FetchData(input)
-   }
-   
-   return process(data)
-}
-```
-
-**When to use inline catch:**
-
-- Handling errors for a **specific call** without affecting other code
-- Quick fallbacks for individual operations
-- Keeping error handling close to the operation
-
-**When to use scope-level catch:**
-
-- Handling errors for **multiple operations** in a scope
-- Complex error handling logic
-- Shared error handling across a function
-
-#### Chaining Multiple Operations
-
-Inline catch works well when building pipelines of operations:
-
-```baml
-function GetUserData(userId: string) -> UserData {
-   // Fetch user with fallback
-   let user = fetchUser(userId).catch({
-      NotFound() => { User.guest(userId) }
-   })
-   
-   // Enrich with error handling
-   let enriched = enrichUser(user).catch({
-      EnrichmentError() => { user }  // Return un-enriched user
-   })
-   
-   return enriched
-}
-```
-
-#### Mixing Scope and Inline Catches
-
-You can combine scope-level and inline catches for fine-grained control:
-
-```baml
-function ComplexOperation(id: string) -> Result {
-   catch {
-      // Scope-level catch for unexpected errors
-      other => {
-         log.error("Unexpected error in ComplexOperation", other)
-         throw other
-      }
-   }
-   
-   // Inline catch for specific operation
-   let primary = FetchPrimary(id).catch({
-      NotFound() => { null }
-   })
-   
-   // Different handling for different calls
-   let secondary = FetchSecondary(id).catch({
-      NotFound() => { Secondary.default() }
-      RateLimited() => { Secondary.fromCache(id) }
-   })
-   
-   return combine(primary, secondary)
-}
-```
-
-**Order of execution:** Inline catches are evaluated first, then scope-level catches. If an inline catch re-throw (via `throw`), the error propagates to the scope-level catch.
-
-#### Expression Blocks with Inline Catch
-
-You can also use `.catch()` on expression blocks:
-
-```baml
-function Calculate() -> float {
-   let result = {
-      let x = compute_x()
-      let y = compute_y()
-      x / y
-   }.catch({
-      DivisionByZero() => { 0.0 }
-   })
-   
-   return result
-}
-```
 
 ### Nested Scopes
 
@@ -600,21 +451,6 @@ catch [( strict )] {
 }
 ```
 
-**Inline catch at call site:**
-
-```baml
-expression.catch({
-   Pattern => Handler
-   Pattern => Handler
-   ...
-})
-```
-
-Where `expression` can be:
-
-- A function call: `FetchData(id).catch({ ... })`
-- An expression block: `{ /* code */ }.catch({ ... })`
-
 ### Patterns
 
 | Pattern | Description | Example |
@@ -651,20 +487,12 @@ Pattern => { throw error }  // Re-throw to caller
 2. **One per scope** — Only one catch block allowed per scope
 3. **Any scope** — Can appear in functions, loops, if-blocks, or expression blocks
 
-**Inline catch:**
-
-- Can appear **anywhere** an expression is valid
-- Can be used **multiple times** on different expressions
-- Attached with `.catch({ ... })` directly to the expression
-
 **Valid:**
 
 ```baml
 function Foo() {
    catch { ... }  // ✅ Scope-level: First statement
    let x = 1
-   
-   let y = Bar().catch({ ... })  // ✅ Inline: Anywhere
 }
 ```
 
@@ -852,11 +680,16 @@ Because the catch block sits at the top of the scope, it naturally has access to
 ---
 
 
-## Open Question: Throwing Arbitrary Types
+## Updates
 
+### Throwing Arbitrary Types
 We are currently evaluating two approaches for handling `throw` with arbitrary values (primitives, structs):
 
 1.  **Universal Wrapper**: All thrown values are wrapped in an `Exception<T>` envelope.
 2.  **Interface Restriction**: Only types implementing an `Error` interface can be thrown.
 
-See [ideas/primitive-and-arbitrary-types](ideas/primitive-and-arbitrary-types) for the detailed trade-off analysis.
+See [updates/primitive-and-arbitrary-types](updates/primitive-and-arbitrary-types) for the detailed trade-off analysis.
+
+### Inline `.catch()`
+
+Was removed. See [updates/inline-catch](updates/inline-catch) for the detailed trade-off analysis.
