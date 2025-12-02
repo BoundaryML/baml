@@ -47,6 +47,11 @@ pub struct Compiler<'db> {
 
     /// Objects pool (for strings, classes, etc.).
     objects: Vec<Object>,
+
+    /// Counter for generating unique compiler-internal variable names.
+    /// Used to avoid collisions when the same internal variable name
+    /// (like the iterator temp) appears in nested scopes.
+    gensym_counter: usize,
 }
 
 impl<'db> Compiler<'db> {
@@ -61,12 +66,21 @@ impl<'db> Compiler<'db> {
             current_source_line: 0,
             bytecode: Bytecode::new(),
             objects: Vec::new(),
+            gensym_counter: 0,
         }
     }
 
     /// Get the type of an expression from the inference result.
     fn expr_type(&self, expr_id: ExprId) -> Option<&Ty<'db>> {
         self.inference.expr_types.get(&expr_id)
+    }
+
+    /// Generate a unique compiler-internal variable name.
+    /// Uses `@` prefix which is not valid in user code, ensuring no collisions.
+    fn gensym(&mut self, prefix: &str) -> String {
+        let name = format!("@{prefix}_{}", self.gensym_counter);
+        self.gensym_counter += 1;
+        name
     }
 
     /// Compile a function from its THIR-typed body.
@@ -365,15 +379,15 @@ impl<'db> Compiler<'db> {
 
                 self.enter_scope();
 
-                // Store iterator in temp variable
-                let iter_var = "__iter".to_string();
+                // Store iterator in temp variable (unique name to avoid collisions in nested loops)
+                let iter_var = self.gensym("iter");
                 self.track_local(&iter_var);
 
                 // Store length
                 // TODO: Call length method when native functions are available
 
-                // Store index = 0
-                let idx_var = "__idx".to_string();
+                // Store index = 0 (unique name to avoid collisions in nested loops)
+                let idx_var = self.gensym("idx");
                 let zero_idx = self.add_constant(Value::Int(0));
                 self.emit(Instruction::LoadConst(zero_idx));
                 self.track_local(&idx_var);
