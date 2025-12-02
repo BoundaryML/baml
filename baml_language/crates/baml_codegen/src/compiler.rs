@@ -637,7 +637,7 @@ impl<'db> Compiler<'db> {
 /// * `globals` - Global name to index mapping
 ///
 /// # Returns
-/// A tuple of (Function, Vec<Object>) where the objects are the object pool
+/// A tuple of (Function, `Vec<Object>`) where the objects are the object pool
 /// containing strings, classes, etc. referenced by the function's bytecode.
 pub fn compile_function<'db>(
     name: &str,
