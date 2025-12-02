@@ -588,7 +588,7 @@ impl<'db> Compiler<'db> {
         // Save locals for debug info before popping
         if let Some(scope) = self.scopes.last() {
             if scope.id < self.locals_in_scope.len() {
-                self.locals_in_scope[scope.id] = self.locals.clone();
+                self.locals_in_scope[scope.id].clone_from(&self.locals);
             }
         }
 
