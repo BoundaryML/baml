@@ -24,13 +24,13 @@ use crate::{
 /// If there's no relevant metadata to attach to the instruction, then this
 /// function returns an empty string.
 pub fn display_instruction(
-    instruction_ptr: isize,
+    instruction_ptr: usize,
     function: &Function,
     stack: &[Value],
     objects: &[Object],
     globals: &[Value],
 ) -> (String, String) {
-    let instruction = &function.bytecode.instructions[instruction_ptr as usize];
+    let instruction = &function.bytecode.instructions[instruction_ptr];
 
     let metadata = match instruction {
         Instruction::NotifyBlock(block_index) => {
@@ -52,11 +52,7 @@ pub fn display_instruction(
         | Instruction::StoreVar(index)
         | Instruction::Watch(index)
         | Instruction::Notify(index) => {
-            let scope_idx = function
-                .bytecode
-                .scopes
-                .get(instruction_ptr as usize)
-                .copied();
+            let scope_idx = function.bytecode.scopes.get(instruction_ptr).copied();
             let name = scope_idx
                 .and_then(|s| function.locals_in_scope.get(s))
                 .and_then(|locals| locals.get(*index))
@@ -93,7 +89,8 @@ pub fn display_instruction(
             )
         }
         Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
-            format!("(to {})", instruction_ptr + offset)
+            let target = instruction_ptr.wrapping_add_signed(*offset);
+            format!("(to {target})")
         }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
             format!("({})", display_object(objects, *index))
@@ -216,7 +213,7 @@ pub fn display_bytecode(
     // Populate all the rows.
     for instruction_ptr in 0..function.bytecode.instructions.len() {
         let (instruction, metadata) =
-            display_instruction(instruction_ptr as isize, function, stack, objects, globals);
+            display_instruction(instruction_ptr, function, stack, objects, globals);
 
         // decide whether to show the line number
         // since a single line could emit multiple instructions
@@ -250,13 +247,6 @@ pub fn display_bytecode(
 
     // Print the table.
     for (i, row) in rows.iter().enumerate() {
-        // Separate bytecode instructions by source line numbers. This checks
-        // that the source line has changed compared to the previous
-        // instruction.
-        if i > 0 && !rows[i][0].text.is_empty() && rows[i - 1][0].text != rows[i][0].text {
-            table.push('\n');
-        }
-
         // Build the row.
         for (j, col) in row.iter().enumerate() {
             let mut width = widths[j];
@@ -275,6 +265,13 @@ pub fn display_bytecode(
         }
 
         table.push('\n');
+
+        // Add blank line after each source line group (when source lines are tracked).
+        // Check if the next row starts a new source line (has a non-empty line number).
+        // When source lines are all 0 (not tracked), no blank lines are added.
+        if i + 1 < rows.len() && !rows[i + 1][0].text.is_empty() {
+            table.push('\n');
+        }
     }
 
     table
