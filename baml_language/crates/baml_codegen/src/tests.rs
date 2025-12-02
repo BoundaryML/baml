@@ -6,8 +6,10 @@
 
 mod common;
 
-use baml_vm::BinOp;
-use baml_vm::test::{Instruction, Value};
+use baml_vm::{
+    BinOp,
+    test::{Instruction, Value},
+};
 use common::{Program, assert_compiles};
 
 // ============================================================================

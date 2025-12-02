@@ -26,12 +26,11 @@ use std::collections::HashMap;
 
 use baml_base::{Name, SourceFile};
 use baml_hir::{self, ItemId, function_body, function_signature};
-use baml_workspace::ProjectRoot;
-
 pub use baml_vm::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, Instruction, Object, Program,
     UnaryOp, Value,
 };
+use baml_workspace::ProjectRoot;
 pub use compiler::{Compiler, compile_function};
 
 /// Generate bytecode for all functions in a project.
