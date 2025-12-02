@@ -26,13 +26,13 @@ In this model, **every** caught value is wrapped in an `Exception<T>` envelope. 
 ```baml
 catch {
    // 's' is Exception<string>, NOT string
-   string(s) => { 
+   s: string => { 
       log("Error: " + s.value) // Access raw value
       log("Stack: " + s.stack) // Access metadata
    }
 
    // 'e' is Exception<MyErrorType>
-   MyErrorType(e) => {
+   e: MyErrorType => {
       log("Error ID: " + e.value.id)
       log("Stack: " + e.stack)
    }
@@ -51,7 +51,7 @@ catch {
 
 // Desugars to:
 catch {
-   MyErrorType(temp) => {
+   temp: MyErrorType => {
       let { id, message } = temp.value
       ...
    }

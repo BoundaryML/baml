@@ -21,7 +21,7 @@ Add a `catch` block at the top of any function to handle errors:
 ```baml
 function ExtractResume(text: string) -> Resume {
    catch {
-      LlmError(e) => { 
+      e: LlmError => { 
         return Resume { name: "Unknown", experience: [] } 
       }
    }
@@ -44,7 +44,7 @@ A `catch` block must be the **first statement** in a scope (function, loop, or b
 ```baml
 function Foo(arg: string) {
     catch {
-        Err(e) => { return fallback(arg) }
+        e: Err => { return fallback(arg) }
     }
 
     // Everything from here down is "protected" by the catch above
@@ -71,12 +71,12 @@ function Foo(arg) {
 
 ### Pattern Matching Errors
 
-Use pattern matching to handle different error types:
+Use pattern matching (consistent with `match` expressions) to handle different error types:
 
 ```baml
 catch {
-   TimeoutError() => { return retry_later() }
-   ParseError(e) => { 
+   _: TimeoutError => { return retry_later() }
+   e: ParseError => { 
       log("Failed to parse: " + e.message)
       return default_value() 
    }
@@ -88,9 +88,10 @@ catch {
 
 **Pattern types:**
 
-- `ErrorType()` — Match the error type
-- `ErrorType(e)` — Match and bind the error instance to `e`
+- `_: ErrorType` — Match the error type (ignore value)
+- `e: ErrorType` — Match and bind the error instance to `e`
 - `ErrorType { field1, field2 }` — Match and destructure error fields
+- `name` — Named wildcard (matches any error)
 
 ### Named Wildcards
 
@@ -98,7 +99,7 @@ Use a named wildcard to catch all other errors:
 
 ```baml
 catch {
-   KnownError() => { return fallback() }
+   _: KnownError => { return fallback() }
    other => { 
       log.error("Unexpected error", other)
       throw other  // Re-throw to caller
@@ -111,12 +112,12 @@ catch {
 ```baml
 // What you write
 catch {
-   MyError() => { return fallback() }
+   _: MyError => { return fallback() }
 }
 
 // What BAML compiles it to
 catch {
-   MyError() => { return fallback() }
+   _: MyError => { return fallback() }
    __implicit__ => { throw __implicit__ }  // Auto-added
 }
 ```
@@ -134,7 +135,7 @@ Return a safe default when an operation fails:
 ```baml
 function GetUserProfile(userId: string) -> Profile {
    catch {
-      NotFound() => { 
+      _: NotFound => { 
          return Profile { 
             id: userId, 
             name: "Unknown User",
@@ -158,7 +159,7 @@ function RobustExtract(text: string) -> Data {
    
    while (true) {
       catch {
-         TimeoutError() => { 
+         _: TimeoutError => { 
             if (attempts < 3) {
                attempts += 1
                continue  // Retry
@@ -229,7 +230,7 @@ Fall back to simpler approaches when the preferred method fails:
 ```baml
 function SmartExtract(text: string) -> Data {
    catch {
-      LlmError() => {
+      _: LlmError => {
          log("LLM failed, falling back to regex")
          return regex_extract(text)  // Simpler fallback
       }
@@ -249,14 +250,14 @@ Inner catch blocks handle errors before outer ones:
 ```baml
 function ProcessDocument(doc: string) -> Report {
    catch {
-      CriticalError() => { return Report.failed() }  // Outer catch
+      _: CriticalError => { return Report.failed() }  // Outer catch
    }
    
    let sections = []
    
    for (section in doc.sections) {
       catch {
-         ParseError() => { 
+         _: ParseError => { 
             sections.append(Section.placeholder())
             continue  // Inner catch handles, continues loop
          }
@@ -280,8 +281,8 @@ function GetPrice(itemId: string) -> float {
    
    let price = {
       catch {
-         ApiError() => { 0.0 }  // Returns 0.0 to assign to 'price'
-         AuthError() => { return -1.0 }  // Returns -1.0 from FUNCTION
+         _: ApiError => { 0.0 }  // Returns 0.0 to assign to 'price'
+         _: AuthError => { return -1.0 }  // Returns -1.0 from FUNCTION
       }
       
       externalApi.getPrice(itemId)
@@ -308,7 +309,7 @@ function ProcessWithContext(userId: string, data: Data) -> Result {
       catch {
          // ✅ Can access function parameters
          // ✅ Can access outer scope variables
-         ProcessError(e) => { 
+         e: ProcessError => { 
             log.error("Failed for user " + userId, e)
             return Result.failure(context, e)
          }
@@ -328,8 +329,8 @@ Enable strict mode to require explicit handling of all known errors:
 ```baml
 function SafeOperation() -> Data {
    catch(strict) {
-      KnownError1() => { return fallback1() }
-      KnownError2() => { return fallback2() }
+      _: KnownError1 => { return fallback1() }
+      _: KnownError2 => { return fallback2() }
       // Compiler error if any other known errors can occur!
    }
 
@@ -350,7 +351,7 @@ Exceptions in BAML automatically capture call stack information, making debuggin
 ```baml
 function A() -> Data {
    catch {
-      MyError(e) => {
+      e: MyError => {
          // Error 'e' contains the full call stack
          log.error("Error in A", {
             message: e.message,
@@ -384,7 +385,7 @@ This makes debugging much easier, especially when errors propagate through multi
 ```baml
 function ProcessDocument(doc: string) -> Report {
    catch {
-      ParseError(e) => {
+      e: ParseError => {
          // Even if this error came from deep in the call chain,
          // e.stack shows the full path: ProcessDocument -> ExtractSections -> ParseSection
          log.error("Failed to process document", {
@@ -418,8 +419,8 @@ function Extract() {
 ```baml
 function Extract() {
    catch { 
-      TimeoutError() => { return retry_with_timeout() }
-      ParseError() => { return fallback_parser() }
+      _: TimeoutError => { return retry_with_timeout() }
+      _: ParseError => { return fallback_parser() }
    }
    
    // Original code unchanged!
@@ -455,10 +456,9 @@ catch [( strict )] {
 
 | Pattern | Description | Example |
 |---------|-------------|---------|
-| `ErrorType()` | Match error type | `TimeoutError()` |
-| `ErrorType(e)` | Bind error instance | `ParseError(e)` |
+| `_: ErrorType` | Match error type | `_: TimeoutError` |
+| `e: ErrorType` | Bind error instance | `e: ParseError` |
 | `ErrorType { fields }` | Destructure fields | `ApiError { code, msg }` |
-| `name` | Named wildcard (matches any error) | `other` |
 | `name` | Named wildcard (matches any error) | `other` |
 
 ### Handlers
@@ -517,7 +517,7 @@ Errors propagate automatically via implicit wildcards:
 ```baml
 function A() -> Data {
    catch {
-      MyError() => { return fallback() }
+      _: MyError => { return fallback() }
       // Other errors propagate automatically
    }
    B()  // Might throw OtherError
@@ -532,7 +532,7 @@ To explicitly handle all errors without propagating:
 
 ```baml
 catch {
-   MyError() => { return fallback1() }
+   _: MyError => { return fallback1() }
    other => { return fallback2() }  // Catches everything else
 }
 ```
@@ -599,14 +599,14 @@ function ParseResume(text: string) -> Resume {
 
 function SafeParseResume(text: string) -> ParsingResult {
    catch {
-      TimeoutError() => {
+      _: TimeoutError => {
          return ParsingResult {
             success: false,
             data: null,
             error: "LLM timeout - please retry"
          }
       }
-      ParseError(e) => {
+      e: ParseError => {
          return ParsingResult {
             success: false,
             data: null,

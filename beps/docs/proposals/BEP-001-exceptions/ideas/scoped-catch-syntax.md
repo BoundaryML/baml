@@ -19,7 +19,7 @@ You can view this syntax as syntactic sugar for a traditional `try-catch` block 
 function Foo(arg: string) {
     // Catch must be the first statement
     catch {
-        Err(e) => { return arg } // Can access parameters or outer variables
+        e: Err => { return arg } // Can access parameters or outer variables
     }
 
     // Everything below is effectively inside a 'try'
@@ -83,7 +83,7 @@ function ExtractResume(text: string) -> Resume {
    // Must be the first statement in the scope
    catch {
       // Return a default/fallback value on failure
-      LlmError(e) => { 
+      e: LlmError => { 
         return Resume { name: "Unknown", experience: [] } 
       }
    }
@@ -143,10 +143,10 @@ function GetPrice(itemId: string) -> float {
    let price = {
       catch {
          // ✅ Expression return: Returns 0.0 to 'price' variable (fallback)
-         ApiError() => { 0.0 }
+         _: ApiError => { 0.0 }
          
          // ✅ Function return: Exits the entire function immediately
-         AuthError() => { return -1.0 } 
+         _: AuthError => { return -1.0 } 
       }
       
       externalApi.getPrice(itemId)
@@ -267,8 +267,8 @@ A distinguishing feature of this syntax is the **named wildcard pattern** for er
 ```baml
 function Foo(param: T) -> Bar {
    catch {
-      MyError() => { return Bar.default() }
-      DatabaseError() => { return Bar.fromCache() }
+      _: MyError => { return Bar.default() }
+      _: DatabaseError => { return Bar.fromCache() }
       // Named wildcard captures all other errors
       other => { 
          log.error("Unexpected error in Foo", other)
@@ -287,7 +287,7 @@ function Foo(param: T) -> Bar {
 ```baml
 function Foo() -> Bar {
    catch {
-      MyError() => { return Bar.default() }
+      _: MyError => { return Bar.default() }
    }
    // code
 }
@@ -297,7 +297,7 @@ function Foo() -> Bar {
 ```baml
 function Foo() -> Bar {
    catch {
-      MyError() => { return Bar.default() }
+      _: MyError => { return Bar.default() }
       __implicit_other__ => { throws __implicit_other__ }  // Implicitly added
    }
    // code
@@ -314,7 +314,7 @@ function Foo() -> Bar {
 ```baml
 // Explicit wildcard for logging before propagation
 catch {
-   KnownError() => { return fallback() }
+   _: KnownError => { return fallback() }
    other => { 
       log.error("Unexpected error", other)
       metrics.increment("unknown_errors")
@@ -374,7 +374,7 @@ The compiler **automatically adds** an implicit wildcard to every catch block th
 // What you write
 function Foo() -> Bar {
    catch {
-      MyError() => { return Bar.default() }
+      _: MyError => { return Bar.default() }
       // No explicit wildcard needed
    }
    // code that might throw MyError and OtherError
@@ -383,7 +383,7 @@ function Foo() -> Bar {
 // What the compiler generates (desugared)
 function Foo() -> Bar {
    catch {
-      MyError() => { return Bar.default() }
+      _: MyError => { return Bar.default() }
       __implicit__ => { throws __implicit__ }  // Auto-added by compiler
    }
    // code
@@ -392,7 +392,7 @@ function Foo() -> Bar {
 // When you want to log/inspect unhandled errors
 function Bar() -> Baz {
    catch {
-      KnownError() => { return fallback() }
+      _: KnownError => { return fallback() }
       other => {  // Explicit wildcard overrides implicit one
          log.error("Unexpected error", other)
          throws other
@@ -420,13 +420,13 @@ function Bar() -> Baz {
 ```baml
 function Foo() -> Bar {
    catch {
-      MyError() => { return Bar.default() }  // Outer catch
+      _: MyError => { return Bar.default() }  // Outer catch
       other => { throws other }
    }
    
    if (condition) {
       catch {
-         MyError() => { return Bar.new(...) }  // Inner catch handles first
+         _: MyError => { return Bar.new(...) }  // Inner catch handles first
          other => { throws other }  // Re-throws to outer catch
       }
       // MyError thrown here goes to inner catch first
@@ -451,7 +451,7 @@ function Foo() -> Bar {
 ```baml
 function Foo() -> Bar {
    catch {
-      MyError() => { return Bar.default() }
+      _: MyError => { return Bar.default() }
       // Named wildcard captures unhandled errors
       other => { throws other }
    }
@@ -508,8 +508,8 @@ function Foo(param: T) -> Bar {
 ```baml
 function Foo() -> Bar {
    catch {
-      MyError() => { return Bar.default() }  // Provide return value
-      OtherError() => { throws OtherError() }  // Re-throw
+      _: MyError => { return Bar.default() }  // Provide return value
+      _: OtherError => { throws OtherError() }  // Re-throw
       other => { throws other }  // Propagate unhandled errors
    }
    // code that returns Bar
@@ -530,8 +530,8 @@ function Foo() -> Bar {
 **Example**:
 ```baml
 catch {
-   SpecificError() => { .. }
-   GeneralError() => { .. }  // Would this catch SpecificError if it extends GeneralError?
+   _: SpecificError => { .. }
+   _: GeneralError => { .. }  // Would this catch SpecificError if it extends GeneralError?
 }
 ```
 
@@ -551,7 +551,7 @@ catch {
 **Example**:
 ```baml
 catch {
-   MyError() => { return Bar.default() }
+   _: MyError => { return Bar.default() }
    other => { 
       // 'other' is a named wildcard that captures any unhandled error
       log(other)
@@ -577,8 +577,8 @@ catch {
 **Examples**:
 ```baml
 catch {
-   MyError() => { .. }  // No access to error instance
-   MyError(e) => { .. }  // Access via parameter binding
+   _: MyError => { .. }  // No access to error instance
+   e: MyError => { .. }  // Access via parameter binding
    MyError { code, msg } => { .. }  // Destructure error fields
 }
 ```
@@ -600,7 +600,7 @@ catch {
 ```baml
 async function Foo() -> Bar {
    catch {
-      NetworkError() => { return Bar.default() }
+      _: NetworkError => { return Bar.default() }
    }
    await someAsyncCall()  // Can be caught by the catch block
 }
@@ -646,7 +646,7 @@ Since every catch block includes an implicit forwarder (`__implicit__ => { throw
 function Foo() -> Bar {
    // strict: Compiler ERROR if 'MyError' is reachable but not handled below
    catch(strict) {
-      MyError() => { return Bar.default() }
+      _: MyError => { return Bar.default() }
       // Implicit forwarder is STILL added for unknown/future errors
    }
    
@@ -685,7 +685,7 @@ function Foo() -> Bar {
 function Foo() -> int {
    // ✅ Valid: Top of function scope
    catch { 
-      MyError() => { return 0 }
+      _: MyError => { return 0 }
    }
 
    // ❌ Invalid: Catch in middle of scope
@@ -694,7 +694,7 @@ function Foo() -> int {
    if (condition) {
       // ✅ Valid: Top of inner scope
       catch {
-         MyError() => { return 1 } // Returns from the block (which returns from function)
+         _: MyError => { return 1 } // Returns from the block (which returns from function)
       }
       
       // ❌ Invalid: Multiple catches
@@ -707,8 +707,8 @@ function Foo() -> int {
    let x = {
       // ✅ Valid: Top of block scope
       catch { 
-         MyError() => { return 10 } // Returns 10 from the FUNCTION
-         MyError2() => { 10 } // Returns 10 from the BLOCK (binds x = 10)
+         _: MyError => { return 10 } // Returns 10 from the FUNCTION
+         _: MyError2 => { 10 } // Returns 10 from the BLOCK (binds x = 10)
       }
       fallible_op() // returns int
    }

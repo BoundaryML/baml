@@ -64,15 +64,18 @@ func f() error {
 > "With check, that space in the code doesn’t exist. There’s a barrier to making that code handle errors better... Most of the time I want to add information about one specific error case."
 > — **Nate Finch**, *[Handle and Check - Let's Not](https://npf.io/2018/09/check-and-handle/)*
 
-**BAML Solution**: BAML supports **Inline Catch** (`expression.catch(...)`) alongside Scope-level Catch.
+**BAML Solution**: BAML supports **Expression Blocks** with catch alongside Scope-level Catch.
 
-- **Benefit**: When you need specific context for a single call, you use the inline syntax. When you want broad resilience for a block of logic, you use the scope-level syntax. You have the best of both worlds.
+- **Benefit**: When you need specific context for a single call, you use an expression block. When you want broad resilience for a block of logic, you use the scope-level syntax. You have the best of both worlds.
 
 ```baml
 // BAML allows local context when needed
-let user = FetchUser(id).catch({
-    NotFound() => { return null } // Specific handling for this call
-})
+let user = {
+    catch {
+        _: NotFound => { return null } // Specific handling for this call
+    }
+    FetchUser(id)
+}
 ```
 
 ## 3. "Spooky Action at a Distance"
@@ -82,7 +85,7 @@ let user = FetchUser(id).catch({
 **BAML Trade-off**: This critique still applies to BAML's scope-level catch.
 
 - **Mitigation**: BAML is a DSL for AI pipelines, where the "happy path" is often a linear sequence of operations. The value of **"Additive Resilience"** (adding error handling without refactoring/indenting) for AI agents and prototyping outweighs the control flow jump.
-- **Alternative**: For complex control flow where this jump is confusing, developers can fall back to using nested blocks `{ catch { ... } ... }` or inline catches to keep handling local.
+- **Alternative**: For complex control flow where this jump is confusing, developers can fall back to using nested blocks `{ catch { ... } ... }` or expression blocks to keep handling local.
 
 ## 4. Specificity to Error Type
 
@@ -118,7 +121,7 @@ handle err { ... } // 'err' is now in scope
 ```baml
 catch {
    // No variable 'e' exists here
-   MyError(e) => { ... } // 'e' exists only in this block
+   e: MyError => { ... } // 'e' exists only in this block
 }
 ```
 This prevents accidental shadowing and makes it clear exactly what data is available.
@@ -133,7 +136,7 @@ Many users preferred an inline syntax:
 // From mcluseau's proposal
 msg, check readErr := remote.Read()
 ```
-BAML's inline catch (`.catch()`) is spiritually similar to this, allowing handling at the assignment site.
+BAML's expression block catch is spiritually similar to this, allowing handling at the assignment site.
 
 ### Named Handlers
 Some proposed explicitly invoking handlers:
@@ -141,4 +144,3 @@ Some proposed explicitly invoking handlers:
 check f() ? handlerName
 ```
 BAML avoids this complexity by sticking to standard scoping rules (inner catches handle first).
-
