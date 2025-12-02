@@ -3,6 +3,9 @@ source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 0
-Objects: 0
-Globals: 0
+Functions: 1
+Objects: 1
+Globals: 1
+
+Function HelloWorld (arity: 1, kind: Llm):
+  (no bytecode)

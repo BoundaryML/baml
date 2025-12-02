@@ -15,7 +15,7 @@ use common::{Program, assert_compiles};
 // ============================================================================
 
 #[test]
-fn literal_int() -> anyhow::Result<()> {
+fn return_literal_int() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
             function main() -> int {
@@ -30,7 +30,7 @@ fn literal_int() -> anyhow::Result<()> {
 }
 
 #[test]
-fn literal_bool() -> anyhow::Result<()> {
+fn return_literal_bool() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
             function main() -> bool {
@@ -50,7 +50,7 @@ fn literal_bool() -> anyhow::Result<()> {
 // TODO: Enable when string literals are supported in HIR/THIR
 #[test]
 #[ignore = "string literals not yet supported in HIR"]
-fn literal_string() -> anyhow::Result<()> {
+fn return_literal_string() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
             function main() -> string {
@@ -101,7 +101,7 @@ fn return_function_call() -> anyhow::Result<()> {
 }
 
 #[test]
-fn call_function() -> anyhow::Result<()> {
+fn assign_function_call_to_variable() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
             function two() -> int {
@@ -275,7 +275,7 @@ fn if_else_assignment() -> anyhow::Result<()> {
 // ============================================================================
 
 #[test]
-fn array_literal() -> anyhow::Result<()> {
+fn return_array_constructor() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
             function main() -> int[] {

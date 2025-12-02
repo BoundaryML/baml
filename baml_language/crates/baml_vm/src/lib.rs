@@ -4,6 +4,7 @@
 //! for the BAML stack-based virtual machine.
 
 mod bytecode;
+pub mod debug;
 pub mod test;
 mod types;
 

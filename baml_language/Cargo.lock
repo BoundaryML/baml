@@ -227,6 +227,7 @@ version = "0.0.0"
 dependencies = [
  "baml_db",
  "baml_diagnostics",
+ "baml_vm",
  "codspeed-divan-compat",
  "insta",
  "salsa",

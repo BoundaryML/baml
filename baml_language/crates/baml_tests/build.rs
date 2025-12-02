@@ -709,8 +709,9 @@ fn generate_codegen_test(file: &mut File, project: &TestProject) -> std::io::Res
     writeln!(file, "        let mut db = RootDatabase::new();")?;
     writeln!(
         file,
-        "        let root = db.set_project_root(std::path::PathBuf::from(\".\"));"
+        "        let _root = db.set_project_root(std::path::PathBuf::from(\".\"));"
     )?;
+    writeln!(file, "        let mut source_files = Vec::new();")?;
     writeln!(file)?;
 
     for baml_file in &project.files {
@@ -724,7 +725,7 @@ fn generate_codegen_test(file: &mut File, project: &TestProject) -> std::io::Res
             file,
             "            let content = content.replace(\"\\r\\n\", \"\\n\");"
         )?;
-        writeln!(file, "            db.add_file(")?;
+        writeln!(file, "            let sf = db.add_file(")?;
         writeln!(
             file,
             "                \"{}\",",
@@ -732,13 +733,14 @@ fn generate_codegen_test(file: &mut File, project: &TestProject) -> std::io::Res
         )?;
         writeln!(file, "                &content,")?;
         writeln!(file, "            );")?;
+        writeln!(file, "            source_files.push(sf);")?;
         writeln!(file, "        }}")?;
     }
 
     writeln!(file)?;
     writeln!(
         file,
-        "        let program = baml_codegen::generate_project_bytecode(&db, root);"
+        "        let program = baml_codegen::compile_files(&db, &source_files);"
     )?;
     writeln!(file)?;
     writeln!(file, "        let mut output = String::new();")?;
@@ -759,7 +761,10 @@ fn generate_codegen_test(file: &mut File, project: &TestProject) -> std::io::Res
         "        writeln!(output, \"Globals: {{}}\", program.globals.len()).unwrap();"
     )?;
     writeln!(file)?;
-    writeln!(file, "        // Show functions and their bytecode")?;
+    writeln!(
+        file,
+        "        // Show functions and their bytecode using debug formatting"
+    )?;
     writeln!(
         file,
         "        let mut func_names: Vec<_> = program.function_indices.keys().collect();"
@@ -777,28 +782,35 @@ fn generate_codegen_test(file: &mut File, project: &TestProject) -> std::io::Res
     writeln!(file, "            {{")?;
     writeln!(
         file,
-        "                writeln!(output, \"\\nFunction {{}}:\", func_name).unwrap();"
+        "                writeln!(output, \"\\nFunction {{}} (arity: {{}}, kind: {{:?}}):\", func_name, func.arity, func.kind).unwrap();"
     )?;
     writeln!(
         file,
-        "                writeln!(output, \"  Arity: {{}}\", func.arity).unwrap();"
+        "                let bytecode_table = baml_vm::debug::display_bytecode("
+    )?;
+    writeln!(file, "                    func,")?;
+    writeln!(
+        file,
+        "                    &[],  // Empty stack for static display"
+    )?;
+    writeln!(file, "                    &program.objects,")?;
+    writeln!(file, "                    &program.globals,")?;
+    writeln!(file, "                );")?;
+    writeln!(file, "                if bytecode_table.is_empty() {{")?;
+    writeln!(
+        file,
+        "                    writeln!(output, \"  (no bytecode)\").unwrap();"
+    )?;
+    writeln!(file, "                }} else {{")?;
+    writeln!(
+        file,
+        "                    for line in bytecode_table.lines() {{"
     )?;
     writeln!(
         file,
-        "                writeln!(output, \"  Instructions: {{}}\", func.bytecode.instructions.len()).unwrap();"
+        "                        writeln!(output, \"  {{}}\", line).unwrap();"
     )?;
-    writeln!(
-        file,
-        "                writeln!(output, \"  Constants: {{}}\", func.bytecode.constants.len()).unwrap();"
-    )?;
-    writeln!(
-        file,
-        "                for (i, instr) in func.bytecode.instructions.iter().enumerate() {{"
-    )?;
-    writeln!(
-        file,
-        "                    writeln!(output, \"    [{{:3}}] {{}}\", i, instr).unwrap();"
-    )?;
+    writeln!(file, "                    }}")?;
     writeln!(file, "                }}")?;
     writeln!(file, "            }}")?;
     writeln!(file, "        }}")?;

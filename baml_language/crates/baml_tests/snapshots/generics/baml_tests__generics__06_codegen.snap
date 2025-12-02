@@ -3,6 +3,11 @@ source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 0
-Objects: 0
-Globals: 0
+Functions: 1
+Objects: 1
+Globals: 1
+
+Function GetTodo (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (null)
+     1   CALL 0         
+     2   RETURN
