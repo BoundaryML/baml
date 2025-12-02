@@ -29,4 +29,6 @@ Error: Expected RBrace, found Class
  5 │ class Another {  // Should still parse this class
    │ ──┬──  
    │   ╰──── Expected RBrace, found Class
+   │ 
+   │ Note: Error code: E0010
 ───╯

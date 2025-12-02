@@ -9,6 +9,8 @@ expression: output
  6 │ function 123Invalid() {}
    │ ────┬───  
    │     ╰───── Expected RBrace, found Function
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected function name, found IntegerLiteral
@@ -17,6 +19,8 @@ expression: output
  6 │ function 123Invalid() {}
    │          ─┬─  
    │           ╰─── Expected function name, found IntegerLiteral
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected return type (->), found LBrace
@@ -25,4 +29,6 @@ expression: output
  6 │ function 123Invalid() {}
    │                       ┬  
    │                       ╰── Expected return type (->), found LBrace
+   │ 
+   │ Note: Error code: E0010
 ───╯

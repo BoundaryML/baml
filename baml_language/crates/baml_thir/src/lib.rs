@@ -13,10 +13,11 @@
 use std::collections::HashMap;
 
 use baml_base::{Name, Span};
+use baml_diagnostics::compiler_error::TypeError;
 use baml_hir::{ExprBody, ExprId, FunctionBody, FunctionSignature, Pattern, StmtId};
 
 mod lower;
-mod pretty;
+pub mod pretty;
 mod types;
 
 pub use lower::lower_type_ref;
@@ -48,112 +49,7 @@ pub struct InferenceResult<'db> {
     /// Types inferred for each expression.
     pub expr_types: HashMap<ExprId, Ty<'db>>,
     /// Type checking errors.
-    pub errors: Vec<TypeError<'db>>,
-}
-
-// ============================================================================
-// Type Errors
-// ============================================================================
-
-/// Type errors that can occur during type checking.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TypeError<'db> {
-    /// Type mismatch between expected and found types.
-    TypeMismatch {
-        expected: Ty<'db>,
-        found: Ty<'db>,
-        span: Span,
-    },
-    /// Reference to an unknown type name.
-    UnknownType { name: String, span: Span },
-    /// Reference to an unknown variable.
-    UnknownVariable { name: String, span: Span },
-    /// Invalid binary operation.
-    InvalidBinaryOp {
-        op: String,
-        lhs: Ty<'db>,
-        rhs: Ty<'db>,
-        span: Span,
-    },
-    /// Invalid unary operation.
-    InvalidUnaryOp {
-        op: String,
-        operand: Ty<'db>,
-        span: Span,
-    },
-    /// Wrong number of arguments in function call.
-    ArgumentCountMismatch {
-        expected: usize,
-        found: usize,
-        span: Span,
-    },
-    /// Calling a non-callable type.
-    NotCallable { ty: Ty<'db>, span: Span },
-    /// Field access on non-class type.
-    NoSuchField {
-        ty: Ty<'db>,
-        field: String,
-        span: Span,
-    },
-    /// Index access on non-indexable type.
-    NotIndexable { ty: Ty<'db>, span: Span },
-}
-
-impl baml_base::Diagnostic for TypeError<'_> {
-    fn message(&self) -> String {
-        match self {
-            TypeError::TypeMismatch {
-                expected, found, ..
-            } => {
-                format!("Type mismatch: expected {expected}, found {found}")
-            }
-            TypeError::UnknownType { name, .. } => {
-                format!("Unknown type: {name}")
-            }
-            TypeError::UnknownVariable { name, .. } => {
-                format!("Unknown variable: {name}")
-            }
-            TypeError::InvalidBinaryOp { op, lhs, rhs, .. } => {
-                format!("Cannot apply operator '{op}' to types {lhs} and {rhs}")
-            }
-            TypeError::InvalidUnaryOp { op, operand, .. } => {
-                format!("Cannot apply operator '{op}' to type {operand}")
-            }
-            TypeError::ArgumentCountMismatch {
-                expected, found, ..
-            } => {
-                format!("Expected {expected} arguments, found {found}")
-            }
-            TypeError::NotCallable { ty, .. } => {
-                format!("Type {ty} is not callable")
-            }
-            TypeError::NoSuchField { ty, field, .. } => {
-                format!("Type {ty} has no field '{field}'")
-            }
-            TypeError::NotIndexable { ty, .. } => {
-                format!("Type {ty} is not indexable")
-            }
-        }
-    }
-
-    fn span(&self) -> Option<Span> {
-        let span = match self {
-            TypeError::TypeMismatch { span, .. }
-            | TypeError::UnknownType { span, .. }
-            | TypeError::UnknownVariable { span, .. }
-            | TypeError::InvalidBinaryOp { span, .. }
-            | TypeError::InvalidUnaryOp { span, .. }
-            | TypeError::ArgumentCountMismatch { span, .. }
-            | TypeError::NotCallable { span, .. }
-            | TypeError::NoSuchField { span, .. }
-            | TypeError::NotIndexable { span, .. } => span,
-        };
-        Some(*span)
-    }
-
-    fn severity(&self) -> baml_base::Severity {
-        baml_base::Severity::Error
-    }
+    pub errors: Vec<TypeError<Ty<'db>>>,
 }
 
 // ============================================================================
@@ -168,7 +64,7 @@ pub struct TypeContext<'db> {
     /// Inferred types for expressions.
     expr_types: HashMap<ExprId, Ty<'db>>,
     /// Accumulated type errors.
-    errors: Vec<TypeError<'db>>,
+    errors: Vec<TypeError<Ty<'db>>>,
 }
 
 impl<'db> TypeContext<'db> {
@@ -226,7 +122,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Add a type error.
-    pub fn push_error(&mut self, error: TypeError<'db>) {
+    pub fn push_error(&mut self, error: TypeError<Ty<'db>>) {
         self.errors.push(error);
     }
 

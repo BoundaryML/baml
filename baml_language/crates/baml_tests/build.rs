@@ -196,10 +196,10 @@ fn generate_project_tests(file: &mut File, project: &TestProject) -> std::io::Re
     writeln!(file, "    use baml_db::baml_hir;")?;
     writeln!(file, "    use baml_db::baml_thir;")?;
     writeln!(file, "    use baml_db::baml_codegen;")?;
-    writeln!(file, "    use baml_db::Diagnostic;")?;
+    writeln!(file, "    use baml_thir::pretty::short_display;")?;
     writeln!(
         file,
-        "    use baml_diagnostics::render_diagnostic_with_color;"
+        "    use baml_diagnostics::{{render_parse_error, render_type_error}};"
     )?;
     writeln!(file, "    use std::collections::HashMap;")?;
     writeln!(file, "    use insta::{{assert_snapshot, with_settings}};")?;
@@ -375,7 +375,7 @@ fn generate_parser_test(
     writeln!(file, "            for error in errors.iter() {{")?;
     writeln!(
         file,
-        "                writeln!(output, \"{{}}\", render_diagnostic_with_color(error, &sources, false)).unwrap();"
+        "                writeln!(output, \"{{}}\", render_parse_error(error, &sources, false)).unwrap();"
     )?;
     writeln!(file, "            }}")?;
     writeln!(file, "        }}")?;
@@ -557,7 +557,7 @@ fn generate_thir_test(file: &mut File, project: &TestProject) -> std::io::Result
     )?;
     writeln!(
         file,
-        "                            writeln!(output, \"      - {{}}\", error.message()).unwrap();"
+        "                            writeln!(output, \"      - {{}}\", short_display(error)).unwrap();"
     )?;
     writeln!(file, "                        }}")?;
     writeln!(file, "                    }}")?;
@@ -582,9 +582,11 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
     writeln!(file, "    fn test_05_diagnostics() {{")?;
     writeln!(file, "        let mut db = RootDatabase::new();")?;
     writeln!(file, "        let mut sources = HashMap::new();")?;
+    writeln!(file, "        let mut source_files = Vec::new();")?;
     writeln!(file, "        let mut all_errors = Vec::new();")?;
     writeln!(file)?;
 
+    // First pass: add all files and collect parse errors
     for baml_file in &project.files {
         writeln!(file, "        {{")?;
         writeln!(
@@ -608,6 +610,7 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
             file,
             "            sources.insert(source_file.file_id(&db), content.clone());"
         )?;
+        writeln!(file, "            source_files.push(source_file);")?;
         writeln!(file)?;
         writeln!(
             file,
@@ -616,11 +619,54 @@ fn generate_diagnostics_test(file: &mut File, project: &TestProject) -> std::io:
         writeln!(file, "            for error in errors {{")?;
         writeln!(
             file,
-            "                all_errors.push((\"parse\".to_string(), render_diagnostic_with_color(&error, &sources, false)));"
+            "                all_errors.push((\"parse\".to_string(), render_parse_error(&error, &sources, false)));"
         )?;
         writeln!(file, "            }}")?;
         writeln!(file, "        }}")?;
     }
+
+    // Second pass: run type inference and collect type errors
+    writeln!(file)?;
+    writeln!(
+        file,
+        "        // Build typing context and run type inference"
+    )?;
+    writeln!(
+        file,
+        "        let globals = baml_db::build_typing_context_from_files(&db, &source_files);"
+    )?;
+    writeln!(file, "        for source_file in &source_files {{")?;
+    writeln!(
+        file,
+        "            let items_struct = baml_hir::file_items(&db, *source_file);"
+    )?;
+    writeln!(file, "            let items = items_struct.items(&db);")?;
+    writeln!(file, "            for item in items.iter() {{")?;
+    writeln!(
+        file,
+        "                if let baml_hir::ItemId::Function(func_id) = item {{"
+    )?;
+    writeln!(
+        file,
+        "                    let signature = baml_db::function_signature(&db, *source_file, *func_id);"
+    )?;
+    writeln!(
+        file,
+        "                    let body = baml_db::function_body(&db, *source_file, *func_id);"
+    )?;
+    writeln!(
+        file,
+        "                    let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()));"
+    )?;
+    writeln!(file, "                    for error in &result.errors {{")?;
+    writeln!(
+        file,
+        "                        all_errors.push((\"type\".to_string(), render_type_error(error, &sources, false)));"
+    )?;
+    writeln!(file, "                    }}")?;
+    writeln!(file, "                }}")?;
+    writeln!(file, "            }}")?;
+    writeln!(file, "        }}")?;
 
     writeln!(file)?;
     writeln!(file, "        let mut output = String::new();")?;

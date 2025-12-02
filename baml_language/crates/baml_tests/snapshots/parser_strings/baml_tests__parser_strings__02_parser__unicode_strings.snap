@@ -285,6 +285,8 @@ Error: Expected function name, found Error
  29 │     Return result with emojis: ✅ or ❌
     │ ─┬─  
     │  ╰─── Expected function name, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected parameter name, found Error
@@ -293,6 +295,8 @@ Error: Expected parameter name, found Error
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected parameter name, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected type annotation, found Error
@@ -301,6 +305,8 @@ Error: Expected type annotation, found Error
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected type annotation, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected RParen, found Error
@@ -309,6 +315,8 @@ Error: Expected RParen, found Error
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected RParen, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected return type (->), found Error
@@ -317,6 +325,8 @@ Error: Expected return type (->), found Error
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected return type (->), found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected function body, found Error
@@ -325,6 +335,8 @@ Error: Expected function body, found Error
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected function body, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found Error
@@ -333,6 +345,8 @@ Error: Expected top-level declaration, found Error
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected top-level declaration, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found Error
@@ -341,6 +355,8 @@ Error: Expected top-level declaration, found Error
  29 │     Return result with emojis: ✅ or ❌
     │                 ─┬─  
     │                  ╰─── Expected top-level declaration, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found Word
@@ -349,6 +365,8 @@ Error: Expected top-level declaration, found Word
  29 │     Return result with emojis: ✅ or ❌
     │                     ───┬──  
     │                        ╰──── Expected top-level declaration, found Word
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found RParen
@@ -357,6 +375,8 @@ Error: Expected top-level declaration, found RParen
  29 │     Return result with emojis: ✅ or ❌
     │                           ┬  
     │                           ╰── Expected top-level declaration, found RParen
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found Arrow
@@ -365,6 +385,8 @@ Error: Expected top-level declaration, found Arrow
  29 │     Return result with emojis: ✅ or ❌
     │                             ─┬   
     │                              ╰─── Expected top-level declaration, found Arrow
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found Word
@@ -373,6 +395,8 @@ Error: Expected top-level declaration, found Word
  29 │     Return result with emojis: ✅ or ❌
     │                                ────┬───  
     │                                    ╰───── Expected top-level declaration, found Word
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found LBrace
@@ -381,6 +405,8 @@ Error: Expected top-level declaration, found LBrace
  30 │   "#
     │ ┬  
     │ ╰── Expected top-level declaration, found LBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected config block, found Word
