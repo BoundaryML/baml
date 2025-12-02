@@ -19,6 +19,10 @@ insta.workspace = true
 
 [build-dependencies]
 walkdir = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+prettyplease = { workspace = true }
+syn = { workspace = true }
 
 [dev-dependencies]
 # For benchmarks

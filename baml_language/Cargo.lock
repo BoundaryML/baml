@@ -230,7 +230,11 @@ dependencies = [
  "baml_vm",
  "codspeed-divan-compat",
  "insta",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
  "salsa",
+ "syn",
  "walkdir",
 ]
 
@@ -1190,6 +1194,16 @@ name = "portable-atomic"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f84267b20a16ea918e43c6a88433c2d54fa145c92a811b5b047ccbe153674483"
+
+[[package]]
+name = "prettyplease"
+version = "0.2.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
+dependencies = [
+ "proc-macro2",
+ "syn",
+]
 
 [[package]]
 name = "proc-macro-crate"

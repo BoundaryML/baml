@@ -53,6 +53,12 @@ smol_str = { version = "0.3" }
 text-size = { version = "1.1" }
 walkdir = { version = "2.4" }
 
+# Code generation for build.rs
+quote = { version = "1" }
+proc-macro2 = { version = "1" }
+prettyplease = { version = "0.2" }
+syn = { version = "2", features = ["full"] }
+
 [workspace.lints.rust]
 unsafe_code = "warn"
 unreachable_pub = "warn"
