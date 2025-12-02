@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 
-use baml_base::{Name, Span};
+use baml_base::{Name, SourceFile, Span};
 use baml_diagnostics::compiler_error::TypeError;
 use baml_hir::{ExprBody, ExprId, FunctionBody, FunctionSignature, Pattern, StmtId};
 
@@ -34,6 +34,85 @@ pub use types::*;
 /// Salsa queries, including type inference and the initial typing context.
 #[salsa::db]
 pub trait Db: baml_hir::Db {}
+
+// ============================================================================
+// Typing Context Construction
+// ============================================================================
+
+/// Build typing context from a list of source files.
+///
+/// This maps function names to their arrow types, e.g.:
+/// `Foo` -> `(int) -> int` for `function Foo(x: int) -> int`
+///
+/// This is used as the starting scope when type-checking function bodies,
+/// allowing function calls to be properly typed.
+///
+/// Note: This is not a Salsa query because it returns `Ty<'db>` which contains
+/// lifetime-parameterized data. Callers should cache the result if needed.
+pub fn build_typing_context_from_files<'db>(
+    db: &'db dyn Db,
+    files: &[SourceFile],
+) -> HashMap<Name, Ty<'db>> {
+    let mut context = HashMap::new();
+
+    for file in files {
+        let items_struct = baml_hir::file_items(db, *file);
+        let items = items_struct.items(db);
+
+        for item in items {
+            if let baml_hir::ItemId::Function(func_loc) = item {
+                let signature = baml_hir::function_signature(db, *file, *func_loc);
+
+                // Build the arrow type: (param_types) -> return_type
+                let param_types: Vec<Ty<'db>> = signature
+                    .params
+                    .iter()
+                    .map(|p| lower_type_ref(db, &p.type_ref))
+                    .collect();
+
+                let return_type = lower_type_ref(db, &signature.return_type);
+
+                let func_type = Ty::Function {
+                    params: param_types,
+                    ret: Box::new(return_type),
+                };
+
+                context.insert(signature.name.clone(), func_type);
+            }
+        }
+    }
+
+    context
+}
+
+/// Build class fields map from a list of source files.
+///
+/// This maps class names to their field types, e.g.:
+/// `Baz` -> { `name` -> `String` }
+///
+/// Used for field access type checking in tests and onionskin.
+pub fn build_class_fields_from_files<'db>(
+    db: &'db dyn Db,
+    files: &[SourceFile],
+) -> HashMap<Name, HashMap<Name, Ty<'db>>> {
+    let mut class_fields = HashMap::new();
+
+    for file in files {
+        let item_tree = baml_hir::file_item_tree(db, *file);
+
+        // Iterate over all classes in the item tree
+        for (_, class) in item_tree.iter_classes() {
+            let mut fields = HashMap::new();
+            for field in &class.fields {
+                let field_ty = lower_type_ref(db, &field.type_ref);
+                fields.insert(field.name.clone(), field_ty);
+            }
+            class_fields.insert(class.name.clone(), fields);
+        }
+    }
+
+    class_fields
+}
 
 // ============================================================================
 // Type Inference Results

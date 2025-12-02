@@ -10,12 +10,13 @@ use std::{
 use anyhow::Result;
 use baml_db::{
     FileId, RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
-    baml_thir, baml_workspace, function_body, function_signature,
+    baml_thir, baml_workspace,
 };
 use baml_diagnostics::compiler_error::{
     CompilerError, ParseError, TypeError, render_parse_error, render_type_error,
 };
 use baml_hir::ItemId;
+use baml_hir::{function_body, function_signature};
 use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},

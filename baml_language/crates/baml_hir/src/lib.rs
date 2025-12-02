@@ -160,6 +160,149 @@ pub fn type_alias_generic_params(_db: &dyn Db, _alias: TypeAliasId<'_>) -> Arc<G
 }
 
 //
+// ────────────────────────────────────────────────── FUNCTION QUERIES ─────
+//
+
+/// Returns the signature of a function (params, return type, generics).
+///
+/// This is separate from the `ItemTree` to provide fine-grained incrementality.
+/// Changing a function body does NOT invalidate this query.
+#[salsa::tracked]
+pub fn function_signature<'db>(
+    db: &'db dyn Db,
+    file: SourceFile,
+    function: FunctionLoc<'db>,
+) -> Arc<FunctionSignature> {
+    let tree = syntax_tree(db, file);
+    let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
+
+    // Find the function node by name
+    let item_tree = file_item_tree(db, file);
+    let func = &item_tree[function.id(db)];
+
+    // First, look for a top-level function
+    for item in source_file.items() {
+        if let baml_syntax::ast::Item::Function(func_node) = item {
+            if let Some(name_token) = func_node.name() {
+                if name_token.text() == func.name.as_str() {
+                    return FunctionSignature::lower(&func_node);
+                }
+            }
+        }
+    }
+
+    // Then, look for a method inside classes (methods are desugared to top-level functions)
+    for item in source_file.items() {
+        if let baml_syntax::ast::Item::Class(class_node) = item {
+            if let Some(class_name_token) = class_node.name() {
+                let class_name = class_name_token.text();
+                for method_node in class_node.methods() {
+                    if let Some(method_name_token) = method_node.name() {
+                        if method_name_token.text() == func.name.as_str() {
+                            return lower_method_signature(&method_node, &func.name, class_name);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Function not found - return minimal signature
+    Arc::new(FunctionSignature {
+        name: func.name.clone(),
+        params: vec![],
+        return_type: TypeRef::Unknown,
+    })
+}
+
+/// Lower a method signature, replacing 'self' parameter with the class type.
+fn lower_method_signature(
+    method_node: &baml_syntax::ast::FunctionDef,
+    method_name: &Name,
+    class_name: &str,
+) -> Arc<FunctionSignature> {
+    // Extract parameters, replacing 'self' with the class type
+    let mut params = Vec::new();
+    if let Some(param_list) = method_node.param_list() {
+        for param_node in param_list.params() {
+            if let Some(name_token) = param_node.name() {
+                let param_name = name_token.text();
+                let type_ref = if param_name == "self" {
+                    // 'self' gets the class type
+                    TypeRef::named(class_name.into())
+                } else {
+                    param_node
+                        .ty()
+                        .map(|t| lower_type_ref(&t))
+                        .unwrap_or(TypeRef::Unknown)
+                };
+
+                params.push(Param {
+                    name: Name::new(param_name),
+                    type_ref,
+                });
+            }
+        }
+    }
+
+    // Extract return type
+    let return_type = method_node
+        .return_type()
+        .map(|t| lower_type_ref(&t))
+        .unwrap_or(TypeRef::Unknown);
+
+    Arc::new(FunctionSignature {
+        name: method_name.clone(),
+        params,
+        return_type,
+    })
+}
+
+/// Returns the body of a function (LLM prompt or expression IR).
+///
+/// This is the most frequently invalidated query - it changes whenever
+/// the function body is edited.
+#[salsa::tracked]
+pub fn function_body<'db>(
+    db: &'db dyn Db,
+    file: SourceFile,
+    function: FunctionLoc<'db>,
+) -> Arc<FunctionBody> {
+    let tree = syntax_tree(db, file);
+    let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
+
+    let item_tree = file_item_tree(db, file);
+    let func = &item_tree[function.id(db)];
+
+    // First, look for a top-level function
+    for item in source_file.items() {
+        if let baml_syntax::ast::Item::Function(func_node) = item {
+            if let Some(name_token) = func_node.name() {
+                if name_token.text() == func.name.as_str() {
+                    return FunctionBody::lower(&func_node);
+                }
+            }
+        }
+    }
+
+    // Then, look for a method inside classes
+    for item in source_file.items() {
+        if let baml_syntax::ast::Item::Class(class_node) = item {
+            for method_node in class_node.methods() {
+                if let Some(method_name_token) = method_node.name() {
+                    if method_name_token.text() == func.name.as_str() {
+                        return FunctionBody::lower(&method_node);
+                    }
+                }
+            }
+        }
+    }
+
+    // No body found
+    Arc::new(FunctionBody::Missing)
+}
+
+//
 // ──────────────────────────────────────────────────────── INTERN HELPERS ─────
 //
 
