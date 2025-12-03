@@ -12,684 +12,418 @@ created: 2025-11-20
       - [internal boundary slack thread](https://gloo-global.slack.com/archives/C0958DV7YPL/p1764615609844069)
       - [public github discussion](https://github.com/orgs/BoundaryML/discussions/2761)
 
-Exception handling in BAML uses a **scoped catch** syntax that lets you handle errors declaratively without wrapping your code in try-blocks. This guide teaches you how to write resilient BAML functions.
+This guide teaches you how to write resilient BAML code using **Trailing Catch**.
 
-## Quick Start
+BAML's error handling is designed for the "Prototype to Production" lifecycle. It allows you to write clean, happy-path code first, and then "attach" error handling logic later without rewriting or re-indenting your functions.
 
-Add a `catch` block at the top of any function to handle errors:
+## 1. The Basics: Function-Level Catch
+
+The simplest way to handle errors is to attach a `catch` block to the end of a function.
+
+Imagine a simple function that calls an LLM:
 
 ```baml
 function ExtractResume(text: string) -> Resume {
-   catch {
-      e: LlmError => { 
-        return Resume { name: "Unknown", experience: [] } 
-      }
-   }
-
    client "openai/gpt-4o"
    prompt #"Extract resume from: {{ text }}"#
 }
 ```
 
-That's it! The `catch` block handles any LLM errors that occur below it, returning a fallback value instead of propagating the error.
-
-## Core Concepts
-
-### How Catch Blocks Work
-
-A `catch` block must be the **first statement** in a scope (function, loop, or block). It handles all errors that occur in the code **below it** in that same scope.
-
-**Think of it as an "open try"** — you write the catch at the top, and everything below is implicitly wrapped:
+To make this resilient, you don't wrap the code. You just append a `catch` block:
 
 ```baml
-function Foo(arg: string) {
-    catch {
-        e: Err => { return fallback(arg) }
-    }
-
-    // Everything from here down is "protected" by the catch above
-    let x = 1
-    risky_operation()
-    another_risky_operation()
-} 
-```
-
-This is equivalent to (but more concise than):
-
-```javascript
-function Foo(arg) {
-    try {
-        let x = 1
-        risky_operation()
-        another_risky_operation()
-    } catch (e) {
-        if (e matches Err) return fallback(arg)
-        throw e
-    }
+function ExtractResume(text: string) -> Resume {
+   client "openai/gpt-4o"
+   prompt #"Extract resume from: {{ text }}"#
+} catch {
+   // This block handles ANY error from the function body above
+   e: LlmError => { 
+     return Resume { name: "Unknown", experience: [] } 
+   }
 }
 ```
 
-### Pattern Matching Errors
+**Key Concept**: The `catch` block acts as an "Implicit Try". It treats the entire function body as if it were inside a `try` block.
 
-Use pattern matching (consistent with `match` expressions) to handle different error types:
+## 2. Pattern Matching Errors
+
+You can handle different types of errors differently using pattern matching. This works just like the `match` expression.
 
 ```baml
-catch {
-   _: TimeoutError => { return retry_later() }
+} catch {
+   // 1. Match by Type (ignore details)
+   _: TimeoutError => { return default_value() }
+
+   // 2. Match and Bind (use the error object)
    e: ParseError => { 
       log("Failed to parse: " + e.message)
       return default_value() 
    }
+
+   // 3. Destructure (extract specific fields)
    ApiError { code, message } => { 
       return Error { code: code, msg: message }
    }
-}
-```
 
-**Pattern types:**
-
-- `_: ErrorType` — Match the error type (ignore value)
-- `e: ErrorType` — Match and bind the error instance to `e`
-- `ErrorType { field1, field2 }` — Match and destructure error fields
-- `name` — Named wildcard (matches any error)
-
-### Named Wildcards
-
-Use a named wildcard to catch all other errors:
-
-```baml
-catch {
-   _: KnownError => { return fallback() }
-   other => { 
+   // 4. Wildcard (catch everything else)
+   other => {
       log.error("Unexpected error", other)
-      throw other  // Re-throw to caller
+      throw other // Re-throw to caller
    }
 }
 ```
 
-**Important:** If you don't provide a wildcard, BAML automatically adds one that propagates unhandled errors:
+## 3. Expressions & Type Safety
+
+In BAML, `if` blocks and `{ ... }` blocks can be used as **expressions** that return values.
+
+When you attach a `catch` block to an expression, the catch block **must return a value** compatible with the expression's type.
+
+### Type Inference
+
+The type of the entire expression is the union of:
+1.  The type returned by the happy path.
+2.  The type returned by the catch block.
 
 ```baml
-// What you write
-catch {
-   _: MyError => { return fallback() }
-}
-
-// What BAML compiles it to
-catch {
-   _: MyError => { return fallback() }
-   __implicit__ => { throw __implicit__ }  // Auto-added
+// 'result' will be inferred as: string | null
+let result = {
+   Extract(text) // returns string
+} catch {
+   _: Error => null // returns null
 }
 ```
 
-This means **all errors are always handled**—either explicitly by your handlers, or implicitly by propagation.
+### Inline Catch
 
-**Call stack preservation:** When errors are implicitly forwarded, their call stack information is preserved, making debugging easier even when errors propagate through multiple functions.
-
-## Common Patterns
-
-### Fallback Values
-
-Return a safe default when an operation fails:
+Since `catch` can be attached to **any expression**, you can use it for concise, one-line error handling without creating a block.
 
 ```baml
-function GetUserProfile(userId: string) -> Profile {
-   catch {
-      _: NotFound => { 
-         return Profile { 
-            id: userId, 
-            name: "Unknown User",
-            active: false 
-         }
+// Handle errors for a single function call
+let user = GetUser(id) catch { _ => null }
+
+// Handle errors for a pipeline
+let data = Extract(text) catch { 
+   _: Timeout => null 
+}
+```
+
+This is extremely useful for "optional" operations where a failure should just result in a null or default value.
+
+### Type Safety Rules
+
+When you attach a `catch` block to an expression, BAML enforces strict type safety rules to prevent runtime errors.
+
+#### Rule 1: Catch Blocks Must Return Values for Expressions
+
+If you use a block as an expression (e.g., assigning it to a variable), it is a **compiler error** if the catch block does not return a value.
+
+```baml
+// ❌ Compile Error: Expression must return a value
+let result = {
+   Extract(text)
+} catch {
+   e => {
+      log(e)
+      // Error: Missing return value!
+      // We cannot assign 'void' to 'result'
+   }
+}
+```
+
+This ensures type safety. You cannot accidentally leave a variable uninitialized or undefined by forgetting to return a fallback value in your error handler.
+
+#### Rule 2: Type Inference for Expressions with Catch
+
+For **inferred types** (when you don't explicitly annotate the variable), BAML infers the type as the **union** of all possible return paths.
+
+Looking back at our earlier examples:
+
+```baml
+// Inferred type: string | null
+let user = GetUser(id) catch { _ => null }
+
+// Inferred type: Data | null
+let data = Extract(text) catch { 
+   _: Timeout => null 
+}
+
+// Inferred type: string | null
+let result = {
+   Extract(text) // returns string
+} catch {
+   _: Error => null // returns null
+}
+```
+
+BAML looks at what each path returns and creates a union type automatically.
+
+#### Rule 3: Explicit Type Annotations Require Compatibility
+
+If you **explicitly annotate** a variable's type, the catch block **must** return a value compatible with that type.
+
+```baml
+// ✅ Valid: catch block returns string (compatible with string)
+let result: string = Extract(text) catch { 
+   _ => "default" 
+}
+
+// ❌ Compile Error: Type mismatch
+let result: string = Extract(text) catch { 
+   _ => null  // Error: Cannot assign 'null' to type 'string'
+}
+
+// ✅ Valid: Explicit union type allows null
+let result: string | null = Extract(text) catch { 
+   _ => null 
+}
+```
+
+This same rule applies to function return types:
+
+```baml
+// ❌ Compile Error: Function returns Data, but catch returns null
+function Extract(text: string) -> Data {
+    client "openai/gpt-4o"
+    prompt #"Extract: {{ text }}"#
+} catch {
+    _: Timeout => null  // Error: null is not assignable to Data
+}
+
+// ✅ Valid: Function signature allows null
+function Extract(text: string) -> Data | null {
+    client "openai/gpt-4o"
+    prompt #"Extract: {{ text }}"#
+} catch {
+    _: Timeout => null  // OK: null is in the union type
+}
+```
+
+**Key Insight**: When you add a catch block that returns a different type, you must update the function signature (or variable annotation) to reflect that possibility. This forces you to be explicit about the fact that your function might return an error value.
+
+## 4. Control Flow Integration
+
+Trailing catch isn't just for functions. You can attach it to **control flow statements** like `for` loops and `if` statements.
+
+### Resilient Loops (Batch Processing)
+
+A common pattern in AI engineering is processing a batch of items where some might fail. You don't want one failure to crash the whole batch.
+
+By attaching `catch` to a `for` loop, you create a **Resilient Loop**. The catch block runs *per iteration*.
+
+```baml
+function ExtractBatch(urls: string[]) -> Resume[] {
+   let resumes = []
+
+   for (url in urls) {
+      // If this throws...
+      let resume = ExtractResume(url)
+      resumes.append(resume)
+
+   } catch {
+      // ...we catch it here, log it, and the loop CONTINUES!
+      e => {
+         log.warn("Failed to extract resume", { url: url, error: e.message })
       }
    }
 
-   client "openai/gpt-4o"
-   prompt #"Look up profile for user {{ userId }}"#
+   return resumes
 }
 ```
 
-### Retry Logic
+### Conditionals
 
-Handle transient errors by retrying:
+You can attach catch blocks to any `if` or `else` block.
+
+**Simple If:**
 
 ```baml
-function RobustExtract(text: string) -> Data {
-   let attempts = 0
-   
-   while (true) {
-      catch {
-         _: TimeoutError => { 
-            if (attempts < 3) {
-               attempts += 1
-               continue  // Retry
-            }
-            return Data.empty()  // Give up
-         }
-      }
-      
-      return ExtractData(text)  // Try the operation
+if (use_fast_model) {
+   ExtractFast(text)
+} catch {
+   // If fast model fails, try slow model
+   _: ModelError => ExtractSlow(text)
+}
+```
+
+**If / Else:**
+
+You can also handle errors independently for each branch:
+
+```baml
+if (use_fast_model) {
+   ExtractFast(text)
+} catch {
+   _: ModelError => ExtractSlow(text)
+} else {
+   ExtractReasoning(text)
+} catch {
+   e => PartialResult(text)
+}
+```
+
+**Handling Errors in Conditions**:
+
+The `catch` block is attached to the *body* of the `if`, not the condition. If you need to handle errors in the condition itself, use **inline catch** (see Section 3):
+
+```baml
+// ✅ Catch errors from the condition
+if (RiskyCondition() catch { _ => false }) {
+   DoSomething()
+}
+```
+
+If you want to catch errors from **both** the condition *and* the body, wrap the entire statement in a block:
+
+```baml
+{
+   if (RiskyCondition()) { 
+      DoSomething()
    }
+} catch {
+   e => log("Caught error from condition or body")
 }
 ```
 
-### Batch Processing
+## 5. Scoping and Data Access
 
-Handle errors for individual items without failing the entire batch:
+One of the biggest challenges in error handling is accessing the data you need to log or recover.
 
-```baml
-class Success { value Resume }
-class Failure { error string }
-type Result = Success | Failure
-
-function ProcessBatch(items: string[]) -> Result[] {
-   let results = []
-
-   for (item in items) {
-     catch {
-       other => { 
-          results.append(Failure { error: other.message })
-          continue  // Process next item
-       }
-     }
-     
-     let resume = ExtractResume(item)
-     results.append(Success { value: resume })
-  }
-
-   return results
-}
-```
-
-### Logging and Observability
-
-Inspect errors before re-throwing:
+**Rule**: A `catch` block can access any variable defined **before** the scope it is attached to. It cannot access variables defined **inside** the scope (because the scope was interrupted).
 
 ```baml
-function TrackedOperation() -> Data {
-   catch {
-      error => {
-         metrics.increment("operation_errors")
-         log.error("Operation failed", {
-            error_type: error.type,
-            message: error.message,
-            context: current_context()
-         })
-         throw error  // Propagate to caller
-      }
-   }
+function ProcessUser(userId: string) {
+   // ✅ Defined BEFORE the block
+   let context = GetContext(userId)
 
-   return expensive_operation()
-}
-```
-
-### Graceful Degradation
-
-Fall back to simpler approaches when the preferred method fails:
-
-```baml
-function SmartExtract(text: string) -> Data {
-   catch {
-      _: LlmError => {
-         log("LLM failed, falling back to regex")
-         return regex_extract(text)  // Simpler fallback
-      }
-   }
-
-   client "openai/gpt-4o"
-   prompt #"Extract structured data from: {{ text }}"#
-}
-```
-
-## Advanced Features
-
-### Nested Scopes
-
-Inner catch blocks handle errors before outer ones:
-
-```baml
-function ProcessDocument(doc: string) -> Report {
-   catch {
-      _: CriticalError => { return Report.failed() }  // Outer catch
-   }
-   
-   let sections = []
-   
-   for (section in doc.sections) {
-      catch {
-         _: ParseError => { 
-            sections.append(Section.placeholder())
-            continue  // Inner catch handles, continues loop
-         }
-      }
-      
-      sections.append(parse_section(section))
-   }
-
-   return Report { sections: sections }
-}
-```
-
-**Control flow:** Inner catch handlers execute first. They can either handle the error (by returning a value) or re-throw it to outer catch blocks.
-
-### Expression-Level Catch
-
-Use catch blocks with expression blocks to handle errors at assignment:
-
-```baml
-function GetPrice(itemId: string) -> float {
-   
-   let price = {
-      catch {
-         _: ApiError => { 0.0 }  // Returns 0.0 to assign to 'price'
-         _: AuthError => { return -1.0 }  // Returns -1.0 from FUNCTION
-      }
-      
-      externalApi.getPrice(itemId)
-   }
-
-   return price * 1.2  // Tax applied (price is either 0.0 or actual)
-}
-```
-
-**Key distinction:**
-
-- `0.0` — Returns from the **block expression** (assigns to variable)
-- `return -1.0` — Returns from the **function** (exits immediately)
-
-### Variable Access
-
-Catch blocks can access variables from outer scopes:
-
-```baml
-function ProcessWithContext(userId: string, data: Data) -> Result {
-   let context = buildContext(userId)
-   
    {
-      catch {
-         // ✅ Can access function parameters
-         // ✅ Can access outer scope variables
-         e: ProcessError => { 
-            log.error("Failed for user " + userId, e)
-            return Result.failure(context, e)
-         }
-      }
-      
-      return process(data, context)
-   }
-}
-```
-
-**Rule:** Catch blocks can only access variables declared in **outer scopes** (or function parameters), not variables declared below them.
-
-### Strict Mode
-
-Enable strict mode to require explicit handling of all known errors:
-
-```baml
-function SafeOperation() -> Data {
-   catch(strict) {
-      _: KnownError1 => { return fallback1() }
-      _: KnownError2 => { return fallback2() }
-      // Compiler error if any other known errors can occur!
-   }
-
-   return risky_operation()
-}
-```
-
-**Default behavior** (without `strict`): Unknown errors are silently propagated via the implicit wildcard.
-
-**With `strict`**: The compiler ensures you've explicitly handled all error types it can infer from the code below, preventing accidental omissions.
-
-**Note:** Even in strict mode, the implicit wildcard is still added to handle dynamic errors that can't be known at compile time.
-
-### Call Stacks and Error Context
-
-Exceptions in BAML automatically capture call stack information, making debugging easier:
-
-```baml
-function A() -> Data {
-   catch {
-      e: MyError => {
-         // Error 'e' contains the full call stack
-         log.error("Error in A", {
-            message: e.message,
-            stack: e.stack,  // Full call stack from where error was thrown
-            callSite: e.callSite  // Where this error was caught
+      // ❌ Defined INSIDE the block
+      let result = RiskyOp(context)
+      return result
+   } catch {
+      e => {
+         // We can access 'userId' and 'context' here!
+         log.error("Failed to process", { 
+            user: userId, 
+            ctx: context, 
+            error: e 
          })
-         throw e  // Stack is preserved when re-throwing
       }
    }
-   B()  // If B throw, stack will include A -> B -> ...
-}
-
-function B() -> Data {
-   C()  // If C throw, stack will include A -> B -> C -> ...
-}
-
-function C() -> Data {
-   throw MyError("Something went wrong")  // Stack starts here
 }
 ```
 
-**Key points:**
+This pattern allows you to define variables, start a block, and then handle errors using those variables naturally, without needing to hoist definitions outside the scope.
 
-- **Stack capture**: Every exception automatically captures where it was thrown
-- **Preserved on propagation**: When errors are implicitly forwarded via the implicit wildcard, the call stack is preserved
-- **Re-throw preserves stack**: Using `throw error` maintains the original stack trace
-- **Call site tracking**: At minimum, the call site where an error is caught is always known
+## 6. Design Rationale
 
-This makes debugging much easier, especially when errors propagate through multiple function calls:
+Why did we invent a new syntax instead of using `try/catch` or `Result` types?
+
+The answer lies in the **nature of AI code**.
+
+### 6.1 The Probabilistic Reality
+
+In traditional software, exceptions are *exceptional*. `JSON.parse` failing is an anomaly. The disk being full is a crisis.
+
+**In AI Engineering, failure is just Tuesday.**
+
+When you introduce an LLM, you introduce **probabilistic failure** at every step.
+*   The model might refuse the request.
+*   It might hallucinate a field.
+*   It might timeout.
+*   It might return valid JSON that misses the point entirely.
+
+Error handling isn't just for "crashing gracefully"—it is **core control flow**. You need to retry, re-prompt, switch models, or fallback to heuristics constantly.
+
+Because failure is the default state, the syntax for handling it must be as low-friction as an `if` statement. If error handling is painful (like nesting 3 layers deep), developers won't do it enough.
+
+### 6.2 The "Refactoring Tax"
+
+When you move from a "Vibe Coding" prototype to a production system, traditional languages punish you.
+
+**The Scenario**: You have a clean, working function.
+```typescript
+function Extract(text) {
+  const client = new Client();
+  return client.run(text);
+}
+```
+
+Now you want to handle a timeout.
+
+**The `try/catch` Tax**:
+You must perform a **Structural Refactor**.
+1.  Wrap everything in `try { ... }`.
+2.  **Indent** every single line of your happy path.
+3.  **Hoist** variables outside the block if you need them later.
+
+```diff
+function Extract(text) {
++ try {
+    const client = new Client();
+    return client.run(text);
++ } catch (e) {
++   return null;
++ }
+}
+```
+In git, this looks like you rewrote the whole function. The "Happy Path" is now visually subservient to the error handling.
+
+**The "Return Type" Tax (The Viral Refactor)**:
+
+In languages like Go, Rust, or even TypeScript (if you return `Data | Error`), adding error handling changes the **signature** of your function.
+
+1.  You change `Extract(text) -> Data` to `Extract(text) -> Result<Data, Error>`.
+2.  Now the caller's code `let data = Extract(text)` is broken. It now holds a `Result` (or a union).
+3.  You must update the caller to unwrap the result or check the type.
+4.  If the caller can't handle the error, *it* must also change its return type to pass the error up.
+
+This ripples up the entire call stack. Suddenly, adding a simple retry policy to one function requires touching 10 files and updating every test.
+
+### 6.3 The BAML Solution: Additive Resilience
+
+BAML is designed to let you evolve code from **Prototype** to **Production** without paying these taxes.
+
+We believe that **Error Handling should be Additive**.
+
+When you want to harden your function, you shouldn't have to touch the happy path at all. You just **append** the resilience logic:
 
 ```baml
-function ProcessDocument(doc: string) -> Report {
-   catch {
-      e: ParseError => {
-         // Even if this error came from deep in the call chain,
-         // e.stack shows the full path: ProcessDocument -> ExtractSections -> ParseSection
-         log.error("Failed to process document", {
-            document: doc,
-            error: e.message,
-            stack: e.stack  // Complete trace
-         })
-         return Report.failed(e)
-      }
-   }
-   
-   ExtractSections(doc)  // Might call other functions that throw
+function Extract(text: string) -> Data | null {
+    // 👇 This code is UNTOUCHED. No indentation changes. No hoisting.
+    client "openai/gpt-4o"
+    prompt #"Extract from: {{ text }}"#
+} catch {
+    // 👇 You just added this.
+    _: Timeout => null
 }
 ```
 
-## From Prototype to Production
+**Note**: When you add a catch block that returns a different type (like `null`), the function's return type becomes the union of both types (`Data | null`). For inferred types or expressions, BAML handles this automatically.
 
-One of BAML's design goals is making it easy to evolve code from quick prototypes to production-ready systems.
+This respects your workflow. It lets you move fast when exploring, and then "snap on" safety features when stabilizing.
 
-**Start with the happy path:**
+### 6.4 Built for Agents
+
+BAML is designed not just for human engineers, but for **AI Agents** writing code.
+
+**Additive syntax is safer for LLMs.**
+
+*   **Structural Edits are Risky**: Asking an LLM to "wrap this code in a try/catch block" requires it to rewrite the entire function body. It might accidentally drop a line, hallucinate a change, or mess up indentation.
+*   **Additive Edits are Safe**: Asking an LLM to "handle errors for this function" in BAML means it just generates a few lines to **append** at the end. The original logic remains byte-for-byte identical.
+
+This makes BAML the ideal language for the next generation of Agentic IDEs.
+
+### 6.5 Trade-offs
+
+We recognize that this syntax can feel awkward in specific edge cases, particularly when you want to catch errors from an **entire** `if` statement (condition + body).
+
+To do this, you must wrap the `if` in a block:
 
 ```baml
-function Extract() {
-   client "openai/gpt-4o"
-   prompt #"Extract data from document"#
-}
+{
+  if (RiskyCondition()) { ... }
+} catch { ... }
 ```
 
-**Add resilience without refactoring:**
-
-```baml
-function Extract() {
-   catch { 
-      _: TimeoutError => { return retry_with_timeout() }
-      _: ParseError => { return fallback_parser() }
-   }
-   
-   // Original code unchanged!
-   client "openai/gpt-4o"
-   prompt #"Extract data from document"#
-}
-```
-
-Error handling is **additive**—you don't need to:
-
-- Wrap existing code in try-blocks
-- Change function signatures
-- Update call sites
-- Modify indentation
-
-Just add the `catch` block at the top and you're done.
-
-## Reference
-
-### Syntax
-
-**Scope-level catch:**
-
-```baml
-catch [( strict )] {
-   Pattern => Handler
-   Pattern => Handler
-   ...
-}
-```
-
-### Patterns
-
-| Pattern | Description | Example |
-|---------|-------------|---------|
-| `_: ErrorType` | Match error type | `_: TimeoutError` |
-| `e: ErrorType` | Bind error instance | `e: ParseError` |
-| `ErrorType { fields }` | Destructure fields | `ApiError { code, msg }` |
-| `name` | Named wildcard (matches any error) | `other` |
-
-### Handlers
-
-Handlers are blocks that execute when the pattern matches:
-
-```baml
-Pattern => { 
-   // Can do multiple statements
-   log(error)
-   metrics.increment("errors")
-   
-   return fallback_value()  // Return from function
-}
-
-Pattern => { fallback_value() }  // Return from block expression
-
-Pattern => { throw error }  // Re-throw to caller
-```
-
-### Placement Rules
-
-**Scope-level catch:**
-
-1. **Must be first** — Catch must be the first statement in its scope
-2. **One per scope** — Only one catch block allowed per scope
-3. **Any scope** — Can appear in functions, loops, if-blocks, or expression blocks
-
-**Valid:**
-
-```baml
-function Foo() {
-   catch { ... }  // ✅ Scope-level: First statement
-   let x = 1
-}
-```
-
-**Invalid:**
-
-```baml
-function Bar() {
-   let x = 1
-   catch { ... }  // ❌ Scope-level: Not first
-}
-
-function Baz() {
-   catch { ... }  // ✅ First
-   catch { ... }  // ❌ Duplicate scope-level catch
-}
-```
-
-### Error Propagation
-
-Errors propagate automatically via implicit wildcards:
-
-```baml
-function A() -> Data {
-   catch {
-      _: MyError => { return fallback() }
-      // Other errors propagate automatically
-   }
-   B()  // Might throw OtherError
-}
-
-function B() -> Data {
-   throw OtherError()  // Propagates through A's implicit wildcard
-}
-```
-
-To explicitly handle all errors without propagating:
-
-```baml
-catch {
-   _: MyError => { return fallback1() }
-   other => { return fallback2() }  // Catches everything else
-}
-```
-
-## Best Practices
-
-### ✅ Do
-
-- **Place catch blocks at the top** of scopes for clarity
-- **Use pattern matching** to handle different error types differently
-- **Return fallback values** for recoverable errors
-- **Log before re-throwing** for observability
-- **Use strict mode** in production code to prevent accidental omissions
-
-### ❌ Don't
-
-- **Don't catch and ignore** without logging
-
-  ```baml
-  catch { error => { } }  // Silent failure - bad!
-  ```
-
-- **Don't catch everything** unless you have a good reason
-
-  ```baml
-  catch { other => { return null } }  // Hides all errors
-  ```
-
-- **Don't place catch blocks in the middle** of scopes
-
-  ```baml
-  let x = 1
-  catch { ... }  // Compile error
-  ```
-
-## Examples
-
-### Complete Example: Resume Parser with Error Handling
-
-```baml
-class Resume {
-  name string
-  email string
-  experience string[]
-  skills string[]
-}
-
-class ParsingResult {
-  success bool
-  data Resume?
-  error string?
-}
-
-function ParseResume(text: string) -> Resume {
-   client "openai/gpt-4o"
-   prompt #"
-      Extract resume information from the following text.
-      Return a structured format with name, email, experience, and skills.
-      
-      Text:
-      {{ text }}
-   "#
-}
-
-function SafeParseResume(text: string) -> ParsingResult {
-   catch {
-      _: TimeoutError => {
-         return ParsingResult {
-            success: false,
-            data: null,
-            error: "LLM timeout - please retry"
-         }
-      }
-      e: ParseError => {
-         return ParsingResult {
-            success: false,
-            data: null,
-            error: "Could not parse: " + e.message
-         }
-      }
-      other => {
-         log.error("Unexpected error in ParseResume", other)
-         metrics.increment("parse_resume_unknown_errors")
-         return ParsingResult {
-            success: false,
-            data: null,
-            error: "Internal error - please contact support"
-         }
-      }
-   }
-
-   let resume = ParseResume(text)
-   return ParsingResult { success: true, data: resume }
-}
-
-function ParseBatchResumes(texts: string[]) -> ParsingResult[] {
-   let results = []
-   
-   for (text in texts) {
-      // Each resume gets independent error handling
-      results.append(SafeParseResume(text))
-   }
-   
-   return results
-}
-```
-
-This example demonstrates:
-
-- Specific error handling for known error types
-- User-friendly error messages
-- Logging and metrics for unknown errors
-- Batch processing where individual failures don't stop the batch
-
-## Why not try/catch?
-
-You might wonder why BAML uses this scoped catch syntax instead of the familiar `try/catch` blocks found in other languages.
-
-The decision comes down to **ergonomics for AI engineering**.
-
-### 1. Zero-Refactor Resilience
-
-In traditional languages, moving from a prototype ("happy path" code) to a production-ready system (resilient code) requires structural refactoring:
-- You must wrap risky code in `try` blocks
-- This forces you to indent all the code inside
-- You often need to move variable declarations outside the block to keep them in scope
-
-With scoped catch, error handling is strictly **additive**. You simply paste a `catch` block at the top of the function. Your existing logic stays exactly where it is—no indentation changes, no variable hoisting, and no "diff noise."
-
-This is particularly important for AI-generated code, where minimizing the size of diffs helps LLMs maintain context and reduce errors.
-
-### 2. Declarative "Open Try"
-
-BAML's syntax acts like an "open try"—it declares "here is how we handle failures in this scope" right at the start.
-
-- **Traditional**: "Try to do X, Y, Z... and if something fails, jump down here."
-- **BAML**: "If anything fails in this scope, handle it like this. Now, do X, Y, Z."
-
-This puts the failure recovery logic front-and-center rather than burying it at the bottom of the function.
-
-### 3. Clean Variable Access
-
-Because the catch block sits at the top of the scope, it naturally has access to all function parameters and variables declared in outer scopes. This makes it easy to construct rich error context or fallback values without fighting scoping rules.
-
----
-
-
-## Updates
-
-### Throwing Arbitrary Types
-We are currently evaluating two approaches for handling `throw` with arbitrary values (primitives, structs):
-
-1.  **Universal Wrapper**: All thrown values are wrapped in an `Exception<T>` envelope.
-2.  **Interface Restriction**: Only types implementing an `Error` interface can be thrown.
-
-See [updates/primitive-and-arbitrary-types](updates/primitive-and-arbitrary-types) for the detailed trade-off analysis.
-
-### Inline `.catch()`
-
-Was removed. See [updates/inline-catch](updates/inline-catch) for the detailed trade-off analysis.
+We decided against introducing a `try` keyword just for this edge case. The benefits of **Additive Resilience** (never having to re-indent your happy path) outweigh the occasional awkwardness of wrapping a complex control flow statement.

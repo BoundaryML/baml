@@ -53,9 +53,9 @@ func f() error {
 }
 ```
 
-**BAML Solution**: BAML enforces a strict **"First Statement Only"** rule. The `catch` block *must* be the very first thing in the scope.
+**BAML Solution**: BAML enforces a strict **"Last Statement Only"** rule. The `catch` block *must* be attached to the end of the scope.
 
-- **Benefit**: This acts as a predictable "header" for the scope. There is no ambiguity about where the handler is—it's always at the top. It functions mentally like a `try` block without the indentation.
+- **Benefit**: This acts as a predictable "trailer" for the scope. There is no ambiguity about where the handler is—it's always at the end. It functions mentally like a `try` block without the indentation.
 
 ## 2. Loss of Local Context
 
@@ -71,10 +71,9 @@ func f() error {
 ```baml
 // BAML allows local context when needed
 let user = {
-    catch {
-        _: NotFound => { return null } // Specific handling for this call
-    }
     FetchUser(id)
+} catch {
+    _: NotFound => { return null } // Specific handling for this call
 }
 ```
 
@@ -82,10 +81,10 @@ let user = {
 
 **Go 2 Critique**: A `check` at the bottom of a function jumping to a `handle` at the top breaks the principle of locality.
 
-**BAML Trade-off**: This critique still applies to BAML's scope-level catch.
+**BAML Trade-off**: This critique applies less to BAML's trailing catch, as the handler is at the bottom (closer to where execution falls through).
 
 - **Mitigation**: BAML is a DSL for AI pipelines, where the "happy path" is often a linear sequence of operations. The value of **"Additive Resilience"** (adding error handling without refactoring/indenting) for AI agents and prototyping outweighs the control flow jump.
-- **Alternative**: For complex control flow where this jump is confusing, developers can fall back to using nested blocks `{ catch { ... } ... }` or expression blocks to keep handling local.
+- **Alternative**: For complex control flow where this jump is confusing, developers can fall back to using nested blocks `{ ... } catch { ... }` or expression blocks to keep handling local.
 
 ## 4. Specificity to Error Type
 

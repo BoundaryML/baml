@@ -22,20 +22,19 @@ function extract(text: string) {
 }
 ```
 
-### BAML Scoped Catch (Header)
-In BAML, error handling is a **header** for the scope. You declare it at the top, and it applies to everything below.
+### BAML Scoped Catch (Trailing)
+In BAML, error handling is a **trailer** for the scope. You append it at the end, and it applies to the scope above.
 
 ```baml
 // BAML
-function Extract(text: string) {
+function Extract(text: string) -> string {
     // 1. No indentation change for happy path
-    catch {
-        error => { return fallback() }
-    }
+    client "openai/gpt-4o"
+    prompt #"Extract from {{ text }}"#
 
-    // 2. Variables declared here are visible to the whole function
-    client "openai"
-    return prompt(text)
+} catch {
+    // 2. Additive error handling
+    error => { return fallback() }
 }
 ```
 
@@ -45,7 +44,7 @@ function Extract(text: string) {
 **Scenario**: You have a working prototype and want to add error handling.
 
 - **Try-Catch**: Requires a **large diff**. You must wrap existing lines in `try { ... }`, changing indentation for every line. In git, this looks like you rewrote the whole function.
-- **Scoped Catch**: Requires a **minimal diff**. You insert 3 lines at the top. The rest of the file is untouched.
+- **Scoped Catch**: Requires a **minimal diff**. You append the catch block at the end. The rest of the file is untouched.
     - *Why this matters for AI*: AI agents (and humans) are less likely to make mistakes when changes are additive rather than structural.
 
 ### 2. Variable Scoping
@@ -59,24 +58,27 @@ function Extract(text: string) {
     } catch (e) { ... }
     use(result);
     ```
-- **Scoped Catch**: Variables declared in the scope are visible naturally because there is no inner block.
+- **Scoped Catch**: Variables declared in the scope are visible naturally because the scope *is* the main body.
     ```baml
-    catch { ... }
     let result = complexOperation() // No hoisting needed
-    use(result)
+    
+    // If complexOperation throws, we catch it here
+    } catch { ... }
+    
+    use(result) // Only reached if no error
     ```
 
 ### 3. Readability & Mental Model
 - **Try-Catch**: "Attempt this block of code, and if it fails, jump down here."
     - *Pro*: Explicit boundary of what is covered.
     - *Con*: Separates the "what we are doing" from "how we handle failure" by a potentially large block of code.
-- **Scoped Catch**: "For this entire scope, here is the failure policy."
-    - *Pro*: Acts as a declarative header. You see the failure policy before you see the logic.
-    - *Con*: Implicit boundary (end of scope).
+- **Scoped Catch**: "Do this. If anything failed, handle it here."
+    - *Pro*: Happy path is front-and-center.
+    - *Con*: Implicit boundary (start of scope).
 
 ### 4. Refactoring Friction
 - **Try-Catch**: Moving code in/out of the `try` block requires re-indenting.
-- **Scoped Catch**: Moving code in/out of the scope is just cut-paste, no re-indenting of the code itself (though the catch block stays at the top).
+- **Scoped Catch**: Moving code in/out of the scope is just cut-paste, no re-indenting of the code itself.
 
 ## Why BAML Chose Scoped Catch
 
@@ -90,9 +92,9 @@ BAML is designed for **AI Engineers** who often move from "prompt engineering" (
 
 | Feature | Traditional Try-Catch | BAML Scoped Catch |
 | :--- | :--- | :--- |
-| **Syntax Type** | Wrapper (Block) | Header (Statement) |
+| **Syntax Type** | Wrapper (Block) | Trailer (Block) |
 | **Indentation** | Increases for happy path | Unchanged |
 | **Variable Scope** | Limited to try-block | Function/Scope-wide |
 | **Diff Size** | Large (structural change) | Small (additive change) |
-| **Placement** | Around risky code | Top of scope |
-| **Mental Model** | "Attempt this specific part" | "Policy for this scope" |
+| **Placement** | Around risky code | End of scope |
+| **Mental Model** | "Attempt this specific part" | "Implicit Try Scope" |
