@@ -1,7 +1,93 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Instructions: 0 bytes
-Constants: 0
+Functions: 8
+Objects: 14
+Globals: 8
+
+Function Ambiguous (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function AnotherLLM (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function ChainedProcess (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function ExtractData (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function LLMAnalyze (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function ProcessAnalysis (arity: 1, kind: Exec):
+     0    LOAD_GLOBAL 0      (<fn AnotherLLM>)
+     1    LOAD_VAR 2         (score)
+     2    LOAD_CONST 0       (0.8)
+     3    CMP_OP >           
+     4    JUMP_IF_FALSE +7   (to 11)
+     5    POP 1              
+     6    LOAD_CONST 1       (<fn AnotherLLM>)
+     7    LOAD_GLOBAL 0      (<fn AnotherLLM>)
+     8    BIN_OP +           
+     9    RETURN             
+     10   JUMP +28           (to 38)
+     11   POP 1              
+     12   LOAD_VAR 2         (score)
+     13   LOAD_CONST 2       (0.5)
+     14   CMP_OP >           
+     15   JUMP_IF_FALSE +7   (to 22)
+     16   POP 1              
+     17   LOAD_CONST 3       (<fn Ambiguous>)
+     18   LOAD_GLOBAL 0      (<fn AnotherLLM>)
+     19   BIN_OP +           
+     20   RETURN             
+     21   JUMP +17           (to 38)
+     22   POP 1              
+     23   LOAD_VAR 2         (score)
+     24   LOAD_CONST 4       (0.2)
+     25   CMP_OP >           
+     26   JUMP_IF_FALSE +7   (to 33)
+     27   POP 1              
+     28   LOAD_CONST 5       (<fn ProcessData>)
+     29   LOAD_GLOBAL 0      (<fn AnotherLLM>)
+     30   BIN_OP +           
+     31   RETURN             
+     32   JUMP +6            (to 38)
+     33   POP 1              
+     34   LOAD_CONST 6       (" "high"")
+     35   LOAD_GLOBAL 0      (<fn AnotherLLM>)
+     36   BIN_OP +           
+     37   RETURN             
+     38   POP_REPLACE 1      
+     39   RETURN             
+
+Function ProcessData (arity: 1, kind: Exec):
+     0    LOAD_GLOBAL 0      (<fn AnotherLLM>)
+     1    LOAD_GLOBAL 0      (<fn AnotherLLM>)
+     2    BIN_OP +           
+     3    LOAD_VAR 2         (result)
+     4    LOAD_CONST 0       (100)
+     5    CMP_OP >           
+     6    JUMP_IF_FALSE +5   (to 11)
+     7    POP 1              
+     8    LOAD_CONST 1       (<fn AnotherLLM>)
+     9    RETURN             
+     10   JUMP +2            (to 12)
+     11   POP 1              
+     12   POP 1              
+     13   LOAD_CONST 2       (<fn Ambiguous>)
+     14   RETURN             
+     15   POP 1              
+     16   RETURN             
+
+Function SimpleCalc (arity: 2, kind: Exec):
+     0   LOAD_VAR 1     (a)
+     1   LOAD_VAR 2     (b)
+     2   LOAD_CONST 0   (2)
+     3   BIN_OP *       
+     4   BIN_OP +       
+     5   RETURN         
+     6   RETURN

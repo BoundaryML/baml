@@ -55,7 +55,7 @@ echo -e "${GREEN}Running pre-commit checks in baml_language...${NC}"
 
 # Run cargo fmt to auto-fix formatting
 echo -e "${YELLOW}Running cargo fmt to auto-fix formatting...${NC}"
-cargo fmt --all
+cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate
 echo -e "${GREEN}✓ Formatting applied${NC}"
 
 # Add any formatted files to the commit
@@ -88,6 +88,17 @@ if ! cargo clippy --workspace --all-targets --all-features -- -D warnings; then
     exit 1
 fi
 echo -e "${GREEN}✓ Clippy checks passed${NC}"
+
+# Run bep:readme to keep BEP index up to date
+echo -e "${YELLOW}Checking BEP index...${NC}"
+cd "$REPO_ROOT" || exit 1
+if command -v mise >/dev/null 2>&1; then
+    mise run bep:readme
+    git add beps/README.md 2>/dev/null || true
+    echo -e "${GREEN}✓ BEP index updated${NC}"
+else
+    echo -e "${YELLOW}Warning: mise not found, skipping BEP index update${NC}"
+fi
 
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"

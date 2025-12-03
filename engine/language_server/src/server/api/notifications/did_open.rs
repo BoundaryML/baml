@@ -97,7 +97,11 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
 
             let generator_version = locked.get_common_generator_version();
             tracing::info!("common generator version {:?}", generator_version);
-            send_generator_version(&notifier, &locked, generator_version.as_ref().ok());
+            send_generator_version(
+                &notifier,
+                &locked,
+                generator_version.as_ref().ok().and_then(|v| v.as_ref()),
+            );
         }
 
         publish_session_lsp_diagnostics(&notifier, session, &url)?;

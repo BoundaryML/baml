@@ -1,7 +1,7 @@
 import { SidebarMenuButton } from '@baml/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
 import { useAtomValue } from 'jotai';
-import { FunctionSquare } from 'lucide-react';
+import { Bot, FunctionSquare } from 'lucide-react';
 import * as React from 'react';
 import { vscode } from '../../vscode';
 import { functionObjectAtom } from '../atoms';
@@ -11,18 +11,23 @@ import {
   testHistoryAtom,
 } from '../prompt-preview/test-panel/atoms';
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils';
+import { useNavigation } from '../../../../sdk/hooks';
 
 interface FunctionItemProps {
   functionName: string;
   tests: string[];
+  functionFlavor: 'llm' | 'expr';
+  isSelected?: boolean;
+  onToggle?: () => void;
 }
 
-export function FunctionItem({ functionName, tests }: FunctionItemProps) {
+export function FunctionItem({ functionName, tests, functionFlavor, isSelected = false, onToggle }: FunctionItemProps) {
   const fnAtom = React.useMemo(
     () => functionObjectAtom(functionName),
     [functionName],
   );
   const fn = useAtomValue(fnAtom);
+  const navigate = useNavigation();
 
   const testHistory = useAtomValue(testHistoryAtom);
   const selectedIndex = useAtomValue(selectedHistoryIndexAtom);
@@ -142,29 +147,55 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    // Toggle expansion to show/hide tests
+    onToggle?.();
+
+    // Determine function type
+    const functionType = fn?.type === 'workflow' ? 'workflow'
+      : fn?.type === 'llm_function' ? 'llm_function'
+      : fn?.functionFlavor === 'llm' ? 'llm_function'
+      : 'function';
+
+    // Navigate to function (same as DebugPanel)
+    navigate({
+      kind: 'function',
+      functionName,
+      functionType,
+      source: 'sidebar',
+      timestamp: Date.now(),
+    });
+
+    // Jump to file
     if (fn?.span) {
       vscode.jumpToFile(fn.span);
     }
   };
 
+  const resolvedFlavor = fn?.functionFlavor ?? functionFlavor;
+  const Icon = resolvedFlavor === 'llm' ? Bot : FunctionSquare;
+
   return (
     <SidebarMenuButton
-      className="flex justify-between items-center w-full pl-8 cursor-pointer"
+      isActive={isSelected}
+      className={`flex justify-between items-center w-full pl-8 cursor-pointer text-[10px] py-0.5 h-6 ${
+        isSelected ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' : ''
+      }`}
       onClick={handleClick}
     >
-      <Tooltip>
+      <Tooltip delayDuration={500}>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-2 truncate cursor-pointer">
+          <div className="flex items-center gap-1.5 truncate cursor-pointer">
             {/* {functionTestsStatus.hasRunning ? (
-              <Loader className="size-4" />
+              <Loader className="size-3" />
             ) : functionTestsStatus.allPassed ? (
-              <CheckCircle2 className="size-4 text-green-500" />
+              <CheckCircle2 className="size-3 text-green-500" />
             ) : functionTestsStatus.anyFailed ? (
-              <XCircle className="size-4 text-red-500" />
+              <XCircle className="size-3 text-red-500" />
             ) : (
-              <FunctionSquare className="size-4" />
+              <FunctionSquare className="size-3" />
             )} */}
-            <FunctionSquare className="size-4" />
+            <Icon className="size-3" />
             <span className="truncate hover:text-primary hover:underline">
               {functionName}
             </span>
@@ -173,7 +204,7 @@ export function FunctionItem({ functionName, tests }: FunctionItemProps) {
         <TooltipContent className="max-w-xs">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <FunctionSquare className="size-4" />
+              <Icon className="size-4" />
               <span className="font-medium">{functionName}</span>
             </div>
 

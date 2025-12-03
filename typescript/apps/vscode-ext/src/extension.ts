@@ -18,6 +18,7 @@ import { Socket } from 'net'
 import StatusBarPanel from './panels/StatusBarPanel'
 import { Server } from 'http'
 import { LAST_ACTIVE_BAML_FILE } from './helpers/get-open-file'
+import { refreshBamlConfigSingleton } from './plugins/language-server-client/bamlConfig'
 
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection =
@@ -287,6 +288,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(diagnosticsCollection)
 
+
   vscode.window.onDidChangeActiveTextEditor((event) => {
     // makes it so we reload the project. Could probably be called reloadProjectFiles or something. This is because we may be clicking into a different file in a separate baml_src.
     requestDiagnostics()
@@ -314,6 +316,20 @@ export function activate(context: vscode.ExtensionContext) {
     if (!name.endsWith('.baml')) {
       return
     }
+
+    if (!event.textEditor.document.fileName.endsWith('.baml')) {
+      console.log('onDidChangeTextEditorSelection not a baml file', event.textEditor.document.fileName);
+      return;
+    }
+
+    // copy pastes are undefined, but may still be valid.
+    // if (event.kind === undefined) {
+    //   console.log('onDidChangeTextEditorSelection kind is undefined', event);
+    //   return;
+    // }
+
+
+    console.log('looking: onDidChangeTextEditorSelection', event);
 
 
 

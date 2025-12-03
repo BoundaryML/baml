@@ -15,8 +15,12 @@ import { inlineCopilot } from 'codemirror-copilot';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { hyperLink } from '@uiw/codemirror-extensions-hyper-link';
-import { langs } from '@uiw/codemirror-extensions-langs';
 import { useAtomValue, useSetAtom, useStore } from 'jotai';
+import { useBAMLSDK } from '../../../sdk/hooks';
+// Import specific language support instead of all languages
+import { javascript as jsLang } from '@codemirror/lang-javascript';
+import { python as pythonLang } from '@codemirror/lang-python';
+import { json as jsonLang } from '@codemirror/lang-json';
 import type { ICodeBlock } from '../types';
 import { CodeMirrorDiagnosticsAtom } from './atoms';
 
@@ -37,14 +41,14 @@ import {
 // } from '@typescript/vfs';
 import { useTheme } from 'next-themes';
 import ts from 'typescript';
-import { flashRangesAtom, updateCursorAtom } from '../playground-panel/atoms';
+import { flashRangesAtom } from '../playground-panel/atoms';
 
 const extensionMap = {
-  js: [langs.javascript()],
-  jsx: [langs.jsx()],
-  py: [langs.python()],
-  python: [langs.python()],
-  json: [langs.json()],
+  js: [jsLang()],
+  jsx: [jsLang({ jsx: true })],
+  py: [pythonLang()],
+  python: [pythonLang()],
+  json: [jsonLang()],
   baml: [BAML()],
 };
 
@@ -136,6 +140,7 @@ export const CodeMirrorViewer = ({
 
   const ref = useRef<ReactCodeMirrorRef>({});
   const store = useStore();
+  const sdk = useBAMLSDK();
   const flashRanges = useAtomValue(flashRangesAtom);
   const diagnostics = useAtomValue(CodeMirrorDiagnosticsAtom);
 
@@ -232,7 +237,7 @@ export const CodeMirrorViewer = ({
   //   // return () => clearInterval(interval); // Clean up the interval on component unmount
   // }, [fileContent, ref, shouldScrollDown])
 
-  const setUpdateCursor = useSetAtom(updateCursorAtom);
+  // const setUpdateCursor = useSetAtom(updateCursorAtom);
 
   useEffect(() => {
     async function initializeExtensions() {
@@ -423,12 +428,15 @@ export const CodeMirrorViewer = ({
             foldGutter: hideLineNumbers ? false : true,
           }}
           onStatistics={(data) => {
-            const pos = data.selectionAsSingle.from;
+            // Use the selection head (cursor position) for consistency
+            // data.line is the line at the cursor head position
+            const cursorPos = data.selectionAsSingle.head;
             const line = data.line.number;
-            // Calculate column by finding the difference between cursor position and line start
-            const column = pos - data.line.from + 1;
+            // Column is cursor position relative to line start (1-indexed)
+            const column = cursorPos - data.line.from + 1;
 
-            setUpdateCursor({
+            // Update cursor position via SDK navigation
+            sdk.navigation.updateCursor({
               fileName: fileContent.id,
               line,
               column,

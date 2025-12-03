@@ -43,9 +43,21 @@ impl CachedClient {
     }
 
     pub fn has_env_vars_changed(&self, new_env_vars: &HashMap<String, String>) -> bool {
-        self.env_vars
+        // Check if any existing env vars have different values
+        let values_changed = self
+            .env_vars
             .iter()
-            .any(|(k, v)| new_env_vars.get(k).is_some_and(|v2| v2 != v))
+            .any(|(k, v)| new_env_vars.get(k).is_some_and(|v2| v2 != v));
+
+        if values_changed {
+            return true;
+        }
+
+        // Check if BOUNDARY_PROXY_URL was added or removed (affects client configuration)
+        let had_proxy = self.env_vars.contains_key("BOUNDARY_PROXY_URL");
+        let has_proxy = new_env_vars.contains_key("BOUNDARY_PROXY_URL");
+
+        had_proxy != has_proxy
     }
 }
 

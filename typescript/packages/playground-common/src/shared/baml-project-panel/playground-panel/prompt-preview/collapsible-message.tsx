@@ -6,9 +6,9 @@ import {
 import { CopyButton } from '@baml/ui/custom/copy-button';
 import { cn } from '@baml/ui/lib/utils';
 import type {
-  WasmChatMessage,
-  WasmTestCase,
-} from '@gloo-ai/baml-schema-wasm-web';
+  ChatMessage,
+  TestCaseMetadata,
+} from '../../../../sdk/interface';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { getFirstLine } from './highlight-utils';
@@ -16,9 +16,9 @@ import { PromptStats } from './prompt-stats';
 import { RenderPart } from './render-part';
 
 interface CollapsibleMessageProps {
-  part: WasmChatMessage;
+  part: ChatMessage;
   partIndex: number;
-  testCase?: WasmTestCase;
+  testCase?: TestCaseMetadata;
 }
 
 export const CollapsibleMessage: React.FC<CollapsibleMessageProps> = ({
@@ -29,7 +29,7 @@ export const CollapsibleMessage: React.FC<CollapsibleMessageProps> = ({
   const [open, setOpen] = useState(true);
   const firstLine = getFirstLine(part.parts);
   const statsText = part.parts
-    .map((part: any) => part.as_text() ?? '')
+    .map((p) => (p.type === 'text' ? p.content : ''))
     .join('\n');
 
   // Check for media types when no first line
@@ -42,10 +42,10 @@ export const CollapsibleMessage: React.FC<CollapsibleMessageProps> = ({
     let hasVideo = false;
 
     for (const p of part.parts) {
-      if (p.is_image?.()) hasImage = true;
-      if (p.is_audio?.()) hasAudio = true;
-      if (p.is_pdf?.()) hasPdf = true;
-      if (p.is_video?.()) hasVideo = true;
+      if (p.type === 'image') hasImage = true;
+      if (p.type === 'audio') hasAudio = true;
+      if (p.type === 'pdf') hasPdf = true;
+      if (p.type === 'video') hasVideo = true;
     }
 
     const indicators: string[] = [];
@@ -87,7 +87,7 @@ export const CollapsibleMessage: React.FC<CollapsibleMessageProps> = ({
                 {/* Copy button */}
                 <CopyButton
                   text={part.parts
-                    .map((p: any) => p.as_text?.() ?? '')
+                    .map((p) => (p.type === 'text' ? p.content : ''))
                     .join('\n')}
                   size="sm"
                   variant="outline"
@@ -115,7 +115,7 @@ export const CollapsibleMessage: React.FC<CollapsibleMessageProps> = ({
               key={`${partIndex}-${
                 // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
                 index
-              }`}
+                }`}
               className="min-w-0"
             >
               <RenderPart part={part} testCase={testCase} />

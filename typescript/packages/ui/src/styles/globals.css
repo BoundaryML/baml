@@ -617,3 +617,80 @@ button.woot-elements--right:nth-child(2) {
 /* input:focus { */
 /* @apply outline-none; */
 /* } */
+
+/* Reactflow styles (from boundaryml/reactflow) */
+
+@layer components {
+  .react-flow__node-base {
+    @apply flex flex-col items-center justify-center;
+  }
+
+  .react-flow__node-diamond {
+    @apply flex items-center justify-center w-fit h-fit;
+    overflow: visible !important;
+  }
+
+  .react-flow__node-diamond > * {
+    @apply flex items-center justify-center w-full h-full;
+    @apply bg-card border-2 border-border;
+    @apply transition-all;
+    overflow: visible;
+  }
+
+  .react-flow__node-diamond:hover > * {
+    @apply shadow-md;
+  }
+
+  .react-flow__node-diamond.selected > * {
+    @apply border-primary border-[3px] shadow-lg;
+  }
+
+  .react-flow__node-hexagon {
+    @apply flex items-center justify-center min-w-[100px] min-h-20 bg-[#f8f8f8] border border-black/50;
+    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+  }
+
+  /* Group nodes should be subtle containers with light background */
+  .react-flow__node-group,
+  .react-flow__node.parent {
+    border: 1.5px solid rgba(100, 116, 139, 0.3) !important;
+    border-radius: 0.5rem !important;
+    background: rgba(241, 245, 249, 0.3) !important;
+    /* Remove any default padding that React Flow might apply */
+    padding: 0 !important;
+    /* Override React Flow's default box-shadow */
+    box-shadow: none !important;
+  }
+
+  /* Ensure group nodes children wrapper is also transparent */
+  .react-flow__node-group > div:first-child,
+  .react-flow__node.parent > div:first-child {
+    background: transparent !important;
+  }
+
+  /* Dark mode adjustments for group nodes */
+  .dark .react-flow__node-group,
+  .dark .react-flow__node.parent {
+    background: rgba(51, 65, 85, 0.15) !important;
+    border: 1.5px solid rgba(148, 163, 184, 0.25) !important;
+  }
+
+  /* Override React Flow's default parent node styling when selected */
+  .react-flow__node.parent.selected,
+  .react-flow__node-group.selected {
+    border: 2px solid rgba(59, 130, 246, 0.5) !important;
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2) !important;
+  }
+
+  /* Override when NOT selected */
+  .react-flow__node.parent:not(.selected),
+  .react-flow__node-group:not(.selected) {
+    border: 1.5px solid rgba(100, 116, 139, 0.1) !important;
+    box-shadow: none !important;
+  }
+
+  .dark .react-flow__node.parent:not(.selected),
+  .dark .react-flow__node-group:not(.selected) {
+    border: 1.5px solid rgba(148, 163, 184, 0.2) !important;
+  }
+}

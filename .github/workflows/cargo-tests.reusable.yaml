@@ -1,0 +1,319 @@
+name: Cargo Tests (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      code_changed:
+        required: true
+        type: string
+      run_all:
+        required: true
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-cargo-tests
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  cargo-fmt:
+    name: "cargo fmt"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup component add rustfmt
+        working-directory: baml_language
+
+      - name: "Check formatting"
+        run: cargo fmt --all --check -- --config imports_granularity=Crate --config group_imports=StdExternalCrate
+        working-directory: baml_language
+
+  cargo-clippy:
+    name: "cargo clippy"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup component add clippy
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Clippy"
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+        working-directory: baml_language
+
+      - name: "Clippy (wasm)"
+        run: cargo clippy --workspace --exclude baml_onionskin --target wasm32-unknown-unknown --all-features --locked -- -D warnings
+        working-directory: baml_language
+
+  cargo-test-linux:
+    name: "cargo test (linux)"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install cargo insta"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-insta
+
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: "Run tests with nextest"
+        run: cargo nextest run --all-features
+        working-directory: baml_language
+
+      - name: "Run snapshot tests with insta"
+        run: cargo insta test --all-features --unreferenced reject
+        working-directory: baml_language
+
+      - name: "Check documentation"
+        run: cargo doc --all --no-deps
+        working-directory: baml_language
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+      - name: "Upload test results on failure"
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failures-linux
+          path: |
+            baml_language/**/*.snap.new
+            baml_language/**/target/nextest/
+
+  cargo-test-macos:
+    name: "cargo test (macos)"
+    runs-on: macos-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: "Run tests"
+        run: |
+          cargo nextest run --all-features
+          cargo test --all-features --doc
+        working-directory: baml_language
+
+  cargo-test-windows:
+    name: "cargo test (windows)"
+    runs-on: windows-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install cargo nextest"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: "Run tests"
+        run: |
+          cargo nextest run --all-features
+          cargo test --all-features --doc
+        working-directory: baml_language
+
+  cargo-test-wasm:
+    name: "cargo test (wasm)"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Build for WASM"
+        run: |
+          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_onionskin --no-default-features
+          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_onionskin --no-default-features --release
+        working-directory: baml_language
+
+      - name: "Check WASM size"
+        run: |
+          ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
+          echo "WASM build artifacts:"
+          find target/wasm32-unknown-unknown -name "*.wasm" -exec ls -lh {} \;
+        working-directory: baml_language
+
+  cargo-build-msrv:
+    name: "cargo build (msrv)"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: SebRollen/toml-action@v1.2.0
+        id: msrv
+        with:
+          file: "baml_language/Cargo.toml"
+          field: "workspace.package.rust-version"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain (MSRV)"
+        env:
+          MSRV: ${{ steps.msrv.outputs.value }}
+        run: |
+          rustup toolchain install "${MSRV}"
+          rustup default "${MSRV}"
+        working-directory: baml_language
+
+      - name: "Build with MSRV"
+        env:
+          MSRV: ${{ steps.msrv.outputs.value }}
+        run: cargo "+${MSRV}" test --no-run --all-features
+        working-directory: baml_language
+
+  check-dependencies:
+    name: "check dependencies"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install cargo-deny"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: "Check dependencies"
+        run: cargo deny check
+        working-directory: baml_language
+        continue-on-error: true # For now, just warn
+
+  snapshot-tests:
+    name: "snapshot tests"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install cargo insta"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-insta
+
+      - name: "Run snapshot tests"
+        run: |
+          cargo insta test --all-features --unreferenced=reject
+          cargo insta test --all-features --review
+        working-directory: baml_language
+
+      - name: "Check for snapshot changes"
+        run: |
+          if [ -n "$(git status --porcelain baml_language/crates/baml_tests/snapshots)" ]; then
+            echo "::error::Snapshot tests have uncommitted changes"
+            git diff baml_language/crates/baml_tests/snapshots
+            exit 1
+          fi
+
+      - name: "Upload snapshot failures"
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-failures
+          path: |
+            baml_language/crates/baml_tests/snapshots/**/*.snap.new
+            baml_language/crates/baml_tests/snapshots/**/*.snap

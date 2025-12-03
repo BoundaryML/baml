@@ -1,0 +1,9 @@
+/* We already have react flow styles in packages/ui/src/styles/globals.css but for some reason this one needs to be imported lazily after all other ones run or it wont work. This one removes all the node handles. */
+.react-flow__handle {
+  width: 0;
+  min-width: 0;
+  height: 0;
+  min-height: 0;
+  pointer-events: none;
+  opacity: 0;
+}

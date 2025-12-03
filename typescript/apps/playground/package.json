@@ -4,7 +4,7 @@
   "packageManager": "pnpm@9.12.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --debug",
     "build": "pnpm run typecheck && vite build",
     "release": "pnpm run typecheck && NODE_ENV=production vite build",
     "preview": "NODE_ENV=development vite preview",
@@ -16,8 +16,9 @@
   "dependencies": {
     "@baml/playground-common": "workspace:*",
     "@baml/ui": "workspace:*",
+    "@tailwindcss/vite": "^4.1.17",
     "allotment": "1.20.4",
-    "jotai": "2.12.5",
+    "jotai": "2.15.1",
     "next-themes": "0.4.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -29,7 +30,9 @@
     "@types/react-dom": "19.1.7",
     "@vitejs/plugin-react": "4.5.2",
     "rimraf": "6.0.1",
-    "vite": "7.0.0",
+    "rollup-plugin-visualizer": "^6.0.5",
+    "vite": "7.2.2",
+    "vite-console-forward-plugin": "^2.0.1",
     "vite-plugin-static-copy": "^3.1.0",
     "vite-plugin-top-level-await": "1.5.0",
     "vite-plugin-wasm": "3.3.0"

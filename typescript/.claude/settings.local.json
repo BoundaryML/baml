@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(find:*)",
+      "Bash(pnpm --filter @baml/playground-common typecheck:*)",
+      "Bash(while read file)",
+      "Bash(do sed -i '' \"s|from [''''\"\"]\\./atoms[''''\"\"]|from ''''../../atoms''''|g\" \"$file\" sed -i '' \"s|from [''''\"\"]\\.\\./ atoms[''''\"\"]|from ''''../../../atoms''''|g\" \"$file\" sed -i '' \"s|from [''''\"\"]\\.\\./../atoms[''''\"\"]|from ''''../../../../atoms''''|g\" \"$file\" done echo \"Updated imports\")",
+      "Bash(pnpm add:*)",
+      "Bash(xargs sed:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm --filter playground-common typecheck)",
+      "Bash(pnpm --filter playground-common test)",
+      "Bash(pnpm --filter playground typecheck:*)",
+      "Bash(cargo build:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

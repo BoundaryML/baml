@@ -9,16 +9,21 @@ import { useFeedbackWidget } from '@baml/playground-common';
 // import IntroToChecksDialog from './shared/IntroToChecksDialog'
 import { CustomErrorBoundary } from '@baml/playground-common/custom-error-boundary';
 import { EventListener } from '@baml/playground-common/event-listener';
+import { BAMLSDKProvider, isDebugMode } from '@baml/playground-common/sdk';
 // import 'jotai-devtools/styles.css'
 import { PromptPreview } from '@baml/playground-common/prompt-preview';
 import { ThemeProvider } from 'next-themes';
 import { useWasmPanicHandler } from '@baml/playground-common/baml-project-panel/atoms';
 import { WasmPanicNotification } from '@baml/playground-common/baml-project-panel/WasmPanicNotification';
+import { DebugPanel } from '@baml/playground-common/features/debug-panel';
 
-function App() {
+function AppContent() {
   useFeedbackWidget();
   // Wire up WASM panic handler to automatically cancel tests on panic
   useWasmPanicHandler();
+  const debugMode = isDebugMode();
+
+  console.log('[App] Debug mode:', debugMode);
 
   return (
     <CustomErrorBoundary message="Error loading playground">
@@ -35,8 +40,11 @@ function App() {
             <WasmPanicNotification />
 
             {/* Main content area */}
-            <div className="h-full">
+            <div className="h-full relative">
               <PromptPreview />
+
+              {/* Debug panel - only shown in debug mode */}
+              {debugMode && <DebugPanel />}
             </div>
 
             {/* Background event handler (no UI) */}
@@ -63,6 +71,14 @@ function App() {
           </AppStateProvider>{' '} */}
       </Suspense>
     </CustomErrorBoundary>
+  );
+}
+
+function App() {
+  return (
+    <BAMLSDKProvider mode="wasm">
+      <AppContent />
+    </BAMLSDKProvider>
   );
 }
 

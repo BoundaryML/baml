@@ -2,6 +2,7 @@
 
 use std::fmt;
 
+use ariadne;
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
 
@@ -21,7 +22,7 @@ impl FileId {
 
 impl fmt::Display for FileId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "FileId({})", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -42,6 +43,22 @@ impl Span {
             file_id,
             range: TextRange::empty(offset),
         }
+    }
+}
+
+impl ariadne::Span for Span {
+    type SourceId = FileId;
+    fn source(&self) -> &Self::SourceId {
+        &self.file_id
+    }
+    fn start(&self) -> usize {
+        let range = self.range.start().into()..self.range.end().into();
+        range.start()
+    }
+
+    fn end(&self) -> usize {
+        let range = self.range.start().into()..self.range.end().into();
+        range.end()
     }
 }
 
@@ -68,11 +85,4 @@ pub enum Severity {
     Error,
     Warning,
     Info,
-}
-
-/// Base trait for all compiler diagnostics
-pub trait Diagnostic: std::fmt::Debug {
-    fn message(&self) -> String;
-    fn span(&self) -> Option<Span>;
-    fn severity(&self) -> Severity;
 }

@@ -168,7 +168,7 @@ function PredictAgeBare(inp: string @assert(big_enough, {{this|length > 1}}) ) -
 
         let current_runtime = project.runtime(env_vars_js, undefined_js).unwrap();
         let diagnostics = project.diagnostics(&current_runtime);
-        current_runtime.list_functions();
+        current_runtime.list_functions(None);
 
         assert!(diagnostics.errors().is_empty());
     }
@@ -217,7 +217,7 @@ test Two {
         let current_runtime = project.runtime(env_vars_js, undefined_js).unwrap();
 
         let diagnostics = project.diagnostics(&current_runtime);
-        let functions = current_runtime.list_functions();
+        let functions = current_runtime.list_functions(None);
         functions.iter().for_each(|f| {
             log::info!("function: {f:#?}");
             f.test_cases.iter().for_each(|t| {

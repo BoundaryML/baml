@@ -79,7 +79,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
             // note background request task here sometimes results in inconsistent baml project state...
         }
         "getBAMLFunctions" => {
-            // tracing::info!("getBAMLFunctions");
+            tracing::info!("getBAMLFunctions");
             return Task::local(move |session, _notifier, requester, responder| {
                 let result: anyhow::Result<(serde_json::Value,)> = {
                     let mut all_functions = Vec::new();
@@ -95,7 +95,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                         let functions = project
                             .lock()
                             .baml_project
-                            .list_functions(effective_flags)
+                            .list_functions(effective_flags, None)
                             .iter()
                             .map(|f| BamlFunctionResult {
                                 name: f.name.clone(),

@@ -1,7 +1,352 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Instructions: 0 bytes
-Constants: 0
+Functions: 103
+Objects: 103
+Globals: 103
+
+Function BodyTorture (arity: 0, kind: Exec):
+     0    LOAD_CONST 0       (null)
+     1    LOAD_VAR 1         (x)
+     2    LOAD_CONST 1       (1)
+     3    BIN_OP +           
+     4    POP 1              
+     5    JUMP_IF_FALSE +8   (to 13)
+     6    POP 1              
+     7    LOAD_VAR 1         (x)
+     8    LOAD_CONST 1       (1)
+     9    BIN_OP +           
+     10   POP 1              
+     11   POP 1              
+     12   JUMP -11           (to 1)
+     13   POP 1              
+     14   POP 1              
+     15   RETURN             
+
+Function ComplexType (arity: 0, kind: Exec):
+  (no bytecode)
+
+Function DeepExpression (arity: 0, kind: Exec):
+     0    LOAD_CONST 0   (1)
+     1    LOAD_CONST 1   (2)
+     2    BIN_OP +       
+     3    LOAD_CONST 2   (3)
+     4    BIN_OP *       
+     5    LOAD_CONST 3   (4)
+     6    BIN_OP -       
+     7    LOAD_CONST 4   (5)
+     8    BIN_OP /       
+     9    LOAD_CONST 5   (6)
+     10   BIN_OP +       
+     11   LOAD_CONST 6   (7)
+     12   BIN_OP *       
+     13   LOAD_CONST 7   (8)
+     14   BIN_OP -       
+     15   LOAD_CONST 8   (9)
+     16   BIN_OP /       
+     17   LOAD_CONST 9   (10)
+     18   BIN_OP +       
+     19   RETURN         
+     20   RETURN         
+
+Function Process1 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process10 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process100 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process11 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process12 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process13 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process14 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process15 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process16 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process17 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process18 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process19 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process2 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process20 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process21 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process22 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process23 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process24 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process25 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process26 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process27 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process28 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process29 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process3 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process30 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process31 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process32 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process33 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process34 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process35 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process36 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process37 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process38 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process39 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process4 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process40 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process41 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process42 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process43 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process44 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process45 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process46 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process47 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process48 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process49 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process5 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process50 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process51 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process52 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process53 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process54 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process55 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process56 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process57 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process58 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process59 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process6 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process60 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process61 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process62 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process63 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process64 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process65 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process66 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process67 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process68 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process69 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process7 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process70 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process71 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process72 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process73 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process74 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process75 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process76 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process77 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process78 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process79 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process8 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process80 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process81 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process82 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process83 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process84 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process85 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process86 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process87 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process88 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process89 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process9 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process90 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process91 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process92 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process93 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process94 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process95 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process96 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process97 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process98 (arity: 1, kind: Llm):
+  (no bytecode)
+
+Function Process99 (arity: 1, kind: Llm):
+  (no bytecode)

@@ -1,12 +1,12 @@
 name: CI - BAML Language
-permissions: {}
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
 on:
   push:
     branches: [main, canary]
   pull_request:
-    paths:
-      - "baml_language/**"
-      - ".github/workflows/ci.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -40,6 +40,10 @@ jobs:
       thir: ${{ steps.check_thir.outputs.changed }}
       # Flag for codegen changes
       codegen: ${{ steps.check_codegen.outputs.changed }}
+      # Flag for BEP changes
+      beps: ${{ steps.check_beps.outputs.changed }}
+      # Flag for docs/frontend changes
+      docs: ${{ steps.check_docs.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,6 +66,7 @@ jobs:
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/**' \
             ':.github/workflows/ci.yaml' \
+            ':.github/workflows/cargo-tests.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -146,306 +151,70 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-  cargo-fmt:
-    name: "cargo fmt"
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup component add rustfmt
-        working-directory: baml_language
-
-      - name: "Check formatting"
-        run: cargo fmt --all --check
-        working-directory: baml_language
-
-  cargo-clippy:
-    name: "cargo clippy"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup component add clippy
-          rustup target add wasm32-unknown-unknown
-        working-directory: baml_language
-
-      - name: "Clippy"
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-        working-directory: baml_language
-
-      - name: "Clippy (wasm)"
-        run: cargo clippy --workspace --exclude baml_onionskin --target wasm32-unknown-unknown --all-features --locked -- -D warnings
-        working-directory: baml_language
-
-  cargo-test-linux:
-    name: "cargo test (linux)"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo insta"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-insta
-
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
-      - name: "Run tests with nextest"
-        run: cargo nextest run --all-features
-        working-directory: baml_language
-
-      - name: "Run snapshot tests with insta"
-        run: cargo insta test --all-features --unreferenced reject
-        working-directory: baml_language
-
-      - name: "Check documentation"
-        run: cargo doc --all --no-deps
-        working-directory: baml_language
+      - name: Check if BEPs changed
+        id: check_beps
         env:
-          RUSTDOCFLAGS: "-D warnings"
-
-      - name: "Upload test results on failure"
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-failures-linux
-          path: |
-            baml_language/**/*.snap.new
-            baml_language/**/target/nextest/
-
-  cargo-test-macos:
-    name: "cargo test (macos)"
-    runs-on: macos-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
-      - name: "Run tests"
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
-          cargo nextest run --all-features
-          cargo test --all-features --doc
-        working-directory: baml_language
-
-  cargo-test-windows:
-    name: "cargo test (windows)"
-    runs-on: windows-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
-      - name: "Run tests"
-        run: |
-          cargo nextest run --all-features
-          cargo test --all-features --doc
-        working-directory: baml_language
-
-  cargo-test-wasm:
-    name: "cargo test (wasm)"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup target add wasm32-unknown-unknown
-        working-directory: baml_language
-
-      - name: "Build for WASM"
-        run: |
-          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_onionskin --no-default-features
-          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_onionskin --no-default-features --release
-        working-directory: baml_language
-
-      - name: "Check WASM size"
-        run: |
-          ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
-          echo "WASM build artifacts:"
-          find target/wasm32-unknown-unknown -name "*.wasm" -exec ls -lh {} \;
-        working-directory: baml_language
-
-  cargo-build-msrv:
-    name: "cargo build (msrv)"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: SebRollen/toml-action@v1.2.0
-        id: msrv
-        with:
-          file: "baml_language/Cargo.toml"
-          field: "workspace.package.rust-version"
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain (MSRV)"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: |
-          rustup toolchain install "${MSRV}"
-          rustup default "${MSRV}"
-        working-directory: baml_language
-
-      - name: "Build with MSRV"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: cargo "+${MSRV}" test --no-run --all-features
-        working-directory: baml_language
-
-  check-dependencies:
-    name: "check dependencies"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo-deny"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny
-
-      - name: "Check dependencies"
-        run: cargo deny check
-        working-directory: baml_language
-        continue-on-error: true # For now, just warn
-
-  snapshot-tests:
-    name: "snapshot tests"
-    runs-on: ubuntu-latest
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
-
-      - name: "Install cargo insta"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-insta
-
-      - name: "Run snapshot tests"
-        run: |
-          cargo insta test --all-features --unreferenced=reject
-          cargo insta test --all-features --review
-        working-directory: baml_language
-
-      - name: "Check for snapshot changes"
-        run: |
-          if [ -n "$(git status --porcelain baml_language/crates/baml_tests/snapshots)" ]; then
-            echo "::error::Snapshot tests have uncommitted changes"
-            git diff baml_language/crates/baml_tests/snapshots
-            exit 1
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':beps/**' \
+            ':.github/workflows/beps.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: "Upload snapshot failures"
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: snapshot-failures
-          path: |
-            baml_language/crates/baml_tests/snapshots/**/*.snap.new
-            baml_language/crates/baml_tests/snapshots/**/*.snap
+      - name: Check if docs changed
+        id: check_docs
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':fern/**' \
+            ':typescript/apps/ask-baml-client/**' \
+            ':typescript/apps/sage-backend/**' \
+            ':.github/workflows/docs.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Call reusable workflows
+  cargo-tests:
+    name: "Cargo Tests"
+    needs: determine_changes
+    uses: ./.github/workflows/cargo-tests.reusable.yaml
+    with:
+      code_changed: ${{ needs.determine_changes.outputs.code }}
+      run_all: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
+    secrets: inherit
+
+  beps:
+    name: "BEPs"
+    needs: determine_changes
+    uses: ./.github/workflows/beps.reusable.yaml
+    with:
+      beps_changed: ${{ needs.determine_changes.outputs.beps }}
+      is_canary: ${{ github.ref == 'refs/heads/canary' }}
+      is_pr: ${{ github.event_name == 'pull_request' }}
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      deployments: write
+
+  docs:
+    name: "Docs"
+    needs: determine_changes
+    uses: ./.github/workflows/docs.reusable.yaml
+    with:
+      docs_changed: ${{ needs.determine_changes.outputs.docs }}
+      is_canary: ${{ github.ref == 'refs/heads/canary' }}
+    secrets: inherit
+    permissions: write-all
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
@@ -499,54 +268,30 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - cargo-fmt
-      - cargo-clippy
-      - cargo-test-linux
-      - cargo-test-macos
-      - cargo-test-windows
-      - cargo-test-wasm
-      - cargo-build-msrv
-      - snapshot-tests
+      - cargo-tests
+      - beps
+      - docs
+      - benchmarks-instrumented
     steps:
       - name: "Check test results"
         run: |
-          if [[ "${{ needs.cargo-fmt.result }}" != "success" && "${{ needs.cargo-fmt.result }}" != "skipped" ]]; then
-            echo "::error::Formatting check failed"
+          if [[ "${{ needs.cargo-tests.result }}" != "success" && "${{ needs.cargo-tests.result }}" != "skipped" ]]; then
+            echo "::error::Cargo tests failed"
             exit 1
           fi
 
-          if [[ "${{ needs.cargo-clippy.result }}" != "success" && "${{ needs.cargo-clippy.result }}" != "skipped" ]]; then
-            echo "::error::Clippy check failed"
+          if [[ "${{ needs.beps.result }}" != "success" && "${{ needs.beps.result }}" != "skipped" ]]; then
+            echo "::error::BEPs workflow failed"
             exit 1
           fi
 
-          if [[ "${{ needs.cargo-test-linux.result }}" != "success" && "${{ needs.cargo-test-linux.result }}" != "skipped" ]]; then
-            echo "::error::Linux tests failed"
+          if [[ "${{ needs.docs.result }}" != "success" && "${{ needs.docs.result }}" != "skipped" ]]; then
+            echo "::error::Docs workflow failed"
             exit 1
           fi
 
-          if [[ "${{ needs.cargo-test-macos.result }}" != "success" && "${{ needs.cargo-test-macos.result }}" != "skipped" ]]; then
-            echo "::error::macOS tests failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.cargo-test-windows.result }}" != "success" && "${{ needs.cargo-test-windows.result }}" != "skipped" ]]; then
-            echo "::error::Windows tests failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.cargo-test-wasm.result }}" != "success" && "${{ needs.cargo-test-wasm.result }}" != "skipped" ]]; then
-            echo "::error::WASM build failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.cargo-build-msrv.result }}" != "success" && "${{ needs.cargo-build-msrv.result }}" != "skipped" ]]; then
-            echo "::error::MSRV build failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.snapshot-tests.result }}" != "success" && "${{ needs.snapshot-tests.result }}" != "skipped" ]]; then
-            echo "::error::Snapshot tests failed"
+          if [[ "${{ needs.benchmarks-instrumented.result }}" != "success" && "${{ needs.benchmarks-instrumented.result }}" != "skipped" ]]; then
+            echo "::error::Benchmarks failed"
             exit 1
           fi
 

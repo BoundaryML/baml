@@ -28,10 +28,81 @@ RUN bundle exec baml-cli generate --from path/to/baml_src
 ```
 
 ```dockerfile Go Dockerfile
-# Install Go and BAML CLI
+# Install BAML CLI
 RUN go install github.com/boundaryml/baml/baml-cli@latest
 # Generate BAML client
 RUN baml-cli generate --from path-to-baml_src
 ```
 </CodeBlocks>
+
+## Go: Multi-stage Docker builds
+
+When using Go, the `baml-cli generate` command downloads the `libbaml-cffi` native library that BAML needs at runtime. This library is cached to avoid downloading it every time your container runs.
+
+### Single-stage builds
+
+For single-stage builds, running `baml-cli generate` (as shown above) will automatically download and cache `libbaml-cffi` in your Docker image.
+
+### Multi-stage builds
+
+For multi-stage Docker builds, you need to ensure `libbaml-cffi` is available in your final image. You have two options:
+
+**Option 1: Copy the cache directory**
+
+Set the `BAML_CACHE_DIR` environment variable in both stages and copy it to your final image:
+
+```dockerfile
+# Build stage
+FROM golang:1.21 AS builder
+ENV BAML_CACHE_DIR=/baml-cache
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go install github.com/boundaryml/baml/baml-cli@latest
+RUN baml-cli generate --from baml_src
+RUN go build -o myapp
+
+# Runtime stage
+FROM debian:bookworm-slim
+ENV BAML_CACHE_DIR=/baml-cache
+COPY --from=builder /app/myapp /myapp
+COPY --from=builder /baml-cache /baml-cache
+CMD ["/myapp"]
+```
+
+**Option 2: Regenerate in the final stage**
+
+Install `baml-cli` in your final image and run `baml-cli --version` (or `baml-cli generate`) to download `libbaml-cffi`:
+
+```dockerfile
+# Build stage
+FROM golang:1.21 AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go install github.com/boundaryml/baml/baml-cli@latest
+RUN baml-cli generate --from baml_src
+RUN go build -o myapp
+
+# Runtime stage
+FROM debian:bookworm-slim
+WORKDIR /app
+COPY --from=builder /app/myapp /myapp
+COPY --from=builder /go/bin/baml-cli /usr/local/bin/baml-cli
+# Download libbaml-cffi into the runtime image
+RUN baml-cli --version
+CMD ["/myapp"]
+```
+
+### Customizing the cache directory
+
+By default, BAML downloads `libbaml-cffi` to a system-specific cache directory. You can control this location using the `BAML_CACHE_DIR` environment variable:
+
+```dockerfile
+ENV BAML_CACHE_DIR=/custom/cache/path
+```
+
+This is particularly useful when you want to explicitly control where the native library is stored in your container.
 

@@ -7,20 +7,22 @@ import { Check, Copy, Play, Square } from 'lucide-react'
 import * as React from 'react'
 
 import { cn } from '@baml/ui/lib/utils'
-import { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
+import type { TestResponseData } from '../../../../../../sdk/interface'
 import { ErrorBoundary } from 'react-error-boundary'
 import { Button } from '@baml/ui/button'
 import { TruncatedString } from '../../TruncatedString'
-import { selectedItemAtom, testcaseObjectAtom, TestState } from '../../../atoms'
+import { testcaseObjectAtom, TestState } from '../../../atoms'
 import { type TestHistoryRun } from '../atoms'
 import { useRunBamlTests } from '../test-runner'
 import { getExplanation, getStatus, getTestStateResponse } from '../testStateUtils'
 import { ResponseViewType, tabularViewConfigAtom } from './atoms'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ParsedResponseRenderer } from './ParsedResponseRender'
+import { useNavigation } from '../../../../../../sdk/hooks'
+import { unifiedSelectionStateAtom } from '../../../../../../sdk/atoms/core.atoms'
 import { TestStatus } from './TestStatus'
 import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { vscode } from '../../../../vscode'
 interface TabularViewProps {
   currentRun?: TestHistoryRun
@@ -46,15 +48,15 @@ const CopyButton = ({
   response,
 }: {
   responseViewType: ResponseViewType
-  response: WasmTestResponse
+  response: TestResponseData
 }) => {
   const [copied, setCopied] = React.useState(false)
 
   const handleCopy = () => {
     const content =
       responseViewType === 'parsed'
-        ? JSON.stringify(JSON.parse(response?.parsed_response()?.value ?? ''), null, 2)
-        : (response?.llm_response()?.content ?? '')
+        ? JSON.stringify(JSON.parse(response?.parsed_response?.value ?? ''), null, 2)
+        : (response?.llm_response?.content ?? '')
     navigator.clipboard.writeText(content)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -77,18 +79,18 @@ const ResponseContent = ({
   state,
   responseViewType,
 }: {
-  response: WasmTestResponse | WasmFunctionResponse | undefined
+  response: TestResponseData | undefined
   state: TestState
   responseViewType: ResponseViewType
 }) => {
-  const failureMessage = response && 'failure_message' in response ? response.failure_message() : undefined
+  const failureMessage = response?.failure_message
 
   return (
     <div className=''>
       {/* todo: render the failure if pretty or raw is selected. */}
       {responseViewType === 'parsed' && (
         <>
-          <ParsedResponseRenderer response={getTestStateResponse(state)} />
+          <ParsedResponseRenderer response={getTestStateResponse(state) as TestResponseData | undefined} />
 
           {/* Don't show the explanation for now. */}
           {false && getExplanation(state) && (
@@ -99,12 +101,12 @@ const ResponseContent = ({
           )}
         </>
       )}
-      {responseViewType === 'pretty' && (
-        <MarkdownRenderer source={getTestStateResponse(state)?.llm_response()?.content || ''} />
+      {responseViewType === 'pretty' && typeof getTestStateResponse(state) === 'object' && (
+        <MarkdownRenderer source={(getTestStateResponse(state) as TestResponseData)?.llm_response?.content || ''} />
       )}
-      {responseViewType === 'raw' && (
+      {responseViewType === 'raw' && typeof getTestStateResponse(state) === 'object' && (
         <TruncatedString
-          text={getTestStateResponse(state)?.llm_response()?.content || ''}
+          text={(getTestStateResponse(state) as TestResponseData)?.llm_response?.content || ''}
           maxLength={1500}
           headLength={600}
           tailLength={600}
@@ -118,7 +120,8 @@ const ResponseContent = ({
 export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
   const [config, setConfig] = useAtom(tabularViewConfigAtom)
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
-  const [selectedItem, setSelectedItem] = useAtom(selectedItemAtom)
+  const selection = useAtomValue(unifiedSelectionStateAtom)
+  const navigate = useNavigation()
 
   const toggleConfig = (key: keyof typeof config) => {
     setConfig((prev) => ({
@@ -134,34 +137,28 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
     }))
   }
 
+  const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.selectedNodeId : null;
+  const testName = selection.mode === 'function' || selection.mode === 'workflow' ? selection.testName : selection.mode === 'loading' ? selection.intent.testName ?? null : null;
+
   const testAtom = useMemo(
-    () => testcaseObjectAtom({ functionName: selectedItem?.[0] ?? '', testcaseName: selectedItem?.[1] ?? '' }),
-    [selectedItem],
+    () => testcaseObjectAtom({ functionName: functionName ?? '', testcaseName: testName ?? '' }),
+    [functionName, testName],
   )
   const tc = useAtomValue(testAtom)
 
   const selectedRowRef = React.useRef<HTMLTableRowElement>(null)
 
+
+
   React.useEffect(() => {
-    if (selectedItem && selectedRowRef.current) {
+    if (functionName && testName && selectedRowRef.current) {
       selectedRowRef.current.scrollIntoView({
         behavior: 'smooth',
         block: 'nearest',
       })
     }
-  }, [selectedItem])
+  }, [functionName, testName])
 
-  // Create memoized retry handlers for each test to prevent re-renders
-  const createRetryHandler = useMemo(() => {
-    const handlers = new Map();
-    return (test: any) => {
-      const key = `${test.functionName}-${test.testName}`;
-      if (!handlers.has(key)) {
-        handlers.set(key, () => runBamlTests([{ functionName: test.functionName, testName: test.testName }]));
-      }
-      return handlers.get(key);
-    };
-  }, [runBamlTests]);
 
   return (
     <div className='space-y-4'>
@@ -228,18 +225,30 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
         </TableHeader>
         <TableBody>
           {currentRun?.tests.map((test, index) => {
-            const isSelected = selectedItem?.[0] === test.functionName && selectedItem?.[1] === test.testName
+            const isSelected = functionName === test.functionName && testName === test.testName
             const isThisTestRunning = test.response.status === 'running'
+            const testResponse = getTestStateResponse(test.response)
+            const responseData = typeof testResponse === 'object' ? testResponse : undefined
+            const rowKey = `${test.functionName}-${test.testName}`
 
             return (
               <TableRow
-                key={index}
-                ref={isSelected ? selectedRowRef : null}
+                key={rowKey}
+                ref={isSelected ? selectedRowRef : undefined}
                 className={cn(
                   'relative cursor-pointer transition-colors hover:bg-muted/70 ',
                   isSelected && 'border-purple-500/20 shadow-sm dark:border-purple-900/30 dark:bg-muted/90',
                 )}
-                onClick={() => setSelectedItem(test.functionName, test.testName)}
+                onClick={() => {
+                  // Navigate to test
+                  navigate({
+                    kind: 'test',
+                    functionName: test.functionName,
+                    testName: test.testName,
+                    source: 'test-panel',
+                    timestamp: Date.now(),
+                  });
+                }}
               >
                 <TableCell className='px-1 py-1'>
                   <div className='flex flex-col items-center space-y-2'>
@@ -315,7 +324,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                     type="always"
                   > */}
                   <ResponseContent
-                    response={getTestStateResponse(test.response)}
+                    response={responseData}
                     state={test.response}
                     responseViewType={config.responseViewType}
                   />
@@ -328,7 +337,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                       errorMessage={test.response.message || 'Unknown error occurred'}
                       functionName={test.functionName}
                       testName={test.testName}
-                      onRetry={createRetryHandler(test)}
+                      onRetry={() => runBamlTests([{ functionName: test.functionName, testName: test.testName }])}
                       className="text-xs"
                     />
                   )}
@@ -337,7 +346,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                   <TableCell className='px-1 py-1 whitespace-normal'>
                     {test.response.status === 'done' && test.response.response && (
                       <span className='text-xs text-muted-foreground'>
-                        {test.response.response.llm_response()?.model}
+                        {test.response.response.llm_response?.model}
                       </span>
                     )}
                   </TableCell>

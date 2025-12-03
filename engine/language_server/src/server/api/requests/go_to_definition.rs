@@ -44,19 +44,6 @@ impl SyncRequestHandler for GotoDefinition {
             return Ok(None);
         };
 
-        {
-            let default_flags = vec!["beta".to_string()];
-            project.lock().update_runtime(
-                Some(notifier),
-                session
-                    .baml_settings
-                    .feature_flags
-                    .as_ref()
-                    .unwrap_or(&default_flags),
-            )
-        }
-        .internal_error()?;
-
         let document_key = DocumentKey::from_url(
             &project.lock().baml_project.root_dir_name,
             &params.text_document_position_params.text_document.uri,

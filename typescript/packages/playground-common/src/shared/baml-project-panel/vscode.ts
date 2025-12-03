@@ -1,4 +1,4 @@
-import { WasmSpan } from '@gloo-ai/baml-schema-wasm-web';
+import type { SpanInfo } from '../../sdk/interface';
 import {
   type GetPlaygroundPortRequest,
   type GetPlaygroundPortResponse,
@@ -151,30 +151,30 @@ class VSCodeAPIWrapper {
     return this.vsCodeApi !== undefined
   }
 
-  public async jumpToFile(span: WasmSpan) {
+  public async jumpToFile(span: SpanInfo) {
     if (this.isVscode()) {
       await this.rpc<JumpToFileRequest, JumpToFileResponse>({
         vscodeCommand: 'JUMP_TO_FILE',
         span: {
-          file_path: span.file_path,
-          start_line: span.start_line,
-          start_column: span.start_column,
+          file_path: span.filePath,
+          start_line: span.startLine,
+          start_column: span.startColumn,
         },
       });
     } else {
       await this.sendLspNotificationToIde({
         method: 'window/showDocument',
         params: {
-          uri: `file://${span.file_path}`,
+          uri: `file://${span.filePath}`,
           takeFocus: true,
           selection: {
             start: {
-              line: span.start_line,
-              character: span.start_column,
+              line: span.startLine,
+              character: span.startColumn,
             },
             end: {
-              line: span.start_line,
-              character: span.start_column,
+              line: span.startLine,
+              character: span.startColumn,
             }
           },
         }
@@ -468,9 +468,10 @@ class VSCodeAPIWrapper {
   private postMessageToHost(message: unknown) {
     if (this.vsCodeApi) {
       this.vsCodeApi.postMessage(message)
-    } else {
+    } else if (typeof window !== 'undefined') {
       window.postMessage(message)
     }
+    // In non-browser environments (like tests), silently ignore
   }
 
   private async httpPostRpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {

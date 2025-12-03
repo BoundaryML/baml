@@ -1,7 +1,94 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Instructions: 0 bytes
-Constants: 0
+Functions: 4
+Objects: 4
+Globals: 4
+
+Function Calculate (arity: 0, kind: Exec):
+     0    LOAD_CONST 0   (1)
+     1    LOAD_CONST 1   (2)
+     2    BIN_OP +       
+     3    LOAD_VAR 1     (a)
+     4    LOAD_CONST 2   (3)
+     5    BIN_OP *       
+     6    LOAD_VAR 2     (b)
+     7    LOAD_CONST 1   (2)
+     8    BIN_OP /       
+     9    LOAD_CONST 0   (1)
+     10   BIN_OP -       
+     11   LOAD_VAR 1     (a)
+     12   LOAD_VAR 2     (b)
+     13   BIN_OP +       
+     14   LOAD_VAR 3     (c)
+     15   BIN_OP *       
+     16   LOAD_VAR 4     (d)
+     17   RETURN         
+     18   POP 4          
+     19   RETURN         
+
+Function FieldAccess (arity: 1, kind: Exec):
+     0   LOAD_GLOBAL 0        (<fn Calculate>)
+     1   LOAD_GLOBAL 0        (<fn Calculate>)
+     2   LOAD_GLOBAL 0        (<fn Calculate>)
+     3   LOAD_GLOBAL 0        (<fn Calculate>)
+     4   LOAD_CONST 0         (0)
+     5   LOAD_ARRAY_ELEMENT   
+     6   LOAD_VAR 4           (theme)
+     7   RETURN               
+     8   POP 4                
+     9   RETURN               
+
+Function IndexAccess (arity: 1, kind: Exec):
+     0    LOAD_VAR 1           (users)
+     1    LOAD_CONST 0         (0)
+     2    LOAD_ARRAY_ELEMENT   
+     3    LOAD_CONST 1         (1)
+     4    LOAD_VAR 1           (users)
+     5    LOAD_VAR 3           (idx)
+     6    LOAD_ARRAY_ELEMENT   
+     7    LOAD_VAR 1           (users)
+     8    LOAD_CONST 0         (0)
+     9    LOAD_ARRAY_ELEMENT   
+     10   LOAD_FIELD 0         
+     11   LOAD_VAR 1           (users)
+     12   LOAD_CONST 0         (0)
+     13   LOAD_ARRAY_ELEMENT   
+     14   LOAD_FIELD 0         
+     15   LOAD_CONST 0         (0)
+     16   LOAD_ARRAY_ELEMENT   
+     17   LOAD_VAR 5           (firstName)
+     18   RETURN               
+     19   POP 5                
+     20   RETURN               
+
+Function TestPrecedence (arity: 0, kind: Exec):
+     0    LOAD_CONST 0       (2)
+     1    LOAD_CONST 1       (3)
+     2    LOAD_CONST 2       (4)
+     3    BIN_OP *           
+     4    BIN_OP +           
+     5    LOAD_CONST 0       (2)
+     6    LOAD_CONST 1       (3)
+     7    BIN_OP *           
+     8    LOAD_CONST 2       (4)
+     9    BIN_OP +           
+     10   LOAD_VAR 1         (a)
+     11   LOAD_CONST 3       (10)
+     12   LOAD_CONST 0       (2)
+     13   BIN_OP +           
+     14   CMP_OP >           
+     15   LOAD_CONST 4       (true)
+     16   JUMP_IF_FALSE +2   (to 18)
+     17   JUMP +6            (to 23)
+     18   POP 1              
+     19   LOAD_CONST 5       (false)
+     20   JUMP_IF_FALSE +3   (to 23)
+     21   POP 1              
+     22   LOAD_CONST 5       (false)
+     23   LOAD_VAR 4         (d)
+     24   RETURN             
+     25   POP 4              
+     26   RETURN

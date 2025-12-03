@@ -1,7 +1,11 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Instructions: 0 bytes
-Constants: 0
+Functions: 1
+Objects: 1
+Globals: 1
+
+Function Invalid (arity: 0, kind: Exec):
+     0   RETURN

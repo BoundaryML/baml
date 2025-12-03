@@ -1,6 +1,7 @@
 export interface FunctionData {
   name: string;
   tests: string[];
+  functionFlavor: 'llm' | 'expr';
 }
 
 export interface FunctionItemProps {

@@ -55,9 +55,9 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
       // Auto-save after updating the API key
       await saveApiKeyChanges();
       setIsSaving(false);
-          },
-      200, // 200ms delay - optimized for copy-paste
-      false // don't call on leading edge
+    },
+    200, // 200ms delay - optimized for copy-paste
+    false // don't call on leading edge
   );
 
   // Update local value when apiKey.value changes (e.g., from external updates)
@@ -65,7 +65,7 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
     setLocalValue(escapeValue(apiKey.value || ''));
   }, [apiKey.value]);
 
-    const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     // Update local state immediately for responsive UI
     setLocalValue(newValue);
@@ -84,7 +84,6 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
     deleteApiKey(apiKey.key);
   }, [apiKey.key, deleteApiKey]);
 
-  console.log('ApiKeyListItem: apiKey:', apiKey);
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-background/70 px-4 py-3">
@@ -107,9 +106,8 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
               type={apiKey.hidden && !isPlaceholderApiKey(localValue) ? 'password' : 'text'}
               value={localValue}
               onChange={handleChange}
-              className={`h-8 text-sm font-mono placeholder:font-sans ${
-                isPlaceholderApiKey(localValue) ? 'text-muted-foreground italic' : ''
-              }`}
+              className={`h-8 text-sm font-mono placeholder:font-sans ${isPlaceholderApiKey(localValue) ? 'text-muted-foreground italic' : ''
+                }`}
               placeholder={isPlaceholderApiKey(localValue) ? "Replace with your API key" : ""}
               autoComplete="off"
               data-1p-ignore

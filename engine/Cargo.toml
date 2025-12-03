@@ -163,8 +163,8 @@ tokio = { version = "1", default-features = false, features = [
   "time",
 ] }
 
-js-sys = "=0.3.78"
-wasm-bindgen = "=0.2.101"
+js-sys = "=0.3.82"
+wasm-bindgen = "=0.2.105"
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.45"
 web-sys = { version = "0.3.78", features = [
@@ -179,6 +179,8 @@ web-sys = { version = "0.3.78", features = [
   "Window",
 ] }
 web-time = "1.1.0"
+tsify = { version = "0.5.6", features = ["js"] }
+
 
 [workspace.package]
 version = "0.214.0"

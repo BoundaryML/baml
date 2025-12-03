@@ -15,17 +15,17 @@ import {
 import { cn } from '@baml/ui/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@baml/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { atom } from 'jotai';
 import { Check, ChevronDown, FlaskConical, FunctionSquare } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { vscode } from '../vscode';
 import {
   functionObjectAtom,
-  runtimeStateAtom,
-  selectedItemAtom,
   testcaseObjectAtom,
 } from './atoms';
+import { functionsAtom as sdkFunctionsAtom } from '../../../sdk/atoms/core.atoms';
+import { useNavigation } from '../../../sdk/hooks';
 
 interface FunctionTestNameProps {
   functionName: string;
@@ -34,13 +34,10 @@ interface FunctionTestNameProps {
 }
 
 const functionsAtom = atom((get) => {
-  const runtimeState = get(runtimeStateAtom);
-  if (!runtimeState) {
-    return [];
-  }
-  return runtimeState.functions.map((f) => ({
+  const functions = get(sdkFunctionsAtom);
+  return functions.map((f) => ({
     name: f.name,
-    tests: f.test_cases.map((t) => t.name),
+    tests: f.testCases.map((t) => t.name),
   }));
 });
 
@@ -62,10 +59,11 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
   const fn = useAtomValue(functionAtom);
   const tc = useAtomValue(testcaseAtom);
   const functions = useAtomValue(functionsAtom);
-  const setSelectedItem = useSetAtom(selectedItemAtom);
+  const navigate = useNavigation();
 
   const currentFunction = functions.find((f) => f.name === functionName);
   const availableTests = currentFunction?.tests || [];
+
 
 
   // Component for function dropdown items with jumpToFile
@@ -79,11 +77,33 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
         value={func.name}
         onSelect={() => {
           const firstTest = func.tests[0];
+
+          // Determine function type
+          const functionType = fn?.type === 'workflow' ? 'workflow'
+            : fn?.type === 'llm_function' ? 'llm_function'
+              : fn?.functionFlavor === 'llm' ? 'llm_function'
+                : 'function';
+
           if (firstTest) {
-            setSelectedItem(func.name, firstTest);
+            // Navigate to test
+            navigate({
+              kind: 'test',
+              functionName: func.name,
+              testName: firstTest,
+              source: 'sidebar',
+              timestamp: Date.now(),
+            });
           } else {
-            setSelectedItem(func.name, undefined);
+            // Navigate to function
+            navigate({
+              kind: 'function',
+              functionName: func.name,
+              functionType,
+              source: 'sidebar',
+              timestamp: Date.now(),
+            });
           }
+
           setFunctionOpen(false);
           if (fn?.span) {
             vscode.jumpToFile(fn.span);
@@ -118,7 +138,15 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
         key={test}
         value={test}
         onSelect={() => {
-          setSelectedItem(functionName, test);
+          // Navigate to test
+          navigate({
+            kind: 'test',
+            functionName,
+            testName: test,
+            source: 'sidebar',
+            timestamp: Date.now(),
+          });
+
           setTestOpen(false);
           if (tc?.span) {
             vscode.jumpToFile(tc.span);

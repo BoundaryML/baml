@@ -4,7 +4,7 @@ import { AlertCircle, RefreshCw, ExternalLink, WifiOff, ChevronDown, ChevronUp, 
 import { Button } from '@baml/ui/button';
 import { useAtomValue } from 'jotai';
 import { ErrorWarningDialog } from '../../../../../../components/ErrorWarningDialog';
-import { diagnosticsAtom } from '@baml/playground-common';
+import { diagnosticsAtom } from '../../../../../../sdk/atoms/core.atoms';
 
 
 // Type definitions for error handlers
@@ -259,7 +259,7 @@ const DefaultErrorRenderer: React.FC<{ context: ErrorContext }> = ({ context }) 
           borderColor: 'rgba(220, 38, 38, 0.3)',
         }}
       >
-        <pre className="text-xs whitespace-pre-wrap break-words font-mono text-[var(--vscode-charts-red)]" style={{ color: '#dc2626' }}>
+        <pre className="text-xs whitespace-pre-wrap break-all font-mono text-[var(--vscode-charts-red)]" style={{ color: '#dc2626' }}>
           {context.errorMessage}
         </pre>
       </div>
@@ -494,7 +494,4 @@ export const EnhancedErrorRenderer: React.FC<EnhancedErrorRendererProps> = React
   );
 });
 
-EnhancedErrorRenderer.displayName = 'EnhancedErrorRenderer';
-
-// Export utility function for registering custom renderers
-export { registerErrorRenderer as addErrorRenderer }; 
+EnhancedErrorRenderer.displayName = 'EnhancedErrorRenderer'; 

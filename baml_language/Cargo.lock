@@ -102,6 +102,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 name = "baml_base"
 version = "0.0.0"
 dependencies = [
+ "ariadne",
  "salsa",
  "smol_str",
  "text-size",
@@ -111,9 +112,15 @@ dependencies = [
 name = "baml_codegen"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "baml_base",
+ "baml_db",
+ "baml_hir",
  "baml_thir",
+ "baml_vm",
  "baml_workspace",
+ "insta",
+ "la-arena",
  "salsa",
 ]
 
@@ -130,6 +137,7 @@ dependencies = [
  "baml_syntax",
  "baml_thir",
  "baml_workspace",
+ "rowan",
  "salsa",
 ]
 
@@ -150,6 +158,9 @@ dependencies = [
  "baml_parser",
  "baml_syntax",
  "baml_workspace",
+ "la-arena",
+ "rowan",
+ "rustc-hash 2.1.1",
  "salsa",
 ]
 
@@ -168,6 +179,8 @@ name = "baml_onionskin"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ariadne",
+ "baml_base",
  "baml_codegen",
  "baml_db",
  "baml_diagnostics",
@@ -192,6 +205,7 @@ name = "baml_parser"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_diagnostics",
  "baml_lexer",
  "baml_syntax",
  "rowan",
@@ -212,8 +226,15 @@ name = "baml_tests"
 version = "0.0.0"
 dependencies = [
  "baml_db",
+ "baml_diagnostics",
+ "baml_vm",
  "codspeed-divan-compat",
  "insta",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "salsa",
+ "syn",
  "walkdir",
 ]
 
@@ -222,9 +243,15 @@ name = "baml_thir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_diagnostics",
  "baml_hir",
  "salsa",
+ "text-size",
 ]
+
+[[package]]
+name = "baml_vm"
+version = "0.0.0"
 
 [[package]]
 name = "baml_workspace"
@@ -898,6 +925,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "la-arena"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3752f229dcc5a481d60f385fa479ff46818033d881d2d801aa27dffcfb5e8306"
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1161,6 +1194,16 @@ name = "portable-atomic"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f84267b20a16ea918e43c6a88433c2d54fa145c92a811b5b047ccbe153674483"
+
+[[package]]
+name = "prettyplease"
+version = "0.2.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
+dependencies = [
+ "proc-macro2",
+ "syn",
+]
 
 [[package]]
 name = "proc-macro-crate"

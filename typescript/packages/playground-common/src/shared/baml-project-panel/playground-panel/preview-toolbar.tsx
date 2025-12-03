@@ -27,12 +27,15 @@ import { showApiKeyDialogAtom } from '../../../components/api-keys-dialog/atoms'
 import { proxyUrlAtom } from '../atoms';
 import { ThemeToggle } from '../theme/ThemeToggle';
 import { vscode } from '../vscode';
-import { areTestsRunningAtom, selectedItemAtom, selectionAtom } from './atoms';
+import { areTestsRunningAtom, selectionAtom } from './atoms';
 import { FunctionTestName } from './function-test-name';
+import { WorkflowNodeName } from './workflow-node-name';
+import { unifiedSelectionAtom } from './unified-atoms';
 import { isParallelTestsEnabledAtom } from './prompt-preview/test-panel/atoms';
 import { useRunBamlTests } from './prompt-preview/test-panel/test-runner';
 import { standaloneBetaFeatureEnabledAtom, isVSCodeEnvironment } from '../feature-flags';
 import { vscodeSettingsAtom } from '../atoms';
+import { useTheme } from 'next-themes';
 
 export const displaySettingsAtom = atom({
   showTokens: false,
@@ -44,7 +47,12 @@ export const displaySettingsAtom = atom({
 const RunButton: React.FC<{ className?: string }> = ({ className }) => {
   const { runTests: runBamlTests, cancelTests } = useRunBamlTests();
   const isRunning = useAtomValue(areTestsRunningAtom);
-  const selected = useAtomValue(selectedItemAtom);
+  const selection = useAtomValue(unifiedSelectionAtom);
+
+  // For workflows, use workflowId (the actual function name), not selectedNodeId (the node's lexical ID)
+  const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.workflowId : null;
+  const testName = selection.mode === 'function' || selection.mode === 'workflow' ? selection.testName : selection.mode === 'loading' ? selection.intent.testName ?? null : null;
+
 
   return (
     <Button
@@ -57,13 +65,13 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
           : 'bg-purple-600 hover:bg-purple-700 text-white',
         className
       )}
-      disabled={!isRunning && selected === undefined}
+      disabled={!isRunning && (!functionName || !testName)}
       onClick={() => {
         if (isRunning) {
           cancelTests();
-        } else if (selected) {
+        } else if (functionName && testName) {
           void runBamlTests([
-            { functionName: selected[0], testName: selected[1] },
+            { functionName, testName },
           ]);
         }
       }}
@@ -86,8 +94,8 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
 export const isClientCallGraphEnabledAtom = atom(false);
 
 export function PreviewToolbar() {
-  const selections = useAtomValue(selectedItemAtom);
   const { selectedFn } = useAtomValue(selectionAtom);
+  const unifiedSelection = useAtomValue(unifiedSelectionAtom);
   const setShowApiKeyDialog = useSetAtom(showApiKeyDialogAtom);
   const { open: isSidebarOpen } = useSidebar();
 
@@ -103,17 +111,20 @@ export function PreviewToolbar() {
   );
   const proxySettings = useAtomValue(proxyUrlAtom);
   const setBamlConfig = useSetAtom(bamlConfig);
-  
+  const setVscodeSettings = useSetAtom(vscodeSettingsAtom);
+  const { resolvedTheme, setTheme } = useTheme();
+  const isLightMode = resolvedTheme === 'light';
+
   // Beta feature flag settings
   const [betaFeatureEnabled, setBetaFeatureEnabled] = useAtom(standaloneBetaFeatureEnabledAtom);
   const vscodeSettings = useAtomValue(vscodeSettingsAtom);
   const isInVSCode = isVSCodeEnvironment();
-  
+
   // For VSCode, use VSCode settings directly (read-only); for standalone, use atom
-  const displayBetaEnabled = isInVSCode 
+  const displayBetaEnabled = isInVSCode
     ? (vscodeSettings?.featureFlags?.includes('beta') ?? false)
     : betaFeatureEnabled;
-  
+
   const handleBetaToggle = (enabled: boolean) => {
     // This function only runs in standalone mode (not VSCode)
     setBetaFeatureEnabled(enabled);
@@ -130,21 +141,41 @@ export function PreviewToolbar() {
     return 'text-sm hidden md:block whitespace-nowrap';
   };
 
+  // Check if we're in a workflow context (workflow mode)
+  const isWorkflowContext = !selectedFn && unifiedSelection.mode === 'workflow';
+
+  const hasSelection = selectedFn !== null || isWorkflowContext;
+
+
   return (
     <div className="flex flex-col gap-1 overflow-hidden w-full">
       <div
         className={cn(
           'flex flex-row gap-1 items-center min-w-0 w-full',
-          selectedFn === undefined ? 'justify-end' : 'justify-between',
+          !hasSelection ? 'justify-end' : 'justify-between',
         )}
       >
-        {selectedFn !== undefined && (
+        {selectedFn !== null && (
           <div className="flex flex-col gap-1 min-w-0 flex-1 overflow-hidden">
             <div className="flex flex-row items-center gap-2 min-w-0">
               <div className="min-w-0 flex-1 overflow-hidden">
                 <FunctionTestName
                   functionName={selectedFn.name}
-                  testName={selections?.[1]}
+                  testName={unifiedSelection.mode === 'function' || unifiedSelection.mode === 'workflow' ? unifiedSelection.testName : unifiedSelection.mode === 'loading' ? unifiedSelection.intent.testName ?? null : null}
+                />
+              </div>
+
+              <RunButton />
+            </div>
+          </div>
+        )}
+        {isWorkflowContext && unifiedSelection.mode === 'workflow' && (
+          <div className="flex flex-col gap-1 min-w-0 flex-1 overflow-hidden">
+            <div className="flex flex-row items-center gap-2 min-w-0">
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <WorkflowNodeName
+                  workflowId={unifiedSelection.workflowId}
+                  nodeId={unifiedSelection.selectedNodeId}
                 />
               </div>
 
@@ -188,18 +219,17 @@ export function PreviewToolbar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-fit p-0">
-              {/* <DropdownMenuLabel>Display</DropdownMenuLabel> */}
-              {/* {options.map((option) => (
-                <DropdownMenuCheckboxItem
-                  key={option.label}
-                  checked={displaySettings. === option.value}
-                  onCheckedChange={() => setDisplaySettings(option.value)}
-                >
-                  <option.icon className='mr-2 size-4' />
-                  {option.label}
-                </DropdownMenuCheckboxItem>
-              ))} */}
-              {/* <DropdownMenuSeparator /> */}
+              <DropdownMenuLabel className="text-xs px-2 py-1.5">
+                Appearance
+              </DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={isLightMode}
+                onCheckedChange={(checked) => setTheme(checked ? 'light' : 'dark')}
+                className="text-sm px-2 py-1.5 pl-7"
+              >
+                Light Mode
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-xs px-2 py-1.5">
                 Testing
               </DropdownMenuLabel>
@@ -218,19 +248,31 @@ export function PreviewToolbar() {
                 checked={proxySettings.proxyEnabled}
                 onCheckedChange={async (checked) => {
                   try {
-                    await vscode.setProxySettings(!!checked);
-                    // Update local config to reflect the change immediately
+                    // Optimistically update vscodeSettingsAtom so proxyUrlAtom updates immediately
+                    setVscodeSettings((prev) => ({
+                      ...prev,
+                      enablePlaygroundProxy: !!checked,
+                    }));
+                    // Also update bamlConfig for consistency
                     setBamlConfig((prev: BamlConfigAtom) => ({
                       ...prev,
                       config: {
                         ...prev.config,
+                        enablePlaygroundProxy: !!checked,
                       },
                     }));
+                    // Send to VSCode to persist the setting
+                    await vscode.setProxySettings(!!checked);
                   } catch (error) {
                     console.error('Failed to update proxy settings:', error);
                     toast.error('Error updating proxy settings', {
                       description: 'Please try again',
                     });
+                    // Revert optimistic update on error
+                    setVscodeSettings((prev) => ({
+                      ...prev,
+                      enablePlaygroundProxy: !checked,
+                    }));
                   }
                 }}
                 className="text-sm px-2 py-1.5 pl-7"
@@ -263,7 +305,7 @@ export function PreviewToolbar() {
               <DropdownMenuLabel className="text-xs px-2 py-1.5">
                 Experimental Features
               </DropdownMenuLabel>
-              
+
               {/* Beta Features - Only show toggle in standalone fiddle, not in VSCode */}
               {!isInVSCode ? (
                 <DropdownMenuCheckboxItem
@@ -280,7 +322,7 @@ export function PreviewToolbar() {
                         Enable experimental BAML features and suppress experimental warnings.
                         <br />
                         <br />
-                        <b>Standalone:</b> This setting is saved locally 
+                        <b>Standalone:</b> This setting is saved locally
                         and persists across sessions.
                       </TooltipContent>
                     </Tooltip>

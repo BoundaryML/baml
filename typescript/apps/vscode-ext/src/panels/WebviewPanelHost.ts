@@ -134,15 +134,20 @@ export class WebviewPanelHost {
   }
 
   public sendCommandToWebview(cmd: VscodeToWebviewCommand) {
-    if (!this._isInitialized &&
-      cmd.source === 'lsp_message' &&
-      cmd.payload.method === 'workspace/executeCommand' &&
-      cmd.payload.params.command === 'baml.openBamlPanel'
-    ) {
-      // Queue select_function commands until initialized
-      this._pendingCommands.push(cmd);
-      return;
+    if (!this._isInitialized) {
+      if (
+        cmd.source === 'lsp_message' &&
+        cmd.payload.method === 'workspace/executeCommand' || (cmd.source == 'lsp_message' && cmd.payload.method === 'runtime_updated')
+      ) {
+        console.log('Queueing command until webview is initialized', cmd);
+        // Queue select_function commands until initialized
+        this._pendingCommands.push(cmd);
+        return;
+      } else {
+        console.log('Cant send command because webview is not yet initialized', cmd);
+      }
     }
+
 
     this._panel.webview.postMessage(cmd);
     // TODO(sam): restore vscode telemetry
@@ -180,7 +185,7 @@ export class WebviewPanelHost {
           return source;
       }
     })();
-    if (command === 'select_function' || command === 'run_test') {
+    if (command === 'run_test') {
       this.reporter?.sendTelemetryEvent({
         event: `baml.webview.${command}`,
         properties: {},

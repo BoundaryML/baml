@@ -247,6 +247,7 @@ pub enum Instruction {
 
 /// Block notification metadata stored in the Function struct.
 /// The function_name field is populated at runtime from the Function containing this notification.
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct BlockNotification {
     pub function_name: String, // Populated at runtime from Function::name

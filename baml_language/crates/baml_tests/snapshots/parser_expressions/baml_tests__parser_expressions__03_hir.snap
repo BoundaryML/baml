@@ -1,6 +1,152 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-No items found.
+function Calculate {
+  return: Int
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Literal(Int(1))
+      Idx::<Expr>(1): Literal(Int(2))
+      Idx::<Expr>(2): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(1) }
+      Idx::<Expr>(3): Path("a")
+      Idx::<Expr>(4): Literal(Int(3))
+      Idx::<Expr>(5): Binary { op: Mul, lhs: Idx::<Expr>(3), rhs: Idx::<Expr>(4) }
+      Idx::<Expr>(6): Path("b")
+      Idx::<Expr>(7): Literal(Int(2))
+      Idx::<Expr>(8): Binary { op: Div, lhs: Idx::<Expr>(6), rhs: Idx::<Expr>(7) }
+      Idx::<Expr>(9): Literal(Int(1))
+      Idx::<Expr>(10): Binary { op: Sub, lhs: Idx::<Expr>(8), rhs: Idx::<Expr>(9) }
+      Idx::<Expr>(11): Path("a")
+      Idx::<Expr>(12): Path("b")
+      Idx::<Expr>(13): Binary { op: Add, lhs: Idx::<Expr>(11), rhs: Idx::<Expr>(12) }
+      Idx::<Expr>(14): Path("c")
+      Idx::<Expr>(15): Binary { op: Mul, lhs: Idx::<Expr>(13), rhs: Idx::<Expr>(14) }
+      Idx::<Expr>(16): Path("d")
+      Idx::<Expr>(17): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(5)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(10)) }
+      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, initializer: Some(Idx::<Expr>(15)) }
+      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(16)))
+    ]
+    root: Idx::<Expr>(17)
+  }
+}
+function FieldAccess {
+  params: [user: Path(Path { segments: ["User"], kind: Plain })]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path("user::name")
+      Idx::<Expr>(1): Path("user::profile::bio")
+      Idx::<Expr>(2): Path("user::profile::settings::theme")
+      Idx::<Expr>(3): Path("user::tags")
+      Idx::<Expr>(4): Literal(Int(0))
+      Idx::<Expr>(5): Index { base: Idx::<Expr>(3), index: Idx::<Expr>(4) }
+      Idx::<Expr>(6): Path("theme")
+      Idx::<Expr>(7): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
+      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, initializer: Some(Idx::<Expr>(5)) }
+      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(6)))
+    ]
+    root: Idx::<Expr>(7)
+  }
+}
+class Settings {
+  theme: String
+}
+class User {
+  name: String
+  profile: Path(Path { segments: ["Profile"], kind: Plain })
+  tags: List(Path(Path { segments: ["string"], kind: Plain }))
+}
+class Profile {
+  bio: String
+  settings: Path(Path { segments: ["Settings"], kind: Plain })
+}
+function IndexAccess {
+  params: [users: List(Path(Path { segments: ["User"], kind: Plain }))]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path("users")
+      Idx::<Expr>(1): Literal(Int(0))
+      Idx::<Expr>(2): Index { base: Idx::<Expr>(0), index: Idx::<Expr>(1) }
+      Idx::<Expr>(3): Literal(Int(1))
+      Idx::<Expr>(4): Path("users")
+      Idx::<Expr>(5): Path("idx")
+      Idx::<Expr>(6): Index { base: Idx::<Expr>(4), index: Idx::<Expr>(5) }
+      Idx::<Expr>(7): Path("users")
+      Idx::<Expr>(8): Literal(Int(0))
+      Idx::<Expr>(9): Index { base: Idx::<Expr>(7), index: Idx::<Expr>(8) }
+      Idx::<Expr>(10): FieldAccess { base: Idx::<Expr>(9), field: "name" }
+      Idx::<Expr>(11): Path("users")
+      Idx::<Expr>(12): Literal(Int(0))
+      Idx::<Expr>(13): Index { base: Idx::<Expr>(11), index: Idx::<Expr>(12) }
+      Idx::<Expr>(14): FieldAccess { base: Idx::<Expr>(13), field: "tags" }
+      Idx::<Expr>(15): Literal(Int(0))
+      Idx::<Expr>(16): Index { base: Idx::<Expr>(14), index: Idx::<Expr>(15) }
+      Idx::<Expr>(17): Path("firstName")
+      Idx::<Expr>(18): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(3)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(6)) }
+      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, initializer: Some(Idx::<Expr>(10)) }
+      Idx::<Stmt>(4): Let { pattern: Idx::<Pattern>(4), type_annotation: None, initializer: Some(Idx::<Expr>(16)) }
+      Idx::<Stmt>(5): Return(Some(Idx::<Expr>(17)))
+    ]
+    root: Idx::<Expr>(18)
+  }
+}
+class User {
+  name: String
+  age: Int
+  tags: List(Path(Path { segments: ["string"], kind: Plain }))
+}
+function TestPrecedence {
+  return: Bool
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Literal(Int(2))
+      Idx::<Expr>(1): Literal(Int(3))
+      Idx::<Expr>(2): Literal(Int(4))
+      Idx::<Expr>(3): Binary { op: Mul, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
+      Idx::<Expr>(4): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(3) }
+      Idx::<Expr>(5): Literal(Int(2))
+      Idx::<Expr>(6): Literal(Int(3))
+      Idx::<Expr>(7): Binary { op: Mul, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(6) }
+      Idx::<Expr>(8): Literal(Int(4))
+      Idx::<Expr>(9): Binary { op: Add, lhs: Idx::<Expr>(7), rhs: Idx::<Expr>(8) }
+      Idx::<Expr>(10): Path("a")
+      Idx::<Expr>(11): Literal(Int(10))
+      Idx::<Expr>(12): Literal(Int(2))
+      Idx::<Expr>(13): Binary { op: Add, lhs: Idx::<Expr>(11), rhs: Idx::<Expr>(12) }
+      Idx::<Expr>(14): Binary { op: Gt, lhs: Idx::<Expr>(10), rhs: Idx::<Expr>(13) }
+      Idx::<Expr>(15): Literal(Bool(true))
+      Idx::<Expr>(16): Literal(Bool(false))
+      Idx::<Expr>(17): Literal(Bool(false))
+      Idx::<Expr>(18): Binary { op: And, lhs: Idx::<Expr>(16), rhs: Idx::<Expr>(17) }
+      Idx::<Expr>(19): Binary { op: Or, lhs: Idx::<Expr>(15), rhs: Idx::<Expr>(18) }
+      Idx::<Expr>(20): Path("d")
+      Idx::<Expr>(21): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
+    ]
+    stmts: [
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(4)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(9)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(14)) }
+      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, initializer: Some(Idx::<Expr>(19)) }
+      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(20)))
+    ]
+    root: Idx::<Expr>(21)
+  }
+}

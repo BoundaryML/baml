@@ -23,7 +23,7 @@ export const getTestStateResponse = (response: TestState) => {
 
 export const getExplanation = (response: TestState) => {
   if (response.status === 'done') {
-    return response.response.parsed_response()?.explanation;
+    return response.response.parsed_response?.explanation;
   }
   return undefined;
 };

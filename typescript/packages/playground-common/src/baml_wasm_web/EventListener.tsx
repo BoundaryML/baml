@@ -1,90 +1,82 @@
 "use client";
-// import * as vscode from 'vscode'
 
-import { vscode } from "@baml/playground-common";
-import {
-  diagnosticsAtom,
-  filesAtom,
-  wasmAtom,
-  selectedFunctionAtom,
-  selectedTestcaseAtom,
-  updateCursorAtom,
-} from "@baml/playground-common";
-import { useRunBamlTests } from "@baml/playground-common";
-import { orchIndexAtom } from "@baml/playground-common";
+import { vscode } from "../shared/baml-project-panel/vscode";
 import { useDebounceCallback } from "@react-hook/debounce";
-import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
+import { atom, useSetAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { useEffect } from "react";
 import { vscodeLocalStorageStore } from "./JotaiProvider";
-import { type BamlConfigAtom, bamlConfig } from "./bamlConfig";
+import { bamlConfig } from "./bamlConfig";
 import { VscodeToWebviewCommand } from "./vscode-to-webview-rpc";
+import { handleIDEMessage, handleLSPMessage } from "./message-handlers";
+import { useBAMLSDK } from "../sdk";
 
+// ============================================================================
+// EventListener-specific atoms (not managed by SDK)
+// ============================================================================
 export const hasClosedEnvVarsDialogAtom = atomWithStorage<boolean>(
   "has-closed-env-vars-dialog",
   false,
   vscodeLocalStorageStore,
 );
+
 export const bamlCliVersionAtom = atom<string | null>(null);
 
 export const showIntroToChecksDialogAtom = atom(false);
+
 export const hasClosedIntroToChecksDialogAtom = atomWithStorage<boolean>(
   "has-closed-intro-to-checks-dialog",
   false,
   vscodeLocalStorageStore,
 );
 
-export const versionAtom = atom((get) => {
-  const wasm = get(wasmAtom);
-
-  if (wasm === undefined) {
-    return "Loading...";
-  }
-
-  return wasm.version();
-});
-
-export const numErrorsAtom = atom((get) => {
-  const errors = get(diagnosticsAtom);
-
-  const warningCount = errors.filter((e: any) => e.type === "warning").length;
-
-  return { errors: errors.length - warningCount, warnings: warningCount };
-});
-
 export const isConnectedAtom = atom(true);
 
+// ============================================================================
+// EventListener Component
+// ============================================================================
+
 export const EventListener: React.FC = () => {
-  const updateCursor = useSetAtom(updateCursorAtom);
-  const [bamlFileMap, setBamlFileMap] = useAtom(filesAtom);
-  const debouncedSetBamlFileMap = useDebounceCallback(setBamlFileMap, 50, true);
+  // Get SDK instance (guaranteed to be initialized by provider)
+  const sdk = useBAMLSDK();
   const isVSCodeWebview = vscode.isVscode();
 
-  const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom);
-  const [selectedTestcase, setSelectedTestcase] = useAtom(selectedTestcaseAtom);
+  // Non-core state atoms (not managed by SDK)
+  const setBamlCliVersion = useSetAtom(bamlCliVersionAtom);
   const setBamlConfig = useSetAtom(bamlConfig);
-  const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom);
-  const { runTests: runBamlTests } = useRunBamlTests();
-  const wasm = useAtomValue(wasmAtom);
+
+  // Mark as initialized when component mounts (SDK is ready)
   useEffect(() => {
-    if (wasm) {
-      console.debug("wasm ready!");
-      try {
-        vscode.markInitialized();
-      } catch (e) {
-        console.error("Error marking initialized", e);
+    console.debug("SDK ready, marking initialized");
+    try {
+      vscode.markInitialized();
+    } catch (e) {
+      console.error("Error marking initialized", e);
+    }
+  }, []);
+
+  // Platform quirk: Debounce file updates to prevent excessive WASM recompilation
+  const debouncedUpdateFiles = useDebounceCallback(
+    (files: Record<string, string>) => {
+      console.debug('[EventListener] Debounced file update');
+      const simpleBamlEntry = Object.entries(files).find(([name]) => name.endsWith('simple.baml'));
+      if (simpleBamlEntry) {
+        const [name, content] = simpleBamlEntry;
       }
-    }
-  }, [wasm]);
+      sdk.files.update(files);
+    },
+    50,
+    true // Leading edge
+  );
 
-  const setOrchestratorIndex = useSetAtom(orchIndexAtom);
-
-  useEffect(() => {
-    if (selectedFunc) {
-      // todo: maybe we use a derived atom to reset it. But for now this useeffect works.
-      setOrchestratorIndex(0);
-    }
-  }, [selectedFunc]);
+  const debouncedUpdateCursor = useDebounceCallback(
+    (cursor: { fileName: string; line: number; column: number }) => {
+      console.debug('[EventListener] Debounced cursor update');
+      sdk.navigation.updateCursor(cursor);
+    },
+    50,
+    true // Leading edge
+  );
 
   useEffect(() => {
     // Only open websocket if not in VSCode webview
@@ -107,107 +99,53 @@ export const EventListener: React.FC = () => {
     return () => ws.close();
   }, [isVSCodeWebview]);
 
+  // Main message handler - routes IDE/LSP messages to SDK methods
   useEffect(() => {
-    const fn = (event: MessageEvent<VscodeToWebviewCommand>) => {
-      const { source, payload } = event.data;
-      console.debug("EventListener handling command", { source, payload });
+    const handler = async (event: MessageEvent<VscodeToWebviewCommand>) => {
+      const { source, payload } = event.data || {};
 
-      switch (source) {
-        case "ide_message":
-          const { command, content } = payload;
-          switch (command) {
-            case "update_cursor":
-              updateCursor(content);
-              break;
-            case "baml_settings_updated":
-              setBamlConfig(content);
-              break;
-            case "baml_cli_version":
-              setBamlCliVersion(content);
-              break;
-          }
-          break;
-        case "lsp_message":
-          const { method, params } = payload;
-          switch (method) {
-            case "baml_settings_updated":
-              setBamlConfig(({ config: prevConfig, ...prevRest }) => {
-                const newConfig = {
-                  ...prevRest,
-                  config: { ...prevConfig, ...params },
-                };
-                console.debug("baml_settings_updated", {
-                  prevConfig,
-                  params,
-                  newConfig,
-                });
-                return newConfig;
-              });
-              break;
-            case "runtime_updated":
-              debouncedSetBamlFileMap(
-                Object.fromEntries(
-                  Object.entries(params.files).map(([name, content]) => [
-                    name,
-                    content,
-                  ]),
-                ),
-              );
-              break;
-            case "workspace/executeCommand":
-              const { command } = params;
-              switch (command) {
-                case "baml.openBamlPanel": {
-                  const [args] = params.arguments;
-                  setSelectedFunction(args.functionName);
-                  break;
-                }
-                case "baml.runBamlTest": {
-                  const [args] = params.arguments;
-                  setSelectedFunction(args.functionName);
-                  setSelectedTestcase(args.testCaseName);
+      // Ignore messages that don't have the expected structure
+      if (!source) {
+        return;
+      }
 
-                  // NB(sam): without this timeout, jetbrains hits "recursive use of an object"
-                  setTimeout(() => {
-                    runBamlTests([
-                      {
-                        functionName: args.functionName,
-                        testName: args.testCaseName,
-                      },
-                    ]);
-                  }, 1000);
-                  break;
-                }
-              }
-              break;
-            case "textDocument/codeAction": {
-              const { textDocument, range } = params;
-              // TODO: this needs testing for escaped file paths!
-              const fileName = textDocument.uri.replace("file://", "");
-              updateCursor({
-                fileName,
-                line: range.start.line,
-                column: range.start.character,
-              });
-              break;
-            }
-          }
-          break;
+      console.debug('[EventListener] Handling command:', { source, payload });
+
+      try {
+        switch (source) {
+          case 'ide_message':
+            // Handle IDE messages via SDK
+            await handleIDEMessage(
+              sdk,
+              payload,
+              debouncedUpdateCursor,
+              setBamlCliVersion,
+              setBamlConfig
+            );
+            break;
+
+          case 'lsp_message':
+            // Handle LSP messages via SDK
+            await handleLSPMessage(sdk, payload, debouncedUpdateFiles, setBamlConfig);
+            break;
+
+          default:
+            console.warn('[EventListener] Unknown message source:', source);
+        }
+      } catch (error) {
+        // Log error but don't crash EventListener - continue processing other messages
+        console.error('[EventListener] Error handling message:', {
+          source,
+          payload,
+          error,
+        });
       }
     };
 
-    window.addEventListener("message", fn);
+    window.addEventListener('message', handler);
 
-    return () => window.removeEventListener("message", fn);
-    // If we dont add the jotai atom callbacks here like setRunningTests, this will call an old version of the atom (e.g. runTests which may have undefined dependencies).
-  }, [
-    selectedFunc,
-    runBamlTests,
-    updateCursor,
-    setSelectedFunction,
-    setSelectedTestcase,
-    bamlFileMap,
-  ]);
+    return () => window.removeEventListener('message', handler);
+  }, [sdk, debouncedUpdateFiles, debouncedUpdateCursor, setBamlCliVersion, setBamlConfig]);
 
   return (
     <>

@@ -3,5 +3,75 @@ source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Instructions: 0 bytes
-Constants: 0
+Functions: 11
+Objects: 14
+Globals: 11
+
+Function boolArray (arity: 0, kind: Exec):
+     0   LOAD_CONST 0    (true)
+     1   LOAD_CONST 1    (false)
+     2   LOAD_CONST 0    (true)
+     3   ALLOC_ARRAY 3   
+     4   RETURN          
+
+Function boolValues (arity: 0, kind: Exec):
+     0   RETURN   
+
+Function floatArray (arity: 0, kind: Exec):
+     0   LOAD_CONST 0    (1)
+     1   LOAD_CONST 1    (2)
+     2   LOAD_CONST 2    (3)
+     3   ALLOC_ARRAY 3   
+     4   RETURN          
+
+Function floatValues (arity: 0, kind: Exec):
+     0   RETURN   
+
+Function intArray (arity: 0, kind: Exec):
+     0   LOAD_CONST 0    (1)
+     1   LOAD_CONST 1    (2)
+     2   LOAD_CONST 2    (3)
+     3   ALLOC_ARRAY 3   
+     4   RETURN          
+
+Function intValues (arity: 0, kind: Exec):
+     0   RETURN   
+
+Function point (arity: 0, kind: Exec):
+     0   LOAD_CONST 0    (1)
+     1   LOAD_CONST 1    (2)
+     2   ALLOC_ARRAY 2   
+     3   RETURN          
+
+Function pointArray (arity: 0, kind: Exec):
+     0    LOAD_CONST 0    (1)
+     1    LOAD_CONST 1    (2)
+     2    ALLOC_ARRAY 2   
+     3    LOAD_CONST 2    (3)
+     4    LOAD_CONST 3    (4)
+     5    ALLOC_ARRAY 2   
+     6    LOAD_CONST 4    (5)
+     7    LOAD_CONST 5    (6)
+     8    ALLOC_ARRAY 2   
+     9    ALLOC_ARRAY 3   
+     10   RETURN          
+
+Function stringArray (arity: 0, kind: Exec):
+     0   LOAD_CONST 0    (<fn floatArray>)
+     1   LOAD_CONST 1    (<fn stringArray>)
+     2   LOAD_CONST 2    ("hello")
+     3   ALLOC_ARRAY 3   
+     4   RETURN          
+
+Function stringValues (arity: 0, kind: Exec):
+     0   RETURN   
+
+Function vec2d (arity: 0, kind: Exec):
+     0   LOAD_CONST 0    (1)
+     1   LOAD_CONST 1    (2)
+     2   ALLOC_ARRAY 2   
+     3   LOAD_CONST 2    (3)
+     4   LOAD_CONST 3    (4)
+     5   ALLOC_ARRAY 2   
+     6   ALLOC_ARRAY 2   
+     7   RETURN

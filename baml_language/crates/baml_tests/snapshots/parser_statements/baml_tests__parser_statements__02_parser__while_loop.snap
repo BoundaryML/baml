@@ -1,0 +1,118 @@
+---
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "simple_while_loop"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT "
+  let i = 0;"
+          KW_LET "let"
+          WORD "i"
+          EQUALS "="
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        WHILE_STMT
+          KW_WHILE "while"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "i < 10"
+              WORD "i"
+              LESS "<"
+              INTEGER_LITERAL "10"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            BINARY_EXPR
+              WORD "i"
+              EQUALS "="
+              BINARY_EXPR "i + 1"
+                WORD "i"
+                PLUS "+"
+                INTEGER_LITERAL "1"
+            SEMICOLON ";"
+            R_BRACE "}"
+        RETURN_STMT "
+  return i;"
+          KW_RETURN "return"
+          WORD "i"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "nested_while_loop"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT "
+  let i = 0;"
+          KW_LET "let"
+          WORD "i"
+          EQUALS "="
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        WHILE_STMT
+          KW_WHILE "while"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "i < 10"
+              WORD "i"
+              LESS "<"
+              INTEGER_LITERAL "10"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            LET_STMT "
+    let j = 0;"
+              KW_LET "let"
+              WORD "j"
+              EQUALS "="
+              INTEGER_LITERAL "0"
+              SEMICOLON ";"
+            WHILE_STMT
+              KW_WHILE "while"
+              PAREN_EXPR
+                L_PAREN "("
+                BINARY_EXPR "j < 10"
+                  WORD "j"
+                  LESS "<"
+                  INTEGER_LITERAL "10"
+                R_PAREN ")"
+              BLOCK_EXPR
+                L_BRACE "{"
+                BINARY_EXPR
+                  WORD "j"
+                  EQUALS "="
+                  BINARY_EXPR "j + 1"
+                    WORD "j"
+                    PLUS "+"
+                    INTEGER_LITERAL "1"
+                SEMICOLON ";"
+                R_BRACE "}"
+            R_BRACE "}"
+        RETURN_STMT "
+  return i;"
+          KW_RETURN "return"
+          WORD "i"
+          SEMICOLON ";"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

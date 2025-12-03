@@ -1,7 +1,19 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Instructions: 0 bytes
-Constants: 0
+Functions: 3
+Objects: 4
+Globals: 3
+
+Function Foo (arity: 0, kind: Llm):
+  (no bytecode)
+
+Function Incomplete (arity: 1, kind: Exec):
+  (no bytecode)
+
+Function NextFunction (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (<fn Foo>)
+     1   RETURN         
+     2   RETURN

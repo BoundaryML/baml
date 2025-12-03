@@ -1,5 +1,35 @@
 ---
-source: target/debug/build/baml_tests-91bdee82f91f7b04/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
+  Function AnotherLLM:
+    Return: String
+  Function Ambiguous:
+    Return: String
+  Function ProcessData:
+    Return: Void
+    Errors:
+      - Unknown type data::field1
+      - Unknown type data::field2
+      - Invalid op Add for unknown and unknown
+  Function ExtractData:
+    Return: Unknown
+  Function SimpleCalc:
+    Return: Void
+  Function ProcessAnalysis:
+    Return: Void
+    Errors:
+      - Unknown type analysis::score
+      - Unknown type analysis::sentiment
+      - Invalid op Add for string and unknown
+      - Unknown type analysis::sentiment
+      - Invalid op Add for string and unknown
+      - Unknown type analysis::sentiment
+      - Invalid op Add for string and unknown
+      - Unknown type analysis::sentiment
+      - Invalid op Add for string and unknown
+  Function LLMAnalyze:
+    Return: Unknown
+  Function ChainedProcess:
+    Return: String

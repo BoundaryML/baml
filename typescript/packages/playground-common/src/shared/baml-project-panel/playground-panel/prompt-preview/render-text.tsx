@@ -1,10 +1,11 @@
 import { cn } from '@baml/ui/lib/utils';
 import { atom, useAtomValue } from 'jotai';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import React from 'react';
 import { displaySettingsAtom } from '../preview-toolbar';
 import { getHighlightedParts } from './highlight-utils';
 import { TokenEncoderCache } from './render-tokens';
+import type { Tiktoken } from 'js-tiktoken/lite';
 
 export const showTokensAtom = atom(
   (get) => get(displaySettingsAtom).showTokens,
@@ -46,26 +47,54 @@ export const RenderPromptPart: React.FC<{
   provider?: string;
 }> = ({ text, highlightChunks = [], model, provider }) => {
   const showTokens = useAtomValue(showTokensAtom);
-  // const currentClient = useAtomValue(currentClientsAtom)
-  // this causes weird scroll issues
+  const [encoder, setEncoder] = useState<Tiktoken | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const tokenizer = useMemo(() => {
-    if (!showTokens) return undefined;
+  // Load encoder asynchronously when needed
+  useEffect(() => {
+    if (!showTokens) {
+      setEncoder(null);
+      return;
+    }
 
-    // TODO! Change this to the appropriate tokenizer!
     const encodingName = TokenEncoderCache.getEncodingNameForModel(
       'baml-openai-chat',
       'gpt-4o',
     );
-    console.log('encoding name', encodingName);
-    if (!encodingName) return undefined;
+    if (!encodingName) return;
 
-    const enc = TokenEncoderCache.INSTANCE.getEncoder(encodingName);
-    return { enc, tokens: enc.encode(text) };
-  }, [text, showTokens, model, provider]);
+    // Check if already cached
+    const cached = TokenEncoderCache.INSTANCE.getEncoder(encodingName);
+    if (cached) {
+      setEncoder(cached);
+      return;
+    }
+
+    // Load asynchronously
+    setIsLoading(true);
+    TokenEncoderCache.INSTANCE.getEncoderAsync(encodingName)
+      .then(enc => {
+        setEncoder(enc);
+        setIsLoading(false);
+      })
+      .catch(err => {
+        console.error('Failed to load tokenizer:', err);
+        setIsLoading(false);
+      });
+  }, [showTokens, model, provider]);
+
+  const tokenizer = useMemo(() => {
+    if (!showTokens || !encoder) return undefined;
+    return { enc: encoder, tokens: encoder.encode(text) };
+  }, [text, showTokens, encoder]);
 
   // Only compute highlighted text if we're not tokenizing
   const renderContent = useMemo(() => {
+    // Show loading state while encoder is being loaded
+    if (showTokens && isLoading) {
+      return <span className="text-muted-foreground">Loading tokenizer...</span>;
+    }
+
     if (tokenizer) {
       const tokenized = Array.from(tokenizer.tokens).map((token) =>
         tokenizer.enc.decode([token]),
@@ -96,11 +125,11 @@ export const RenderPromptPart: React.FC<{
 
     // Only do highlighting if we're not tokenizing
     return <HighlightedText text={text} highlightChunks={highlightChunks} />;
-  }, [text, highlightChunks, tokenizer]);
+  }, [text, highlightChunks, tokenizer, showTokens, isLoading]);
 
   return (
     <div className="flex flex-col min-w-0">
-      <div className="px-3 pb-3 pt-2 bg-accent group max-h-[600px] overflow-y-auto overflow-x-hidden min-w-0">
+      <div className="px-3 pb-3 pt-0 bg-accent group max-h-[600px] overflow-y-auto overflow-x-hidden min-w-0">
         <pre
           className={cn(
             'whitespace-pre-wrap text-xs leading-relaxed transition-all text-primary-foreground min-w-0',

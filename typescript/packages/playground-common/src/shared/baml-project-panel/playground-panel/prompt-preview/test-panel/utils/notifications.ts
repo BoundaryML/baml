@@ -11,8 +11,8 @@ export function parseNotificationValue(value: string): any {
 }
 
 export function getNotificationLabel(notification: WatchNotification): string {
-  if (notification.variable_name) {
-    return notification.variable_name;
+  if (notification.variableName) {
+    return notification.variableName;
   }
 
   // Try to parse JSON value to check for block type
@@ -30,10 +30,10 @@ export function getNotificationLabel(notification: WatchNotification): string {
     }
   }
 
-  if (notification.is_stream) {
-    return `Stream: ${notification.block_name ?? 'unknown'}`;
+  if (notification.isStream) {
+    return `Stream: ${notification.lexicalNodeId ?? 'unknown'}`;
   }
-  return notification.block_name ?? 'Block';
+  return notification.lexicalNodeId ?? 'Block';
 }
 
 export function getNotificationType(notification: WatchNotification): 'variable' | 'block' | 'stream' {
@@ -47,6 +47,6 @@ export function getNotificationType(notification: WatchNotification): 'variable'
     if (notification.value.startsWith('Block(')) return 'block';
   }
 
-  if (notification.is_stream) return 'stream';
+  if (notification.isStream) return 'stream';
   return 'variable';
 }

@@ -4,6 +4,7 @@ import { useAtom } from 'jotai'
 import { Brain, Clock } from 'lucide-react'
 import * as React from 'react'
 import { type TestHistoryRun } from '../atoms'
+import { getTestStateResponse } from '../testStateUtils'
 import { tabularViewConfigAtom } from './atoms'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ParsedResponseRenderer } from './ParsedResponseRender'
@@ -30,7 +31,7 @@ export const SimpleCardView: React.FC<SimpleCardViewProps> = ({ currentRun }) =>
                 <>
                   <Badge variant='outline' className='flex items-center space-x-1'>
                     <Brain className='h-3 w-3' />
-                    <span>{test.response.response.llm_response()?.model}</span>
+                    <span>{test.response.response.llm_response?.model}</span>
                   </Badge>
                   <Badge variant='outline' className='flex items-center space-x-1'>
                     <Clock className='h-3 w-3' />
@@ -40,15 +41,20 @@ export const SimpleCardView: React.FC<SimpleCardViewProps> = ({ currentRun }) =>
               )}
             </div>
           </div>
-          {test.response.status === 'done' &&
-            test.response.response?.parsed_response() &&
-            (config.responseViewType === 'pretty' ? (
+          {/* Render response for both 'done' and 'running' states */}
+          {(() => {
+            const responseData = getTestStateResponse(test.response);
+            if (!responseData || typeof responseData === 'string') return null;
+            if (!responseData.parsed_response) return null;
+
+            return config.responseViewType === 'pretty' ? (
               <MarkdownRenderer
-                source={JSON.stringify(JSON.parse(test.response.response.parsed_response()?.value ?? '{}'), null, 2)}
+                source={JSON.stringify(JSON.parse(responseData.parsed_response?.value ?? '{}'), null, 2)}
               />
             ) : (
-              <ParsedResponseRenderer response={test.response.response} />
-            ))}
+              <ParsedResponseRenderer response={responseData} />
+            );
+          })()}
         </div>
       ))}
     </div>

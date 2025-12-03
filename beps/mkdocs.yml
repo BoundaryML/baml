@@ -1,0 +1,59 @@
+site_name: BEPs (BAML Enhancement Proposals)
+site_description: BAML Language Proposals
+# site_url: https://boundaryml.github.io/baml/beps/
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - toc.follow
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+  - attr_list
+  - md_in_html
+
+plugins:
+  - search
+  - git-revision-date-localized:
+      fallback_to_build_date: true
+      type: datetime
+  - git-committers:
+      repository: boundaryml/baml
+      branch: canary
+
+hooks:
+  - bep_hooks.py
+
+site_dir: ../_site
+
+watch:
+  - docs/

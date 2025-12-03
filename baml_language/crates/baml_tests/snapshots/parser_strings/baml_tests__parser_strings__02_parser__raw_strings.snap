@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -112,68 +112,48 @@ SOURCE_FILE
     WORD "ProcessText"
     PARAMETER_LIST
       L_PAREN "("
-      PARAMETER "input"
+      PARAMETER
         WORD "input"
-  WORD "string"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "string"
-  L_BRACE "{"
-  CLIENT_DEF "
+        TYPE_EXPR " string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "
   client GPT4"
-    KW_CLIENT "client"
-    WORD "GPT4"
-  WORD "prompt"
-  HASH "#"
-  QUOTE """
-  WORD "Process"
-  WORD "the"
-  WORD "following"
-  WORD "text"
-  COLON ":"
-  L_BRACE "{"
-  L_BRACE "{"
-  WORD "input"
-  R_BRACE "}"
-  R_BRACE "}"
-  WORD "Return"
-  WORD "the"
-  WORD "processed"
-  WORD "result"
-  DOT "."
-  QUOTE """
-  HASH "#"
-  R_BRACE "}"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL " #"
+    Process the following text:
+    {{ input }}
+    
+    Return the processed result.
+  "#"
+          HASH "#"
+          QUOTE """
+          WORD "Process"
+          WORD "the"
+          WORD "following"
+          WORD "text"
+          COLON ":"
+          L_BRACE "{"
+          L_BRACE "{"
+          WORD "input"
+          R_BRACE "}"
+          R_BRACE "}"
+          WORD "Return"
+          WORD "the"
+          WORD "processed"
+          WORD "result"
+          DOT "."
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
 
 === ERRORS ===
-  Expected Expected type annotation (:), found Expected type annotation (:)
-  Expected Expected RParen, found Word, found Expected RParen, found Word
-  Expected Expected return type (->), found Expected return type (->)
-  Expected Expected function body, found Expected function body
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected config block, found Expected config block
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
-  Expected Expected top-level declaration, found Expected top-level declaration
+None

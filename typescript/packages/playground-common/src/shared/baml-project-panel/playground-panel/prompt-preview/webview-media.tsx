@@ -1,7 +1,6 @@
 'use client';
 import { Button } from '@baml/ui/button';
 // import Link from "next/link";
-import type { WasmChatMessagePartMedia } from '@gloo-ai/baml-schema-wasm-web';
 /* eslint-disable @typescript-eslint/require-await */
 import { useAtom, useAtomValue } from 'jotai';
 import {
@@ -17,18 +16,25 @@ import {
   Video,
   X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { wasmAtom } from '../../atoms';
 import { vscode } from '../../vscode';
 import { imageStatsMapAtom } from './image-stats-atom';
 import { mediaCollapsedMapAtom } from './media-collapsed-atom';
-import { PdfViewer } from './pdf-viewer';
 import { showTokensAtom } from './render-text';
+
+// Lazy load PdfViewer to reduce initial bundle size (react-pdf is ~1MB+)
+const PdfViewer = lazy(() => import('./pdf-viewer').then(m => ({ default: m.PdfViewer })));
+
+export interface MediaInfo {
+  content: string;
+  type?: number; // Optional: WASM media type (File/Url/Error)
+}
 
 interface WebviewMediaProps {
   bamlMediaType: 'image' | 'audio' | 'pdf' | 'video';
-  media: WasmChatMessagePartMedia;
+  media: MediaInfo;
 }
 
 // Helper function to convert base64 data URL to blob URL for better performance
@@ -169,6 +175,11 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
     async () => {
       if (!wasm) {
         throw new Error('wasm not loaded');
+      }
+
+      // If type is undefined, assume it's a file path (from unified types)
+      if (media.type === undefined) {
+        return `${media.content}`;
       }
 
       switch (media.type) {
@@ -632,7 +643,18 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   };
 
   const renderPdfContent = (url: string) => {
-    return <PdfViewer url={url} />;
+    return (
+      <Suspense fallback={
+        <div className="flex items-center justify-center h-[30vh]">
+          <div className="text-center space-y-2">
+            <div className="w-6 h-6 border-2 border-[var(--vscode-panel-border)] border-t-[var(--vscode-foreground)] rounded-full animate-spin mx-auto"></div>
+            <p className="text-sm text-[var(--vscode-description-foreground)]">Loading PDF viewer...</p>
+          </div>
+        </div>
+      }>
+        <PdfViewer url={url} />
+      </Suspense>
+    );
   };
 
   const handleCopyToClipboard = async () => {

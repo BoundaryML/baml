@@ -1,62 +1,70 @@
+/**
+ * Playground Panel Atoms
+ *
+ * This file bridges between the old WASM-based runtime and the new SDK.
+ * It maintains backward compatibility while using SDK atoms where possible.
+ */
+
 import { type Atom, atom } from 'jotai';
-import { filesAtom, runtimeAtom } from '../atoms';
 
-// Related to test status
-import type {
-  WasmFunction,
-  WasmFunctionResponse,
-  WasmTestResponse,
-} from '@gloo-ai/baml-schema-wasm-web';
-import { atomFamily } from 'jotai/utils';
-import type { WatchNotification } from './prompt-preview/test-panel/types';
+import { atomFamily, atomWithStorage } from 'jotai/utils';
 
-export const runtimeStateAtom: Atom<{
-  functions: WasmFunction[];
-  stale: boolean;
-}> = atom((get) => {
-  const { rt, lastValidRt } = get(runtimeAtom);
-  console.debug('rt', rt);
-  if (rt === undefined) {
-    if (lastValidRt === undefined) {
-      return { functions: [], stale: false };
-    }
-    // Include both LLM functions and expr functions
-    const llmFunctions = lastValidRt.list_functions();
-    const exprFunctions = lastValidRt.list_expr_fns();
-    return { functions: [...llmFunctions, ...exprFunctions], stale: true };
-  }
-  // Include both LLM functions and expr functions
-  const llmFunctions = rt.list_functions();
-  const exprFunctions = rt.list_expr_fns();
-  return { functions: [...llmFunctions, ...exprFunctions], stale: false };
-});
+// ============================================================================
+// SDK Atoms - Direct Re-exports
+// ============================================================================
 
-export const selectedFunctionAtom = atom<string | undefined>(undefined);
-export const selectedTestcaseAtom = atom<string | undefined>(undefined);
+// Re-export SDK atoms directly without creating local copies
+export {
+  // Test execution state
+  areTestsRunningAtom,
+  currentAbortControllerAtom,
+  flashRangesAtom,
+  testHistoryAtom,
+  selectedHistoryIndexAtom,
+  selectedTestHistoryAtom,
+  currentWatchNotificationsAtom,
+  highlightedBlocksAtom,
+  categorizedNotificationsAtom,
 
-export const selectedItemAtom = atom(
-  (get) => {
-    const selected = get(selectionAtom);
-    if (
-      selected.selectedFn === undefined ||
-      selected.selectedTc === undefined
-    ) {
-      return undefined;
-    }
-    return [selected.selectedFn.name, selected.selectedTc.name] as [
-      string,
-      string,
-    ];
-  },
-  (_, set, functionName: string, testcaseName: string | undefined) => {
-    set(selectedFunctionAtom, functionName);
-    set(selectedTestcaseAtom, testcaseName);
-  },
+  // Types
+  type TestState,
+  type TestHistoryEntry,
+  type TestHistoryRun,
+  type WatchNotification,
+  type FlashRange,
+  type CategorizedNotifications,
+} from '../../../sdk/atoms/test.atoms';
+
+// Import for internal use
+import {
+  selectedTestHistoryAtom,
+} from '../../../sdk/atoms/test.atoms';
+
+// Re-export selection atoms from SDK
+import {
+  selectedFunctionNameAtom,
+  selectedTestCaseNameAtom,
+  unifiedSelectionStateAtom,
+  functionsAtom,
+} from '../../../sdk/atoms/core.atoms';
+
+type FunctionType = 'workflow' | 'function' | 'llm_function' | 'conditional' | 'loop' | 'group' | 'return' | 'block';
+type NodeType = 'llm_function' | 'function';
+
+
+
+export const graphControlsTipDismissedAtom = atomWithStorage(
+  'playground:graphControlsTipDismissed',
+  false
 );
+
+// ============================================================================
+// Function & Test Case Helpers
+// ============================================================================
 
 export const functionObjectAtom = atomFamily((functionName: string) =>
   atom((get) => {
-    const { functions } = get(runtimeStateAtom);
+    const functions = get(functionsAtom);
     const fn = functions.find((f) => f.name === functionName);
     if (!fn) {
       return undefined;
@@ -68,103 +76,52 @@ export const functionObjectAtom = atomFamily((functionName: string) =>
 export const testcaseObjectAtom = atomFamily(
   (params: { functionName: string; testcaseName?: string | null }) =>
     atom((get) => {
-      const { functions } = get(runtimeStateAtom);
-      const fn = functions.find((f) => f.name === params.functionName);
-      if (!fn) {
+      try {
+        const functions = get(functionsAtom);
+        const fn = functions.find((f) => f.name === params.functionName);
+        if (!fn) {
+          return undefined;
+        }
+        const tc = fn.testCases?.find((tc) => tc.name === params.testcaseName);
+        if (!tc) {
+          return undefined;
+        }
+        return tc;
+      } catch (error) {
+        console.error('Error getting testcase object', error);
         return undefined;
       }
-      const tc = fn.test_cases.find((tc) => tc.name === params.testcaseName);
-      if (!tc) {
-        return undefined;
-      }
-      return tc;
     }),
 );
 
-export const updateCursorAtom = atom(
-  null,
-  (
-    get,
-    set,
-    cursor: {
-      fileName: string;
-      line: number;
-      column: number;
-    },
-  ) => {
-    const runtime = get(runtimeAtom)?.rt;
-    if (!runtime) {
-      return;
-    }
-    const fileContent = get(filesAtom)[cursor.fileName];
-    if (!fileContent) {
-      return;
-    }
 
-    const fileName = cursor.fileName;
-    const lines = fileContent.split('\n');
-
-    let cursorIdx = 0;
-    for (let i = 0; i < cursor.line; i++) {
-      cursorIdx += (lines[i]?.length ?? 0) + 1; // +1 for the newline character
-    }
-    cursorIdx += cursor.column;
-
-    const selectedFunc = runtime.get_function_at_position(
-      fileName,
-      get(selectedFunctionAtom) ?? '',
-      cursorIdx,
-    );
-
-    if (selectedFunc) {
-      set(selectedFunctionAtom, selectedFunc.name);
-      const selectedTestcase = runtime.get_testcase_from_position(
-        selectedFunc,
-        cursorIdx,
-      );
-
-      if (selectedTestcase) {
-        set(selectedTestcaseAtom, selectedTestcase.name);
-        const nestedFunc = runtime.get_function_of_testcase(
-          fileName,
-          cursorIdx,
-        );
-
-        if (nestedFunc) {
-          set(selectedFunctionAtom, nestedFunc.name);
-        }
-      }
-    }
-  }
-);
+// ============================================================================
+// Selection State
+// ============================================================================
 
 export const selectionAtom = atom((get) => {
-  const selectedFunction = get(selectedFunctionAtom);
-  const selectedTestcase = get(selectedTestcaseAtom);
+  const selectedFunction = get(selectedFunctionNameAtom);
+  const selectedTestcase = get(selectedTestCaseNameAtom);
 
-  const state = get(runtimeStateAtom);
+  const functions = get(functionsAtom);
 
-  let selectedFn = state.functions.at(0);
-  if (selectedFunction !== undefined) {
-    const foundFn = state.functions.find((f) => f.name === selectedFunction);
+  type FunctionType = (typeof functions)[number];
+  let selectedFn: FunctionType | null = null;
+  if (selectedFunction !== null) {
+    const foundFn = functions.find((f) => f.name === selectedFunction);
     if (foundFn) {
       selectedFn = foundFn;
     } else {
-      console.error('Function not found', selectedFunction);
+      console.warn('Function not found', selectedFunction);
     }
-  } else {
-    console.debug('No function selected');
   }
 
-  let selectedTc = selectedFn?.test_cases.at(0);
-  if (selectedTestcase !== undefined) {
-    const foundTc = selectedFn?.test_cases.find(
-      (tc) => tc.name === selectedTestcase,
-    );
-    if (foundTc) {
-      selectedTc = foundTc;
-    } else {
-      console.error('Testcase not found', selectedTestcase);
+  type TestType = FunctionType['testCases'][number];
+  let selectedTc: TestType | null = null;
+  if (selectedFn && selectedTestcase !== null) {
+    selectedTc = selectedFn.testCases?.find((tc) => tc.name === selectedTestcase) ?? null;
+    if (!selectedTc) {
+      console.warn('Testcase not found', selectedTestcase);
     }
   }
 
@@ -176,6 +133,10 @@ export const selectedFunctionObjectAtom = atom((get) => {
   return selectedFn;
 });
 
+// ============================================================================
+// Test Status Types (for backward compatibility)
+// ============================================================================
+
 export type TestStatusType = 'queued' | 'running' | 'done' | 'error' | 'idle';
 export type DoneTestStatusType =
   | 'passed'
@@ -184,34 +145,17 @@ export type DoneTestStatusType =
   | 'constraints_failed'
   | 'assert_failed'
   | 'error';
-export type TestState =
-  | {
-    status: 'queued' | 'idle';
-  }
-  | {
-    status: 'running';
-    response?: WasmFunctionResponse;
-    watchNotifications?: WatchNotification[];  // NEW
-  }
-  | {
-    status: 'done';
-    response_status: DoneTestStatusType;
-    response: WasmTestResponse;
-    latency_ms: number;
-    watchNotifications?: WatchNotification[];  // NEW
-  }
-  | {
-    status: 'error';
-    message: string;
-    watchNotifications?: WatchNotification[];  // NEW
-  };
+
+// ============================================================================
+// Test Case Helpers
+// ============================================================================
 
 export const testCaseAtom = atomFamily(
   (params: { functionName: string; testName: string }) =>
     atom((get) => {
-      const { functions } = get(runtimeStateAtom);
+      const functions = get(functionsAtom);
       const fn = functions.find((f) => f.name === params.functionName);
-      const tc = fn?.test_cases.find((tc) => tc.name === params.testName);
+      const tc = fn?.testCases?.find((tc) => tc.name === params.testName);
       if (!fn || !tc) {
         return undefined;
       }
@@ -221,43 +165,56 @@ export const testCaseAtom = atomFamily(
 
 export const functionTestSnippetAtom = atomFamily((functionName: string) =>
   atom((get) => {
-    const { functions } = get(runtimeStateAtom);
+    const functions = get(functionsAtom);
     const fn = functions.find((f) => f.name === functionName);
     if (!fn) {
       return undefined;
     }
-    return fn.test_snippet;
+    return fn.testSnippet;
   }),
 );
 
+// ============================================================================
+// Test Case Response (uses SDK test history)
+// ============================================================================
+
+/**
+ * Get the test state for a specific function/test case from SDK test history
+ * This replaces the old runningTestsAtom which was never set
+ */
 export const testCaseResponseAtom = atomFamily(
   (params: { functionName?: string; testName?: string }) =>
     atom((get) => {
-      const allTestCaseResponse = get(runningTestsAtom);
-      const testCaseResponse = allTestCaseResponse.find(
+      // Get the currently selected test history run (most recent)
+      const historyRun = get(selectedTestHistoryAtom);
+      if (!historyRun) {
+        return undefined;
+      }
+
+      // Find the matching test in the history
+      const testEntry = historyRun.tests.find(
         (t) =>
           t.functionName === params.functionName &&
-          t.testName === params.testName,
-        undefined,
+          t.testName === params.testName
       );
-      return testCaseResponse?.state;
+
+      // Return the test state (response field contains the TestState)
+      return testEntry?.response;
     }),
 );
-export const areTestsRunningAtom = atom(false);
-// TODO: this is never set.
-export const runningTestsAtom = atom<
-  { functionName: string; testName: string; state: TestState }[]
->([]);
 
-// AbortController for cancelling running tests
-export const currentAbortControllerAtom = atom<AbortController | null>(null);
+// ============================================================================
+// UNIFIED STATE INTEGRATION
+// ============================================================================
 
-export interface FlashRange {
-  filePath: string;
-  startLine: number;
-  startCol: number;
-  endLine: number;
-  endCol: number;
-}
-
-export const flashRangesAtom = atom<FlashRange[]>([]);
+// Re-export unified atoms
+export {
+  unifiedSelectionAtom,
+  activeTabAtom,
+  viewModeAtom,
+  bottomPanelModeAtom,
+  shouldShowGraphAtom,
+  type UnifiedSelection,
+  type TabValue,
+  type BottomPanelMode,
+} from './unified-atoms';
