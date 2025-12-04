@@ -22,6 +22,41 @@ README_PATH = DOCS_DIR / "README.md"
 TABLE_START = "<!-- BEP-TABLE-START -->"
 TABLE_END = "<!-- BEP-TABLE-END -->"
 
+# Cache for canary ref detection
+_CANARY_REF = None
+
+def get_canary_ref() -> str:
+    """Get the canary branch reference, trying local first then remote."""
+    global _CANARY_REF
+    if _CANARY_REF is not None:
+        return _CANARY_REF
+    
+    # Try local 'canary' branch first
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "canary"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=False
+    )
+    if result.returncode == 0:
+        _CANARY_REF = "canary"
+        return _CANARY_REF
+    
+    # Try 'origin/canary' (common in CI/CD)
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "origin/canary"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=False
+    )
+    if result.returncode == 0:
+        _CANARY_REF = "origin/canary"
+        return _CANARY_REF
+    
+    # Fallback - return canary and let it fail gracefully
+    _CANARY_REF = "canary"
+    return _CANARY_REF
+
 
 def parse_bep_file(path: Path):
     text = path.read_text(encoding="utf-8")
@@ -72,8 +107,9 @@ def parse_bep_file(path: Path):
                 try:
                     # Get path relative to repo root for git command
                     rel_path = path.relative_to(REPO_ROOT)
+                    canary_ref = get_canary_ref()
                     file_in_canary = subprocess.run(
-                        ["git", "cat-file", "-e", f"canary:{rel_path}"],
+                        ["git", "cat-file", "-e", f"{canary_ref}:{rel_path}"],
                         cwd=REPO_ROOT,
                         capture_output=True,
                         check=False
@@ -89,8 +125,9 @@ def parse_bep_file(path: Path):
                     # Get last modified time from git relative to canary branch
                     try:
                         # Get the last commit date for the file between canary and HEAD
+                        canary_ref = get_canary_ref()
                         git_date = subprocess.check_output(
-                            ["git", "log", "canary..HEAD", "-1", "--format=%cd", "--date=format:%Y-%m-%d", "--", str(path)],
+                            ["git", "log", f"{canary_ref}..HEAD", "-1", "--format=%cd", "--date=format:%Y-%m-%d", "--", str(path)],
                             text=True,
                             stderr=subprocess.DEVNULL
                         ).strip()
