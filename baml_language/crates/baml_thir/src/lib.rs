@@ -755,10 +755,13 @@ fn infer_field_access<'db>(
             .lookup(field)
             .or(ctx.lookup_class_field(class_name, field))
             .cloned(),
-        Ty::Class(_class_id) => {
-            // TODO: Look up field/method in class using ClassId
-            // For now, return Unknown
-            None
+        Ty::Class(class_id) => {
+            let class_fields_data = baml_hir::class_fields(ctx.db(), *class_id);
+            let fields = class_fields_data.fields(ctx.db());
+            fields
+                .iter()
+                .find(|(name, _)| name == field)
+                .map(|(_, type_ref)| lower_type_ref(ctx.db(), type_ref))
         }
         Ty::Unknown => None,
         _ => None,

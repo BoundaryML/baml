@@ -109,7 +109,7 @@ impl TyLowering {
                     .iter()
                     .map(smol_str::SmolStr::as_str)
                     .collect::<Vec<_>>()
-                    .join("::");
+                    .join(".");
                 Ty::Named(baml_base::Name::new(&full_path))
             }
         }
