@@ -1,3 +1,11 @@
+---
+id: BEP-001
+title: "Exception Handling"
+shepherds: Vaibhav Gupta <vbv@boundaryml.com>
+status: Draft
+created: 2025-11-20
+---
+
 # BEP-001: Exception Handling
 
 Leave comments on either
