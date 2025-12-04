@@ -54,7 +54,7 @@ def parse_bep_file(path: Path):
                 title = get_meta("title", "Untitled")
                 status = get_meta("status", "Unknown")
                 shepherds = get_meta("shepherds", "TBD")
-                created = get_meta("created", "Unknown")
+                created = get_meta("created", "TBD")
 
                 # Validate Shepherds
                 if shepherds == "TBD" or not shepherds:
@@ -62,30 +62,46 @@ def parse_bep_file(path: Path):
                     pass # Actually, let's just ensure it exists for now
 
                 # Validate dates
-                if created != "Unknown":
+                if created != "TBD":
                     try:
                         datetime.strptime(created, "%Y-%m-%d")
                     except ValueError:
                          raise ValueError(f"Invalid created date '{created}' in {path}. Must be YYYY-MM-DD.")
 
-                # Get last modified time from git (more reliable in CI than fs mtime)
+                # Check if file exists in canary branch
                 try:
-                    # Get the last commit date for the file
-                    git_date = subprocess.check_output(
-                        ["git", "log", "-1", "--format=%cd", "--date=format:%Y-%m-%d", str(path)],
-                        text=True,
-                        stderr=subprocess.DEVNULL
-                    ).strip()
-                    if git_date:
-                        last_modified = git_date
-                    else:
-                        # File might be new and not yet committed
-                        mtime = os.path.getmtime(path)
-                        last_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
-                except (subprocess.CalledProcessError, FileNotFoundError):
-                     # Fallback to file system time if git fails
-                    mtime = os.path.getmtime(path)
-                    last_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+                    # Get path relative to repo root for git command
+                    rel_path = path.relative_to(REPO_ROOT)
+                    file_in_canary = subprocess.run(
+                        ["git", "cat-file", "-e", f"canary:{rel_path}"],
+                        cwd=REPO_ROOT,
+                        capture_output=True,
+                        check=False
+                    ).returncode == 0
+                except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+                    file_in_canary = False
+
+                # If file doesn't exist in canary, both dates should be TBD
+                if not file_in_canary:
+                    created = "TBD"
+                    last_modified = "TBD"
+                else:
+                    # Get last modified time from git relative to canary branch
+                    try:
+                        # Get the last commit date for the file between canary and HEAD
+                        git_date = subprocess.check_output(
+                            ["git", "log", "canary..HEAD", "-1", "--format=%cd", "--date=format:%Y-%m-%d", "--", str(path)],
+                            text=True,
+                            stderr=subprocess.DEVNULL
+                        ).strip()
+                        if git_date:
+                            last_modified = git_date
+                        else:
+                            # File has no changes relative to canary
+                            last_modified = "TBD"
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                         # Fallback to TBD if git fails
+                        last_modified = "TBD"
                 
                 # Summary extraction (still heuristic based on markdown structure, or could be metadata)
                 # Let's keep summary as first section after frontmatter for richness, 
