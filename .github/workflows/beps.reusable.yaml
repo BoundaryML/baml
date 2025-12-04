@@ -65,6 +65,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           env: beps-canary
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -91,6 +94,25 @@ jobs:
       - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/canary/*"
+
+      - name: Generate Slack notification
+        id: slack-payload
+        run: |
+          PAYLOAD=$(./beps/scripts/summarize_changes.py \
+            --base-url "https://${{ secrets.BEPS_DOMAIN }}/canary" \
+            --env "canary" \
+            --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --format slack)
+          echo "payload<<EOF" >> $GITHUB_OUTPUT
+          echo "$PAYLOAD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Slack notification
+        if: ${{ secrets.BEPS_SLACK_WEBHOOK_URL != '' }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '${{ steps.slack-payload.outputs.payload }}' \
+            ${{ secrets.BEPS_SLACK_WEBHOOK_URL }}
 
       - name: Update deployment status
         uses: bobheadxi/deployments@v1
@@ -144,6 +166,9 @@ jobs:
       - name: Fetch canary ref
         run: git fetch origin canary
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -187,6 +212,25 @@ jobs:
             **Preview URL**: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
 
             <sub>Commit: `${{ github.event.pull_request.head.sha }}` • [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
+
+      - name: Generate Slack notification
+        id: slack-payload
+        run: |
+          PAYLOAD=$(./beps/scripts/summarize_changes.py \
+            --base-url "https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}" \
+            --env "${{ steps.branch.outputs.name }}" \
+            --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --format slack)
+          echo "payload<<EOF" >> $GITHUB_OUTPUT
+          echo "$PAYLOAD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Slack notification
+        if: ${{ secrets.BEPS_SLACK_WEBHOOK_URL != '' }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '${{ steps.slack-payload.outputs.payload }}' \
+            ${{ secrets.BEPS_SLACK_WEBHOOK_URL }}
 
       - name: Update deployment status
         uses: bobheadxi/deployments@v1
