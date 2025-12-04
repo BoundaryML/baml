@@ -108,11 +108,12 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Send Slack notification
-        if: ${{ secrets.BEPS_SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_PAYLOAD: ${{ steps.slack-payload.outputs.payload }}
         run: |
           curl -X POST -H 'Content-type: application/json' \
-            --data '${{ steps.slack-payload.outputs.payload }}' \
-            ${{ secrets.BEPS_SLACK_WEBHOOK_URL }}
+            --data "$SLACK_PAYLOAD" \
+            "${{ secrets.BEPS_SLACK_WEBHOOK_URL }}"
 
       - name: Update deployment status
         uses: bobheadxi/deployments@v1
@@ -226,11 +227,12 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Send Slack notification
-        if: ${{ secrets.BEPS_SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_PAYLOAD: ${{ steps.slack-payload.outputs.payload }}
         run: |
           curl -X POST -H 'Content-type: application/json' \
-            --data '${{ steps.slack-payload.outputs.payload }}' \
-            ${{ secrets.BEPS_SLACK_WEBHOOK_URL }}
+            --data "$SLACK_PAYLOAD" \
+            "${{ secrets.BEPS_SLACK_WEBHOOK_URL }}"
 
       - name: Update deployment status
         uses: bobheadxi/deployments@v1
