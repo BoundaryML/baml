@@ -750,36 +750,31 @@ fn infer_field_access<'db>(
     field: &Name,
     span: Span,
 ) -> Ty<'db> {
-    match base {
-        Ty::Named(class_name) => {
-            // Try to look up as a method (methods are top-level functions with simple names)
-            if let Some(method_ty) = ctx.lookup(field) {
-                return method_ty.clone();
-            }
-
-            // Try to look up as a field in the class
-            if let Some(field_ty) = ctx.lookup_class_field(class_name, field) {
-                return field_ty.clone();
-            }
-
-            // Field/method not found
-            Ty::Unknown
-        }
+    let found_field = match base {
+        Ty::Named(class_name) => ctx
+            .lookup(field)
+            .or(ctx.lookup_class_field(class_name, field))
+            .cloned(),
         Ty::Class(_class_id) => {
             // TODO: Look up field/method in class using ClassId
             // For now, return Unknown
-            Ty::Unknown
+            None
         }
-        Ty::Unknown => Ty::Unknown,
-        _ => {
+        Ty::Unknown => None,
+        _ => None,
+    };
+
+    found_field.map_or_else(
+        || {
             ctx.push_error(TypeError::NoSuchField {
                 ty: base.clone(),
                 field: field.to_string(),
                 span,
             });
             Ty::Unknown
-        }
-    }
+        },
+        |t| t.clone(),
+    )
 }
 
 /// Infer the type of an index access.

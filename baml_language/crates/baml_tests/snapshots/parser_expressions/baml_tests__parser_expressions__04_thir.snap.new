@@ -1,0 +1,20 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+assertion_line: 2908
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function Calculate:
+    Return: Void
+  Function FieldAccess:
+    Return: Void
+    Errors:
+      - User has no field profile
+      - unknown has no field bio
+      - User has no field profile
+      - unknown has no field settings
+      - unknown has no field theme
+  Function IndexAccess:
+    Return: Void
+  Function TestPrecedence:
+    Return: Void
