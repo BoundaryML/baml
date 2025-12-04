@@ -320,6 +320,10 @@ impl CompilerRunner {
             }
         }
 
+        // Update project root with the list of files for proper Salsa tracking
+        let file_list: Vec<_> = self.source_files.values().copied().collect();
+        self.project_root.set_files(&mut self.db).to(file_list);
+
         // Run all compiler phases
         self.run_all_phases();
     }
@@ -943,14 +947,6 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Metrics, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Metrics, output_annotated);
-    }
-
-    fn was_query_recomputed(&self, query_pattern: &str) -> bool {
-        self.recomputed_queries
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|q| q.contains(query_pattern))
     }
 
     pub(crate) fn get_phase_output(&self, phase: CompilerPhase) -> Option<&str> {

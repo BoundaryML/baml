@@ -14028,9 +14028,9 @@ expression: output
    │
  1 │ // Try parsing rust source with baml.
    │ │ 
-   │ ╰─ type alias 'Language' defined here
+   │ ╰─ type alias 'Language' defined in rust.baml
    │ │ 
-   │ ╰─ 'Language' previously defined here
+   │ ╰─ 'Language' previously defined in rust.baml
    │ 
    │ Note: Error code: E0011
 ───╯

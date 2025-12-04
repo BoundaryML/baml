@@ -89,15 +89,19 @@ where
                 name,
                 kind,
                 first,
+                first_path,
                 second,
+                second_path,
             } => (
                 Report::build(ReportKind::Error, second)
                     .with_message(format!("Duplicate {kind} '{name}'"))
                     .with_label(
-                        Label::new(second).with_message(format!("{kind} '{name}' defined here")),
+                        Label::new(second)
+                            .with_message(format!("{kind} '{name}' defined in {second_path}")),
                     )
                     .with_label(
-                        Label::new(first).with_message(format!("'{name}' previously defined here")),
+                        Label::new(first)
+                            .with_message(format!("'{name}' previously defined in {first_path}")),
                     ),
                 DUPLICATE_NAME,
             ),

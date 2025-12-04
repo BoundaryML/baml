@@ -12,6 +12,8 @@ pub enum NameError {
         name: String,
         kind: &'static str,
         first: Span,
+        first_path: String,
         second: Span,
+        second_path: String,
     },
 }

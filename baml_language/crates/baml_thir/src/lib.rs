@@ -138,7 +138,7 @@ pub fn build_class_fields_from_files(
 ///
 /// TODO: How do we make this incremental/cached? It seems like the
 /// `ClassId` and `EnumId` inside `Ty`, which are salsa references, make it
-/// impossible to #[tracked] `Ty`.
+/// impossible to track `Ty`.
 pub fn lower_project_class_fields(
     db: &dyn Db,
     root: baml_workspace::Project,
@@ -782,17 +782,14 @@ fn infer_field_access<'db>(
         _ => None,
     };
 
-    found_field.map_or_else(
-        || {
-            ctx.push_error(TypeError::NoSuchField {
-                ty: base.clone(),
-                field: field.to_string(),
-                span,
-            });
-            Ty::Unknown
-        },
-        |t| t.clone(),
-    )
+    found_field.unwrap_or_else(|| {
+        ctx.push_error(TypeError::NoSuchField {
+            ty: base.clone(),
+            field: field.to_string(),
+            span,
+        });
+        Ty::Unknown
+    })
 }
 
 /// Infer the type of an index access.

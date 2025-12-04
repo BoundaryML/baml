@@ -713,8 +713,8 @@ use rustc_hash::FxHashMap;
 
 /// Information about a named item for duplicate detection.
 struct ItemInfo {
-    kind: &'static str,
     span: Span,
+    path: String,
 }
 
 /// Validate that there are no duplicate names in the project.
@@ -727,48 +727,54 @@ pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> V
     let mut errors = Vec::new();
 
     for item in items.items(db) {
-        let (name, kind, span) = match item {
+        let (name, kind, span, path) = match item {
             ItemId::Function(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let func = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
-                (func.name.clone(), "function", span)
+                let path = file.path(db).display().to_string();
+                (func.name.clone(), "function", span, path)
             }
             ItemId::Class(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let class = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
-                (class.name.clone(), "class", span)
+                let path = file.path(db).display().to_string();
+                (class.name.clone(), "class", span, path)
             }
             ItemId::Enum(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let enum_def = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
-                (enum_def.name.clone(), "enum", span)
+                let path = file.path(db).display().to_string();
+                (enum_def.name.clone(), "enum", span, path)
             }
             ItemId::TypeAlias(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let alias = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
-                (alias.name.clone(), "type alias", span)
+                let path = file.path(db).display().to_string();
+                (alias.name.clone(), "type alias", span, path)
             }
             ItemId::Client(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let client = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
-                (client.name.clone(), "client", span)
+                let path = file.path(db).display().to_string();
+                (client.name.clone(), "client", span, path)
             }
             ItemId::Test(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let test = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
-                (test.name.clone(), "test", span)
+                let path = file.path(db).display().to_string();
+                (test.name.clone(), "test", span, path)
             }
         };
 
@@ -777,10 +783,12 @@ pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> V
                 name: name.to_string(),
                 kind,
                 first: existing.span,
+                first_path: existing.path.clone(),
                 second: span,
+                second_path: path,
             });
         } else {
-            seen.insert(name, ItemInfo { kind, span });
+            seen.insert(name, ItemInfo { span, path });
         }
     }
 

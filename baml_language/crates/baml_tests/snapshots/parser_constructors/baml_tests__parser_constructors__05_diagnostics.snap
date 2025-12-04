@@ -8,13 +8,13 @@ expression: output
    │
  1 │ class Point {
    │ │ 
-   │ ╰─ class 'Point' defined here
+   │ ╰─ class 'Point' defined in class_constructor.baml
    │
    ├─[ 0:1:1 ]
    │
  1 │ class Point {
    │ │ 
-   │ ╰─ 'Point' previously defined here
+   │ ╰─ 'Point' previously defined in array_constructor.baml
    │ 
    │ Note: Error code: E0011
 ───╯

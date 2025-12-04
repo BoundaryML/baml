@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -30,16 +30,23 @@ Function Calculate (arity: 0, kind: Exec):
      19   RETURN         
 
 Function FieldAccess (arity: 1, kind: Exec):
-     0   LOAD_GLOBAL 0        (<fn Calculate>)
-     1   LOAD_GLOBAL 0        (<fn Calculate>)
-     2   LOAD_GLOBAL 0        (<fn Calculate>)
-     3   LOAD_GLOBAL 0        (<fn Calculate>)
-     4   LOAD_CONST 0         (0)
-     5   LOAD_ARRAY_ELEMENT   
-     6   LOAD_VAR 4           (theme)
-     7   RETURN               
-     8   POP 4                
-     9   RETURN               
+     0    LOAD_VAR 1           (user)
+     1    LOAD_FIELD 0         
+     2    LOAD_VAR 1           (user)
+     3    LOAD_FIELD 0         
+     4    LOAD_FIELD 0         
+     5    LOAD_VAR 1           (user)
+     6    LOAD_FIELD 0         
+     7    LOAD_FIELD 0         
+     8    LOAD_FIELD 0         
+     9    LOAD_VAR 1           (user)
+     10   LOAD_FIELD 0         
+     11   LOAD_CONST 0         (0)
+     12   LOAD_ARRAY_ELEMENT   
+     13   LOAD_VAR 4           (theme)
+     14   RETURN               
+     15   POP 4                
+     16   RETURN               
 
 Function IndexAccess (arity: 1, kind: Exec):
      0    LOAD_VAR 1           (users)
