@@ -2,7 +2,7 @@
 id: BEP-001
 title: "Exception Handling"
 shepherds: Vaibhav Gupta <vbv@boundaryml.com>
-status: Draft
+status: Proposed
 created: 2025-11-20
 ---
 

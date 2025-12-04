@@ -109,8 +109,10 @@ def parse_bep_file(path: Path):
                     summary = " ".join(line.strip() for line in summary.splitlines())
                 
                 # Calculate relative link path
+                # For directory-based BEPs (BEP-XXX/README.md), use just the directory name
+                # MkDocs automatically resolves README.md from directories
                 if path.name == "README.md":
-                    link_path = f"{path.parent.name}/README.md"
+                    link_path = f"{path.parent.name}/"
                 else:
                     link_path = path.name
 

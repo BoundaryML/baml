@@ -2,7 +2,7 @@
 id: BEP-002
 title: "match"
 shepherds: hellovai <vbv@boundaryml.com>
-status: Draft
+status: Accepted
 created: 2025-12-01
 ---
 
