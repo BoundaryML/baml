@@ -21,8 +21,8 @@ function ExtractResume(text: string) -> Resume | null {
   client "gpt-4o"
   prompt #"Extract resume from {{ text }}"#
 } catch {
-  _: TimeoutError => null
-  _: RefusalError => null
+  e: TimeoutError => null
+  e: RefusalError => null
 }
 ```
 
@@ -37,7 +37,7 @@ In BAML, blocks `{ ... }` are expressions. This means `catch` can be attached to
 For error handling on single expressions, `catch` acts as a postfix operator.
 
 ```typescript
-let user = GetUser(id) catch { _ => null }
+let user = GetUser(id) catch { e => null }
 ```
 
 The operator precedence of `catch` is lower than other operators, meaning it applies to the entire preceding expression unless grouped by parentheses.
@@ -89,15 +89,15 @@ for (url in urls) {
 
 *   **Expressions**: In BAML, blocks are expressions that evaluate to their last statement. When `catch` is attached, the entire expression evaluates to the union of the block's result and the catch block's result.
 
-    ```typescript
-    // resume is inferred as: Resume | null
-    let resume = { 
-      let text = ExtractText(pdf)
-      ExtractResume(text) 
-    } catch { 
-      _ => null 
-    }
-    ```
+```typescript
+// resume is inferred as: Resume | null
+let resume = { 
+  let text = ExtractText(pdf)
+  ExtractResume(text) 
+} catch { 
+  e => null 
+}
+```
 
 *   **Functions**: The catch block must return a value compatible with the function's return type.
 *   **Statements**: For statements that do not yield values (like `for` loops), the catch block does not return a value.
@@ -105,8 +105,8 @@ for (url in urls) {
 ### Pattern Matching
 
 The `catch` clause uses pattern matching syntax, similar to `match` expressions.
-*   `_` acts as a wildcard for any `Error`.
+*   An untyped pattern like `e` matches any `Error` (but not `Panic`).
 *   Specific error types can be matched (e.g., `e: TimeoutError`).
 
-> **Note**: Full details on scoping, panic handling, and complex patterns are available in [03_learn.md](./03_learn.md). This document defines the minimal syntax.
+> **Note**: Full details on scoping, panic handling, and complex patterns are available in [02_learn.md](./02_learn.md). This document defines the minimal syntax.
 

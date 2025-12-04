@@ -11,6 +11,42 @@ DOCS_DIR = Path(__file__).resolve().parent / "docs"
 _DIFF_CACHE = {}
 
 
+def _generate_toc(markdown: str) -> str:
+    """
+    Replace <!-- TOC_PLACEHOLDER --> placeholder with auto-generated table of contents.
+    Extracts ## sections and ### questions to build a linked TOC.
+    """
+    if "<!-- TOC_PLACEHOLDER -->" not in markdown:
+        return markdown
+    
+    toc_lines = []
+    current_section = None
+    
+    for line in markdown.splitlines():
+        # Match ## Section headers (but skip ## Contents if present)
+        if line.startswith("## ") and "Contents" not in line:
+            current_section = line[3:].strip()
+            toc_lines.append(f"\n**{current_section}**\n")
+        # Match ### Question headers
+        elif line.startswith("### "):
+            title = line[4:].strip()
+            # Generate anchor: lowercase, spaces to dashes, remove backticks and special chars
+            anchor = title.lower()
+            anchor = anchor.replace(" ", "-")
+            anchor = anchor.replace("`", "")
+            anchor = anchor.replace("?", "")
+            anchor = anchor.replace("(", "")
+            anchor = anchor.replace(")", "")
+            anchor = anchor.replace("/", "")
+            anchor = anchor.replace("'", "")
+            anchor = re.sub(r"-+", "-", anchor)  # Collapse multiple dashes
+            anchor = anchor.strip("-")
+            toc_lines.append(f"- [{title}](#{anchor})")
+    
+    toc = "\n".join(toc_lines)
+    return markdown.replace("<!-- TOC_PLACEHOLDER -->", toc)
+
+
 def _run_git(args: list[str]) -> str:
     """Run git in the repo root and return stdout (or empty on error)."""
     try:
@@ -621,6 +657,9 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     # Optional: only show diffs for proposals
     if not rel_path.startswith("proposals/"):
         return markdown
+    
+    # Generate TOC from <!-- TOC_PLACEHOLDER --> placeholder
+    markdown = _generate_toc(markdown)
     
     # DEBUG: Skip go.md to see if it renders
     # if "go.md" in rel_path:

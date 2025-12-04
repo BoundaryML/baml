@@ -1,32 +1,13 @@
-# Deviations from TypeScript/JavaScript Exceptions
+# Coming from TypeScript/JavaScript
 
-This document lists all semantic and syntactic differences between BAML's Universal Catch and TypeScript/JavaScript exception handling.
+This document answers common questions from developers familiar with TypeScript/JavaScript exception handling.
 
-## 1. No Variable Binding in Catch Clause
+---
 
-**TypeScript**:
-```typescript
-try {
-  riskyOperation()
-} catch (e) {
-  console.log(e.message)
-}
-```
-The exception is explicitly bound to `e` in the catch clause header.
+### Why does catch use pattern matching instead of `catch (e) { ... }`?
 
-**BAML**:
-```typescript
-riskyOperation() catch {
-  e => log(e.message)
-}
-```
-The catch clause contains pattern arms. Variable binding happens within each pattern, not at the clause level.
+**TypeScript** binds one variable, then uses `instanceof` to discriminate:
 
-**Rationale**: The thrown value is implicitly defined by the attached scope—there is no ambiguity about what is being caught. Binding in the header (`catch (e) { ... }`) would require a second level of pattern matching inside. Binding directly in patterns avoids redundancy: `catch { e: TimeoutError => ... }` vs `catch (e) { case e: TimeoutError => ... }`.
-
-## 2. Pattern Matching Syntax
-
-**TypeScript**:
 ```typescript
 try {
   riskyOperation()
@@ -40,81 +21,49 @@ try {
   }
 }
 ```
-Type discrimination requires runtime `instanceof` checks inside the catch body.
 
-**BAML**:
+**BAML** uses pattern matching with arrow syntax:
+
 ```typescript
 riskyOperation() catch {
   e: TimeoutError => retry()
   e: ParseError => null
-  _ => throw e
-}
-```
-Type discrimination is part of the pattern syntax. The compiler can perform exhaustiveness analysis.
-
-**Rationale**: Compile-time exhaustiveness checking. Reduced boilerplate.
-
-## 3. No Chained Catch Blocks
-
-**TypeScript (Java-style)**:
-```typescript
-try {
-  riskyOperation()
-} catch (e: TimeoutError) {
-  retry()
-} catch (e: ParseError) {
-  return null
-}
-```
-Note: TypeScript does not actually support this syntax. Java does.
-
-**TypeScript (actual)**:
-```typescript
-try {
-  riskyOperation()
-} catch (e) {
-  // Single catch block with manual type checks
+  // Other errors implicitly propagate
 }
 ```
 
-**BAML**:
+**Why not `catch (e) { <pattern matching> }`?**
+
+We could have kept the header binding and added pattern matching inside:
+
 ```typescript
-riskyOperation() catch {
+// Hypothetical: header binding + pattern matching
+catch (e) {
   e: TimeoutError => retry()
   e: ParseError => null
 }
 ```
-All patterns are arms within a single catch block.
 
-**Rationale**: First-match semantics are explicit. Exhaustiveness analysis is straightforward because the compiler sees all handlers at once.
+But this creates redundancy: you bind `e` in the header, then re-bind it in each pattern arm. Which `e` is in scope? The outer untyped one or the inner typed one? 
 
-**Note**: Developers can achieve chained catch behavior by nesting catch blocks or using explicit `throw` statements, since unmatched patterns in a catch block implicitly re-throw. The idiomatic approach is pattern matching within a single catch block.
+By removing the header binding, the design is cleaner: each pattern arm introduces its own binding with the matched type already applied.
 
-## 4. Expression Semantics
+**Other benefits:**
 
-**TypeScript**:
-```typescript
-// try/catch is a statement
-let result
-try {
-  result = riskyOperation()
-} catch (e) {
-  result = null
-}
-```
-Variables must be hoisted outside the try block to be accessible after.
+1. **Untyped patterns exclude Panics**: A pattern like `e` matches all Errors but not Panics. Bugs crash loudly by default. To catch panics explicitly: `p: Panic => ...`.
 
-**BAML**:
-```typescript
-let result = riskyOperation() catch { _ => null }
-```
-The `catch` expression evaluates to the union of the try expression's type and each handler's return type.
+2. **Implicit re-throw**: Unhandled cases propagate automatically. No `else { throw e }` boilerplate.
 
-**Rationale**: Expression-oriented syntax reduces variable hoisting and supports inline fallbacks.
+3. **Arrow syntax**: Consistent with `match` expressions. Single expressions don't need braces (`e => null`), multi-statement handlers use blocks.
 
-## 5. Try Keyword is Optional
+See [Design Alternatives](./03_alternatives.md#why-pattern-matching-syntax-in-catch) for the full rationale.
 
-**TypeScript**:
+---
+
+### Do I need to write `try` before every catch?
+
+**TypeScript** requires `try`:
+
 ```typescript
 try {
   riskyOperation()
@@ -122,59 +71,56 @@ try {
   handleError(e)
 }
 ```
-The `try` keyword is required.
 
-**BAML**:
+**BAML** allows `catch` on any expression, so `try` is optional:
+
 ```typescript
-// Explicit try (optional)
-try {
-  riskyOperation()
-} catch {
-  e => handleError(e)
-}
+// Catch on a function call
+a() catch { e => null }
 
-// Implicit try (semantically identical)
-{
-  riskyOperation()
-} catch {
-  e => handleError(e)
-}
+// Catch on a binary expression
+a() + b() catch { e => 0 }
+
+// Catch on a block expression
+{ let x = a(); x + b() } catch { e => 0 }
+
+// Catch on a block with explicit try (for familiarity)
+try { let x = a(); x + b() } catch { e => 0 }
 ```
-The `try` keyword is syntactic sugar. Any block can have a catch attached.
 
-**Rationale**: `try` signals intent but adds no semantic meaning. Omitting it reduces noise in common patterns.
+Since `catch` attaches to any expression—including block expressions—the `try` keyword is redundant. We allow `try` as a prefix for familiarity, but it adds no semantic meaning.
 
-## 6. Catch Attaches to Function Bodies
+### How do I add error handling to a function without wrapping the body?
 
-**TypeScript**:
+**TypeScript** requires wrapping the function body:
+
 ```typescript
 function extract(text: string): Resume | null {
   try {
-    // function body
     return callLLM(text)
   } catch (e) {
     return null
   }
 }
 ```
-The function body must be wrapped in a try block. Declarative constructs cannot be directly protected.
 
-**BAML**:
+**BAML** attaches catch directly to the function:
+
 ```typescript
 function Extract(text: string) -> Resume | null {
   client "gpt-4o"
   prompt #"Extract resume from {{ text }}"#
 } catch {
-  _ => null
+  e => null
 }
 ```
-The catch block attaches directly to the function, treating the entire body as the try scope.
 
-**Rationale**: Additive error handling without restructuring the function body. Preserves declarative syntax for LLM functions.
+No restructuring needed. Particularly useful for declarative LLM functions.
 
-## 7. Catch Attaches to Control Flow Statements
+### How do I handle errors in a loop without nesting try/catch?
 
-**TypeScript**:
+**TypeScript** requires an inner try/catch:
+
 ```typescript
 for (const item of items) {
   try {
@@ -184,9 +130,9 @@ for (const item of items) {
   }
 }
 ```
-Error handling requires an inner try/catch block.
 
-**BAML**:
+**BAML** attaches catch to the loop:
+
 ```typescript
 for (item in items) {
   process(item)
@@ -194,36 +140,72 @@ for (item in items) {
   e => log(`Failed: ${item}`)
 }
 ```
-Catch attaches to the loop statement. Errors are handled per-iteration. Execution continues to the next iteration.
 
-**Rationale**: Common batch processing pattern without extra nesting.
+Errors are handled per-iteration. Execution continues to the next item.
 
-## 8. Inline Catch on Expressions
+---
 
-**TypeScript**:
+### Why is `catch` an expression instead of a statement?
+
+**TypeScript** try/catch is a statement, requiring variable hoisting or an IIFE:
+
 ```typescript
-// IIFE pattern
-const result = (() => {
-  try {
-    return riskyOperation()
-  } catch (e) {
-    return null
-  }
+// Hoisting required
+let result
+try {
+  result = riskyOperation()
+} catch (e) {
+  result = null
+}
+
+// Or use an IIFE
+const result2 = (() => {
+  try { return riskyOperation() }
+  catch (e) { return null }
 })()
 ```
-Inline error handling requires an immediately-invoked function expression.
 
-**BAML**:
+**BAML** catch is an expression—no hoisting or wrapping needed:
+
 ```typescript
-let result = riskyOperation() catch { _ => null }
+let result = riskyOperation() catch { e => null }
 ```
-Catch is a postfix operator on expressions.
 
-**Rationale**: Concise inline fallbacks without wrapping in IIFE.
+The result type is the union of the success type and handler return types.
 
-## 9. No Finally Clause
+### Why doesn't my catch-all pattern catch `IndexOutOfBounds`?
 
-**TypeScript**:
+**TypeScript** catches everything:
+
+```typescript
+try {
+  riskyOperation()
+} catch (e) {
+  // Catches everything, including bugs
+}
+```
+
+**BAML** distinguishes errors from panics:
+
+```typescript
+riskyOperation() catch {
+  e => null  // Catches recoverable errors only
+  // IndexOutOfBounds, AssertionError, etc. propagate
+}
+
+// To catch panics explicitly:
+riskyOperation() catch {
+  p: Panic => handleBug(p)
+  e => null
+}
+```
+
+Untyped patterns like `e` match recoverable errors but not `Panic` types. Bugs fail loudly by default.
+
+### Is there a `finally` block?
+
+**TypeScript** supports `finally`:
+
 ```typescript
 let handle
 try {
@@ -232,17 +214,15 @@ try {
 } catch (e) {
   logError(e)
 } finally {
-  if (handle) {
-    releaseResource(handle)
-  }
+  if (handle) releaseResource(handle)
 }
 ```
-The `finally` block runs regardless of success or failure.
 
-**BAML**:
+**BAML** handles cleanup through normal control flow:
+
 ```typescript
 let handle = acquireResource()
-let result = try {
+let result = {
   useResource(handle)
 } catch {
   e => {
@@ -252,99 +232,39 @@ let result = try {
 }
 releaseResource(handle)
 ```
-Cleanup is handled through normal control flow. No `finally` keyword.
 
-**Rationale**: Simpler model. May revisit if common patterns emerge that require `finally`.
+No `finally` keyword. Place cleanup after the catch expression.
 
-## 10. Pattern Arms Use Arrow Syntax
+### What types can I throw?
 
-**TypeScript**:
-```typescript
-try {
-  riskyOperation()
-} catch (e) {
-  // Block body with statements
-  console.log(e)
-  return null
-}
-```
-The catch clause uses block syntax.
+**TypeScript** allows any value but convention is `Error`:
 
-**BAML**:
-```typescript
-riskyOperation() catch {
-  e => {
-    log(e)
-    null
-  }
-}
-```
-Each pattern arm uses `=>` arrow syntax. Multi-statement handlers use blocks.
-
-**Rationale**: Consistency with `match` expressions.
-
-## 11. Wildcard Does Not Catch Panics
-
-**TypeScript**:
-```typescript
-try {
-  riskyOperation()
-} catch (e) {
-  // Catches everything, including bugs
-}
-```
-All thrown values are caught.
-
-**BAML**:
-```typescript
-riskyOperation() catch {
-  _ => null           // Catches recoverable errors
-  // IndexOutOfBounds, AssertionError, etc. propagate
-}
-
-// To catch panics explicitly:
-riskyOperation() catch {
-  p: Panic => handleBug(p)
-  _ => null
-}
-```
-The `_` wildcard matches recoverable errors but not `Panic` types. Panics must be caught explicitly.
-
-**Rationale**: Bugs should fail loudly by default. Silent swallowing of logic errors masks problems.
-
-## 12. Thrown Values Are Not Restricted to Error Types
-
-**TypeScript**:
 ```typescript
 throw "string error"     // Valid but discouraged
 throw new Error("msg")   // Idiomatic
 throw { code: 500 }      // Valid but discouraged
 ```
-Convention is to throw `Error` instances, but any value can be thrown.
 
-**BAML**:
+**BAML** uses an open throw system:
+
 ```typescript
 throw TimeoutError("operation timed out")
 throw { code: 500, message: "server error" }
 ```
-BAML uses an open throw system. Any value can be thrown. There is no required base `Error` type.
 
-**Rationale**: Flexibility for domain-specific error types without requiring inheritance.
+Any value can be thrown. No required base `Error` type.
+
+---
 
 ## Summary Table
 
-| Aspect | TypeScript | BAML |
-|:-------|:-----------|:-----|
-| Variable binding | In clause header: `catch (e)` | In pattern: `catch { e => ... }` |
-| Type discrimination | Runtime `instanceof` | Pattern matching |
-| Multiple handlers | Manual `if/else` | Pattern arms in one block |
-| Expression vs statement | Statement (needs IIFE for expression) | Expression |
-| Try keyword | Required | Optional |
-| Attach to functions | No | Yes |
-| Attach to loops | No | Yes |
-| Inline catch | Requires IIFE | Postfix operator |
-| Finally | Supported | Not supported |
-| Arrow syntax | No | Yes |
-| Wildcard catches all | Yes | No (excludes Panic) |
-| Thrown value types | Any (convention: Error) | Any (no convention) |
-
+| Question | TypeScript | BAML |
+|:---------|:-----------|:-----|
+| How do I handle errors by type? | `catch (e) { if (e instanceof ...) }` | Pattern matching: `catch { e: Type => ... }` |
+| Can I use catch as an expression? | No (needs IIFE) | Yes |
+| Is `try` required? | Yes | No (optional) |
+| Can I attach catch to functions? | No | Yes |
+| Can I attach catch to loops? | No | Yes |
+| Is there a `finally`? | Yes | No |
+| Does catch-all catch everything? | Yes | No (excludes Panic) |
+| What can I throw? | Any (convention: Error) | Any (no convention) |

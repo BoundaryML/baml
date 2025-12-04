@@ -8,7 +8,7 @@ The compiler detects patterns shadowed by preceding patterns:
 
 ```typescript
 } catch {
-  _ => null                       // Catches all Errors
+  e => null                       // Catches all Errors
   e: TimeoutError => retry()      // Warning: unreachable pattern
 }
 ```
@@ -17,7 +17,7 @@ The compiler detects patterns shadowed by preceding patterns:
 warning: unreachable pattern
   --> src/main.baml:18:3
    |
-16 |   _ => null
+16 |   e => null
    |   - this pattern matches any error
 18 |   e: TimeoutError => retry()
    |   ^^^^^^^^^^^^^^^^^^^^^^^^^ this pattern will never match
@@ -58,7 +58,7 @@ function ExtractResume(text: string) -> Resume | null {
   client "gpt-4o"
   prompt #"Extract resume from {{ text }}"#
 } catch {
-  _ => null
+  e => null
 }
 ```
 
@@ -93,7 +93,7 @@ function Extract(text: string) -> Resume | null {
 } catch {
   e: TimeoutError => todo("Handle timeout")
   e: ParseError => todo("Handle parse error")
-  _ => null
+  e => null
 }
 ```
 
@@ -114,7 +114,7 @@ Warn when `Panic` is caught:
 ```typescript
 } catch {
   p: Panic => DefaultResult()  // Warning: catching Panic hides bugs
-  _ => DefaultResult()
+  e => DefaultResult()
 }
 ```
 
@@ -126,7 +126,7 @@ function ServerMain() {
   RunApp()
 } catch {
   p: Panic => { log.fatal("Bug", p); ErrorResponse() }
-  _ => ErrorResponse()
+  e => ErrorResponse()
 }
 ```
 
@@ -137,7 +137,7 @@ function ServerMain() {
 ```typescript
 } catch {
   e: RateLimitError => todo("Implement retry")  // Warning: incomplete implementation
-  _ => null
+  e => null
 }
 ```
 
@@ -163,8 +163,8 @@ The compiler adds implicit re-throws:
 // Compiler desugaring:
 } catch {
   e: TimeoutError => null
-  __implicit_error: _ => throw __implicit_error  // Re-throw unhandled Errors
   __implicit_panic: Panic => throw __implicit_panic  // Re-throw all Panics
+  __implicit_error => throw __implicit_error         // Re-throw unhandled Errors
 }
 ```
 

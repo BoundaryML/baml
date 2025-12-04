@@ -23,8 +23,8 @@ The core idea: `catch` is an operator that attaches to any scope—functions, lo
 |:---------|:--------|
 | [00_background.md](./00_background.md) | Error handling landscape and requirements |
 | [01_proposal.md](./01_proposal.md) | Universal Catch syntax specification |
-| [02_alternatives.md](./02_alternatives.md) | Rejected designs and rationale |
-| [03_learn.md](./03_learn.md) | User guide and technical reference |
+| [02_learn.md](./02_learn.md) | Practical guide and FAQ |
+| [03_alternatives.md](./03_alternatives.md) | Rejected designs and rationale |
 | [04_tooling.md](./04_tooling.md) | IDE and compiler capabilities |
 | [05_deviations_from_ts.md](./05_deviations_from_ts.md) | Differences from TypeScript/JavaScript |
 | [06_proposal_safe.md](./06_proposal_safe.md) | The `safe` keyword for strict exhaustiveness |

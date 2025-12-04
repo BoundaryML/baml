@@ -1,114 +1,127 @@
-# Safe Functions
+# Safe Functions: Practical Guide
 
-This document proposes the `safe` keyword to enable local reasoning about error handling and strictly enforce exhaustiveness.
+This document covers the `safe` keyword for strict error handling guarantees.
 
-## Background: The Need for Local Reasoning
+---
 
-While Universal Catch (BEP-001) improves the ergonomics of error handling, it leaves two significant gaps regarding correctness and composition:
+## Using `safe`
 
-1. **Lack of Local Reasoning**: By default, BAML functions use implicit re-throws for unhandled errors. To know if a function `Extract()` is safe to call, a developer (or AI Agent) must read its source code or rely on IDE inference. There is no way to declare "this function handles all its own errors" in the signature itself.
+### How do I guarantee a function handles all its errors?
 
-2. **Optional Exhaustiveness**: For prototyping speed, BAML does not force developers to handle every possible error type. However, for reliable systems, we need a mechanism to enforce that *all* known recoverable errors are handled, ensuring no expected failure modes are accidentally ignored.
-
-We need a way to transform the *implicit* behavior of exceptions into an *explicit* guarantee of safety, without the verbosity of Java's checked exceptions or Rust's `Result` types.
-
-## Proposal
-
-We introduce the `safe` keyword, which acts as a contract that a scope (function or expression) handles all recoverable `Error` types.
-
-### 1. Safe Functions
-
-A function declared as `safe` guarantees that no `Error` types escape its body.
+Add the `safe` keyword to the function declaration:
 
 ```typescript
 safe function Extract(text: string) -> Resume | null {
   client "gpt-4o"
   prompt #"..."#
 } catch {
-  // Compiler ENFORCES that these handlers are exhaustive for Error
   e: TimeoutError => null
   e: RefusalError => null
-  // If we missed 'NetworkError', this fails to compile.
-  // Wildcard '_' satisfies exhaustiveness immediately.
+  // Compiler enforces: all Error types must be handled
 }
 ```
 
-**Semantics**:
+Without `safe`, unhandled errors implicitly propagate. With `safe`, the compiler requires exhaustive handling—if you miss an error type, it fails to compile.
 
-* **Strict Exhaustiveness**: The compiler disables implicit re-throws for `Error` types. Every error the body can throw must be matched.
-* **Panic Propagation**: `safe` guarantees the absence of `Error`. It does *not* catch `Panic` (bugs). A `safe` function can still crash if a bug occurs (e.g., `assert` fails).
+### How do I enforce exhaustive error handling at a call site?
 
-### 2. Safe Expressions
-
-The `safe` keyword can enforce handling at the call site for any expression, including blocks.
+Add `safe` before the expression:
 
 ```typescript
-// Compiler ensures the attached catch block is exhaustive
 let user = safe GetUser(id) catch {
-  _ => null 
+  e => null
 }
+```
 
-// Applying safe to a block enforces strict handling for the entire block
-// This is similar to a try-catch, but with mandatory exhaustiveness for Errors
+Or apply it to a block:
+
+```typescript
 let result = safe {
   let x = Compute(data)
   Process(x)
 } catch {
   e: CalculationError => 0
-  _ => -1 
+  e => -1
 }
 ```
 
-### 3. Safety Inference
+The compiler ensures the attached `catch` block handles all possible errors from the expression or block.
 
-The compiler automatically infers a function as "semantically safe" if it handles all errors, even without the keyword. However, adding the `safe` keyword makes this a **checked contract**: if the implementation changes to introduce a new unhandled error, the compiler will error.
+### What does `safe` guarantee?
 
-## Alternatives
+`safe` guarantees that no `Error` types escape the scope. It does **not** catch `Panic` types.
 
-### Checked Exceptions (`throws`)
+| With `safe` | Without `safe` |
+|:------------|:---------------|
+| All Errors must be handled | Unhandled Errors propagate |
+| Compiler enforces exhaustiveness | Compiler allows partial handling |
+| Panics still propagate | Panics still propagate |
 
-Java requires functions to declare what they throw (`throws IOException`). This pushes the burden to the *caller*.
+A `safe` function can still crash if a bug occurs (e.g., `assert()` fails, array access panics).
 
-* **Decision**: Rejected. We prefer pushing the burden to the *callee* (the `safe` function) to contain errors, or using `safe` at the call site to explicitly handle them.
+### Does `safe` catch Panics?
 
-### Result Types (`Result<T, E>`)
+No. `safe` only applies to `Error` types. Panics propagate through `safe` functions just like any other function.
 
-Rust uses `Result` types.
+```typescript
+safe function GetFirst(items: Item[]) -> Item | null {
+  return items[0]  // Can panic with IndexOutOfBounds
+} catch {
+  e => null  // Catches Errors, not Panics
+}
+```
 
-* **Decision**: Rejected. `safe` allows us to keep direct return types (`Resume | null`) while still guaranteeing safety, which is more ergonomic for the "AI Engineering" domain.
+If `items` is empty, `IndexOutOfBounds` crashes the program despite the `safe` keyword.
 
-## What `safe` Enables
+### What happens if I add a new error type to a `safe` function?
 
-### 1. Agent-Readable Contracts
+The compiler fails immediately:
 
-AI Agents writing BAML code can look at a function signature:
+```typescript
+safe function Extract(text: string) -> Resume | null {
+  client "gpt-4o"
+  prompt #"..."#
+} catch {
+  e: TimeoutError => null
+  // Error: NetworkError is not handled
+}
+```
 
-* `function DoWork()` -> "I might need to wrap this in a catch block."
-* `safe function DoWork()` -> "I can call this directly; it handles its own failures."
+Without `safe`, the new error would silently propagate up the stack. With `safe`, you're forced to handle it.
 
-### 2. Refactoring Confidence
+### Can the compiler infer if a function is safe?
 
-If `Extract` is modified to throw a new `BamlClientError`:
+Yes. If a function handles all its errors, the compiler infers it as "semantically safe" even without the keyword.
 
-* **Without `safe`**: The error silently propagates up the stack, potentially crashing a distant caller.
-* **With `safe`**: The `safe function` failing to handle the new error triggers a compile-time error immediately.
+However, adding `safe` explicitly makes this a **checked contract**. If someone later changes the implementation to introduce an unhandled error, the compiler catches it.
 
-### 3. Incremental Adoption
+```typescript
+// Implicitly safe (compiler infers)
+function Extract(text: string) -> Resume | null {
+  client "gpt-4o"
+  prompt #"..."#
+} catch {
+  e => null  // Handles everything
+}
 
-The design supports the full software lifecycle:
+// Explicitly safe (compiler enforces)
+safe function Extract(text: string) -> Resume | null {
+  client "gpt-4o"
+  prompt #"..."#
+} catch {
+  e => null
+}
+```
 
-1. **Prototype**: Write normal functions. Let errors propagate or use `_`.
-2. **Production**: Add `safe` to critical functions. The compiler forces you to handle edge cases you missed.
+---
 
-## Tooling Implications
+## Tooling
 
-The explicit `safe` contract enables tooling that was not possible with implicit error propagation.
+### Visual Safety Indicators
 
-### 1. Visual Safety Indicators
+IDEs display warnings when a function contains unhandled unsafe calls:
 
-IDEs can display warnings in the gutter when a function contains unhandled unsafe calls:
-
-```text
+```
   1 │   function ProcessBatch(texts: string[]) -> Report {
   2 │     let results = []
   3 │     for (text in texts) {
@@ -120,20 +133,18 @@ IDEs can display warnings in the gutter when a function contains unhandled unsaf
   9 │   }
 ```
 
-Hovering over the `⚠` shows which errors can propagate:
+Hovering shows which errors can propagate:
 
-```text
+```
 ⚠ Extract(text) can throw: LLMError, TimeoutError, ParseError
-  
+
   Add error handling:
-    Extract(text) catch { _ => defaultResume }
+    Extract(text) catch { e => defaultResume }
 ```
 
-This surfaces unsafe operations without requiring developers to trace through call graphs.
+### Inline Diagnostics
 
-### 2. Inline Diagnostics
-
-The compiler can flag unsafe calls inside `safe` functions:
+The compiler flags unsafe calls inside `safe` functions:
 
 ```typescript
 safe function Process() -> Result {
@@ -142,14 +153,14 @@ safe function Process() -> Result {
    //      Extract() can throw LLMError, TimeoutError
    //      hint: add `catch { ... }` or use `safe Extract(text) catch { ... }`
    
-   let y = Extract(text) catch { _ => default }
+   let y = Extract(text) catch { e => default }
    //      OK: error handling present
 }
 ```
 
-### 3. Agent Metadata
+### Agent Metadata
 
-Generated client code includes safety metadata for AI agents and other tooling:
+Generated client code includes safety metadata:
 
 ```typescript
 // baml_client/metadata.ts
@@ -169,19 +180,17 @@ export const BAML_FUNCTION_METADATA = {
 }
 ```
 
-An agent can query this before generating code:
+Agents can query this before generating code:
 
 ```typescript
 if (BAML_FUNCTION_METADATA.Extract.isSafe) {
-  // Call directly
   return `Extract(text)`
 } else {
-  // Wrap in error handling
-  return `Extract(text) catch { _ => null }`
+  return `Extract(text) catch { e => null }`
 }
 ```
 
-### 4. CLI Safety Analysis
+### CLI Safety Analysis
 
 ```bash
 $ baml safety graph --function ProcessBatch
@@ -189,7 +198,7 @@ $ baml safety graph --function ProcessBatch
 ProcessBatch (unsafe)
 ├─⚠ Extract (unsafe)
 │  └─ client "openai/gpt-4o"
-├─⚠ Summarize (unsafe) 
+├─⚠ Summarize (unsafe)
 │  └─ client "openai/gpt-4o"
 └─● FormatReport (safe)
 
@@ -209,5 +218,3 @@ ProcessBatch (safe)
 │  └─ client "openai/gpt-4o"
 └─● FormatReport (safe)
 ```
-
-The tree view shows exactly where errors originate and whether they are handled.
