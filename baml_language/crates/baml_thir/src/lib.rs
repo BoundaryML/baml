@@ -751,6 +751,21 @@ fn infer_field_access<'db>(
     span: Span,
 ) -> Ty<'db> {
     let found_field = match base {
+        // Ty::Named(class_name) => {
+        //     // Try to look up as a method (methods are top-level functions with simple names)
+        //     if let Some(method_ty) = ctx.lookup(field) {
+        //         return method_ty.clone();
+        //     }
+
+        //     // Try to look up as a field in the class
+        //     if let Some(field_ty) = ctx.lookup_class_field(class_name, field) {
+        //         return field_ty.clone();
+        //     }
+
+        //     // Field/method not found
+        //     Some(Ty::Unknown)
+        // }
+        // Ty::Named(class_name) => ctx.lookup_class_field(class_name, field).cloned(),
         Ty::Named(class_name) => ctx
             .lookup(field)
             .or(ctx.lookup_class_field(class_name, field))

@@ -701,6 +701,9 @@ impl CompilerRunner {
                 CompilerError::TypeError(e) => {
                     type_errors_by_file.entry(file_id).or_default().push(e);
                 }
+                CompilerError::NameError(_) => {
+                    // TODO: Handle name errors in diagnostics display
+                }
             }
         }
 
@@ -1589,6 +1592,9 @@ fn get_error_file_id(error: &StoredCompilerError) -> FileId {
             TypeError::NotCallable { span, .. } => span.file_id,
             TypeError::NoSuchField { span, .. } => span.file_id,
             TypeError::NotIndexable { span, .. } => span.file_id,
+        },
+        CompilerError::NameError(e) => match e {
+            baml_diagnostics::NameError::DuplicateName { second, .. } => second.file_id,
         },
     }
 }

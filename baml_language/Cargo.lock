@@ -155,6 +155,7 @@ name = "baml_hir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_diagnostics",
  "baml_parser",
  "baml_syntax",
  "baml_workspace",

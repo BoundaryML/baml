@@ -226,7 +226,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_hir::{function_body, function_signature};
             use baml_thir::{build_typing_context_from_files};
             use baml_thir::pretty::short_display;
-            use baml_diagnostics::{render_parse_error, render_type_error};
+            use baml_diagnostics::{render_name_error, render_parse_error, render_type_error};
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
@@ -481,6 +481,11 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
 
             // Update project root with the list of files for proper Salsa tracking
             root.set_files(&mut db).to(source_files.clone());
+
+            // Check for duplicate names
+            for error in baml_hir::validate_duplicate_names(&db, root) {
+                all_errors.push(("name".to_string(), render_name_error(&error, &sources, false)));
+            }
 
             // Build typing context and run type inference
             let globals = build_typing_context_from_files(&db, &source_files);

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -80,7 +80,7 @@ class Profile {
   settings: Path(Path { segments: ["Settings"], kind: Plain })
 }
 function IndexAccess {
-  params: [users: List(Path(Path { segments: ["User"], kind: Plain }))]
+  params: [users: List(Path(Path { segments: ["IndexUser"], kind: Plain }))]
   return: String
   body: Expr {
     exprs: [
@@ -115,7 +115,7 @@ function IndexAccess {
     root: Idx::<Expr>(18)
   }
 }
-class User {
+class IndexUser {
   name: String
   age: Int
   tags: List(Path(Path { segments: ["string"], kind: Plain }))
