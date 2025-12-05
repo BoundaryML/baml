@@ -22,6 +22,27 @@ struct Scope {
     id: usize,
 }
 
+/// Information about the current loop for break/continue handling.
+#[derive(Debug)]
+struct LoopInfo {
+    /// Length of scopes vec before entering loop body.
+    /// Used by break/continue to know how many scopes to pop.
+    scope_depth: usize,
+    /// Jump instruction locations to patch for break statements.
+    break_patch_list: Vec<usize>,
+    /// Jump instruction locations to patch for continue statements.
+    continue_patch_list: Vec<usize>,
+}
+
+/// Information about a class for bytecode generation.
+#[derive(Debug, Clone)]
+pub struct ClassInfo {
+    /// Maps field name to its index in the class.
+    pub field_indices: HashMap<String, usize>,
+    /// Ordered list of field names.
+    pub field_names: Vec<String>,
+}
+
 /// Compiler state for generating bytecode from THIR.
 pub struct Compiler<'db> {
     /// Type inference result from THIR.
@@ -29,6 +50,9 @@ pub struct Compiler<'db> {
 
     /// Resolved global names to indices.
     globals: HashMap<String, usize>,
+
+    /// Resolved class information (name -> `ClassInfo`).
+    classes: HashMap<String, ClassInfo>,
 
     /// Resolved local variable names to stack indices.
     locals: HashMap<String, usize>,
@@ -52,14 +76,22 @@ pub struct Compiler<'db> {
     /// Used to avoid collisions when the same internal variable name
     /// (like the iterator temp) appears in nested scopes.
     gensym_counter: usize,
+
+    /// Current loop info for break/continue handling.
+    current_loop: Option<LoopInfo>,
 }
 
 impl<'db> Compiler<'db> {
     /// Create a new compiler with the given type inference result and global mappings.
-    pub fn new(inference: &'db InferenceResult<'db>, globals: HashMap<String, usize>) -> Self {
+    pub fn new(
+        inference: &'db InferenceResult<'db>,
+        globals: HashMap<String, usize>,
+        classes: HashMap<String, ClassInfo>,
+    ) -> Self {
         Self {
             inference,
             globals,
+            classes,
             locals: HashMap::new(),
             scopes: Vec::new(),
             locals_in_scope: Vec::new(),
@@ -67,6 +99,7 @@ impl<'db> Compiler<'db> {
             bytecode: Bytecode::new(),
             objects: Vec::new(),
             gensym_counter: 0,
+            current_loop: None,
         }
     }
 
@@ -276,16 +309,49 @@ impl<'db> Compiler<'db> {
                 self.emit(Instruction::AllocArray(elements.len()));
             }
 
-            Expr::Object {
-                type_name: _,
-                fields,
-            } => {
-                // For now, just compile fields in order
-                // TODO: Proper class allocation when class system is complete
-                for (_name, value) in fields {
-                    self.compile_expr(*value, body);
+            Expr::Object { type_name, fields } => {
+                // Look up class information if type_name is provided
+                let class_info = type_name.as_ref().and_then(|name| {
+                    let name_str: &str = name.as_ref();
+                    self.classes.get(name_str).cloned()
+                });
+
+                if let (Some(name), Some(class_info)) = (type_name.as_ref(), class_info) {
+                    // Create a Class object and add to objects pool
+                    let class_obj = Object::Class(baml_vm::Class {
+                        name: name.to_string(),
+                        field_names: class_info.field_names.clone(),
+                    });
+                    let class_obj_idx = self.objects.len();
+                    self.objects.push(class_obj);
+
+                    // Emit AllocInstance
+                    self.emit(Instruction::AllocInstance(class_obj_idx));
+
+                    // For each field: Copy instance, compile value, StoreField
+                    for (field_name, field_value) in fields {
+                        // Copy the instance reference (it's at top of stack)
+                        self.emit(Instruction::Copy(0));
+
+                        // Compile the field value
+                        self.compile_expr(*field_value, body);
+
+                        // Get field index and store
+                        let field_name_str: &str = field_name.as_ref();
+                        let field_idx = class_info
+                            .field_indices
+                            .get(field_name_str)
+                            .copied()
+                            .unwrap_or(0);
+                        self.emit(Instruction::StoreField(field_idx));
+                    }
+                } else {
+                    // Fallback: class not found, use array (shouldn't happen in well-typed code)
+                    for (_name, value) in fields {
+                        self.compile_expr(*value, body);
+                    }
+                    self.emit(Instruction::AllocArray(fields.len()));
                 }
-                self.emit(Instruction::AllocArray(fields.len()));
             }
 
             Expr::FieldAccess { base, field: _ } => {
@@ -358,15 +424,15 @@ impl<'db> Compiler<'db> {
                 condition,
                 body: while_body,
             } => {
-                let loop_start = self.next_insn_index();
-                self.compile_expr(*condition, body);
-                let exit_jump = self.emit(Instruction::JumpIfFalse(0));
-                self.emit(Instruction::Pop(1));
-                self.compile_expr(*while_body, body);
-                self.emit(Instruction::Pop(1)); // Discard body result
-                self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
-                self.patch_jump(exit_jump);
-                self.emit(Instruction::Pop(1)); // Pop condition on exit
+                self.compile_while_loop(
+                    |ctx| ctx.compile_expr(*condition, body),
+                    |ctx| {
+                        ctx.compile_expr(*while_body, body);
+                        // The body result is not used, but if it's a block expression
+                        // it will handle its own stack through exit_scope
+                    },
+                    |_| {}, // No after code for simple while
+                );
             }
 
             Stmt::ForIn {
@@ -374,46 +440,82 @@ impl<'db> Compiler<'db> {
                 iterator,
                 body: for_body,
             } => {
-                // Compile iterator
+                // For-in loop compilation:
+                // let @array = (iterator);
+                // let @array_len = baml.Array.length(@array);
+                // let @loop_i = 0;
+                // while (@loop_i < @array_len) {
+                //     let <pattern> = @array[@loop_i];
+                //     @loop_i = @loop_i + 1;
+                //     (body)
+                // }
+
+                // Compile iterator expression - this puts the array on the stack
                 self.compile_expr(*iterator, body);
 
                 self.enter_scope();
 
-                // Store iterator in temp variable (unique name to avoid collisions in nested loops)
-                let iter_var = self.gensym("iter");
-                self.track_local(&iter_var);
+                // Store array in temp variable
+                let array_var = self.gensym("for_array");
+                let array_location = self.track_local(&array_var);
 
-                // Store length
-                // TODO: Call length method when native functions are available
-
-                // Store index = 0 (unique name to avoid collisions in nested loops)
-                let idx_var = self.gensym("idx");
-                let zero_idx = self.add_constant(Value::Int(0));
-                self.emit(Instruction::LoadConst(zero_idx));
-                self.track_local(&idx_var);
-
-                let loop_start = self.next_insn_index();
-
-                // Check if index < length
-                // For now, this is a simplified implementation
-                // TODO: Proper iterator protocol
-
-                // Extract variable name from pattern
-                let pat = &body.patterns[*pattern];
-                match pat {
-                    Pattern::Binding(name) => {
-                        self.track_local(name.as_ref());
-                    }
+                // Get array length: baml.Array.length(@array)
+                let length_var = self.gensym("for_len");
+                if let Some(&len_fn_idx) = self.globals.get("baml.Array.length") {
+                    self.emit(Instruction::LoadGlobal(len_fn_idx));
+                    self.emit(Instruction::LoadVar(array_location));
+                    self.emit(Instruction::Call(1));
+                } else {
+                    // Fallback: push 0 for length (loop won't execute)
+                    let zero = self.add_constant(Value::Int(0));
+                    self.emit(Instruction::LoadConst(zero));
                 }
+                let length_location = self.track_local(&length_var);
 
-                // Compile body
-                self.compile_expr(*for_body, body);
-                self.emit(Instruction::Pop(1)); // Discard body result
+                // Initialize loop index to 0
+                let idx_var = self.gensym("for_idx");
+                let zero = self.add_constant(Value::Int(0));
+                self.emit(Instruction::LoadConst(zero));
+                let idx_location = self.track_local(&idx_var);
 
-                // Increment index
-                // TODO: Proper loop mechanics
+                // Now compile the while loop
+                self.compile_while_loop(
+                    |ctx| {
+                        // Condition: @loop_i < @array_len
+                        ctx.emit(Instruction::LoadVar(idx_location));
+                        ctx.emit(Instruction::LoadVar(length_location));
+                        ctx.emit(Instruction::CmpOp(CmpOp::Lt));
+                    },
+                    |ctx| {
+                        ctx.enter_scope();
 
-                self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
+                        // Extract variable name from pattern and track it
+                        let pat = &body.patterns[*pattern];
+                        match pat {
+                            Pattern::Binding(name) => {
+                                ctx.track_local(name.as_ref());
+                            }
+                        }
+
+                        // let <pattern> = @array[@loop_i]
+                        ctx.emit(Instruction::LoadVar(array_location));
+                        ctx.emit(Instruction::LoadVar(idx_location));
+                        ctx.emit(Instruction::LoadArrayElement);
+
+                        // Increment index: @loop_i = @loop_i + 1
+                        ctx.emit(Instruction::LoadVar(idx_location));
+                        let one = ctx.add_constant(Value::Int(1));
+                        ctx.emit(Instruction::LoadConst(one));
+                        ctx.emit(Instruction::BinOp(BinOp::Add));
+                        ctx.emit(Instruction::StoreVar(idx_location));
+
+                        // Compile body
+                        ctx.compile_expr(*for_body, body);
+
+                        ctx.exit_scope(false);
+                    },
+                    |_| {}, // No after code
+                );
 
                 self.exit_scope(false);
             }
@@ -431,38 +533,40 @@ impl<'db> Compiler<'db> {
                     self.compile_stmt(*init_stmt, body);
                 }
 
-                let loop_start = self.next_insn_index();
-
-                // Compile condition
-                if let Some(cond) = condition {
-                    self.compile_expr(*cond, body);
-                    let exit_jump = self.emit(Instruction::JumpIfFalse(0));
-                    self.emit(Instruction::Pop(1));
-
-                    // Compile body
-                    self.compile_expr(*for_body, body);
-                    self.emit(Instruction::Pop(1));
-
-                    // Compile update
-                    if let Some(upd) = update {
-                        self.compile_expr(*upd, body);
-                        self.emit(Instruction::Pop(1));
+                match condition {
+                    Some(cond) => {
+                        // Loop with condition
+                        self.compile_while_loop(
+                            |ctx| ctx.compile_expr(*cond, body),
+                            |ctx| ctx.compile_expr(*for_body, body),
+                            |ctx| {
+                                if let Some(upd) = update {
+                                    ctx.compile_expr(*upd, body);
+                                    ctx.emit(Instruction::Pop(1)); // Discard update result
+                                }
+                            },
+                        );
                     }
+                    None => {
+                        // Infinite loop
+                        let loop_start = self.next_insn_index();
 
-                    self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
-                    self.patch_jump(exit_jump);
-                    self.emit(Instruction::Pop(1));
-                } else {
-                    // Infinite loop
-                    self.compile_expr(*for_body, body);
-                    self.emit(Instruction::Pop(1));
+                        let break_locs = self.wrap_loop_body(|ctx| {
+                            ctx.compile_expr(*for_body, body);
+                        });
 
-                    if let Some(upd) = update {
-                        self.compile_expr(*upd, body);
-                        self.emit(Instruction::Pop(1));
+                        if let Some(upd) = update {
+                            self.compile_expr(*upd, body);
+                            self.emit(Instruction::Pop(1));
+                        }
+
+                        self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
+
+                        // Patch break locations
+                        for loc in break_locs {
+                            self.patch_jump(loc);
+                        }
                     }
-
-                    self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
                 }
 
                 self.exit_scope(false);
@@ -623,6 +727,93 @@ impl<'db> Compiler<'db> {
             }
         }
     }
+
+    /// Compile a while loop with proper break/continue support.
+    ///
+    /// The loop structure is:
+    /// ```text
+    /// loop_start:
+    ///   compile_condition
+    ///   JumpIfFalse exit_pop
+    ///   Pop 1  // pop condition
+    ///   compile_body
+    ///   compile_after (for continue handling)
+    ///   Jump loop_start
+    /// exit_pop:
+    ///   Pop 1  // pop condition
+    /// ```
+    fn compile_while_loop(
+        &mut self,
+        compile_condition: impl FnOnce(&mut Self),
+        compile_body: impl FnOnce(&mut Self),
+        compile_after: impl FnOnce(&mut Self),
+    ) {
+        let loop_start = self.next_insn_index();
+
+        compile_condition(self);
+
+        // This jump needs patching - it jumps to exit when condition is false
+        let bail_jump = self.emit(Instruction::JumpIfFalse(0));
+        self.emit(Instruction::Pop(1)); // Pop condition (true case)
+
+        // Wrap body in loop context for break/continue
+        let break_locs = self.wrap_loop_body(compile_body);
+
+        // Code that runs after each iteration (for continue targets)
+        compile_after(self);
+
+        // Jump back to loop start
+        self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
+
+        // Exit point: pop condition (false case)
+        let pop_if_condition = self.emit(Instruction::Pop(1));
+        self.patch_jump_to(bail_jump, pop_if_condition);
+
+        // Patch all break statements to jump here (after condition pop)
+        for loc in break_locs {
+            self.patch_jump(loc);
+        }
+    }
+
+    /// Wrap a loop body to handle break/continue.
+    ///
+    /// Returns the break patch list - locations that need to be patched
+    /// to point to the loop exit.
+    fn wrap_loop_body(&mut self, compile_body: impl FnOnce(&mut Self)) -> Vec<usize> {
+        self.enter_scope();
+
+        let old_loop = self.current_loop.replace(LoopInfo {
+            scope_depth: self.scopes.len(),
+            break_patch_list: Vec::new(),
+            continue_patch_list: Vec::new(),
+        });
+
+        compile_body(self);
+
+        let loop_info = std::mem::replace(&mut self.current_loop, old_loop)
+            .expect("loop info should exist after compile_body");
+
+        self.exit_scope(false);
+
+        // Patch continue jumps to point to current position
+        // (which is right before the "after" code and jump back to start)
+        for continue_jmp in loop_info.continue_patch_list {
+            self.patch_jump(continue_jmp);
+        }
+
+        loop_info.break_patch_list
+    }
+
+    /// Patch a jump instruction to point to a specific destination.
+    #[allow(clippy::cast_possible_wrap)]
+    fn patch_jump_to(&mut self, instruction_ptr: usize, destination: usize) {
+        match &mut self.bytecode.instructions[instruction_ptr] {
+            Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
+                *offset = destination as isize - instruction_ptr as isize;
+            }
+            _ => panic!("expected jump instruction at index {instruction_ptr}"),
+        }
+    }
 }
 
 /// Compile a function to bytecode using THIR type information.
@@ -635,6 +826,7 @@ impl<'db> Compiler<'db> {
 /// * `body` - HIR function body
 /// * `inference` - THIR type inference result
 /// * `globals` - Global name to index mapping
+/// * `classes` - Class name to field information mapping
 ///
 /// # Returns
 /// A tuple of (Function, `Vec<Object>`) where the objects are the object pool
@@ -645,8 +837,9 @@ pub fn compile_function<'db>(
     body: &FunctionBody,
     inference: &'db InferenceResult<'db>,
     globals: HashMap<String, usize>,
+    classes: HashMap<String, ClassInfo>,
 ) -> (Function, Vec<Object>) {
-    let mut compiler = Compiler::new(inference, globals);
+    let mut compiler = Compiler::new(inference, globals, classes);
     let function = compiler.compile_function(name, params, body);
     (function, compiler.objects)
 }

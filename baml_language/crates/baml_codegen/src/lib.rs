@@ -31,7 +31,7 @@ pub use baml_vm::{
     UnaryOp, Value,
 };
 use baml_workspace::ProjectRoot;
-pub use compiler::{Compiler, compile_function};
+pub use compiler::{ClassInfo, Compiler, compile_function};
 
 /// Generate bytecode for all functions in a project.
 ///
@@ -68,6 +68,34 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
         }
     }
 
+    // Build classes map (class name -> ClassInfo)
+    let mut classes: HashMap<String, ClassInfo> = HashMap::new();
+    for file in files {
+        let item_tree = baml_hir::file_item_tree(db, *file);
+        let items_struct = baml_hir::file_items(db, *file);
+        for item in items_struct.items(db) {
+            if let ItemId::Class(class_loc) = item {
+                let class = &item_tree[class_loc.id(db)];
+                let class_name = class.name.to_string();
+
+                let mut field_indices = HashMap::new();
+                let mut field_names = Vec::new();
+                for (idx, field) in class.fields.iter().enumerate() {
+                    field_indices.insert(field.name.to_string(), idx);
+                    field_names.push(field.name.to_string());
+                }
+
+                classes.insert(
+                    class_name,
+                    ClassInfo {
+                        field_indices,
+                        field_names,
+                    },
+                );
+            }
+        }
+    }
+
     // Compile each function
     for file in files {
         let items_struct = baml_hir::file_items(db, *file);
@@ -90,6 +118,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                     &body,
                     &inference,
                     globals.clone(),
+                    classes.clone(),
                 );
 
                 // Add function object to program

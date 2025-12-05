@@ -296,3 +296,36 @@ fn return_array_constructor() -> anyhow::Result<()> {
         )],
     })
 }
+
+// ============================================================================
+// Class Constructor Tests
+// ============================================================================
+
+#[test]
+fn class_constructor_simple() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            class Point {
+                x int
+                y int
+            }
+
+            function main() -> Point {
+                Point { x: 1, y: 2 }
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreField(0),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreField(1),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
