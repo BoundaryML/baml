@@ -75,14 +75,13 @@ Function ProcessData (arity: 1, kind: Exec):
      7    POP 1              
      8    LOAD_CONST 1       (<fn AnotherLLM>)
      9    RETURN             
-     10   JUMP +3            (to 13)
+     10   JUMP +2            (to 12)
      11   POP 1              
-     12   LOAD_CONST 2       (null)
-     13   POP 1              
-     14   LOAD_CONST 3       (<fn Ambiguous>)
-     15   RETURN             
-     16   POP 1              
-     17   RETURN             
+     12   POP 1              
+     13   LOAD_CONST 2       (<fn Ambiguous>)
+     14   RETURN             
+     15   POP 1              
+     16   RETURN             
 
 Function SimpleCalc (arity: 2, kind: Exec):
      0   LOAD_VAR 1     (a)

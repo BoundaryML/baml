@@ -1,6 +1,9 @@
 //! Compiler tests for operators (arithmetic, logical, assignment).
 
-use baml_vm::{BinOp, test::{Instruction, Value}};
+use baml_vm::{
+    BinOp,
+    test::{Instruction, Value},
+};
 
 use super::common::{Program, assert_compiles};
 

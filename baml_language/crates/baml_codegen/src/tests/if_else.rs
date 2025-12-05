@@ -1,6 +1,9 @@
 //! Compiler tests for if/else expressions and statements.
 
-use baml_vm::{BinOp, CmpOp, test::{Instruction, Value}};
+use baml_vm::{
+    BinOp, CmpOp,
+    test::{Instruction, Value},
+};
 
 use super::common::{Program, assert_compiles};
 
@@ -533,33 +536,13 @@ fn chained_if_else_in_arithmetic() -> anyhow::Result<()> {
 }
 
 // ============================================================================
-// If without else (returns null on false path)
+// If without else
 // ============================================================================
 
-#[test]
-fn if_without_else_returns_null() -> anyhow::Result<()> {
-    // When condition is false, the if expression evaluates to null
-    assert_compiles(Program {
-        source: "
-            function main() -> int {
-                if (true) { 42 }
-            }
-        ",
-        expected: vec![(
-            "main",
-            vec![
-                Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(42)),
-                Instruction::Jump(3),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Null), // null for false path
-                Instruction::Return,
-            ],
-        )],
-    })
-}
+// Note: If-without-else where the then-branch produces a value is a type error.
+// The type checker ensures that if-without-else is only used when the then-branch
+// block has no trailing expression (i.e., doesn't produce a value).
+// Example: `if (cond) { x = 5; }` is valid, `if (cond) { 5 }` is a type error.
 
 // ============================================================================
 // Block expressions

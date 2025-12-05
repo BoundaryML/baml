@@ -27,7 +27,7 @@ struct Scope {
 struct LoopInfo {
     /// Length of scopes vec before entering loop body.
     /// Used by break/continue to know how many scopes to pop.
-    scope_depth: usize,
+    _scope_depth: usize,
     /// Jump instruction locations to patch for break statements.
     break_patch_list: Vec<usize>,
     /// Jump instruction locations to patch for continue statements.
@@ -277,19 +277,18 @@ impl<'db> Compiler<'db> {
             } => {
                 self.compile_expr(*condition, body);
                 let skip_if = self.emit(Instruction::JumpIfFalse(0));
-                self.emit(Instruction::Pop(1));
+                self.emit(Instruction::Pop(1)); // Pop condition (true path)
                 self.compile_expr(*then_branch, body);
                 let skip_else = self.emit(Instruction::Jump(0));
                 self.patch_jump(skip_if);
-                self.emit(Instruction::Pop(1));
+                self.emit(Instruction::Pop(1)); // Pop condition (false path)
+
                 if let Some(else_expr) = else_branch {
                     self.compile_expr(*else_expr, body);
-                } else {
-                    // If no else branch, push null for the false path
-                    // so the if expression always produces a value
-                    let idx = self.add_constant(Value::Null);
-                    self.emit(Instruction::LoadConst(idx));
                 }
+                // If no else: then_branch must not produce a value (type checker ensures this).
+                // Both paths pop condition and leave stack in same state.
+
                 self.patch_jump(skip_else);
             }
 
@@ -788,7 +787,7 @@ impl<'db> Compiler<'db> {
         self.enter_scope();
 
         let old_loop = self.current_loop.replace(LoopInfo {
-            scope_depth: self.scopes.len(),
+            _scope_depth: self.scopes.len(),
             break_patch_list: Vec::new(),
             continue_patch_list: Vec::new(),
         });
