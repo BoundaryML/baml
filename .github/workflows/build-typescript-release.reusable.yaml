@@ -51,6 +51,13 @@ jobs:
             node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
 
+          - target: aarch64-pc-windows-msvc
+            host: windows-11-arm
+            architecture: arm64
+            node_action_version: v6
+            node_build: pnpm build:napi-release --target aarch64-pc-windows-msvc
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+
           - target: x86_64-unknown-linux-gnu
             # Do not use -latest, since it uses a newer glibc version!
             host: ubuntu-22.04
@@ -102,6 +109,8 @@ jobs:
       # Setup using standardized actions
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
+        with:
+          node-action-version: ${{ matrix._.node_action_version }}
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -109,9 +118,6 @@ jobs:
           targets: ${{ matrix._.target }}
           prefix-key: v5-rust-${{ matrix._.target }}
           cache-on-failure: true
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
 
       # per-matrix-entry dependency setup
       - name: Build tools setup

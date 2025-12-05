@@ -1,0 +1,88 @@
+name: BAML Release - Build Typescript Windows arm64
+
+on:
+  workflow_call: {}
+  workflow_dispatch: {}
+  push:
+    branches:
+      - sam/win-arm64-ts
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-typescript-aarch64
+  cancel-in-progress: true
+
+env:
+  DEBUG: napi:*
+  APP_NAME: baml
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
+  # Turbo remote caching
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: gloo
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          - target: x86_64-pc-windows-msvc
+            host: windows-latest
+            node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+
+          - target: aarch64-pc-windows-msvc
+            host: windows-11-arm
+            architecture: arm64
+            node_action_version: v6
+            node_build: pnpm build:napi-release --target aarch64-pc-windows-msvc
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+
+    name: ${{ matrix._.target }}
+    runs-on: ${{ matrix._.host }}
+    container: ${{ matrix._.container }}
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Check GLIBC version for Linux targets (skip musl targets)
+      - name: Check GLIBC version
+        if: contains(matrix._.target, 'linux') && !contains(matrix._.target, 'musl')
+        run: |
+          ldd --version
+
+      # Setup using standardized actions
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          node-action-version: ${{ matrix._.node_action_version }}
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix._.target }}
+          prefix-key: v5-rust-${{ matrix._.target }}
+          cache-on-failure: true
+
+      # per-matrix-entry dependency setup
+      - name: Build tools setup
+        if: matrix._.before
+        run: ${{ matrix._.before }}
+
+      # Build the NAPI library and bindings
+      - name: PNPM Build
+        run: ${{ matrix._.node_build }}
+        working-directory: engine/language_client_typescript
+
+      - name: Build TS
+        run: pnpm build:ts_build
+        working-directory: engine/language_client_typescript
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix._.target }}
+          path: engine/language_client_typescript/*.node
+          if-no-files-found: error
