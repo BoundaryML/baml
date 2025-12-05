@@ -4,6 +4,7 @@ title: "Exception Handling"
 shepherds: Vaibhav Gupta <vbv@boundaryml.com>
 status: Proposed
 created: 2025-11-20
+feedback: https://gloo-global.slack.com/docs/T03KV1PH19P/F098LMB0QK0
 ---
 
 # BEP-001: Exception Handling

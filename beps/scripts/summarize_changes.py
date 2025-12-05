@@ -73,7 +73,7 @@ def get_changed_files() -> dict:
 
 
 def extract_bep_info(filepath: str) -> dict | None:
-    """Extract BEP ID and title from a file path."""
+    """Extract BEP ID, title, status, and feedback link from a file path."""
     # Match BEP-XXX pattern in path (may have suffix like BEP-001-exceptions)
     match = re.search(r"(BEP-\d+)(-[^/]+)?", filepath)
     if not match:
@@ -82,7 +82,11 @@ def extract_bep_info(filepath: str) -> dict | None:
     bep_id = match.group(1)
     bep_dir_name = match.group(0)  # Full match including suffix
     
-    # Try to get title from README.md frontmatter
+    title = None
+    status = "Draft"  # Default to Draft
+    feedback = None
+    
+    # Try to get title, status, and feedback from README.md frontmatter
     readme_path = REPO_ROOT / f"beps/docs/proposals/{bep_dir_name}/README.md"
     if readme_path.exists():
         try:
@@ -94,11 +98,14 @@ def extract_bep_info(filepath: str) -> dict | None:
                     for line in frontmatter.splitlines():
                         if line.startswith("title:"):
                             title = line.split(":", 1)[1].strip().strip('"')
-                            return {"id": bep_id, "title": title, "dir": bep_dir_name}
+                        elif line.startswith("status:"):
+                            status = line.split(":", 1)[1].strip().strip('"')
+                        elif line.startswith("feedback:"):
+                            feedback = line.split(":", 1)[1].strip().strip('"')
         except Exception:
             pass
     
-    return {"id": bep_id, "title": None, "dir": bep_dir_name}
+    return {"id": bep_id, "title": title, "dir": bep_dir_name, "status": status, "feedback": feedback}
 
 
 def generate_summary(base_url: str = "") -> dict:
@@ -120,6 +127,8 @@ def generate_summary(base_url: str = "") -> dict:
                 beps_touched[bep_id] = {
                     "title": info["title"],
                     "dir": info.get("dir", bep_id),
+                    "status": info.get("status", "Draft"),
+                    "feedback": info.get("feedback"),
                     "added": 0,
                     "modified": 0,
                 }
@@ -128,6 +137,9 @@ def generate_summary(base_url: str = "") -> dict:
                 beps_touched[bep_id]["added"] += 1
             else:
                 beps_touched[bep_id]["modified"] += 1
+    
+    # Filter out Draft BEPs for notifications
+    non_draft_beps = {k: v for k, v in beps_touched.items() if v["status"] != "Draft"}
     
     # Build summary text
     total_added = len(changes["added"])
@@ -145,12 +157,13 @@ def generate_summary(base_url: str = "") -> dict:
     
     file_summary = ", ".join(summary_parts) if summary_parts else "No file changes"
     
-    # Build BEP list with links
+    # Build BEP list with links (only non-Draft)
     bep_lines = []
     bep_details = []
-    for bep_id, info in sorted(beps_touched.items()):
+    for bep_id, info in sorted(non_draft_beps.items()):
         title = info["title"] or "Untitled"
         bep_dir = info["dir"]
+        status = info["status"]
         parts = []
         if info["added"]:
             parts.append(f"+{info['added']}")
@@ -161,14 +174,16 @@ def generate_summary(base_url: str = "") -> dict:
         # Build link if base_url provided
         if base_url:
             bep_url = f"{base_url.rstrip('/')}/proposals/{bep_dir}/"
-            bep_lines.append(f"• <{bep_url}|*{bep_id}*: {title}> ({change_str})")
+            bep_lines.append(f"• <{bep_url}|*{bep_id}*: {title}> [{status}] ({change_str})")
         else:
-            bep_lines.append(f"• *{bep_id}*: {title} ({change_str})")
+            bep_lines.append(f"• *{bep_id}*: {title} [{status}] ({change_str})")
         
         bep_details.append({
             "id": bep_id,
             "title": title,
             "dir": bep_dir,
+            "status": status,
+            "feedback": info.get("feedback"),
             "added": info["added"],
             "modified": info["modified"],
         })
@@ -178,7 +193,7 @@ def generate_summary(base_url: str = "") -> dict:
     return {
         "file_summary": file_summary,
         "bep_summary": bep_summary,
-        "beps_touched": list(beps_touched.keys()),
+        "beps_touched": list(non_draft_beps.keys()),
         "bep_details": bep_details,
         "total_files": total_added + total_modified + total_deleted,
     }
@@ -187,7 +202,10 @@ def generate_summary(base_url: str = "") -> dict:
 def generate_slack_blocks(summary: dict, env: str, base_url: str, workflow_url: str = "") -> dict:
     """Generate Slack Block Kit payload for rich notifications."""
     
-    emoji = "🚀" if env == "canary" else "👀"
+    # If no non-draft BEPs, return empty payload
+    if not summary.get("bep_details"):
+        return {"blocks": []}
+    
     env_label = "Canary" if env == "canary" else f"Preview ({env})"
     
     blocks = [
@@ -195,15 +213,15 @@ def generate_slack_blocks(summary: dict, env: str, base_url: str, workflow_url: 
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": f"{emoji} BEPs Deployed — {env_label}",
-                "emoji": True
+                "text": f"BEPs Deployed — {env_label}",
+                "emoji": False
             }
         },
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*Changes:* {summary['file_summary']}"
+                "text": f"*Changes vs canary:* {summary['file_summary']}"
             }
         },
         {"type": "divider"},
@@ -219,23 +237,46 @@ def generate_slack_blocks(summary: dict, env: str, base_url: str, workflow_url: 
         change_str = ", ".join(change_parts) if change_parts else "no changes"
         
         bep_url = f"{base_url.rstrip('/')}/proposals/{bep['dir']}/"
+        status = bep.get("status", "Proposed")
+        feedback_url = bep.get("feedback")
         
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*<{bep_url}|{bep['id']}: {bep['title']}>*\n{change_str}"
-            },
-            "accessory": {
+                "text": f"*<{bep_url}|{bep['id']}: {bep['title']}>*\n{status} · {change_str}"
+            }
+        })
+        
+        # Add buttons row
+        buttons = [
+            {
                 "type": "button",
                 "text": {
                     "type": "plain_text",
                     "text": "View",
-                    "emoji": True
+                    "emoji": False
                 },
                 "url": bep_url,
                 "action_id": f"view-{bep['id'].lower()}"
             }
+        ]
+        
+        if feedback_url:
+            buttons.append({
+                "type": "button",
+                "text": {
+                    "type": "plain_text",
+                    "text": "Leave Feedback",
+                    "emoji": False
+                },
+                "url": feedback_url,
+                "action_id": f"feedback-{bep['id'].lower()}"
+            })
+        
+        blocks.append({
+            "type": "actions",
+            "elements": buttons
         })
     
     # Add context footer

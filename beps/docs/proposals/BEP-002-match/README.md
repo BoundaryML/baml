@@ -4,6 +4,7 @@ title: "match"
 shepherds: hellovai <vbv@boundaryml.com>
 status: Accepted
 created: 2025-12-01
+feedback: https://gloo-global.slack.com/docs/T03KV1PH19P/F0A1715PM52
 ---
 
 The `match` expression in BAML provides a powerful way to handle different data shapes, particularly useful for working with union types and structured LLM outputs. It lets you write declarative, type-safe code that is easier to read and maintain than complex `if-else` chains.

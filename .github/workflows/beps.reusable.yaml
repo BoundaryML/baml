@@ -103,11 +103,15 @@ jobs:
             --env "canary" \
             --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --format slack)
+          # Check if there are any blocks (non-draft BEPs)
+          BLOCK_COUNT=$(echo "$PAYLOAD" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('blocks',[])))")
+          echo "block_count=$BLOCK_COUNT" >> $GITHUB_OUTPUT
           echo "payload<<EOF" >> $GITHUB_OUTPUT
           echo "$PAYLOAD" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Send Slack notification
+        if: ${{ steps.slack-payload.outputs.block_count != '0' }}
         env:
           SLACK_PAYLOAD: ${{ steps.slack-payload.outputs.payload }}
         run: |
@@ -222,11 +226,15 @@ jobs:
             --env "${{ steps.branch.outputs.name }}" \
             --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --format slack)
+          # Check if there are any blocks (non-draft BEPs)
+          BLOCK_COUNT=$(echo "$PAYLOAD" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('blocks',[])))")
+          echo "block_count=$BLOCK_COUNT" >> $GITHUB_OUTPUT
           echo "payload<<EOF" >> $GITHUB_OUTPUT
           echo "$PAYLOAD" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Send Slack notification
+        if: ${{ steps.slack-payload.outputs.block_count != '0' }}
         env:
           SLACK_PAYLOAD: ${{ steps.slack-payload.outputs.payload }}
         run: |
