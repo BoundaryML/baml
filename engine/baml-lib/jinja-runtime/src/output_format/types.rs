@@ -235,6 +235,7 @@ pub struct RenderOptions {
     hoist_classes: HoistClasses,
     always_hoist_enums: RenderSetting<bool>,
     map_style: MapStyle,
+    quote_class_fields: bool,
 }
 
 impl Default for RenderOptions {
@@ -247,6 +248,7 @@ impl Default for RenderOptions {
             hoist_classes: HoistClasses::Auto,
             always_hoist_enums: RenderSetting::Auto,
             map_style: MapStyle::TypeParameters,
+            quote_class_fields: false,
         }
     }
 }
@@ -261,6 +263,7 @@ impl RenderOptions {
     ///
     /// This might be a little annoying, maybe we can change the code in mod.rs
     /// to flatten the types Option<Option<T>> => Option<T>
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         prefix: Option<Option<String>>,
         or_splitter: Option<String>,
@@ -269,6 +272,7 @@ impl RenderOptions {
         map_style: Option<MapStyle>,
         hoisted_class_prefix: Option<Option<String>>,
         hoist_classes: Option<HoistClasses>,
+        quote_class_fields: Option<bool>,
     ) -> Self {
         Self {
             prefix: prefix.map_or(RenderSetting::Auto, |p| {
@@ -285,6 +289,7 @@ impl RenderOptions {
                 p.map_or(RenderSetting::Never, RenderSetting::Always)
             }),
             hoist_classes: hoist_classes.unwrap_or(HoistClasses::Auto),
+            quote_class_fields: quote_class_fields.unwrap_or(false),
         }
     }
 
@@ -349,6 +354,7 @@ struct ClassRender {
     name: String,
     description: Option<String>,
     values: Vec<ClassFieldRender>,
+    quote_fields: bool,
 }
 
 struct ClassFieldRender {
@@ -376,12 +382,21 @@ impl std::fmt::Display for ClassRender {
             if let Some(desc) = &value.description {
                 writeln!(f, "  // {}", desc.replace("\n", "\n  // "))?;
             }
-            writeln!(
-                f,
-                "  {}: {},",
-                value.name,
-                value.r#type.replace('\n', "\n  ")
-            )?;
+            if self.quote_fields {
+                writeln!(
+                    f,
+                    "  \"{}\": {},",
+                    value.name,
+                    value.r#type.replace('\n', "\n  ")
+                )?;
+            } else {
+                writeln!(
+                    f,
+                    "  {}: {},",
+                    value.name,
+                    value.r#type.replace('\n', "\n  ")
+                )?;
+            }
         }
         write!(f, "}}")
     }
@@ -723,6 +738,7 @@ impl OutputFormatContent {
                             })
                         })
                         .collect::<Result<_, minijinja::Error>>()?,
+                    quote_fields: options.quote_class_fields,
                 }
                 .to_string()
             }
@@ -1283,6 +1299,53 @@ Color
             rendered,
             Some(String::from(
                 "Answer in JSON using this schema:\n{\n  // A professional resume\n  // containing work history\n  // and qualifications\n\n  name: string,\n}"
+            ))
+        );
+    }
+
+    #[test]
+    fn render_class_with_quoted_fields() {
+        let classes = vec![Class {
+            name: Name::new("Person".to_string()),
+            description: None,
+            namespace: baml_types::StreamingMode::NonStreaming,
+            fields: vec![
+                (
+                    Name::new("name".to_string()),
+                    TypeIR::string(),
+                    Some("The person's name".to_string()),
+                    false,
+                ),
+                (
+                    Name::new("age".to_string()),
+                    TypeIR::int(),
+                    Some("The person's age".to_string()),
+                    false,
+                ),
+            ],
+            constraints: Vec::new(),
+            streaming_behavior: Default::default(),
+        }];
+
+        let content = OutputFormatContent::target(TypeIR::class("Person"))
+            .classes(classes)
+            .build();
+        let rendered = content
+            .render(RenderOptions {
+                quote_class_fields: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                r#"Answer in JSON using this schema:
+{
+  // The person's name
+  "name": string,
+  // The person's age
+  "age": int,
+}"#
             ))
         );
     }
@@ -3434,6 +3497,7 @@ Answer in JSON using this schema: Ret"#
             None,       // map_style
             None,       // hoisted_class_prefix
             None,       // hoist_classes
+            None,       // quote_class_fields
         );
 
         let rendered = content.render(options).unwrap().unwrap();
