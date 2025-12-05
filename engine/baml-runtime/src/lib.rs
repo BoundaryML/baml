@@ -1691,12 +1691,72 @@ impl BamlRuntime {
             })
     }
 
+    /// Strip test blocks from the input files using the parser database
+    /// This is safe because it uses the actual parsed spans from the AST
+    fn strip_tests_from_files(
+        &self,
+        input_files: &IndexMap<PathBuf, String>,
+    ) -> Result<IndexMap<PathBuf, String>> {
+        use internal_baml_ast::ast::WithSpan;
+
+        // Collect all test block spans grouped by file
+        let mut test_spans_by_file: std::collections::HashMap<PathBuf, Vec<Span>> =
+            std::collections::HashMap::new();
+
+        for test_walker in self.db.walk_test_cases() {
+            let span = test_walker.span();
+            let file_path = span.file.path_buf().clone();
+            test_spans_by_file
+                .entry(file_path)
+                .or_default()
+                .push(span.clone());
+        }
+
+        // Process each file, removing test blocks
+        let mut result = IndexMap::new();
+        for (path, content) in input_files.iter() {
+            let processed_content = if let Some(spans) = test_spans_by_file.get(path) {
+                // Sort spans by start position in reverse order so we can remove from end to start
+                let mut sorted_spans = spans.clone();
+                sorted_spans.sort_by(|a, b| b.start.cmp(&a.start));
+
+                // Remove each test block from the content
+                let mut new_content = content.clone();
+                for span in sorted_spans {
+                    let start = span.start;
+                    let end = span.end;
+
+                    // Replace the span with empty string
+                    // We need to work with byte offsets
+                    if start <= end && end <= new_content.len() {
+                        new_content.replace_range(start..end, "");
+                    }
+                }
+                new_content
+            } else {
+                content.clone()
+            };
+
+            result.insert(path.clone(), processed_content);
+        }
+
+        Ok(result)
+    }
+
     pub fn run_codegen(
         &self,
         input_files: &IndexMap<PathBuf, String>,
         no_version_check: bool,
         generator_type: GeneratorType,
+        strip_tests: bool,
     ) -> Result<Vec<GenerateOutput>> {
+        // If strip_tests is enabled, remove test blocks using the parser database
+        let processed_files = if strip_tests {
+            self.strip_tests_from_files(input_files)?
+        } else {
+            input_files.clone()
+        };
+
         let client_types: Vec<(&CodegenGenerator, GeneratorArgs)> = self
             .codegen_generators()
             .map(|generator| {
@@ -1705,7 +1765,7 @@ impl BamlRuntime {
                     GeneratorArgs::new(
                         generator.output_dir(),
                         generator.baml_src.clone(),
-                        input_files.iter(),
+                        processed_files.iter(),
                         generator.version.clone(),
                         no_version_check,
                         generator.default_client_mode(),

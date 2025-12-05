@@ -1154,6 +1154,7 @@ impl WasmRuntime {
                     .collect(),
                 no_version_check,
                 GeneratorType::VSCodeCLI,
+                false, // strip_tests - not applicable for WASM runtime
             )
             .map_err(|e| JsError::new(format!("{e:#}").as_str()))?
             .into_iter()
