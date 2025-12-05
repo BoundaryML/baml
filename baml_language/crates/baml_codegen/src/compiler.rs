@@ -284,6 +284,11 @@ impl<'db> Compiler<'db> {
                 self.emit(Instruction::Pop(1));
                 if let Some(else_expr) = else_branch {
                     self.compile_expr(*else_expr, body);
+                } else {
+                    // If no else branch, push null for the false path
+                    // so the if expression always produces a value
+                    let idx = self.add_constant(Value::Null);
+                    self.emit(Instruction::LoadConst(idx));
                 }
                 self.patch_jump(skip_else);
             }

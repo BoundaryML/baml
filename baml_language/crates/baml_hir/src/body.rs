@@ -451,10 +451,13 @@ impl LoweringContext {
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
             SyntaxKind::PAREN_EXPR => {
                 // Unwrap parentheses - just lower the inner expression
+                // First try to find a child node
                 if let Some(inner) = node.children().next() {
                     self.lower_expr(&inner)
                 } else {
-                    self.exprs.alloc(Expr::Missing)
+                    // No child nodes - try to find a literal token (true/false/null/int)
+                    self.try_lower_literal_token(node)
+                        .unwrap_or_else(|| self.exprs.alloc(Expr::Missing))
                 }
             }
             SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {

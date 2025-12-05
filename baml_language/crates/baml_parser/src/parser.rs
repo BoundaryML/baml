@@ -1308,8 +1308,6 @@ impl<'a> Parser<'a> {
             self.parse_let_stmt();
         } else if self.at(TokenKind::Return) {
             self.parse_return_stmt();
-        } else if self.at(TokenKind::If) {
-            self.parse_if_expr();
         } else if self.at(TokenKind::While) {
             self.parse_while_stmt();
         } else if self.at(TokenKind::For) {
@@ -1771,6 +1769,9 @@ impl<'a> Parser<'a> {
                 // Block expression: { statements... }
                 self.parse_block_expr();
             }
+        } else if self.at(TokenKind::If) {
+            // If expression (can be used in expression context like `let x = if (cond) { a } else { b }`)
+            self.parse_if_expr();
         } else {
             self.error("expression".to_string());
             // Consume the unexpected token to avoid infinite loops
