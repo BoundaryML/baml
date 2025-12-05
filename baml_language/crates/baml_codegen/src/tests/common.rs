@@ -53,7 +53,8 @@ fn convert_instruction(
     inst: &baml_vm::Instruction,
     inst_idx: usize,
     constants: &[baml_vm::Value],
-    objects: &[baml_vm::Object],
+    fn_objects: &[baml_vm::Object],
+    class_objects: &[baml_vm::Object],
     globals: &HashMap<String, usize>,
     function: &baml_vm::Function,
 ) -> anyhow::Result<Instruction> {
@@ -66,7 +67,7 @@ fn convert_instruction(
     Ok(match inst {
         baml_vm::Instruction::LoadConst(idx) => {
             let value = &constants[*idx];
-            let test_value = convert_value(value, objects)?;
+            let test_value = convert_value(value, fn_objects)?;
             Instruction::LoadConst(test_value)
         }
         baml_vm::Instruction::LoadVar(idx) => {
@@ -108,8 +109,8 @@ fn convert_instruction(
         baml_vm::Instruction::StoreArrayElement => Instruction::StoreArrayElement,
         baml_vm::Instruction::StoreMapElement => Instruction::StoreMapElement,
         baml_vm::Instruction::AllocInstance(obj_idx) => {
-            let obj = objects.get(*obj_idx).ok_or_else(|| {
-                anyhow::anyhow!("Object index {obj_idx} not found for AllocInstance")
+            let obj = class_objects.get(*obj_idx).ok_or_else(|| {
+                anyhow::anyhow!("Class object index {obj_idx} not found for AllocInstance (have {} class objects)", class_objects.len())
             })?;
             match obj {
                 baml_vm::Object::Class(class) => {
@@ -119,7 +120,8 @@ fn convert_instruction(
             }
         }
         baml_vm::Instruction::AllocVariant(obj_idx) => {
-            let obj = objects.get(*obj_idx).ok_or_else(|| {
+            // Enums would also be pre-allocated, similar to classes
+            let obj = class_objects.get(*obj_idx).ok_or_else(|| {
                 anyhow::anyhow!("Object index {obj_idx} not found for AllocVariant")
             })?;
             match obj {
@@ -165,7 +167,10 @@ fn convert_value(value: &baml_vm::Value, objects: &[baml_vm::Object]) -> anyhow:
 /// Compiled function with its objects.
 struct CompiledFunction {
     function: baml_vm::Function,
-    objects: Vec<baml_vm::Object>,
+    /// Function-local objects (strings, etc.) - indices in bytecode constants reference this.
+    fn_objects: Vec<baml_vm::Object>,
+    /// Pre-allocated class objects - `AllocInstance` indices reference this.
+    class_objects: Vec<baml_vm::Object>,
 }
 
 /// Result of compiling source code.
@@ -199,8 +204,11 @@ fn compile_source(source: &str) -> CompileResult {
     global_idx += 1;
     let _ = global_idx; // suppress unused variable warning
 
-    // Build classes map (class name -> ClassInfo)
+    // Build classes map (class name -> ClassInfo) and pre-allocate Class objects
     let mut classes: HashMap<String, ClassInfo> = HashMap::new();
+    let mut class_object_indices: HashMap<String, usize> = HashMap::new();
+    let mut class_objects: Vec<baml_vm::Object> = Vec::new();
+
     for item in items {
         if let baml_hir::ItemId::Class(class_loc) = item {
             let class = &item_tree[class_loc.id(&db)];
@@ -212,6 +220,14 @@ fn compile_source(source: &str) -> CompileResult {
                 field_indices.insert(field.name.to_string(), idx);
                 field_names.push(field.name.to_string());
             }
+
+            // Pre-allocate Class object and record its index
+            let class_obj_idx = class_objects.len();
+            class_objects.push(baml_vm::Object::Class(baml_vm::Class {
+                name: class_name.clone(),
+                field_names: field_names.clone(),
+            }));
+            class_object_indices.insert(class_name.clone(), class_obj_idx);
 
             classes.insert(
                 class_name,
@@ -242,20 +258,22 @@ fn compile_source(source: &str) -> CompileResult {
                 signature.params.iter().map(|p| p.name.clone()).collect();
 
             // Compile to bytecode
-            let (compiled, objects) = crate::compile_function(
+            let (compiled, fn_objects) = crate::compile_function(
                 signature.name.as_str(),
                 &params,
                 &body,
                 &inference,
                 globals.clone(),
                 classes.clone(),
+                class_object_indices.clone(),
             );
 
             functions.push((
                 signature.name.to_string(),
                 CompiledFunction {
                     function: compiled,
-                    objects,
+                    fn_objects,
+                    class_objects: class_objects.clone(),
                 },
             ));
         }
@@ -282,7 +300,8 @@ pub(super) fn assert_compiles(input: Program) -> anyhow::Result<()> {
             .ok_or_else(|| anyhow::anyhow!("function '{function_name}' not found"))?;
 
         let function = &compiled.function;
-        let objects = &compiled.objects;
+        let fn_objects = &compiled.fn_objects;
+        let class_objects = &compiled.class_objects;
 
         eprintln!("---- fn {function_name}() ----");
         for (i, inst) in function.bytecode.instructions.iter().enumerate() {
@@ -301,7 +320,8 @@ pub(super) fn assert_compiles(input: Program) -> anyhow::Result<()> {
                     inst,
                     inst_idx,
                     &function.bytecode.constants,
-                    objects,
+                    fn_objects,
+                    class_objects,
                     &globals,
                     function,
                 )

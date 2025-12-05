@@ -4,7 +4,7 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 8
-Objects: 14
+Objects: 16
 Globals: 8
 
 Function Ambiguous (arity: 1, kind: Llm):
@@ -29,7 +29,7 @@ Function ProcessAnalysis (arity: 1, kind: Exec):
      3    CMP_OP >           
      4    JUMP_IF_FALSE +7   (to 11)
      5    POP 1              
-     6    LOAD_CONST 1       (<fn AnotherLLM>)
+     6    LOAD_CONST 1       (" "Very positive: "")
      7    LOAD_GLOBAL 0      (<fn AnotherLLM>)
      8    BIN_OP +           
      9    RETURN             
@@ -40,7 +40,7 @@ Function ProcessAnalysis (arity: 1, kind: Exec):
      14   CMP_OP >           
      15   JUMP_IF_FALSE +7   (to 22)
      16   POP 1              
-     17   LOAD_CONST 3       (<fn Ambiguous>)
+     17   LOAD_CONST 3       (" "Positive: "")
      18   LOAD_GLOBAL 0      (<fn AnotherLLM>)
      19   BIN_OP +           
      20   RETURN             
@@ -51,13 +51,13 @@ Function ProcessAnalysis (arity: 1, kind: Exec):
      25   CMP_OP >           
      26   JUMP_IF_FALSE +7   (to 33)
      27   POP 1              
-     28   LOAD_CONST 5       (<fn ProcessData>)
+     28   LOAD_CONST 5       (" "Neutral: "")
      29   LOAD_GLOBAL 0      (<fn AnotherLLM>)
      30   BIN_OP +           
      31   RETURN             
      32   JUMP +6            (to 38)
      33   POP 1              
-     34   LOAD_CONST 6       (" "high"")
+     34   LOAD_CONST 6       (" "Negative: "")
      35   LOAD_GLOBAL 0      (<fn AnotherLLM>)
      36   BIN_OP +           
      37   RETURN             
@@ -73,12 +73,12 @@ Function ProcessData (arity: 1, kind: Exec):
      5    CMP_OP >           
      6    JUMP_IF_FALSE +5   (to 11)
      7    POP 1              
-     8    LOAD_CONST 1       (<fn AnotherLLM>)
+     8    LOAD_CONST 1       (" "high"")
      9    RETURN             
      10   JUMP +2            (to 12)
      11   POP 1              
      12   POP 1              
-     13   LOAD_CONST 2       (<fn Ambiguous>)
+     13   LOAD_CONST 2       (" "low"")
      14   RETURN             
      15   POP 1              
      16   RETURN             

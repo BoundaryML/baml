@@ -13,7 +13,7 @@ Function ConditionalLogic (arity: 1, kind: Exec):
      2    CMP_OP <           
      3    JUMP_IF_FALSE +5   (to 8)
      4    POP 1              
-     5    LOAD_CONST 1       (<fn c_style_for_loop>)
+     5    LOAD_CONST 1       (" "minor"")
      6    RETURN             
      7    JUMP +13           (to 20)
      8    POP 1              
@@ -22,11 +22,11 @@ Function ConditionalLogic (arity: 1, kind: Exec):
      11   CMP_OP <           
      12   JUMP_IF_FALSE +5   (to 17)
      13   POP 1              
-     14   LOAD_CONST 3       (<fn iterator_style_for_loop>)
+     14   LOAD_CONST 3       (" "adult"")
      15   RETURN             
      16   JUMP +4            (to 20)
      17   POP 1              
-     18   LOAD_CONST 4       (<fn nested_for_loop>)
+     18   LOAD_CONST 4       (" "senior"")
      19   RETURN             
      20   RETURN             
 
@@ -94,7 +94,7 @@ Function let_statements (arity: 0, kind: Exec):
      3    LOAD_CONST 1       (2)
      4    LOAD_CONST 2       (3)
      5    ALLOC_ARRAY 3      
-     6    ALLOC_INSTANCE 0   (<fn c_style_for_loop>)
+     6    ALLOC_INSTANCE 0   (<class Point>)
      7    COPY 0             
      8    LOAD_CONST 0       (1)
      9    STORE_FIELD 0      

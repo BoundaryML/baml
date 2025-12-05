@@ -68,8 +68,10 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
         }
     }
 
-    // Build classes map (class name -> ClassInfo)
+    // Build classes map (class name -> ClassInfo) and add Class objects to program
     let mut classes: HashMap<String, ClassInfo> = HashMap::new();
+    let mut class_object_indices: HashMap<String, usize> = HashMap::new();
+
     for file in files {
         let item_tree = baml_hir::file_item_tree(db, *file);
         let items_struct = baml_hir::file_items(db, *file);
@@ -84,6 +86,14 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                     field_indices.insert(field.name.to_string(), idx);
                     field_names.push(field.name.to_string());
                 }
+
+                // Add Class object to program and record its index
+                let class_obj = Object::Class(Class {
+                    name: class_name.clone(),
+                    field_names: field_names.clone(),
+                });
+                let class_obj_idx = program.add_object(class_obj);
+                class_object_indices.insert(class_name.clone(), class_obj_idx);
 
                 classes.insert(
                     class_name,
@@ -112,22 +122,33 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                 let params: Vec<Name> = signature.params.iter().map(|p| p.name.clone()).collect();
 
                 // Compile to bytecode
-                let (compiled_fn, objects) = compile_function(
+                let (mut compiled_fn, fn_objects) = compile_function(
                     signature.name.as_str(),
                     &params,
                     &body,
                     &inference,
                     globals.clone(),
                     classes.clone(),
+                    class_object_indices.clone(),
                 );
+
+                // Add function-local objects (strings, etc.) to program and track their new indices
+                // The base index for these objects is the current size of program.objects
+                let object_base_idx = program.objects.len();
+                for obj in fn_objects {
+                    program.add_object(obj);
+                }
+
+                // Remap Value::Object indices in the function's constants
+                // Old index (in compiler's local pool) -> new index (in program's pool)
+                for constant in &mut compiled_fn.bytecode.constants {
+                    if let Value::Object(idx) = constant {
+                        *idx += object_base_idx;
+                    }
+                }
 
                 // Add function object to program
                 let fn_obj_idx = program.add_object(Object::Function(compiled_fn));
-
-                // Add all objects from this function to the program's object pool
-                for obj in objects {
-                    program.add_object(obj);
-                }
 
                 // Register in function indices
                 program

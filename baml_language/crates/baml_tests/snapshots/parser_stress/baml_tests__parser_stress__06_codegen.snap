@@ -4,7 +4,7 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 103
-Objects: 103
+Objects: 1109
 Globals: 103
 
 Function BodyTorture (arity: 0, kind: Exec):

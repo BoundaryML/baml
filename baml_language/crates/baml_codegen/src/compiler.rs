@@ -54,6 +54,9 @@ pub struct Compiler<'db> {
     /// Resolved class information (name -> `ClassInfo`).
     classes: HashMap<String, ClassInfo>,
 
+    /// Pre-allocated Class object indices in the program's object pool.
+    class_object_indices: HashMap<String, usize>,
+
     /// Resolved local variable names to stack indices.
     locals: HashMap<String, usize>,
 
@@ -69,7 +72,7 @@ pub struct Compiler<'db> {
     /// Bytecode being generated.
     bytecode: Bytecode,
 
-    /// Objects pool (for strings, classes, etc.).
+    /// Objects pool (for strings, etc. - NOT classes, those are pre-allocated).
     objects: Vec<Object>,
 
     /// Counter for generating unique compiler-internal variable names.
@@ -87,11 +90,13 @@ impl<'db> Compiler<'db> {
         inference: &'db InferenceResult<'db>,
         globals: HashMap<String, usize>,
         classes: HashMap<String, ClassInfo>,
+        class_object_indices: HashMap<String, usize>,
     ) -> Self {
         Self {
             inference,
             globals,
             classes,
+            class_object_indices,
             locals: HashMap::new(),
             scopes: Vec::new(),
             locals_in_scope: Vec::new(),
@@ -314,23 +319,18 @@ impl<'db> Compiler<'db> {
             }
 
             Expr::Object { type_name, fields } => {
-                // Look up class information if type_name is provided
-                let class_info = type_name.as_ref().and_then(|name| {
-                    let name_str: &str = name.as_ref();
-                    self.classes.get(name_str).cloned()
-                });
+                // Look up class information and pre-allocated object index
+                let name_str = type_name.as_ref().map(std::string::ToString::to_string);
+                let class_info = name_str
+                    .as_ref()
+                    .and_then(|name| self.classes.get(name).cloned());
+                let class_obj_idx = name_str
+                    .as_ref()
+                    .and_then(|name| self.class_object_indices.get(name).copied());
 
-                if let (Some(name), Some(class_info)) = (type_name.as_ref(), class_info) {
-                    // Create a Class object and add to objects pool
-                    let class_obj = Object::Class(baml_vm::Class {
-                        name: name.to_string(),
-                        field_names: class_info.field_names.clone(),
-                    });
-                    let class_obj_idx = self.objects.len();
-                    self.objects.push(class_obj);
-
-                    // Emit AllocInstance
-                    self.emit(Instruction::AllocInstance(class_obj_idx));
+                if let (Some(class_info), Some(obj_idx)) = (class_info, class_obj_idx) {
+                    // Emit AllocInstance with pre-allocated Class object index
+                    self.emit(Instruction::AllocInstance(obj_idx));
 
                     // For each field: Copy instance, compile value, StoreField
                     for (field_name, field_value) in fields {
@@ -831,10 +831,12 @@ impl<'db> Compiler<'db> {
 /// * `inference` - THIR type inference result
 /// * `globals` - Global name to index mapping
 /// * `classes` - Class name to field information mapping
+/// * `class_object_indices` - Pre-allocated Class object indices in program's object pool
 ///
 /// # Returns
 /// A tuple of (Function, `Vec<Object>`) where the objects are the object pool
-/// containing strings, classes, etc. referenced by the function's bytecode.
+/// containing strings, etc. referenced by the function's bytecode.
+/// Class objects are NOT included here - they are pre-allocated in the program.
 pub fn compile_function<'db>(
     name: &str,
     params: &[Name],
@@ -842,8 +844,9 @@ pub fn compile_function<'db>(
     inference: &'db InferenceResult<'db>,
     globals: HashMap<String, usize>,
     classes: HashMap<String, ClassInfo>,
+    class_object_indices: HashMap<String, usize>,
 ) -> (Function, Vec<Object>) {
-    let mut compiler = Compiler::new(inference, globals, classes);
+    let mut compiler = Compiler::new(inference, globals, classes, class_object_indices);
     let function = compiler.compile_function(name, params, body);
     (function, compiler.objects)
 }
