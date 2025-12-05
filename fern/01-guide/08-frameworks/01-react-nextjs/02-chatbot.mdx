@@ -68,11 +68,7 @@ baml-cli generate
 
 ## Step 2: Implement the Chat Interface
 
-You can implement the chat interface in two ways:
-
-### Option A: Using the Generated Hook Directly
-
-The simplest approach is to use the generated hook directly. Note that the hook's `data` property contains the assistant's response (a `string`), not the messages array. You need to maintain your own message state:
+The `useChat` hook's `data` property contains the assistant's streaming response (a `string`), not the messages array. You need to maintain your own message state:
 
 <CodeBlocks>
 ```tsx title="app/components/chat-interface.tsx"
@@ -144,12 +140,12 @@ export function ChatInterface() {
 ```
 </CodeBlocks>
 
-### Option B: Using Callbacks for Fine-Grained Control
+### Using Callbacks for Fine-Grained Control
 
-You can use the hook's callbacks for more control over streaming events. This is useful for logging, analytics, or custom state management:
+You can use the hook's callbacks for more control over streaming events. This is useful for logging, analytics, or custom state management. The highlighted lines show the additions to the base example:
 
 <CodeBlocks>
-```tsx title="app/components/chat-interface-with-callbacks.tsx"
+```tsx {9, 11-28} title="app/components/chat-interface.tsx"
 'use client'
 
 import { useChat } from "@/baml_client/react/hooks";
@@ -158,8 +154,8 @@ import type { Message } from "@/baml_client/types";
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
+  const [input, setInput] = useState("");
 
   const chat = useChat({
     // Called on each streaming partial update
@@ -177,11 +173,6 @@ export function ChatInterface() {
         ]);
         setStreamingContent("");
       }
-    },
-    // Called on any error
-    onError: (error) => {
-      console.error("Chat error:", error);
-      setStreamingContent("");
     },
   });
 
@@ -208,11 +199,8 @@ export function ChatInterface() {
         ))}
         {chat.isLoading && (
           <div>
-            <strong>assistant:</strong> {streamingContent || "Thinking..."}
+            <strong>assistant:</strong> {streamingContent || "Generating..."}
           </div>
-        )}
-        {chat.isError && (
-          <div style={{ color: 'red' }}>Error: {chat.error?.message}</div>
         )}
       </div>
 
@@ -232,11 +220,11 @@ export function ChatInterface() {
 ```
 </CodeBlocks>
 
-The callback approach is useful when you need to:
+With callbacks, you can:
 - Track streaming progress with `onStreamData`
 - Handle completion with `onFinalData`
-- Implement custom error handling with `onError`
-- Add analytics or logging on each event
+- Add error handling with `onError`
+- Integrate analytics or logging on each event
 
 ## Next Steps
 
