@@ -961,9 +961,10 @@ impl BamlAsyncVmRuntime {
         input_files: &indexmap::IndexMap<std::path::PathBuf, String>,
         no_version_check: bool,
         generator_type: generators_lib::version_check::GeneratorType,
+        strip_tests: bool,
     ) -> anyhow::Result<Vec<generators_lib::GenerateOutput>> {
         self.llm_runtime
-            .run_codegen(input_files, no_version_check, generator_type)
+            .run_codegen(input_files, no_version_check, generator_type, strip_tests)
     }
 
     pub fn codegen_generators(

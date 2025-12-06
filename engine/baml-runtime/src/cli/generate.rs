@@ -16,6 +16,12 @@ pub struct GenerateArgs {
         default_value_t = false
     )]
     pub(super) no_version_check: bool,
+    #[arg(
+        long,
+        help = "Strip test blocks from inlined BAML to reduce generated file size",
+        default_value_t = false
+    )]
+    pub no_tests: bool,
 }
 
 impl GenerateArgs {
@@ -73,7 +79,12 @@ impl GenerateArgs {
             .collect::<Result<_>>()
             .context("Failed while reading .baml files in baml_src/")?;
         let generated = runtime
-            .run_codegen(&all_files, self.no_version_check, GeneratorType::CLI)
+            .run_codegen(
+                &all_files,
+                self.no_version_check,
+                GeneratorType::CLI,
+                self.no_tests,
+            )
             .context("Client generation failed")?;
 
         // give the user a working config to copy-paste (so we need to run it through generator again)

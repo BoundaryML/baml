@@ -181,10 +181,24 @@ impl minijinja::value::Object for OutputFormat {
             None
         };
 
+        let quote_class_fields = if kwargs.has("quote_class_fields") {
+            match kwargs.get::<bool>("quote_class_fields") {
+                Ok(quote_class_fields) => Some(quote_class_fields),
+                Err(e) => {
+                    return Err(Error::new(
+                        ErrorKind::SyntaxError,
+                        format!("Invalid value for quote_class_fields (expected bool): {e}"),
+                    ))
+                }
+            }
+        } else {
+            None
+        };
+
         let Ok(_) = kwargs.assert_all_used() else {
             return Err(Error::new(
                 ErrorKind::TooManyArguments,
-                "output_format() got an unexpected keyword argument (only 'prefix', 'always_host_enums', 'enum_value_prefix', and 'or_splitter' are allowed)",
+                "output_format() got an unexpected keyword argument (only 'prefix', 'always_hoist_enums', 'enum_value_prefix', 'or_splitter', 'hoisted_class_prefix', 'hoist_classes', 'map_style', and 'quote_class_fields' are allowed)",
             ));
         };
 
@@ -196,6 +210,7 @@ impl minijinja::value::Object for OutputFormat {
             map_style,
             hoisted_class_prefix,
             hoist_classes,
+            quote_class_fields,
         ))?;
 
         match content {

@@ -379,6 +379,10 @@ impl PredefinedTypes {
                                     Type::List(Box::new(Type::String)),
                                 ]),
                             ),
+                            (
+                                "quote_class_fields".into(),
+                                Type::merge(vec![Type::Bool, Type::None]),
+                            ),
                         ],
                     ),
                 ),

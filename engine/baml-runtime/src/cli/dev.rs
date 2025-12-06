@@ -55,6 +55,7 @@ impl DevArgs {
         let _ = GenerateArgs {
             from: self.from.clone(),
             no_version_check: false,
+            no_tests: false,
         }
         .run(defaults, feature_flags.clone());
         t.spawn(server.clone().serve(tcp_listener));
@@ -82,6 +83,7 @@ impl DevArgs {
                                 let _ = GenerateArgs {
                                     from: self.from.clone(),
                                     no_version_check: false,
+                                    no_tests: false,
                                 }
                                 .run(defaults, feature_flags.clone());
 
