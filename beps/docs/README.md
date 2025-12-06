@@ -26,10 +26,10 @@ Below is an auto-generated index of all BEPs.
   </thead>
   <tbody>
     <tr>
-      <td><a href="./proposals/BEP-001-exceptions/"><strong>BEP-001</strong>: Exception Handling</a> &nbsp; <img src="https://img.shields.io/badge/Status-Proposed-yellow" alt="Proposed"><br><br><br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): Vaibhav Gupta <vbv@boundaryml.com> | Created: 2025-11-20 | Updated: 2025-12-04</span></td>
+      <td><a href="./proposals/BEP-001-exceptions/"><strong>BEP-001</strong>: Exception Handling</a> &nbsp; <img src="https://img.shields.io/badge/Status-Proposed-yellow" alt="Proposed"><br><br><br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): Vaibhav Gupta <vbv@boundaryml.com></span></td>
     </tr>
     <tr>
-      <td><a href="./proposals/BEP-002-match/"><strong>BEP-002</strong>: match</a> &nbsp; <img src="https://img.shields.io/badge/Status-Accepted-brightgreen" alt="Accepted"><br><br><br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): hellovai <vbv@boundaryml.com> | Created: TBD | Updated: TBD</span></td>
+      <td><a href="./proposals/BEP-002-match/"><strong>BEP-002</strong>: match</a> &nbsp; <img src="https://img.shields.io/badge/Status-Accepted-brightgreen" alt="Accepted"><br><br><br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): hellovai <vbv@boundaryml.com></span></td>
     </tr>
   </tbody>
 </table>

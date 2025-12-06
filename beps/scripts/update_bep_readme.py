@@ -279,8 +279,6 @@ def generate_table(entries):
         desc = e["summary"] or ""
         status = e["status"]
         shepherds = e.get("shepherds", "TBD")
-        created = e.get("created", "Unknown")
-        last_modified = e.get("last_modified", "Unknown")
         
         if shepherds == "TBD" and status not in ["Superseded", "Rejected"]:
              raise ValueError(f"BEP {e['id']} ({status}) must have a shepherd assigned (currently 'TBD').")
@@ -297,7 +295,7 @@ def generate_table(entries):
         shepherd_display = ", ".join(shepherd_list)
         
         lines.append("    <tr>")
-        lines.append(f"      <td>{link} &nbsp; {status_badge}<br><br>{desc}<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): {shepherd_display} | Created: {created} | Updated: {last_modified}</span></td>")
+        lines.append(f"      <td>{link} &nbsp; {status_badge}<br><br>{desc}<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): {shepherd_display}</span></td>")
         lines.append("    </tr>")
 
     lines.append("  </tbody>")
