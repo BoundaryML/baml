@@ -221,7 +221,14 @@ impl RuntimeCli {
                 }
             }
             Commands::Test(args) => {
-                let res = t.block_on(async { args.run(feature_flags.clone()).await })?;
+                let (baml_testing_runtime, env_vars) =
+                    args.create_cli_testing_runtime(feature_flags.clone())?;
+
+                let res = t.block_on(async {
+                    args.run(feature_flags.clone(), baml_testing_runtime, env_vars)
+                        .await
+                })?;
+
                 match res {
                     baml_runtime::cli::testing::TestRunResult::Success => {
                         Ok(crate::ExitCode::Success)
