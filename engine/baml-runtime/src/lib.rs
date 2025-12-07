@@ -8,6 +8,8 @@ pub(crate) mod internal;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cli;
 pub mod client_registry;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod optimize;
 pub mod errors;
 pub mod request;
 pub mod runtime;

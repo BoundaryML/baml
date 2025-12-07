@@ -28,10 +28,21 @@ BAML already has the key components needed for automated optimization:
 - **Functions with prompts** as the optimization target
 - **Tests with assertions** as the success metric
 
-## Out of scope - optimizing BAML types
+## Scope: What Gets Optimized
 
-Optimizing the types would require updating the test arguments, making it
-hard to compare across versions of types. It's a little too much.
+### In Scope (Phase 1)
+- **Function prompts**: The `prompt #"..."#` text
+- **Class field descriptions**: `@description("...")` annotations
+- **Class field aliases**: `@alias(...)` annotations  
+- **Enum value descriptions**: Comments on enum values
+- **Class descriptions**: Class-level `@description`
+
+All optimized together as a cohesive system. Changes to schema descriptions/aliases can improve parsing without requiring test updates.
+
+### Out of Scope
+- **Structural changes**: Adding/removing fields, changing types (would break tests)
+- **Multi-function workflows**: Optimizing multiple functions together (Phase 4+)
+- **Few-shot examples**: Optimizing example selection (Phase 2+)
 
 ## Proposed Design
 
@@ -80,9 +91,8 @@ baml-cli optimize --weight accuracy=0.9,completion_tokens=0.1
 # Resume previous optimization run
 baml-cli optimize --resume .baml_optimize/run_20250106_143022
 
-# Configure reflection model (for generating new prompts)
-baml-cli optimize --reflection-model gpt-4o
-baml-cli optimize --reflection-model claude-sonnet-4
+# Reset GEPA reflection prompts to defaults
+baml-cli optimize --reset-gepa-prompts
 
 # Control parallelism
 baml-cli optimize --parallel 8
@@ -141,6 +151,260 @@ test ReceiptWithGroundedness {
 }
 ```
 
+### BAML-Driven GEPA Reflection
+
+A key design principle: **GEPA's reflection logic is implemented in BAML itself**. This makes the optimization process transparent, customizable, and dogfoods BAML for optimizing BAML.
+
+#### gepa.baml Location and Versioning
+
+GEPA reflection functions live in `.baml_optimize/gepa/baml_src/`:
+
+```
+.baml_optimize/
+└── gepa/
+    └── baml_src/
+        ├── gepa.baml          # Reflection functions
+        ├── clients.baml       # Client configs
+        └── .gepa_version      # Tracks baml-cli version
+```
+
+**First run behavior:**
+```bash
+$ baml-cli optimize
+
+Creating .baml_optimize/gepa/baml_src/ with defaults from baml-cli 0.73.0...
+Using reflection model: gpt-4o (default)
+```
+
+**Customization workflow:**
+```bash
+# User modifies reflection logic
+$ vim .baml_optimize/gepa/baml_src/gepa.baml
+
+# Or changes the reflection model
+$ vim .baml_optimize/gepa/baml_src/clients.baml
+
+# Next run uses custom GEPA implementation
+$ baml-cli optimize
+```
+
+**Version tracking:**
+
+The `.gepa_version` file contains:
+```json
+{
+  "baml_cli_version": "0.73.0",
+  "created_at": "2025-01-06T14:30:22Z",
+  "gepa_baml_hash": "a3f5c9d..."
+}
+```
+
+Modifications are detected by comparing file hash to embedded default. On version mismatch:
+```bash
+$ baml-cli --version
+baml-cli 0.74.0
+
+$ baml-cli optimize
+
+Warning: Your GEPA implementation is from baml-cli 0.73.0
+         Run 'baml-cli optimize --reset-gepa-prompts' to upgrade
+```
+
+#### Default gepa.baml Implementation
+
+The default `gepa.baml` embedded in `baml-cli` includes:
+
+**Data Models:**
+```baml
+class SchemaFieldDefinition {
+  field_name string
+  field_type string
+  description string?
+  aliases string[]
+  is_optional bool
+}
+
+class ClassDefinition {
+  class_name string
+  description string?
+  fields SchemaFieldDefinition[]
+}
+
+class EnumDefinition {
+  enum_name string
+  values string[]
+  value_descriptions map<string, string>
+}
+
+class OptimizableFunction {
+  function_name string
+  prompt_text string
+  classes ClassDefinition[]  // All reachable classes
+  enums EnumDefinition[]     // All reachable enums
+}
+
+class ReflectiveExample {
+  inputs map<string, string>
+  generated_outputs map<string, string>
+  feedback string
+  failure_location string?  // "prompt" | "parsing" | "schema"
+}
+
+class ImprovedFunction {
+  prompt_text string
+  classes ClassDefinition[]  // Only modified classes
+  enums EnumDefinition[]     // Only modified enums
+  rationale string
+}
+```
+
+**Core Reflection Function:**
+```baml
+function ProposeImprovements(
+  current_function: OptimizableFunction,
+  failed_examples: ReflectiveExample[],
+  successful_examples: ReflectiveExample[]?
+) -> ImprovedFunction {
+  client ReflectionModel
+  prompt #"
+    You are optimizing a BAML function. Improve both the prompt and schema.
+    
+    ## Current Implementation
+    
+    Prompt:
+    ```
+    {{ current_function.prompt_text }}
+    ```
+    
+    Schema:
+    {% for class in current_function.classes %}
+    class {{ class.class_name }} {
+      {% for field in class.fields %}
+      /// @description("{{ field.description or 'none' }}")
+      {{ field.field_name }} {{ field.field_type }}{% if field.aliases %} @alias({{ field.aliases | join(", ") }}){% endif %}
+      {% endfor %}
+    }
+    {% endfor %}
+    
+    ## Failures
+    {% for ex in failed_examples %}
+    Inputs: {{ ex.inputs }}
+    Generated: {{ ex.generated_outputs }}
+    Issue: {{ ex.feedback }}
+    {% endfor %}
+    
+    ## Your Task
+    
+    Analyze failures and propose improvements to:
+    1. Prompt text - clarity, instructions, examples
+    2. Field descriptions - guide LLM parsing
+    3. Field aliases - catch output variations
+    
+    Consider: Do the prompt and schema work well together?
+    
+    Return improvements as ImprovedFunction JSON.
+  "#
+}
+
+function MergeVariants(
+  variant_a: OptimizableFunction,
+  variant_b: OptimizableFunction,
+  variant_a_strengths: string[],
+  variant_b_strengths: string[]
+) -> ImprovedFunction {
+  client ReflectionModel
+  prompt #"
+    Merge two successful BAML function variants.
+    Combine their strengths into a single improved version.
+    
+    [Details omitted for brevity]
+  "#
+}
+```
+
+**Default clients.baml:**
+```baml
+client<llm> ReflectionModel {
+  provider openai
+  options {
+    model "gpt-4o"
+    temperature 1.0
+    max_tokens 8000
+  }
+}
+```
+
+#### Schema Optimization Examples
+
+**Example 1: Adding aliases based on failures**
+
+Before:
+```baml
+class Receipt {
+  /// @description("Merchant name")
+  merchant string
+}
+```
+
+After reflection on failures where LLM outputs "store_name":
+```baml
+class Receipt {
+  /// @description("Merchant name exactly as shown on receipt")
+  merchant string @alias("store_name", "shop_name", "vendor")
+}
+```
+
+**Example 2: Improving descriptions**
+
+Before:
+```baml
+class Receipt {
+  /// @description("Total")
+  total float
+}
+```
+
+After reflection on failures with parsing errors:
+```baml
+class Receipt {
+  /// @description("Total amount in decimal format (e.g., 12.99, not '$12.99')")
+  total float @alias("amount", "total_amount")
+}
+```
+
+**Example 3: Coordinated prompt and schema improvements**
+
+GEPA optimizes prompt and schema together, ensuring they work cohesively:
+
+```baml
+// Before
+function ExtractReceipt(image: image) -> Receipt {
+  prompt #"Extract receipt information"#
+}
+
+class Receipt {
+  merchant string
+  total float
+}
+
+// After GEPA optimization
+function ExtractReceipt(image: image) -> Receipt {
+  prompt #"
+    Extract structured receipt data:
+    - merchant: exact name as printed
+    - total: decimal amount (e.g., 45.67)
+  "#
+}
+
+class Receipt {
+  /// @description("Merchant name preserving exact capitalization")
+  merchant string @alias("store_name", "vendor")
+  
+  /// @description("Total in decimal format, no currency symbols")
+  total float @alias("amount", "sum")
+}
+```
+
 ### Semantics
 
 #### Test-Based Objective Function
@@ -187,12 +451,41 @@ The optimizer stores artifacts in `baml_src/../.baml_optimize/run_<timestamp>/`:
     ├── reflections/
     │   ├── iteration_01.json          # Failure analysis
     │   └── ...
-    ├── checkpoints/
-    │   ├── checkpoint_10.pkl          # Resumable state
-    │   └── checkpoint_20.pkl
+    ├── state.json                     # Resumable optimization state
     ├── pareto_frontier.json           # Current best candidates
     └── final_results.json             # Summary statistics
 ```
+
+**State Format (JSON, not pickle):**
+
+All optimization state is stored in human-readable JSON format for language-agnostic resumability:
+
+```json
+{
+  "version": "1.0",
+  "baml_cli_version": "0.73.0",
+  "iteration": 15,
+  "total_evals": 450,
+  "budget_remaining": 550,
+  "rng_seed": 42,
+  "pareto_frontier_indices": [3, 7, 12, 15],
+  "candidate_lineage": {
+    "0": {"parents": null, "method": "initial"},
+    "1": {"parents": [0], "method": "reflection"},
+    "2": {"parents": [0, 1], "method": "merge"}
+  },
+  "normalization_stats": {
+    "tokens": {"mean": 1500, "std": 300, "min": 800, "max": 2500},
+    "latency": {"mean": 1200, "std": 200, "min": 800, "max": 1800}
+  }
+}
+```
+
+This replaces pickle files, ensuring:
+- Language-agnostic: Works across Python, Rust, TypeScript implementations
+- Human-readable: Can inspect/debug state manually
+- Git-friendly: Can diff checkpoints
+- Secure: No code execution risk
 
 #### Candidate BAML File Format
 

@@ -66,6 +66,9 @@ pub(crate) enum Commands {
 
     #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     Repl(baml_runtime::cli::repl::ReplArgs),
+
+    #[command(about = "Optimize prompts using GEPA algorithm")]
+    Optimize(baml_runtime::cli::optimize::OptimizeArgs),
 }
 
 impl RuntimeCli {
@@ -284,6 +287,30 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            Commands::Optimize(args) => {
+                match t.block_on(async { args.run(feature_flags.clone()).await }) {
+                    Ok(baml_runtime::cli::optimize::OptimizeRunResult::Success) => {
+                        Ok(crate::ExitCode::Success)
+                    }
+                    Ok(baml_runtime::cli::optimize::OptimizeRunResult::NoFunctionsToOptimize) => {
+                        eprintln!("No functions with tests found to optimize");
+                        Ok(crate::ExitCode::Other)
+                    }
+                    Ok(baml_runtime::cli::optimize::OptimizeRunResult::Cancelled) => {
+                        Ok(crate::ExitCode::Other)
+                    }
+                    Ok(baml_runtime::cli::optimize::OptimizeRunResult::Failed) => {
+                        Ok(crate::ExitCode::Other)
+                    }
+                    Ok(baml_runtime::cli::optimize::OptimizeRunResult::GepaPromptsReset) => {
+                        Ok(crate::ExitCode::Success)
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        Ok(crate::ExitCode::Other)
+                    }
+                }
+            }
         }
     }
 }
