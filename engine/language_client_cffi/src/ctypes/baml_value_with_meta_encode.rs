@@ -39,9 +39,10 @@ where
         holder: CffiValueHolder,
         lookup: &TypeLookups,
     ) -> CffiValueHolder;
+    fn maybe_wrap_checked(&self, holder: CffiValueHolder, lookup: &TypeLookups) -> CffiValueHolder;
 }
 
-fn maybe_wrap_union_impl<TypeLookups, T>(
+fn maybe_wrap_union_impl<TypeLookups, T: super::baml_type_encode::IsChecked>(
     value: &BamlValueWithMeta<Meta<'_, T>>,
     holder: CffiValueHolder,
     lookup: &TypeLookups,
@@ -146,6 +147,30 @@ where
     ) -> CffiValueHolder {
         holder
     }
+
+    fn maybe_wrap_checked(
+        &self,
+        holder: CffiValueHolder,
+        _lookup: &TypeLookups,
+    ) -> CffiValueHolder {
+        let meta = self.meta().checks;
+        let checks = meta.iter().map(|f| f.encode()).collect::<Vec<_>>();
+
+        if !checks.is_empty() {
+            let checked_value = CffiValueChecked {
+                value: Some(Box::new(holder)),
+                checks,
+            };
+            CffiValueHolder {
+                r#type: None,
+                value: Some(cffi_value_holder::Value::CheckedValue(Box::new(
+                    checked_value,
+                ))),
+            }
+        } else {
+            holder
+        }
+    }
 }
 
 impl<TypeLookups> MaybeWrapUnion<TypeLookups> for BamlValueWithMeta<Meta<'_, type_meta::Streaming>>
@@ -190,9 +215,33 @@ where
             holder
         }
     }
+
+    fn maybe_wrap_checked(
+        &self,
+        holder: CffiValueHolder,
+        _lookup: &TypeLookups,
+    ) -> CffiValueHolder {
+        let meta = self.meta().checks;
+        let checks = meta.iter().map(|f| f.encode()).collect::<Vec<_>>();
+
+        if !checks.is_empty() {
+            let checked_value = CffiValueChecked {
+                value: Some(Box::new(holder)),
+                checks,
+            };
+            CffiValueHolder {
+                r#type: None,
+                value: Some(cffi_value_holder::Value::CheckedValue(Box::new(
+                    checked_value,
+                ))),
+            }
+        } else {
+            holder
+        }
+    }
 }
 
-impl<'a, TypeLookups, T> Encode<CffiValueHolder>
+impl<'a, TypeLookups, T: super::baml_type_encode::IsChecked> Encode<CffiValueHolder>
     for WithIr<'a, BamlValueWithMeta<Meta<'_, T>>, TypeLookups>
 where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
@@ -341,26 +390,11 @@ where
             }
         };
 
-        let meta = value.meta().checks;
-        let checks = meta.iter().map(|f| f.encode()).collect::<Vec<_>>();
-
-        let holder = if !checks.is_empty() {
-            let checked_value = CffiValueChecked {
-                value: Some(Box::new(holder)),
-                checks,
-            };
-
-            CffiValueHolder {
-                // Checks don't have a type
-                r#type: None,
-                value: Some(Value::CheckedValue(Box::new(checked_value))),
-            }
-        } else {
-            holder
-        };
-
+        let holder = value.maybe_wrap_checked(holder, lookup);
         let holder = value.maybe_wrap_union(holder, lookup);
-        value.maybe_wrap_stream_state(holder, lookup)
+        let holder = value.maybe_wrap_stream_state(holder, lookup);
+
+        holder
     }
 }
 

@@ -15,6 +15,9 @@ internal-baml-core.workspace = true
 baml-compiler = { path = "../../../baml-compiler" }
 
 
+[build-dependencies]
+type_test_spec = { path = "../../utils/type_test_spec" }
+
 [dev-dependencies]
 prettydiff = "0.8.0"
 test-harness = { path = "../../utils/test_harness" }

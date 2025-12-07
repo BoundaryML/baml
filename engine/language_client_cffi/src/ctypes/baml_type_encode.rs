@@ -27,7 +27,56 @@ pub enum UnionAllowance {
     Disallow,
 }
 
-impl<'a, TypeLookups, T> Encode<CffiFieldTypeHolder>
+pub trait IsChecked {
+    fn checks(&self) -> Option<Vec<&str>>;
+}
+
+impl IsChecked for baml_types::type_meta::base::TypeMeta {
+    fn checks(&self) -> Option<Vec<&str>> {
+        if self.constraints.is_empty() {
+            None
+        } else {
+            Some(
+                self.constraints
+                    .iter()
+                    .filter_map(|c| c.label.as_ref().map(|l| l.as_str()))
+                    .collect(),
+            )
+        }
+    }
+}
+
+impl IsChecked for baml_types::type_meta::NonStreaming {
+    fn checks(&self) -> Option<Vec<&str>> {
+        if self.constraints.is_empty() {
+            None
+        } else {
+            Some(
+                self.constraints
+                    .iter()
+                    .filter_map(|c| c.label.as_ref().map(|l| l.as_str()))
+                    .collect(),
+            )
+        }
+    }
+}
+
+impl IsChecked for baml_types::type_meta::Streaming {
+    fn checks(&self) -> Option<Vec<&str>> {
+        if self.constraints.is_empty() {
+            None
+        } else {
+            Some(
+                self.constraints
+                    .iter()
+                    .filter_map(|c| c.label.as_ref().map(|l| l.as_str()))
+                    .collect(),
+            )
+        }
+    }
+}
+
+impl<'a, TypeLookups, T: IsChecked> Encode<CffiFieldTypeHolder>
     for WithIr<'a, (&'a TypeGeneric<T>, UnionAllowance), TypeLookups>
 where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
@@ -225,8 +274,28 @@ where
             ),
         };
 
-        CffiFieldTypeHolder {
+        let holder = CffiFieldTypeHolder {
             r#type: Some(type_value),
+        };
+
+        if let Some(checks) = value.meta().checks() {
+            let checked = CffiFieldTypeChecked {
+                value: Some(Box::new(holder)),
+                checks: checks
+                    .iter()
+                    .map(|c| CffiCheckType {
+                        name: c.to_string(),
+                        returns: Some(CffiFieldTypeHolder {
+                            r#type: Some(cType::BoolType(Default::default())),
+                        }),
+                    })
+                    .collect::<Vec<_>>(),
+            };
+            CffiFieldTypeHolder {
+                r#type: Some(cffi_field_type_holder::Type::CheckedType(Box::new(checked))),
+            }
+        } else {
+            holder
         }
     }
 }

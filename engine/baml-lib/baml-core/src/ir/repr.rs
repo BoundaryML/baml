@@ -695,6 +695,40 @@ impl IntermediateRepr {
         self.functions.iter().map(|e| Walker { ir: self, item: e })
     }
 
+    pub fn walk_all_types_with_checks(&self) -> impl Iterator<Item = TypeNonStreaming> {
+        let class_fields = self
+            .classes
+            .iter()
+            .flat_map(|c| c.elem.static_fields.iter().map(|f| &f.elem.r#type.elem));
+
+        let type_alias_fields = self.type_aliases.iter().map(|c| &c.elem.r#type.elem);
+
+        let function_fields = self.functions.iter().flat_map(|f| {
+            f.elem
+                .inputs
+                .iter()
+                .map(|(_, t)| t)
+                .chain(std::iter::once(&f.elem.output))
+        });
+
+        let all_types = class_fields.chain(type_alias_fields).chain(function_fields);
+
+        fn is_checked(t: &TypeNonStreaming) -> bool {
+            t.meta()
+                .constraints
+                .iter()
+                .any(|c| c.level == ConstraintLevel::Check)
+        }
+
+        let mut res = vec![];
+        all_types.for_each(|t| {
+            let found = t.to_non_streaming_type(self);
+            res.extend(found.find_if(&is_checked, false).into_iter().cloned());
+        });
+
+        res.into_iter()
+    }
+
     pub fn walk_all_non_streaming_unions(&self) -> impl Iterator<Item = TypeNonStreaming> {
         // finding types used in classes
         let class_fields = self

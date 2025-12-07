@@ -1,0 +1,47 @@
+syntax = "proto3";
+package baml.cffi.v1;
+
+import "baml/cffi/v1/baml_inbound.proto";
+import "baml/cffi/v1/baml_object.proto";
+import "baml/cffi/v1/baml_outbound.proto";
+
+option go_package = "./cffi";
+
+// -----------------------------------------------------------------------------
+// BamlObject definition
+// -----------------------------------------------------------------------------
+
+message BamlObjectMethodInvocation {
+  BamlObjectHandle object = 1;
+  string method_name = 2;
+  repeated HostMapEntry kwargs = 3;
+}
+
+message BamlObjectConstructorInvocation {
+  BamlObjectType type = 1;
+  repeated HostMapEntry kwargs = 2;
+}
+
+// only one of these will be set
+// proto doesn't allow oneofs with repeated fields
+message InvocationResponseSuccess {
+  oneof result {
+    BamlObjectHandle object = 1;
+    RepeatedBamlObjectHandle objects = 2;
+    CFFIValueHolder value = 3;
+  }
+}
+
+message RepeatedBamlObjectHandle {
+  repeated BamlObjectHandle objects = 1;
+}
+
+// from either:
+// BamlObjectConstructorInvocation
+// BamlObjectMethodInvocation
+message InvocationResponse {
+  oneof response {
+    InvocationResponseSuccess success = 1;
+    string error = 2;
+  }
+}

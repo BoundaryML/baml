@@ -235,12 +235,14 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant, typeMap TypeMap) r
 
 }
 
-func decodeCheckedValue[T any](valueChecked *cffi.CFFIValueChecked, typeMap TypeMap) shared.Checked[T] {
+func decodeCheckedValue(valueChecked *cffi.CFFIValueChecked, fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeMap) reflect.Value {
 	if valueChecked == nil {
 		panic("decodeCheckedValue: valueChecked is nil")
 	}
 
 	value := valueChecked.Value
+	decodedValue := Decode(value, typeMap)
+
 	checks := make(map[string]shared.Check, len(valueChecked.Checks))
 	for _, check := range valueChecked.Checks {
 		checks[string(check.Name)] = shared.Check{
@@ -250,10 +252,16 @@ func decodeCheckedValue[T any](valueChecked *cffi.CFFIValueChecked, typeMap Type
 		}
 	}
 
-	return shared.Checked[T]{
-		Value:  Decode(value, typeMap).Interface().(T),
-		Checks: checks,
-	}
+	goType := convertFieldTypeToGoType(fieldType, typeMap)
+	checkedValue := reflect.New(goType)
+
+	// set checkedValue.value = decodedValue
+	checkedValue.Elem().FieldByName("Value").Set(decodedValue)
+
+	// set checkedValue.checks = checks
+	checkedValue.Elem().FieldByName("Checks").Set(reflect.ValueOf(checks))
+
+	return checkedValue.Elem()
 }
 
 func decodeStreamStateType(state cffi.CFFIStreamState) shared.StreamStateType {
@@ -326,7 +334,7 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 		if !ok {
 			// going to be a dynamic enum
 			return reflect.TypeOf(DynamicEnum{
-				Name: name,
+				Name:  name,
 				Value: "",
 			})
 		}
@@ -356,7 +364,12 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 
 	if checked, ok := type_.(*cffi.CFFIFieldTypeHolder_CheckedType); ok {
 		checkedType := checked.CheckedType
-		return convertFieldTypeToGoType(checkedType.Value, typeMap)
+		serializeType := typeToString(checkedType.Value)
+		goType, ok := typeMap["CHECKED_TYPES."+serializeType]
+		if !ok {
+			panic("error decoding value, checked type not found: " + serializeType)
+		}
+		return goType
 	}
 
 	if streamState, ok := type_.(*cffi.CFFIFieldTypeHolder_StreamStateType); ok {
@@ -395,6 +408,62 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 		return reflect.TypeOf((*interface{})(nil)).Elem()
 	}
 
+	panic("error decoding value, unknown field type: " + fmt.Sprintf("%+v", fieldType))
+}
+
+func typeToString(fieldType *cffi.CFFIFieldTypeHolder) string {
+	if fieldType == nil {
+		panic("error decoding value")
+	}
+
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_StringType); ok {
+		return "string"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_BoolType); ok {
+		return "bool"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_IntType); ok {
+		return "int64"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_FloatType); ok {
+		return "float64"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_LiteralType); ok {
+		return "literal"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_ClassType); ok {
+		return "class"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_EnumType); ok {
+		return "enum"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_UnionVariantType); ok {
+		return "union"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_OptionalType); ok {
+		return "optional"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_CheckedType); ok {
+		return "checked"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_StreamStateType); ok {
+		return "stream_state"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_ListType); ok {
+		return "list"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_MapType); ok {
+		return "map"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_TypeAliasType); ok {
+		return "type_alias"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_NullType); ok {
+		return "null"
+	}
+	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_AnyType); ok {
+		return "any"
+	}
 	panic("error decoding value, unknown field type: " + fmt.Sprintf("%+v", fieldType))
 }
 
@@ -459,7 +528,8 @@ func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) reflect.Value {
 	if _, ok := value.(*cffi.CFFIValueHolder_NullValue); ok {
 		retType := convertFieldTypeToGoType(holder.Type, typeMap)
 		// return as the null value of the type.
-		return reflect.Zero(retType)
+		val := reflect.Zero(retType)
+		return val
 	}
 
 	if primitiveValue, found := maybeDecodePrimitive(holder); found {
@@ -488,9 +558,7 @@ func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) reflect.Value {
 	}
 
 	if checkedVal, ok := value.(*cffi.CFFIValueHolder_CheckedValue); ok {
-		checked := decodeCheckedValue[any](checkedVal.CheckedValue, typeMap)
-		// checks cannot be optional, so we don't need to maybeOptional
-		return reflect.ValueOf(checked)
+		return maybeOptional(decodeCheckedValue(checkedVal.CheckedValue, holder.Type, typeMap), holder.Type, false, typeMap)
 	}
 
 	if streamingVal, ok := value.(*cffi.CFFIValueHolder_StreamingStateValue); ok {
@@ -523,7 +591,7 @@ func DecodeChecked[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *c
 			}
 		}
 		return shared.Checked[T]{
-			Value: decodeFunc(checkedVal.CheckedValue.Value),
+			Value:  decodeFunc(checkedVal.CheckedValue.Value),
 			Checks: checks,
 		}
 	}
@@ -533,7 +601,7 @@ func DecodeChecked[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *c
 func CastChecked[T any](value any, castFunc func(inner any) T) shared.Checked[T] {
 	checked := value.(shared.Checked[any])
 	return shared.Checked[T]{
-		Value: castFunc(checked.Value),
+		Value:  castFunc(checked.Value),
 		Checks: checked.Checks,
 	}
 }

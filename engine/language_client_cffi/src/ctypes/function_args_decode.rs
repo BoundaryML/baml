@@ -4,7 +4,10 @@ use baml_runtime::client_registry::{ClientProperty, ClientProvider, ClientRegist
 use baml_types::BamlValue;
 
 use super::utils::Decode;
-use crate::raw_ptr_wrapper::{CollectorWrapper, RawPtrType, TypeBuilderWrapper};
+use crate::{
+    ctypes::baml_value_decode::from_host_kv_to_baml_kv,
+    raw_ptr_wrapper::{CollectorWrapper, RawPtrType, TypeBuilderWrapper},
+};
 
 pub struct BamlFunctionArguments {
     pub kwargs: baml_types::BamlMap<String, BamlValue>,
@@ -16,16 +19,13 @@ pub struct BamlFunctionArguments {
 }
 
 impl Decode for BamlFunctionArguments {
-    type From = crate::baml::cffi::CffiFunctionArguments;
+    type From = crate::baml::cffi::HostFunctionArguments;
 
     fn decode(from: Self::From) -> Result<Self, anyhow::Error> {
         let kwargs = from
             .kwargs
             .into_iter()
-            .map(|v| match v.value {
-                Some(value) => Ok((v.key, BamlValue::decode(value)?)),
-                None => Err(anyhow::anyhow!("Failed to decode BamlValue")),
-            })
+            .map(from_host_kv_to_baml_kv)
             .collect::<Result<_, _>>()?;
         let client_registry = from
             .client_registry
@@ -66,22 +66,13 @@ impl Decode for BamlFunctionArguments {
         let tags = from
             .tags
             .into_iter()
-            .map(|t| {
-                (
-                    t.key,
-                    t.value
-                        .and_then(|v| v.value)
-                        .and_then(|v| {
-                            if let crate::baml::cffi::cffi_value_holder::Value::StringValue(s) = v {
-                                Some(s)
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or_default(),
-                )
+            .map(|v| {
+                from_host_kv_to_baml_kv(v).and_then(|(k, v)| match v {
+                    BamlValue::String(s) => Ok((k, s)),
+                    _ => anyhow::bail!("Expected string value for tag key {}", k),
+                })
             })
-            .collect::<HashMap<String, String>>();
+            .collect::<Result<_, _>>()?;
 
         Ok(BamlFunctionArguments {
             kwargs,
@@ -95,7 +86,7 @@ impl Decode for BamlFunctionArguments {
 }
 
 impl Decode for ClientRegistry {
-    type From = crate::baml::cffi::CffiClientRegistry;
+    type From = crate::baml::cffi::HostClientRegistry;
 
     fn decode(from: Self::From) -> Result<Self, anyhow::Error> {
         let mut client_registry = ClientRegistry::new();
@@ -112,13 +103,13 @@ impl Decode for ClientRegistry {
 }
 
 impl Decode for ClientProperty {
-    type From = crate::baml::cffi::CffiClientProperty;
+    type From = crate::baml::cffi::HostClientProperty;
 
     fn decode(from: Self::From) -> Result<Self, anyhow::Error> {
         let options = from
             .options
             .into_iter()
-            .map(super::baml_value_decode::from_cffi_map_entry)
+            .map(from_host_kv_to_baml_kv)
             .collect::<Result<_, _>>()?;
         let provider = from.provider.parse::<ClientProvider>()?;
         Ok(ClientProperty::new(

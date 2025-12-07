@@ -591,3 +591,18 @@ test_partial_deserializer_streaming!(
     TypeIR::class("Inspiration"),
     {"Description": "Test"}
 );
+
+test_partial_deserializer_streaming!(
+  test_person_with_check,
+  r#"
+  class Person {
+    known_ages int | null @check(hi, {{ false }})
+    name string
+  }
+  "#,
+  r#"{
+    known_ages: 10
+  "#,
+  TypeIR::class("Person"),
+  {"known_ages": 10, "name": null}
+);

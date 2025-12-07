@@ -74,7 +74,7 @@ func CreateRuntime(
 
 func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (*ResultCallback, error) {
 	callback_id, callback := create_unique_id(ctx, onTick)
-	
+
 	// Monitor context for early cancellation
 	go func() {
 		<-ctx.Done()
@@ -101,7 +101,7 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 
 func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte, onTick OnTickCallbackData) (<-chan ResultCallback, error) {
 	callback_id, callback := create_unique_id(ctx, onTick)
-	
+
 	// Monitor context for early cancellation
 	go func() {
 		<-ctx.Done()
@@ -124,7 +124,7 @@ func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName strin
 
 func (r *BamlRuntime) CallFunctionParse(ctx context.Context, functionName string, encoded_args []byte) (any, error) {
 	callback_id, callback := create_unique_id(ctx, nil)
-	
+
 	// Monitor context for early cancellation
 	go func() {
 		<-ctx.Done()

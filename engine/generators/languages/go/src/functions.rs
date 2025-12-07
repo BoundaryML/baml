@@ -290,6 +290,10 @@ struct FunctionParseStreamTemplate<'a> {
 /// {% for type_alias in stream_type_aliases -%}
 ///     "STREAM_TYPES.{{ type_alias.name }}": reflect.TypeOf({{ type_alias.type_.construct_instance(pkg) }}),
 /// {% endfor %}
+/// {% for checked_type in checked_types -%}
+///     {% let inner_type = checked_type.clone_without_checked() %}
+///     "CHECKED_TYPES.{{ inner_type.serialize_type(pkg) }}": reflect.TypeOf({{ checked_type.construct_instance(pkg) }}),
+/// {% endfor %}
 /// }
 /// ```
 #[derive(askama::Template)]
@@ -301,6 +305,7 @@ struct TypeMap<'a> {
     stream_unions: &'a [UnionGo<'a>],
     type_aliases: &'a [TypeAliasGo<'a>],
     stream_type_aliases: &'a [TypeAliasGo<'a>],
+    checked_types: &'a [TypeGo],
     go_mod_name: &'a str,
     pkg: &'a CurrentRenderPackage,
 }
@@ -313,6 +318,7 @@ pub fn render_type_map(
     stream_unions: &[UnionGo],
     type_aliases: &[TypeAliasGo],
     stream_type_aliases: &[TypeAliasGo],
+    checked_types: &[TypeGo],
     go_mod_name: &str,
     pkg: &CurrentRenderPackage,
 ) -> Result<String, askama::Error> {
@@ -323,6 +329,7 @@ pub fn render_type_map(
         stream_unions,
         type_aliases,
         stream_type_aliases,
+        checked_types,
         go_mod_name,
         pkg,
     }

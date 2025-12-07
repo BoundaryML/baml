@@ -3155,6 +3155,7 @@ dependencies = [
  "internal-baml-core",
  "prettydiff",
  "test-harness",
+ "type_test_spec",
 ]
 
 [[package]]
@@ -3206,6 +3207,7 @@ dependencies = [
  "internal-baml-core",
  "prettydiff",
  "test-harness",
+ "type_test_spec",
 ]
 
 [[package]]
@@ -3235,6 +3237,7 @@ dependencies = [
  "prettydiff",
  "regex",
  "test-harness",
+ "type_test_spec",
 ]
 
 [[package]]
@@ -8119,6 +8122,10 @@ dependencies = [
  "thiserror 2.0.12",
  "uuid",
 ]
+
+[[package]]
+name = "type_test_spec"
+version = "0.1.0"
 
 [[package]]
 name = "typed-arena"

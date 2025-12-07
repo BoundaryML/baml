@@ -26,13 +26,13 @@ func (args *BamlFunctionArguments) Encode() ([]byte, error) {
 	return proto.Marshal(encoded)
 }
 
-func (args *BamlFunctionArguments) encode() (*cffi.CFFIFunctionArguments, error) {
+func (args *BamlFunctionArguments) encode() (*cffi.HostFunctionArguments, error) {
 	kwargs, err := serde.EncodeMapEntries(args.Kwargs, "function arguments")
 	if err != nil {
 		return nil, fmt.Errorf("encoding function arguments: %w", err)
 	}
 
-	var clientRegistry *cffi.CFFIClientRegistry
+	var clientRegistry *cffi.HostClientRegistry
 	if args.ClientRegistry != nil {
 		clientRegistry, err = encodeClientRegistry(args.ClientRegistry)
 		if err != nil {
@@ -40,7 +40,7 @@ func (args *BamlFunctionArguments) encode() (*cffi.CFFIFunctionArguments, error)
 		}
 	}
 
-	var env []*cffi.CFFIEnvVar
+	var env []*cffi.HostEnvVar
 	if args.Env != nil {
 		env, err = serde.EncodeEnvVar(args.Env)
 		if err != nil {
@@ -48,7 +48,7 @@ func (args *BamlFunctionArguments) encode() (*cffi.CFFIFunctionArguments, error)
 		}
 	}
 
-	var collectors []*cffi.CFFIRawObject
+	var collectors []*cffi.BamlObjectHandle
 	if args.Collectors != nil {
 		for _, collector := range args.Collectors {
 			if collector == nil {
@@ -62,7 +62,7 @@ func (args *BamlFunctionArguments) encode() (*cffi.CFFIFunctionArguments, error)
 		}
 	}
 
-	var typeBuilder *cffi.CFFIRawObject
+	var typeBuilder *cffi.BamlObjectHandle
 	if args.TypeBuilder != nil {
 		encodedTypeBuilder := raw_objects.EncodeRawObject(args.TypeBuilder)
 		if err != nil {
@@ -71,13 +71,13 @@ func (args *BamlFunctionArguments) encode() (*cffi.CFFIFunctionArguments, error)
 		typeBuilder = encodedTypeBuilder
 	}
 
-	var tags []*cffi.CFFIMapEntry
+	var tags []*cffi.HostMapEntry
 	if args.Tags != nil {
 		for key, value := range args.Tags {
-			tags = append(tags, &cffi.CFFIMapEntry{
-				Key: key,
-				Value: &cffi.CFFIValueHolder{
-					Value: &cffi.CFFIValueHolder_StringValue{
+			tags = append(tags, &cffi.HostMapEntry{
+				Key: &cffi.HostMapEntry_StringKey{StringKey: key},
+				Value: &cffi.HostValue{
+					Value: &cffi.HostValue_StringValue{
 						StringValue: value,
 					},
 				},
@@ -85,7 +85,7 @@ func (args *BamlFunctionArguments) encode() (*cffi.CFFIFunctionArguments, error)
 		}
 	}
 
-	functionArguments := cffi.CFFIFunctionArguments{
+	functionArguments := cffi.HostFunctionArguments{
 		Kwargs:         kwargs,
 		ClientRegistry: clientRegistry,
 		Env:            env,

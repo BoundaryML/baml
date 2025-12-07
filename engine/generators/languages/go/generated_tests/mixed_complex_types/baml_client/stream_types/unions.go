@@ -47,14 +47,14 @@ func (u *Union2ConditionOrSimpleCondition) Decode(holder *cffi.CFFIValueUnionVar
 	}
 }
 
-func (u Union2ConditionOrSimpleCondition) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2ConditionOrSimpleCondition) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Condition":
-		return baml.EncodeUnion(u.BamlEncodeName, "Condition", *u.variant_Condition)
+		return baml.EncodeValue(*u.variant_Condition)
 
 	case "SimpleCondition":
-		return baml.EncodeUnion(u.BamlEncodeName, "SimpleCondition", *u.variant_SimpleCondition)
+		return baml.EncodeValue(*u.variant_SimpleCondition)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -65,13 +65,6 @@ func (u Union2ConditionOrSimpleCondition) Encode() (*cffi.CFFIValueHolder, error
 
 func (u Union2ConditionOrSimpleCondition) BamlTypeName() string {
 	return "Union2ConditionOrSimpleCondition"
-}
-
-func (u Union2ConditionOrSimpleCondition) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Condition__SimpleCondition",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
 }
 
 func (u Union2ConditionOrSimpleCondition) MarshalJSON() ([]byte, error) {
@@ -169,37 +162,28 @@ func (u *Union2ConditionOrSimpleCondition) AsSimpleCondition() *SimpleCondition 
 type Union2ErrorOrSuccess struct {
 	variant string
 
-	variant_Success *Success
-
-	variant_Error *Error
+	variant_Union2ErrorOrSuccess *Union2ErrorOrSuccess
 }
 
 func (u *Union2ErrorOrSuccess) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "Success":
-		u.variant = "Success"
-		value := baml.Decode(valueHolder).Interface().(Success)
-		u.variant_Success = &value
-	case "Error":
-		u.variant = "Error"
-		value := baml.Decode(valueHolder).Interface().(Error)
-		u.variant_Error = &value
+	case "Union__Error__Success":
+		u.variant = "Union2ErrorOrSuccess"
+		value := baml.Decode(valueHolder).Interface().(Union2ErrorOrSuccess)
+		u.variant_Union2ErrorOrSuccess = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
-func (u Union2ErrorOrSuccess) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2ErrorOrSuccess) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "Success":
-		return baml.EncodeUnion(u.BamlEncodeName, "Success", *u.variant_Success)
-
-	case "Error":
-		return baml.EncodeUnion(u.BamlEncodeName, "Error", *u.variant_Error)
+	case "Union2ErrorOrSuccess":
+		return baml.EncodeValue(*u.variant_Union2ErrorOrSuccess)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -212,21 +196,11 @@ func (u Union2ErrorOrSuccess) BamlTypeName() string {
 	return "Union2ErrorOrSuccess"
 }
 
-func (u Union2ErrorOrSuccess) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Error__Success",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
-}
-
 func (u Union2ErrorOrSuccess) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "Success":
-		return json.Marshal(u.variant_Success)
-
-	case "Error":
-		return json.Marshal(u.variant_Error)
+	case "Union2ErrorOrSuccess":
+		return json.Marshal(u.variant_Union2ErrorOrSuccess)
 
 	}
 
@@ -236,124 +210,68 @@ func (u Union2ErrorOrSuccess) MarshalJSON() ([]byte, error) {
 func (u *Union2ErrorOrSuccess) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_Success)
+	err = json.Unmarshal(data, &u.variant_Union2ErrorOrSuccess)
 	if err == nil {
-		u.variant = "Success"
+		u.variant = "Union2ErrorOrSuccess"
 		return nil
 	} else {
-		u.variant_Success = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Error)
-	if err == nil {
-		u.variant = "Error"
-		return nil
-	} else {
-		u.variant_Error = nil
+		u.variant_Union2ErrorOrSuccess = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2ErrorOrSuccess__NewSuccess(v Success) Union2ErrorOrSuccess {
+func Union2ErrorOrSuccess__NewUnion2ErrorOrSuccess(v Union2ErrorOrSuccess) Union2ErrorOrSuccess {
 
 	return Union2ErrorOrSuccess{
-		variant:         "Success",
-		variant_Success: &v,
+		variant:                      "Union2ErrorOrSuccess",
+		variant_Union2ErrorOrSuccess: &v,
 	}
 }
 
-func (u *Union2ErrorOrSuccess) SetSuccess(v Success) {
+func (u *Union2ErrorOrSuccess) SetUnion2ErrorOrSuccess(v Union2ErrorOrSuccess) {
 
-	u.variant = "Success"
-	u.variant_Success = &v
-
-	u.variant_Error = nil
+	u.variant = "Union2ErrorOrSuccess"
+	u.variant_Union2ErrorOrSuccess = &v
 
 }
 
-func (u *Union2ErrorOrSuccess) IsSuccess() bool {
-	return u.variant == "Success"
+func (u *Union2ErrorOrSuccess) IsUnion2ErrorOrSuccess() bool {
+	return u.variant == "Union2ErrorOrSuccess"
 }
 
-func (u *Union2ErrorOrSuccess) AsSuccess() *Success {
-	if u.variant != "Success" {
+func (u *Union2ErrorOrSuccess) AsUnion2ErrorOrSuccess() *Union2ErrorOrSuccess {
+	if u.variant != "Union2ErrorOrSuccess" {
 		return nil
 	}
-	return u.variant_Success
-}
-
-func Union2ErrorOrSuccess__NewError(v Error) Union2ErrorOrSuccess {
-
-	return Union2ErrorOrSuccess{
-		variant:       "Error",
-		variant_Error: &v,
-	}
-}
-
-func (u *Union2ErrorOrSuccess) SetError(v Error) {
-
-	u.variant = "Error"
-	u.variant_Error = &v
-
-	u.variant_Success = nil
-
-}
-
-func (u *Union2ErrorOrSuccess) IsError() bool {
-	return u.variant == "Error"
-}
-
-func (u *Union2ErrorOrSuccess) AsError() *Error {
-	if u.variant != "Error" {
-		return nil
-	}
-	return u.variant_Error
+	return u.variant_Union2ErrorOrSuccess
 }
 
 type Union3DataObjectOrIntOrString struct {
 	variant string
 
-	variant_String *string
-
-	variant_Int *int64
-
-	variant_DataObject *DataObject
+	variant_Union3DataObjectOrIntOrString *Union3DataObjectOrIntOrString
 }
 
 func (u *Union3DataObjectOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "string":
-		u.variant = "String"
-		value := baml.Decode(valueHolder).Interface().(string)
-		u.variant_String = &value
-	case "int":
-		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
-		u.variant_Int = &value
-	case "DataObject":
-		u.variant = "DataObject"
-		value := baml.Decode(valueHolder).Interface().(DataObject)
-		u.variant_DataObject = &value
+	case "Union__DataObject__int__string":
+		u.variant = "Union3DataObjectOrIntOrString"
+		value := baml.Decode(valueHolder).Interface().(Union3DataObjectOrIntOrString)
+		u.variant_Union3DataObjectOrIntOrString = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
-func (u Union3DataObjectOrIntOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union3DataObjectOrIntOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
-
-	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
-
-	case "DataObject":
-		return baml.EncodeUnion(u.BamlEncodeName, "DataObject", *u.variant_DataObject)
+	case "Union3DataObjectOrIntOrString":
+		return baml.EncodeValue(*u.variant_Union3DataObjectOrIntOrString)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -366,24 +284,11 @@ func (u Union3DataObjectOrIntOrString) BamlTypeName() string {
 	return "Union3DataObjectOrIntOrString"
 }
 
-func (u Union3DataObjectOrIntOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__DataObject__int__string",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
-}
-
 func (u Union3DataObjectOrIntOrString) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "String":
-		return json.Marshal(u.variant_String)
-
-	case "Int":
-		return json.Marshal(u.variant_Int)
-
-	case "DataObject":
-		return json.Marshal(u.variant_DataObject)
+	case "Union3DataObjectOrIntOrString":
+		return json.Marshal(u.variant_Union3DataObjectOrIntOrString)
 
 	}
 
@@ -393,175 +298,68 @@ func (u Union3DataObjectOrIntOrString) MarshalJSON() ([]byte, error) {
 func (u *Union3DataObjectOrIntOrString) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_String)
+	err = json.Unmarshal(data, &u.variant_Union3DataObjectOrIntOrString)
 	if err == nil {
-		u.variant = "String"
+		u.variant = "Union3DataObjectOrIntOrString"
 		return nil
 	} else {
-		u.variant_String = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Int)
-	if err == nil {
-		u.variant = "Int"
-		return nil
-	} else {
-		u.variant_Int = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_DataObject)
-	if err == nil {
-		u.variant = "DataObject"
-		return nil
-	} else {
-		u.variant_DataObject = nil
+		u.variant_Union3DataObjectOrIntOrString = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union3DataObjectOrIntOrString__NewString(v string) Union3DataObjectOrIntOrString {
+func Union3DataObjectOrIntOrString__NewUnion3DataObjectOrIntOrString(v Union3DataObjectOrIntOrString) Union3DataObjectOrIntOrString {
 
 	return Union3DataObjectOrIntOrString{
-		variant:        "String",
-		variant_String: &v,
+		variant:                               "Union3DataObjectOrIntOrString",
+		variant_Union3DataObjectOrIntOrString: &v,
 	}
 }
 
-func (u *Union3DataObjectOrIntOrString) SetString(v string) {
+func (u *Union3DataObjectOrIntOrString) SetUnion3DataObjectOrIntOrString(v Union3DataObjectOrIntOrString) {
 
-	u.variant = "String"
-	u.variant_String = &v
-
-	u.variant_Int = nil
-
-	u.variant_DataObject = nil
+	u.variant = "Union3DataObjectOrIntOrString"
+	u.variant_Union3DataObjectOrIntOrString = &v
 
 }
 
-func (u *Union3DataObjectOrIntOrString) IsString() bool {
-	return u.variant == "String"
+func (u *Union3DataObjectOrIntOrString) IsUnion3DataObjectOrIntOrString() bool {
+	return u.variant == "Union3DataObjectOrIntOrString"
 }
 
-func (u *Union3DataObjectOrIntOrString) AsString() *string {
-	if u.variant != "String" {
+func (u *Union3DataObjectOrIntOrString) AsUnion3DataObjectOrIntOrString() *Union3DataObjectOrIntOrString {
+	if u.variant != "Union3DataObjectOrIntOrString" {
 		return nil
 	}
-	return u.variant_String
-}
-
-func Union3DataObjectOrIntOrString__NewInt(v int64) Union3DataObjectOrIntOrString {
-
-	return Union3DataObjectOrIntOrString{
-		variant:     "Int",
-		variant_Int: &v,
-	}
-}
-
-func (u *Union3DataObjectOrIntOrString) SetInt(v int64) {
-
-	u.variant = "Int"
-	u.variant_Int = &v
-
-	u.variant_String = nil
-
-	u.variant_DataObject = nil
-
-}
-
-func (u *Union3DataObjectOrIntOrString) IsInt() bool {
-	return u.variant == "Int"
-}
-
-func (u *Union3DataObjectOrIntOrString) AsInt() *int64 {
-	if u.variant != "Int" {
-		return nil
-	}
-	return u.variant_Int
-}
-
-func Union3DataObjectOrIntOrString__NewDataObject(v DataObject) Union3DataObjectOrIntOrString {
-
-	return Union3DataObjectOrIntOrString{
-		variant:            "DataObject",
-		variant_DataObject: &v,
-	}
-}
-
-func (u *Union3DataObjectOrIntOrString) SetDataObject(v DataObject) {
-
-	u.variant = "DataObject"
-	u.variant_DataObject = &v
-
-	u.variant_String = nil
-
-	u.variant_Int = nil
-
-}
-
-func (u *Union3DataObjectOrIntOrString) IsDataObject() bool {
-	return u.variant == "DataObject"
-}
-
-func (u *Union3DataObjectOrIntOrString) AsDataObject() *DataObject {
-	if u.variant != "DataObject" {
-		return nil
-	}
-	return u.variant_DataObject
+	return u.variant_Union3DataObjectOrIntOrString
 }
 
 type Union4IntOrListNodeOrMapStringKeyNodeValueOrString struct {
 	variant string
 
-	variant_String *string
-
-	variant_Int *int64
-
-	variant_ListNode *[]Node
-
-	variant_MapStringKeyNodeValue *map[string]Node
+	variant_Union4IntOrListNodeOrMapStringKeyNodeValueOrString *Union4IntOrListNodeOrMapStringKeyNodeValueOrString
 }
 
 func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "string":
-		u.variant = "String"
-		value := baml.Decode(valueHolder).Interface().(string)
-		u.variant_String = &value
-	case "int":
-		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
-		u.variant_Int = &value
-	case "List__Node":
-		u.variant = "ListNode"
-		value := baml.Decode(valueHolder).Interface().([]Node)
-		u.variant_ListNode = &value
-	case "Map__string_Node":
-		u.variant = "MapStringKeyNodeValue"
-		value := baml.Decode(valueHolder).Interface().(map[string]Node)
-		u.variant_MapStringKeyNodeValue = &value
+	case "Union__List__Node__Map__string_Node__int__string":
+		u.variant = "Union4IntOrListNodeOrMapStringKeyNodeValueOrString"
+		value := baml.Decode(valueHolder).Interface().(Union4IntOrListNodeOrMapStringKeyNodeValueOrString)
+		u.variant_Union4IntOrListNodeOrMapStringKeyNodeValueOrString = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
 	}
 }
 
-func (u Union4IntOrListNodeOrMapStringKeyNodeValueOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union4IntOrListNodeOrMapStringKeyNodeValueOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
-
-	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
-
-	case "ListNode":
-		return baml.EncodeUnion(u.BamlEncodeName, "List__Node", *u.variant_ListNode)
-
-	case "MapStringKeyNodeValue":
-		return baml.EncodeUnion(u.BamlEncodeName, "Map__string_Node", *u.variant_MapStringKeyNodeValue)
+	case "Union4IntOrListNodeOrMapStringKeyNodeValueOrString":
+		return baml.EncodeValue(*u.variant_Union4IntOrListNodeOrMapStringKeyNodeValueOrString)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -574,27 +372,11 @@ func (u Union4IntOrListNodeOrMapStringKeyNodeValueOrString) BamlTypeName() strin
 	return "Union4IntOrListNodeOrMapStringKeyNodeValueOrString"
 }
 
-func (u Union4IntOrListNodeOrMapStringKeyNodeValueOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__List__Node__Map__string_Node__int__string",
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-	}
-}
-
 func (u Union4IntOrListNodeOrMapStringKeyNodeValueOrString) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "String":
-		return json.Marshal(u.variant_String)
-
-	case "Int":
-		return json.Marshal(u.variant_Int)
-
-	case "ListNode":
-		return json.Marshal(u.variant_ListNode)
-
-	case "MapStringKeyNodeValue":
-		return json.Marshal(u.variant_MapStringKeyNodeValue)
+	case "Union4IntOrListNodeOrMapStringKeyNodeValueOrString":
+		return json.Marshal(u.variant_Union4IntOrListNodeOrMapStringKeyNodeValueOrString)
 
 	}
 
@@ -604,165 +386,39 @@ func (u Union4IntOrListNodeOrMapStringKeyNodeValueOrString) MarshalJSON() ([]byt
 func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_String)
+	err = json.Unmarshal(data, &u.variant_Union4IntOrListNodeOrMapStringKeyNodeValueOrString)
 	if err == nil {
-		u.variant = "String"
+		u.variant = "Union4IntOrListNodeOrMapStringKeyNodeValueOrString"
 		return nil
 	} else {
-		u.variant_String = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_Int)
-	if err == nil {
-		u.variant = "Int"
-		return nil
-	} else {
-		u.variant_Int = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_ListNode)
-	if err == nil {
-		u.variant = "ListNode"
-		return nil
-	} else {
-		u.variant_ListNode = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_MapStringKeyNodeValue)
-	if err == nil {
-		u.variant = "MapStringKeyNodeValue"
-		return nil
-	} else {
-		u.variant_MapStringKeyNodeValue = nil
+		u.variant_Union4IntOrListNodeOrMapStringKeyNodeValueOrString = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union4IntOrListNodeOrMapStringKeyNodeValueOrString__NewString(v string) Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
+func Union4IntOrListNodeOrMapStringKeyNodeValueOrString__NewUnion4IntOrListNodeOrMapStringKeyNodeValueOrString(v Union4IntOrListNodeOrMapStringKeyNodeValueOrString) Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
 
 	return Union4IntOrListNodeOrMapStringKeyNodeValueOrString{
-		variant:        "String",
-		variant_String: &v,
+		variant: "Union4IntOrListNodeOrMapStringKeyNodeValueOrString",
+		variant_Union4IntOrListNodeOrMapStringKeyNodeValueOrString: &v,
 	}
 }
 
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) SetString(v string) {
+func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) SetUnion4IntOrListNodeOrMapStringKeyNodeValueOrString(v Union4IntOrListNodeOrMapStringKeyNodeValueOrString) {
 
-	u.variant = "String"
-	u.variant_String = &v
-
-	u.variant_Int = nil
-
-	u.variant_ListNode = nil
-
-	u.variant_MapStringKeyNodeValue = nil
+	u.variant = "Union4IntOrListNodeOrMapStringKeyNodeValueOrString"
+	u.variant_Union4IntOrListNodeOrMapStringKeyNodeValueOrString = &v
 
 }
 
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) IsString() bool {
-	return u.variant == "String"
+func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) IsUnion4IntOrListNodeOrMapStringKeyNodeValueOrString() bool {
+	return u.variant == "Union4IntOrListNodeOrMapStringKeyNodeValueOrString"
 }
 
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) AsString() *string {
-	if u.variant != "String" {
+func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) AsUnion4IntOrListNodeOrMapStringKeyNodeValueOrString() *Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
+	if u.variant != "Union4IntOrListNodeOrMapStringKeyNodeValueOrString" {
 		return nil
 	}
-	return u.variant_String
-}
-
-func Union4IntOrListNodeOrMapStringKeyNodeValueOrString__NewInt(v int64) Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
-
-	return Union4IntOrListNodeOrMapStringKeyNodeValueOrString{
-		variant:     "Int",
-		variant_Int: &v,
-	}
-}
-
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) SetInt(v int64) {
-
-	u.variant = "Int"
-	u.variant_Int = &v
-
-	u.variant_String = nil
-
-	u.variant_ListNode = nil
-
-	u.variant_MapStringKeyNodeValue = nil
-
-}
-
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) IsInt() bool {
-	return u.variant == "Int"
-}
-
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) AsInt() *int64 {
-	if u.variant != "Int" {
-		return nil
-	}
-	return u.variant_Int
-}
-
-func Union4IntOrListNodeOrMapStringKeyNodeValueOrString__NewListNode(v []Node) Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
-
-	return Union4IntOrListNodeOrMapStringKeyNodeValueOrString{
-		variant:          "ListNode",
-		variant_ListNode: &v,
-	}
-}
-
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) SetListNode(v []Node) {
-
-	u.variant = "ListNode"
-	u.variant_ListNode = &v
-
-	u.variant_String = nil
-
-	u.variant_Int = nil
-
-	u.variant_MapStringKeyNodeValue = nil
-
-}
-
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) IsListNode() bool {
-	return u.variant == "ListNode"
-}
-
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) AsListNode() *[]Node {
-	if u.variant != "ListNode" {
-		return nil
-	}
-	return u.variant_ListNode
-}
-
-func Union4IntOrListNodeOrMapStringKeyNodeValueOrString__NewMapStringKeyNodeValue(v map[string]Node) Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
-
-	return Union4IntOrListNodeOrMapStringKeyNodeValueOrString{
-		variant:                       "MapStringKeyNodeValue",
-		variant_MapStringKeyNodeValue: &v,
-	}
-}
-
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) SetMapStringKeyNodeValue(v map[string]Node) {
-
-	u.variant = "MapStringKeyNodeValue"
-	u.variant_MapStringKeyNodeValue = &v
-
-	u.variant_String = nil
-
-	u.variant_Int = nil
-
-	u.variant_ListNode = nil
-
-}
-
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) IsMapStringKeyNodeValue() bool {
-	return u.variant == "MapStringKeyNodeValue"
-}
-
-func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) AsMapStringKeyNodeValue() *map[string]Node {
-	if u.variant != "MapStringKeyNodeValue" {
-		return nil
-	}
-	return u.variant_MapStringKeyNodeValue
+	return u.variant_Union4IntOrListNodeOrMapStringKeyNodeValueOrString
 }

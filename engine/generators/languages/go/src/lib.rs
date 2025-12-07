@@ -13,12 +13,14 @@ use crate::{
         render_go_stream_types_utils, render_go_types_utils, render_type_builder_classes,
         render_type_builder_common, render_type_builder_enums,
     },
+    r#type::SerializeType,
 };
 
 mod functions;
 mod generated_types;
 mod ir_to_go;
 mod package;
+mod test_macros;
 mod r#type;
 mod utils;
 
@@ -169,6 +171,16 @@ impl LanguageFeatures for GoLanguageFeatures {
             unions
         };
 
+        let checked_types = {
+            let mut checked_types = ir
+                .walk_all_types_with_checks()
+                .map(|t| ir_to_go::type_to_go(&t, pkg.lookup()))
+                .collect::<Vec<_>>();
+            checked_types.sort_by_key(|t| t.serialize_type(&pkg));
+            checked_types.dedup_by_key(|t| t.serialize_type(&pkg));
+            checked_types
+        };
+
         let _ = collector.add_file(
             "type_map.go",
             render_type_map(
@@ -178,6 +190,7 @@ impl LanguageFeatures for GoLanguageFeatures {
                 &stream_unions,
                 &go_type_aliases,
                 &stream_type_aliases,
+                &checked_types,
                 go_mod_name,
                 &pkg,
             )?,

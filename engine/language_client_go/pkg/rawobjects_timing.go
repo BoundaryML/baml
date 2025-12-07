@@ -16,8 +16,8 @@ func newTiming(ptr int64, rt unsafe.Pointer) Timing {
 	return &timing{raw_objects.FromPointer(ptr, rt)}
 }
 
-func (t *timing) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_TIMING
+func (t *timing) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_TIMING
 }
 
 func (t *timing) pointer() int64 {

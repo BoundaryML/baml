@@ -54,25 +54,18 @@ func (c *MediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap baml.T
 
 }
 
-func (c MediaAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
+func (c MediaAnalysisResult) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["topics"] = c.Topics
 
 	fields["analysisText"] = c.AnalysisText
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("MediaAnalysisResult", fields, nil)
 }
 
 func (c MediaAnalysisResult) BamlTypeName() string {
 	return "MediaAnalysisResult"
-}
-
-func (u MediaAnalysisResult) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "MediaAnalysisResult",
-	}
 }
 
 type MediaArrayAnalysisResult struct {
@@ -109,25 +102,18 @@ func (c *MediaArrayAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap b
 
 }
 
-func (c MediaArrayAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
+func (c MediaArrayAnalysisResult) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["analysisText"] = c.AnalysisText
 
 	fields["mediaCount"] = c.MediaCount
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("MediaArrayAnalysisResult", fields, nil)
 }
 
 func (c MediaArrayAnalysisResult) BamlTypeName() string {
 	return "MediaArrayAnalysisResult"
-}
-
-func (u MediaArrayAnalysisResult) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "MediaArrayAnalysisResult",
-	}
 }
 
 type MediaMapAnalysisResult struct {
@@ -168,7 +154,7 @@ func (c *MediaMapAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap bam
 
 }
 
-func (c MediaMapAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
+func (c MediaMapAnalysisResult) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["analysisText"] = c.AnalysisText
@@ -177,18 +163,11 @@ func (c MediaMapAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["keys"] = c.Keys
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("MediaMapAnalysisResult", fields, nil)
 }
 
 func (c MediaMapAnalysisResult) BamlTypeName() string {
 	return "MediaMapAnalysisResult"
-}
-
-func (u MediaMapAnalysisResult) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "MediaMapAnalysisResult",
-	}
 }
 
 type MixedMediaAnalysisResult struct {
@@ -249,7 +228,7 @@ func (c *MixedMediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap b
 
 }
 
-func (c MixedMediaAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
+func (c MixedMediaAnalysisResult) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["title"] = c.Title
@@ -268,18 +247,11 @@ func (c MixedMediaAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["metadataKeys"] = c.MetadataKeys
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("MixedMediaAnalysisResult", fields, nil)
 }
 
 func (c MixedMediaAnalysisResult) BamlTypeName() string {
 	return "MixedMediaAnalysisResult"
-}
-
-func (u MixedMediaAnalysisResult) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "MixedMediaAnalysisResult",
-	}
 }
 
 type OptionalMediaAnalysisResult struct {
@@ -320,7 +292,7 @@ func (c *OptionalMediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMa
 
 }
 
-func (c OptionalMediaAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
+func (c OptionalMediaAnalysisResult) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["analysisText"] = c.AnalysisText
@@ -329,16 +301,9 @@ func (c OptionalMediaAnalysisResult) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["missingMediaTypes"] = c.MissingMediaTypes
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("OptionalMediaAnalysisResult", fields, nil)
 }
 
 func (c OptionalMediaAnalysisResult) BamlTypeName() string {
 	return "OptionalMediaAnalysisResult"
-}
-
-func (u OptionalMediaAnalysisResult) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "OptionalMediaAnalysisResult",
-	}
 }

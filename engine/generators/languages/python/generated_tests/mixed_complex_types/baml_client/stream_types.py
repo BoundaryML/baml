@@ -12,11 +12,9 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
-import baml_py
 
-from . import types
 
 StreamStateValueT = typing.TypeVar('StreamStateValueT')
 class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
@@ -33,7 +31,7 @@ class Action(BaseModel):
 
 class Asset(BaseModel):
     id: typing.Optional[int] = None
-    type: typing.Optional[typing.Union[str, str, str]] = None
+    type: typing.Optional[typing.Union[typing_extensions.Literal['image'], typing_extensions.Literal['audio'], typing_extensions.Literal['document']]] = None
     metadata: typing.Optional["AssetMetadata"] = None
     tags: typing.List[str]
 
@@ -55,7 +53,7 @@ class ComplexData(BaseModel):
     tertiary: typing.Optional["TertiaryData"] = None
 
 class Condition(BaseModel):
-    type: typing.Optional[typing.Union[str, str, str]] = None
+    type: typing.Optional[typing.Union[typing_extensions.Literal['and'], typing_extensions.Literal['or'], typing_extensions.Literal['not']]] = None
     conditions: typing.List[typing.Union["Condition", "SimpleCondition"]]
 
 class Configuration(BaseModel):
@@ -65,12 +63,12 @@ class Configuration(BaseModel):
     rules: typing.List["Rule"]
 
 class ContainerWidget(BaseModel):
-    layout: typing.Optional[typing.Union[str, str, str]] = None
+    layout: typing.Optional[typing.Union[typing_extensions.Literal['flex'], typing_extensions.Literal['grid'], typing_extensions.Literal['stack']]] = None
     children: typing.List["Widget"]
     style: typing.Dict[str, str]
 
 class DataObject(BaseModel):
-    type: typing.Optional[str] = None
+    type: typing.Optional[typing_extensions.Literal['object']] = None
     value: typing.Dict[str, str]
 
 class Dimensions(BaseModel):
@@ -84,7 +82,7 @@ class Environment(BaseModel):
     secrets: typing.Optional[typing.Dict[str, str]] = None
 
 class Error(BaseModel):
-    type: typing.Optional[str] = None
+    type: typing.Optional[typing_extensions.Literal['error']] = None
     message: typing.Optional[str] = None
     code: typing.Optional[int] = None
 
@@ -115,8 +113,8 @@ class KitchenSink(BaseModel):
     score: typing.Optional[float] = None
     active: typing.Optional[bool] = None
     nothing: typing.Any
-    status: typing.Optional[typing.Union[str, str, str]] = None
-    priority: typing.Optional[typing.Union[int, int, int, int, int]] = None
+    status: typing.Optional[typing.Union[typing_extensions.Literal['draft'], typing_extensions.Literal['published'], typing_extensions.Literal['archived']]] = None
+    priority: typing.Optional[typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[2], typing_extensions.Literal[3], typing_extensions.Literal[4], typing_extensions.Literal[5]]] = None
     tags: typing.List[str]
     numbers: typing.List[int]
     matrix: typing.List[typing.List[int]]
@@ -132,7 +130,7 @@ class KitchenSink(BaseModel):
 
 class Node(BaseModel):
     id: typing.Optional[int] = None
-    type: typing.Optional[typing.Union[str, str]] = None
+    type: typing.Optional[typing.Union[typing_extensions.Literal['leaf'], typing_extensions.Literal['branch']]] = None
     value: typing.Optional[typing.Union[str, int, typing.List["Node"], typing.Dict[str, "Node"]]] = None
     metadata: typing.Optional["NodeMetadata"] = None
 
@@ -176,11 +174,11 @@ class Setting(BaseModel):
 
 class SimpleCondition(BaseModel):
     field: typing.Optional[str] = None
-    operator: typing.Optional[typing.Union[str, str, str, str, str]] = None
+    operator: typing.Optional[typing.Union[typing_extensions.Literal['eq'], typing_extensions.Literal['ne'], typing_extensions.Literal['gt'], typing_extensions.Literal['lt'], typing_extensions.Literal['contains']]] = None
     value: typing.Optional[typing.Union[str, int, float, bool]] = None
 
 class Success(BaseModel):
-    type: typing.Optional[str] = None
+    type: typing.Optional[typing_extensions.Literal['success']] = None
     data: typing.Dict[str, str]
 
 class TertiaryData(BaseModel):
@@ -190,7 +188,7 @@ class TertiaryData(BaseModel):
 
 class TextWidget(BaseModel):
     content: typing.Optional[str] = None
-    format: typing.Optional[typing.Union[str, str, str]] = None
+    format: typing.Optional[typing.Union[typing_extensions.Literal['plain'], typing_extensions.Literal['markdown'], typing_extensions.Literal['html']]] = None
     style: typing.Dict[str, str]
 
 class UltraComplex(BaseModel):
@@ -212,7 +210,7 @@ class UserProfile(BaseModel):
     links: typing.List[str]
 
 class UserResponse(BaseModel):
-    status: typing.Optional[typing.Union[str, str]] = None
+    status: typing.Optional[typing.Union[typing_extensions.Literal['success'], typing_extensions.Literal['error']]] = None
     data: typing.Optional["User"] = None
     error: typing.Optional["ErrorDetail"] = None
     metadata: typing.Optional["ResponseMetadata"] = None
@@ -224,7 +222,7 @@ class Variant(BaseModel):
     options: typing.Dict[str, str]
 
 class Widget(BaseModel):
-    type: typing.Optional[typing.Union[str, str, str, str]] = None
+    type: typing.Optional[typing.Union[typing_extensions.Literal['button'], typing_extensions.Literal['text'], typing_extensions.Literal['image'], typing_extensions.Literal['container']]] = None
     button: typing.Optional["ButtonWidget"] = None
     text: typing.Optional["TextWidget"] = None
     img: typing.Optional["ImageWidget"] = None

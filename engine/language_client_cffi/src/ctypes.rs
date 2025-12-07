@@ -12,4 +12,5 @@ mod utils;
 
 pub(crate) use baml_value_with_meta_encode::Meta as EncodeMeta;
 pub use function_args_decode::BamlFunctionArguments;
+pub(crate) use utils::Encode;
 pub use utils::{DecodeFromBuffer, EncodeToBuffer};

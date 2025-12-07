@@ -42,7 +42,7 @@ export namespace partial_types {
     }
     export interface ClassWithoutDone {
       i_16_digits?: number | null
-      s_20_words?: StreamState<string | null>
+      s_20_words: StreamState<string | null>
     }
     export interface SemanticContainer {
       sixteen_digit_number?: number | null

@@ -47,14 +47,14 @@ func (u *Union2BoolOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap 
 	}
 }
 
-func (u Union2BoolOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2BoolOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Bool":
-		return baml.EncodeUnion(u.BamlEncodeName, "bool", *u.variant_Bool)
+		return baml.EncodeValue(*u.variant_Bool)
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -65,13 +65,6 @@ func (u Union2BoolOrString) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2BoolOrString) BamlTypeName() string {
 	return "Union2BoolOrString"
-}
-
-func (u Union2BoolOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__bool__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2BoolOrString) MarshalJSON() ([]byte, error) {
@@ -192,14 +185,14 @@ func (u *Union2DataResponseOrErrorResponse) Decode(holder *cffi.CFFIValueUnionVa
 	}
 }
 
-func (u Union2DataResponseOrErrorResponse) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2DataResponseOrErrorResponse) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "DataResponse":
-		return baml.EncodeUnion(u.BamlEncodeName, "DataResponse", *u.variant_DataResponse)
+		return baml.EncodeValue(*u.variant_DataResponse)
 
 	case "ErrorResponse":
-		return baml.EncodeUnion(u.BamlEncodeName, "ErrorResponse", *u.variant_ErrorResponse)
+		return baml.EncodeValue(*u.variant_ErrorResponse)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -210,13 +203,6 @@ func (u Union2DataResponseOrErrorResponse) Encode() (*cffi.CFFIValueHolder, erro
 
 func (u Union2DataResponseOrErrorResponse) BamlTypeName() string {
 	return "Union2DataResponseOrErrorResponse"
-}
-
-func (u Union2DataResponseOrErrorResponse) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__DataResponse__ErrorResponse",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2DataResponseOrErrorResponse) MarshalJSON() ([]byte, error) {
@@ -337,14 +323,14 @@ func (u *Union2FloatOrInt) Decode(holder *cffi.CFFIValueUnionVariant, typeMap ba
 	}
 }
 
-func (u Union2FloatOrInt) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2FloatOrInt) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "Float":
-		return baml.EncodeUnion(u.BamlEncodeName, "float", *u.variant_Float)
+		return baml.EncodeValue(*u.variant_Float)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -355,13 +341,6 @@ func (u Union2FloatOrInt) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2FloatOrInt) BamlTypeName() string {
 	return "Union2FloatOrInt"
-}
-
-func (u Union2FloatOrInt) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__float__int",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2FloatOrInt) MarshalJSON() ([]byte, error) {
@@ -482,14 +461,14 @@ func (u *Union2FloatOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap
 	}
 }
 
-func (u Union2FloatOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2FloatOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "Float":
-		return baml.EncodeUnion(u.BamlEncodeName, "float", *u.variant_Float)
+		return baml.EncodeValue(*u.variant_Float)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -500,13 +479,6 @@ func (u Union2FloatOrString) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2FloatOrString) BamlTypeName() string {
 	return "Union2FloatOrString"
-}
-
-func (u Union2FloatOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__float__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2FloatOrString) MarshalJSON() ([]byte, error) {
@@ -627,14 +599,14 @@ func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap b
 	}
 }
 
-func (u Union2IntOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2IntOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -645,13 +617,6 @@ func (u Union2IntOrString) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2IntOrString) BamlTypeName() string {
 	return "Union2IntOrString"
-}
-
-func (u Union2IntOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__int__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2IntOrString) MarshalJSON() ([]byte, error) {
@@ -772,14 +737,14 @@ func (u *Union2ListIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeM
 	}
 }
 
-func (u Union2ListIntOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2ListIntOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "ListInt":
-		return baml.EncodeUnion(u.BamlEncodeName, "List__int", *u.variant_ListInt)
+		return baml.EncodeValue(*u.variant_ListInt)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -790,13 +755,6 @@ func (u Union2ListIntOrString) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2ListIntOrString) BamlTypeName() string {
 	return "Union2ListIntOrString"
-}
-
-func (u Union2ListIntOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__List__int__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2ListIntOrString) MarshalJSON() ([]byte, error) {
@@ -917,14 +875,14 @@ func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap
 	}
 }
 
-func (u Union2ProductOrUser) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2ProductOrUser) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "User":
-		return baml.EncodeUnion(u.BamlEncodeName, "User", *u.variant_User)
+		return baml.EncodeValue(*u.variant_User)
 
 	case "Product":
-		return baml.EncodeUnion(u.BamlEncodeName, "Product", *u.variant_Product)
+		return baml.EncodeValue(*u.variant_Product)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -935,13 +893,6 @@ func (u Union2ProductOrUser) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2ProductOrUser) BamlTypeName() string {
 	return "Union2ProductOrUser"
-}
-
-func (u Union2ProductOrUser) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Product__User",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2ProductOrUser) MarshalJSON() ([]byte, error) {
@@ -1062,14 +1013,14 @@ func (u *Union2RecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVariant
 	}
 }
 
-func (u Union2RecursiveUnionOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2RecursiveUnionOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "RecursiveUnion":
-		return baml.EncodeUnion(u.BamlEncodeName, "RecursiveUnion", *u.variant_RecursiveUnion)
+		return baml.EncodeValue(*u.variant_RecursiveUnion)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -1080,13 +1031,6 @@ func (u Union2RecursiveUnionOrString) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2RecursiveUnionOrString) BamlTypeName() string {
 	return "Union2RecursiveUnionOrString"
-}
-
-func (u Union2RecursiveUnionOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__RecursiveUnion__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2RecursiveUnionOrString) MarshalJSON() ([]byte, error) {
@@ -1213,17 +1157,17 @@ func (u *Union3AdminOrProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, 
 	}
 }
 
-func (u Union3AdminOrProductOrUser) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union3AdminOrProductOrUser) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "User":
-		return baml.EncodeUnion(u.BamlEncodeName, "User", *u.variant_User)
+		return baml.EncodeValue(*u.variant_User)
 
 	case "Product":
-		return baml.EncodeUnion(u.BamlEncodeName, "Product", *u.variant_Product)
+		return baml.EncodeValue(*u.variant_Product)
 
 	case "Admin":
-		return baml.EncodeUnion(u.BamlEncodeName, "Admin", *u.variant_Admin)
+		return baml.EncodeValue(*u.variant_Admin)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -1234,13 +1178,6 @@ func (u Union3AdminOrProductOrUser) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union3AdminOrProductOrUser) BamlTypeName() string {
 	return "Union3AdminOrProductOrUser"
-}
-
-func (u Union3AdminOrProductOrUser) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Admin__Product__User",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union3AdminOrProductOrUser) MarshalJSON() ([]byte, error) {
@@ -1412,17 +1349,17 @@ func (u *Union3ApiErrorOrApiPendingOrApiSuccess) Decode(holder *cffi.CFFIValueUn
 	}
 }
 
-func (u Union3ApiErrorOrApiPendingOrApiSuccess) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union3ApiErrorOrApiPendingOrApiSuccess) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "ApiSuccess":
-		return baml.EncodeUnion(u.BamlEncodeName, "ApiSuccess", *u.variant_ApiSuccess)
+		return baml.EncodeValue(*u.variant_ApiSuccess)
 
 	case "ApiError":
-		return baml.EncodeUnion(u.BamlEncodeName, "ApiError", *u.variant_ApiError)
+		return baml.EncodeValue(*u.variant_ApiError)
 
 	case "ApiPending":
-		return baml.EncodeUnion(u.BamlEncodeName, "ApiPending", *u.variant_ApiPending)
+		return baml.EncodeValue(*u.variant_ApiPending)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -1433,13 +1370,6 @@ func (u Union3ApiErrorOrApiPendingOrApiSuccess) Encode() (*cffi.CFFIValueHolder,
 
 func (u Union3ApiErrorOrApiPendingOrApiSuccess) BamlTypeName() string {
 	return "Union3ApiErrorOrApiPendingOrApiSuccess"
-}
-
-func (u Union3ApiErrorOrApiPendingOrApiSuccess) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__ApiError__ApiPending__ApiSuccess",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union3ApiErrorOrApiPendingOrApiSuccess) MarshalJSON() ([]byte, error) {
@@ -1611,17 +1541,17 @@ func (u *Union3BirdOrCatOrDog) Decode(holder *cffi.CFFIValueUnionVariant, typeMa
 	}
 }
 
-func (u Union3BirdOrCatOrDog) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union3BirdOrCatOrDog) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Dog":
-		return baml.EncodeUnion(u.BamlEncodeName, "Dog", *u.variant_Dog)
+		return baml.EncodeValue(*u.variant_Dog)
 
 	case "Cat":
-		return baml.EncodeUnion(u.BamlEncodeName, "Cat", *u.variant_Cat)
+		return baml.EncodeValue(*u.variant_Cat)
 
 	case "Bird":
-		return baml.EncodeUnion(u.BamlEncodeName, "Bird", *u.variant_Bird)
+		return baml.EncodeValue(*u.variant_Bird)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -1632,13 +1562,6 @@ func (u Union3BirdOrCatOrDog) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union3BirdOrCatOrDog) BamlTypeName() string {
 	return "Union3BirdOrCatOrDog"
-}
-
-func (u Union3BirdOrCatOrDog) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Bird__Cat__Dog",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union3BirdOrCatOrDog) MarshalJSON() ([]byte, error) {
@@ -1810,17 +1733,17 @@ func (u *Union3CircleOrRectangleOrTriangle) Decode(holder *cffi.CFFIValueUnionVa
 	}
 }
 
-func (u Union3CircleOrRectangleOrTriangle) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union3CircleOrRectangleOrTriangle) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Circle":
-		return baml.EncodeUnion(u.BamlEncodeName, "Circle", *u.variant_Circle)
+		return baml.EncodeValue(*u.variant_Circle)
 
 	case "Rectangle":
-		return baml.EncodeUnion(u.BamlEncodeName, "Rectangle", *u.variant_Rectangle)
+		return baml.EncodeValue(*u.variant_Rectangle)
 
 	case "Triangle":
-		return baml.EncodeUnion(u.BamlEncodeName, "Triangle", *u.variant_Triangle)
+		return baml.EncodeValue(*u.variant_Triangle)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -1831,13 +1754,6 @@ func (u Union3CircleOrRectangleOrTriangle) Encode() (*cffi.CFFIValueHolder, erro
 
 func (u Union3CircleOrRectangleOrTriangle) BamlTypeName() string {
 	return "Union3CircleOrRectangleOrTriangle"
-}
-
-func (u Union3CircleOrRectangleOrTriangle) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Circle__Rectangle__Triangle",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union3CircleOrRectangleOrTriangle) MarshalJSON() ([]byte, error) {
@@ -2009,17 +1925,17 @@ func (u *Union3ErrorOrSuccessOrWarning) Decode(holder *cffi.CFFIValueUnionVarian
 	}
 }
 
-func (u Union3ErrorOrSuccessOrWarning) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union3ErrorOrSuccessOrWarning) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Success":
-		return baml.EncodeUnion(u.BamlEncodeName, "Success", *u.variant_Success)
+		return baml.EncodeValue(*u.variant_Success)
 
 	case "Warning":
-		return baml.EncodeUnion(u.BamlEncodeName, "Warning", *u.variant_Warning)
+		return baml.EncodeValue(*u.variant_Warning)
 
 	case "Error":
-		return baml.EncodeUnion(u.BamlEncodeName, "Error", *u.variant_Error)
+		return baml.EncodeValue(*u.variant_Error)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -2030,13 +1946,6 @@ func (u Union3ErrorOrSuccessOrWarning) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union3ErrorOrSuccessOrWarning) BamlTypeName() string {
 	return "Union3ErrorOrSuccessOrWarning"
-}
-
-func (u Union3ErrorOrSuccessOrWarning) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Error__Success__Warning",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union3ErrorOrSuccessOrWarning) MarshalJSON() ([]byte, error) {
@@ -2208,17 +2117,17 @@ func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, ty
 	}
 }
 
-func (u Union3FloatOrIntOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union3FloatOrIntOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "Float":
-		return baml.EncodeUnion(u.BamlEncodeName, "float", *u.variant_Float)
+		return baml.EncodeValue(*u.variant_Float)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -2229,13 +2138,6 @@ func (u Union3FloatOrIntOrString) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union3FloatOrIntOrString) BamlTypeName() string {
 	return "Union3FloatOrIntOrString"
-}
-
-func (u Union3FloatOrIntOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__float__int__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union3FloatOrIntOrString) MarshalJSON() ([]byte, error) {
@@ -2407,17 +2309,17 @@ func (u *Union3IntOrRecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVa
 	}
 }
 
-func (u Union3IntOrRecursiveUnionOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union3IntOrRecursiveUnionOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "RecursiveUnion":
-		return baml.EncodeUnion(u.BamlEncodeName, "RecursiveUnion", *u.variant_RecursiveUnion)
+		return baml.EncodeValue(*u.variant_RecursiveUnion)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -2428,13 +2330,6 @@ func (u Union3IntOrRecursiveUnionOrString) Encode() (*cffi.CFFIValueHolder, erro
 
 func (u Union3IntOrRecursiveUnionOrString) BamlTypeName() string {
 	return "Union3IntOrRecursiveUnionOrString"
-}
-
-func (u Union3IntOrRecursiveUnionOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__RecursiveUnion__int__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union3IntOrRecursiveUnionOrString) MarshalJSON() ([]byte, error) {
@@ -2612,20 +2507,20 @@ func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVaria
 	}
 }
 
-func (u Union4BoolOrFloatOrIntOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union4BoolOrFloatOrIntOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "Float":
-		return baml.EncodeUnion(u.BamlEncodeName, "float", *u.variant_Float)
+		return baml.EncodeValue(*u.variant_Float)
 
 	case "Bool":
-		return baml.EncodeUnion(u.BamlEncodeName, "bool", *u.variant_Bool)
+		return baml.EncodeValue(*u.variant_Bool)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -2636,13 +2531,6 @@ func (u Union4BoolOrFloatOrIntOrString) Encode() (*cffi.CFFIValueHolder, error) 
 
 func (u Union4BoolOrFloatOrIntOrString) BamlTypeName() string {
 	return "Union4BoolOrFloatOrIntOrString"
-}
-
-func (u Union4BoolOrFloatOrIntOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__bool__float__int__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union4BoolOrFloatOrIntOrString) MarshalJSON() ([]byte, error) {

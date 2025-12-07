@@ -238,7 +238,17 @@ impl TypeGo {
         }
     }
 
+    pub fn clone_without_checked(&self) -> Self {
+        let mut clone = self.clone();
+        clone.meta_mut().type_wrapper.pop_checked();
+        clone
+    }
+
     pub fn construct_instance(&self, pkg: &CurrentRenderPackage) -> String {
+        if matches!(self.meta().type_wrapper, TypeWrapper::Checked(_)) {
+            return format!("{}{{}}", self.serialize_type(pkg));
+        }
+
         let instance = match self {
             TypeGo::String(val, _) => val.as_ref().map_or("\"\"".to_string(), |v| {
                 format!("\"{}\"", v.replace("\"", "\\\"")).to_string()

@@ -56,23 +56,16 @@ func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 
 }
 
-func (c SimpleClass) Encode() (*cffi.CFFIValueHolder, error) {
+func (c SimpleClass) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["digits"] = c.Digits
 
 	fields["words"] = c.Words
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("SimpleClass", fields, nil)
 }
 
 func (c SimpleClass) BamlTypeName() string {
 	return "SimpleClass"
-}
-
-func (u SimpleClass) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "SimpleClass",
-	}
 }

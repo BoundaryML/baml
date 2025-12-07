@@ -115,7 +115,7 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                     from_type_ir(&t, lookup)
                 });
 
-                let variants = if !needed || is_optional {
+                let variants = if is_optional {
                     variants
                         .chain(std::iter::once(TypeStreaming::null()))
                         .collect()

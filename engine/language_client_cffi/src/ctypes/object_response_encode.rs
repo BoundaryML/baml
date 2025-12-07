@@ -1,7 +1,7 @@
 use baml_types::BamlValue;
 
 use crate::{
-    baml::cffi::{CffiObjectResponse, CffiObjectResponseError, CffiObjectResponseSuccess},
+    baml::cffi::{InvocationResponse, InvocationResponseSuccess},
     ctypes::utils::{Encode, WithIr},
     raw_ptr_wrapper::RawPtrType,
 };
@@ -29,25 +29,25 @@ impl BamlObjectResponseSuccess {
     }
 }
 
-impl<'a, TypeLookups> Encode<CffiObjectResponse> for WithIr<'a, BamlObjectResponse, TypeLookups>
+impl<'a, TypeLookups> Encode<InvocationResponse> for WithIr<'a, BamlObjectResponse, TypeLookups>
 where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
 {
-    fn encode(self) -> CffiObjectResponse {
+    fn encode(self) -> InvocationResponse {
         use crate::baml::cffi::{
-            cffi_object_response::Response as cResponse,
-            cffi_object_response_success::Result as cResult,
+            invocation_response::Response as cResponse,
+            invocation_response_success::Result as cResult,
         };
 
         match self.value {
-            Ok(success) => CffiObjectResponse {
-                response: Some(cResponse::Success(CffiObjectResponseSuccess {
+            Ok(success) => InvocationResponse {
+                response: Some(cResponse::Success(InvocationResponseSuccess {
                     result: Some(match success {
                         BamlObjectResponseSuccess::Object(object) => {
                             cResult::Object(object.clone().encode())
                         }
                         BamlObjectResponseSuccess::Objects(objects) => {
-                            cResult::Objects(crate::baml::cffi::MultipleRawObjectResponse {
+                            cResult::Objects(crate::baml::cffi::RepeatedBamlObjectHandle {
                                 objects: objects.iter().map(|ptr| ptr.clone().encode()).collect(),
                             })
                         }
@@ -62,10 +62,8 @@ where
                     }),
                 })),
             },
-            Err(error) => CffiObjectResponse {
-                response: Some(cResponse::Error(CffiObjectResponseError {
-                    error: error.clone(),
-                })),
+            Err(error) => InvocationResponse {
+                response: Some(cResponse::Error(error.clone())),
             },
         }
     }

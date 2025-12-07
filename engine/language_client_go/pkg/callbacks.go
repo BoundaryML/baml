@@ -105,7 +105,6 @@ func error_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int
 			callback.channel <- ResultCallback{Error: err}
 		}
 
-
 		close(callback.channel)
 		callbackMutex.Lock()
 		defer callbackMutex.Unlock()

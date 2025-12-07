@@ -8,7 +8,7 @@ import (
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
-/// Construct Collector
+// / Construct Collector
 func (r *BamlRuntime) NewCollector(name string) (Collector, error) {
 	kwargs, err := serde.EncodeMapEntries(map[string]any{
 		"name": name,
@@ -17,7 +17,7 @@ func (r *BamlRuntime) NewCollector(name string) (Collector, error) {
 		return nil, fmt.Errorf("failed to encode kwargs: %w", err)
 	}
 
-	ptr, err := raw_objects.NewRawObject(r.runtime, cffi.CFFIObjectType_OBJECT_COLLECTOR, kwargs)
+	ptr, err := raw_objects.NewRawObject(r.runtime, cffi.BamlObjectType_OBJECT_COLLECTOR, kwargs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create collector: %w", err)
 	}
@@ -29,7 +29,6 @@ func (r *BamlRuntime) NewCollector(name string) (Collector, error) {
 
 	return as_collector, nil
 }
-
 
 func (r *BamlRuntime) newMediaFromUrl(mediaType MediaType, url string, mimeType *string) (media, error) {
 	kwargs, err := serde.EncodeMapEntries(map[string]any{
@@ -108,7 +107,7 @@ func (r *BamlRuntime) NewVideoFromBase64(base64 string, mimeType *string) (Video
 }
 
 func (r *BamlRuntime) NewTypeBuilder() (TypeBuilder, error) {
-	ptr, err := raw_objects.NewRawObject(r.runtime, cffi.CFFIObjectType_OBJECT_TYPE_BUILDER, nil)
+	ptr, err := raw_objects.NewRawObject(r.runtime, cffi.BamlObjectType_OBJECT_TYPE_BUILDER, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create type builder: %w", err)
 	}

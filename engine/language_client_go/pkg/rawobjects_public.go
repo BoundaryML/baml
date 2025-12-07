@@ -8,8 +8,8 @@ import (
 type ASTNodeSource string
 
 const (
-	ASTNodeSource_Unknown ASTNodeSource = "unknown"
-	ASTNodeSource_Baml    ASTNodeSource = "baml_file"
+	ASTNodeSource_Unknown     ASTNodeSource = "unknown"
+	ASTNodeSource_Baml        ASTNodeSource = "baml_file"
 	ASTNodeSource_TypeBuilder ASTNodeSource = "type_builder"
 )
 
@@ -194,7 +194,7 @@ type TypeBuilder interface {
 	Float() (Type, error)
 	Bool() (Type, error)
 	Null() (Type, error)
-	// Literal types  
+	// Literal types
 	LiteralString(value string) (Type, error)
 	LiteralInt(value int64) (Type, error)
 	LiteralBool(value bool) (Type, error)

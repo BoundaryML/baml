@@ -151,8 +151,8 @@ func initializeBaml() error {
 		// Enhanced error messages for common issues
 		errStr := err.Error()
 		if strings.Contains(errStr, "wrong architecture") ||
-		   strings.Contains(errStr, "wrong ELF class") ||
-		   strings.Contains(errStr, "is not a valid Win32 application") {
+			strings.Contains(errStr, "wrong ELF class") ||
+			strings.Contains(errStr, "is not a valid Win32 application") {
 			err = fmt.Errorf("%w (possible architecture mismatch)", err)
 		}
 		return fmt.Errorf("%w: %w", ErrLoadLibrary, err)

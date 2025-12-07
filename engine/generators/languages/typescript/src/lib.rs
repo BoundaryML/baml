@@ -15,6 +15,7 @@ mod functions;
 mod generated_types;
 mod ir_to_ts;
 mod package;
+mod test_macros;
 mod r#type;
 mod utils;
 mod watchers;

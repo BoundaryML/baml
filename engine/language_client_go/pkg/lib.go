@@ -8,16 +8,16 @@ import (
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
-func EncodeClass(name func() *cffi.CFFITypeName, fields map[string]any, dynamicFields *map[string]any) (*cffi.CFFIValueHolder, error) {
+func EncodeClass(name string, fields map[string]any, dynamicFields *map[string]any) (*cffi.HostValue, error) {
 	return serde.EncodeClass(name, fields, dynamicFields)
 }
 
-func EncodeEnum(name func() *cffi.CFFITypeName, value string, is_dynamic bool) (*cffi.CFFIValueHolder, error) {
+func EncodeEnum(name string, value string, is_dynamic bool) (*cffi.HostValue, error) {
 	return serde.EncodeEnum(name, value, is_dynamic)
 }
 
-func EncodeUnion(name func() *cffi.CFFITypeName, variant string, value any) (*cffi.CFFIValueHolder, error) {
-	return serde.EncodeUnion(name, variant, value)
+func EncodeValue(value any) (*cffi.HostValue, error) {
+	return serde.EncodeValue(value)
 }
 
 func Decode(holder *cffi.CFFIValueHolder) reflect.Value {
@@ -40,7 +40,7 @@ func CastStreamState[T any](value any, castFunc func(inner any) T) shared.Stream
 	return serde.CastStreamState(value, castFunc)
 }
 
-func BAMLTESTINGONLY_InternalEncode(value any) (*cffi.CFFIValueHolder, error) {
+func BAMLTESTINGONLY_InternalEncode(value any) (*cffi.HostValue, error) {
 	return serde.EncodeValue(value)
 }
 

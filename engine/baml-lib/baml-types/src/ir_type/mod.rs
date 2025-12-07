@@ -1681,4 +1681,274 @@ mod tests {
         assert_eq!(streaming_type_variants[0], expected_first_variant);
         assert_eq!(streaming_type_variants[1], expected_second_variant);
     }
+
+    #[test]
+    fn partialize_checked_optional_int() {
+        // int? @check("foo", "bar")
+        // represented as Union(Int, Null) with constraints.
+        let constraint = Constraint::new_check("foo", "bar");
+        let mut optional_int = TypeIR::union(vec![TypeIR::int(), TypeIR::null()]);
+        optional_int.set_meta(type_meta::IR {
+            constraints: vec![constraint.clone()],
+            streaming_behavior: Default::default(),
+        });
+
+        // Expected streaming type:
+        // Union(stream(Int), Null) with constraints.
+        // The outer null is collapsed into the inner null.
+        let expected = TypeStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    // Inner int is marked needed=true because it was inside a union
+                    TypeStreaming::Primitive(
+                        TypeValue::Int,
+                        TypeMetaStreaming {
+                            streaming_behavior: type_meta::stream::StreamingBehavior {
+                                done: true,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                    ),
+                    TypeStreaming::null(),
+                ])
+            },
+            TypeMetaStreaming {
+                constraints: vec![constraint],
+                streaming_behavior: Default::default(),
+            },
+        );
+
+        let actual = converters::streaming::from_type_ir(&optional_int, &TestLookup);
+        assert_eq!(
+            actual, expected,
+            "\nActual: {}\nExpected: {}",
+            actual, expected
+        );
+    }
+
+    #[test]
+    fn partialize_checked_int() {
+        // Case: int @check(..)
+        let constraint = Constraint::new_check("foo", "bar");
+        let mut input = TypeIR::int();
+        input.set_meta(type_meta::IR {
+            constraints: vec![constraint.clone()],
+            streaming_behavior: Default::default(),
+        });
+
+        // Non-streaming: Just the int with the check.
+        let expected_non_streaming = TypeNonStreaming::Primitive(
+            TypeValue::Int,
+            type_meta::NonStreaming {
+                constraints: vec![constraint.clone()],
+            },
+        );
+
+        // Streaming: int becomes Union(int, null).
+        // The int keeps the check.
+        let expected_streaming = TypeStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeStreaming::Primitive(
+                        TypeValue::Int,
+                        type_meta::stream::TypeMetaStreaming {
+                            constraints: vec![constraint.clone()],
+                            streaming_behavior: type_meta::stream::StreamingBehavior {
+                                done: true,
+                                ..Default::default()
+                            },
+                        },
+                    ),
+                    TypeStreaming::null(),
+                ])
+            },
+            Default::default(),
+        );
+
+        let actual_non_streaming = input.to_non_streaming_type(&TestLookup);
+        assert_eq!(actual_non_streaming.to_string(), "int @check(foo, {{..}} )");
+        assert_eq!(
+            actual_non_streaming, expected_non_streaming,
+            "Non-streaming mismatch"
+        );
+
+        let actual_streaming = input.to_streaming_type(&TestLookup);
+        assert_eq!(
+            actual_streaming.to_string(),
+            "(int @check(foo, {{..}} ) @stream.done | null)"
+        );
+        assert_eq!(actual_streaming, expected_streaming, "Streaming mismatch");
+    }
+
+    #[test]
+    fn partialize_checked_union_on_union() {
+        // Case: (int | null) @check(..)
+        let constraint = Constraint::new_check("foo", "bar");
+        let mut input = TypeIR::union(vec![TypeIR::int(), TypeIR::null()]);
+        input.set_meta(type_meta::IR {
+            constraints: vec![constraint.clone()],
+            streaming_behavior: Default::default(),
+        });
+
+        let expected_non_streaming = TypeNonStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeNonStreaming::Primitive(TypeValue::Int, Default::default()),
+                    TypeNonStreaming::Primitive(TypeValue::Null, Default::default()),
+                ])
+            },
+            type_meta::NonStreaming {
+                constraints: vec![constraint.clone()],
+            },
+        );
+
+        let expected_streaming = TypeStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeStreaming::Primitive(
+                        TypeValue::Int,
+                        type_meta::stream::TypeMetaStreaming::default().done(),
+                    ),
+                    TypeStreaming::null(),
+                ])
+            },
+            type_meta::stream::TypeMetaStreaming {
+                constraints: vec![constraint.clone()],
+                streaming_behavior: Default::default(),
+            },
+        );
+
+        let actual_non_streaming = input.to_non_streaming_type(&TestLookup);
+        assert_eq!(
+            actual_non_streaming.to_string(),
+            "(int | null) @check(foo, {{..}} )"
+        );
+        assert_eq!(
+            actual_non_streaming, expected_non_streaming,
+            "Non-streaming mismatch"
+        );
+
+        let actual_streaming = input.to_streaming_type(&TestLookup);
+        assert_eq!(
+            actual_streaming.to_string(),
+            "(int @stream.done | null) @check(foo, {{..}} )"
+        );
+        assert_eq!(actual_streaming, expected_streaming, "Streaming mismatch");
+    }
+
+    #[test]
+    fn partialize_checked_union_on_variant() {
+        // Case: (int @check(..)) | null
+        let constraint = Constraint::new_check("foo", "bar");
+        let mut int = TypeIR::int();
+        int.set_meta(type_meta::IR {
+            constraints: vec![constraint.clone()],
+            streaming_behavior: Default::default(),
+        });
+        let input = TypeIR::union(vec![int, TypeIR::null()]);
+
+        let int_non_streaming = TypeNonStreaming::Primitive(
+            TypeValue::Int,
+            type_meta::NonStreaming {
+                constraints: vec![constraint.clone()],
+            },
+        );
+        let expected_non_streaming = TypeNonStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    int_non_streaming,
+                    TypeNonStreaming::Primitive(TypeValue::Null, Default::default()),
+                ])
+            },
+            Default::default(),
+        );
+
+        let expected_streaming = TypeStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeStreaming::Primitive(
+                        TypeValue::Int,
+                        type_meta::stream::TypeMetaStreaming {
+                            constraints: vec![constraint.clone()],
+                            streaming_behavior: type_meta::stream::StreamingBehavior {
+                                done: true,
+                                ..Default::default()
+                            },
+                        },
+                    ),
+                    TypeStreaming::null(),
+                ])
+            },
+            Default::default(),
+        );
+
+        let actual_non_streaming = input.to_non_streaming_type(&TestLookup);
+        assert_eq!(
+            actual_non_streaming.to_string(),
+            "(int @check(foo, {{..}} ) | null)"
+        );
+        assert_eq!(
+            actual_non_streaming, expected_non_streaming,
+            "Non-streaming mismatch"
+        );
+
+        let actual_streaming = input.to_streaming_type(&TestLookup);
+        assert_eq!(
+            actual_streaming.to_string(),
+            "(int @check(foo, {{..}} ) @stream.done | null)"
+        );
+        assert_eq!(actual_streaming, expected_streaming, "Streaming mismatch");
+    }
+
+    #[test]
+    fn partialize_checked_union_on_null_variant() {
+        // Case: int | (null @check(..))
+        let constraint = Constraint::new_check("foo", "bar");
+        let mut null = TypeIR::null();
+        null.set_meta(type_meta::IR {
+            constraints: vec![constraint.clone()],
+            streaming_behavior: Default::default(),
+        });
+        let input = TypeIR::union(vec![TypeIR::int(), null]);
+
+        let expected_non_streaming = {
+            // NOTE: checks on null are currently lost in non-streaming conversion as well
+            let null = TypeNonStreaming::Primitive(TypeValue::Null, Default::default());
+            TypeNonStreaming::Union(
+                unsafe {
+                    UnionTypeGeneric::new_unsafe(vec![
+                        TypeNonStreaming::Primitive(TypeValue::Int, Default::default()),
+                        null,
+                    ])
+                },
+                Default::default(),
+            )
+        };
+
+        let expected_streaming = TypeStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeStreaming::Primitive(
+                        TypeValue::Int,
+                        type_meta::stream::TypeMetaStreaming::default().done(),
+                    ),
+                    // NOTE: checks on null are lost in streaming conversion due to iter_skip_null usage
+                    TypeStreaming::null(),
+                ])
+            },
+            Default::default(),
+        );
+
+        let actual_non_streaming = input.to_non_streaming_type(&TestLookup);
+        assert_eq!(actual_non_streaming.to_string(), "(int | null)");
+        assert_eq!(
+            actual_non_streaming, expected_non_streaming,
+            "Non-streaming mismatch"
+        );
+
+        let actual_streaming = input.to_streaming_type(&TestLookup);
+        assert_eq!(actual_streaming.to_string(), "(int @stream.done | null)");
+        assert_eq!(actual_streaming, expected_streaming, "Streaming mismatch");
+    }
 }

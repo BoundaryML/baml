@@ -16,6 +16,9 @@ mod generated_types;
 mod ir_to_py;
 mod package;
 mod r#type;
+#[cfg(test)]
+#[macro_use]
+mod test_macros;
 mod utils;
 mod watchers;
 

@@ -16,8 +16,8 @@ func newLLMCall(ptr int64, rt unsafe.Pointer) LLMCall {
 	return &llmCall{raw_objects.FromPointer(ptr, rt)}
 }
 
-func (l *llmCall) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_LLM_CALL
+func (l *llmCall) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_LLM_CALL
 }
 
 func (l *llmCall) pointer() int64 {

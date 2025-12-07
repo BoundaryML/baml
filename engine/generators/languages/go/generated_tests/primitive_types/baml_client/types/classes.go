@@ -82,7 +82,7 @@ func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 }
 
-func (c MixedPrimitives) Encode() (*cffi.CFFIValueHolder, error) {
+func (c MixedPrimitives) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["name"] = c.Name
@@ -103,18 +103,11 @@ func (c MixedPrimitives) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["flags"] = c.Flags
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("MixedPrimitives", fields, nil)
 }
 
 func (c MixedPrimitives) BamlTypeName() string {
 	return "MixedPrimitives"
-}
-
-func (u MixedPrimitives) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "MixedPrimitives",
-	}
 }
 
 type PrimitiveArrays struct {
@@ -159,7 +152,7 @@ func (c *PrimitiveArrays) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 }
 
-func (c PrimitiveArrays) Encode() (*cffi.CFFIValueHolder, error) {
+func (c PrimitiveArrays) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["stringArray"] = c.StringArray
@@ -170,18 +163,11 @@ func (c PrimitiveArrays) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["boolArray"] = c.BoolArray
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("PrimitiveArrays", fields, nil)
 }
 
 func (c PrimitiveArrays) BamlTypeName() string {
 	return "PrimitiveArrays"
-}
-
-func (u PrimitiveArrays) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "PrimitiveArrays",
-	}
 }
 
 type PrimitiveMaps struct {
@@ -226,7 +212,7 @@ func (c *PrimitiveMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 
 }
 
-func (c PrimitiveMaps) Encode() (*cffi.CFFIValueHolder, error) {
+func (c PrimitiveMaps) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["stringMap"] = c.StringMap
@@ -237,18 +223,11 @@ func (c PrimitiveMaps) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["boolMap"] = c.BoolMap
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("PrimitiveMaps", fields, nil)
 }
 
 func (c PrimitiveMaps) BamlTypeName() string {
 	return "PrimitiveMaps"
-}
-
-func (u PrimitiveMaps) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "PrimitiveMaps",
-	}
 }
 
 type PrimitiveTypes struct {
@@ -297,7 +276,7 @@ func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 
 }
 
-func (c PrimitiveTypes) Encode() (*cffi.CFFIValueHolder, error) {
+func (c PrimitiveTypes) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["stringField"] = c.StringField
@@ -310,16 +289,9 @@ func (c PrimitiveTypes) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["nullField"] = c.NullField
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("PrimitiveTypes", fields, nil)
 }
 
 func (c PrimitiveTypes) BamlTypeName() string {
 	return "PrimitiveTypes"
-}
-
-func (u PrimitiveTypes) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "PrimitiveTypes",
-	}
 }

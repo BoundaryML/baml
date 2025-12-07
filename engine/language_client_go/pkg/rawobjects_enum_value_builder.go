@@ -13,8 +13,8 @@ type enumValueBuilder struct {
 	llmRenderableObject
 }
 
-func (evb *enumValueBuilder) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_ENUM_VALUE_BUILDER
+func (evb *enumValueBuilder) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_ENUM_VALUE_BUILDER
 }
 
 func newEnumValueBuilder(ptr int64, rt unsafe.Pointer) EnumValueBuilder {
