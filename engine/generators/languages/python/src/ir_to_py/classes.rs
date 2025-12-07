@@ -45,11 +45,15 @@ pub fn ir_class_to_py_stream<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -
 }
 
 fn ir_field_to_py<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldPy<'a> {
-    println!("\n=== DEBUG: Field '{}' ===", field.elem.name);
     let field_ty = field.elem.r#type.elem.to_non_streaming_type(pkg.lookup());
-    println!("Non-streaming IR: {}", field_ty.to_string());
     let r#type = super::type_to_py(&field_ty, pkg.lookup());
-    println!("Python type: {}", r#type.serialize_type(pkg));
+
+    #[cfg(test)]
+    {
+        println!("\n=== DEBUG: Field '{}' ===", field.elem.name);
+        println!("Non-streaming IR: {}", field_ty.to_string());
+        println!("Python type: {}", r#type.serialize_type(pkg));
+    }
 
     FieldPy {
         name: field.elem.name.clone(),
@@ -64,11 +68,16 @@ fn ir_field_to_py<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldPy<'
 }
 
 fn ir_field_to_py_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldPy<'a> {
-    let partialized = field.elem.r#type.elem.to_streaming_type(pkg.lookup()); // TypeStreaming
-    println!("\n=== DEBUG: Field '{}' ===", field.elem.name);
-    println!("Streaming IR: {}", partialized.to_string());
+    let partialized = field.elem.r#type.elem.to_streaming_type(pkg.lookup());
     let r#type = super::stream_type_to_py(&partialized, pkg.lookup());
-    println!("Python type: {}", r#type.serialize_type(pkg));
+
+    #[cfg(test)]
+    {
+        println!("\n=== DEBUG: Field '{}' ===", field.elem.name);
+        println!("Streaming IR: {}", partialized.to_string());
+        println!("Python type: {}", r#type.serialize_type(pkg));
+    }
+
     FieldPy {
         name: field.elem.name.clone(),
         r#type,

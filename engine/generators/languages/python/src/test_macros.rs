@@ -70,7 +70,7 @@ macro_rules! test_py_type {
                 .expect(&format!("Class '{}' not found", class_name))
                 .item;
 
-            // Test non-streaming
+            // Test non-streaming (debug output is printed in ir_class_to_py)
             pkg.set("baml_client.types");
             let class_py = ir_class_to_py(class, &pkg);
             let field = class_py
@@ -88,7 +88,7 @@ macro_rules! test_py_type {
                 path
             );
 
-            // Test streaming
+            // Test streaming (debug output is printed in ir_class_to_py_stream)
             pkg.set("baml_client.stream_types");
             let class_py_stream = ir_class_to_py_stream(class, &pkg);
             let field = class_py_stream

@@ -788,6 +788,110 @@ class T { inner Inner @stream.done @stream.with_state }
 
 ---
 
+## list_of_stream_done_classes
+
+A list where each element is a class marked with `@stream.done`.
+In streaming mode, each element uses the complete (non-partial) class type.
+
+```baml
+class Inner { x int }
+class T { items (Inner @stream.done)[] }
+```
+
+### target: `T.items`
+
+### Python
+- Non-streaming: `typing.List["Inner"]`
+- Streaming: `typing.List["types.Inner"]`
+
+### TypeScript
+- Non-streaming: `Inner[]`
+- Streaming: `types.Inner[]`
+
+### Go
+- Non-streaming: `[]Inner`
+- Streaming: `[]types.Inner`
+
+---
+
+## list_field_with_stream_done
+
+`@stream.done` on the whole list field should propagate to elements.
+In streaming mode, elements should use the complete class type from the types module.
+
+```baml
+class Inner { x int }
+class T { items Inner[] @stream.done }
+```
+
+### target: `T.items`
+
+### Python
+- Non-streaming: `typing.List["Inner"]`
+- Streaming: `typing.List["types.Inner"]`
+
+### TypeScript
+- Non-streaming: `Inner[]`
+- Streaming: `types.Inner[]`
+
+### Go
+- Non-streaming: `[]Inner`
+- Streaming: `[]types.Inner`
+
+---
+
+## nested_list_with_stream_done
+
+`@stream.done` on a deeply nested list should propagate through all levels.
+Each nested container and the innermost class should use the complete type.
+
+```baml
+class Inner { x int }
+class T { matrix Inner[][][] @stream.done }
+```
+
+### target: `T.matrix`
+
+### Python
+- Non-streaming: `typing.List[typing.List[typing.List["Inner"]]]`
+- Streaming: `typing.List[typing.List[typing.List["types.Inner"]]]`
+
+### TypeScript
+- Non-streaming: `Inner[][][]`
+- Streaming: `types.Inner[][][]`
+
+### Go
+- Non-streaming: `[][][]Inner`
+- Streaming: `[][][]types.Inner`
+
+---
+
+## map_with_stream_done
+
+`@stream.done` on a map should propagate to the value type.
+In streaming mode, value elements should use the complete class type.
+
+```baml
+class Inner { x int }
+class T { lookup map<string, Inner> @stream.done }
+```
+
+### target: `T.lookup`
+
+### Python
+- Non-streaming: `typing.Dict[str, "Inner"]`
+- Streaming: `typing.Dict[str, "types.Inner"]`
+
+### TypeScript
+- Non-streaming: `Record<string, Inner>`
+- Streaming: `Record<string, types.Inner>`
+
+### Go
+- Non-streaming: `map[string]Inner`
+- Streaming: `map[string]types.Inner`
+
+---
+
 # Union Types with Streaming Attributes
 
 ## union_with_stream_done_variant
