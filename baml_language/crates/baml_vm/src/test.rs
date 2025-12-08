@@ -4,7 +4,6 @@
 //! rely on indices, making tests more readable and resilient to changes in the
 //! order of globals, constants, and objects.
 
-use baml_types::{BamlMap, BamlMedia};
 use indexmap::IndexMap;
 
 use crate::{
@@ -65,10 +64,10 @@ impl Value {
 pub enum Object {
     String(String),
     Array(Vec<Value>),
-    Map(BamlMap<String, Value>),
+    Map(IndexMap<String, Value>),
     Instance(Instance),
     Variant(Variant),
-    Media(BamlMedia),
+    // Media(BamlMedia),
     /// Function name (for `LoadGlobal` instructions)
     Function(String),
     /// Class name (for `AllocInstance` instructions)
@@ -94,7 +93,7 @@ impl Object {
                 .map(|(key, value)| {
                     Value::from_vm_value(value, vm).map(|value| (key.clone(), value))
                 })
-                .collect::<anyhow::Result<BamlMap<String, Value>>>()
+                .collect::<anyhow::Result<IndexMap<String, Value>>>()
                 .map(Object::Map),
 
             VmObject::Instance(instance) => {
@@ -102,7 +101,7 @@ impl Object {
                     anyhow::bail!("Class not found for instance: {instance:?}");
                 };
 
-                let mut fields = BamlMap::new();
+                let mut fields = IndexMap::new();
 
                 for (i, value) in instance.fields.iter().enumerate() {
                     let value = Value::from_vm_value(value, vm)?;
@@ -126,8 +125,7 @@ impl Object {
                 }))
             }
 
-            VmObject::Media(media) => Ok(Object::Media(media.clone())),
-
+            // VmObject::Media(media) => Ok(Object::Media(media.clone())),
             VmObject::Function(f) => Ok(Object::Function(f.name.clone())),
 
             VmObject::Class(c) => Ok(Object::Class(c.name.clone())),
@@ -314,5 +312,5 @@ pub enum Instruction {
     Call(usize),
     Return,
     Assert,
-    NotifyBlock(VmBlockNotification),
+    NotifyBlock(usize),
 }

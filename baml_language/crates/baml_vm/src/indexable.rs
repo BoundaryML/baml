@@ -13,22 +13,20 @@
 
 use std::marker::PhantomData;
 
-use baml_types::BamlMedia;
-
 use crate::{InternalError, Object, ObjectType, Value, types::Type};
 
 // Marker types for different pool kinds
 
 /// Evaluation stack index type.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct StackKind;
 
 /// Global pool index type.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct GlobalKind;
 
 /// Object pool index type.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct ObjectKind;
 
 /// Generic index type that forces a subtype during compilation.
@@ -264,18 +262,18 @@ impl ObjectPool {
         self[index].as_string()
     }
 
-    pub fn as_media(&self, value: &Value) -> Result<&BamlMedia, InternalError> {
-        let object_index = self.as_object(value, ObjectType::Media)?;
+    // pub fn as_media(&self, value: &Value) -> Result<&BamlMedia, InternalError> {
+    //     let object_index = self.as_object(value, ObjectType::Media)?;
 
-        let Object::Media(media) = &self[object_index] else {
-            return Err(InternalError::TypeError {
-                expected: ObjectType::Media.into(),
-                got: ObjectType::of(&self[object_index]).into(),
-            });
-        };
+    //     let Object::Media(media) = &self[object_index] else {
+    //         return Err(InternalError::TypeError {
+    //             expected: ObjectType::Media.into(),
+    //             got: ObjectType::of(&self[object_index]).into(),
+    //         });
+    //     };
 
-        Ok(media)
-    }
+    //     Ok(media)
+    // }
 
     /// Inspects the type of a value, including the [`ObjectType`] if the object
     /// reference is valid.

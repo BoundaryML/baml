@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use baml_types::{BamlMap, BamlMedia};
+use indexmap::IndexMap;
 
 use crate::{
     StackTrace, UnaryOp,
@@ -351,7 +351,7 @@ impl Vm {
         Value::Object(self.objects.insert(Object::Array(values)))
     }
 
-    pub fn alloc_map(&mut self, values: BamlMap<String, Value>) -> Value {
+    pub fn alloc_map(&mut self, values: IndexMap<String, Value>) -> Value {
         Value::Object(self.objects.insert(Object::Map(values)))
     }
 
@@ -373,9 +373,9 @@ impl Vm {
         Value::Object(self.objects.insert(Object::Variant(Variant { enm, index })))
     }
 
-    pub fn alloc_media(&mut self, media: BamlMedia) -> Value {
-        Value::Object(self.objects.insert(Object::Media(media)))
-    }
+    // pub fn alloc_media(&mut self, media: BamlMedia) -> Value {
+    //     Value::Object(self.objects.insert(Object::Media(media)))
+    // }
 
     /// Builds a stack trace for the given error.
     ///
@@ -400,7 +400,7 @@ impl Vm {
 
                 Ok(ErrorLocation {
                     function_name: function.name.clone(),
-                    function_span: function.span.clone(),
+                    function_span: function.span,
                     error_line: function.bytecode.source_lines[last_executed_instruction as usize],
                 })
             })
@@ -1778,7 +1778,7 @@ impl Vm {
                             .zip(keys)
                             .map(|(val, key_res)| key_res.map(|k| (k, val)));
 
-                        let map = pairs.collect::<Result<BamlMap<_, _>, _>>()?;
+                        let map = pairs.collect::<Result<IndexMap<_, _>, _>>()?;
 
                         // drain & drop the drain so that vec is empty.
                         self.stack.drain(end_of_values..);
@@ -1786,7 +1786,7 @@ impl Vm {
                         map
                     } else {
                         // nothing to pop.
-                        BamlMap::new()
+                        IndexMap::new()
                     };
 
                     let obj_index = self.objects.insert(Object::Map(map));

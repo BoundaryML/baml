@@ -1,27 +1,37 @@
 use std::collections::HashMap;
 
-use baml_types::{BamlMap, BamlMedia, TypeIR};
+use indexmap::IndexMap;
 
 use crate::{
     bytecode::Bytecode,
     errors::{InternalError, VmError},
-    indexable::ObjectIndex,
+    indexable::{GlobalPool, ObjectIndex, ObjectPool},
 };
 
 /// Compiled program ready for execution.
 ///
 /// This is what `baml_codegen` produces. It contains all the objects and globals
 /// needed to run a BAML program.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Program {
     /// Object pool containing functions, classes, strings, etc.
-    pub objects: Vec<Object>,
+    pub objects: ObjectPool,
 
     /// Global variables (typically function references).
-    pub globals: Vec<Value>,
+    pub globals: GlobalPool,
 
     /// Maps function names to their object indices.
     pub function_indices: HashMap<String, usize>,
+}
+
+impl Default for Program {
+    fn default() -> Self {
+        Self {
+            objects: ObjectPool::new(),
+            globals: GlobalPool::new(),
+            function_indices: HashMap::new(),
+        }
+    }
 }
 
 impl Program {
@@ -88,7 +98,7 @@ pub struct Function {
     pub locals_in_scope: Vec<Vec<String>>,
 
     /// Span of the function as computed by the parser.
-    pub span: internal_baml_diagnostics::Span,
+    pub span: baml_base::Span,
 
     /// Block notifications for this function.
     ///
@@ -243,15 +253,16 @@ pub enum Object {
     Array(Vec<Value>),
 
     /// Map of values.
-    Map(BamlMap<String, Value>),
+    Map(IndexMap<String, Value>),
 
     Future(Future),
+    // TODO: Figure out media.
+    // /// Images, audio, pdf, video.
+    // Media(BamlMedia),
 
-    /// Images, audio, pdf, video.
-    Media(BamlMedia),
-
-    /// Used for `baml.fetch_as` function.
-    BamlType(TypeIR),
+    // TODO: Figure out how to handle this here.
+    // /// Used for `baml.fetch_as` function.
+    // BamlType(TypeIR),
 }
 
 impl Object {
@@ -294,15 +305,14 @@ impl std::fmt::Display for Object {
             Object::String(string) => string.fmt(f),
             Object::Array(array) => write!(f, "{array:?}"),
             Object::Map(map) => write!(f, "{map:?}"),
-            Object::Media(_media) => write!(f, "<media>"),
+            // Object::Media(_media) => write!(f, "<media>"),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
                     write!(f, "<pending: {}>", future.function)
                 }
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
             },
-
-            Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
+            // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
         }
     }
 }
@@ -403,9 +413,9 @@ impl ObjectType {
             Object::String(_) => Self::String,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
-            Object::Media(_) => Self::Media,
+            // Object::Media(_) => Self::Media,
             Object::Future(fut) => Self::Future(fut.into()),
-            Object::BamlType(_) => Self::Any, // TODO
+            // Object::BamlType(_) => Self::Any, // TODO
         }
     }
 }

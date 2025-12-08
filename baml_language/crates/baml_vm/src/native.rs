@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
+use indexmap::IndexMap;
 
 use crate::{
     Vm,
@@ -111,133 +111,133 @@ pub fn env_get(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     }
 }
 
-pub fn image_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let url = vm.objects.as_string(&args[0])?;
+// pub fn image_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let url = vm.objects.as_string(&args[0])?;
 
-    Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Image, url.to_owned(), None)))
-}
+//     Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Image, url.to_owned(), None)))
+// }
 
-pub fn audio_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let url = vm.objects.as_string(&args[0])?;
+// pub fn audio_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let url = vm.objects.as_string(&args[0])?;
 
-    Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Audio, url.to_owned(), None)))
-}
+//     Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Audio, url.to_owned(), None)))
+// }
 
-pub fn video_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let url = vm.objects.as_string(&args[0])?;
+// pub fn video_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let url = vm.objects.as_string(&args[0])?;
 
-    Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Video, url.to_owned(), None)))
-}
+//     Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Video, url.to_owned(), None)))
+// }
 
-pub fn pdf_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let url = vm.objects.as_string(&args[0])?;
+// pub fn pdf_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let url = vm.objects.as_string(&args[0])?;
 
-    Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Pdf, url.to_owned(), None)))
-}
+//     Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Pdf, url.to_owned(), None)))
+// }
 
-pub fn image_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let media_type = vm.objects.as_string(&args[0])?;
-    let base64 = vm.objects.as_string(&args[1])?;
+// pub fn image_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let media_type = vm.objects.as_string(&args[0])?;
+//     let base64 = vm.objects.as_string(&args[1])?;
 
-    Ok(vm.alloc_media(BamlMedia::base64(
-        BamlMediaType::Image,
-        base64.to_owned(),
-        Some(media_type.to_owned()),
-    )))
-}
+//     Ok(vm.alloc_media(BamlMedia::base64(
+//         BamlMediaType::Image,
+//         base64.to_owned(),
+//         Some(media_type.to_owned()),
+//     )))
+// }
 
-pub fn audio_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.5a
-    let media_type = vm.objects.as_string(&args[0])?;
-    let base64 = vm.objects.as_string(&args[1])?;
+// pub fn audio_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let media_type = vm.objects.as_string(&args[0])?;
+//     let base64 = vm.objects.as_string(&args[1])?;
 
-    Ok(vm.alloc_media(BamlMedia::base64(
-        BamlMediaType::Audio,
-        base64.to_owned(),
-        Some(media_type.to_owned()),
-    )))
-}
+//     Ok(vm.alloc_media(BamlMedia::base64(
+//         BamlMediaType::Audio,
+//         base64.to_owned(),
+//         Some(media_type.to_owned()),
+//     )))
+// }
 
-pub fn video_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let media_type = vm.objects.as_string(&args[0])?;
-    let base64 = vm.objects.as_string(&args[1])?;
+// pub fn video_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let media_type = vm.objects.as_string(&args[0])?;
+//     let base64 = vm.objects.as_string(&args[1])?;
 
-    Ok(vm.alloc_media(BamlMedia::base64(
-        BamlMediaType::Video,
-        base64.to_owned(),
-        Some(media_type.to_owned()),
-    )))
-}
+//     Ok(vm.alloc_media(BamlMedia::base64(
+//         BamlMediaType::Video,
+//         base64.to_owned(),
+//         Some(media_type.to_owned()),
+//     )))
+// }
 
-pub fn pdf_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let base64 = vm.objects.as_string(&args[0])?;
+// pub fn pdf_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let base64 = vm.objects.as_string(&args[0])?;
 
-    Ok(vm.alloc_media(BamlMedia::base64(
-        BamlMediaType::Pdf,
-        base64.to_owned(),
-        Some("application/pdf".to_string()),
-    )))
-}
+//     Ok(vm.alloc_media(BamlMedia::base64(
+//         BamlMediaType::Pdf,
+//         base64.to_owned(),
+//         Some("application/pdf".to_string()),
+//     )))
+// }
 
-pub fn media_is_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let media = vm.objects.as_media(&args[0])?;
+// pub fn media_is_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let media = vm.objects.as_media(&args[0])?;
 
-    Ok(Value::Bool(matches!(
-        media.content,
-        BamlMediaContent::Url(_)
-    )))
-}
+//     Ok(Value::Bool(matches!(
+//         media.content,
+//         BamlMediaContent::Url(_)
+//     )))
+// }
 
-pub fn media_is_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let media = vm.objects.as_media(&args[0])?;
+// pub fn media_is_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let media = vm.objects.as_media(&args[0])?;
 
-    Ok(Value::Bool(matches!(
-        media.content,
-        BamlMediaContent::Base64(_)
-    )))
-}
+//     Ok(Value::Bool(matches!(
+//         media.content,
+//         BamlMediaContent::Base64(_)
+//     )))
+// }
 
-pub fn media_as_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let media = vm.objects.as_media(&args[0])?;
+// pub fn media_as_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let media = vm.objects.as_media(&args[0])?;
 
-    match &media.content {
-        BamlMediaContent::Url(url) => Ok(vm.alloc_string(url.url.clone())),
+//     match &media.content {
+//         BamlMediaContent::Url(url) => Ok(vm.alloc_string(url.url.clone())),
 
-        _ => Err(VmError::RuntimeError(RuntimeError::Other(
-            "Media is not a URL".to_string(),
-        ))),
-    }
-}
+//         _ => Err(VmError::RuntimeError(RuntimeError::Other(
+//             "Media is not a URL".to_string(),
+//         ))),
+//     }
+// }
 
-pub fn media_as_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let media = vm.objects.as_media(&args[0])?;
+// pub fn media_as_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let media = vm.objects.as_media(&args[0])?;
 
-    match &media.content {
-        BamlMediaContent::Base64(base64) => Ok(vm.alloc_string(base64.base64.clone())),
+//     match &media.content {
+//         BamlMediaContent::Base64(base64) => Ok(vm.alloc_string(base64.base64.clone())),
 
-        _ => Err(VmError::RuntimeError(RuntimeError::Other(
-            "Media is not base64".to_string(),
-        ))),
-    }
-}
+//         _ => Err(VmError::RuntimeError(RuntimeError::Other(
+//             "Media is not base64".to_string(),
+//         ))),
+//     }
+// }
 
-pub fn media_mime_type(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let media = vm.objects.as_media(&args[0])?;
+// pub fn media_mime_type(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+//     // Arity is already checked by the VM.
+//     let media = vm.objects.as_media(&args[0])?;
 
-    Ok(vm.alloc_string(media.mime_type.clone().unwrap_or(String::new())))
-}
+//     Ok(vm.alloc_string(media.mime_type.clone().unwrap_or(String::new())))
+// }
 
 /// String length
 pub fn string_length(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
@@ -404,11 +404,11 @@ fn deep_copy_value_recursive(
 
                 Object::Map(map) => {
                     // First, register a placeholder to handle circular references
-                    let placeholder_index = vm.objects.insert(Object::Map(BamlMap::new()));
+                    let placeholder_index = vm.objects.insert(Object::Map(IndexMap::new()));
                     copied_objects.insert(index, placeholder_index);
 
                     // Deep copy each key-value pair
-                    let mut new_map = BamlMap::new();
+                    let mut new_map = IndexMap::new();
                     for (key, value) in &map {
                         let new_value = deep_copy_value_recursive(vm, *value, copied_objects)?;
                         new_map.insert(key.clone(), new_value);
@@ -446,9 +446,9 @@ fn deep_copy_value_recursive(
                 Object::Class(c) => vm.objects.insert(Object::Class(c)),
                 Object::Enum(e) => vm.objects.insert(Object::Enum(e)),
                 Object::Variant(v) => vm.objects.insert(Object::Variant(v)),
-                Object::Media(m) => vm.objects.insert(Object::Media(m)),
+                // Object::Media(m) => vm.objects.insert(Object::Media(m)),
                 Object::Future(f) => vm.objects.insert(Object::Future(f)),
-                Object::BamlType(t) => vm.objects.insert(Object::BamlType(t)),
+                // Object::BamlType(t) => vm.objects.insert(Object::BamlType(t)),
             };
 
             // Record the mapping if not already done (for non-circular cases)
@@ -540,7 +540,7 @@ fn deep_equals_recursive(
                     a_class.name == b_class.name && a_class.field_names == b_class.field_names
                 }
 
-                (Object::Media(a_media), Object::Media(b_media)) => a_media == b_media,
+                // (Object::Media(a_media), Object::Media(b_media)) => a_media == b_media,
 
                 // Functions are compared by reference (they're the same if they point to the same function)
                 (Object::Function(_), Object::Function(_)) => a_idx == b_idx,
@@ -568,7 +568,7 @@ fn deep_equals_recursive(
                     _ => false,
                 },
 
-                (Object::BamlType(a_type), Object::BamlType(b_type)) => a_type == b_type,
+                // (Object::BamlType(a_type), Object::BamlType(b_type)) => a_type == b_type,
 
                 // Different types are not equal
                 _ => false,
@@ -687,16 +687,16 @@ fn format_value_recursive(vm: &mut Vm, value: &Value, depth: usize) -> Result<St
             }
             Object::Function(f) => Ok(format!("<function {}>", f.name)),
             Object::Class(c) => Ok(format!("<class {}>", c.name)),
-            Object::Media(_) => Ok("<media>".to_string()),
+            // Object::Media(_) => Ok("<media>".to_string()),
             Object::Future(_) => Ok("<future>".to_string()),
-            Object::BamlType(_) => Ok("<baml type>".to_string()),
+            // Object::BamlType(_) => Ok("<baml type>".to_string()),
         },
     }
 }
 
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> NativeFunctionResult;
 
-pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
+pub fn functions() -> IndexMap<String, (NativeFunction, usize)> {
     let fns: &[(&str, (NativeFunction, usize))] = &[
         // String.
         ("baml.String.length", (string_len, 1)),
@@ -718,34 +718,34 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         ("baml.String.substring", (string_substring, 3)),
         ("baml.String.replace", (string_replace, 3)),
         // Media
-        ("baml.media.image.from_url", (image_from_url, 1)),
-        ("baml.media.audio.from_url", (audio_from_url, 1)),
-        ("baml.media.video.from_url", (video_from_url, 1)),
-        ("baml.media.pdf.from_url", (pdf_from_url, 1)),
-        ("baml.media.image.from_base64", (image_from_base64, 2)),
-        ("baml.media.audio.from_base64", (audio_from_base64, 2)),
-        ("baml.media.video.from_base64", (video_from_base64, 2)),
-        ("baml.media.pdf.from_base64", (pdf_from_base64, 1)),
-        ("baml.media.image.is_url", (media_is_url, 1)),
-        ("baml.media.video.is_url", (media_is_url, 1)),
-        ("baml.media.audio.is_url", (media_is_url, 1)),
-        ("baml.media.pdf.is_url", (media_is_url, 1)),
-        ("baml.media.image.is_base64", (media_is_base64, 1)),
-        ("baml.media.video.is_base64", (media_is_base64, 1)),
-        ("baml.media.audio.is_base64", (media_is_base64, 1)),
-        ("baml.media.pdf.is_base64", (media_is_base64, 1)),
-        ("baml.media.image.as_url", (media_as_url, 1)),
-        ("baml.media.video.as_url", (media_as_url, 1)),
-        ("baml.media.audio.as_url", (media_as_url, 1)),
-        ("baml.media.pdf.as_url", (media_as_url, 1)),
-        ("baml.media.image.as_base64", (media_as_base64, 1)),
-        ("baml.media.video.as_base64", (media_as_base64, 1)),
-        ("baml.media.audio.as_base64", (media_as_base64, 1)),
-        ("baml.media.pdf.as_base64", (media_as_base64, 1)),
-        ("baml.media.image.mime", (media_mime_type, 1)),
-        ("baml.media.video.mime", (media_mime_type, 1)),
-        ("baml.media.audio.mime", (media_mime_type, 1)),
-        ("baml.media.pdf.mime", (media_mime_type, 1)),
+        // ("baml.media.image.from_url", (image_from_url, 1)),
+        // ("baml.media.audio.from_url", (audio_from_url, 1)),
+        // ("baml.media.video.from_url", (video_from_url, 1)),
+        // ("baml.media.pdf.from_url", (pdf_from_url, 1)),
+        // ("baml.media.image.from_base64", (image_from_base64, 2)),
+        // ("baml.media.audio.from_base64", (audio_from_base64, 2)),
+        // ("baml.media.video.from_base64", (video_from_base64, 2)),
+        // ("baml.media.pdf.from_base64", (pdf_from_base64, 1)),
+        // ("baml.media.image.is_url", (media_is_url, 1)),
+        // ("baml.media.video.is_url", (media_is_url, 1)),
+        // ("baml.media.audio.is_url", (media_is_url, 1)),
+        // ("baml.media.pdf.is_url", (media_is_url, 1)),
+        // ("baml.media.image.is_base64", (media_is_base64, 1)),
+        // ("baml.media.video.is_base64", (media_is_base64, 1)),
+        // ("baml.media.audio.is_base64", (media_is_base64, 1)),
+        // ("baml.media.pdf.is_base64", (media_is_base64, 1)),
+        // ("baml.media.image.as_url", (media_as_url, 1)),
+        // ("baml.media.video.as_url", (media_as_url, 1)),
+        // ("baml.media.audio.as_url", (media_as_url, 1)),
+        // ("baml.media.pdf.as_url", (media_as_url, 1)),
+        // ("baml.media.image.as_base64", (media_as_base64, 1)),
+        // ("baml.media.video.as_base64", (media_as_base64, 1)),
+        // ("baml.media.audio.as_base64", (media_as_base64, 1)),
+        // ("baml.media.pdf.as_base64", (media_as_base64, 1)),
+        // ("baml.media.image.mime", (media_mime_type, 1)),
+        // ("baml.media.video.mime", (media_mime_type, 1)),
+        // ("baml.media.audio.mime", (media_mime_type, 1)),
+        // ("baml.media.pdf.mime", (media_mime_type, 1)),
         // Environment
         ("env.get", (env_get, 1)),
         // Utility functions.
@@ -754,7 +754,7 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         ("baml.unstable.string", (any_value_to_string, 1)),
     ];
 
-    BamlMap::from_iter(
+    IndexMap::from_iter(
         fns.iter()
             .map(|(name, (func, arity))| ((*name).to_string(), (*func, *arity))),
     )

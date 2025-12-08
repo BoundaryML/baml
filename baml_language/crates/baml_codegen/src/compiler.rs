@@ -152,7 +152,7 @@ impl<'db> Compiler<'db> {
                             .map(std::string::ToString::to_string)
                             .collect(),
                     ],
-                    span: internal_baml_diagnostics::Span::fake(),
+                    span: baml_base::Span::fake(),
                     block_notifications: Vec::new(),
                 }
             }
@@ -164,7 +164,7 @@ impl<'db> Compiler<'db> {
                     bytecode: Bytecode::new(),
                     kind: FunctionKind::Exec,
                     locals_in_scope: Vec::new(),
-                    span: internal_baml_diagnostics::Span::fake(),
+                    span: baml_base::Span::fake(),
                     block_notifications: Vec::new(),
                 }
             }
@@ -210,7 +210,7 @@ impl<'db> Compiler<'db> {
                     names
                 })
                 .collect(),
-            span: internal_baml_diagnostics::Span::fake(),
+            span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
         }
     }

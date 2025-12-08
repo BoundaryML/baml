@@ -120,17 +120,17 @@ fn convert_instruction(
         }
         baml_vm::Instruction::LoadGlobal(global_idx) => {
             let name = globals_by_index
-                .get(global_idx)
+                .get(&global_idx.raw())
                 .map(|s| (*s).to_string())
                 .unwrap_or_else(|| format!("global_{global_idx}"));
-            Instruction::LoadGlobal(Value::Function(name))
+            Instruction::LoadGlobal(Value::function(&name))
         }
         baml_vm::Instruction::StoreGlobal(global_idx) => {
             let name = globals_by_index
-                .get(global_idx)
+                .get(&global_idx.raw())
                 .map(|s| (*s).to_string())
                 .unwrap_or_else(|| format!("global_{global_idx}"));
-            Instruction::StoreGlobal(Value::Function(name))
+            Instruction::StoreGlobal(Value::function(&name))
         }
         baml_vm::Instruction::LoadField(idx) => Instruction::LoadField(*idx),
         baml_vm::Instruction::StoreField(idx) => Instruction::StoreField(*idx),
@@ -149,7 +149,7 @@ fn convert_instruction(
         baml_vm::Instruction::StoreArrayElement => Instruction::StoreArrayElement,
         baml_vm::Instruction::StoreMapElement => Instruction::StoreMapElement,
         baml_vm::Instruction::AllocInstance(obj_idx) => {
-            let obj = objects.get(*obj_idx).ok_or_else(|| {
+            let obj = objects.get(obj_idx.raw()).ok_or_else(|| {
                 anyhow::anyhow!(
                     "Object index {obj_idx} not found for AllocInstance (have {} objects)",
                     objects.len()
@@ -157,19 +157,17 @@ fn convert_instruction(
             })?;
             match obj {
                 baml_vm::Object::Class(class) => {
-                    Instruction::AllocInstance(Value::Class(class.name.clone()))
+                    Instruction::AllocInstance(Value::class(&class.name))
                 }
                 _ => anyhow::bail!("Expected Class object for AllocInstance, got {obj:?}"),
             }
         }
         baml_vm::Instruction::AllocVariant(obj_idx) => {
-            let obj = objects.get(*obj_idx).ok_or_else(|| {
+            let obj = objects.get(obj_idx.raw()).ok_or_else(|| {
                 anyhow::anyhow!("Object index {obj_idx} not found for AllocVariant")
             })?;
             match obj {
-                baml_vm::Object::Enum(enm) => {
-                    Instruction::AllocVariant(Value::Enum(enm.name.clone()))
-                }
+                baml_vm::Object::Enum(enm) => Instruction::AllocVariant(Value::enm(&enm.name)),
                 _ => anyhow::bail!("Expected Enum object for AllocVariant, got {obj:?}"),
             }
         }
@@ -193,13 +191,13 @@ fn convert_value(value: &baml_vm::Value, objects: &[baml_vm::Object]) -> anyhow:
         baml_vm::Value::Bool(b) => Value::Bool(*b),
         baml_vm::Value::Object(obj_idx) => {
             let obj = objects
-                .get(*obj_idx)
+                .get(obj_idx.raw())
                 .ok_or_else(|| anyhow::anyhow!("Object index {obj_idx} not found"))?;
             match obj {
-                baml_vm::Object::String(s) => Value::String(s.clone()),
-                baml_vm::Object::Function(f) => Value::Function(f.name.clone()),
-                baml_vm::Object::Class(c) => Value::Class(c.name.clone()),
-                baml_vm::Object::Enum(e) => Value::Enum(e.name.clone()),
+                baml_vm::Object::String(s) => Value::string(s),
+                baml_vm::Object::Function(f) => Value::function(&f.name),
+                baml_vm::Object::Class(c) => Value::class(&c.name),
+                baml_vm::Object::Enum(e) => Value::enm(&e.name),
                 _ => anyhow::bail!("Unsupported object type in constant pool: {obj:?}"),
             }
         }
@@ -210,7 +208,7 @@ fn convert_value(value: &baml_vm::Value, objects: &[baml_vm::Object]) -> anyhow:
 struct CompiledFunction {
     function: baml_vm::Function,
     /// All objects from the program - indices in bytecode constants reference this.
-    objects: Vec<baml_vm::Object>,
+    objects: baml_vm::ObjectPool,
 }
 
 /// Result of compiling source code.
@@ -229,7 +227,7 @@ fn compile_source(source: &str) -> CompileResult {
     // Extract functions from the program
     let mut functions = Vec::new();
     for (name, obj_idx) in &program.function_indices {
-        if let baml_vm::Object::Function(func) = &program.objects[*obj_idx] {
+        if let Some(baml_vm::Object::Function(func)) = program.objects.get(*obj_idx) {
             functions.push((
                 name.clone(),
                 CompiledFunction {
@@ -247,7 +245,7 @@ fn compile_source(source: &str) -> CompileResult {
     for (global_idx, value) in program.globals.iter().enumerate() {
         if let baml_vm::Value::Object(obj_idx) = value {
             for (name, fn_obj_idx) in &program.function_indices {
-                if fn_obj_idx == obj_idx {
+                if *fn_obj_idx == obj_idx.raw() {
                     globals.insert(name.clone(), global_idx);
                     break;
                 }

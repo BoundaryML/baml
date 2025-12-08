@@ -104,7 +104,7 @@ impl std::fmt::Display for VmError {
 #[derive(Debug, Clone)]
 pub struct ErrorLocation {
     pub function_name: String,
-    pub function_span: internal_baml_diagnostics::Span,
+    pub function_span: baml_base::Span,
     pub error_line: usize,
 }
 
@@ -123,9 +123,7 @@ impl std::fmt::Display for StackTrace {
             writeln!(
                 f,
                 "  File \"{}\", line {}, in {}",
-                location.function_span.file_name(),
-                location.error_line,
-                location.function_name
+                location.function_span.file_id, location.error_line, location.function_name
             )?;
         }
 

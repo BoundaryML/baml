@@ -143,8 +143,8 @@ pub(crate) fn collect_vm_exec_states(
             target_function_index,
         ))]),
         runtime_allocs_offset: ObjectIndex::from_raw(program.objects.len()),
-        objects: ObjectPool::from_vec(program.objects),
-        globals: GlobalPool::from_vec(program.globals),
+        objects: program.objects.clone(),
+        globals: program.globals.clone(),
         env_vars: Default::default(),
         watch: Watch::new(),
         watched_vars: Default::default(),
@@ -222,8 +222,8 @@ fn setup_and_exec_program(
             target_function_index,
         ))]),
         runtime_allocs_offset: ObjectIndex::from_raw(program.objects.len()),
-        objects: ObjectPool::from_vec(program.objects),
-        globals: GlobalPool::from_vec(program.globals),
+        objects: program.objects.clone(),
+        globals: program.globals.clone(),
         env_vars: Default::default(),
         watch: Watch::new(),
         watched_vars: Default::default(),
@@ -265,7 +265,7 @@ pub(crate) fn assert_vm_executes_bytecode_with_inspection(
             names.resize_with(names.capacity(), String::new);
             vec![names]
         },
-        span: internal_baml_diagnostics::Span::fake(),
+        span: baml_base::Span::fake(),
         block_notifications: Vec::new(),
     };
 
