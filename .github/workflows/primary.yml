@@ -53,6 +53,8 @@ jobs:
       - name: Setup Node.js
         if: matrix.check == 'typescript-lint'
         uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
 
       # Setup Rust for Rust checks
       - name: Setup Rust
@@ -111,6 +113,8 @@ jobs:
       # Setup Node.js for TypeScript lint
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
 
       # Setup Rust for Rust checks
       - name: Setup Rust
@@ -156,6 +160,8 @@ jobs:
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -219,6 +225,8 @@ jobs:
       - name: Setup Node.js
         if: matrix.test-suite == 'python-integration'
         uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
 
       - name: Setup Python
         uses: ./.github/actions/setup-python
