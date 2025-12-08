@@ -2,14 +2,56 @@
 
 #![allow(clippy::print_stderr)] // Tests use eprintln! for debugging output
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, atomic::AtomicU32},
+};
 
-use baml_db::{RootDatabase, baml_hir, baml_thir};
-use baml_hir::{function_body, function_signature};
-use baml_thir::build_typing_context_from_files;
+use baml_base::{FileId, SourceFile};
 use baml_vm::test::{Instruction, Value};
 
-use crate::ClassInfo;
+//
+// ──────────────────────────────────────────────────────── TEST DATABASE ─────
+//
+
+/// Minimal test database for compilation tests.
+///
+/// This is a stripped-down version of `baml_db::RootDatabase` that implements
+/// just enough to run `compile_files`. This avoids a dependency cycle between
+/// `baml_codegen` and `baml_db`.
+#[salsa::db]
+#[derive(Clone)]
+struct TestDatabase {
+    storage: salsa::Storage<Self>,
+    next_file_id: Arc<AtomicU32>,
+}
+
+#[salsa::db]
+impl salsa::Database for TestDatabase {}
+
+#[salsa::db]
+impl baml_hir::Db for TestDatabase {}
+
+#[salsa::db]
+impl baml_thir::Db for TestDatabase {}
+
+impl TestDatabase {
+    fn new() -> Self {
+        Self {
+            storage: salsa::Storage::default(),
+            next_file_id: Arc::new(AtomicU32::new(0)),
+        }
+    }
+
+    fn add_file(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceFile {
+        let file_id = FileId::new(
+            self.next_file_id
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+        );
+        SourceFile::new(self, text.into(), path.into(), file_id)
+    }
+}
 
 /// Helper struct for testing bytecode compilation.
 pub(super) struct Program {
@@ -52,8 +94,7 @@ fn convert_instruction(
     inst: &baml_vm::Instruction,
     inst_idx: usize,
     constants: &[baml_vm::Value],
-    fn_objects: &[baml_vm::Object],
-    class_objects: &[baml_vm::Object],
+    objects: &[baml_vm::Object],
     globals: &HashMap<String, usize>,
     function: &baml_vm::Function,
 ) -> anyhow::Result<Instruction> {
@@ -66,7 +107,7 @@ fn convert_instruction(
     Ok(match inst {
         baml_vm::Instruction::LoadConst(idx) => {
             let value = &constants[*idx];
-            let test_value = convert_value(value, fn_objects)?;
+            let test_value = convert_value(value, objects)?;
             Instruction::LoadConst(test_value)
         }
         baml_vm::Instruction::LoadVar(idx) => {
@@ -108,8 +149,11 @@ fn convert_instruction(
         baml_vm::Instruction::StoreArrayElement => Instruction::StoreArrayElement,
         baml_vm::Instruction::StoreMapElement => Instruction::StoreMapElement,
         baml_vm::Instruction::AllocInstance(obj_idx) => {
-            let obj = class_objects.get(*obj_idx).ok_or_else(|| {
-                anyhow::anyhow!("Class object index {obj_idx} not found for AllocInstance (have {} class objects)", class_objects.len())
+            let obj = objects.get(*obj_idx).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Object index {obj_idx} not found for AllocInstance (have {} objects)",
+                    objects.len()
+                )
             })?;
             match obj {
                 baml_vm::Object::Class(class) => {
@@ -119,8 +163,7 @@ fn convert_instruction(
             }
         }
         baml_vm::Instruction::AllocVariant(obj_idx) => {
-            // Enums would also be pre-allocated, similar to classes
-            let obj = class_objects.get(*obj_idx).ok_or_else(|| {
+            let obj = objects.get(*obj_idx).ok_or_else(|| {
                 anyhow::anyhow!("Object index {obj_idx} not found for AllocVariant")
             })?;
             match obj {
@@ -166,120 +209,49 @@ fn convert_value(value: &baml_vm::Value, objects: &[baml_vm::Object]) -> anyhow:
 /// Compiled function with its objects.
 struct CompiledFunction {
     function: baml_vm::Function,
-    /// Function-local objects (strings, etc.) - indices in bytecode constants reference this.
-    fn_objects: Vec<baml_vm::Object>,
-    /// Pre-allocated class objects - `AllocInstance` indices reference this.
-    class_objects: Vec<baml_vm::Object>,
+    /// All objects from the program - indices in bytecode constants reference this.
+    objects: Vec<baml_vm::Object>,
 }
 
 /// Result of compiling source code.
 type CompileResult = (Vec<(String, CompiledFunction)>, HashMap<String, usize>);
 
 /// Compile BAML source and return compiled functions with their object pools.
+///
+/// Uses the production `compile_files` function to ensure tests match real behavior.
 fn compile_source(source: &str) -> CompileResult {
-    let mut db = RootDatabase::new();
+    let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
 
-    // Get all functions from the file
-    let items_struct = baml_hir::file_items(&db, file);
-    let items = items_struct.items(&db);
+    // Use the production compile_files function
+    let program = crate::compile_files(&db, &[file]);
 
-    // Get the item tree for class lookups
-    let item_tree = baml_hir::file_item_tree(&db, file);
-
-    // Build globals map (function name -> index)
-    let mut globals: HashMap<String, usize> = HashMap::new();
-    let mut global_idx = 0;
-    for item in items {
-        if let baml_hir::ItemId::Function(func_loc) = item {
-            let sig = function_signature(&db, *func_loc);
-            globals.insert(sig.name.to_string(), global_idx);
-            global_idx += 1;
-        }
-    }
-
-    // Add native functions for for-in loop support
-    globals.insert("baml.Array.length".to_string(), global_idx);
-    global_idx += 1;
-    let _ = global_idx; // suppress unused variable warning
-
-    // Build classes map (class name -> ClassInfo) and pre-allocate Class objects
-    let mut classes: HashMap<String, ClassInfo> = HashMap::new();
-    let mut class_object_indices: HashMap<String, usize> = HashMap::new();
-    let mut class_objects: Vec<baml_vm::Object> = Vec::new();
-
-    for item in items {
-        if let baml_hir::ItemId::Class(class_loc) = item {
-            let class = &item_tree[class_loc.id(&db)];
-            let class_name = class.name.to_string();
-
-            let mut field_indices = HashMap::new();
-            let mut field_names = Vec::new();
-            for (idx, field) in class.fields.iter().enumerate() {
-                field_indices.insert(field.name.to_string(), idx);
-                field_names.push(field.name.to_string());
-            }
-
-            // Pre-allocate Class object and record its index
-            let class_obj_idx = class_objects.len();
-            class_objects.push(baml_vm::Object::Class(baml_vm::Class {
-                name: class_name.clone(),
-                field_names: field_names.clone(),
-            }));
-            class_object_indices.insert(class_name.clone(), class_obj_idx);
-
-            classes.insert(
-                class_name,
-                ClassInfo {
-                    field_indices,
-                    field_names,
-                },
-            );
-        }
-    }
-
-    // Build typing context
-    let typing_context = build_typing_context_from_files(&db, &[file]);
-
-    // Compile each function
+    // Extract functions from the program
     let mut functions = Vec::new();
-    for item in items {
-        if let baml_hir::ItemId::Function(func_loc) = item {
-            let signature = function_signature(&db, *func_loc);
-            let body = function_body(&db, *func_loc);
-
-            // Run type inference
-            let inference = baml_thir::infer_function(
-                &db,
-                &signature,
-                &body,
-                Some(typing_context.clone()),
-                None,
-            );
-
-            // Get parameter names
-            let params: Vec<baml_base::Name> =
-                signature.params.iter().map(|p| p.name.clone()).collect();
-
-            // Compile to bytecode
-            let (compiled, fn_objects) = crate::compile_function(
-                signature.name.as_str(),
-                &params,
-                &body,
-                &inference,
-                globals.clone(),
-                classes.clone(),
-                class_object_indices.clone(),
-            );
-
+    for (name, obj_idx) in &program.function_indices {
+        if let baml_vm::Object::Function(func) = &program.objects[*obj_idx] {
             functions.push((
-                signature.name.to_string(),
+                name.clone(),
                 CompiledFunction {
-                    function: compiled,
-                    fn_objects,
-                    class_objects: class_objects.clone(),
+                    function: func.clone(),
+                    // All objects are in the program's object pool
+                    objects: program.objects.clone(),
                 },
             ));
+        }
+    }
+
+    // Build globals map: function_name -> global_idx
+    // This reconstructs the mapping from the program's globals list
+    let mut globals: HashMap<String, usize> = HashMap::new();
+    for (global_idx, value) in program.globals.iter().enumerate() {
+        if let baml_vm::Value::Object(obj_idx) = value {
+            for (name, fn_obj_idx) in &program.function_indices {
+                if fn_obj_idx == obj_idx {
+                    globals.insert(name.clone(), global_idx);
+                    break;
+                }
+            }
         }
     }
 
@@ -304,8 +276,7 @@ pub(super) fn assert_compiles(input: Program) -> anyhow::Result<()> {
             .ok_or_else(|| anyhow::anyhow!("function '{function_name}' not found"))?;
 
         let function = &compiled.function;
-        let fn_objects = &compiled.fn_objects;
-        let class_objects = &compiled.class_objects;
+        let objects = &compiled.objects;
 
         eprintln!("---- fn {function_name}() ----");
         for (i, inst) in function.bytecode.instructions.iter().enumerate() {
@@ -324,8 +295,7 @@ pub(super) fn assert_compiles(input: Program) -> anyhow::Result<()> {
                     inst,
                     inst_idx,
                     &function.bytecode.constants,
-                    fn_objects,
-                    class_objects,
+                    objects,
                     &globals,
                     function,
                 )

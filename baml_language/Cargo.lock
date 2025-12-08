@@ -114,7 +114,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "baml_base",
- "baml_db",
  "baml_hir",
  "baml_thir",
  "baml_vm",
