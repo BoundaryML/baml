@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 /// Represents a field in a class schema that can be optimized
+/// TODO: Aliases must be singular.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SchemaFieldDefinition {
     pub field_name: String,
@@ -242,7 +243,10 @@ fn merge_classes(base: &[ClassDefinition], improved: &[ClassDefinition]) -> Vec<
     let mut result = base.to_vec();
 
     for imp_class in improved {
-        if let Some(existing) = result.iter_mut().find(|c| c.class_name == imp_class.class_name) {
+        if let Some(existing) = result
+            .iter_mut()
+            .find(|c| c.class_name == imp_class.class_name)
+        {
             // Override with improved version
             *existing = imp_class.clone();
         } else {
@@ -259,7 +263,10 @@ fn merge_enums(base: &[EnumDefinition], improved: &[EnumDefinition]) -> Vec<Enum
     let mut result = base.to_vec();
 
     for imp_enum in improved {
-        if let Some(existing) = result.iter_mut().find(|e| e.enum_name == imp_enum.enum_name) {
+        if let Some(existing) = result
+            .iter_mut()
+            .find(|e| e.enum_name == imp_enum.enum_name)
+        {
             *existing = imp_enum.clone();
         } else {
             result.push(imp_enum.clone());

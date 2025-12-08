@@ -53,12 +53,8 @@ impl CandidateApplier {
         let original_files = self.read_source_files()?;
 
         // Generate the modified files
-        let modified_files = self.generate_modified_files(
-            base_runtime,
-            function_name,
-            improved,
-            &original_files,
-        )?;
+        let modified_files =
+            self.generate_modified_files(base_runtime, function_name, improved, &original_files)?;
 
         // Create a new runtime from the modified files
         let root_path = self.baml_src_path.to_string_lossy().to_string();
@@ -157,6 +153,9 @@ impl CandidateApplier {
     }
 
     /// Replace the prompt text in a file
+    /// TODO: Use the span of the prompt instead of regex search.
+    /// Otherwise this will fail for prompts in ##""## blocks
+    /// (n-hash raw strings where n > 1).
     fn replace_prompt_in_file(
         &self,
         content: &str,
@@ -173,7 +172,10 @@ impl CandidateApplier {
 
         // Try to find the exact old prompt and replace it
         // Only do simple replacement if old_prompt is non-empty and substantial
-        if !old_prompt_trimmed.is_empty() && old_prompt_trimmed.len() > 10 && content.contains(old_prompt) {
+        if !old_prompt_trimmed.is_empty()
+            && old_prompt_trimmed.len() > 10
+            && content.contains(old_prompt)
+        {
             return Ok(content.replace(old_prompt, new_prompt));
         }
 
@@ -193,7 +195,10 @@ impl CandidateApplier {
                     let before = &content[..abs_start];
                     let after = &content[abs_end..];
 
-                    return Ok(format!("{}#\"\n{}\n\"#{}", before, new_prompt_trimmed, after));
+                    return Ok(format!(
+                        "{}#\"\n{}\n\"#{}",
+                        before, new_prompt_trimmed, after
+                    ));
                 }
             }
         }
@@ -217,9 +222,7 @@ impl CandidateApplier {
         let ir = base_runtime.ir();
 
         // Find the class in IR to get its location
-        let class_walker = ir
-            .walk_classes()
-            .find(|c| c.name() == class_def.class_name);
+        let class_walker = ir.walk_classes().find(|c| c.name() == class_def.class_name);
 
         let Some(class_walker) = class_walker else {
             // Class not found, skip
@@ -248,7 +251,11 @@ impl CandidateApplier {
     }
 
     /// Update class attributes (description, alias) in file content
-    fn update_class_attributes(&self, content: &str, class_def: &ClassDefinition) -> Result<String> {
+    fn update_class_attributes(
+        &self,
+        content: &str,
+        class_def: &ClassDefinition,
+    ) -> Result<String> {
         let mut result = content.to_string();
         let class_name = &class_def.class_name;
 
@@ -287,10 +294,8 @@ impl CandidateApplier {
                             let after = &result[abs_desc_start + desc_end..];
                             if let Some(desc) = &class_def.description {
                                 let escaped = escape_baml_string(desc);
-                                result = format!(
-                                    "{}@@description(#\"{}\"#){}",
-                                    before, escaped, after
-                                );
+                                result =
+                                    format!("{}@@description(#\"{}\"#){}", before, escaped, after);
                             }
                         }
                     } else {
@@ -372,13 +377,16 @@ impl CandidateApplier {
                             // Replace existing description
                             if let Some(desc_start) = line_rest.find("@description") {
                                 let abs_desc_start = value_end + desc_start;
-                                if let Some(desc_end) = find_attribute_end(&result[abs_desc_start..])
+                                if let Some(desc_end) =
+                                    find_attribute_end(&result[abs_desc_start..])
                                 {
                                     let escaped = escape_baml_string(description);
                                     let before = &result[..abs_desc_start];
                                     let after = &result[abs_desc_start + desc_end..];
-                                    result =
-                                        format!("{}@description(#\"{}\"#){}", before, escaped, after);
+                                    result = format!(
+                                        "{}@description(#\"{}\"#){}",
+                                        before, escaped, after
+                                    );
                                 }
                             }
                         } else {
@@ -408,6 +416,7 @@ fn escape_baml_string(s: &str) -> String {
 }
 
 /// Find the end of an attribute (closing paren followed by optional whitespace)
+/// TODO: Replaces usages with the span of the attribute.
 fn find_attribute_end(s: &str) -> Option<usize> {
     let mut depth = 0;
     let mut in_string = false;
@@ -642,7 +651,7 @@ function ExtractResume(input: string) -> Resume {
             .replace_prompt_in_file(
                 content,
                 "ExtractResume",
-                "",  // Empty old prompt
+                "", // Empty old prompt
                 "Extract the name from the input.\n{{ ctx.output_format }}",
             )
             .unwrap();
@@ -682,7 +691,7 @@ function ExtractResume(input: string) -> Resume {
             .replace_prompt_in_file(
                 content,
                 "MyFunc",
-                "    \n  ",  // Whitespace-only old prompt
+                "    \n  ", // Whitespace-only old prompt
                 "New prompt content",
             )
             .unwrap();

@@ -1,3 +1,5 @@
+/// CLI Options and top-level implementation for the
+/// `baml-cli optimize` command.
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result};
@@ -17,9 +19,6 @@ pub struct OptimizeArgs {
     ///   --function ExtractReceipt
     ///   -f ExtractReceipt -f ClassifyEmail
     pub function: Vec<String>,
-
-    #[arg(long, help = "Enable beta features")]
-    pub beta: bool,
 
     #[arg(long, short = 't', help = "Test filter pattern")]
     /// Filter which tests to use for optimization.
@@ -132,9 +131,9 @@ impl OptimizeArgs {
         &self,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<OptimizeRunResult> {
-        if !(self.beta) {
+        if !(feature_flags.is_beta_enabled()) {
             println!(
-                "`baml-cli optimize` is still in beta. Please use the --beta flag and procede with caution."
+                "`baml-cli optimize` is still in beta. Please use --features beta and procede with caution."
             );
             std::process::exit(1);
         }
