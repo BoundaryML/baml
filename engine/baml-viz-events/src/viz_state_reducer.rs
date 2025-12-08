@@ -49,7 +49,10 @@ impl VizStateReducer {
 
     /// Current log_filter_key stack (root at index 0).
     pub fn log_filter_stack(&self) -> Vec<String> {
-        self.frames.iter().map(|fr| fr.log_filter_key.clone()).collect()
+        self.frames
+            .iter()
+            .map(|fr| fr.log_filter_key.clone())
+            .collect()
     }
     fn dispatch(&mut self, function_name: &str, viz_event: &VizExecEvent) -> Vec<StateUpdate> {
         match viz_event.event {

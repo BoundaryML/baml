@@ -20,11 +20,6 @@ $ pnpm add @boundaryml/baml
 
 import { BamlStream } from "@boundaryml/baml"
 
-export interface BlockNotification {
-  block_label: string
-  notification_type: "enter" | "exit"
-}
-
 export interface VarNotification<T> {
   variable_name: string
   value: T
@@ -88,14 +83,12 @@ class NotificationStream<PartialT, FinalT> implements BamlStream<PartialT, Final
   }
 }
 
-type BlockHandler = (event: BlockNotification) => void
 type VarHandler<T> = (event: VarNotification<T>) => void
 type StreamHandler<PartialT, FinalT> = (event: VarNotification<BamlStream<PartialT, FinalT>>) => void
 type InternalStreamHandler = (event: InternalStreamEvent) => void
 
 export interface InternalEventBindings {
   functionName: string
-  block: BlockHandler[]
   vars: Record<string, VarHandler<any>[]>
   streams: Record<string, InternalStreamHandler[]>
   functions: Record<string, InternalEventBindings>
@@ -109,14 +102,11 @@ export interface EventCollectorInternal {
 
 
 export interface AnotherTakedownEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function AnotherTakedown(): AnotherTakedownEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -170,9 +160,6 @@ export function AnotherTakedown(): AnotherTakedownEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -202,7 +189,6 @@ export function AnotherTakedown(): AnotherTakedownEventCollector {
 
       return {
         functionName: "AnotherTakedown",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -215,14 +201,11 @@ export function AnotherTakedown(): AnotherTakedownEventCollector {
 
 
 export interface AssignElseIfExprEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function AssignElseIfExpr(): AssignElseIfExprEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -276,9 +259,6 @@ export function AssignElseIfExpr(): AssignElseIfExprEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -308,7 +288,6 @@ export function AssignElseIfExpr(): AssignElseIfExprEventCollector {
 
       return {
         functionName: "AssignElseIfExpr",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -321,14 +300,11 @@ export function AssignElseIfExpr(): AssignElseIfExprEventCollector {
 
 
 export interface BoolToIntWithIfElseEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function BoolToIntWithIfElse(): BoolToIntWithIfElseEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -382,9 +358,6 @@ export function BoolToIntWithIfElse(): BoolToIntWithIfElseEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -414,7 +387,6 @@ export function BoolToIntWithIfElse(): BoolToIntWithIfElseEventCollector {
 
       return {
         functionName: "BoolToIntWithIfElse",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -427,14 +399,11 @@ export function BoolToIntWithIfElse(): BoolToIntWithIfElseEventCollector {
 
 
 export interface BoolToIntWithIfElseCallingLlmEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function BoolToIntWithIfElseCallingLlm(): BoolToIntWithIfElseCallingLlmEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -488,9 +457,6 @@ export function BoolToIntWithIfElseCallingLlm(): BoolToIntWithIfElseCallingLlmEv
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -520,7 +486,6 @@ export function BoolToIntWithIfElseCallingLlm(): BoolToIntWithIfElseCallingLlmEv
 
       return {
         functionName: "BoolToIntWithIfElseCallingLlm",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -533,14 +498,11 @@ export function BoolToIntWithIfElseCallingLlm(): BoolToIntWithIfElseCallingLlmEv
 
 
 export interface CallLlmDescribeImageEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function CallLlmDescribeImage(): CallLlmDescribeImageEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -594,9 +556,6 @@ export function CallLlmDescribeImage(): CallLlmDescribeImageEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -626,7 +585,6 @@ export function CallLlmDescribeImage(): CallLlmDescribeImageEventCollector {
 
       return {
         functionName: "CallLlmDescribeImage",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -639,14 +597,11 @@ export function CallLlmDescribeImage(): CallLlmDescribeImageEventCollector {
 
 
 export interface CallReturnOneEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function CallReturnOne(): CallReturnOneEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -700,9 +655,6 @@ export function CallReturnOne(): CallReturnOneEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -732,7 +684,6 @@ export function CallReturnOne(): CallReturnOneEventCollector {
 
       return {
         functionName: "CallReturnOne",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -745,14 +696,11 @@ export function CallReturnOne(): CallReturnOneEventCollector {
 
 
 export interface ChainedCallsEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function ChainedCalls(): ChainedCallsEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -806,9 +754,6 @@ export function ChainedCalls(): ChainedCallsEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -838,7 +783,6 @@ export function ChainedCalls(): ChainedCallsEventCollector {
 
       return {
         functionName: "ChainedCalls",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -851,14 +795,11 @@ export function ChainedCalls(): ChainedCallsEventCollector {
 
 
 export interface EchoWorkflowEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function EchoWorkflow(): EchoWorkflowEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -912,9 +853,6 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -944,7 +882,6 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
 
       return {
         functionName: "EchoWorkflow",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -957,14 +894,11 @@ export function EchoWorkflow(): EchoWorkflowEventCollector {
 
 
 export interface ExecFetchAsEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function ExecFetchAs(): ExecFetchAsEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -1018,9 +952,6 @@ export function ExecFetchAs(): ExecFetchAsEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -1050,7 +981,6 @@ export function ExecFetchAs(): ExecFetchAsEventCollector {
 
       return {
         functionName: "ExecFetchAs",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -1063,14 +993,11 @@ export function ExecFetchAs(): ExecFetchAsEventCollector {
 
 
 export interface ExecFetchAsWithHttpPostRequestEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function ExecFetchAsWithHttpPostRequest(): ExecFetchAsWithHttpPostRequestEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -1124,9 +1051,6 @@ export function ExecFetchAsWithHttpPostRequest(): ExecFetchAsWithHttpPostRequest
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -1156,7 +1080,6 @@ export function ExecFetchAsWithHttpPostRequest(): ExecFetchAsWithHttpPostRequest
 
       return {
         functionName: "ExecFetchAsWithHttpPostRequest",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -1169,14 +1092,11 @@ export function ExecFetchAsWithHttpPostRequest(): ExecFetchAsWithHttpPostRequest
 
 
 export interface ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function ExecFetchAsWithHttpPutRequestAndClassJson(): ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -1230,9 +1150,6 @@ export function ExecFetchAsWithHttpPutRequestAndClassJson(): ExecFetchAsWithHttp
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -1262,7 +1179,6 @@ export function ExecFetchAsWithHttpPutRequestAndClassJson(): ExecFetchAsWithHttp
 
       return {
         functionName: "ExecFetchAsWithHttpPutRequestAndClassJson",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -1275,14 +1191,11 @@ export function ExecFetchAsWithHttpPutRequestAndClassJson(): ExecFetchAsWithHttp
 
 
 export interface HomeEnvVarIsEmptyEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function HomeEnvVarIsEmpty(): HomeEnvVarIsEmptyEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -1336,9 +1249,6 @@ export function HomeEnvVarIsEmpty(): HomeEnvVarIsEmptyEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -1368,7 +1278,6 @@ export function HomeEnvVarIsEmpty(): HomeEnvVarIsEmptyEventCollector {
 
       return {
         functionName: "HomeEnvVarIsEmpty",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -1381,14 +1290,11 @@ export function HomeEnvVarIsEmpty(): HomeEnvVarIsEmptyEventCollector {
 
 
 export interface IsTargetWordEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function IsTargetWord(): IsTargetWordEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -1442,9 +1348,6 @@ export function IsTargetWord(): IsTargetWordEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -1474,7 +1377,6 @@ export function IsTargetWord(): IsTargetWordEventCollector {
 
       return {
         functionName: "IsTargetWord",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -1487,14 +1389,11 @@ export function IsTargetWord(): IsTargetWordEventCollector {
 
 
 export interface IsTargetWord2EventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function IsTargetWord2(): IsTargetWord2EventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -1548,9 +1447,6 @@ export function IsTargetWord2(): IsTargetWord2EventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -1580,7 +1476,6 @@ export function IsTargetWord2(): IsTargetWord2EventCollector {
 
       return {
         functionName: "IsTargetWord2",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -1593,14 +1488,11 @@ export function IsTargetWord2(): IsTargetWord2EventCollector {
 
 
 export interface IterativeFibonacciEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function IterativeFibonacci(): IterativeFibonacciEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -1654,9 +1546,6 @@ export function IterativeFibonacci(): IterativeFibonacciEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -1686,7 +1575,6 @@ export function IterativeFibonacci(): IterativeFibonacciEventCollector {
 
       return {
         functionName: "IterativeFibonacci",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -1699,14 +1587,11 @@ export function IterativeFibonacci(): IterativeFibonacciEventCollector {
 
 
 export interface NormalElseIfStmtEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function NormalElseIfStmt(): NormalElseIfStmtEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -1760,9 +1645,6 @@ export function NormalElseIfStmt(): NormalElseIfStmtEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -1792,7 +1674,6 @@ export function NormalElseIfStmt(): NormalElseIfStmtEventCollector {
 
       return {
         functionName: "NormalElseIfStmt",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -1805,14 +1686,11 @@ export function NormalElseIfStmt(): NormalElseIfStmtEventCollector {
 
 
 export interface NotEmptyEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function NotEmpty(): NotEmptyEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -1866,9 +1744,6 @@ export function NotEmpty(): NotEmptyEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -1898,7 +1773,6 @@ export function NotEmpty(): NotEmptyEventCollector {
 
       return {
         functionName: "NotEmpty",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -1911,14 +1785,11 @@ export function NotEmpty(): NotEmptyEventCollector {
 
 
 export interface ReturnCategoryEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function ReturnCategory(): ReturnCategoryEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -1972,9 +1843,6 @@ export function ReturnCategory(): ReturnCategoryEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -2004,7 +1872,6 @@ export function ReturnCategory(): ReturnCategoryEventCollector {
 
       return {
         functionName: "ReturnCategory",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -2017,14 +1884,11 @@ export function ReturnCategory(): ReturnCategoryEventCollector {
 
 
 export interface ReturnElseIfExprEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function ReturnElseIfExpr(): ReturnElseIfExprEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -2078,9 +1942,6 @@ export function ReturnElseIfExpr(): ReturnElseIfExprEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -2110,7 +1971,6 @@ export function ReturnElseIfExpr(): ReturnElseIfExprEventCollector {
 
       return {
         functionName: "ReturnElseIfExpr",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -2123,14 +1983,11 @@ export function ReturnElseIfExpr(): ReturnElseIfExprEventCollector {
 
 
 export interface ReturnImageFromUrlEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function ReturnImageFromUrl(): ReturnImageFromUrlEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -2184,9 +2041,6 @@ export function ReturnImageFromUrl(): ReturnImageFromUrlEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -2216,7 +2070,6 @@ export function ReturnImageFromUrl(): ReturnImageFromUrlEventCollector {
 
       return {
         functionName: "ReturnImageFromUrl",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -2229,14 +2082,11 @@ export function ReturnImageFromUrl(): ReturnImageFromUrlEventCollector {
 
 
 export interface ReturnNumberEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function ReturnNumber(): ReturnNumberEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -2290,9 +2140,6 @@ export function ReturnNumber(): ReturnNumberEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -2322,7 +2169,6 @@ export function ReturnNumber(): ReturnNumberEventCollector {
 
       return {
         functionName: "ReturnNumber",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -2335,14 +2181,11 @@ export function ReturnNumber(): ReturnNumberEventCollector {
 
 
 export interface ReturnNumberCallingLlmEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function ReturnNumberCallingLlm(): ReturnNumberCallingLlmEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -2396,9 +2239,6 @@ export function ReturnNumberCallingLlm(): ReturnNumberCallingLlmEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -2428,7 +2268,6 @@ export function ReturnNumberCallingLlm(): ReturnNumberCallingLlmEventCollector {
 
       return {
         functionName: "ReturnNumberCallingLlm",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -2441,14 +2280,11 @@ export function ReturnNumberCallingLlm(): ReturnNumberCallingLlmEventCollector {
 
 
 export interface ReturnOneEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function ReturnOne(): ReturnOneEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -2502,9 +2338,6 @@ export function ReturnOne(): ReturnOneEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -2534,7 +2367,6 @@ export function ReturnOne(): ReturnOneEventCollector {
 
       return {
         functionName: "ReturnOne",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -2563,7 +2395,6 @@ type SimpleWatchWithFilterEventCollectorStreamTypes = {
 
 
 export interface SimpleWatchWithFilterEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   on_var<K extends keyof SimpleWatchWithFilterEventCollectorVarTypes>(channel: K, handler: (event: VarNotification<SimpleWatchWithFilterEventCollectorVarTypes[K]>) => void): void
   
@@ -2576,8 +2407,6 @@ export interface SimpleWatchWithFilterEventCollector extends EventCollectorInter
 }
 
 export function SimpleWatchWithFilter(): SimpleWatchWithFilterEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
   const varHandlers_new_name = new Set<VarHandler<string>>()
   const streamHandlers_new_name = new Set<StreamHandler<string | null, string | null>>()
@@ -2650,9 +2479,6 @@ export function SimpleWatchWithFilter(): SimpleWatchWithFilterEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     on_var<K extends keyof SimpleWatchWithFilterEventCollectorVarTypes>(channel: K, handler: (notif: VarNotification<SimpleWatchWithFilterEventCollectorVarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
@@ -2695,7 +2521,6 @@ export function SimpleWatchWithFilter(): SimpleWatchWithFilterEventCollector {
 
       return {
         functionName: "SimpleWatchWithFilter",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -2708,14 +2533,11 @@ export function SimpleWatchWithFilter(): SimpleWatchWithFilterEventCollector {
 
 
 export interface StoreFnCallInLocalVarEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function StoreFnCallInLocalVar(): StoreFnCallInLocalVarEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -2769,9 +2591,6 @@ export function StoreFnCallInLocalVar(): StoreFnCallInLocalVarEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -2801,7 +2620,6 @@ export function StoreFnCallInLocalVar(): StoreFnCallInLocalVarEventCollector {
 
       return {
         functionName: "StoreFnCallInLocalVar",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -2814,14 +2632,11 @@ export function StoreFnCallInLocalVar(): StoreFnCallInLocalVarEventCollector {
 
 
 export interface StoreLlmCallInLocalVarEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function StoreLlmCallInLocalVar(): StoreLlmCallInLocalVarEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -2875,9 +2690,6 @@ export function StoreLlmCallInLocalVar(): StoreLlmCallInLocalVarEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -2907,7 +2719,6 @@ export function StoreLlmCallInLocalVar(): StoreLlmCallInLocalVarEventCollector {
 
       return {
         functionName: "StoreLlmCallInLocalVar",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -2920,14 +2731,11 @@ export function StoreLlmCallInLocalVar(): StoreLlmCallInLocalVarEventCollector {
 
 
 export interface SumArrayEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function SumArray(): SumArrayEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -2981,9 +2789,6 @@ export function SumArray(): SumArrayEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -3013,7 +2818,6 @@ export function SumArray(): SumArrayEventCollector {
 
       return {
         functionName: "SumArray",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -3026,14 +2830,11 @@ export function SumArray(): SumArrayEventCollector {
 
 
 export interface SumFromToEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   
 }
 
 export function SumFromTo(): SumFromToEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
 
   // Track active streams by stream_id
@@ -3087,9 +2888,6 @@ export function SumFromTo(): SumFromToEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     
     __handlers() {
@@ -3119,7 +2917,6 @@ export function SumFromTo(): SumFromToEventCollector {
 
       return {
         functionName: "SumFromTo",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -3160,7 +2957,6 @@ type WorkflowWatchEventCollectorStreamTypes = {
 
 
 export interface WorkflowWatchEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   on_var<K extends keyof WorkflowWatchEventCollectorVarTypes>(channel: K, handler: (event: VarNotification<WorkflowWatchEventCollectorVarTypes[K]>) => void): void
   
@@ -3181,8 +2977,6 @@ export interface WorkflowWatchEventCollector extends EventCollectorInternal {
 }
 
 export function WorkflowWatch(): WorkflowWatchEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
   const varHandlers_once = new Set<VarHandler<string>>()
   const streamHandlers_once = new Set<StreamHandler<string | null, string | null>>()
@@ -3282,9 +3076,6 @@ export function WorkflowWatch(): WorkflowWatchEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     on_var<K extends keyof WorkflowWatchEventCollectorVarTypes>(channel: K, handler: (notif: VarNotification<WorkflowWatchEventCollectorVarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
@@ -3329,7 +3120,6 @@ export function WorkflowWatch(): WorkflowWatchEventCollector {
 
       return {
         functionName: "WorkflowWatch",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -3354,7 +3144,6 @@ type WorkflowWatchChildEventCollectorStreamTypes = {
 
 
 export interface WorkflowWatchChildEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   on_var<K extends keyof WorkflowWatchChildEventCollectorVarTypes>(channel: K, handler: (event: VarNotification<WorkflowWatchChildEventCollectorVarTypes[K]>) => void): void
   
@@ -3365,8 +3154,6 @@ export interface WorkflowWatchChildEventCollector extends EventCollectorInternal
 }
 
 export function WorkflowWatchChild(): WorkflowWatchChildEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
   const varHandlers_x = new Set<VarHandler<string>>()
   const streamHandlers_x = new Set<StreamHandler<string | null, string | null>>()
@@ -3432,9 +3219,6 @@ export function WorkflowWatchChild(): WorkflowWatchChildEventCollector {
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     on_var<K extends keyof WorkflowWatchChildEventCollectorVarTypes>(channel: K, handler: (notif: VarNotification<WorkflowWatchChildEventCollectorVarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
@@ -3477,7 +3261,6 @@ export function WorkflowWatchChild(): WorkflowWatchChildEventCollector {
 
       return {
         functionName: "WorkflowWatchChild",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,
@@ -3502,7 +3285,6 @@ type WorkflowWatchWithFilterEventCollectorStreamTypes = {
 
 
 export interface WorkflowWatchWithFilterEventCollector extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   
   on_var<K extends keyof WorkflowWatchWithFilterEventCollectorVarTypes>(channel: K, handler: (event: VarNotification<WorkflowWatchWithFilterEventCollectorVarTypes[K]>) => void): void
   
@@ -3513,8 +3295,6 @@ export interface WorkflowWatchWithFilterEventCollector extends EventCollectorInt
 }
 
 export function WorkflowWatchWithFilter(): WorkflowWatchWithFilterEventCollector {
-  const blockHandlers = new Set<BlockHandler>()
-
   
   const varHandlers_this_word = new Set<VarHandler<string>>()
   const streamHandlers_this_word = new Set<StreamHandler<string | null, string | null>>()
@@ -3580,9 +3360,6 @@ export function WorkflowWatchWithFilter(): WorkflowWatchWithFilterEventCollector
   
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     
     on_var<K extends keyof WorkflowWatchWithFilterEventCollectorVarTypes>(channel: K, handler: (notif: VarNotification<WorkflowWatchWithFilterEventCollectorVarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
@@ -3625,7 +3402,6 @@ export function WorkflowWatchWithFilter(): WorkflowWatchWithFilterEventCollector
 
       return {
         functionName: "WorkflowWatchWithFilter",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,

@@ -2,9 +2,8 @@ use baml_types::ir_type::TypeIR;
 use baml_viz_events::{encode_segments, PathSegment, RuntimeNodeType};
 use internal_baml_diagnostics::Span;
 
-use crate::{hir, thir};
-
 use super::viz::{VizNode, VizNodes};
+use crate::{hir, thir};
 
 /// Build viz metadata nodes from THIR, mirroring control_flow.rs semantics
 /// closely enough for runtime visualization.
@@ -96,7 +95,11 @@ struct Frame {
 }
 
 impl Frame {
-    fn new(entry: FrameEntry, lexical_segment: Option<PathSegment>, log_filter_key: String) -> Self {
+    fn new(
+        entry: FrameEntry,
+        lexical_segment: Option<PathSegment>,
+        log_filter_key: String,
+    ) -> Self {
         Self {
             entry,
             lexical_segment,
@@ -128,7 +131,7 @@ impl Builder {
         };
 
         let segment = PathSegment::FunctionRoot { ordinal: 0 };
-        let log_filter_key = encode_segments(function_name, &[segment.clone()]);
+        let log_filter_key = encode_segments(function_name, std::slice::from_ref(&segment));
         let node_id = builder.allocate_node_id();
         builder.nodes.push(VizNode {
             node_id,

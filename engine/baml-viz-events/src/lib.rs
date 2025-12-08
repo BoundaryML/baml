@@ -1,7 +1,6 @@
 mod viz_state_reducer;
 
 use serde::{Deserialize, Serialize};
-
 pub use viz_state_reducer::{encode_segments, Frame, LexicalState, StateUpdate, VizStateReducer};
 
 /// Indicates whether execution is entering or exiting a context node.

@@ -5,8 +5,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use baml_compiler::watch::{shared_handler, SharedWatchHandler, WatchBamlValue, WatchNotification};
-use baml_compiler::watch::{VizExecDelta, VizExecEvent};
+use baml_compiler::watch::{
+    shared_handler, SharedWatchHandler, VizExecDelta, VizExecEvent, WatchBamlValue,
+    WatchNotification,
+};
 use baml_runtime::{FunctionResult, RuntimeContextManager, TripWire};
 use baml_viz_events::{Frame, LexicalState, StateUpdate, VizStateReducer};
 use internal_baml_core::feature_flags::FeatureFlags;
@@ -160,7 +162,10 @@ fn build_watch_handler(
             let state_after = reducer_guard.dump();
             (Vec::new(), state_after)
         };
-        let stack_after: Vec<String> = state_after.iter().map(|f| f.log_filter_key.clone()).collect();
+        let stack_after: Vec<String> = state_after
+            .iter()
+            .map(|f| f.log_filter_key.clone())
+            .collect();
         drop(reducer_guard);
 
         events.lock().unwrap().push(event);

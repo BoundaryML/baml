@@ -4,7 +4,6 @@ use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, str::FromS
 
 use anyhow::Context;
 use baml_compiler::watch::{shared_handler, ReducedWatchBamlValue, WatchEventReducer};
-use futures::{channel::mpsc, stream::StreamExt};
 // Conditional runtime selection based on the "thir-interpreter" feature flag
 #[cfg(feature = "thir-interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
@@ -25,6 +24,7 @@ use baml_runtime::{
 };
 use baml_types::{BamlValue, GeneratorOutputType, ResponseCheck};
 use baml_viz_events::LexicalState;
+use futures::{channel::mpsc, stream::StreamExt};
 use generators_lib::version_check::{check_version, GeneratorType, VersionCheckMode};
 use indexmap::IndexMap;
 use internal_baml_core::feature_flags::FeatureFlags;
@@ -37,8 +37,9 @@ use wasm_bindgen::{prelude::*, JsError, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
 use self::runtime_prompt::WasmScope;
-use crate::abort_controller::js_abort_signal_to_tripwire;
-use crate::runtime_wasm::runtime_prompt::WasmPrompt;
+use crate::{
+    abort_controller::js_abort_signal_to_tripwire, runtime_wasm::runtime_prompt::WasmPrompt,
+};
 
 type JsResult<T> = core::result::Result<T, JsError>;
 

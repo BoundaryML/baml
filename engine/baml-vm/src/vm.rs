@@ -57,8 +57,8 @@ fn build_viz_exec_event(
         .into());
     };
 
-    let path_segment =
-        parse_node_segment(&node.log_filter_key).unwrap_or(PathSegment::FunctionRoot { ordinal: 0 });
+    let path_segment = parse_node_segment(&node.log_filter_key)
+        .unwrap_or(PathSegment::FunctionRoot { ordinal: 0 });
 
     Ok(VizExecEvent {
         event: delta,
@@ -683,7 +683,7 @@ impl Vm {
                         _ => unreachable!("matched on viz instruction"),
                     };
 
-                    let event = build_viz_exec_event(&function, index, delta)?;
+                    let event = build_viz_exec_event(function, index, delta)?;
 
                     return Ok(VmExecState::Notify(WatchNotification::Viz {
                         function_name: function.name.clone(),

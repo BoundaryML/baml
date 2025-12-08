@@ -107,6 +107,12 @@ pub enum ReducedWatchBamlValue {
 
 pub struct WatchEventReducer(pub VizStateReducer);
 
+impl Default for WatchEventReducer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WatchEventReducer {
     pub fn new() -> Self {
         Self(VizStateReducer::default())
@@ -122,7 +128,7 @@ impl WatchEventReducer {
                 .0
                 .apply(function_name, &event)
                 .into_iter()
-                .map(|update| ReducedWatchBamlValue::VizStateUpdate(update))
+                .map(ReducedWatchBamlValue::VizStateUpdate)
                 .collect(),
             WatchBamlValue::Value(value) => vec![ReducedWatchBamlValue::Value(value.clone())],
             WatchBamlValue::StreamStart(stream_id) => {

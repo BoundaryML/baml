@@ -190,16 +190,12 @@ impl Builder {
     }
 }
 
+#[derive(Default)]
 enum RenderSetting<T> {
+    #[default]
     Auto,
     Always(T),
     Never,
-}
-
-impl<T> Default for RenderSetting<T> {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 #[derive(strum::EnumString, strum::VariantNames)]
