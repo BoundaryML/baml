@@ -2,7 +2,7 @@
 //!
 //! We need to find a better pattern for this, but this works for now.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Write};
 
 use indexmap::IndexMap;
 
@@ -16,6 +16,7 @@ use crate::{
 type NativeFunctionResult = Result<Value, VmError>;
 
 /// String length.
+#[allow(clippy::cast_possible_wrap)] // string length won't exceed i64::MAX
 pub fn string_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
     let s = vm.objects.as_string(&args[0])?;
@@ -23,6 +24,7 @@ pub fn string_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
 }
 
 /// Array length.
+#[allow(clippy::cast_possible_wrap)] // array length won't exceed i64::MAX
 pub fn array_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
 
@@ -64,6 +66,7 @@ pub fn array_push(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
 }
 
 /// Length of map
+#[allow(clippy::cast_possible_wrap)] // map length won't exceed i64::MAX
 pub fn map_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
 
@@ -240,6 +243,7 @@ pub fn env_get(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
 // }
 
 /// String length
+#[allow(clippy::cast_possible_wrap)] // string length won't exceed i64::MAX
 pub fn string_length(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
     let string = vm.objects.as_string(&args[0])?;
@@ -299,6 +303,7 @@ pub fn string_split(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
 }
 
 /// String substring
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // bounds are checked below
 pub fn string_substring(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     let string = vm.objects.as_string(&args[0])?;
 
@@ -460,6 +465,7 @@ fn deep_copy_value_recursive(
 }
 
 /// Recursively compare two values for deep equality
+#[allow(clippy::float_cmp)] // intentional exact comparison for deep equality
 fn deep_equals_recursive(
     vm: &Vm,
     a: Value,
@@ -627,18 +633,16 @@ fn format_value_recursive(vm: &mut Vm, value: &Value, depth: usize) -> Result<St
                             let fallback = format!("field_{i}");
                             let formatted_value =
                                 format_value_recursive(vm, field_value, depth + 1)?;
-                            result.push_str(&format!(
-                                "{field_indent}{fallback}: {formatted_value}\n"
-                            ));
+                            let _ = writeln!(result, "{field_indent}{fallback}: {formatted_value}");
                             continue;
                         }
                     };
                     let formatted_value = format_value_recursive(vm, field_value, depth + 1)?;
-                    result.push_str(&format!("{field_indent}{field_name}: {formatted_value}\n"));
+                    let _ = writeln!(result, "{field_indent}{field_name}: {formatted_value}");
                 }
 
                 let indent = "    ".repeat(depth);
-                result.push_str(&format!("{indent}}}"));
+                let _ = write!(result, "{indent}}}");
                 Ok(result)
             }
 
@@ -662,11 +666,11 @@ fn format_value_recursive(vm: &mut Vm, value: &Value, depth: usize) -> Result<St
 
                 for (key, value) in &map {
                     let formatted_value = format_value_recursive(vm, value, depth + 1)?;
-                    result.push_str(&format!("{field_indent}\"{key}\": {formatted_value}\n"));
+                    let _ = writeln!(result, "{field_indent}\"{key}\": {formatted_value}");
                 }
 
                 let indent = "    ".repeat(depth);
-                result.push_str(&format!("{indent}}}"));
+                let _ = write!(result, "{indent}}}");
                 Ok(result)
             }
 
@@ -754,8 +758,7 @@ pub fn functions() -> IndexMap<String, (NativeFunction, usize)> {
         ("baml.unstable.string", (any_value_to_string, 1)),
     ];
 
-    IndexMap::from_iter(
-        fns.iter()
-            .map(|(name, (func, arity))| ((*name).to_string(), (*func, *arity))),
-    )
+    fns.iter()
+        .map(|(name, (func, arity))| ((*name).to_string(), (*func, *arity)))
+        .collect()
 }

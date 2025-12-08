@@ -47,6 +47,7 @@ use crate::{
 ///
 /// If there's no relevant metadata to attach to the instruction, then this
 /// function returns an empty string.
+#[allow(clippy::cast_sign_loss)] // instruction_ptr is always non-negative in valid bytecode
 pub fn display_instruction(
     instruction_ptr: isize,
     function: &Function,
@@ -279,6 +280,7 @@ pub fn display_bytecode(
     let mut last_line: usize = 0;
 
     // Populate all the rows.
+    #[allow(clippy::cast_possible_wrap)] // instruction count is always small enough
     for instruction_ptr in 0..function.bytecode.instructions.len() {
         let (instruction, metadata) =
             display_instruction(instruction_ptr as isize, function, stack, objects, globals);
@@ -364,6 +366,7 @@ pub fn display_bytecode(
 }
 
 /// Prints the dissassembly of a function.
+#[allow(clippy::print_stderr)] // intentional debug output for disassembly
 pub fn disassemble(
     function: &Function,
     stack: &EvalStack,

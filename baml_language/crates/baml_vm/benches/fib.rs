@@ -2,7 +2,14 @@
 //!
 //! Do not measure compilation here, only VM execution time.
 
-use baml_vm::{BamlVmProgram, EvalStack, Frame, ObjectIndex, StackIndex, Value, Vm, watch::Watch};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, atomic::AtomicU32},
+};
+
+use baml_base::{FileId, SourceFile};
+use baml_vm::{EvalStack, Frame, ObjectIndex, StackIndex, Value, Vm, watch::Watch};
 
 struct Program {
     source: &'static str,
@@ -10,18 +17,52 @@ struct Program {
     args: Vec<Value>,
 }
 
-fn bootstrap_vm(input: Program) -> Vm {
-    let ast = baml_compiler::test::ast(input.source).unwrap();
+/// Minimal test database for benchmarks.
+#[salsa::db]
+#[derive(Clone)]
+struct BenchDatabase {
+    storage: salsa::Storage<Self>,
+    next_file_id: Arc<AtomicU32>,
+}
 
-    let BamlVmProgram {
-        objects,
-        globals,
-        resolved_function_names,
-        ..
-    } = baml_compiler::compile(&ast).unwrap();
+#[salsa::db]
+impl salsa::Database for BenchDatabase {}
+
+#[salsa::db]
+impl baml_hir::Db for BenchDatabase {}
+
+#[salsa::db]
+impl baml_thir::Db for BenchDatabase {}
+
+impl BenchDatabase {
+    fn new() -> Self {
+        Self {
+            storage: salsa::Storage::default(),
+            next_file_id: Arc::new(AtomicU32::new(0)),
+        }
+    }
+
+    fn add_file(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceFile {
+        let file_id = FileId::new(
+            self.next_file_id
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+        );
+        SourceFile::new(self, text.into(), path.into(), file_id)
+    }
+}
+
+fn bootstrap_vm(input: Program) -> Vm {
+    let mut db = BenchDatabase::new();
+    let file = db.add_file("bench.baml", input.source);
+    let program = baml_codegen::compile_files(&db, &[file]);
 
     // Find the target function index by name
-    let (target_function_index, _) = resolved_function_names[input.function];
+    let target_function_index = *program
+        .function_indices
+        .get(input.function)
+        .expect("function not found");
+
+    let target_function_index = ObjectIndex::from_raw(target_function_index);
 
     Vm {
         frames: vec![Frame {
@@ -34,12 +75,12 @@ fn bootstrap_vm(input: Program) -> Vm {
                 .chain(input.args)
                 .collect(),
         ),
-        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
-        objects,
-        globals,
-        env_vars: Default::default(),
+        runtime_allocs_offset: ObjectIndex::from_raw(program.objects.len()),
+        objects: program.objects.clone(),
+        globals: program.globals.clone(),
+        env_vars: HashMap::default(),
         watch: Watch::new(),
-        watched_vars: Default::default(),
+        watched_vars: HashMap::default(),
         interrupt_frame: None,
     }
 }

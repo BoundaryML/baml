@@ -263,6 +263,7 @@ impl Vm {
     }
 
     /// Bootstraps the VM preparing the given function to run.
+    #[allow(clippy::print_stderr)] // intentional debug warning for developer feedback
     pub fn set_entry_point(&mut self, function: ObjectIndex, args: &[Value]) {
         debug_assert!(
             matches!(self.objects[function], Object::Function(_)),
@@ -398,6 +399,7 @@ impl Vm {
                 // a bug somewhere.
                 let last_executed_instruction = frame.instruction_ptr.saturating_sub(1);
 
+                #[allow(clippy::cast_sign_loss)] // instruction_ptr is always non-negative
                 Ok(ErrorLocation {
                     function_name: function.name.clone(),
                     function_span: function.span,
@@ -638,6 +640,7 @@ impl Vm {
             //     eprintln!("{instruction} {metadata}");
             // }
 
+            #[allow(clippy::cast_sign_loss)] // instruction_ptr is validated non-negative above
             match function.bytecode.instructions[instruction_ptr as usize] {
                 Instruction::NotifyBlock(block_index) => {
                     // Get the notification from the function's storage
@@ -1006,6 +1009,8 @@ impl Vm {
                             }
                         }),
 
+                        #[allow(clippy::float_cmp)]
+                        // intentional exact comparison for equality operators
                         (Value::Float(left), Value::Float(right)) => Value::Bool(match op {
                             CmpOp::Eq => left == right,
                             CmpOp::NotEq => left != right,
@@ -1134,6 +1139,8 @@ impl Vm {
                     };
 
                     // Get the index
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    // bounds checked below
                     let index = match index_value {
                         Value::Int(i) => {
                             if i < 0 {
@@ -1212,6 +1219,8 @@ impl Vm {
                         .as_object(&self.stack.ensure_pop()?, ObjectType::Array)?;
 
                     // Verify index.
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    // bounds checked below
                     let index = match index_value {
                         Value::Int(i) => {
                             if i < 0 {
@@ -1383,9 +1392,13 @@ impl Vm {
                         return Err(InternalError::ArrayIndexIsNegative(variant_index).into());
                     }
 
-                    if variant_index as usize >= enm.variant_names.len() {
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    // checked non-negative above
+                    let variant_usize = variant_index as usize;
+
+                    if variant_usize >= enm.variant_names.len() {
                         return Err(InternalError::ArrayIndexOutOfBounds {
-                            index: variant_index as usize,
+                            index: variant_usize,
                             length: enm.variant_names.len(),
                         }
                         .into());
@@ -1393,7 +1406,7 @@ impl Vm {
 
                     let object_index = self.objects.insert(Object::Variant(Variant {
                         enm: enum_index,
-                        index: variant_index as usize,
+                        index: variant_usize,
                     }));
 
                     // Push the variant object on top of the stack.
@@ -1541,6 +1554,7 @@ impl Vm {
                         },
                     );
 
+                    #[allow(clippy::cast_sign_loss)] // instruction_ptr is validated non-negative
                     let watched_var_name = &function.locals_in_scope
                         [function.bytecode.scopes[instruction_ptr as usize]][index];
                     // Track this so we can unregister on scope exit

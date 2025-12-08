@@ -132,7 +132,7 @@ impl Object {
 
             VmObject::Enum(e) => Ok(Object::Enum(e.name.clone())),
 
-            _ => anyhow::bail!("Unsupported object type for testing: {obj:?}"),
+            VmObject::Future(_) => anyhow::bail!("Unsupported object type for testing: {obj:?}"),
         }
     }
 
@@ -192,7 +192,7 @@ pub struct BlockEvent {
 }
 
 impl BlockEvent {
-    fn from_vm(notification: VmBlockNotification) -> Self {
+    fn from_vm(notification: &VmBlockNotification) -> Self {
         Self {
             function_name: notification.function_name.as_str().to_owned(),
             block_name: notification.block_name.as_str().to_owned(),
@@ -216,7 +216,7 @@ impl Notification {
         Notification::Channel(name.to_string())
     }
 
-    pub fn block(notification: VmBlockNotification) -> Self {
+    pub fn block(notification: &VmBlockNotification) -> Self {
         Notification::Block(BlockEvent::from_vm(notification))
     }
 }
@@ -232,7 +232,7 @@ impl Notification {
                 .ok_or_else(|| {
                     anyhow::anyhow!("No root state found for local variable: {stack_index:?}")
                 }),
-            watch::NodeId::HeapObject(obj_index) => {
+            watch::NodeId::HeapObject(_obj_index) => {
                 Ok(Notification::Object(Object::String("bogger".to_string())))
             }
         }
@@ -271,7 +271,7 @@ impl ExecState {
                         .collect::<anyhow::Result<Vec<_>>>()?;
                     Ok(ExecState::Emit(notifications))
                 }
-                VmWatchNotification::Block(notification) => {
+                VmWatchNotification::Block(ref notification) => {
                     Ok(ExecState::Emit(vec![Notification::block(notification)]))
                 }
             },

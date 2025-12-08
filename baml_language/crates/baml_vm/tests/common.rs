@@ -2,7 +2,11 @@
 //!
 //! Re-exports types from `baml_vm::test` and adds helper functions that use the new compiler.
 
+#![allow(dead_code)] // Test utilities may not all be used yet
+#![allow(clippy::needless_pass_by_value)] // Test utilities intentionally take ownership
+
 use std::{
+    collections::HashMap,
     path::PathBuf,
     sync::{Arc, atomic::AtomicU32},
 };
@@ -145,9 +149,9 @@ pub(crate) fn collect_vm_exec_states(
         runtime_allocs_offset: ObjectIndex::from_raw(program.objects.len()),
         objects: program.objects.clone(),
         globals: program.globals.clone(),
-        env_vars: Default::default(),
+        env_vars: HashMap::default(),
         watch: Watch::new(),
-        watched_vars: Default::default(),
+        watched_vars: HashMap::default(),
         interrupt_frame: None,
     };
 
@@ -224,9 +228,9 @@ fn setup_and_exec_program(
         runtime_allocs_offset: ObjectIndex::from_raw(program.objects.len()),
         objects: program.objects.clone(),
         globals: program.globals.clone(),
-        env_vars: Default::default(),
+        env_vars: HashMap::default(),
         watch: Watch::new(),
-        watched_vars: Default::default(),
+        watched_vars: HashMap::default(),
         interrupt_frame: None,
     };
     let result = vm.exec();
@@ -282,9 +286,9 @@ pub(crate) fn assert_vm_executes_bytecode_with_inspection(
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects: ObjectPool::from_vec(objects),
         globals: GlobalPool::from_vec(globals),
-        env_vars: Default::default(),
+        env_vars: HashMap::default(),
         watch: Watch::new(),
-        watched_vars: Default::default(),
+        watched_vars: HashMap::default(),
         interrupt_frame: None,
     };
 
