@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -50,7 +50,7 @@ jobs:
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -79,7 +79,7 @@ jobs:
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -117,7 +117,7 @@ jobs:
 
       - name: "Upload test results on failure"
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-failures-linux
           path: |
@@ -130,7 +130,7 @@ jobs:
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -159,7 +159,7 @@ jobs:
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -188,7 +188,7 @@ jobs:
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -221,7 +221,7 @@ jobs:
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -254,7 +254,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -278,7 +278,7 @@ jobs:
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -311,7 +311,7 @@ jobs:
 
       - name: "Upload snapshot failures"
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: snapshot-failures
           path: |

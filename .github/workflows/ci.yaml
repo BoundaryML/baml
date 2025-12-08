@@ -45,7 +45,7 @@ jobs:
       # Flag for docs/frontend changes
       docs: ${{ steps.check_docs.outputs.changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -234,7 +234,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -256,7 +256,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Run benchmarks"
-        uses: CodSpeedHQ/action@v3
+        uses: CodSpeedHQ/action@v4
         with:
           mode: walltime
           run: cd baml_language && cargo codspeed run

@@ -24,7 +24,7 @@ jobs:
       name: ${{ inputs.is_canary && 'boundary-tools-prod' || 'boundary-tools-dev' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -101,7 +101,7 @@ jobs:
         working-directory: ../sage-backend
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -210,7 +210,7 @@ jobs:
         working-directory: typescript/apps/sage-backend
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
