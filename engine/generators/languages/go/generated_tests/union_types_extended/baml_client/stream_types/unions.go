@@ -24,17 +24,23 @@ import (
 type Union2DataResponseOrErrorResponse struct {
 	variant string
 
-	variant_Union2DataResponseOrErrorResponse *Union2DataResponseOrErrorResponse
+	variant_DataResponse *DataResponse
+
+	variant_ErrorResponse *ErrorResponse
 }
 
 func (u *Union2DataResponseOrErrorResponse) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "Union__DataResponse__ErrorResponse":
-		u.variant = "Union2DataResponseOrErrorResponse"
-		value := baml.Decode(valueHolder).Interface().(Union2DataResponseOrErrorResponse)
-		u.variant_Union2DataResponseOrErrorResponse = &value
+	case "DataResponse":
+		u.variant = "DataResponse"
+		value := baml.Decode(valueHolder).Interface().(DataResponse)
+		u.variant_DataResponse = &value
+	case "ErrorResponse":
+		u.variant = "ErrorResponse"
+		value := baml.Decode(valueHolder).Interface().(ErrorResponse)
+		u.variant_ErrorResponse = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
@@ -44,8 +50,11 @@ func (u *Union2DataResponseOrErrorResponse) Decode(holder *cffi.CFFIValueUnionVa
 func (u Union2DataResponseOrErrorResponse) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "Union2DataResponseOrErrorResponse":
-		return baml.EncodeValue(*u.variant_Union2DataResponseOrErrorResponse)
+	case "DataResponse":
+		return baml.EncodeValue(*u.variant_DataResponse)
+
+	case "ErrorResponse":
+		return baml.EncodeValue(*u.variant_ErrorResponse)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -61,8 +70,11 @@ func (u Union2DataResponseOrErrorResponse) BamlTypeName() string {
 func (u Union2DataResponseOrErrorResponse) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "Union2DataResponseOrErrorResponse":
-		return json.Marshal(u.variant_Union2DataResponseOrErrorResponse)
+	case "DataResponse":
+		return json.Marshal(u.variant_DataResponse)
+
+	case "ErrorResponse":
+		return json.Marshal(u.variant_ErrorResponse)
 
 	}
 
@@ -72,57 +84,101 @@ func (u Union2DataResponseOrErrorResponse) MarshalJSON() ([]byte, error) {
 func (u *Union2DataResponseOrErrorResponse) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_Union2DataResponseOrErrorResponse)
+	err = json.Unmarshal(data, &u.variant_DataResponse)
 	if err == nil {
-		u.variant = "Union2DataResponseOrErrorResponse"
+		u.variant = "DataResponse"
 		return nil
 	} else {
-		u.variant_Union2DataResponseOrErrorResponse = nil
+		u.variant_DataResponse = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_ErrorResponse)
+	if err == nil {
+		u.variant = "ErrorResponse"
+		return nil
+	} else {
+		u.variant_ErrorResponse = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2DataResponseOrErrorResponse__NewUnion2DataResponseOrErrorResponse(v Union2DataResponseOrErrorResponse) Union2DataResponseOrErrorResponse {
+func Union2DataResponseOrErrorResponse__NewDataResponse(v DataResponse) Union2DataResponseOrErrorResponse {
 
 	return Union2DataResponseOrErrorResponse{
-		variant: "Union2DataResponseOrErrorResponse",
-		variant_Union2DataResponseOrErrorResponse: &v,
+		variant:              "DataResponse",
+		variant_DataResponse: &v,
 	}
 }
 
-func (u *Union2DataResponseOrErrorResponse) SetUnion2DataResponseOrErrorResponse(v Union2DataResponseOrErrorResponse) {
+func (u *Union2DataResponseOrErrorResponse) SetDataResponse(v DataResponse) {
 
-	u.variant = "Union2DataResponseOrErrorResponse"
-	u.variant_Union2DataResponseOrErrorResponse = &v
+	u.variant = "DataResponse"
+	u.variant_DataResponse = &v
+
+	u.variant_ErrorResponse = nil
 
 }
 
-func (u *Union2DataResponseOrErrorResponse) IsUnion2DataResponseOrErrorResponse() bool {
-	return u.variant == "Union2DataResponseOrErrorResponse"
+func (u *Union2DataResponseOrErrorResponse) IsDataResponse() bool {
+	return u.variant == "DataResponse"
 }
 
-func (u *Union2DataResponseOrErrorResponse) AsUnion2DataResponseOrErrorResponse() *Union2DataResponseOrErrorResponse {
-	if u.variant != "Union2DataResponseOrErrorResponse" {
+func (u *Union2DataResponseOrErrorResponse) AsDataResponse() *DataResponse {
+	if u.variant != "DataResponse" {
 		return nil
 	}
-	return u.variant_Union2DataResponseOrErrorResponse
+	return u.variant_DataResponse
+}
+
+func Union2DataResponseOrErrorResponse__NewErrorResponse(v ErrorResponse) Union2DataResponseOrErrorResponse {
+
+	return Union2DataResponseOrErrorResponse{
+		variant:               "ErrorResponse",
+		variant_ErrorResponse: &v,
+	}
+}
+
+func (u *Union2DataResponseOrErrorResponse) SetErrorResponse(v ErrorResponse) {
+
+	u.variant = "ErrorResponse"
+	u.variant_ErrorResponse = &v
+
+	u.variant_DataResponse = nil
+
+}
+
+func (u *Union2DataResponseOrErrorResponse) IsErrorResponse() bool {
+	return u.variant == "ErrorResponse"
+}
+
+func (u *Union2DataResponseOrErrorResponse) AsErrorResponse() *ErrorResponse {
+	if u.variant != "ErrorResponse" {
+		return nil
+	}
+	return u.variant_ErrorResponse
 }
 
 type Union2ProductOrUser struct {
 	variant string
 
-	variant_Union2ProductOrUser *Union2ProductOrUser
+	variant_User *User
+
+	variant_Product *Product
 }
 
 func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "Union__Product__User":
-		u.variant = "Union2ProductOrUser"
-		value := baml.Decode(valueHolder).Interface().(Union2ProductOrUser)
-		u.variant_Union2ProductOrUser = &value
+	case "User":
+		u.variant = "User"
+		value := baml.Decode(valueHolder).Interface().(User)
+		u.variant_User = &value
+	case "Product":
+		u.variant = "Product"
+		value := baml.Decode(valueHolder).Interface().(Product)
+		u.variant_Product = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
@@ -132,8 +188,11 @@ func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap
 func (u Union2ProductOrUser) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "Union2ProductOrUser":
-		return baml.EncodeValue(*u.variant_Union2ProductOrUser)
+	case "User":
+		return baml.EncodeValue(*u.variant_User)
+
+	case "Product":
+		return baml.EncodeValue(*u.variant_Product)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -149,8 +208,11 @@ func (u Union2ProductOrUser) BamlTypeName() string {
 func (u Union2ProductOrUser) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "Union2ProductOrUser":
-		return json.Marshal(u.variant_Union2ProductOrUser)
+	case "User":
+		return json.Marshal(u.variant_User)
+
+	case "Product":
+		return json.Marshal(u.variant_Product)
 
 	}
 
@@ -160,41 +222,79 @@ func (u Union2ProductOrUser) MarshalJSON() ([]byte, error) {
 func (u *Union2ProductOrUser) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_Union2ProductOrUser)
+	err = json.Unmarshal(data, &u.variant_User)
 	if err == nil {
-		u.variant = "Union2ProductOrUser"
+		u.variant = "User"
 		return nil
 	} else {
-		u.variant_Union2ProductOrUser = nil
+		u.variant_User = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Product)
+	if err == nil {
+		u.variant = "Product"
+		return nil
+	} else {
+		u.variant_Product = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union2ProductOrUser__NewUnion2ProductOrUser(v Union2ProductOrUser) Union2ProductOrUser {
+func Union2ProductOrUser__NewUser(v User) Union2ProductOrUser {
 
 	return Union2ProductOrUser{
-		variant:                     "Union2ProductOrUser",
-		variant_Union2ProductOrUser: &v,
+		variant:      "User",
+		variant_User: &v,
 	}
 }
 
-func (u *Union2ProductOrUser) SetUnion2ProductOrUser(v Union2ProductOrUser) {
+func (u *Union2ProductOrUser) SetUser(v User) {
 
-	u.variant = "Union2ProductOrUser"
-	u.variant_Union2ProductOrUser = &v
+	u.variant = "User"
+	u.variant_User = &v
+
+	u.variant_Product = nil
 
 }
 
-func (u *Union2ProductOrUser) IsUnion2ProductOrUser() bool {
-	return u.variant == "Union2ProductOrUser"
+func (u *Union2ProductOrUser) IsUser() bool {
+	return u.variant == "User"
 }
 
-func (u *Union2ProductOrUser) AsUnion2ProductOrUser() *Union2ProductOrUser {
-	if u.variant != "Union2ProductOrUser" {
+func (u *Union2ProductOrUser) AsUser() *User {
+	if u.variant != "User" {
 		return nil
 	}
-	return u.variant_Union2ProductOrUser
+	return u.variant_User
+}
+
+func Union2ProductOrUser__NewProduct(v Product) Union2ProductOrUser {
+
+	return Union2ProductOrUser{
+		variant:         "Product",
+		variant_Product: &v,
+	}
+}
+
+func (u *Union2ProductOrUser) SetProduct(v Product) {
+
+	u.variant = "Product"
+	u.variant_Product = &v
+
+	u.variant_User = nil
+
+}
+
+func (u *Union2ProductOrUser) IsProduct() bool {
+	return u.variant == "Product"
+}
+
+func (u *Union2ProductOrUser) AsProduct() *Product {
+	if u.variant != "Product" {
+		return nil
+	}
+	return u.variant_Product
 }
 
 type Union2RecursiveUnionOrString struct {
@@ -338,17 +438,29 @@ func (u *Union2RecursiveUnionOrString) AsRecursiveUnion() *RecursiveUnion {
 type Union3AdminOrProductOrUser struct {
 	variant string
 
-	variant_Union3AdminOrProductOrUser *Union3AdminOrProductOrUser
+	variant_User *User
+
+	variant_Product *Product
+
+	variant_Admin *Admin
 }
 
 func (u *Union3AdminOrProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "Union__Admin__Product__User":
-		u.variant = "Union3AdminOrProductOrUser"
-		value := baml.Decode(valueHolder).Interface().(Union3AdminOrProductOrUser)
-		u.variant_Union3AdminOrProductOrUser = &value
+	case "User":
+		u.variant = "User"
+		value := baml.Decode(valueHolder).Interface().(User)
+		u.variant_User = &value
+	case "Product":
+		u.variant = "Product"
+		value := baml.Decode(valueHolder).Interface().(Product)
+		u.variant_Product = &value
+	case "Admin":
+		u.variant = "Admin"
+		value := baml.Decode(valueHolder).Interface().(Admin)
+		u.variant_Admin = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
@@ -358,8 +470,14 @@ func (u *Union3AdminOrProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, 
 func (u Union3AdminOrProductOrUser) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "Union3AdminOrProductOrUser":
-		return baml.EncodeValue(*u.variant_Union3AdminOrProductOrUser)
+	case "User":
+		return baml.EncodeValue(*u.variant_User)
+
+	case "Product":
+		return baml.EncodeValue(*u.variant_Product)
+
+	case "Admin":
+		return baml.EncodeValue(*u.variant_Admin)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -375,8 +493,14 @@ func (u Union3AdminOrProductOrUser) BamlTypeName() string {
 func (u Union3AdminOrProductOrUser) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "Union3AdminOrProductOrUser":
-		return json.Marshal(u.variant_Union3AdminOrProductOrUser)
+	case "User":
+		return json.Marshal(u.variant_User)
+
+	case "Product":
+		return json.Marshal(u.variant_Product)
+
+	case "Admin":
+		return json.Marshal(u.variant_Admin)
 
 	}
 
@@ -386,57 +510,149 @@ func (u Union3AdminOrProductOrUser) MarshalJSON() ([]byte, error) {
 func (u *Union3AdminOrProductOrUser) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_Union3AdminOrProductOrUser)
+	err = json.Unmarshal(data, &u.variant_User)
 	if err == nil {
-		u.variant = "Union3AdminOrProductOrUser"
+		u.variant = "User"
 		return nil
 	} else {
-		u.variant_Union3AdminOrProductOrUser = nil
+		u.variant_User = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Product)
+	if err == nil {
+		u.variant = "Product"
+		return nil
+	} else {
+		u.variant_Product = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Admin)
+	if err == nil {
+		u.variant = "Admin"
+		return nil
+	} else {
+		u.variant_Admin = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union3AdminOrProductOrUser__NewUnion3AdminOrProductOrUser(v Union3AdminOrProductOrUser) Union3AdminOrProductOrUser {
+func Union3AdminOrProductOrUser__NewUser(v User) Union3AdminOrProductOrUser {
 
 	return Union3AdminOrProductOrUser{
-		variant:                            "Union3AdminOrProductOrUser",
-		variant_Union3AdminOrProductOrUser: &v,
+		variant:      "User",
+		variant_User: &v,
 	}
 }
 
-func (u *Union3AdminOrProductOrUser) SetUnion3AdminOrProductOrUser(v Union3AdminOrProductOrUser) {
+func (u *Union3AdminOrProductOrUser) SetUser(v User) {
 
-	u.variant = "Union3AdminOrProductOrUser"
-	u.variant_Union3AdminOrProductOrUser = &v
+	u.variant = "User"
+	u.variant_User = &v
+
+	u.variant_Product = nil
+
+	u.variant_Admin = nil
 
 }
 
-func (u *Union3AdminOrProductOrUser) IsUnion3AdminOrProductOrUser() bool {
-	return u.variant == "Union3AdminOrProductOrUser"
+func (u *Union3AdminOrProductOrUser) IsUser() bool {
+	return u.variant == "User"
 }
 
-func (u *Union3AdminOrProductOrUser) AsUnion3AdminOrProductOrUser() *Union3AdminOrProductOrUser {
-	if u.variant != "Union3AdminOrProductOrUser" {
+func (u *Union3AdminOrProductOrUser) AsUser() *User {
+	if u.variant != "User" {
 		return nil
 	}
-	return u.variant_Union3AdminOrProductOrUser
+	return u.variant_User
+}
+
+func Union3AdminOrProductOrUser__NewProduct(v Product) Union3AdminOrProductOrUser {
+
+	return Union3AdminOrProductOrUser{
+		variant:         "Product",
+		variant_Product: &v,
+	}
+}
+
+func (u *Union3AdminOrProductOrUser) SetProduct(v Product) {
+
+	u.variant = "Product"
+	u.variant_Product = &v
+
+	u.variant_User = nil
+
+	u.variant_Admin = nil
+
+}
+
+func (u *Union3AdminOrProductOrUser) IsProduct() bool {
+	return u.variant == "Product"
+}
+
+func (u *Union3AdminOrProductOrUser) AsProduct() *Product {
+	if u.variant != "Product" {
+		return nil
+	}
+	return u.variant_Product
+}
+
+func Union3AdminOrProductOrUser__NewAdmin(v Admin) Union3AdminOrProductOrUser {
+
+	return Union3AdminOrProductOrUser{
+		variant:       "Admin",
+		variant_Admin: &v,
+	}
+}
+
+func (u *Union3AdminOrProductOrUser) SetAdmin(v Admin) {
+
+	u.variant = "Admin"
+	u.variant_Admin = &v
+
+	u.variant_User = nil
+
+	u.variant_Product = nil
+
+}
+
+func (u *Union3AdminOrProductOrUser) IsAdmin() bool {
+	return u.variant == "Admin"
+}
+
+func (u *Union3AdminOrProductOrUser) AsAdmin() *Admin {
+	if u.variant != "Admin" {
+		return nil
+	}
+	return u.variant_Admin
 }
 
 type Union3ApiErrorOrApiPendingOrApiSuccess struct {
 	variant string
 
-	variant_Union3ApiErrorOrApiPendingOrApiSuccess *Union3ApiErrorOrApiPendingOrApiSuccess
+	variant_ApiSuccess *ApiSuccess
+
+	variant_ApiError *ApiError
+
+	variant_ApiPending *ApiPending
 }
 
 func (u *Union3ApiErrorOrApiPendingOrApiSuccess) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "Union__ApiError__ApiPending__ApiSuccess":
-		u.variant = "Union3ApiErrorOrApiPendingOrApiSuccess"
-		value := baml.Decode(valueHolder).Interface().(Union3ApiErrorOrApiPendingOrApiSuccess)
-		u.variant_Union3ApiErrorOrApiPendingOrApiSuccess = &value
+	case "ApiSuccess":
+		u.variant = "ApiSuccess"
+		value := baml.Decode(valueHolder).Interface().(ApiSuccess)
+		u.variant_ApiSuccess = &value
+	case "ApiError":
+		u.variant = "ApiError"
+		value := baml.Decode(valueHolder).Interface().(ApiError)
+		u.variant_ApiError = &value
+	case "ApiPending":
+		u.variant = "ApiPending"
+		value := baml.Decode(valueHolder).Interface().(ApiPending)
+		u.variant_ApiPending = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
@@ -446,8 +662,14 @@ func (u *Union3ApiErrorOrApiPendingOrApiSuccess) Decode(holder *cffi.CFFIValueUn
 func (u Union3ApiErrorOrApiPendingOrApiSuccess) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "Union3ApiErrorOrApiPendingOrApiSuccess":
-		return baml.EncodeValue(*u.variant_Union3ApiErrorOrApiPendingOrApiSuccess)
+	case "ApiSuccess":
+		return baml.EncodeValue(*u.variant_ApiSuccess)
+
+	case "ApiError":
+		return baml.EncodeValue(*u.variant_ApiError)
+
+	case "ApiPending":
+		return baml.EncodeValue(*u.variant_ApiPending)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -463,8 +685,14 @@ func (u Union3ApiErrorOrApiPendingOrApiSuccess) BamlTypeName() string {
 func (u Union3ApiErrorOrApiPendingOrApiSuccess) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "Union3ApiErrorOrApiPendingOrApiSuccess":
-		return json.Marshal(u.variant_Union3ApiErrorOrApiPendingOrApiSuccess)
+	case "ApiSuccess":
+		return json.Marshal(u.variant_ApiSuccess)
+
+	case "ApiError":
+		return json.Marshal(u.variant_ApiError)
+
+	case "ApiPending":
+		return json.Marshal(u.variant_ApiPending)
 
 	}
 
@@ -474,57 +702,149 @@ func (u Union3ApiErrorOrApiPendingOrApiSuccess) MarshalJSON() ([]byte, error) {
 func (u *Union3ApiErrorOrApiPendingOrApiSuccess) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_Union3ApiErrorOrApiPendingOrApiSuccess)
+	err = json.Unmarshal(data, &u.variant_ApiSuccess)
 	if err == nil {
-		u.variant = "Union3ApiErrorOrApiPendingOrApiSuccess"
+		u.variant = "ApiSuccess"
 		return nil
 	} else {
-		u.variant_Union3ApiErrorOrApiPendingOrApiSuccess = nil
+		u.variant_ApiSuccess = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_ApiError)
+	if err == nil {
+		u.variant = "ApiError"
+		return nil
+	} else {
+		u.variant_ApiError = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_ApiPending)
+	if err == nil {
+		u.variant = "ApiPending"
+		return nil
+	} else {
+		u.variant_ApiPending = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union3ApiErrorOrApiPendingOrApiSuccess__NewUnion3ApiErrorOrApiPendingOrApiSuccess(v Union3ApiErrorOrApiPendingOrApiSuccess) Union3ApiErrorOrApiPendingOrApiSuccess {
+func Union3ApiErrorOrApiPendingOrApiSuccess__NewApiSuccess(v ApiSuccess) Union3ApiErrorOrApiPendingOrApiSuccess {
 
 	return Union3ApiErrorOrApiPendingOrApiSuccess{
-		variant: "Union3ApiErrorOrApiPendingOrApiSuccess",
-		variant_Union3ApiErrorOrApiPendingOrApiSuccess: &v,
+		variant:            "ApiSuccess",
+		variant_ApiSuccess: &v,
 	}
 }
 
-func (u *Union3ApiErrorOrApiPendingOrApiSuccess) SetUnion3ApiErrorOrApiPendingOrApiSuccess(v Union3ApiErrorOrApiPendingOrApiSuccess) {
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) SetApiSuccess(v ApiSuccess) {
 
-	u.variant = "Union3ApiErrorOrApiPendingOrApiSuccess"
-	u.variant_Union3ApiErrorOrApiPendingOrApiSuccess = &v
+	u.variant = "ApiSuccess"
+	u.variant_ApiSuccess = &v
+
+	u.variant_ApiError = nil
+
+	u.variant_ApiPending = nil
 
 }
 
-func (u *Union3ApiErrorOrApiPendingOrApiSuccess) IsUnion3ApiErrorOrApiPendingOrApiSuccess() bool {
-	return u.variant == "Union3ApiErrorOrApiPendingOrApiSuccess"
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) IsApiSuccess() bool {
+	return u.variant == "ApiSuccess"
 }
 
-func (u *Union3ApiErrorOrApiPendingOrApiSuccess) AsUnion3ApiErrorOrApiPendingOrApiSuccess() *Union3ApiErrorOrApiPendingOrApiSuccess {
-	if u.variant != "Union3ApiErrorOrApiPendingOrApiSuccess" {
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) AsApiSuccess() *ApiSuccess {
+	if u.variant != "ApiSuccess" {
 		return nil
 	}
-	return u.variant_Union3ApiErrorOrApiPendingOrApiSuccess
+	return u.variant_ApiSuccess
+}
+
+func Union3ApiErrorOrApiPendingOrApiSuccess__NewApiError(v ApiError) Union3ApiErrorOrApiPendingOrApiSuccess {
+
+	return Union3ApiErrorOrApiPendingOrApiSuccess{
+		variant:          "ApiError",
+		variant_ApiError: &v,
+	}
+}
+
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) SetApiError(v ApiError) {
+
+	u.variant = "ApiError"
+	u.variant_ApiError = &v
+
+	u.variant_ApiSuccess = nil
+
+	u.variant_ApiPending = nil
+
+}
+
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) IsApiError() bool {
+	return u.variant == "ApiError"
+}
+
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) AsApiError() *ApiError {
+	if u.variant != "ApiError" {
+		return nil
+	}
+	return u.variant_ApiError
+}
+
+func Union3ApiErrorOrApiPendingOrApiSuccess__NewApiPending(v ApiPending) Union3ApiErrorOrApiPendingOrApiSuccess {
+
+	return Union3ApiErrorOrApiPendingOrApiSuccess{
+		variant:            "ApiPending",
+		variant_ApiPending: &v,
+	}
+}
+
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) SetApiPending(v ApiPending) {
+
+	u.variant = "ApiPending"
+	u.variant_ApiPending = &v
+
+	u.variant_ApiSuccess = nil
+
+	u.variant_ApiError = nil
+
+}
+
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) IsApiPending() bool {
+	return u.variant == "ApiPending"
+}
+
+func (u *Union3ApiErrorOrApiPendingOrApiSuccess) AsApiPending() *ApiPending {
+	if u.variant != "ApiPending" {
+		return nil
+	}
+	return u.variant_ApiPending
 }
 
 type Union3BirdOrCatOrDog struct {
 	variant string
 
-	variant_Union3BirdOrCatOrDog *Union3BirdOrCatOrDog
+	variant_Dog *Dog
+
+	variant_Cat *Cat
+
+	variant_Bird *Bird
 }
 
 func (u *Union3BirdOrCatOrDog) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "Union__Bird__Cat__Dog":
-		u.variant = "Union3BirdOrCatOrDog"
-		value := baml.Decode(valueHolder).Interface().(Union3BirdOrCatOrDog)
-		u.variant_Union3BirdOrCatOrDog = &value
+	case "Dog":
+		u.variant = "Dog"
+		value := baml.Decode(valueHolder).Interface().(Dog)
+		u.variant_Dog = &value
+	case "Cat":
+		u.variant = "Cat"
+		value := baml.Decode(valueHolder).Interface().(Cat)
+		u.variant_Cat = &value
+	case "Bird":
+		u.variant = "Bird"
+		value := baml.Decode(valueHolder).Interface().(Bird)
+		u.variant_Bird = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
@@ -534,8 +854,14 @@ func (u *Union3BirdOrCatOrDog) Decode(holder *cffi.CFFIValueUnionVariant, typeMa
 func (u Union3BirdOrCatOrDog) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "Union3BirdOrCatOrDog":
-		return baml.EncodeValue(*u.variant_Union3BirdOrCatOrDog)
+	case "Dog":
+		return baml.EncodeValue(*u.variant_Dog)
+
+	case "Cat":
+		return baml.EncodeValue(*u.variant_Cat)
+
+	case "Bird":
+		return baml.EncodeValue(*u.variant_Bird)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -551,8 +877,14 @@ func (u Union3BirdOrCatOrDog) BamlTypeName() string {
 func (u Union3BirdOrCatOrDog) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "Union3BirdOrCatOrDog":
-		return json.Marshal(u.variant_Union3BirdOrCatOrDog)
+	case "Dog":
+		return json.Marshal(u.variant_Dog)
+
+	case "Cat":
+		return json.Marshal(u.variant_Cat)
+
+	case "Bird":
+		return json.Marshal(u.variant_Bird)
 
 	}
 
@@ -562,57 +894,149 @@ func (u Union3BirdOrCatOrDog) MarshalJSON() ([]byte, error) {
 func (u *Union3BirdOrCatOrDog) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_Union3BirdOrCatOrDog)
+	err = json.Unmarshal(data, &u.variant_Dog)
 	if err == nil {
-		u.variant = "Union3BirdOrCatOrDog"
+		u.variant = "Dog"
 		return nil
 	} else {
-		u.variant_Union3BirdOrCatOrDog = nil
+		u.variant_Dog = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Cat)
+	if err == nil {
+		u.variant = "Cat"
+		return nil
+	} else {
+		u.variant_Cat = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Bird)
+	if err == nil {
+		u.variant = "Bird"
+		return nil
+	} else {
+		u.variant_Bird = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union3BirdOrCatOrDog__NewUnion3BirdOrCatOrDog(v Union3BirdOrCatOrDog) Union3BirdOrCatOrDog {
+func Union3BirdOrCatOrDog__NewDog(v Dog) Union3BirdOrCatOrDog {
 
 	return Union3BirdOrCatOrDog{
-		variant:                      "Union3BirdOrCatOrDog",
-		variant_Union3BirdOrCatOrDog: &v,
+		variant:     "Dog",
+		variant_Dog: &v,
 	}
 }
 
-func (u *Union3BirdOrCatOrDog) SetUnion3BirdOrCatOrDog(v Union3BirdOrCatOrDog) {
+func (u *Union3BirdOrCatOrDog) SetDog(v Dog) {
 
-	u.variant = "Union3BirdOrCatOrDog"
-	u.variant_Union3BirdOrCatOrDog = &v
+	u.variant = "Dog"
+	u.variant_Dog = &v
+
+	u.variant_Cat = nil
+
+	u.variant_Bird = nil
 
 }
 
-func (u *Union3BirdOrCatOrDog) IsUnion3BirdOrCatOrDog() bool {
-	return u.variant == "Union3BirdOrCatOrDog"
+func (u *Union3BirdOrCatOrDog) IsDog() bool {
+	return u.variant == "Dog"
 }
 
-func (u *Union3BirdOrCatOrDog) AsUnion3BirdOrCatOrDog() *Union3BirdOrCatOrDog {
-	if u.variant != "Union3BirdOrCatOrDog" {
+func (u *Union3BirdOrCatOrDog) AsDog() *Dog {
+	if u.variant != "Dog" {
 		return nil
 	}
-	return u.variant_Union3BirdOrCatOrDog
+	return u.variant_Dog
+}
+
+func Union3BirdOrCatOrDog__NewCat(v Cat) Union3BirdOrCatOrDog {
+
+	return Union3BirdOrCatOrDog{
+		variant:     "Cat",
+		variant_Cat: &v,
+	}
+}
+
+func (u *Union3BirdOrCatOrDog) SetCat(v Cat) {
+
+	u.variant = "Cat"
+	u.variant_Cat = &v
+
+	u.variant_Dog = nil
+
+	u.variant_Bird = nil
+
+}
+
+func (u *Union3BirdOrCatOrDog) IsCat() bool {
+	return u.variant == "Cat"
+}
+
+func (u *Union3BirdOrCatOrDog) AsCat() *Cat {
+	if u.variant != "Cat" {
+		return nil
+	}
+	return u.variant_Cat
+}
+
+func Union3BirdOrCatOrDog__NewBird(v Bird) Union3BirdOrCatOrDog {
+
+	return Union3BirdOrCatOrDog{
+		variant:      "Bird",
+		variant_Bird: &v,
+	}
+}
+
+func (u *Union3BirdOrCatOrDog) SetBird(v Bird) {
+
+	u.variant = "Bird"
+	u.variant_Bird = &v
+
+	u.variant_Dog = nil
+
+	u.variant_Cat = nil
+
+}
+
+func (u *Union3BirdOrCatOrDog) IsBird() bool {
+	return u.variant == "Bird"
+}
+
+func (u *Union3BirdOrCatOrDog) AsBird() *Bird {
+	if u.variant != "Bird" {
+		return nil
+	}
+	return u.variant_Bird
 }
 
 type Union3CircleOrRectangleOrTriangle struct {
 	variant string
 
-	variant_Union3CircleOrRectangleOrTriangle *Union3CircleOrRectangleOrTriangle
+	variant_Circle *Circle
+
+	variant_Rectangle *Rectangle
+
+	variant_Triangle *Triangle
 }
 
 func (u *Union3CircleOrRectangleOrTriangle) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "Union__Circle__Rectangle__Triangle":
-		u.variant = "Union3CircleOrRectangleOrTriangle"
-		value := baml.Decode(valueHolder).Interface().(Union3CircleOrRectangleOrTriangle)
-		u.variant_Union3CircleOrRectangleOrTriangle = &value
+	case "Circle":
+		u.variant = "Circle"
+		value := baml.Decode(valueHolder).Interface().(Circle)
+		u.variant_Circle = &value
+	case "Rectangle":
+		u.variant = "Rectangle"
+		value := baml.Decode(valueHolder).Interface().(Rectangle)
+		u.variant_Rectangle = &value
+	case "Triangle":
+		u.variant = "Triangle"
+		value := baml.Decode(valueHolder).Interface().(Triangle)
+		u.variant_Triangle = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
@@ -622,8 +1046,14 @@ func (u *Union3CircleOrRectangleOrTriangle) Decode(holder *cffi.CFFIValueUnionVa
 func (u Union3CircleOrRectangleOrTriangle) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "Union3CircleOrRectangleOrTriangle":
-		return baml.EncodeValue(*u.variant_Union3CircleOrRectangleOrTriangle)
+	case "Circle":
+		return baml.EncodeValue(*u.variant_Circle)
+
+	case "Rectangle":
+		return baml.EncodeValue(*u.variant_Rectangle)
+
+	case "Triangle":
+		return baml.EncodeValue(*u.variant_Triangle)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -639,8 +1069,14 @@ func (u Union3CircleOrRectangleOrTriangle) BamlTypeName() string {
 func (u Union3CircleOrRectangleOrTriangle) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "Union3CircleOrRectangleOrTriangle":
-		return json.Marshal(u.variant_Union3CircleOrRectangleOrTriangle)
+	case "Circle":
+		return json.Marshal(u.variant_Circle)
+
+	case "Rectangle":
+		return json.Marshal(u.variant_Rectangle)
+
+	case "Triangle":
+		return json.Marshal(u.variant_Triangle)
 
 	}
 
@@ -650,57 +1086,149 @@ func (u Union3CircleOrRectangleOrTriangle) MarshalJSON() ([]byte, error) {
 func (u *Union3CircleOrRectangleOrTriangle) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_Union3CircleOrRectangleOrTriangle)
+	err = json.Unmarshal(data, &u.variant_Circle)
 	if err == nil {
-		u.variant = "Union3CircleOrRectangleOrTriangle"
+		u.variant = "Circle"
 		return nil
 	} else {
-		u.variant_Union3CircleOrRectangleOrTriangle = nil
+		u.variant_Circle = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Rectangle)
+	if err == nil {
+		u.variant = "Rectangle"
+		return nil
+	} else {
+		u.variant_Rectangle = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Triangle)
+	if err == nil {
+		u.variant = "Triangle"
+		return nil
+	} else {
+		u.variant_Triangle = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union3CircleOrRectangleOrTriangle__NewUnion3CircleOrRectangleOrTriangle(v Union3CircleOrRectangleOrTriangle) Union3CircleOrRectangleOrTriangle {
+func Union3CircleOrRectangleOrTriangle__NewCircle(v Circle) Union3CircleOrRectangleOrTriangle {
 
 	return Union3CircleOrRectangleOrTriangle{
-		variant: "Union3CircleOrRectangleOrTriangle",
-		variant_Union3CircleOrRectangleOrTriangle: &v,
+		variant:        "Circle",
+		variant_Circle: &v,
 	}
 }
 
-func (u *Union3CircleOrRectangleOrTriangle) SetUnion3CircleOrRectangleOrTriangle(v Union3CircleOrRectangleOrTriangle) {
+func (u *Union3CircleOrRectangleOrTriangle) SetCircle(v Circle) {
 
-	u.variant = "Union3CircleOrRectangleOrTriangle"
-	u.variant_Union3CircleOrRectangleOrTriangle = &v
+	u.variant = "Circle"
+	u.variant_Circle = &v
+
+	u.variant_Rectangle = nil
+
+	u.variant_Triangle = nil
 
 }
 
-func (u *Union3CircleOrRectangleOrTriangle) IsUnion3CircleOrRectangleOrTriangle() bool {
-	return u.variant == "Union3CircleOrRectangleOrTriangle"
+func (u *Union3CircleOrRectangleOrTriangle) IsCircle() bool {
+	return u.variant == "Circle"
 }
 
-func (u *Union3CircleOrRectangleOrTriangle) AsUnion3CircleOrRectangleOrTriangle() *Union3CircleOrRectangleOrTriangle {
-	if u.variant != "Union3CircleOrRectangleOrTriangle" {
+func (u *Union3CircleOrRectangleOrTriangle) AsCircle() *Circle {
+	if u.variant != "Circle" {
 		return nil
 	}
-	return u.variant_Union3CircleOrRectangleOrTriangle
+	return u.variant_Circle
+}
+
+func Union3CircleOrRectangleOrTriangle__NewRectangle(v Rectangle) Union3CircleOrRectangleOrTriangle {
+
+	return Union3CircleOrRectangleOrTriangle{
+		variant:           "Rectangle",
+		variant_Rectangle: &v,
+	}
+}
+
+func (u *Union3CircleOrRectangleOrTriangle) SetRectangle(v Rectangle) {
+
+	u.variant = "Rectangle"
+	u.variant_Rectangle = &v
+
+	u.variant_Circle = nil
+
+	u.variant_Triangle = nil
+
+}
+
+func (u *Union3CircleOrRectangleOrTriangle) IsRectangle() bool {
+	return u.variant == "Rectangle"
+}
+
+func (u *Union3CircleOrRectangleOrTriangle) AsRectangle() *Rectangle {
+	if u.variant != "Rectangle" {
+		return nil
+	}
+	return u.variant_Rectangle
+}
+
+func Union3CircleOrRectangleOrTriangle__NewTriangle(v Triangle) Union3CircleOrRectangleOrTriangle {
+
+	return Union3CircleOrRectangleOrTriangle{
+		variant:          "Triangle",
+		variant_Triangle: &v,
+	}
+}
+
+func (u *Union3CircleOrRectangleOrTriangle) SetTriangle(v Triangle) {
+
+	u.variant = "Triangle"
+	u.variant_Triangle = &v
+
+	u.variant_Circle = nil
+
+	u.variant_Rectangle = nil
+
+}
+
+func (u *Union3CircleOrRectangleOrTriangle) IsTriangle() bool {
+	return u.variant == "Triangle"
+}
+
+func (u *Union3CircleOrRectangleOrTriangle) AsTriangle() *Triangle {
+	if u.variant != "Triangle" {
+		return nil
+	}
+	return u.variant_Triangle
 }
 
 type Union3ErrorOrSuccessOrWarning struct {
 	variant string
 
-	variant_Union3ErrorOrSuccessOrWarning *Union3ErrorOrSuccessOrWarning
+	variant_Success *Success
+
+	variant_Warning *Warning
+
+	variant_Error *Error
 }
 
 func (u *Union3ErrorOrSuccessOrWarning) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "Union__Error__Success__Warning":
-		u.variant = "Union3ErrorOrSuccessOrWarning"
-		value := baml.Decode(valueHolder).Interface().(Union3ErrorOrSuccessOrWarning)
-		u.variant_Union3ErrorOrSuccessOrWarning = &value
+	case "Success":
+		u.variant = "Success"
+		value := baml.Decode(valueHolder).Interface().(Success)
+		u.variant_Success = &value
+	case "Warning":
+		u.variant = "Warning"
+		value := baml.Decode(valueHolder).Interface().(Warning)
+		u.variant_Warning = &value
+	case "Error":
+		u.variant = "Error"
+		value := baml.Decode(valueHolder).Interface().(Error)
+		u.variant_Error = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
@@ -710,8 +1238,14 @@ func (u *Union3ErrorOrSuccessOrWarning) Decode(holder *cffi.CFFIValueUnionVarian
 func (u Union3ErrorOrSuccessOrWarning) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "Union3ErrorOrSuccessOrWarning":
-		return baml.EncodeValue(*u.variant_Union3ErrorOrSuccessOrWarning)
+	case "Success":
+		return baml.EncodeValue(*u.variant_Success)
+
+	case "Warning":
+		return baml.EncodeValue(*u.variant_Warning)
+
+	case "Error":
+		return baml.EncodeValue(*u.variant_Error)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -727,8 +1261,14 @@ func (u Union3ErrorOrSuccessOrWarning) BamlTypeName() string {
 func (u Union3ErrorOrSuccessOrWarning) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "Union3ErrorOrSuccessOrWarning":
-		return json.Marshal(u.variant_Union3ErrorOrSuccessOrWarning)
+	case "Success":
+		return json.Marshal(u.variant_Success)
+
+	case "Warning":
+		return json.Marshal(u.variant_Warning)
+
+	case "Error":
+		return json.Marshal(u.variant_Error)
 
 	}
 
@@ -738,57 +1278,149 @@ func (u Union3ErrorOrSuccessOrWarning) MarshalJSON() ([]byte, error) {
 func (u *Union3ErrorOrSuccessOrWarning) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_Union3ErrorOrSuccessOrWarning)
+	err = json.Unmarshal(data, &u.variant_Success)
 	if err == nil {
-		u.variant = "Union3ErrorOrSuccessOrWarning"
+		u.variant = "Success"
 		return nil
 	} else {
-		u.variant_Union3ErrorOrSuccessOrWarning = nil
+		u.variant_Success = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Warning)
+	if err == nil {
+		u.variant = "Warning"
+		return nil
+	} else {
+		u.variant_Warning = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Error)
+	if err == nil {
+		u.variant = "Error"
+		return nil
+	} else {
+		u.variant_Error = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union3ErrorOrSuccessOrWarning__NewUnion3ErrorOrSuccessOrWarning(v Union3ErrorOrSuccessOrWarning) Union3ErrorOrSuccessOrWarning {
+func Union3ErrorOrSuccessOrWarning__NewSuccess(v Success) Union3ErrorOrSuccessOrWarning {
 
 	return Union3ErrorOrSuccessOrWarning{
-		variant:                               "Union3ErrorOrSuccessOrWarning",
-		variant_Union3ErrorOrSuccessOrWarning: &v,
+		variant:         "Success",
+		variant_Success: &v,
 	}
 }
 
-func (u *Union3ErrorOrSuccessOrWarning) SetUnion3ErrorOrSuccessOrWarning(v Union3ErrorOrSuccessOrWarning) {
+func (u *Union3ErrorOrSuccessOrWarning) SetSuccess(v Success) {
 
-	u.variant = "Union3ErrorOrSuccessOrWarning"
-	u.variant_Union3ErrorOrSuccessOrWarning = &v
+	u.variant = "Success"
+	u.variant_Success = &v
+
+	u.variant_Warning = nil
+
+	u.variant_Error = nil
 
 }
 
-func (u *Union3ErrorOrSuccessOrWarning) IsUnion3ErrorOrSuccessOrWarning() bool {
-	return u.variant == "Union3ErrorOrSuccessOrWarning"
+func (u *Union3ErrorOrSuccessOrWarning) IsSuccess() bool {
+	return u.variant == "Success"
 }
 
-func (u *Union3ErrorOrSuccessOrWarning) AsUnion3ErrorOrSuccessOrWarning() *Union3ErrorOrSuccessOrWarning {
-	if u.variant != "Union3ErrorOrSuccessOrWarning" {
+func (u *Union3ErrorOrSuccessOrWarning) AsSuccess() *Success {
+	if u.variant != "Success" {
 		return nil
 	}
-	return u.variant_Union3ErrorOrSuccessOrWarning
+	return u.variant_Success
+}
+
+func Union3ErrorOrSuccessOrWarning__NewWarning(v Warning) Union3ErrorOrSuccessOrWarning {
+
+	return Union3ErrorOrSuccessOrWarning{
+		variant:         "Warning",
+		variant_Warning: &v,
+	}
+}
+
+func (u *Union3ErrorOrSuccessOrWarning) SetWarning(v Warning) {
+
+	u.variant = "Warning"
+	u.variant_Warning = &v
+
+	u.variant_Success = nil
+
+	u.variant_Error = nil
+
+}
+
+func (u *Union3ErrorOrSuccessOrWarning) IsWarning() bool {
+	return u.variant == "Warning"
+}
+
+func (u *Union3ErrorOrSuccessOrWarning) AsWarning() *Warning {
+	if u.variant != "Warning" {
+		return nil
+	}
+	return u.variant_Warning
+}
+
+func Union3ErrorOrSuccessOrWarning__NewError(v Error) Union3ErrorOrSuccessOrWarning {
+
+	return Union3ErrorOrSuccessOrWarning{
+		variant:       "Error",
+		variant_Error: &v,
+	}
+}
+
+func (u *Union3ErrorOrSuccessOrWarning) SetError(v Error) {
+
+	u.variant = "Error"
+	u.variant_Error = &v
+
+	u.variant_Success = nil
+
+	u.variant_Warning = nil
+
+}
+
+func (u *Union3ErrorOrSuccessOrWarning) IsError() bool {
+	return u.variant == "Error"
+}
+
+func (u *Union3ErrorOrSuccessOrWarning) AsError() *Error {
+	if u.variant != "Error" {
+		return nil
+	}
+	return u.variant_Error
 }
 
 type Union3IntOrRecursiveUnionOrString struct {
 	variant string
 
-	variant_Union3IntOrRecursiveUnionOrString *Union3IntOrRecursiveUnionOrString
+	variant_String *string
+
+	variant_Int *int64
+
+	variant_RecursiveUnion *RecursiveUnion
 }
 
 func (u *Union3IntOrRecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
 	variantName := holder.VariantName
 	switch variantName {
-	case "Union__RecursiveUnion__int__string":
-		u.variant = "Union3IntOrRecursiveUnionOrString"
-		value := baml.Decode(valueHolder).Interface().(Union3IntOrRecursiveUnionOrString)
-		u.variant_Union3IntOrRecursiveUnionOrString = &value
+	case "string":
+		u.variant = "String"
+		value := baml.Decode(valueHolder).Interface().(string)
+		u.variant_String = &value
+	case "int":
+		u.variant = "Int"
+		value := baml.Decode(valueHolder).Interface().(int64)
+		u.variant_Int = &value
+	case "RecursiveUnion":
+		u.variant = "RecursiveUnion"
+		value := baml.Decode(valueHolder).Interface().(RecursiveUnion)
+		u.variant_RecursiveUnion = &value
 
 	default:
 		panic(fmt.Sprintf("invalid union variant: %s", variantName))
@@ -798,8 +1430,14 @@ func (u *Union3IntOrRecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVa
 func (u Union3IntOrRecursiveUnionOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
-	case "Union3IntOrRecursiveUnionOrString":
-		return baml.EncodeValue(*u.variant_Union3IntOrRecursiveUnionOrString)
+	case "String":
+		return baml.EncodeValue(*u.variant_String)
+
+	case "Int":
+		return baml.EncodeValue(*u.variant_Int)
+
+	case "RecursiveUnion":
+		return baml.EncodeValue(*u.variant_RecursiveUnion)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -815,8 +1453,14 @@ func (u Union3IntOrRecursiveUnionOrString) BamlTypeName() string {
 func (u Union3IntOrRecursiveUnionOrString) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
-	case "Union3IntOrRecursiveUnionOrString":
-		return json.Marshal(u.variant_Union3IntOrRecursiveUnionOrString)
+	case "String":
+		return json.Marshal(u.variant_String)
+
+	case "Int":
+		return json.Marshal(u.variant_Int)
+
+	case "RecursiveUnion":
+		return json.Marshal(u.variant_RecursiveUnion)
 
 	}
 
@@ -826,39 +1470,119 @@ func (u Union3IntOrRecursiveUnionOrString) MarshalJSON() ([]byte, error) {
 func (u *Union3IntOrRecursiveUnionOrString) UnmarshalJSON(data []byte) error {
 	var err error
 
-	err = json.Unmarshal(data, &u.variant_Union3IntOrRecursiveUnionOrString)
+	err = json.Unmarshal(data, &u.variant_String)
 	if err == nil {
-		u.variant = "Union3IntOrRecursiveUnionOrString"
+		u.variant = "String"
 		return nil
 	} else {
-		u.variant_Union3IntOrRecursiveUnionOrString = nil
+		u.variant_String = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Int)
+	if err == nil {
+		u.variant = "Int"
+		return nil
+	} else {
+		u.variant_Int = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_RecursiveUnion)
+	if err == nil {
+		u.variant = "RecursiveUnion"
+		return nil
+	} else {
+		u.variant_RecursiveUnion = nil
 	}
 
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func Union3IntOrRecursiveUnionOrString__NewUnion3IntOrRecursiveUnionOrString(v Union3IntOrRecursiveUnionOrString) Union3IntOrRecursiveUnionOrString {
+func Union3IntOrRecursiveUnionOrString__NewString(v string) Union3IntOrRecursiveUnionOrString {
 
 	return Union3IntOrRecursiveUnionOrString{
-		variant: "Union3IntOrRecursiveUnionOrString",
-		variant_Union3IntOrRecursiveUnionOrString: &v,
+		variant:        "String",
+		variant_String: &v,
 	}
 }
 
-func (u *Union3IntOrRecursiveUnionOrString) SetUnion3IntOrRecursiveUnionOrString(v Union3IntOrRecursiveUnionOrString) {
+func (u *Union3IntOrRecursiveUnionOrString) SetString(v string) {
 
-	u.variant = "Union3IntOrRecursiveUnionOrString"
-	u.variant_Union3IntOrRecursiveUnionOrString = &v
+	u.variant = "String"
+	u.variant_String = &v
+
+	u.variant_Int = nil
+
+	u.variant_RecursiveUnion = nil
 
 }
 
-func (u *Union3IntOrRecursiveUnionOrString) IsUnion3IntOrRecursiveUnionOrString() bool {
-	return u.variant == "Union3IntOrRecursiveUnionOrString"
+func (u *Union3IntOrRecursiveUnionOrString) IsString() bool {
+	return u.variant == "String"
 }
 
-func (u *Union3IntOrRecursiveUnionOrString) AsUnion3IntOrRecursiveUnionOrString() *Union3IntOrRecursiveUnionOrString {
-	if u.variant != "Union3IntOrRecursiveUnionOrString" {
+func (u *Union3IntOrRecursiveUnionOrString) AsString() *string {
+	if u.variant != "String" {
 		return nil
 	}
-	return u.variant_Union3IntOrRecursiveUnionOrString
+	return u.variant_String
+}
+
+func Union3IntOrRecursiveUnionOrString__NewInt(v int64) Union3IntOrRecursiveUnionOrString {
+
+	return Union3IntOrRecursiveUnionOrString{
+		variant:     "Int",
+		variant_Int: &v,
+	}
+}
+
+func (u *Union3IntOrRecursiveUnionOrString) SetInt(v int64) {
+
+	u.variant = "Int"
+	u.variant_Int = &v
+
+	u.variant_String = nil
+
+	u.variant_RecursiveUnion = nil
+
+}
+
+func (u *Union3IntOrRecursiveUnionOrString) IsInt() bool {
+	return u.variant == "Int"
+}
+
+func (u *Union3IntOrRecursiveUnionOrString) AsInt() *int64 {
+	if u.variant != "Int" {
+		return nil
+	}
+	return u.variant_Int
+}
+
+func Union3IntOrRecursiveUnionOrString__NewRecursiveUnion(v RecursiveUnion) Union3IntOrRecursiveUnionOrString {
+
+	return Union3IntOrRecursiveUnionOrString{
+		variant:                "RecursiveUnion",
+		variant_RecursiveUnion: &v,
+	}
+}
+
+func (u *Union3IntOrRecursiveUnionOrString) SetRecursiveUnion(v RecursiveUnion) {
+
+	u.variant = "RecursiveUnion"
+	u.variant_RecursiveUnion = &v
+
+	u.variant_String = nil
+
+	u.variant_Int = nil
+
+}
+
+func (u *Union3IntOrRecursiveUnionOrString) IsRecursiveUnion() bool {
+	return u.variant == "RecursiveUnion"
+}
+
+func (u *Union3IntOrRecursiveUnionOrString) AsRecursiveUnion() *RecursiveUnion {
+	if u.variant != "RecursiveUnion" {
+		return nil
+	}
+	return u.variant_RecursiveUnion
 }

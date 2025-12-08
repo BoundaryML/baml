@@ -604,5 +604,14 @@ test_partial_deserializer_streaming!(
     known_ages: 10
   "#,
   TypeIR::class("Person"),
-  {"known_ages": 10, "name": null}
+  {"known_ages": {
+    "value": null,
+    "checks": {
+      "hi": {
+        "name": "hi",
+        "expression": "false",
+        "status": "failed"
+      }
+    }
+  }, "name": null}
 );

@@ -126,7 +126,10 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                     from_type_ir(&t, lookup)
                 });
 
-                let variants = if is_optional {
+                let meta_needs_wrapping =
+                    meta.constraints.len() > 0 || meta.streaming_behavior.done;
+
+                let variants = if is_optional || (!meta_needs_wrapping && !needed) {
                     variants
                         .chain(std::iter::once(TypeStreaming::null()))
                         .collect()

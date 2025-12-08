@@ -1535,6 +1535,8 @@ mod tests {
         ));
         let actual = converters::streaming::from_type_ir(&union, &TestLookup);
 
+        println!("actual: {actual}");
+        println!("expected: {expected}");
         assert_eq!(actual, expected);
     }
 
