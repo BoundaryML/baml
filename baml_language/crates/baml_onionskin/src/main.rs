@@ -124,7 +124,7 @@ fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
     eprintln!("[TIMING] Step 3 total: {:?}\n", start.elapsed());
 
     // Step 4: Show annotated compiler outputs
-    println!("Step 4: Compiler Output with Cache Status (Lexer + Parser only)");
+    println!("Step 4: Compiler Output with Cache Status");
     println!("------------------------------------------------------------------");
 
     for &phase in &[
@@ -132,6 +132,9 @@ fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
         CompilerPhase::Parser,
         CompilerPhase::Ast,
         CompilerPhase::Hir,
+        CompilerPhase::Thir,
+        CompilerPhase::Diagnostics,
+        CompilerPhase::Codegen,
     ] {
         println!("\n### {} ###", phase.name());
         let annotated = compiler.get_annotated_output(phase);

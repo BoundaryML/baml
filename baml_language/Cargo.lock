@@ -188,6 +188,7 @@ dependencies = [
  "baml_lexer",
  "baml_parser",
  "baml_thir",
+ "baml_vm",
  "baml_workspace",
  "clap",
  "crossterm",

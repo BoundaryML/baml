@@ -820,23 +820,84 @@ impl CompilerRunner {
     }
 
     fn run_codegen(&mut self) {
-        let bytecode = baml_codegen::generate_project_bytecode(&self.db, self.project_root);
-        let output = format!("{bytecode:#?}");
+        // Use compile_files directly with our source files instead of generate_project_bytecode,
+        // because project_files(db, root) returns an empty vector (not yet implemented).
+        let files: Vec<_> = self.source_files.values().copied().collect();
+        let program = baml_codegen::compile_files(&self.db, &files);
+        let file_recomputed = !self.modified_files.is_empty();
 
-        let file_recomputed = self.was_query_recomputed("generate_project_bytecode(");
-        let output_annotated: Vec<_> = output
-            .lines()
-            .map(|line| {
-                (
-                    line.to_string(),
-                    if file_recomputed {
-                        LineStatus::Recomputed
-                    } else {
-                        LineStatus::Cached
-                    },
-                )
-            })
-            .collect();
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Summary header
+        writeln!(output, "=== BYTECODE ===").ok();
+        output_annotated.push(("=== BYTECODE ===".to_string(), LineStatus::Unknown));
+
+        writeln!(output, "Functions: {}", program.function_indices.len()).ok();
+        output_annotated.push((
+            format!("Functions: {}", program.function_indices.len()),
+            LineStatus::Unknown,
+        ));
+
+        writeln!(output, "Objects: {}", program.objects.len()).ok();
+        output_annotated.push((
+            format!("Objects: {}", program.objects.len()),
+            LineStatus::Unknown,
+        ));
+
+        writeln!(output, "Globals: {}", program.globals.len()).ok();
+        output_annotated.push((
+            format!("Globals: {}", program.globals.len()),
+            LineStatus::Unknown,
+        ));
+
+        // Show functions and their bytecode using debug formatting (same as baml_test)
+        let mut func_names: Vec<_> = program.function_indices.keys().collect();
+        func_names.sort();
+        for func_name in func_names {
+            if let Some(&idx) = program.function_indices.get(func_name)
+                && let Some(baml_codegen::Object::Function(func)) = program.objects.get(idx)
+            {
+                let func_header = format!(
+                    "\nFunction {} (arity: {}, kind: {:?}):",
+                    func_name, func.arity, func.kind
+                );
+                writeln!(output, "{}", func_header).ok();
+                output_annotated.push((func_header, LineStatus::Unknown));
+
+                let bytecode_table = baml_vm::debug::display_bytecode(
+                    func,
+                    &[], // Empty stack for static display
+                    &program.objects,
+                    &program.globals,
+                );
+
+                if bytecode_table.is_empty() {
+                    writeln!(output, "  (no bytecode)").ok();
+                    output_annotated.push((
+                        "  (no bytecode)".to_string(),
+                        if file_recomputed {
+                            LineStatus::Recomputed
+                        } else {
+                            LineStatus::Cached
+                        },
+                    ));
+                } else {
+                    for line in bytecode_table.lines() {
+                        let formatted_line = format!("  {}", line);
+                        writeln!(output, "{}", formatted_line).ok();
+                        output_annotated.push((
+                            formatted_line,
+                            if file_recomputed {
+                                LineStatus::Recomputed
+                            } else {
+                                LineStatus::Cached
+                            },
+                        ));
+                    }
+                }
+            }
+        }
 
         self.phase_outputs.insert(CompilerPhase::Codegen, output);
         self.phase_outputs_annotated
