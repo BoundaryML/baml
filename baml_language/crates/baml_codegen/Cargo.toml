@@ -23,6 +23,7 @@ baml_hir = { workspace = true }
 baml_vm = { workspace = true }
 baml_workspace = { workspace = true }
 baml_thir = { workspace = true }
+internal-baml-diagnostics = { path = "../../../engine/baml-lib/diagnostics" }
 
 [dev-dependencies]
 insta = { workspace = true }

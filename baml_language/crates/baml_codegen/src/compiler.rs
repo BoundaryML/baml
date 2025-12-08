@@ -9,7 +9,10 @@ use std::collections::{HashMap, HashSet};
 use baml_base::Name;
 use baml_hir::{BinaryOp, ExprBody, ExprId, FunctionBody, Literal, Pattern, StmtId, UnaryOp};
 use baml_thir::{InferenceResult, Ty};
-use baml_vm::{BinOp, Bytecode, CmpOp, Function, FunctionKind, Instruction, Object, Value};
+use baml_vm::{
+    BinOp, Bytecode, CmpOp, Function, FunctionKind, GlobalIndex, Instruction, Object, ObjectIndex,
+    Value,
+};
 
 /// Block scope for tracking local variables.
 #[derive(Debug, Default)]
@@ -149,6 +152,8 @@ impl<'db> Compiler<'db> {
                             .map(std::string::ToString::to_string)
                             .collect(),
                     ],
+                    span: internal_baml_diagnostics::Span::fake(),
+                    block_notifications: Vec::new(),
                 }
             }
             FunctionBody::Missing => {
@@ -159,6 +164,8 @@ impl<'db> Compiler<'db> {
                     bytecode: Bytecode::new(),
                     kind: FunctionKind::Exec,
                     locals_in_scope: Vec::new(),
+                    span: internal_baml_diagnostics::Span::fake(),
+                    block_notifications: Vec::new(),
                 }
             }
         }
@@ -203,6 +210,8 @@ impl<'db> Compiler<'db> {
                     names
                 })
                 .collect(),
+            span: internal_baml_diagnostics::Span::fake(),
+            block_notifications: Vec::new(),
         }
     }
 
@@ -225,11 +234,11 @@ impl<'db> Compiler<'db> {
                 if let Some(&index) = self.locals.get(&name_str) {
                     self.emit(Instruction::LoadVar(index));
                 } else if let Some(&index) = self.globals.get(&name_str) {
-                    self.emit(Instruction::LoadGlobal(index));
+                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(index)));
                 } else {
                     // Unknown variable - this should have been caught by type checker
                     // For now, treat as global 0 (error recovery)
-                    self.emit(Instruction::LoadGlobal(0));
+                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(0)));
                 }
             }
 
@@ -330,7 +339,7 @@ impl<'db> Compiler<'db> {
 
                 if let (Some(class_info), Some(obj_idx)) = (class_info, class_obj_idx) {
                     // Emit AllocInstance with pre-allocated Class object index
-                    self.emit(Instruction::AllocInstance(obj_idx));
+                    self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(obj_idx)));
 
                     // For each field: Copy instance, compile value, StoreField
                     for (field_name, field_value) in fields {
@@ -466,7 +475,7 @@ impl<'db> Compiler<'db> {
                 // Get array length: baml.Array.length(@array)
                 let length_var = self.gensym("for_len");
                 if let Some(&len_fn_idx) = self.globals.get("baml.Array.length") {
-                    self.emit(Instruction::LoadGlobal(len_fn_idx));
+                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(len_fn_idx)));
                     self.emit(Instruction::LoadVar(array_location));
                     self.emit(Instruction::Call(1));
                 } else {
@@ -595,7 +604,7 @@ impl<'db> Compiler<'db> {
             Literal::String(v) => {
                 let obj_idx = self.objects.len();
                 self.objects.push(Object::String(v.clone()));
-                let idx = self.add_constant(Value::Object(obj_idx));
+                let idx = self.add_constant(Value::Object(ObjectIndex::from_raw(obj_idx)));
                 self.emit(Instruction::LoadConst(idx));
             }
             Literal::Bool(v) => {

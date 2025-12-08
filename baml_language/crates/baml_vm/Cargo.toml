@@ -9,6 +9,7 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
+description = "BAML Virtual Machine"
 
 [lib]
 doctest = false
@@ -17,3 +18,26 @@ doctest = false
 workspace = true
 
 [dependencies]
+anyhow = "1"
+colored = "2"
+indexmap = "2"
+tokio = { version = "1", features = ["sync"] }
+# TODO: Replace with appropriate dependency - needs baml-types equivalent
+baml-types = { path = "../../../engine/baml-lib/baml-types" }
+internal-baml-diagnostics = { path = "../../../engine/baml-lib/diagnostics" }
+
+[dev-dependencies]
+anyhow = "1"
+indexmap = "2"
+divan = { workspace = true }
+tokio = { version = "1", features = ["rt", "macros"] }
+# New compiler crates from baml_language
+baml_base = { workspace = true }
+baml_codegen = { workspace = true }
+baml_hir = { workspace = true }
+baml_thir = { workspace = true }
+salsa = { workspace = true }
+
+[[bench]]
+name = "fib"
+harness = false

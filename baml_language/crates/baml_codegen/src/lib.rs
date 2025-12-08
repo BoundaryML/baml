@@ -27,8 +27,8 @@ use std::collections::HashMap;
 use baml_base::{Name, SourceFile};
 use baml_hir::{self, ItemId, function_body, function_signature};
 pub use baml_vm::{
-    BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, Instruction, Object, Program,
-    UnaryOp, Value,
+    BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
+    ObjectIndex, Program, UnaryOp, Value,
 };
 use baml_workspace::Project;
 pub use compiler::{ClassInfo, Compiler, compile_function};
@@ -38,7 +38,6 @@ pub use compiler::{ClassInfo, Compiler, compile_function};
 /// This is the main entry point for project-wide code generation.
 /// It collects all functions from HIR, type-checks them via THIR,
 /// and compiles them to bytecode.
-#[salsa::tracked]
 pub fn generate_project_bytecode(db: &dyn baml_thir::Db, root: Project) -> Program {
     let files = baml_workspace::project_files(db, root);
     compile_files(db, &files)
@@ -148,7 +147,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                 // Old index (in compiler's local pool) -> new index (in program's pool)
                 for constant in &mut compiled_fn.bytecode.constants {
                     if let Value::Object(idx) = constant {
-                        *idx += object_base_idx;
+                        *idx = *idx + object_base_idx;
                     }
                 }
 
@@ -161,7 +160,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                     .insert(signature.name.to_string(), fn_obj_idx);
 
                 // Add to globals
-                program.add_global(Value::Object(fn_obj_idx));
+                program.add_global(Value::Object(ObjectIndex::from_raw(fn_obj_idx)));
             }
         }
     }
