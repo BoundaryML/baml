@@ -22,7 +22,7 @@ Comments are tracked on [a slack thread](https://gloo-global.slack.com/archives/
 
 ## Motivation
 
-Propmt Optimization is becoming an attractive way to add reliability to
+Prompt Optimization is becoming an attractive way to add reliability to
 LLM interactions. BAML's type-based interface to LLMs still requires
 the user to write and maintain a prompt string, and optionally to
 add descriptions and aliases to custom classes. The new `optimize`
@@ -70,12 +70,17 @@ To optimize it, kick off an optimization job:
 baml-cli optimize --features beta --apply
 ```
 
+This command should be run from your project root - usually the directory
+containing `baml_src`. If you have multiple `baml_src` directories in
+your project, run the `optimize` command from the directory that contains
+the `baml_src` you are trying to optimize.
+
 The `--features beta` flag tells BAML to enable experimental features,
 and will be required until we stabilize the optimizer, some
 time after we gather initial user feedback.
 
 The `--apply` flag tells BAML to overwrite the current prompt
-with the best promp identified by the optimization.
+with the best prompt identified by the optimization.
 
 After optimization is finished, you can continue with a
 normal BAML workflow. For example, running `baml-cli generate`
@@ -114,7 +119,7 @@ baml-cli optimize --features beta --weight accuracy=0.4,latency=0.6
 
 Weights don't necessarily need to add up to 1.0, even though
 it's customary to write them that way. They will be normalized
-to sum to 1 by the opmitizer.
+to sum to 1 by the optimizer.
 
 ### Creating custom metrics
 
@@ -174,6 +179,122 @@ It is not safe to change the classes or to delete text in `gepa.baml`
 because the internal part of the implementation is not customizable,
 and it expects the types to be in their current shape.
 
+`gepa.baml` is defined like this:
+
+```
+// GEPA: Genetic Pareto
+// =============================================================================
+// Data Models
+// =============================================================================
+
+/// Represents a field in a class schema that can be optimized
+class SchemaFieldDefinition {
+    field_name string
+    field_type string
+    description string?
+    alias string?
+    is_optional bool
+}
+
+/// Represents a class definition with its fields
+class ClassDefinition {
+    class_name string
+    description string?
+    fields SchemaFieldDefinition[]
+}
+
+/// The complete optimizable context for a function
+class OptimizableFunction {
+    function_name string
+    prompt_text string
+    classes ClassDefinition[]
+    enums EnumDefinition[]
+    function_source string?  // The full BAML source code of the function
+}
+
+/// An example from test execution showing inputs, outputs, and feedback
+class ReflectiveExample {
+    inputs map<string, string>
+    generated_outputs map<string, string>
+    feedback string
+    failure_location string?  // "prompt" | "parsing" | "assertion" | "unknown"
+    test_source string?  // The BAML source code of the test (including assertions)
+    test_name string?
+}
+
+/// The result of reflection: improved prompt and schema
+class ImprovedFunction {
+    prompt_text string
+    classes ClassDefinition[]
+    enums EnumDefinition[]
+    rationale string
+}
+
+// =============================================================================
+// Reflection Functions
+// =============================================================================
+
+
+/// Analyze test failures and propose improvements to prompt and schema
+function ProposeImprovements(current_function: OptimizableFunction, failed_examples: ReflectiveExample[], successful_examples: ReflectiveExample[]?) -> ImprovedFunction {
+    client ReflectionModel
+    prompt ##"
+        You are an expert at optimizing BAML functions. Your task is to improve
+        both the prompt and the schema annotations to make the tests pass.
+
+        ## Current Implementation
+
+        Function: {{ current_function.function_name }}
+
+        {% if current_function.function_source %}
+        ### Full BAML Source Code
+        ```baml
+        {{ current_function.function_source }}
+        ```
+        {% endif %}
+
+        ### Prompt Template
+        ```
+        {{ current_function.prompt_text }}
+        ```
+
+        ### Schema
+        {% for class in current_function.classes %}
+        class {{ class.class_name }}{% if class.description %} // {{ class.description }}{% endif %} {
+        {% for field in class.fields %}
+            {% if field.description %}/// @description("{{ field.description }}")
+            {% endif %}{{ field.field_name }} {{ field.field_type }}{% if field.alias %} @alias({{ field.alias }}){% endif %}
+
+        {% endfor %}
+        }
+        {% endfor %}
+
+
+        {% for ex in failed_examples %}
+        ### Failure {{ loop.index }}{% if ex.test_name %}: {{ ex.test_name }}{% endif %}
+
+        **Test Inputs:** {{ ex.inputs | tojson }}
+        **LLM Generated Output:** {{ ex.generated_outputs | tojson }}
+
+        {% endfor %}
+
+        ## Your Task
+
+        **IMPORTANT:** The test source code shows the assertions that must pass.
+        Look at the test's assert/check statements to understand what output is expected.
+        If the prompt contains instructions that contradict what the tests expect,
+        those instructions are BUGS that need to be fixed.
+
+        Analyze the failures and propose improvements. Consider:
+
+        1. **Prompt bugs:**
+           - Does the prompt contain instructions that cause wrong outputs?
+    ...
+```
+
+In summary, it synthesizes data about the existing BAML types, prompts, and
+test results in order to generate new proposed types and prompts.
+
 ## Optimization Timing
 
 GEPA optimization requires making many LLM calls. It uses LLMs
@@ -203,13 +324,18 @@ adding more candidate prompts, using `--resume` followed by
 the name of some prior run. Prior runs are tracked in the
 optimization state directory, `.baml_optimize`.
 
-## Understanding the Optimazation Algorithm
+```
+# Resume an existing run
+baml-cli optimize --features beta --resume .baml_optimize/run_20251208_150606
+```
+
+## Understanding the Optimization Algorithm
 
 The sections above are enough to get started. But an understanding
 of the GEPA algorithm can be helpful for getting better results
 from optimization.
 
-GEPA stands for Genetic Pareto, meaning that it proceedes by tracking
+GEPA stands for Genetic Pareto, meaning that it proceeds by tracking
 the current Pareto frontier, and combining prompts from the frontier
 to try to extend the frontier. A Pareto frontier prompt is any prompt
 that is not strictly worse than any other prompt, in the various ways
@@ -219,10 +345,33 @@ single prompt with the least failures (or the set of all prompts with
 the least failures, if there is a tie).
 
 The Pareto frontier begins with only your original prompt, and the algorithm
-procedes in a loop until it reaches its exploration budget (maximum
+proceeds in a loop until it reaches its exploration budget (maximum
 number of trials or maximum number of evaluations).
 
  1. Evaluate and score the current Pareto frontier (it starts with the initial prompt)
  2. Propose prompt improvements by iterating on or combining prompts on the frontier
  3. Reflect on the improved prompts and score them
  4. Repeat
+
+## Limitations
+
+### Types
+
+Optimization will modify your types' descriptions and aliases, but it will
+not make other changes, such as renaming or adding fields. Modifying
+your types would require you to modify any application code that uses your
+generated BAML functions.
+
+### Template strings
+
+When optimization runs over your functions, it only looks for the classes
+and enums already used by that function. The optimizer doesn't know how
+to search for template_strings in your codebase that would be helpful
+in the prompt.
+
+
+
+## References
+
+GEPA: https://arxiv.org/abs/2507.19457
+DSPy: https://dspy.ai/
