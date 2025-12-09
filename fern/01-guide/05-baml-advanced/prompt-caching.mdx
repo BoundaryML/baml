@@ -7,7 +7,7 @@ Recall that an LLM request usually looks like this, where it sometimes has metad
 ```curl {3,11} Anthropic Request
 curl https://api.anthropic.com/v1/messages \
   -H "content-type: application/json" \
-  -H "anthropic-version: anthropic-version: 2023-06-01" \
+  -H "anthropic-version: 2023-06-01" \
   -d '{
     "model": "claude-sonnet-4-5-20250929",
     "max_tokens": 1024,
