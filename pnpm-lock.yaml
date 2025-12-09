@@ -506,61 +506,61 @@ importers:
         version: 10.4.21(postcss@8.5.6)
       geist:
         specifier: 1.4.2
-        version: 1.4.2(next@15.4.5(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
+        version: 1.4.2(next@15.4.5(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))
       http-proxy:
         specifier: 1.18.1
         version: 1.18.1(debug@4.4.1)
       jotai:
         specifier: 2.12.5
-        version: 2.12.5(@types/react@19.1.9)(react@19.1.0)
+        version: 2.12.5(@types/react@19.2.7)(react@19.2.1)
       jotai-devtools:
         specifier: 0.12.0
-        version: 0.12.0(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(redux@5.0.1)(storybook@8.6.14)
+        version: 0.12.0(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(redux@5.0.1)(storybook@8.6.14)
       lucide-react:
         specifier: 0.516.0
-        version: 0.516.0(react@19.1.0)
+        version: 0.516.0(react@19.2.1)
       nanoid:
         specifier: 5.1.5
         version: 5.1.5
       next:
         specifier: 15.4.5
-        version: 15.4.5(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 15.4.5(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       next-themes:
         specifier: 0.4.6
-        version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 0.4.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       posthog-js:
         specifier: 1.253.4
         version: 1.253.4
       react:
-        specifier: 19.1.0
-        version: 19.1.0
+        specifier: 19.2.1
+        version: 19.2.1
       react-arborist:
         specifier: 3.4.3
-        version: 3.4.3(@types/node@24.0.3)(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 3.4.3(@types/node@24.0.3)(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       react-device-detect:
         specifier: 2.2.3
-        version: 2.2.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 2.2.3(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       react-dom:
-        specifier: 19.1.0
-        version: 19.1.0(react@19.1.0)
+        specifier: 19.2.1
+        version: 19.2.1(react@19.2.1)
       react-error-boundary:
         specifier: 6.0.0
-        version: 6.0.0(react@19.1.0)
+        version: 6.0.0(react@19.2.1)
       react-icons:
         specifier: 5.5.0
-        version: 5.5.0(react@19.1.0)
+        version: 5.5.0(react@19.2.1)
       react-joyride:
         specifier: 2.9.3
-        version: 2.9.3(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 2.9.3(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       react18-json-view:
         specifier: 0.2.9
-        version: 0.2.9(react@19.1.0)
+        version: 0.2.9(react@19.2.1)
       tailwindcss:
         specifier: 4.1.11
         version: 4.1.11
       use-resize-observer:
         specifier: 9.1.0
-        version: 9.1.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 9.1.0(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
     devDependencies:
       '@types/http-proxy':
         specifier: 1.17.16
@@ -569,11 +569,11 @@ importers:
         specifier: 24.0.3
         version: 24.0.3
       '@types/react':
-        specifier: 19.1.9
-        version: 19.1.9
+        specifier: 19.2.7
+        version: 19.2.7
       '@types/react-dom':
-        specifier: 19.1.7
-        version: 19.1.7(@types/react@19.1.9)
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.7)
       typescript:
         specifier: 5.8.3
         version: 5.8.3
@@ -594,19 +594,19 @@ importers:
         version: 4.1.17(vite@7.2.2(@types/node@24.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.43.1)(tsx@4.20.3)(yaml@2.8.0))
       allotment:
         specifier: 1.20.4
-        version: 1.20.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 1.20.4(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       jotai:
         specifier: 2.15.1
-        version: 2.15.1(@babel/core@7.27.7)(@babel/template@7.27.2)(@types/react@19.1.9)(react@19.1.0)
+        version: 2.15.1(@babel/core@7.27.7)(@babel/template@7.27.2)(@types/react@19.2.7)(react@19.2.1)
       next-themes:
         specifier: 0.4.6
-        version: 0.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        version: 0.4.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       react:
-        specifier: 19.1.0
-        version: 19.1.0
+        specifier: 19.2.1
+        version: 19.2.1
       react-dom:
-        specifier: 19.1.0
-        version: 19.1.0(react@19.1.0)
+        specifier: 19.2.1
+        version: 19.2.1(react@19.2.1)
       typescript:
         specifier: 5.8.3
         version: 5.8.3
@@ -615,11 +615,11 @@ importers:
         specifier: 24.0.3
         version: 24.0.3
       '@types/react':
-        specifier: 19.1.9
-        version: 19.1.9
+        specifier: 19.2.7
+        version: 19.2.7
       '@types/react-dom':
-        specifier: 19.1.7
-        version: 19.1.7(@types/react@19.1.9)
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.7)
       '@vitejs/plugin-react':
         specifier: 4.5.2
         version: 4.5.2(vite@7.2.2(@types/node@24.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.43.1)(tsx@4.20.3)(yaml@2.8.0))
@@ -962,7 +962,7 @@ importers:
         version: 5.28.5(@swc/core@1.12.7)
       next:
         specifier: 15.3.3
-        version: 15.3.3(@opentelemetry/api@1.9.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        version: 15.3.3(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       typescript:
         specifier: 5.8.3
         version: 5.8.3
@@ -6310,6 +6310,11 @@ packages:
     peerDependencies:
       '@types/react': ^19.0.0
 
+  '@types/react-dom@19.2.3':
+    resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
+    peerDependencies:
+      '@types/react': ^19.2.0
+
   '@types/react-reconciler@0.28.9':
     resolution: {integrity: sha512-HHM3nxyUZ3zAylX8ZEyrDNd2XZOnQ0D5XfunJF5FLQnZbHHYq4UWvW1QfelQNXv1ICNkwYhfxjwfnqivYB6bFg==}
     peerDependencies:
@@ -6328,6 +6333,9 @@ packages:
 
   '@types/react@19.2.2':
     resolution: {integrity: sha512-6mDvHUFSjyT2B2yeNx2nUgMxh9LtOWvkhIU3uePn2I2oyNymUAX1NIsdgviM4CH+JSrp2D2hsMvJOkxY+0wNRA==}
+
+  '@types/react@19.2.7':
+    resolution: {integrity: sha512-MWtvHrGZLFttgeEj28VXHxpmwYbor/ATPYbBfSFZEIRK0ecCFLl2Qo55z52Hss+UV9CRN7trSeq1zbgx7YDWWg==}
 
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
@@ -7618,6 +7626,9 @@ packages:
 
   csstype@3.1.3:
     resolution: {integrity: sha512-M1uQkMl8rQK/szD0LNhtqxIPLpimGm8sOBwU7lLnCpSbTyY3yeU1Vc7l4KT5zT4s/yOxHH5O7tIuuLOCnLADRw==}
+
+  csstype@3.2.3:
+    resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
   cytoscape-cose-bilkent@4.1.0:
     resolution: {integrity: sha512-wgQlVIUJF13Quxiv5e1gstZ08rnZj2XaLHGoFMYXz7SkNfCDOOteKBE6SYRfA9WxxI/iBc3ajfDoc6hb/MRAHQ==}
@@ -11354,10 +11365,10 @@ packages:
     peerDependencies:
       react: ^19.1.1
 
-  react-dom@19.2.0:
-    resolution: {integrity: sha512-UlbRu4cAiGaIewkPyiRGJk0imDN2T3JjieT6spoL2UeSf5od4n5LB/mQ4ejmxhCFT1tYe8IvaFulzynWovsEFQ==}
+  react-dom@19.2.1:
+    resolution: {integrity: sha512-ibrK8llX2a4eOskq1mXKu/TGZj9qzomO+sNfO98M6d9zIPOEhlBkMkBUBLd1vgS0gQsLDBzA+8jJBVXDnfHmJg==}
     peerDependencies:
-      react: ^19.2.0
+      react: ^19.2.1
 
   react-error-boundary@3.1.4:
     resolution: {integrity: sha512-uM9uPzZJTF6wRQORmSrvOIgt4lJ9MC1sNgEOj2XGsDTRE4kmpWxg7ENK9EWNKJRMAOY9z0MuF4yIfl6gp4sotA==}
@@ -11648,8 +11659,8 @@ packages:
     resolution: {integrity: sha512-w8nqGImo45dmMIfljjMwOGtbmC/mk4CMYhWIicdSflH91J9TyCyczcPFXJzrZ/ZXcgGRFeP6BU0BEJTw6tZdfQ==}
     engines: {node: '>=0.10.0'}
 
-  react@19.2.0:
-    resolution: {integrity: sha512-tmbWg6W31tQLeB5cdIBOicJDJRR2KzXsV7uSK9iNfLWQ5bIZfxuPEHp7M8wiHyHnn0DD1i7w3Zmin0FtkrwoCQ==}
+  react@19.2.1:
+    resolution: {integrity: sha512-DGrYcCWK7tvYMnWh79yrPHt+vdx9tY+1gPZa7nJQtO/p8bLTDaHp4dzwEhQB7pZ4Xe3ok4XKuEPrVuc+wlpkmw==}
     engines: {node: '>=0.10.0'}
 
   read-cache@1.0.0:
@@ -15370,6 +15381,12 @@ snapshots:
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
 
+  '@floating-ui/react-dom@2.1.3(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
+    dependencies:
+      '@floating-ui/dom': 1.7.1
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+
   '@floating-ui/react@0.26.28(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
     dependencies:
       '@floating-ui/react-dom': 2.1.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -15384,6 +15401,14 @@ snapshots:
       '@floating-ui/utils': 0.2.9
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
+      tabbable: 6.2.0
+
+  '@floating-ui/react@0.26.28(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
+    dependencies:
+      '@floating-ui/react-dom': 2.1.3(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      '@floating-ui/utils': 0.2.9
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
       tabbable: 6.2.0
 
   '@floating-ui/utils@0.2.9': {}
@@ -16260,6 +16285,15 @@ snapshots:
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
 
+  '@mantine/code-highlight@7.17.8(@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@19.2.1))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(@mantine/hooks@7.17.8(react@19.2.1))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
+    dependencies:
+      '@mantine/core': 7.17.8(@mantine/hooks@7.17.8(react@19.2.1))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      '@mantine/hooks': 7.17.8(react@19.2.1)
+      clsx: 2.1.1
+      highlight.js: 11.11.1
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+
   '@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@19.1.0))(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
     dependencies:
       '@floating-ui/react': 0.26.28(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -16288,6 +16322,20 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
 
+  '@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@19.2.1))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)':
+    dependencies:
+      '@floating-ui/react': 0.26.28(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      '@mantine/hooks': 7.17.8(react@19.2.1)
+      clsx: 2.1.1
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+      react-number-format: 5.4.4(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      react-remove-scroll: 2.7.1(@types/react@19.2.7)(react@19.2.1)
+      react-textarea-autosize: 8.5.9(@types/react@19.2.7)(react@19.2.1)
+      type-fest: 4.41.0
+    transitivePeerDependencies:
+      - '@types/react'
+
   '@mantine/hooks@7.17.8(react@19.1.0)':
     dependencies:
       react: 19.1.0
@@ -16295,6 +16343,10 @@ snapshots:
   '@mantine/hooks@7.17.8(react@19.1.1)':
     dependencies:
       react: 19.1.1
+
+  '@mantine/hooks@7.17.8(react@19.2.1)':
+    dependencies:
+      react: 19.2.1
 
   '@mapbox/node-pre-gyp@1.0.11':
     dependencies:
@@ -19673,6 +19725,10 @@ snapshots:
     dependencies:
       '@types/react': 19.1.9
 
+  '@types/react-dom@19.2.3(@types/react@19.2.7)':
+    dependencies:
+      '@types/react': 19.2.7
+
   '@types/react-reconciler@0.28.9(@types/react@19.1.9)':
     dependencies:
       '@types/react': 19.1.9
@@ -19692,6 +19748,10 @@ snapshots:
   '@types/react@19.2.2':
     dependencies:
       csstype: 3.1.3
+
+  '@types/react@19.2.7':
+    dependencies:
+      csstype: 3.2.3
 
   '@types/retry@0.12.0': {}
 
@@ -20478,6 +20538,17 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
       use-resize-observer: 9.1.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+
+  allotment@1.20.4(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+    dependencies:
+      classnames: 2.5.1
+      eventemitter3: 5.0.1
+      lodash.clamp: 4.0.3
+      lodash.debounce: 4.0.8
+      lodash.isequal: 4.5.0
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+      use-resize-observer: 9.1.0(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
 
   anser@1.4.10: {}
 
@@ -21293,6 +21364,8 @@ snapshots:
       cssom: 0.3.8
 
   csstype@3.1.3: {}
+
+  csstype@3.2.3: {}
 
   cytoscape-cose-bilkent@4.1.0(cytoscape@3.32.1):
     dependencies:
@@ -22328,9 +22401,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  geist@1.4.2(next@15.4.5(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)):
+  geist@1.4.2(next@15.4.5(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)):
     dependencies:
-      next: 15.4.5(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      next: 15.4.5(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
 
   generic-pool@3.4.2: {}
 
@@ -23687,6 +23760,28 @@ snapshots:
       - redux
       - storybook
 
+  jotai-devtools@0.12.0(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(redux@5.0.1)(storybook@8.6.14):
+    dependencies:
+      '@mantine/code-highlight': 7.17.8(@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@19.2.1))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(@mantine/hooks@7.17.8(react@19.2.1))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      '@mantine/core': 7.17.8(@mantine/hooks@7.17.8(react@19.2.1))(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      '@mantine/hooks': 7.17.8(react@19.2.1)
+      '@redux-devtools/extension': 3.3.0(redux@5.0.1)
+      '@storybook/test': 8.6.14(storybook@8.6.14)
+      clsx: 2.1.1
+      javascript-stringify: 2.1.0
+      jotai: 2.12.5(@types/react@19.2.7)(react@19.2.1)
+      jsondiffpatch: 0.5.0
+      react: 19.2.1
+      react-base16-styling: 0.9.1
+      react-error-boundary: 5.0.0(react@19.2.1)
+      react-json-tree: 0.18.0(@types/react@19.2.7)(react@19.2.1)
+      react-resizable-panels: 2.1.7(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+    transitivePeerDependencies:
+      - '@types/react'
+      - react-dom
+      - redux
+      - storybook
+
   jotai@2.12.2(@types/react@19.1.9)(react@19.1.0):
     optionalDependencies:
       '@types/react': 19.1.9
@@ -23702,12 +23797,17 @@ snapshots:
       '@types/react': 19.1.9
       react: 19.1.1
 
-  jotai@2.15.1(@babel/core@7.27.7)(@babel/template@7.27.2)(@types/react@19.1.9)(react@19.1.0):
+  jotai@2.12.5(@types/react@19.2.7)(react@19.2.1):
+    optionalDependencies:
+      '@types/react': 19.2.7
+      react: 19.2.1
+
+  jotai@2.15.1(@babel/core@7.27.7)(@babel/template@7.27.2)(@types/react@19.2.7)(react@19.2.1):
     optionalDependencies:
       '@babel/core': 7.27.7
       '@babel/template': 7.27.2
-      '@types/react': 19.1.9
-      react: 19.1.0
+      '@types/react': 19.2.7
+      react: 19.2.1
 
   joycon@3.1.1: {}
 
@@ -24102,6 +24202,10 @@ snapshots:
   lucide-react@0.516.0(react@19.1.0):
     dependencies:
       react: 19.1.0
+
+  lucide-react@0.516.0(react@19.2.1):
+    dependencies:
+      react: 19.2.1
 
   lucide-react@0.536.0(react@19.1.1):
     dependencies:
@@ -24986,6 +25090,11 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 
+  next-themes@0.4.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+    dependencies:
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+
   next@15.2.3(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       '@next/env': 15.2.3
@@ -25038,7 +25147,7 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.3.3(@opentelemetry/api@1.9.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
+  next@15.3.3(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
     dependencies:
       '@next/env': 15.3.3
       '@swc/counter': 0.1.3
@@ -25046,9 +25155,9 @@ snapshots:
       busboy: 1.6.0
       caniuse-lite: 1.0.30001726
       postcss: 8.4.31
-      react: 19.2.0
-      react-dom: 19.2.0(react@19.2.0)
-      styled-jsx: 5.1.6(react@19.2.0)
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+      styled-jsx: 5.1.6(react@19.2.1)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.3.3
       '@next/swc-darwin-x64': 15.3.3
@@ -25073,6 +25182,30 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
       styled-jsx: 5.1.6(@babel/core@7.28.4)(react@19.1.0)
+    optionalDependencies:
+      '@next/swc-darwin-arm64': 15.4.5
+      '@next/swc-darwin-x64': 15.4.5
+      '@next/swc-linux-arm64-gnu': 15.4.5
+      '@next/swc-linux-arm64-musl': 15.4.5
+      '@next/swc-linux-x64-gnu': 15.4.5
+      '@next/swc-linux-x64-musl': 15.4.5
+      '@next/swc-win32-arm64-msvc': 15.4.5
+      '@next/swc-win32-x64-msvc': 15.4.5
+      '@opentelemetry/api': 1.9.0
+      sharp: 0.34.3
+    transitivePeerDependencies:
+      - '@babel/core'
+      - babel-plugin-macros
+
+  next@15.4.5(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+    dependencies:
+      '@next/env': 15.4.5
+      '@swc/helpers': 0.5.15
+      caniuse-lite: 1.0.30001726
+      postcss: 8.4.31
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+      styled-jsx: 5.1.6(react@19.2.1)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.4.5
       '@next/swc-darwin-x64': 15.4.5
@@ -25833,6 +25966,20 @@ snapshots:
       - '@types/node'
       - '@types/react'
 
+  react-arborist@3.4.3(@types/node@24.0.3)(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+    dependencies:
+      react: 19.2.1
+      react-dnd: 14.0.5(@types/node@24.0.3)(@types/react@19.2.7)(react@19.2.1)
+      react-dnd-html5-backend: 14.1.0
+      react-dom: 19.2.1(react@19.2.1)
+      react-window: 1.8.11(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      redux: 5.0.1
+      use-sync-external-store: 1.5.0(react@19.2.1)
+    transitivePeerDependencies:
+      - '@types/hoist-non-react-statics'
+      - '@types/node'
+      - '@types/react'
+
   react-base16-styling@0.9.1:
     dependencies:
       '@babel/runtime': 7.28.2
@@ -25850,10 +25997,10 @@ snapshots:
       date-fns-jalali: 4.1.0-0
       react: 19.1.0
 
-  react-device-detect@2.2.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+  react-device-detect@2.2.3(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
     dependencies:
-      react: 19.1.0
-      react-dom: 19.1.0(react@19.1.0)
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
       ua-parser-js: 1.0.40
 
   react-devtools-core@6.1.5:
@@ -25880,6 +26027,18 @@ snapshots:
       '@types/node': 24.0.3
       '@types/react': 19.1.9
 
+  react-dnd@14.0.5(@types/node@24.0.3)(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      '@react-dnd/invariant': 2.0.0
+      '@react-dnd/shallowequal': 2.0.0
+      dnd-core: 14.0.1
+      fast-deep-equal: 3.1.3
+      hoist-non-react-statics: 3.3.2
+      react: 19.2.1
+    optionalDependencies:
+      '@types/node': 24.0.3
+      '@types/react': 19.2.7
+
   react-dom@18.3.1(react@18.3.1):
     dependencies:
       loose-envify: 1.4.0
@@ -25896,9 +26055,9 @@ snapshots:
       react: 19.1.1
       scheduler: 0.26.0
 
-  react-dom@19.2.0(react@19.2.0):
+  react-dom@19.2.1(react@19.2.1):
     dependencies:
-      react: 19.2.0
+      react: 19.2.1
       scheduler: 0.27.0
 
   react-error-boundary@3.1.4(react@19.1.0):
@@ -25916,10 +26075,20 @@ snapshots:
       '@babel/runtime': 7.27.6
       react: 19.1.1
 
+  react-error-boundary@5.0.0(react@19.2.1):
+    dependencies:
+      '@babel/runtime': 7.27.6
+      react: 19.2.1
+
   react-error-boundary@6.0.0(react@19.1.0):
     dependencies:
       '@babel/runtime': 7.27.6
       react: 19.1.0
+
+  react-error-boundary@6.0.0(react@19.2.1):
+    dependencies:
+      '@babel/runtime': 7.27.6
+      react: 19.2.1
 
   react-expanding-textarea@2.3.6(react@19.1.0):
     dependencies:
@@ -25928,14 +26097,14 @@ snapshots:
       react-with-forwarded-ref: 0.3.5(react@19.1.0)
       tslib: 2.8.1
 
-  react-floater@0.7.9(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+  react-floater@0.7.9(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
     dependencies:
       deepmerge: 4.3.1
       is-lite: 0.8.2
       popper.js: 1.16.1
       prop-types: 15.8.1
-      react: 19.1.0
-      react-dom: 19.1.0(react@19.1.0)
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
       tree-changes: 0.9.3
 
   react-hook-form@7.58.0(react@19.1.0):
@@ -25946,10 +26115,14 @@ snapshots:
     dependencies:
       react: 19.1.0
 
-  react-innertext@1.1.5(@types/react@19.1.9)(react@19.1.0):
+  react-icons@5.5.0(react@19.2.1):
     dependencies:
-      '@types/react': 19.1.9
-      react: 19.1.0
+      react: 19.2.1
+
+  react-innertext@1.1.5(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      '@types/react': 19.2.7
+      react: 19.2.1
 
   react-instantsearch-core@7.16.2(algoliasearch@5.34.1)(react@19.1.1):
     dependencies:
@@ -25976,16 +26149,16 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-joyride@2.9.3(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+  react-joyride@2.9.3(@types/react@19.2.7)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
     dependencies:
       '@gilbarbara/deep-equal': 0.3.1
       deep-diff: 1.0.2
       deepmerge: 4.3.1
       is-lite: 1.2.1
-      react: 19.1.0
-      react-dom: 19.1.0(react@19.1.0)
-      react-floater: 0.7.9(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      react-innertext: 1.1.5(@types/react@19.1.9)(react@19.1.0)
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+      react-floater: 0.7.9(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      react-innertext: 1.1.5(@types/react@19.2.7)(react@19.2.1)
       react-is: 16.13.1
       scroll: 3.0.1
       scrollparent: 2.1.0
@@ -26008,6 +26181,14 @@ snapshots:
       '@types/lodash': 4.17.17
       '@types/react': 19.1.9
       react: 19.1.1
+      react-base16-styling: 0.9.1
+
+  react-json-tree@0.18.0(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      '@babel/runtime': 7.28.2
+      '@types/lodash': 4.17.17
+      '@types/react': 19.2.7
+      react: 19.2.1
       react-base16-styling: 0.9.1
 
   react-konva@19.0.6(@types/react@19.1.9)(konva@9.3.20)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
@@ -26115,6 +26296,11 @@ snapshots:
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
 
+  react-number-format@5.4.4(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+    dependencies:
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+
   react-pdf@9.0.0(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       clsx: 2.1.1
@@ -26163,6 +26349,14 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.9
 
+  react-remove-scroll-bar@2.3.8(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      react: 19.2.1
+      react-style-singleton: 2.2.3(@types/react@19.2.7)(react@19.2.1)
+      tslib: 2.8.1
+    optionalDependencies:
+      '@types/react': 19.2.7
+
   react-remove-scroll@2.7.1(@types/react@19.1.9)(react@19.1.0):
     dependencies:
       react: 19.1.0
@@ -26185,6 +26379,17 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.9
 
+  react-remove-scroll@2.7.1(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      react: 19.2.1
+      react-remove-scroll-bar: 2.3.8(@types/react@19.2.7)(react@19.2.1)
+      react-style-singleton: 2.2.3(@types/react@19.2.7)(react@19.2.1)
+      tslib: 2.8.1
+      use-callback-ref: 1.3.3(@types/react@19.2.7)(react@19.2.1)
+      use-sidecar: 1.1.3(@types/react@19.2.7)(react@19.2.1)
+    optionalDependencies:
+      '@types/react': 19.2.7
+
   react-resizable-panels@2.1.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       react: 19.1.0
@@ -26194,6 +26399,11 @@ snapshots:
     dependencies:
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
+
+  react-resizable-panels@2.1.7(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+    dependencies:
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
 
   react-resizable-panels@3.0.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
@@ -26272,6 +26482,14 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.9
 
+  react-style-singleton@2.2.3(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      get-nonce: 1.0.1
+      react: 19.2.1
+      tslib: 2.8.1
+    optionalDependencies:
+      '@types/react': 19.2.7
+
   react-svg-pan-zoom@3.13.1:
     dependencies:
       prop-types: 15.8.1
@@ -26305,6 +26523,15 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
 
+  react-textarea-autosize@8.5.9(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      '@babel/runtime': 7.28.2
+      react: 19.2.1
+      use-composed-ref: 1.4.0(@types/react@19.2.7)(react@19.2.1)
+      use-latest: 1.3.0(@types/react@19.2.7)(react@19.2.1)
+    transitivePeerDependencies:
+      - '@types/react'
+
   react-transition-group@4.4.5(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       '@babel/runtime': 7.28.2
@@ -26335,6 +26562,13 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 
+  react-window@1.8.11(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+    dependencies:
+      '@babel/runtime': 7.27.6
+      memoize-one: 5.2.1
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
+
   react-with-forwarded-ref@0.3.5(react@19.1.0):
     dependencies:
       react: 19.1.0
@@ -26351,10 +26585,10 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 
-  react18-json-view@0.2.9(react@19.1.0):
+  react18-json-view@0.2.9(react@19.2.1):
     dependencies:
       copy-to-clipboard: 3.3.3
-      react: 19.1.0
+      react: 19.2.1
 
   react@18.3.1:
     dependencies:
@@ -26364,7 +26598,7 @@ snapshots:
 
   react@19.1.1: {}
 
-  react@19.2.0: {}
+  react@19.2.1: {}
 
   read-cache@1.0.0:
     dependencies:
@@ -27197,10 +27431,10 @@ snapshots:
     optionalDependencies:
       '@babel/core': 7.28.4
 
-  styled-jsx@5.1.6(react@19.2.0):
+  styled-jsx@5.1.6(react@19.2.1):
     dependencies:
       client-only: 0.0.1
-      react: 19.2.0
+      react: 19.2.1
 
   stylis@4.3.6: {}
 
@@ -27929,6 +28163,13 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.9
 
+  use-callback-ref@1.3.3(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      react: 19.2.1
+      tslib: 2.8.1
+    optionalDependencies:
+      '@types/react': 19.2.7
+
   use-composed-ref@1.4.0(@types/react@19.1.9)(react@19.1.0):
     dependencies:
       react: 19.1.0
@@ -27941,6 +28182,12 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.9
 
+  use-composed-ref@1.4.0(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      react: 19.2.1
+    optionalDependencies:
+      '@types/react': 19.2.7
+
   use-isomorphic-layout-effect@1.2.1(@types/react@19.1.9)(react@19.1.0):
     dependencies:
       react: 19.1.0
@@ -27952,6 +28199,12 @@ snapshots:
       react: 19.1.1
     optionalDependencies:
       '@types/react': 19.1.9
+
+  use-isomorphic-layout-effect@1.2.1(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      react: 19.2.1
+    optionalDependencies:
+      '@types/react': 19.2.7
 
   use-latest@1.3.0(@types/react@19.1.9)(react@19.1.0):
     dependencies:
@@ -27967,11 +28220,24 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.9
 
+  use-latest@1.3.0(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      react: 19.2.1
+      use-isomorphic-layout-effect: 1.2.1(@types/react@19.2.7)(react@19.2.1)
+    optionalDependencies:
+      '@types/react': 19.2.7
+
   use-resize-observer@9.1.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       '@juggle/resize-observer': 3.4.0
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
+
+  use-resize-observer@9.1.0(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+    dependencies:
+      '@juggle/resize-observer': 3.4.0
+      react: 19.2.1
+      react-dom: 19.2.1(react@19.2.1)
 
   use-sidecar@1.1.3(@types/react@19.1.9)(react@19.1.0):
     dependencies:
@@ -27989,6 +28255,14 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.9
 
+  use-sidecar@1.1.3(@types/react@19.2.7)(react@19.2.1):
+    dependencies:
+      detect-node-es: 1.1.0
+      react: 19.2.1
+      tslib: 2.8.1
+    optionalDependencies:
+      '@types/react': 19.2.7
+
   use-sync-external-store@1.5.0(react@19.1.0):
     dependencies:
       react: 19.1.0
@@ -27996,6 +28270,10 @@ snapshots:
   use-sync-external-store@1.5.0(react@19.1.1):
     dependencies:
       react: 19.1.1
+
+  use-sync-external-store@1.5.0(react@19.2.1):
+    dependencies:
+      react: 19.2.1
 
   util-deprecate@1.0.2: {}
 
