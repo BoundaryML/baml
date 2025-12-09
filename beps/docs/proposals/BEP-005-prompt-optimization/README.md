@@ -369,6 +369,7 @@ and enums already used by that function. The optimizer doesn't know how
 to search for template_strings in your codebase that would be helpful
 in the prompt.
 
+## Future features
 
 
 ## References

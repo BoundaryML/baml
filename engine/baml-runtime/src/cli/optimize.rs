@@ -150,6 +150,48 @@ impl OptimizeArgs {
 
         // If --reset-gepa-prompts is specified alone, just reset and exit
         if self.reset_gepa_prompts {
+            // Check if custom gepa.baml exists
+            let baml_src_dir = gepa_dir.join("baml_src");
+            let gepa_file = baml_src_dir.join("gepa.baml");
+
+            if gepa_file.exists() {
+                // Compute hash of existing files to see if they differ from defaults
+                let current_hash = {
+                    use std::{
+                        collections::hash_map::DefaultHasher,
+                        hash::{Hash, Hasher},
+                    };
+
+                    let gepa_content = std::fs::read_to_string(&gepa_file).unwrap_or_default();
+                    let clients_content =
+                        std::fs::read_to_string(baml_src_dir.join("clients.baml"))
+                            .unwrap_or_default();
+
+                    let mut hasher = DefaultHasher::new();
+                    gepa_content.hash(&mut hasher);
+                    clients_content.hash(&mut hasher);
+                    format!("{:x}", hasher.finish())
+                };
+
+                let default_hash = crate::optimize::gepa_defaults::default_gepa_hash();
+
+                // Only prompt if the existing files differ from defaults (i.e., have been customized)
+                if current_hash != default_hash {
+                    println!("This will erase your custom gepa.baml. Are you sure? [Y/n]");
+                    let mut input = String::new();
+                    std::io::stdin()
+                        .read_line(&mut input)
+                        .context("Failed to read user input")?;
+                    let input = input.trim().to_lowercase();
+
+                    // Accept Y, y, yes, or empty (default to yes)
+                    if !input.is_empty() && input != "y" && input != "yes" {
+                        println!("Cancelled.");
+                        return Ok(OptimizeRunResult::Cancelled);
+                    }
+                }
+            }
+
             println!("Resetting GEPA prompts to defaults...");
             crate::optimize::gepa_runtime::reset_gepa_prompts(&gepa_dir)?;
             println!("GEPA prompts reset successfully.");
