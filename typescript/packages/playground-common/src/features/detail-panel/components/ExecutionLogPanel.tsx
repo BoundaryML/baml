@@ -38,14 +38,13 @@ function StatusIndicator({ state }: { state: NodeExecutionState }) {
   switch (state) {
     case 'running':
       return <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />;
-    case 'success':
-      return <CheckCircle2 className="w-3 h-3 text-green-500" />;
     case 'error':
       return <XCircle className="w-3 h-3 text-red-500" />;
     case 'pending':
       return <Clock className="w-3 h-3 text-yellow-500" />;
+    case 'success':
     default:
-      return <div className="w-3 h-3 rounded-full bg-muted-foreground/30" />;
+      return null;
   }
 }
 
@@ -80,7 +79,7 @@ function HeaderEnterCard({
       data-node-id={event.nodeId}
     >
       <StatusIndicator state={state} />
-      <span className="text-xs text-foreground">{event.label}</span>
+      <span className="text-xs text-muted-foreground">{event.label}</span>
     </div>
   );
 }

@@ -29,7 +29,7 @@ import { graphControlsTipDismissedAtom, unifiedSelectionAtom } from '../atoms';
 import { MousePointer2, ZoomIn, X, ChevronLeft } from 'lucide-react';
 import type { NavigationInput } from '../../../../sdk/navigation';
 import { panToNodeIfNeeded } from '../../../../utils/cameraPan';
-import { allNodeStatesAtom, currentGraphAtom, scrollToNodeIdAtom } from '../../../../sdk/atoms/core.atoms';
+import { allNodeStatesAtom, allNodeIterationsAtom, currentGraphAtom, scrollToNodeIdAtom } from '../../../../sdk/atoms/core.atoms';
 
 /**
  * GraphView - ReactFlow graph component for the Graph tab
@@ -57,6 +57,7 @@ export const GraphView = () => {
   const selection = useAtomValue(unifiedSelectionAtom);
   const selectedNodeId = selection.mode === 'workflow' ? selection.selectedNodeId : null;
   const nodeStates = useAtomValue(allNodeStatesAtom);
+  const nodeIterations = useAtomValue(allNodeIterationsAtom);
   const currentGraph = useAtomValue(currentGraphAtom);
   const setScrollToNodeId = useSetAtom(scrollToNodeIdAtom);
 
@@ -110,6 +111,28 @@ export const GraphView = () => {
       })
     );
   }, [nodeStates, setNodes, nodesInitialized]);
+
+  // Update ReactFlow nodes when SDK node iterations change (for loops)
+  useEffect(() => {
+    if (!nodesInitialized) return;
+    if (nodeIterations.size === 0) return;
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        const iteration = nodeIterations.get(node.id) ?? 0;
+        if (iteration !== (node.data.iteration ?? 0)) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              iteration,
+            },
+          };
+        }
+        return node;
+      })
+    );
+  }, [nodeIterations, setNodes, nodesInitialized]);
 
   // set selected node id if it changes
   useEffect(() => {

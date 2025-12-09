@@ -37,6 +37,8 @@ import {
   nodeExecutionsAtom,
   nodeStateAtomFamily,
   allNodeStatesAtom,
+  allNodeIterationsAtom,
+  nodeIterationAtomFamily,
   viewModeAtom,
   selectedNodeIdAtom,
   detailPanelAtom,
@@ -188,6 +190,22 @@ export function useSetNodeState(nodeId: string) {
  */
 export function useAllNodeStates() {
   return useAtomValue(allNodeStatesAtom);
+}
+
+/**
+ * Get iteration count for a specific node
+ * Used to track how many times a node has run in a loop
+ */
+export function useNodeIteration(nodeId: string) {
+  return useAtomValue(nodeIterationAtomFamily(nodeId));
+}
+
+/**
+ * Get all node iterations as a Map
+ * Used for displaying iteration badges on nodes
+ */
+export function useAllNodeIterations() {
+  return useAtomValue(allNodeIterationsAtom);
 }
 
 // ============================================================================

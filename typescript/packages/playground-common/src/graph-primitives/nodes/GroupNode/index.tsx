@@ -1,6 +1,7 @@
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { type ComponentType, memo } from 'react';
 import { Loader as Spinner } from '@baml/ui/custom/loader';
+import { RefreshCw } from 'lucide-react';
 
 export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
   // Use direction from node data, fallback to vertical
@@ -11,6 +12,7 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
 
   // Execution state styling - very subtle border colors
   const executionState = (data as any).executionState || 'not-started';
+  const iteration = (data as any).iteration ?? 0;
   const labelStateStyles: Record<string, string> = {
     'not-started': 'bg-muted border border-border text-muted-foreground',
     'running': 'bg-muted border border-blue-300 dark:border-blue-500 text-muted-foreground',
@@ -74,7 +76,15 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
       <div
         className={`absolute -top-0 left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto whitespace-nowrap px-3 py-1.5 rounded-md font-semibold text-sm shadow-sm ${labelStyle}`}
       >
-        {(data as any).label || id}
+        <span className="flex items-center gap-1.5">
+          {(data as any).label || id}
+          {iteration > 0 && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-medium">
+              <RefreshCw className="w-3 h-3" />
+              {iteration + 1}
+            </span>
+          )}
+        </span>
       </div>
 
       {/* Source handles (bottom) */}

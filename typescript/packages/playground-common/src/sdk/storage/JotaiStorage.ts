@@ -23,6 +23,9 @@ import {
   nodeStateAtomFamily,
   registerNodeAtom,
   clearAllNodeStatesAtom,
+  nodeIterationAtomFamily,
+  loopOrdinalsAtom,
+  clearAllNodeIterationsAtom,
   cacheAtom,
   getCacheKey,
   versionAtom,
@@ -183,6 +186,38 @@ export class JotaiStorage implements SDKStorage {
 
   clearAllNodeStates() {
     this.store.set(clearAllNodeStatesAtom);
+  }
+
+  // ============================================================================
+  // Node Iterations (for loops)
+  // ============================================================================
+
+  setNodeIteration(nodeId: string, iteration: number) {
+    this.store.set(nodeIterationAtomFamily(nodeId), iteration);
+  }
+
+  getNodeIteration(nodeId: string) {
+    return this.store.get(nodeIterationAtomFamily(nodeId));
+  }
+
+  incrementNodeIteration(nodeId: string) {
+    const current = this.store.get(nodeIterationAtomFamily(nodeId));
+    this.store.set(nodeIterationAtomFamily(nodeId), current + 1);
+    return current + 1;
+  }
+
+  getLoopOrdinals() {
+    return this.store.get(loopOrdinalsAtom);
+  }
+
+  setLoopOrdinal(loopPath: string, ordinal: number) {
+    const ordinals = new Map(this.store.get(loopOrdinalsAtom));
+    ordinals.set(loopPath, ordinal);
+    this.store.set(loopOrdinalsAtom, ordinals);
+  }
+
+  clearAllNodeIterations() {
+    this.store.set(clearAllNodeIterationsAtom);
   }
 
   // ============================================================================
