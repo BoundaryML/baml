@@ -337,6 +337,7 @@ export function ExecutionLogPanel() {
   const detailPanel = useAtomValue(detailPanelAtom);
   const nodeStates = useAtomValue(allNodeStatesAtom);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showOnlyVariables, setShowOnlyVariables] = useState(false);
 
   // Auto-scroll to bottom when new events arrive
   const prevEventsLengthRef = useRef(events.length);
@@ -361,14 +362,22 @@ export function ExecutionLogPanel() {
     }
   }, [scrollToNodeId, setScrollToNodeId]);
 
+  // Filter events if showing only variables
+  const filteredEvents = useMemo(() => {
+    if (showOnlyVariables) {
+      return events.filter(e => e.type === 'variable.update');
+    }
+    return events;
+  }, [events, showOnlyVariables]);
+
   // Compute indentation levels for all events
-  const eventsWithIndent = useMemo(() => computeIndentLevels(events), [events]);
+  const eventsWithIndent = useMemo(() => computeIndentLevels(filteredEvents), [filteredEvents]);
 
   if (!detailPanel.isOpen) {
     return null;
   }
 
-  if (eventsWithIndent.length === 0) {
+  if (events.length === 0) {
     return (
       <div className="h-full flex flex-col bg-card border-t border-border">
         <div className="flex items-center justify-between px-3 py-2 border-b border-border">
@@ -394,9 +403,18 @@ export function ExecutionLogPanel() {
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-semibold">Execution Log</h3>
           <span className="px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground rounded">
-            {eventsWithIndent.length} events
+            {filteredEvents.length} events
           </span>
         </div>
+        <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showOnlyVariables}
+            onChange={(e) => setShowOnlyVariables(e.target.checked)}
+            className="w-3 h-3 rounded border-border"
+          />
+          Variables only
+        </label>
       </div>
 
       {/* Event List */}

@@ -1280,6 +1280,8 @@ export class BAMLSDK {
             const functionName = notification.functionName ?? 'unknown';
 
             if (notification.variableName) {
+              console.log('[SDK] Variable notification:', notification.variableName, notification.value);
+
               let parsedVarValue: unknown;
               if (notification.value !== undefined) {
                 try {
