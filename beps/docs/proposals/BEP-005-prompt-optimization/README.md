@@ -2,7 +2,7 @@
 id: BEP-005
 title: "Prompt Optimization"
 shepherds: Greg Hale <imalsogreg@gmail.com>
-status: Draft
+status: Accepted
 created: 2025-12-06
 ---
 
@@ -222,4 +222,7 @@ The Pareto frontier begins with only your original prompt, and the algorithm
 procedes in a loop until it reaches its exploration budget (maximum
 number of trials or maximum number of evaluations).
 
- 1. Evaluate
+ 1. Evaluate and score the current Pareto frontier (it starts with the initial prompt)
+ 2. Propose prompt improvements by iterating on or combining prompts on the frontier
+ 3. Reflect on the improved prompts and score them
+ 4. Repeat

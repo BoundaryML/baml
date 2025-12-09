@@ -1,4 +1,4 @@
-// GEPA: Generative Evolution of Prompts and Annotations
+// GEPA: Genetic Pareto
 //
 // This file contains the reflection functions used by `baml-cli optimize`
 // to analyze test failures and propose improved prompts and schema annotations.
@@ -15,7 +15,7 @@ class SchemaFieldDefinition {
     field_name string
     field_type string
     description string?
-    aliases string[]
+    alias string?
     is_optional bool
 }
 
@@ -64,7 +64,10 @@ class ImprovedFunction {
 // Reflection Functions
 // =============================================================================
 
+
 /// Analyze test failures and propose improvements to prompt and schema
+// TODO: Include additional instructions about optimizing
+//       for latency and token counts if the user requests it with --weight
 function ProposeImprovements(current_function: OptimizableFunction, failed_examples: ReflectiveExample[], successful_examples: ReflectiveExample[]?) -> ImprovedFunction {
     client ReflectionModel
     prompt ##"
@@ -92,7 +95,7 @@ function ProposeImprovements(current_function: OptimizableFunction, failed_examp
         class {{ class.class_name }}{% if class.description %} // {{ class.description }}{% endif %} {
         {% for field in class.fields %}
             {% if field.description %}/// @description("{{ field.description }}")
-            {% endif %}{{ field.field_name }} {{ field.field_type }}{% if not field.is_optional %}{% endif %}{% if field.aliases %} @alias({{ field.aliases | join(', ') }}){% endif %}
+            {% endif %}{{ field.field_name }} {{ field.field_type }}{% if field.alias %} @alias({{ field.alias }}){% endif %}
 
         {% endfor %}
         }
@@ -189,13 +192,14 @@ function ProposeImprovements(current_function: OptimizableFunction, failed_examp
         }
         ```
 
-        Note how it uses its function arguments in the prompt, that aliases
-        and descriptions take a single argument, and that we use ctx.output_format
-        without preceding it by instructions like "use this format" (because
-        those instructions are present already in ctx.output_format.
+        Note how it uses its function arguments in the prompt, and that we
+        use ctx.output_format without preceding it by instructions like "use
+        this format" (because those instructions are present already in
+        ctx.output_format).
 
         Return your improvements. Fix any bugs in the prompt that cause test failures.
         Explain your reasoning in the rationale field.
+
 
         {{ ctx.output_format }}
     "##

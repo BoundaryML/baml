@@ -327,13 +327,10 @@ pub fn start_publisher(
     };
 
     // Use blocking send for UpdateRuntime to ensure it's processed
-    // // TODO: Reenable. (it crashes optimizer)
-    if false {
-        match channel.blocking_send(PublisherMessage::UpdateRuntime(lookup)) {
-            Ok(()) => {}
-            Err(e) => {
-                log::error!("Failed to send UpdateRuntime message: {}", e);
-            }
+    match channel.blocking_send(PublisherMessage::UpdateRuntime(lookup)) {
+        Ok(()) => {}
+        Err(e) => {
+            log::error!("Failed to send UpdateRuntime message: {}", e);
         }
     }
 }

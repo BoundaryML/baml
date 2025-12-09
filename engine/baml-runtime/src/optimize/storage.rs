@@ -1,13 +1,21 @@
 //! Storage - JSON-based persistence for optimization state and artifacts
 //!
+//! The types here are similar to those stored elsewhere. These ones exist
+//! purely to define the disk format. Changing them in a backwards-incompatible
+//! way would invalidate old optimize runs. Forwards-incompatible changes are
+//! OK as long as you do not share new serialized state with old versions
+//! of `baml-cli`.
+//!
 //! All optimization state is stored in human-readable JSON format for:
 //! - Language-agnostic resumability
 //! - Human readability and debugging
 //! - Git-friendly diffs
 //! - Security (no code execution risk)
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -147,8 +155,14 @@ impl OptimizationStorage {
     // =========================================================================
 
     /// Save a candidate as a BAML file with metadata comments
+    /// TODO: Render description and alias with valid baml syntax,
+    /// instead of in comments above the field.
     pub fn save_candidate(&self, candidate: &Candidate) -> Result<PathBuf> {
-        let filename = format!("{:02}_{}.baml", candidate.id, candidate_method_name(&candidate));
+        let filename = format!(
+            "{:02}_{}.baml",
+            candidate.id,
+            candidate_method_name(candidate)
+        );
         let path = self.run_dir.join("candidates").join(&filename);
 
         let mut content = String::new();
@@ -157,7 +171,10 @@ impl OptimizationStorage {
         content.push_str(&format!("// Generated candidate #{}\n", candidate.id));
         content.push_str(&format!("// Iteration: {}\n", candidate.iteration));
         if !candidate.parent_ids.is_empty() {
-            content.push_str(&format!("// Parent candidates: {:?}\n", candidate.parent_ids));
+            content.push_str(&format!(
+                "// Parent candidates: {:?}\n",
+                candidate.parent_ids
+            ));
         }
         if let Some(ref scores) = candidate.scores {
             content.push_str(&format!(
@@ -168,10 +185,7 @@ impl OptimizationStorage {
         content.push('\n');
 
         // Function definition
-        content.push_str(&format!(
-            "function {}",
-            candidate.function.function_name
-        ));
+        content.push_str(&format!("function {}", candidate.function.function_name));
         // Note: We don't have the full function signature here, just the prompt
         content.push_str(" {\n");
         content.push_str("  prompt #\"\n");
@@ -195,9 +209,8 @@ impl OptimizationStorage {
                     content.push_str(&format!("  /// @description(\"{}\")\n", desc));
                 }
                 content.push_str(&format!("  {} {}", field.field_name, field.field_type));
-                if !field.aliases.is_empty() {
-                    let aliases: Vec<String> = field.aliases.iter().map(|a| format!("\"{}\"", a)).collect();
-                    content.push_str(&format!(" @alias({})", aliases.join(", ")));
+                if let Some(alias) = field.alias.as_ref() {
+                    content.push_str(&format!(" @alias({alias})"));
                 }
                 content.push('\n');
             }
@@ -221,7 +234,10 @@ impl OptimizationStorage {
         std::fs::write(&path, content)?;
 
         // Also save the full candidate as JSON for programmatic access
-        let json_path = self.run_dir.join("candidates").join(format!("{:02}_candidate.json", candidate.id));
+        let json_path = self
+            .run_dir
+            .join("candidates")
+            .join(format!("{:02}_candidate.json", candidate.id));
         let json = serde_json::to_string_pretty(candidate)?;
         std::fs::write(&json_path, json)?;
 
@@ -242,7 +258,10 @@ impl OptimizationStorage {
             let path = entry.path();
 
             if path.extension().map(|e| e == "json").unwrap_or(false)
-                && path.file_name().map(|n| n.to_string_lossy().ends_with("_candidate.json")).unwrap_or(false)
+                && path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().ends_with("_candidate.json"))
+                    .unwrap_or(false)
             {
                 let content = std::fs::read_to_string(&path)?;
                 let candidate: Candidate = serde_json::from_str(&content)?;
@@ -262,7 +281,10 @@ impl OptimizationStorage {
 
     /// Save evaluation results for a candidate
     pub fn save_evaluation(&self, candidate_id: usize, scores: &CandidateScores) -> Result<()> {
-        let path = self.run_dir.join("evaluations").join(format!("{:02}_evaluation.json", candidate_id));
+        let path = self
+            .run_dir
+            .join("evaluations")
+            .join(format!("{:02}_evaluation.json", candidate_id));
         let json = serde_json::to_string_pretty(scores)?;
         std::fs::write(path, json)?;
         Ok(())
@@ -270,7 +292,10 @@ impl OptimizationStorage {
 
     /// Load evaluation results for a candidate
     pub fn load_evaluation(&self, candidate_id: usize) -> Result<Option<CandidateScores>> {
-        let path = self.run_dir.join("evaluations").join(format!("{:02}_evaluation.json", candidate_id));
+        let path = self
+            .run_dir
+            .join("evaluations")
+            .join(format!("{:02}_evaluation.json", candidate_id));
 
         if !path.exists() {
             return Ok(None);
@@ -292,7 +317,10 @@ impl OptimizationStorage {
         parent_id: usize,
         failures: &[ReflectiveExample],
     ) -> Result<()> {
-        let path = self.run_dir.join("reflections").join(format!("iteration_{:02}.json", iteration));
+        let path = self
+            .run_dir
+            .join("reflections")
+            .join(format!("iteration_{:02}.json", iteration));
 
         #[derive(Serialize)]
         struct ReflectionData<'a> {

@@ -14,8 +14,7 @@ pub struct SchemaFieldDefinition {
     pub field_name: String,
     pub field_type: String,
     pub description: Option<String>,
-    pub aliases: Vec<String>,
-    pub is_optional: bool,
+    pub alias: Option<String>,
 }
 
 /// Represents a class definition with its fields
@@ -41,7 +40,7 @@ pub struct OptimizableFunction {
     pub prompt_text: String,
     pub classes: Vec<ClassDefinition>,
     pub enums: Vec<EnumDefinition>,
-    /// The full BAML source code of the function and its impl block
+    /// The full BAML source code of the function
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function_source: Option<String>,
 }
@@ -108,6 +107,8 @@ impl CandidateScores {
         prompt_tokens: Vec<f64>,
         completion_tokens: Vec<f64>,
         latencies_ms: Vec<f64>,
+        // TODO: This should be a map from String to usize
+        // (the number of passing checks with each key name).
         check_results: HashMap<String, Vec<bool>>,
     ) -> Self {
         let avg = |v: &[f64]| {

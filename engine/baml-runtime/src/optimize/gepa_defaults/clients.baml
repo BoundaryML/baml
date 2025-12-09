@@ -5,24 +5,21 @@
 //
 // Run `baml-cli optimize --reset-gepa-prompts` to restore defaults.
 
+// Anthropic Claude
 client<llm> ReflectionModel {
-    provider openai
+    provider anthropic
     options {
-        model "gpt-4o"
         temperature 0.7
-        max_tokens 8000
+        model "claude-opus-4-20251101"
     }
 }
 
 // Alternative configurations (uncomment to use):
 
-// Anthropic Claude
 // client<llm> ReflectionModel {
-//     provider anthropic
+//     provider openai
 //     options {
-//         model "claude-sonnet-4-20250514"
-//         temperature 0.7
-//         max_tokens 8000
+//         model "gpt-4o"
 //     }
 // }
 

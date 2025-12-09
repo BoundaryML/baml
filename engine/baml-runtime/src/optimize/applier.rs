@@ -4,15 +4,12 @@
 //! class descriptions/aliases, enum descriptions) to create a new BamlRuntime
 //! for evaluation.
 
-use std::collections::HashMap;
-use std::path::Path;
-use std::sync::Arc;
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use anyhow::{Context, Result};
 
-use crate::{BamlRuntime, InternalRuntimeInterface};
-
 use super::candidate::{ClassDefinition, EnumDefinition, ImprovedFunction, OptimizableFunction};
+use crate::{BamlRuntime, InternalRuntimeInterface};
 
 /// Applies candidate changes to create a modified runtime
 pub struct CandidateApplier {
@@ -277,7 +274,7 @@ impl CandidateApplier {
 
                 // Update field attributes
                 for field in &class_def.fields {
-                    if field.description.is_some() || !field.aliases.is_empty() {
+                    if field.description.is_some() || field.alias.is_some() {
                         // We'll handle field attributes separately
                     }
                 }

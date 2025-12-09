@@ -80,7 +80,12 @@ impl NormalizationStats {
         let min = values.iter().cloned().fold(f64::INFINITY, f64::min);
         let max = values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
 
-        Self { mean, std, min, max }
+        Self {
+            mean,
+            std,
+            min,
+            max,
+        }
     }
 }
 
@@ -144,16 +149,25 @@ impl ParetoFrontier {
                 .map(|s| obj.get_value(s))
                 .collect();
 
-            self.stats.insert(obj.name.clone(), NormalizationStats::from_values(&values));
+            self.stats
+                .insert(obj.name.clone(), NormalizationStats::from_values(&values));
         }
     }
 
     /// Add a candidate to the frontier if it's non-dominated
     /// Returns true if the candidate was added
-    pub fn add(&mut self, candidate_idx: usize, scores: &CandidateScores, all_candidates: &[Candidate]) -> bool {
+    pub fn add(
+        &mut self,
+        candidate_idx: usize,
+        scores: &CandidateScores,
+        all_candidates: &[Candidate],
+    ) -> bool {
         // Check if this candidate is dominated by any on the frontier
         for &frontier_idx in &self.frontier {
-            if let Some(frontier_scores) = all_candidates.get(frontier_idx).and_then(|c| c.scores.as_ref()) {
+            if let Some(frontier_scores) = all_candidates
+                .get(frontier_idx)
+                .and_then(|c| c.scores.as_ref())
+            {
                 if self.dominates(frontier_scores, scores) {
                     // New candidate is dominated, don't add
                     return false;
@@ -163,10 +177,14 @@ impl ParetoFrontier {
 
         // Remove any frontier candidates dominated by the new one
         // We need to collect indices to remove first to avoid borrow checker issues
-        let to_remove: Vec<usize> = self.frontier
+        let to_remove: Vec<usize> = self
+            .frontier
             .iter()
             .filter(|&&frontier_idx| {
-                if let Some(frontier_scores) = all_candidates.get(frontier_idx).and_then(|c| c.scores.as_ref()) {
+                if let Some(frontier_scores) = all_candidates
+                    .get(frontier_idx)
+                    .and_then(|c| c.scores.as_ref())
+                {
                     self.dominates(scores, frontier_scores)
                 } else {
                     false
@@ -208,9 +226,13 @@ impl ParetoFrontier {
         self.frontier
             .iter()
             .max_by(|&&a, &&b| {
-                let a_score = self.weighted_score(candidates.get(a).and_then(|c| c.scores.as_ref()));
-                let b_score = self.weighted_score(candidates.get(b).and_then(|c| c.scores.as_ref()));
-                a_score.partial_cmp(&b_score).unwrap_or(std::cmp::Ordering::Equal)
+                let a_score =
+                    self.weighted_score(candidates.get(a).and_then(|c| c.scores.as_ref()));
+                let b_score =
+                    self.weighted_score(candidates.get(b).and_then(|c| c.scores.as_ref()));
+                a_score
+                    .partial_cmp(&b_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .copied()
     }
@@ -292,11 +314,14 @@ pub fn parse_weight_args(weight_args: &[String]) -> Result<Vec<Objective>> {
 
     // Ensure accuracy is included
     if !objectives.iter().any(|o| o.name == "accuracy") {
-        objectives.insert(0, Objective {
-            name: "accuracy".to_string(),
-            weight: 0.5, // Lower weight since other objectives were specified
-            direction: Direction::Maximize,
-        });
+        objectives.insert(
+            0,
+            Objective {
+                name: "accuracy".to_string(),
+                weight: 0.5, // Lower weight since other objectives were specified
+                direction: Direction::Maximize,
+            },
+        );
     }
 
     Ok(objectives)

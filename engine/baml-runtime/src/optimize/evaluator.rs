@@ -3,15 +3,13 @@
 //! This module handles running BAML tests against a candidate's prompt/schema
 //! configuration and collecting the resulting metrics.
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result};
 use baml_types::BamlValue;
 
-use crate::{BamlRuntime, TestFailReason, TestStatus, TripWire};
-
 use super::candidate::{CandidateScores, ReflectiveExample};
+use crate::{BamlRuntime, TestFailReason, TestStatus, TripWire};
 
 /// Evaluates candidates by running tests
 pub struct Evaluator {
@@ -36,14 +34,8 @@ pub struct TestEvalResult {
 
 impl Evaluator {
     /// Create a new evaluator
-    pub fn new(
-        env_vars: HashMap<String, String>,
-        parallel: usize,
-    ) -> Self {
-        Self {
-            env_vars,
-            parallel,
-        }
+    pub fn new(env_vars: HashMap<String, String>, parallel: usize) -> Self {
+        Self { env_vars, parallel }
     }
 
     /// Evaluate by running all tests for a function
@@ -97,10 +89,8 @@ impl Evaluator {
             let handle = tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.unwrap();
 
-                let ctx_manager = runtime.create_ctx_manager(
-                    BamlValue::String("optimize".to_string()),
-                    None,
-                );
+                let ctx_manager =
+                    runtime.create_ctx_manager(BamlValue::String("optimize".to_string()), None);
 
                 let start = std::time::Instant::now();
 
@@ -127,10 +117,10 @@ impl Evaluator {
                         let passed = matches!(status, TestStatus::Pass);
 
                         // Extract the actual output from the response
-                        let output = extract_output_from_response(&response);
+                        let output = response_output(&response);
 
                         // Extract detailed error information
-                        let (error, check_results) = extract_error_details(&status);
+                        let (error, check_results) = error_details(&status);
 
                         // Extract token counts from LLM response if available
                         let (prompt_tokens, completion_tokens) = response
@@ -140,7 +130,9 @@ impl Evaluator {
                                 let llm_resp = fr.llm_response();
                                 match llm_resp {
                                     crate::internal::llm_client::LLMResponse::Success(complete) => {
-                                        complete.metadata.prompt_tokens
+                                        complete
+                                            .metadata
+                                            .prompt_tokens
                                             .zip(complete.metadata.output_tokens)
                                     }
                                     _ => None,
@@ -223,11 +215,8 @@ impl Evaluator {
                             map
                         })
                         .unwrap_or_default(),
-                    feedback: r
-                        .error
-                        .clone()
-                        .unwrap_or_else(|| "Test failed".to_string()),
-                    failure_location: determine_failure_location(r),
+                    feedback: r.error.clone().unwrap_or_else(|| "Test failed".to_string()),
+                    failure_location: failure_location(r),
                     test_source,
                     test_name: Some(r.test_name.clone()),
                 }
@@ -270,15 +259,9 @@ fn compute_scores(results: &[TestEvalResult]) -> CandidateScores {
     let tests_passed = results.iter().filter(|r| r.passed).count();
     let tests_total = results.len();
 
-    let prompt_tokens: Vec<f64> = results
-        .iter()
-        .filter_map(|r| r.prompt_tokens)
-        .collect();
+    let prompt_tokens: Vec<f64> = results.iter().filter_map(|r| r.prompt_tokens).collect();
 
-    let completion_tokens: Vec<f64> = results
-        .iter()
-        .filter_map(|r| r.completion_tokens)
-        .collect();
+    let completion_tokens: Vec<f64> = results.iter().filter_map(|r| r.completion_tokens).collect();
 
     let latencies: Vec<f64> = results.iter().map(|r| r.latency_ms).collect();
 
@@ -304,11 +287,14 @@ fn compute_scores(results: &[TestEvalResult]) -> CandidateScores {
 }
 
 /// Determine the likely failure location from a test result
-fn determine_failure_location(result: &TestEvalResult) -> Option<String> {
+fn failure_location(result: &TestEvalResult) -> Option<String> {
     let error = result.error.as_ref()?;
     let error_lower = error.to_lowercase();
 
-    if error_lower.contains("parse") || error_lower.contains("json") || error_lower.contains("deserialize") {
+    if error_lower.contains("parse")
+        || error_lower.contains("json")
+        || error_lower.contains("deserialize")
+    {
         Some("parsing".to_string())
     } else if error_lower.contains("assert") || error_lower.contains("constraint") {
         Some("assertion".to_string())
@@ -322,22 +308,18 @@ fn determine_failure_location(result: &TestEvalResult) -> Option<String> {
 }
 
 /// Extract the actual output from a TestResponse
-fn extract_output_from_response(response: &crate::TestResponse) -> Option<String> {
+fn response_output(response: &crate::TestResponse) -> Option<String> {
     // Try to get output from expr function response first
-    if let Some(expr_res) = &response.expr_function_response {
-        if let Ok(val) = expr_res {
-            return Some(serde_json::to_string_pretty(&val.serialize_partial()).unwrap_or_default());
-        }
+    if let Some(Ok(val)) = &response.expr_function_response {
+        return Some(serde_json::to_string_pretty(&val.serialize_partial()).unwrap_or_default());
     }
 
     // Try to get output from LLM function response
     if let Some(func_res) = &response.function_response {
-        if let Some(parsed) = func_res.result_with_constraints() {
-            if let Ok(value) = parsed {
-                return Some(
-                    serde_json::to_string_pretty(&value.serialize_partial()).unwrap_or_default(),
-                );
-            }
+        if let Some(Ok(value)) = func_res.result_with_constraints() {
+            return Some(
+                serde_json::to_string_pretty(&value.serialize_partial()).unwrap_or_default(),
+            );
         }
         // Even if parsing failed, try to get the raw LLM output
         if let Ok(content) = func_res.llm_response().content() {
@@ -349,16 +331,17 @@ fn extract_output_from_response(response: &crate::TestResponse) -> Option<String
 }
 
 /// Extract detailed error information from TestStatus
-fn extract_error_details(status: &TestStatus<'_>) -> (Option<String>, HashMap<String, bool>) {
+fn error_details(status: &TestStatus<'_>) -> (Option<String>, HashMap<String, bool>) {
     match status {
         TestStatus::Pass => (None, HashMap::new()),
         TestStatus::NeedsHumanEval(checks) => {
-            let check_map: HashMap<String, bool> = checks
-                .iter()
-                .map(|c| (c.clone(), false))
-                .collect();
+            let check_map: HashMap<String, bool> =
+                checks.iter().map(|c| (c.clone(), false)).collect();
             (
-                Some(format!("Checks need human evaluation: {}", checks.join(", "))),
+                Some(format!(
+                    "Checks need human evaluation: {}",
+                    checks.join(", ")
+                )),
                 check_map,
             )
         }

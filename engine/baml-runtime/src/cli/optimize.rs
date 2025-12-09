@@ -1,3 +1,4 @@
+#![allow(clippy::print_stdout)]
 /// CLI Options and top-level implementation for the
 /// `baml-cli optimize` command.
 use std::{collections::HashMap, path::PathBuf};

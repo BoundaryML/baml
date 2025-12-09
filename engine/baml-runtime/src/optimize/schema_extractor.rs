@@ -8,7 +8,9 @@ use std::collections::{HashMap, HashSet};
 use anyhow::{Context, Result};
 use baml_types::TypeIR;
 
-use super::candidate::{ClassDefinition, EnumDefinition, OptimizableFunction, SchemaFieldDefinition};
+use super::candidate::{
+    ClassDefinition, EnumDefinition, OptimizableFunction, SchemaFieldDefinition,
+};
 use crate::InternalRuntimeInterface;
 
 /// Extract the optimizable function context from the IR
@@ -94,7 +96,9 @@ pub fn extract_test_source(
     let function = ir.walk_functions().find(|f| f.name() == function_name)?;
 
     // Find the test within the function
-    let test = function.walk_tests().find(|t| t.test_case().name == test_name)?;
+    let test = function
+        .walk_tests()
+        .find(|t| t.test_case().name == test_name)?;
 
     extract_source_from_span(test.span())
 }
@@ -124,9 +128,6 @@ fn collect_reachable_types(
                         // Get field type
                         let field_type_ir = field_walker.r#type();
 
-                        // Check if optional
-                        let is_optional = field_type_ir.is_optional();
-
                         // Recursively process the field type
                         collect_reachable_types(
                             ir,
@@ -141,8 +142,7 @@ fn collect_reachable_types(
                             field_name: field_walker.name().to_string(),
                             field_type: format_field_type(field_type_ir),
                             description: None, // TODO: Extract from attributes
-                            aliases: vec![],   // TODO: Extract from attributes
-                            is_optional,
+                            alias: None,       // TODO: Extract from attributes
                         }
                     })
                     .collect();
@@ -182,13 +182,27 @@ fn collect_reachable_types(
 
         TypeIR::Union(variants, _) => {
             for variant in variants.iter_include_null() {
-                collect_reachable_types(ir, variant, classes, enums, visited_classes, visited_enums);
+                collect_reachable_types(
+                    ir,
+                    variant,
+                    classes,
+                    enums,
+                    visited_classes,
+                    visited_enums,
+                );
             }
         }
 
         TypeIR::Map(key_type, value_type, _) => {
             collect_reachable_types(ir, key_type, classes, enums, visited_classes, visited_enums);
-            collect_reachable_types(ir, value_type, classes, enums, visited_classes, visited_enums);
+            collect_reachable_types(
+                ir,
+                value_type,
+                classes,
+                enums,
+                visited_classes,
+                visited_enums,
+            );
         }
 
         TypeIR::Tuple(items, _) => {
@@ -214,7 +228,11 @@ fn format_field_type(field_type: &TypeIR) -> String {
         TypeIR::List(inner, _) => format!("{}[]", format_field_type(inner)),
         TypeIR::Map(k, v, _) => format!("map<{}, {}>", format_field_type(k), format_field_type(v)),
         TypeIR::Union(variants, _) => {
-            let parts: Vec<_> = variants.iter_include_null().into_iter().map(format_field_type).collect();
+            let parts: Vec<_> = variants
+                .iter_include_null()
+                .into_iter()
+                .map(format_field_type)
+                .collect();
             parts.join(" | ")
         }
         TypeIR::Tuple(items, _) => {

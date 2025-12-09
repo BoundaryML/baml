@@ -14,8 +14,10 @@ pub const GEPA_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Compute a hash of the default GEPA files for change detection
 pub fn default_gepa_hash() -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
 
     let mut hasher = DefaultHasher::new();
     GEPA_BAML.hash(&mut hasher);

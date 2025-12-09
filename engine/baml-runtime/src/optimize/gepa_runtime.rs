@@ -1,20 +1,24 @@
+#![allow(clippy::print_stdout)]
 //! GEPA Runtime - Loads and executes the GEPA BAML functions
 //!
 //! This module manages the separate BamlRuntime instance that runs the GEPA
 //! reflection functions (ProposeImprovements, MergeVariants, etc.)
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::{Context, Result};
 use baml_types::BamlValue;
 use serde::{Deserialize, Serialize};
 
+use super::{
+    candidate::{ImprovedFunction, OptimizableFunction, ReflectiveExample},
+    gepa_defaults,
+};
 use crate::{BamlRuntime, TripWire};
-
-use super::candidate::{ImprovedFunction, OptimizableFunction, ReflectiveExample};
-use super::gepa_defaults;
 
 /// Version tracking for GEPA implementation
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -69,14 +73,16 @@ impl GEPARuntime {
 
         // Load the GEPA runtime
         let runtime = BamlRuntime::from_directory(&baml_src_dir, env_vars.clone(), feature_flags)
-            .with_context(|| format!(
+            .with_context(|| {
+            format!(
                 "Failed to load GEPA BAML runtime from {}.\n\
                  This may indicate invalid BAML syntax in the GEPA files.\n\
                  Try running: baml-cli optimize --reset-gepa-prompts\n\
                  Or check the files in: {}",
                 baml_src_dir.display(),
                 gepa_dir.display()
-            ))?;
+            )
+        })?;
 
         Ok(Self {
             runtime: Arc::new(runtime),
@@ -140,15 +146,17 @@ impl GEPARuntime {
 
     /// Compute hash of current GEPA files
     fn compute_current_hash(&self) -> Result<String> {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher},
+        };
 
         let baml_src_dir = self.gepa_dir.join("baml_src");
 
-        let gepa_content = std::fs::read_to_string(baml_src_dir.join("gepa.baml"))
-            .unwrap_or_default();
-        let clients_content = std::fs::read_to_string(baml_src_dir.join("clients.baml"))
-            .unwrap_or_default();
+        let gepa_content =
+            std::fs::read_to_string(baml_src_dir.join("gepa.baml")).unwrap_or_default();
+        let clients_content =
+            std::fs::read_to_string(baml_src_dir.join("clients.baml")).unwrap_or_default();
 
         let mut hasher = DefaultHasher::new();
         gepa_content.hash(&mut hasher);
@@ -214,10 +222,9 @@ impl GEPARuntime {
         .collect();
 
         // Create context manager
-        let ctx_manager = self.runtime.create_ctx_manager(
-            BamlValue::String("optimize".to_string()),
-            None,
-        );
+        let ctx_manager = self
+            .runtime
+            .create_ctx_manager(BamlValue::String("optimize".to_string()), None);
 
         // Call the function
         let (result, _call_id) = self
@@ -238,7 +245,8 @@ impl GEPARuntime {
         let result = result.context("Failed to call ProposeImprovements")?;
 
         // Parse result
-        let parsed_result = result.result_with_constraints_content()
+        let parsed_result = result
+            .result_with_constraints_content()
             .context("Failed to get result from ProposeImprovements")?;
         let baml_value: BamlValue = (&parsed_result.0).into();
         let result_json = baml_value_to_json(&baml_value)?;
@@ -262,20 +270,31 @@ impl GEPARuntime {
         let args: baml_types::BamlMap<String, BamlValue> = [
             ("variant_a".to_string(), json_to_baml_value(variant_a_val)?),
             ("variant_b".to_string(), json_to_baml_value(variant_b_val)?),
-            ("variant_a_strengths".to_string(), BamlValue::List(
-                a_strengths.iter().map(|s| BamlValue::String(s.clone())).collect()
-            )),
-            ("variant_b_strengths".to_string(), BamlValue::List(
-                b_strengths.iter().map(|s| BamlValue::String(s.clone())).collect()
-            )),
+            (
+                "variant_a_strengths".to_string(),
+                BamlValue::List(
+                    a_strengths
+                        .iter()
+                        .map(|s| BamlValue::String(s.clone()))
+                        .collect(),
+                ),
+            ),
+            (
+                "variant_b_strengths".to_string(),
+                BamlValue::List(
+                    b_strengths
+                        .iter()
+                        .map(|s| BamlValue::String(s.clone()))
+                        .collect(),
+                ),
+            ),
         ]
         .into_iter()
         .collect();
 
-        let ctx_manager = self.runtime.create_ctx_manager(
-            BamlValue::String("optimize".to_string()),
-            None,
-        );
+        let ctx_manager = self
+            .runtime
+            .create_ctx_manager(BamlValue::String("optimize".to_string()), None);
 
         let (result, _call_id) = self
             .runtime
@@ -294,7 +313,8 @@ impl GEPARuntime {
 
         let result = result.context("Failed to call MergeVariants")?;
 
-        let parsed_result = result.result_with_constraints_content()
+        let parsed_result = result
+            .result_with_constraints_content()
             .context("Failed to get result from MergeVariants")?;
         let baml_value: BamlValue = (&parsed_result.0).into();
         let result_json = baml_value_to_json(&baml_value)?;
@@ -313,8 +333,7 @@ pub fn reset_gepa_prompts(gepa_dir: &Path) -> Result<()> {
     let baml_src_dir = gepa_dir.join("baml_src");
     let version_file = baml_src_dir.join(".gepa_version");
 
-    std::fs::create_dir_all(&baml_src_dir)
-        .context("Failed to create GEPA baml_src directory")?;
+    std::fs::create_dir_all(&baml_src_dir).context("Failed to create GEPA baml_src directory")?;
 
     // Write gepa.baml
     std::fs::write(baml_src_dir.join("gepa.baml"), gepa_defaults::GEPA_BAML)
@@ -334,8 +353,8 @@ pub fn reset_gepa_prompts(gepa_dir: &Path) -> Result<()> {
         gepa_baml_hash: gepa_defaults::default_gepa_hash(),
     };
 
-    let version_json = serde_json::to_string_pretty(&version_info)
-        .context("Failed to serialize version info")?;
+    let version_json =
+        serde_json::to_string_pretty(&version_info).context("Failed to serialize version info")?;
 
     std::fs::write(version_file, version_json).context("Failed to write .gepa_version")?;
 

@@ -1,3 +1,4 @@
+#![allow(clippy::print_stdout)]
 //! GEPA Orchestrator - Main optimization loop
 //!
 //! Implements the GEPA (Generative Evolution of Prompts and Annotations) algorithm:
@@ -8,25 +9,23 @@
 //! 5. Update Pareto frontier
 //! 6. Iterate until budget exhausted
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 
-use crate::test_executor::TestFilter;
-use crate::{BamlRuntime, InternalRuntimeInterface};
-
-use super::applier::CandidateApplier;
-use super::candidate::{Candidate, CandidateScores, OptimizableFunction};
-use super::evaluator::{Evaluator, TestEvalResult};
-use super::gepa_runtime::GEPARuntime;
-use super::pareto::{Objective, ParetoFrontier};
-use super::schema_extractor::{extract_optimizable_function, filter_functions};
-use super::storage::{
-    CandidateLineage, NormalizationStats, ObjectiveConfig, OptimizationConfig,
-    OptimizationResults, OptimizationState, OptimizationStorage, ParetoCandidate, StatsSummary,
+use super::{
+    applier::CandidateApplier,
+    candidate::{Candidate, CandidateScores, OptimizableFunction},
+    evaluator::{Evaluator, TestEvalResult},
+    gepa_runtime::GEPARuntime,
+    pareto::{Objective, ParetoFrontier},
+    schema_extractor::{extract_optimizable_function, filter_functions},
+    storage::{
+        CandidateLineage, NormalizationStats, ObjectiveConfig, OptimizationConfig,
+        OptimizationResults, OptimizationState, OptimizationStorage, ParetoCandidate, StatsSummary,
+    },
 };
+use crate::{test_executor::TestFilter, BamlRuntime, InternalRuntimeInterface};
 
 /// Configuration for the orchestrator
 pub struct OrchestratorConfig {
@@ -103,10 +102,7 @@ impl GEPAOrchestrator {
         // TODO: Support optimizing multiple functions
         let function_name = functions.into_iter().next().unwrap();
 
-        let evaluator = Evaluator::new(
-            config.env_vars.clone(),
-            config.parallel,
-        );
+        let evaluator = Evaluator::new(config.env_vars.clone(), config.parallel);
 
         let applier = CandidateApplier::new(
             &config.baml_src_path,
@@ -133,7 +129,10 @@ impl GEPAOrchestrator {
 
     /// Run the optimization loop
     pub async fn run(&mut self) -> Result<OptimizationRunResult> {
-        println!("\n[Optimization] Optimizing function: {}", self.function_name);
+        println!(
+            "\n[Optimization] Optimizing function: {}",
+            self.function_name
+        );
 
         // Save configuration
         self.save_config()?;
@@ -142,7 +141,8 @@ impl GEPAOrchestrator {
         self.initialize().await?;
 
         // Main GEPA loop
-        while self.current_iteration < self.config.trials && self.total_evals < self.config.max_evals
+        while self.current_iteration < self.config.trials
+            && self.total_evals < self.config.max_evals
         {
             self.current_iteration += 1;
 
@@ -172,7 +172,11 @@ impl GEPAOrchestrator {
             // Collect failures from recent evaluations
             let (_, results) = self
                 .evaluator
-                .evaluate(self.user_runtime.clone(), &self.function_name, &self.config.test_filter)
+                .evaluate(
+                    self.user_runtime.clone(),
+                    &self.function_name,
+                    &self.config.test_filter,
+                )
                 .await?;
 
             let failures = self.evaluator.collect_failures(
@@ -244,8 +248,7 @@ impl GEPAOrchestrator {
             );
 
             // Update Pareto frontier
-            self.pareto
-                .add(new_id, new_scores, &self.candidates);
+            self.pareto.add(new_id, new_scores, &self.candidates);
 
             // Save checkpoint
             self.save_checkpoint()?;
@@ -311,7 +314,10 @@ impl GEPAOrchestrator {
             };
 
             // Apply the changes to create a modified runtime
-            match self.applier.apply(&self.user_runtime, &self.function_name, &improved) {
+            match self
+                .applier
+                .apply(&self.user_runtime, &self.function_name, &improved)
+            {
                 Ok(modified_runtime) => Arc::new(modified_runtime),
                 Err(e) => {
                     log::warn!(
@@ -326,15 +332,18 @@ impl GEPAOrchestrator {
 
         let (scores, _results) = self
             .evaluator
-            .evaluate(runtime_to_use, &self.function_name, &self.config.test_filter)
+            .evaluate(
+                runtime_to_use,
+                &self.function_name,
+                &self.config.test_filter,
+            )
             .await?;
 
         self.candidates[candidate_idx].scores = Some(scores.clone());
         self.total_evals += scores.tests_total;
 
         // Save evaluation
-        self.storage
-            .save_evaluation(candidate_idx, &scores)?;
+        self.storage.save_evaluation(candidate_idx, &scores)?;
 
         // Save candidate
         self.storage
@@ -347,7 +356,11 @@ impl GEPAOrchestrator {
     fn check_convergence(&self) -> bool {
         // Check if all tests pass
         if let Some(best_idx) = self.pareto.best_weighted(&self.candidates) {
-            if let Some(scores) = self.candidates.get(best_idx).and_then(|c| c.scores.as_ref()) {
+            if let Some(scores) = self
+                .candidates
+                .get(best_idx)
+                .and_then(|c| c.scores.as_ref())
+            {
                 if scores.test_pass_rate >= 1.0 {
                     return true;
                 }
@@ -423,10 +436,7 @@ impl GEPAOrchestrator {
         self.pareto.update_stats(&self.candidates);
 
         // Find best candidate
-        let best_idx = self
-            .pareto
-            .best_weighted(&self.candidates)
-            .unwrap_or(0);
+        let best_idx = self.pareto.best_weighted(&self.candidates).unwrap_or(0);
 
         let initial_score = self.candidates[0]
             .scores
