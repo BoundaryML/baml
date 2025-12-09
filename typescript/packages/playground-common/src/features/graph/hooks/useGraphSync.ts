@@ -29,7 +29,7 @@ export function useGraphSync() {
 
     const layoutKey = `${currentGraph.workflow?.id ?? 'standalone'}|${convertedGraph.nodes
       .map((node) => node.id)
-      .join(',')}|${convertedGraph.edges.length}`;
+      .join(',')}|${convertedGraph.edges.length}|${direction}`;
 
     if (lastLayoutKeyRef.current === layoutKey) {
       return;
@@ -71,7 +71,7 @@ export function useGraphSync() {
       clearTimeout(timeoutId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [convertedGraph]); // convertedGraph is memoized with direction, so this only runs when graph actually changes
+  }, [convertedGraph, direction]); // Re-run layout when graph or direction changes
 
   return {
     convertedGraph,
