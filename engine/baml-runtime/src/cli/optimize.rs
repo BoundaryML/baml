@@ -148,6 +148,31 @@ impl OptimizeArgs {
 
         let gepa_dir = optimize_base_dir.join("gepa");
 
+        // Create/update .gitignore in the parent directory to ignore .baml_optimize
+        if let Some(parent_dir) = optimize_base_dir.parent() {
+            let gitignore_path = parent_dir.join(".gitignore");
+
+            // Read existing .gitignore or create empty string
+            let mut gitignore_content = if gitignore_path.exists() {
+                std::fs::read_to_string(&gitignore_path).unwrap_or_default()
+            } else {
+                String::new()
+            };
+
+            // Check if .baml_optimize is already in the .gitignore
+            let entry = ".baml_optimize/";
+            if !gitignore_content.lines().any(|line| line.trim() == entry) {
+                // Add .baml_optimize/ to .gitignore
+                if !gitignore_content.is_empty() && !gitignore_content.ends_with('\n') {
+                    gitignore_content.push('\n');
+                }
+                gitignore_content.push_str(entry);
+                gitignore_content.push('\n');
+
+                let _ = std::fs::write(&gitignore_path, gitignore_content);
+            }
+        }
+
         // If --reset-gepa-prompts is specified alone, just reset and exit
         if self.reset_gepa_prompts {
             // Check if custom gepa.baml exists
