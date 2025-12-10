@@ -15,10 +15,10 @@
 - [-] gepa.baml versioning will be an issue in the future. No clear solution now (noted)
 - [x] Copy some of these notes into BEP for tracking
 - [x] follow_links - is it recursive? (It's just a builder method on a `WalkDir`. Only recursive if the user make a loop with symlinks.
-- [ ] Use some crate for rendering diffs
-- [ ] failure_location - see if we have an enum that gives us error
-- [ ] limitations: 500 from LLM provider might unfairly penalize the prompt candidate.
-- [ ] Write "ctx.output_format writes the schema, so you don't have to write the schema".
-- [ ] We need to improve gepa.baml to teach it how to use jinja
-- [ ] Give gepa.baml more info about the parameters of ctx.output_format
+- [x] Use some crate for rendering diffs (we use the same lib)
+- [x] failure_location - see if we have an enum that gives us error
+- [x] limitations: 500 from LLM provider might unfairly penalize the prompt candidate.
+- [x] Write "ctx.output_format writes the schema, so you don't have to write the schema".
+- [x] We need to improve gepa.baml to teach it how to use jinja
+- [x] Give gepa.baml more info about the parameters of ctx.output_format
 - [ ] Block on TODO extract descriptions and aliases

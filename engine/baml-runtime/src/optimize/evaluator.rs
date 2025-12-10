@@ -17,6 +17,85 @@ pub struct Evaluator {
     parallel: usize,
 }
 
+/// Classification of test failure with structured information where available.
+/// This is an owned version that can be stored independently of TestFailReason.
+#[derive(Debug, Clone)]
+pub enum FailureKind {
+    Unspecified,
+    /// LLM call failure with structured error code information
+    LLMFailure(LLMFailureInfo),
+    ParseFailure,
+    FinishReasonFailed,
+    ConstraintsFailure {
+        checks: Vec<(String, bool)>,
+        failed_assert: Option<String>,
+    },
+}
+
+/// Structured information about an LLM failure
+#[derive(Debug, Clone)]
+pub struct LLMFailureInfo {
+    pub error_code: crate::internal::llm_client::ErrorCode,
+    pub message: String,
+    pub client: String,
+}
+
+impl<'a> From<&TestFailReason<'a>> for FailureKind {
+    fn from(reason: &TestFailReason<'a>) -> Self {
+        match reason {
+            TestFailReason::TestUnspecified(_) => FailureKind::Unspecified,
+            TestFailReason::TestLLMFailure(llm_resp) => {
+                FailureKind::LLMFailure(LLMFailureInfo::from_llm_response(llm_resp))
+            }
+            TestFailReason::TestParseFailure(_) => FailureKind::ParseFailure,
+            TestFailReason::TestFinishReasonFailed(_) => FailureKind::FinishReasonFailed,
+            TestFailReason::TestConstraintsFailure {
+                checks,
+                failed_assert,
+            } => FailureKind::ConstraintsFailure {
+                checks: checks.clone(),
+                failed_assert: failed_assert.clone(),
+            },
+        }
+    }
+}
+
+impl LLMFailureInfo {
+    /// Extract structured error information from LLMResponse
+    fn from_llm_response(llm_resp: &crate::internal::llm_client::LLMResponse) -> Self {
+        match llm_resp {
+            crate::internal::llm_client::LLMResponse::LLMFailure(err) => LLMFailureInfo {
+                error_code: err.code.clone(),
+                message: err.message.clone(),
+                client: err.client.clone(),
+            },
+            crate::internal::llm_client::LLMResponse::UserFailure(msg) => LLMFailureInfo {
+                error_code: crate::internal::llm_client::ErrorCode::Other(0),
+                message: msg.clone(),
+                client: "unknown".to_string(),
+            },
+            crate::internal::llm_client::LLMResponse::InternalFailure(msg) => LLMFailureInfo {
+                error_code: crate::internal::llm_client::ErrorCode::Other(1),
+                message: msg.clone(),
+                client: "unknown".to_string(),
+            },
+            crate::internal::llm_client::LLMResponse::Cancelled(msg) => LLMFailureInfo {
+                error_code: crate::internal::llm_client::ErrorCode::Other(2),
+                message: msg.clone(),
+                client: "unknown".to_string(),
+            },
+            crate::internal::llm_client::LLMResponse::Success(_) => {
+                // This shouldn't happen in a failure reason, but handle it gracefully
+                LLMFailureInfo {
+                    error_code: crate::internal::llm_client::ErrorCode::Other(3),
+                    message: "Unexpected success response in failure reason".to_string(),
+                    client: "unknown".to_string(),
+                }
+            }
+        }
+    }
+}
+
 /// Result of evaluating a single test
 #[derive(Debug)]
 pub struct TestEvalResult {
@@ -30,6 +109,10 @@ pub struct TestEvalResult {
     pub error: Option<String>,
     pub output: Option<String>,
     pub inputs: HashMap<String, String>,
+    /// Structured failure information for more reliable error categorization.
+    /// Only LLM failures have detailed structured info; other failure types are
+    /// categorized based on the TestFailReason variant.
+    pub failure_kind: Option<FailureKind>,
 }
 
 impl Evaluator {
@@ -120,7 +203,7 @@ impl Evaluator {
                         let output = response_output(&response);
 
                         // Extract detailed error information
-                        let (error, check_results) = error_details(&status);
+                        let (error, check_results, failure_kind) = error_details(&status);
 
                         // Extract token counts from LLM response if available
                         let (prompt_tokens, completion_tokens) = response
@@ -152,6 +235,7 @@ impl Evaluator {
                             error,
                             output,
                             inputs: test_inputs,
+                            failure_kind,
                         }
                     }
                     Err(e) => TestEvalResult {
@@ -165,6 +249,7 @@ impl Evaluator {
                         error: Some(e.to_string()),
                         output: None,
                         inputs: test_inputs,
+                        failure_kind: Some(FailureKind::Unspecified),
                     },
                 }
             });
@@ -286,8 +371,49 @@ fn compute_scores(results: &[TestEvalResult]) -> CandidateScores {
     )
 }
 
-/// Determine the likely failure location from a test result
+/// Determine the likely failure location from a test result using structured error information
 fn failure_location(result: &TestEvalResult) -> Option<String> {
+    use crate::internal::llm_client::ErrorCode;
+
+    // Use structured failure kind if available
+    if let Some(ref kind) = result.failure_kind {
+        return Some(match kind {
+            FailureKind::ParseFailure => "parsing".to_string(),
+            FailureKind::ConstraintsFailure { .. } => "assertion".to_string(),
+            FailureKind::FinishReasonFailed => "finish_reason".to_string(),
+            FailureKind::LLMFailure(info) => {
+                // Use the structured ErrorCode to determine failure location
+                match &info.error_code {
+                    ErrorCode::Timeout => "infrastructure".to_string(),
+                    ErrorCode::RateLimited => "infrastructure".to_string(),
+                    ErrorCode::ServiceUnavailable => "infrastructure".to_string(),
+                    ErrorCode::ServerError => "infrastructure".to_string(),
+                    ErrorCode::InvalidAuthentication => "configuration".to_string(),
+                    ErrorCode::NotSupported => "configuration".to_string(),
+                    ErrorCode::UnsupportedResponse(_) => "llm_response".to_string(),
+                    ErrorCode::Other(code) => {
+                        // For Other error codes, use the code to classify
+                        match code {
+                            0 => "user_error".to_string(),     // UserFailure
+                            1 => "internal_error".to_string(), // InternalFailure
+                            2 => "cancelled".to_string(),      // Cancelled
+                            _ => {
+                                // Fallback: if no output was generated, likely a prompt issue
+                                if result.output.is_none() {
+                                    "prompt".to_string()
+                                } else {
+                                    "llm_call".to_string()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            FailureKind::Unspecified => "unknown".to_string(),
+        });
+    }
+
+    // Fallback to string-based detection if no structured reason is available
     let error = result.error.as_ref()?;
     let error_lower = error.to_lowercase();
 
@@ -331,9 +457,11 @@ fn response_output(response: &crate::TestResponse) -> Option<String> {
 }
 
 /// Extract detailed error information from TestStatus
-fn error_details(status: &TestStatus<'_>) -> (Option<String>, HashMap<String, bool>) {
+fn error_details(
+    status: &TestStatus<'_>,
+) -> (Option<String>, HashMap<String, bool>, Option<FailureKind>) {
     match status {
-        TestStatus::Pass => (None, HashMap::new()),
+        TestStatus::Pass => (None, HashMap::new(), None),
         TestStatus::NeedsHumanEval(checks) => {
             let check_map: HashMap<String, bool> =
                 checks.iter().map(|c| (c.clone(), false)).collect();
@@ -343,9 +471,11 @@ fn error_details(status: &TestStatus<'_>) -> (Option<String>, HashMap<String, bo
                     checks.join(", ")
                 )),
                 check_map,
+                None,
             )
         }
         TestStatus::Fail(reason) => {
+            let failure_kind = FailureKind::from(reason);
             let (error_msg, check_results) = match reason {
                 TestFailReason::TestUnspecified(e) => (e.to_string(), HashMap::new()),
                 TestFailReason::TestLLMFailure(llm_resp) => {
@@ -393,7 +523,7 @@ fn error_details(status: &TestStatus<'_>) -> (Option<String>, HashMap<String, bo
                     (msg, check_map)
                 }
             };
-            (Some(error_msg), check_results)
+            (Some(error_msg), check_results, Some(failure_kind))
         }
     }
 }

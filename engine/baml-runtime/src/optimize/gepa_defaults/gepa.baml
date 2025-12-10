@@ -146,19 +146,35 @@ function ProposeImprovements(current_function: OptimizableFunction, failed_examp
 
         Analyze the failures and propose improvements. Consider:
 
-        1. **Prompt bugs:**
+        1. **Jinja**
+           - Prompts use jinja to inject function parameters.
+           - There are special variables in the context for inserting other data.
+           - Variables are inserted with \{\{ variable \}\} (double-curly brackets).
+           - The ctx.output_format variable contains the schema and some instructions.
+             You use that instead of saying "Respond in JSON with this schema... SCHEMA..."
+           - _.role("system") and _.role("user") variables set the message block role.
+           - ctx.output_format can take arguments:
+             - ctx.output_format(quote_class_fields=true) renders classes with quotes around
+               field names.
+             - ctx.output_format(or_splitter=" X ") uses " X " to separate entries in unions
+             - ctx.output_format(hoist_classes={"auto" | bool | field[]}) renders class
+               definitions as classes, instead of as anonymous, possibly nested, JSON records.
+               A list of names can be passed in order to isolate just some classes for
+               hoisting.
+
+        2. **Prompt bugs:**
            - Does the prompt contain instructions that cause wrong outputs?
            - Are there hardcoded values that should be extracted from input instead?
            - Does the prompt tell the LLM to do something different from what tests expect?
            - Does the prompt use the jinja expression \{\{ctx.output_format\}\} (in double-curly brackets)
              to specify how to format outputs?
 
-        2. **Prompt clarity:**
+        3. **Prompt clarity:**
            - Is the instruction clear and specific?
            - Should examples be added or modified?
            - Are edge cases addressed?
 
-        3. **Schema improvements:**
+        4. **Schema improvements:**
            - Should field @description annotations be added or improved?
            - Would @alias annotations help catch output variations?
 

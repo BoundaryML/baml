@@ -369,7 +369,29 @@ and enums already used by that function. The optimizer doesn't know how
 to search for template_strings in your codebase that would be helpful
 in the prompt.
 
+### Error types
+
+For the purpose of optimization, all failures are treated
+equally. If a model is sporadically unavailable and the LLM provider 
+returns 500, this can confuse the algorithm because it will appear
+that the prompt is at fault for the failure.
+
 ## Future features
+
+Based on user feedback, we are considering several improvements to
+the prompt optimizer.
+
+### Error robustness
+
+We improve our error handling so that spurious errors don't penalize
+a good prompt.
+
+### Agentic features
+
+In some circumstances it would be helpful for the reflection steps
+to be able to run tools, such as fetching specific documentation or
+rendering the prompt with its inputs to inspect it prior to calling
+the LLM.
 
 
 ## References
