@@ -720,6 +720,25 @@ class T { f int @stream.not_null }
 
 ---
 
+## stream_state_inside_union
+
+```baml
+class T { f (int @stream.with_state | string) }
+```
+
+### target: `T.f`
+### Python 
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `typing.Optional[typing.Union[StreamState[int], str]]`
+
+### TypeScript
+- Non-streaming: `number | string`
+- Streaming: `StreamState<number> | string | null`
+
+### Go
+- Non-streaming: `Union2IntOrString`
+- Streaming: `*Union2StreamStateIntOrString`
+
 ## stream_not_null_with_state
 
 ```baml
@@ -1500,6 +1519,106 @@ class T { f (string?)[] }
 - Streaming: `[]*string`
 
 ---
+
+## stream_state_checked
+
+```baml
+class T { f int @stream.with_state @check(positive, {{ this > 0 }}) }
+```
+
+### target: `T.f`
+
+### Python
+- Non-streaming: `Checked[int, typing_extensions.Literal['positive']]`
+- Streaming:
+```python
+StreamState[typing.Optional[types.Checked[int, typing_extensions.Literal['positive']]]]
+```
+
+### TypeScript
+- Non-streaming: `Checked<number,"positive">`
+- Streaming: `StreamState<types.Checked<number,"positive"> | null>`
+
+### Go
+- Non-streaming: `Checked[int64]`
+- Streaming: `baml.StreamState[*types.Checked[int64]]`
+---
+
+
+## checked_stream_state
+
+```baml
+class T { f int @check(positive, {{ this > 0 }}) @stream.with_state }
+```
+
+### target: `T.f`
+
+### Python
+- Non-streaming: `Checked[int, typing_extensions.Literal['positive']]`
+- Streaming:
+```python
+StreamState[typing.Optional[types.Checked[int, typing_extensions.Literal['positive']]]]
+```
+
+### TypeScript
+- Non-streaming: `Checked<number,"positive">`
+- Streaming: `StreamState<types.Checked<number,"positive"> | null>`
+
+### Go
+- Non-streaming: `Checked[int64]`
+- Streaming: `baml.StreamState[*types.Checked[int64]]`
+---
+
+## stream_state_checked_paren
+
+```baml
+class T { f (int @stream.with_state) @check(positive, {{ this > 0 }}) }
+```
+
+### target: `T.f`
+
+### Python
+- Non-streaming: `Checked[int, typing_extensions.Literal['positive']]`
+- Streaming:
+```python
+StreamState[typing.Optional[types.Checked[int, typing_extensions.Literal['positive']]]]
+```
+
+### TypeScript
+- Non-streaming: `Checked<number,"positive">`
+- Streaming: `StreamState<types.Checked<number,"positive"> | null>`
+
+### Go
+- Non-streaming: `Checked[int64]`
+- Streaming: `baml.StreamState[*types.Checked[int64]]`
+---
+
+
+## checked_stream_state_paren
+
+```baml
+class T { f (int @check(positive, {{ this > 0 }})) @stream.with_state }
+```
+
+### target: `T.f`
+
+### Python
+- Non-streaming: `Checked[int, typing_extensions.Literal['positive']]`
+- Streaming:
+```python
+StreamState[typing.Optional[types.Checked[int, typing_extensions.Literal['positive']]]]
+```
+
+### TypeScript
+- Non-streaming: `Checked<number,"positive">`
+- Streaming: `StreamState<types.Checked<number,"positive"> | null>`
+
+### Go
+- Non-streaming: `Checked[int64]`
+- Streaming: `baml.StreamState[*types.Checked[int64]]`
+---
+
+
 
 # Real-World Example
 
