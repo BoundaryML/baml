@@ -1024,16 +1024,19 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            // Parse fields and attributes
+            // Parse fields, methods, and attributes
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword() {
+                // Error recovery: if we see a top-level keyword (except function), assume we missed a closing brace
+                if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
 
                 if p.at(TokenKind::AtAt) {
                     // Block attribute: @@dynamic
                     p.parse_block_attribute();
+                } else if p.at(TokenKind::Function) {
+                    // Method definition
+                    p.parse_function();
                 } else if p.at(TokenKind::Word) {
                     // Field declaration
                     p.parse_field();
@@ -1127,6 +1130,9 @@ impl<'a> Parser<'a> {
 
     fn parse_parameter(&mut self) {
         self.with_node(SyntaxKind::PARAMETER, |p| {
+            // Check if this is a 'self' parameter (no type annotation allowed)
+            let is_self = p.current().map(|t| t.text == "self").unwrap_or(false);
+
             // Parameter name
             if p.at(TokenKind::Word) {
                 p.bump();
@@ -1135,7 +1141,10 @@ impl<'a> Parser<'a> {
             }
 
             // Type annotation - supports both "name: type" and "name type" syntax
-            if p.eat(TokenKind::Colon) {
+            // 'self' parameter does not have a type annotation
+            if is_self {
+                // No type annotation for self
+            } else if p.eat(TokenKind::Colon) {
                 // With colon: "name: type"
                 p.parse_type();
             } else if p.at(TokenKind::Word) {
@@ -1308,8 +1317,6 @@ impl<'a> Parser<'a> {
             self.parse_let_stmt();
         } else if self.at(TokenKind::Return) {
             self.parse_return_stmt();
-        } else if self.at(TokenKind::If) {
-            self.parse_if_expr();
         } else if self.at(TokenKind::While) {
             self.parse_while_stmt();
         } else if self.at(TokenKind::For) {
@@ -1449,16 +1456,24 @@ impl<'a> Parser<'a> {
                         }
                     }
                 } else if p.at(TokenKind::Word) {
-                    // Simple iterator-style without let: for (i in expr)
-                    p.bump(); // variable name
-                    if p.at(TokenKind::In) {
+                    // Could be iterator-style: for (i in expr)
+                    // Or could be C-style starting with expression: for (i = 0; ...)
+                    // Look ahead to determine
+                    if p.peek(1).map(|t| t.kind == TokenKind::In).unwrap_or(false) {
+                        // Simple iterator-style without let: for (i in expr)
+                        p.bump(); // variable name
                         p.bump(); // in
                         p.parse_expr(); // iterator expression
                     } else {
-                        p.error("'in' keyword after loop variable".to_string());
+                        // C-style without initializer starting with expression
+                        // Just parse as expression-based C-style
+                        p.parse_c_style_for_body();
                     }
+                } else if p.at(TokenKind::Semicolon) {
+                    // C-style with empty initializer: for (; cond; update)
+                    p.parse_c_style_for_body();
                 } else {
-                    p.error("loop variable or 'let'".to_string());
+                    p.error("loop variable, 'let', or ';'".to_string());
                 }
 
                 p.expect(TokenKind::RParen);
@@ -1490,6 +1505,26 @@ impl<'a> Parser<'a> {
         self.peek(2)
             .map(|t| t.kind == TokenKind::In)
             .unwrap_or(false)
+    }
+
+    /// Parse C-style for loop body (condition and update parts): ; cond; update
+    /// Called when we've already consumed any initializer or are at the first semicolon.
+    fn parse_c_style_for_body(&mut self) {
+        // Consume first semicolon (separates initializer from condition)
+        self.eat(TokenKind::Semicolon);
+
+        // Parse condition expression (if present)
+        if !self.at(TokenKind::Semicolon) && !self.at(TokenKind::RParen) {
+            self.parse_expr();
+        }
+
+        // Consume second semicolon (separates condition from update)
+        self.eat(TokenKind::Semicolon);
+
+        // Parse update expression (if present)
+        if !self.at(TokenKind::RParen) {
+            self.parse_expr();
+        }
     }
 
     /// Parse a for-in loop pattern: let var (without initializer)
@@ -1771,6 +1806,9 @@ impl<'a> Parser<'a> {
                 // Block expression: { statements... }
                 self.parse_block_expr();
             }
+        } else if self.at(TokenKind::If) {
+            // If expression (can be used in expression context like `let x = if (cond) { a } else { b }`)
+            self.parse_if_expr();
         } else {
             self.error("expression".to_string());
             // Consume the unexpected token to avoid infinite loops

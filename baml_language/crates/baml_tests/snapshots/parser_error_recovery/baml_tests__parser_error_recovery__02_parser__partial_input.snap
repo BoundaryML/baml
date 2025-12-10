@@ -93,6 +93,8 @@ Error: Expected type, found At
  5 │   field3 string @  // Incomplete attribute
    │                 ┬  
    │                 ╰── Expected type, found At
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected type, found At
@@ -101,6 +103,8 @@ Error: Expected type, found At
  6 │   field4 string @alias(  // Unclosed attribute
    │                 ┬  
    │                 ╰── Expected type, found At
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected RParen, found Word
@@ -109,6 +113,8 @@ Error: Expected RParen, found Word
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
    │             ╰──── Expected RParen, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected type, found RBrace
@@ -117,6 +123,8 @@ Error: Expected type, found RBrace
  8 │ }
    │ ┬  
    │ ╰── Expected type, found RBrace
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected RParen, found Function
@@ -125,6 +133,8 @@ Error: Expected RParen, found Function
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
     │     ╰───── Expected RParen, found Function
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected return type (->), found Function
@@ -133,6 +143,8 @@ Error: Expected return type (->), found Function
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
     │     ╰───── Expected return type (->), found Function
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected function body, found Function
@@ -141,6 +153,8 @@ Error: Expected function body, found Function
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
     │     ╰───── Expected function body, found Function
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected LBrace, found Word
@@ -149,6 +163,8 @@ Error: Expected LBrace, found Word
  19 │   VALUE2
     │   ───┬──  
     │      ╰──── Expected LBrace, found Word
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found Word
@@ -157,6 +173,8 @@ Error: Expected top-level declaration, found Word
  19 │   VALUE2
     │   ───┬──  
     │      ╰──── Expected top-level declaration, found Word
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found RBrace
@@ -165,4 +183,6 @@ Error: Expected top-level declaration, found RBrace
  20 │ }
     │ ┬  
     │ ╰── Expected top-level declaration, found RBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯

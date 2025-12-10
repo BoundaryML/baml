@@ -1,12 +1,12 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
   CLASS_DEF
     KW_CLASS "class"
-    WORD "User"
+    WORD "IndexUser"
     L_BRACE "{"
     FIELD
       WORD "name"
@@ -30,8 +30,8 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "users"
-        TYPE_EXPR " User[]"
-          WORD "User"
+        TYPE_EXPR " IndexUser[]"
+          WORD "IndexUser"
           L_BRACKET "["
           R_BRACKET "]"
       R_PAREN ")"

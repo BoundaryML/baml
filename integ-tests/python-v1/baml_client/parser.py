@@ -288,6 +288,12 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractPeople", llm_response=llm_response, mode="request")
         return typing.cast(typing.List["types.Person"], result)
 
+    def ExtractPersonWithMeta(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.PersonWithMeta:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractPersonWithMeta", llm_response=llm_response, mode="request")
+        return typing.cast(types.PersonWithMeta, result)
+
     def ExtractReceiptInfo(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ReceiptInfo:
@@ -1885,6 +1891,12 @@ class LlmStreamParser:
     ) -> typing.List["stream_types.Person"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractPeople", llm_response=llm_response, mode="stream")
         return typing.cast(typing.List["stream_types.Person"], result)
+
+    def ExtractPersonWithMeta(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> stream_types.PersonWithMeta:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractPersonWithMeta", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.PersonWithMeta, result)
 
     def ExtractReceiptInfo(
         self, llm_response: str, baml_options: BamlCallOptions = {},

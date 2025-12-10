@@ -4,7 +4,7 @@ on:
   workflow_call: {}
   push:
     branches:
-      - ts-release
+      - sam/win-arm64-ts
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -25,22 +25,20 @@ jobs:
       fail-fast: false
       matrix:
         _:
+          - target: aarch64-unknown-linux-gnu
+            host: ubuntu-24.04-arm
+            # Target glibc 2.17. This is the oldest glibc we can practically support.
+            # Note that ubuntu-22.04-arm has glibc 2.35, but our users need older glibc.
+            # See https://github.com/BoundaryML/baml/issues/2736
+            container: ghcr.io/rust-cross/manylinux2014-cross:aarch64
+            before: |
+              echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
+            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+
           - target: aarch64-apple-darwin
             host: macos-14
             node_build: pnpm build:napi-release --target aarch64-apple-darwin
-
-          - target: aarch64-unknown-linux-gnu
-            # Do not use -latest, since it uses a different glibc version!
-            host: ubuntu-22.04-arm
-            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
-            # need a new version of manylinux to build crates on arm64-linux
-            # Note: update (aaron): this container doesnt work due to this error with ring:
-            # https://github.com/briansmith/ring/issues/1728
-            # So now we use ubuntu-arm, but glibc is too high, so we have to figure out container approach later.
-            # potential fix in https://github.com/apache/opendal/issues/5483
-            # container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
-            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu
-            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
 
           - target: x86_64-apple-darwin
             host: macos-14
@@ -49,6 +47,12 @@ jobs:
           - target: x86_64-pc-windows-msvc
             host: windows-latest
             node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+
+          - target: aarch64-pc-windows-msvc
+            host: windows-11-arm
+            architecture: arm64
+            node_build: pnpm build:napi-release --target aarch64-pc-windows-msvc
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
 
           - target: x86_64-unknown-linux-gnu
@@ -102,6 +106,8 @@ jobs:
       # Setup using standardized actions
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
+        with:
+          node-action-version: v6
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -109,9 +115,6 @@ jobs:
           targets: ${{ matrix._.target }}
           prefix-key: v5-rust-${{ matrix._.target }}
           cache-on-failure: true
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
 
       # per-matrix-entry dependency setup
       - name: Build tools setup

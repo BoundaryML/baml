@@ -15,6 +15,7 @@ name = "baml_onionskin"
 path = "src/main.rs"
 
 [dependencies]
+ariadne = { workspace = true }
 baml_base = { workspace = true }
 baml_db = { workspace = true }
 baml_lexer = { workspace = true }
@@ -22,6 +23,7 @@ baml_parser = { workspace = true }
 baml_hir = { workspace = true }
 baml_thir = { workspace = true }
 baml_codegen = { workspace = true }
+baml_vm = { workspace = true }
 baml_diagnostics = { workspace = true }
 baml_workspace = { workspace = true }
 rowan = { workspace = true }

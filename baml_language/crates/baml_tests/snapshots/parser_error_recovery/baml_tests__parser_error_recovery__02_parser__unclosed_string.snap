@@ -69,6 +69,8 @@ Error: Expected RParen, found Word
  4 │   field3 string @alias("another closed string")  // Should still parse this
    │                         ───┬───  
    │                            ╰───── Expected RParen, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected Unclosed string literal, found EOF
@@ -77,6 +79,8 @@ Error: Expected Unclosed string literal, found EOF
  5 │ }
    │  ┬  
    │  ╰── Expected Unclosed string literal, found EOF
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected RBrace, found EOF
@@ -85,4 +89,6 @@ Error: Expected RBrace, found EOF
  5 │ }
    │  ┬  
    │  ╰── Expected RBrace, found EOF
+   │ 
+   │ Note: Error code: E0010
 ───╯

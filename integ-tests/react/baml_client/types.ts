@@ -191,6 +191,13 @@ export interface AddTodoItem {
   
 }
 
+export interface AddressWithMeta {
+  street: string
+  city: string
+  zipcode: string
+  
+}
+
 export interface AnotherObject {
   id: string
   thingy2: string
@@ -665,6 +672,14 @@ export interface Person {
   hair_color?: (string | Color) | null
   
   [key: string]: any;
+}
+
+export interface PersonWithMeta {
+  name: string
+  age: number
+  address: AddressWithMeta
+  tags: string[]
+  
 }
 
 export interface PhoneNumber {

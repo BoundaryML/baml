@@ -29,6 +29,15 @@ inputs:
   npm-token:
     description: 'NPM authentication token'
     required: false
+  node-action-version:
+    description: 'Version of actions/setup-node to use (v4 or v6)'
+    required: false
+    # Default to v4 for backwards compatibility.
+    default: 'v4'
+    type: choice
+    options:
+      - v4
+      - v6
 
 runs:
   using: 'composite'
@@ -48,8 +57,20 @@ runs:
         version: ${{ inputs.pnpm-version }}
         run_install: false
 
-    - name: Setup Node.js
+    - name: Setup Node.js (v4)
+      if: inputs.node-action-version == 'v4'
       uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml
+        registry-url: "https://registry.npmjs.org"
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.npm-token }}
+
+    - name: Setup Node.js (v6)
+      if: inputs.node-action-version == 'v6'
+      uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
         cache: pnpm

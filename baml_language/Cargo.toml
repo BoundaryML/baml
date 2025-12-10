@@ -28,9 +28,11 @@ baml_onionskin = { path = "crates/baml_onionskin" }
 baml_syntax = { path = "crates/baml_syntax" }
 baml_tests = { path = "crates/baml_tests" }
 baml_thir = { path = "crates/baml_thir" }
+baml_vm = { path = "crates/baml_vm" }
 baml_workspace = { path = "crates/baml_workspace" }
 
 # external dependencies
+anyhow = { version = "1" }
 ariadne = { version = "0.6" }
 divan = { package = "codspeed-divan-compat", version = "*" }
 glob = { version = "0.3" }
@@ -51,6 +53,12 @@ salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18
 smol_str = { version = "0.3" }
 text-size = { version = "1.1" }
 walkdir = { version = "2.4" }
+
+# Code generation for build.rs
+quote = { version = "1" }
+proc-macro2 = { version = "1" }
+prettyplease = { version = "0.2" }
+syn = { version = "2", features = ["full"] }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

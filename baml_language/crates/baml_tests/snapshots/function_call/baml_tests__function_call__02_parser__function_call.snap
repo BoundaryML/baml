@@ -51,6 +51,88 @@ SOURCE_FILE
           PLUS "+"
           INTEGER_LITERAL "1"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "GreetBaz"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "n"
+        COLON ":"
+        TYPE_EXPR " string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "baz"
+          EQUALS "="
+          OBJECT_LITERAL
+            WORD "Baz"
+            L_BRACE "{"
+            OBJECT_FIELD " name: n"
+              WORD "name"
+              COLON ":"
+              WORD "n"
+            R_BRACE "}"
+          SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "
+  baz.Greeting"
+            WORD "baz"
+            DOT "."
+            WORD "Greeting"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Baz"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR " string"
+        WORD "string"
+    FUNCTION_DEF
+      KW_FUNCTION "function"
+      WORD "Greeting"
+      PARAMETER_LIST
+        L_PAREN "("
+        PARAMETER "self"
+          WORD "self"
+        R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR " string"
+        WORD "string"
+      EXPR_FUNCTION_BODY
+        BLOCK_EXPR
+          L_BRACE "{"
+          BINARY_EXPR
+            BINARY_EXPR
+              STRING_LITERAL "
+    "Hello, ""
+                QUOTE """
+                WORD "Hello"
+                COMMA ","
+                QUOTE """
+              PLUS "+"
+              PATH_EXPR " self.name"
+                WORD "self"
+                DOT "."
+                WORD "name"
+            PLUS "+"
+            STRING_LITERAL " "!""
+              QUOTE """
+              NOT "!"
+              QUOTE """
+          R_BRACE "}"
+    R_BRACE "}"
 
 === ERRORS ===
 None

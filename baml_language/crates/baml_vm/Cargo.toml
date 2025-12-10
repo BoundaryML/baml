@@ -1,0 +1,36 @@
+[package]
+name = "baml_vm"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "BAML Virtual Machine"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+colored = "2"
+indexmap = "2"
+tokio = { version = "1", features = ["sync"] }
+baml_base = { workspace = true }
+
+[dev-dependencies]
+anyhow = "1"
+indexmap = "2"
+divan = { workspace = true }
+tokio = { version = "1", features = ["rt", "macros"] }
+baml_tests = { workspace = true }
+baml_codegen = { workspace = true }
+
+[[bench]]
+name = "fib"
+harness = false

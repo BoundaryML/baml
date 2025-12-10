@@ -170,6 +170,8 @@ Error: Expected Greater, found GreaterGreater
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
     │                                                                      ╰── Expected Greater, found GreaterGreater
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected Greater, found GreaterGreater
@@ -178,6 +180,8 @@ Error: Expected Greater, found GreaterGreater
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
     │                                                                      ╰── Expected Greater, found GreaterGreater
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected Greater, found GreaterGreater
@@ -186,6 +190,8 @@ Error: Expected Greater, found GreaterGreater
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
     │                                                                      ╰── Expected Greater, found GreaterGreater
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected function body, found GreaterGreater
@@ -194,6 +200,8 @@ Error: Expected function body, found GreaterGreater
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
     │                                                                      ╰── Expected function body, found GreaterGreater
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found GreaterGreater
@@ -202,6 +210,8 @@ Error: Expected top-level declaration, found GreaterGreater
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
     │                                                                      ╰── Expected top-level declaration, found GreaterGreater
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found Greater
@@ -210,6 +220,8 @@ Error: Expected top-level declaration, found Greater
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                       ┬  
     │                                                                       ╰── Expected top-level declaration, found Greater
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found LBrace
@@ -218,6 +230,8 @@ Error: Expected top-level declaration, found LBrace
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                         ┬  
     │                                                                         ╰── Expected top-level declaration, found LBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found Return
@@ -226,6 +240,8 @@ Error: Expected top-level declaration, found Return
  30 │   return {}
     │   ───┬──  
     │      ╰──── Expected top-level declaration, found Return
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found LBrace
@@ -234,6 +250,8 @@ Error: Expected top-level declaration, found LBrace
  30 │   return {}
     │          ┬  
     │          ╰── Expected top-level declaration, found LBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found RBrace
@@ -242,6 +260,8 @@ Error: Expected top-level declaration, found RBrace
  30 │   return {}
     │           ┬  
     │           ╰── Expected top-level declaration, found RBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found RBrace
@@ -250,4 +270,6 @@ Error: Expected top-level declaration, found RBrace
  31 │ }
     │ ┬  
     │ ╰── Expected top-level declaration, found RBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯

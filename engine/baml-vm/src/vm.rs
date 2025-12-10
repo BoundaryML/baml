@@ -544,18 +544,26 @@ impl Vm {
 
                 // Run user function to decide if we should notify.
                 WatchFilter::Function(filter_func) => {
-                    match self.interrupt(filter_func, &[state.value]) {
-                        Ok(VmExecState::Complete(Value::Bool(notify))) => {
-                            if notify {
-                                filtered_notifications.push(notification);
+                    let mut result = self.interrupt(filter_func, &[state.value]);
+                    loop {
+                        match result {
+                            Ok(VmExecState::Complete(Value::Bool(notify))) => {
+                                if notify {
+                                    filtered_notifications.push(notification);
+                                }
+                                break;
                             }
-                        }
-
-                        other => {
-                            return Err(RuntimeError::Other(format!(
-                                "Invalid filter function return: {other:?}"
-                            ))
-                            .into())
+                            Ok(VmExecState::Notify(_)) => {
+                                // Ignore viz/variable notifications produced by the filter and keep running it.
+                                result = self.exec();
+                            }
+                            Ok(other) => {
+                                return Err(RuntimeError::Other(format!(
+                                    "Invalid filter function return: {other:?}"
+                                ))
+                                .into());
+                            }
+                            Err(err) => return Err(err),
                         }
                     }
                 }

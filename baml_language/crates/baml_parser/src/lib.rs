@@ -2,55 +2,14 @@
 //!
 //! Implements incremental parsing with error recovery.
 
-use baml_base::{SourceFile, Span};
+use baml_base::SourceFile;
+use baml_diagnostics::compiler_error::parse_error::ParseError;
 use baml_lexer::lex_file;
 use baml_syntax::SyntaxNode;
 use rowan::GreenNode;
 
 mod parser;
 pub use parser::{parse_file, parse_file_with_cache};
-
-/// Parse errors that can occur during parsing.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ParseError {
-    UnexpectedToken {
-        expected: String,
-        found: String,
-        span: Span,
-    },
-    UnexpectedEof {
-        expected: String,
-        span: Span,
-    },
-    // Add more variants as needed
-}
-
-impl baml_base::Diagnostic for ParseError {
-    fn message(&self) -> String {
-        match self {
-            ParseError::UnexpectedToken {
-                expected, found, ..
-            } => {
-                format!("Expected {expected}, found {found}")
-            }
-            ParseError::UnexpectedEof { expected, .. } => {
-                format!("Unexpected end of file, expected {expected}")
-            }
-        }
-    }
-
-    fn span(&self) -> Option<Span> {
-        match self {
-            ParseError::UnexpectedToken { span, .. } | ParseError::UnexpectedEof { span, .. } => {
-                Some(*span)
-            }
-        }
-    }
-
-    fn severity(&self) -> baml_base::Severity {
-        baml_base::Severity::Error
-    }
-}
 
 /// Tracked struct that holds both parse outputs together
 #[salsa::tracked]

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -64,6 +64,8 @@ Error: Expected LLM function missing 'prompt' field, found RBrace
  5 │ }
    │ ┬  
    │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
@@ -72,6 +74,8 @@ Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent
  9 │   clent GPT4  // Typo in "client"
    │   ──┬──  
    │     ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
@@ -80,6 +84,8 @@ Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4'
  9 │   clent GPT4  // Typo in "client"
    │         ──┬─  
    │           ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected LLM function missing 'client' field, found RBrace
@@ -88,4 +94,6 @@ Error: Expected LLM function missing 'client' field, found RBrace
  11 │ }
     │ ┬  
     │ ╰── Expected LLM function missing 'client' field, found RBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
