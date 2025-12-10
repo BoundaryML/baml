@@ -7,12 +7,32 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
-use baml_hir::{BinaryOp, ExprBody, ExprId, FunctionBody, Literal, Pattern, StmtId, UnaryOp};
+use baml_hir::{
+    BinaryOp, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, Pattern, StmtId, UnaryOp,
+};
 use baml_thir::{InferenceResult, Ty};
 use baml_vm::{
     BinOp, Bytecode, CmpOp, Function, FunctionKind, GlobalIndex, Instruction, Object, ObjectIndex,
-    Value,
+    ObjectPool, Value,
 };
+
+/// Context for compiling functions to bytecode.
+///
+/// Contains all the shared state needed during compilation:
+/// type inference results, global mappings, class information, and the shared object pool.
+pub struct CodegenContext<'db, 'ctx, 'obj> {
+    /// Type inference result from THIR.
+    pub inference: &'db InferenceResult<'db>,
+    /// Resolved global names to indices.
+    pub globals: &'ctx HashMap<String, usize>,
+    /// Resolved class information (name -> `ClassInfo`).
+    pub classes: &'ctx HashMap<String, ClassInfo>,
+    /// Pre-allocated Class object indices in the program's object pool.
+    pub class_object_indices: &'ctx HashMap<String, usize>,
+    /// Shared object pool for strings, etc.
+    /// Objects are added directly here with correct indices, eliminating remapping.
+    pub objects: &'obj mut ObjectPool,
+}
 
 /// Block scope for tracking local variables.
 #[derive(Debug, Default)]
@@ -47,18 +67,18 @@ pub struct ClassInfo {
 }
 
 /// Compiler state for generating bytecode from THIR.
-pub struct Compiler<'db> {
+pub struct Compiler<'db, 'ctx, 'obj> {
     /// Type inference result from THIR.
     inference: &'db InferenceResult<'db>,
 
     /// Resolved global names to indices.
-    globals: HashMap<String, usize>,
+    globals: &'ctx HashMap<String, usize>,
 
     /// Resolved class information (name -> `ClassInfo`).
-    classes: HashMap<String, ClassInfo>,
+    classes: &'ctx HashMap<String, ClassInfo>,
 
     /// Pre-allocated Class object indices in the program's object pool.
-    class_object_indices: HashMap<String, usize>,
+    class_object_indices: &'ctx HashMap<String, usize>,
 
     /// Resolved local variable names to stack indices.
     locals: HashMap<String, usize>,
@@ -75,8 +95,8 @@ pub struct Compiler<'db> {
     /// Bytecode being generated.
     bytecode: Bytecode,
 
-    /// Objects pool (for strings, etc. - NOT classes, those are pre-allocated).
-    objects: Vec<Object>,
+    /// Shared objects pool (for strings, etc. - NOT classes, those are pre-allocated).
+    objects: &'obj mut ObjectPool,
 
     /// Counter for generating unique compiler-internal variable names.
     /// Used to avoid collisions when the same internal variable name
@@ -87,25 +107,20 @@ pub struct Compiler<'db> {
     current_loop: Option<LoopInfo>,
 }
 
-impl<'db> Compiler<'db> {
-    /// Create a new compiler with the given type inference result and global mappings.
-    pub fn new(
-        inference: &'db InferenceResult<'db>,
-        globals: HashMap<String, usize>,
-        classes: HashMap<String, ClassInfo>,
-        class_object_indices: HashMap<String, usize>,
-    ) -> Self {
+impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
+    /// Create a new compiler with the given codegen context.
+    pub fn new(ctx: CodegenContext<'db, 'ctx, 'obj>) -> Self {
         Self {
-            inference,
-            globals,
-            classes,
-            class_object_indices,
+            inference: ctx.inference,
+            globals: ctx.globals,
+            classes: ctx.classes,
+            class_object_indices: ctx.class_object_indices,
             locals: HashMap::new(),
             scopes: Vec::new(),
             locals_in_scope: Vec::new(),
             current_source_line: 0,
             bytecode: Bytecode::new(),
-            objects: Vec::new(),
+            objects: ctx.objects,
             gensym_counter: 0,
             current_loop: None,
         }
@@ -127,8 +142,7 @@ impl<'db> Compiler<'db> {
     /// Compile a function from its THIR-typed body.
     pub fn compile_function(
         &mut self,
-        name: &str,
-        params: &[Name],
+        signature: &FunctionSignature,
         body: &FunctionBody,
     ) -> Function {
         // Reset state for this function
@@ -137,8 +151,11 @@ impl<'db> Compiler<'db> {
         self.locals_in_scope.clear();
         self.bytecode = Bytecode::new();
 
+        let name = signature.name.as_str();
+        let params: Vec<Name> = signature.params.iter().map(|p| p.name.clone()).collect();
+
         match body {
-            FunctionBody::Expr(expr_body) => self.compile_expr_function(name, params, expr_body),
+            FunctionBody::Expr(expr_body) => self.compile_expr_function(name, &params, expr_body),
             FunctionBody::Llm(_) => {
                 // LLM functions have no bytecode to compile
                 Function {
@@ -834,28 +851,17 @@ impl<'db> Compiler<'db> {
 /// This is the main entry point for compiling a single function.
 ///
 /// # Arguments
-/// * `name` - Function name
-/// * `params` - Parameter names
+/// * `signature` - Function signature (name, parameters, return type)
 /// * `body` - HIR function body
-/// * `inference` - THIR type inference result
-/// * `globals` - Global name to index mapping
-/// * `classes` - Class name to field information mapping
-/// * `class_object_indices` - Pre-allocated Class object indices in program's object pool
+/// * `ctx` - Codegen context containing type inference, globals, class info, and shared object pool
 ///
-/// # Returns
-/// A tuple of (Function, `Vec<Object>`) where the objects are the object pool
-/// containing strings, etc. referenced by the function's bytecode.
-/// Class objects are NOT included here - they are pre-allocated in the program.
-pub fn compile_function<'db>(
-    name: &str,
-    params: &[Name],
+/// Objects (strings, etc.) are added directly to `ctx.objects` with correct indices,
+/// eliminating the need for post-compilation index remapping.
+pub fn compile_function(
+    signature: &FunctionSignature,
     body: &FunctionBody,
-    inference: &'db InferenceResult<'db>,
-    globals: HashMap<String, usize>,
-    classes: HashMap<String, ClassInfo>,
-    class_object_indices: HashMap<String, usize>,
-) -> (Function, Vec<Object>) {
-    let mut compiler = Compiler::new(inference, globals, classes, class_object_indices);
-    let function = compiler.compile_function(name, params, body);
-    (function, compiler.objects)
+    ctx: CodegenContext<'_, '_, '_>,
+) -> Function {
+    let mut compiler = Compiler::new(ctx);
+    compiler.compile_function(signature, body)
 }

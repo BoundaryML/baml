@@ -31,7 +31,7 @@ pub use baml_vm::{
     ObjectIndex, Program, UnaryOp, Value,
 };
 use baml_workspace::Project;
-pub use compiler::{ClassInfo, Compiler, compile_function};
+pub use compiler::{ClassInfo, CodegenContext, Compiler, compile_function};
 
 /// Generate bytecode for all functions in a project.
 ///
@@ -122,34 +122,15 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                     None, // TODO: Pass class fields. Eventually remove this parameter.
                 );
 
-                // Get parameter names
-                let params: Vec<Name> = signature.params.iter().map(|p| p.name.clone()).collect();
-
-                // Compile to bytecode
-                let (mut compiled_fn, fn_objects) = compile_function(
-                    signature.name.as_str(),
-                    &params,
-                    &body,
-                    &inference,
-                    globals.clone(),
-                    classes.clone(),
-                    class_object_indices.clone(),
-                );
-
-                // Add function-local objects (strings, etc.) to program and track their new indices
-                // The base index for these objects is the current size of program.objects
-                let object_base_idx = program.objects.len();
-                for obj in fn_objects {
-                    program.add_object(obj);
-                }
-
-                // Remap Value::Object indices in the function's constants
-                // Old index (in compiler's local pool) -> new index (in program's pool)
-                for constant in &mut compiled_fn.bytecode.constants {
-                    if let Value::Object(idx) = constant {
-                        *idx = *idx + object_base_idx;
-                    }
-                }
+                // Compile to bytecode (objects are added directly to program.objects)
+                let ctx = CodegenContext {
+                    inference: &inference,
+                    globals: &globals,
+                    classes: &classes,
+                    class_object_indices: &class_object_indices,
+                    objects: &mut program.objects,
+                };
+                let compiled_fn = compile_function(&signature, &body, ctx);
 
                 // Add function object to program
                 let fn_obj_idx = program.add_object(Object::Function(compiled_fn));
