@@ -2,64 +2,12 @@
 
 #![allow(clippy::print_stderr)] // Tests use eprintln! for debugging output
 
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    sync::{Arc, atomic::AtomicU32},
+use std::collections::HashMap;
+
+use crate::{
+    bytecode::TestDatabase,
+    vm::{Instruction, Value},
 };
-
-use baml_base::{FileId, SourceFile};
-use baml_vm::test::{Instruction, Value};
-
-//
-// ──────────────────────────────────────────────────────── TEST DATABASE ─────
-//
-
-/// Minimal test database for compilation tests.
-///
-/// This is a stripped-down version of `baml_db::RootDatabase` that implements
-/// just enough to run `compile_files`. This avoids a dependency cycle between
-/// `baml_codegen` and `baml_db`.
-#[salsa::db]
-#[derive(Clone)]
-pub struct TestDatabase {
-    storage: salsa::Storage<Self>,
-    next_file_id: Arc<AtomicU32>,
-}
-
-#[salsa::db]
-impl salsa::Database for TestDatabase {}
-
-#[salsa::db]
-impl baml_hir::Db for TestDatabase {}
-
-#[salsa::db]
-impl baml_thir::Db for TestDatabase {}
-
-impl Default for TestDatabase {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TestDatabase {
-    /// Create a new empty test database.
-    pub fn new() -> Self {
-        Self {
-            storage: salsa::Storage::default(),
-            next_file_id: Arc::new(AtomicU32::new(0)),
-        }
-    }
-
-    /// Add a source file to the database.
-    pub fn add_file(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceFile {
-        let file_id = FileId::new(
-            self.next_file_id
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-        );
-        SourceFile::new(self, text.into(), path.into(), file_id)
-    }
-}
 
 /// Helper struct for testing bytecode compilation.
 pub struct Program {
@@ -230,7 +178,7 @@ fn compile_source(source: &str) -> CompileResult {
     let file = db.add_file("test.baml", source);
 
     // Use the production compile_files function
-    let program = crate::compile_files(&db, &[file]);
+    let program = baml_codegen::compile_files(&db, &[file]);
 
     // Extract functions from the program
     let mut functions = Vec::new();

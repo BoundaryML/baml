@@ -1,10 +1,10 @@
 //! Compiler tests for operators (arithmetic, logical, assignment).
 
-use baml_codegen::tests::{Program, assert_compiles};
-use baml_vm::{
-    BinOp,
-    test::{Instruction, Value},
+use baml_tests::{
+    codegen::{Program, assert_compiles},
+    vm::{Instruction, Value},
 };
+use baml_vm::BinOp;
 
 #[test]
 fn basic_and() -> anyhow::Result<()> {

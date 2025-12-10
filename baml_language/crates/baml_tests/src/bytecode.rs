@@ -30,11 +30,12 @@ use std::{
 };
 
 use baml_base::{FileId, SourceFile};
-// Re-export test types from baml_vm::test
-pub use baml_vm::test::{
+use baml_vm::{ObjectIndex, Program as VmProgram, Value as VmValue, Vm, VmExecState};
+
+// Re-export test types from crate::vm
+pub use crate::vm::{
     BlockEvent, ExecState, Instance, Instruction, Notification, Object, Value, Variant,
 };
-use baml_vm::{ObjectIndex, Program as VmProgram, Value as VmValue, Vm, VmExecState};
 
 //
 // ──────────────────────────────────────────────────────── TEST DATABASE ─────

@@ -23,8 +23,9 @@ baml_hir = { workspace = true }
 baml_vm = { workspace = true }
 baml_workspace = { workspace = true }
 baml_thir = { workspace = true }
-anyhow = "1.0"
 
 [dev-dependencies]
+anyhow = "1.0"
+baml_tests = { workspace = true }
 insta = { workspace = true }
 la-arena = { workspace = true }

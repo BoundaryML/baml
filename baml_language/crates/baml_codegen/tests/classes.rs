@@ -1,10 +1,10 @@
 //! Compiler tests for class construction and field operations.
 
-use baml_codegen::tests::{Program, assert_compiles};
-use baml_vm::{
-    BinOp,
-    test::{Instruction, Value},
+use baml_tests::{
+    codegen::{Program, assert_compiles},
+    vm::{Instruction, Value},
 };
+use baml_vm::BinOp;
 
 #[test]
 fn class_constructor() -> anyhow::Result<()> {

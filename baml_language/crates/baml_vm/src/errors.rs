@@ -56,7 +56,7 @@ pub enum RuntimeError {
     /// Ah yes, classic stack overflow.
     StackOverflow,
 
-    /// User code triggered an assertion failure via the [`Instruction::Assert`] opcode.
+    /// User code triggered an assertion failure via the [`crate::Instruction::Assert`] opcode.
     AssertionError,
 
     /// VM internal error.

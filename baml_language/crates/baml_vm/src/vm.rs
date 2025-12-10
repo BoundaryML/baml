@@ -34,7 +34,7 @@ pub struct Frame {
     /// Points to the next instruction that the VM will execute. It is of type
     /// [`isize`] because some jumps can create negative offsets (for loops)
     /// and it's easier to operate on an [`isize`] and cast it to [`usize`]
-    /// only once (when we index into [`Bytecode::instructions`]). However,
+    /// only once (when we index into [`crate::Bytecode::instructions`]). However,
     /// this number should never be negative, otherwise indexing into the
     /// instruction vec will throw [`InternalError::NegativeInstructionPtr`].
     pub instruction_ptr: isize,

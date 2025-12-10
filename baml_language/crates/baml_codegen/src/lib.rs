@@ -204,7 +204,3 @@ fn build_typing_context<'db>(
 
     context
 }
-
-/// Test utilities for bytecode compilation tests.
-#[doc(hidden)]
-pub mod tests;

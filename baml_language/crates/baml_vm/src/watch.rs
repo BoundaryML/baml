@@ -194,7 +194,7 @@ pub enum Path {
 ///
 /// - [`Watch::register_root`]
 /// - [`Watch::unregister_root`]
-/// - [`Watch::add_edge`]
+/// - `Watch::add_edge`
 /// - [`Watch::link_edge`]
 /// - [`Watch::unlink_edge`]
 /// - [`Watch::copy_roots_reaching`]

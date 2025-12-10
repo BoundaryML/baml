@@ -1,10 +1,14 @@
 //! Test utilities and automatic tests for the BAML compiler.
 //!
 //! This crate provides:
+//! - [`vm`]: Test-friendly representations of VM values and execution states
+//! - [`codegen`]: Test utilities for bytecode compilation tests
 //! - [`bytecode`]: Shared test utilities for bytecode compilation and VM execution
 //! - Automatic snapshot tests generated from the `projects/` directory by `build.rs`
 
 pub mod bytecode;
+pub mod codegen;
+pub mod vm;
 
 #[cfg(test)]
 pub mod incremental;

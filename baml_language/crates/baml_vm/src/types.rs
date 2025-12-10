@@ -139,7 +139,7 @@ impl std::fmt::Display for Class {
 /// Runtime instance representation.
 #[derive(Clone, Debug)]
 pub struct Instance {
-    /// Class index in the [`Vm::objects`] pool.
+    /// Class index in the [`crate::Vm::objects`] pool.
     pub class: ObjectIndex,
 
     /// Fields are accessed by index. No string lookups.
@@ -247,7 +247,7 @@ pub enum Object {
 
     /// Heap allocated string.
     ///
-    /// TODO: Add [`Vm::strings`] interner to avoid allocating duplicates.
+    /// TODO: Add a `Vm::strings` interner to avoid allocating duplicates.
     /// In Rust it's not easy to implement because [`crate::vm::Vm::objects`]
     /// owns the strings allocated on heap, but the interner would be something
     /// like `HashSet`<&str> and it would store pointers to the strings. That

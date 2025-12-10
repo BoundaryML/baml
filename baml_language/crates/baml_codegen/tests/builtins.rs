@@ -1,7 +1,9 @@
 //! Compiler tests for built-in method calls.
 
-use baml_codegen::tests::{Program, assert_compiles};
-use baml_vm::test::{Instruction, Value};
+use baml_tests::{
+    codegen::{Program, assert_compiles},
+    vm::{Instruction, Value},
+};
 
 #[test]
 #[ignore = "method calls not yet in HIR"]

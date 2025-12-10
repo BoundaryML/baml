@@ -1,10 +1,10 @@
 //! Compiler tests for assert statements.
 
-use baml_codegen::tests::{Program, assert_compiles};
-use baml_vm::{
-    BinOp, CmpOp,
-    test::{Instruction, Value},
+use baml_tests::{
+    codegen::{Program, assert_compiles},
+    vm::{Instruction, Value},
 };
+use baml_vm::{BinOp, CmpOp};
 
 #[test]
 #[ignore = "assert not yet in HIR"]

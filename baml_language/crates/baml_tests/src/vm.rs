@@ -4,9 +4,7 @@
 //! rely on indices, making tests more readable and resilient to changes in the
 //! order of globals, constants, and objects.
 
-use indexmap::IndexMap;
-
-use crate::{
+use baml_vm::{
     Object as VmObject, ObjectIndex, Value as VmValue, Vm, VmExecState,
     bytecode::{
         BinOp, BlockNotification as VmBlockNotification, BlockNotificationType, CmpOp, UnaryOp,
@@ -14,6 +12,7 @@ use crate::{
     vm::WatchNotification as VmWatchNotification,
     watch::{self},
 };
+use indexmap::IndexMap;
 
 /// Test-friendly representation of VM values that doesn't rely on object
 /// indices.
