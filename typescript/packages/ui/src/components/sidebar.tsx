@@ -629,7 +629,8 @@ function SidebarMenuSkeleton({
         style={
           {
             "--skeleton-width": width,
-          } as unknown as React.CSSProperties
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any
         }
       />
     </div>
