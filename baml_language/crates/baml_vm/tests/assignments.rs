@@ -1,6 +1,6 @@
 //! VM tests for field assignments and complex assignment scenarios.
 
-use baml_bytecode_tests::{ExecState, Program, Value, assert_vm_executes};
+use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
 
 // Block expressions
 #[test]

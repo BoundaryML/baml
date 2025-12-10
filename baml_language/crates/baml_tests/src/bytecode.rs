@@ -1,12 +1,7 @@
 //! Shared test utilities for BAML bytecode testing.
 //!
-//! This crate provides common infrastructure used by both `baml_codegen` and `baml_vm`
-//! for testing bytecode compilation and execution. It exists to break a circular
-//! dependency: `baml_codegen` depends on `baml_vm` for the bytecode types, but
-//! `baml_vm` tests need `baml_codegen` to compile source code to bytecode.
-//!
-//! By extracting the shared test utilities into this intermediate crate, both
-//! `baml_codegen` and `baml_vm` can use it as a dev-dependency without creating a cycle.
+//! This module provides common infrastructure for testing bytecode compilation
+//! and execution in `baml_vm`.
 //!
 //! # Contents
 //!
@@ -18,7 +13,7 @@
 //! # Usage
 //!
 //! ```ignore
-//! use baml_bytecode_tests::{Program, ExecState, Value, assert_vm_executes};
+//! use baml_tests::bytecode::{Program, ExecState, Value, assert_vm_executes};
 //!
 //! assert_vm_executes(Program {
 //!     source: "function main() -> int { 42 }",

@@ -1,6 +1,6 @@
 //! VM tests for `deep_copy` functionality
 
-use baml_bytecode_tests::{ExecState, Instance, Object, Program, Value, assert_vm_executes};
+use baml_tests::bytecode::{ExecState, Instance, Object, Program, Value, assert_vm_executes};
 use indexmap::indexmap;
 
 #[test]

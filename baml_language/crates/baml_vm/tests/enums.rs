@@ -1,6 +1,6 @@
 //! VM tests for enum variants.
 
-use baml_bytecode_tests::{ExecState, Object, Program, Value, Variant, assert_vm_executes};
+use baml_tests::bytecode::{ExecState, Object, Program, Value, Variant, assert_vm_executes};
 
 #[test]
 #[ignore = "enum variants not yet implemented"]

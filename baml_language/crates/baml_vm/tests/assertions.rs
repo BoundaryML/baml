@@ -1,6 +1,6 @@
 //! VM tests for assert statements.
 
-use baml_bytecode_tests::{
+use baml_tests::bytecode::{
     ExecState, FailingProgram, Program, Value, assert_vm_executes, assert_vm_fails,
 };
 use baml_vm::RuntimeError;

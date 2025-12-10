@@ -1,6 +1,6 @@
 //! VM tests for arrays.
 
-use baml_bytecode_tests::{FailingProgram, assert_vm_fails_with_inspection};
+use baml_tests::bytecode::{FailingProgram, assert_vm_fails_with_inspection};
 use baml_vm::{RuntimeError, Value, errors::VmError};
 
 // Array tests

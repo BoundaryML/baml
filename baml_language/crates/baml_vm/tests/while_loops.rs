@@ -1,6 +1,6 @@
 //! VM tests for while loops, break, and continue.
 
-use baml_bytecode_tests::{ExecState, Program, Value, assert_vm_executes};
+use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
 
 #[test]
 #[ignore = "loop codegen causes infinite loop"]

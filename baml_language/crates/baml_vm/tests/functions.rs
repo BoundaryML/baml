@@ -1,6 +1,6 @@
 //! VM tests for function calls, parameters, and return statements.
 
-use baml_bytecode_tests::{ExecState, Program, Value, assert_vm_executes};
+use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
 
 #[test]
 fn return_function_call() -> anyhow::Result<()> {

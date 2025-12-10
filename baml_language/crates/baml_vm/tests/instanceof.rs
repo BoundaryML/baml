@@ -1,6 +1,6 @@
 //! VM tests for instanceof operator & narrowing.
 
-use baml_bytecode_tests::{ExecState, Program, Value, assert_vm_executes};
+use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
 
 #[test]
 #[ignore = "instanceof not yet implemented"]
