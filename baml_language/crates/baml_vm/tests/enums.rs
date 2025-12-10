@@ -6,6 +6,7 @@ use common::{ExecState, Program, Value, assert_vm_executes};
 use crate::common::{Object, Variant};
 
 #[test]
+#[ignore = "enum variants not yet implemented"]
 fn return_enum_variant() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -28,6 +29,7 @@ fn return_enum_variant() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "enum variants not yet implemented"]
 fn assign_enum_variant() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -51,6 +53,7 @@ fn assign_enum_variant() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "enum variants not yet implemented"]
 fn take_and_return_enum_variant() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

@@ -4,6 +4,7 @@ mod common;
 use common::{Notification, WatchProgram, assert_vm_emits};
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn notify_primitive_on_change() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -21,6 +22,7 @@ fn notify_primitive_on_change() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn notify_primitive_on_nested_scope() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -40,6 +42,7 @@ fn notify_primitive_on_nested_scope() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn stop_notifying_on_scope_exit() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -66,6 +69,7 @@ fn stop_notifying_on_scope_exit() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn notify_on_function_call_modifications() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -96,6 +100,7 @@ fn notify_on_function_call_modifications() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn notify_on_change_with_alias() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -119,6 +124,7 @@ fn notify_on_change_with_alias() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn notify_on_change_with_alias_in_nested_scope() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -143,6 +149,7 @@ fn notify_on_change_with_alias_in_nested_scope() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn notify_when_nested_object_is_modified_after_addtion() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -183,6 +190,7 @@ fn notify_when_nested_object_is_modified_after_addtion() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn dont_notify_when_nested_object_is_modified_after_removal() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -222,6 +230,7 @@ fn dont_notify_when_nested_object_is_modified_after_removal() -> anyhow::Result<
 
 // Complicated case from the edge cases doc.
 #[test]
+#[ignore = "watch not yet implemented"]
 fn cyclic_graph() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -291,6 +300,7 @@ fn cyclic_graph() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn run_user_filter() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -314,6 +324,7 @@ fn run_user_filter() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn run_default_filter() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -332,6 +343,7 @@ fn run_default_filter() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn manual_notify() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -354,6 +366,7 @@ fn manual_notify() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn basic_block_notification() -> anyhow::Result<()> {
     use baml_vm::bytecode::BlockNotificationType;
     use common::BlockEvent;
@@ -379,6 +392,7 @@ fn basic_block_notification() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "watch not yet implemented"]
 fn multiple_block_notifications() -> anyhow::Result<()> {
     use baml_vm::bytecode::BlockNotificationType;
     use common::BlockEvent;

@@ -50,6 +50,13 @@ impl Program {
     pub fn add_global(&mut self, value: Value) {
         self.globals.push(value);
     }
+
+    /// Look up a function's object index by name.
+    pub fn function_index(&self, name: &str) -> Option<crate::ObjectIndex> {
+        self.function_indices
+            .get(name)
+            .map(|&idx| crate::ObjectIndex::from_raw(idx))
+    }
 }
 
 /// Function type.

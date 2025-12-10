@@ -262,6 +262,21 @@ impl Vm {
         }
     }
 
+    /// Creates a VM from a compiled [`crate::Program`].
+    pub fn from_program(program: crate::Program) -> Self {
+        Self {
+            frames: Vec::new(),
+            stack: EvalStack::new(),
+            runtime_allocs_offset: ObjectIndex::from_raw(program.objects.len()),
+            objects: program.objects,
+            globals: program.globals,
+            env_vars: HashMap::new(),
+            watch: Watch::new(),
+            watched_vars: HashMap::new(),
+            interrupt_frame: None,
+        }
+    }
+
     /// Bootstraps the VM preparing the given function to run.
     #[allow(clippy::print_stderr)] // intentional debug warning for developer feedback
     pub fn set_entry_point(&mut self, function: ObjectIndex, args: &[Value]) {

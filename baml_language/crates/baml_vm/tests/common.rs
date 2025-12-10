@@ -6,17 +6,13 @@
 #![allow(clippy::needless_pass_by_value)] // Test utilities intentionally take ownership
 
 use std::{
-    collections::HashMap,
     path::PathBuf,
     sync::{Arc, atomic::AtomicU32},
 };
 
 use baml_base::{FileId, SourceFile};
 pub(crate) use baml_vm::test::*;
-use baml_vm::{
-    EvalStack, Frame, GlobalPool, ObjectIndex, ObjectPool, StackIndex, Value as VmValue, Vm,
-    VmExecState, watch::Watch,
-};
+use baml_vm::{ObjectIndex, Value as VmValue, Vm, VmExecState};
 
 //
 // ──────────────────────────────────────────────────────── TEST DATABASE ─────
@@ -132,28 +128,12 @@ pub(crate) fn collect_vm_exec_states(
 ) -> anyhow::Result<(Vm, Vec<ExecState>)> {
     let program = compile_source(source);
 
-    let target_function_index = *program
-        .function_indices
-        .get(function)
+    let function_index = program
+        .function_index(function)
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
-    let mut vm = Vm {
-        frames: vec![Frame {
-            function: ObjectIndex::from_raw(target_function_index),
-            instruction_ptr: 0,
-            locals_offset: StackIndex::from_raw(0),
-        }],
-        stack: EvalStack::from_vec(vec![VmValue::Object(ObjectIndex::from_raw(
-            target_function_index,
-        ))]),
-        runtime_allocs_offset: ObjectIndex::from_raw(program.objects.len()),
-        objects: program.objects.clone(),
-        globals: program.globals.clone(),
-        env_vars: HashMap::default(),
-        watch: Watch::new(),
-        watched_vars: HashMap::default(),
-        interrupt_frame: None,
-    };
+    let mut vm = Vm::from_program(program);
+    vm.set_entry_point(function_index, &[]);
 
     let mut states = Vec::new();
 
@@ -211,28 +191,12 @@ fn setup_and_exec_program(
 ) -> Result<(Vm, Result<VmExecState, baml_vm::errors::VmError>), anyhow::Error> {
     let program = compile_source(source);
 
-    let target_function_index = *program
-        .function_indices
-        .get(function)
+    let function_index = program
+        .function_index(function)
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
-    let mut vm = Vm {
-        frames: vec![Frame {
-            function: ObjectIndex::from_raw(target_function_index),
-            instruction_ptr: 0,
-            locals_offset: StackIndex::from_raw(0),
-        }],
-        stack: EvalStack::from_vec(vec![VmValue::Object(ObjectIndex::from_raw(
-            target_function_index,
-        ))]),
-        runtime_allocs_offset: ObjectIndex::from_raw(program.objects.len()),
-        objects: program.objects.clone(),
-        globals: program.globals.clone(),
-        env_vars: HashMap::default(),
-        watch: Watch::new(),
-        watched_vars: HashMap::default(),
-        interrupt_frame: None,
-    };
+    let mut vm = Vm::from_program(program);
+    vm.set_entry_point(function_index, &[]);
     let result = vm.exec();
     Ok((vm, result))
 }
@@ -273,24 +237,19 @@ pub(crate) fn assert_vm_executes_bytecode_with_inspection(
         block_notifications: Vec::new(),
     };
 
-    let objects = vec![baml_vm::Object::Function(function)];
-    let globals = vec![VmValue::Object(ObjectIndex::from_raw(0))];
+    let mut program = baml_vm::Program::new();
+    let fn_idx = program.add_object(baml_vm::Object::Function(function));
+    program.add_global(VmValue::Object(ObjectIndex::from_raw(fn_idx)));
+    program
+        .function_indices
+        .insert("test_fn".to_string(), fn_idx);
 
-    let mut vm = Vm {
-        frames: vec![Frame {
-            function: ObjectIndex::from_raw(0),
-            instruction_ptr: 0,
-            locals_offset: StackIndex::from_raw(0),
-        }],
-        stack: EvalStack::from_vec(vec![VmValue::Object(ObjectIndex::from_raw(0))]),
-        runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
-        objects: ObjectPool::from_vec(objects),
-        globals: GlobalPool::from_vec(globals),
-        env_vars: HashMap::default(),
-        watch: Watch::new(),
-        watched_vars: HashMap::default(),
-        interrupt_frame: None,
-    };
+    let function_index = program
+        .function_index("test_fn")
+        .expect("test_fn should exist");
+
+    let mut vm = Vm::from_program(program);
+    vm.set_entry_point(function_index, &[]);
 
     let result = vm.exec()?;
 

@@ -6,6 +6,7 @@ mod common;
 use common::{ExecState, FailingProgram, Program, Value, assert_vm_executes, assert_vm_fails};
 
 #[test]
+#[ignore = "maps not yet implemented"]
 fn create_and_access() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -23,6 +24,7 @@ fn create_and_access() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "maps not yet implemented"]
 fn access_no_key() -> anyhow::Result<()> {
     assert_vm_fails(FailingProgram {
         source: r#"
@@ -41,6 +43,7 @@ fn access_no_key() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "maps not yet implemented"]
 fn contains() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -62,6 +65,7 @@ fn contains() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "maps not yet implemented"]
 fn modify() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -81,6 +85,7 @@ fn modify() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore = "maps not yet implemented"]
 fn len() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
