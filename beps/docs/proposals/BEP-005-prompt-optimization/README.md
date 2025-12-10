@@ -67,7 +67,7 @@ This prompt could be difficult for the LLM to satisfy.
 To optimize it, kick off an optimization job:
 
 ```sh
-baml-cli optimize --features beta --apply
+baml-cli optimize --beta --apply
 ```
 
 This command should be run from your project root - usually the directory
@@ -75,7 +75,7 @@ containing `baml_src`. If you have multiple `baml_src` directories in
 your project, run the `optimize` command from the directory that contains
 the `baml_src` you are trying to optimize.
 
-The `--features beta` flag tells BAML to enable experimental features,
+The `--beta` flag tells BAML to enable experimental features,
 and will be required until we stabilize the optimizer, some
 time after we gather initial user feedback.
 
@@ -111,10 +111,10 @@ tokens, response tokens, and response latency, using the
 
 ```sh
 # Weigh accuracy and token efficiency equally.
-baml-cli optimize --features beta --weight accuracy=0.5,tokens=0.5
+baml-cli optimize --beta --weight accuracy=0.5,tokens=0.5
 
 # Consider latency in the weighting
-baml-cli optimize --features beta --weight accuracy=0.4,latency=0.6
+baml-cli optimize --beta --weight accuracy=0.4,latency=0.6
 ```
 
 Weights don't necessarily need to add up to 1.0, even though
@@ -145,7 +145,7 @@ test Test1 {
 ```
 
 ```sh
-baml-cli optimize --features beta --weight accuracy=0.8,correct_age=0.2
+baml-cli optimize --beta --weight accuracy=0.8,correct_age=0.2
 ```
 
 ### Customizing the optimization backend model
@@ -158,12 +158,12 @@ first, edit them, and then run optimization:
 
 ```sh
 # Create the gepa.baml files
-baml-cli optimize --features beta --reset-gepa-prompts
+baml-cli optimize --beta --reset-gepa-prompts
 
 # ... edit .baml_optimize/gepa/baml_src/gepa.baml ...
 
 # Run optimization with the customized gepa.baml
-baml-cli optimize --features beta
+baml-cli optimize --beta
 ```
 
 There are two safe ways to modify `gepa.baml`:
@@ -306,16 +306,16 @@ You can control the timing in a few ways.
 
 ```sh
 # Limit the number of iterations through the full algorithm
-baml-cli optimize --features beta --trials 10
+baml-cli optimize --beta --trials 10
 
 # Limit the absolute number of tests to run
-baml-cli optimize --features beta --max-evals 50
+baml-cli optimize --beta --max-evals 50
 
 # Limit optimization to a single BAML function
-baml-cli optimize --features beta --function ExtractSubject
+baml-cli optimize --beta --function ExtractSubject
 
 # Filter to specific tests
-baml-cli optimize --features beta --test "*::IndirectionTest"
+baml-cli optimize --beta --test "*::IndirectionTest"
 ```
 
 Optimization runs generally start fresh from your own single
@@ -326,7 +326,7 @@ optimization state directory, `.baml_optimize`.
 
 ```
 # Resume an existing run
-baml-cli optimize --features beta --resume .baml_optimize/run_20251208_150606
+baml-cli optimize --beta --resume .baml_optimize/run_20251208_150606
 ```
 
 ## Understanding the Optimization Algorithm

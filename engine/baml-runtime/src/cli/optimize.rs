@@ -21,6 +21,9 @@ pub struct OptimizeArgs {
     ///   -f ExtractReceipt -f ClassifyEmail
     pub function: Vec<String>,
 
+    #[arg(long, help = "Enable beta features")]
+    pub beta: bool,
+
     #[arg(long, short = 't', help = "Test filter pattern")]
     /// Filter which tests to use for optimization.
     /// Uses the same syntax as `baml-cli test --include`.
@@ -134,7 +137,7 @@ impl OptimizeArgs {
     ) -> Result<OptimizeRunResult> {
         if !(feature_flags.is_beta_enabled()) {
             println!(
-                "`baml-cli optimize` is still in beta. Please use --features beta and procede with caution."
+                "`baml-cli optimize` is still in beta. Please use --beta flag and proceed with caution."
             );
             std::process::exit(1);
         }
