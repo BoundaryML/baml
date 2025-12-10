@@ -572,9 +572,10 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
                     writeln!(output, "\nFunction {} (arity: {}, kind: {:?}):", func_name, func.arity, func.kind).unwrap();
                     let bytecode_table = baml_vm::debug::display_bytecode(
                         func,
-                        &[],  // Empty stack for static display
+                        &baml_vm::EvalStack::new(),
                         &program.objects,
                         &program.globals,
+                        false,  // no colors
                     );
                     if bytecode_table.is_empty() {
                         writeln!(output, "  (no bytecode)").unwrap();

@@ -114,8 +114,8 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "baml_base",
- "baml_db",
  "baml_hir",
+ "baml_tests",
  "baml_thir",
  "baml_vm",
  "baml_workspace",
@@ -227,11 +227,16 @@ dependencies = [
 name = "baml_tests"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
+ "baml_base",
+ "baml_codegen",
  "baml_db",
  "baml_diagnostics",
  "baml_hir",
+ "baml_thir",
  "baml_vm",
  "codspeed-divan-compat",
+ "indexmap",
  "insta",
  "prettyplease",
  "proc-macro2",
@@ -257,6 +262,16 @@ dependencies = [
 [[package]]
 name = "baml_vm"
 version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "baml_base",
+ "baml_codegen",
+ "baml_tests",
+ "codspeed-divan-compat",
+ "colored",
+ "indexmap",
+ "tokio",
+]
 
 [[package]]
 name = "baml_workspace"
@@ -1639,6 +1654,27 @@ name = "thin-vec"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "144f754d318415ac792f9d69fc87abbbfc043ce2ef041c60f16ad828f638717d"
+
+[[package]]
+name = "tokio"
+version = "1.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff360e02eab121e0bc37a2d3b4d4dc622e6eda3a8e5253d5435ecf5bd4c68408"
+dependencies = [
+ "pin-project-lite",
+ "tokio-macros",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af407857209536a95c8e56f8231ef2c2e2aff839b22e07a1ffcbc617e9db9fa5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "toml_datetime"

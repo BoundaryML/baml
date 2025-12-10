@@ -1,0 +1,77 @@
+//! VM tests for enum variants.
+
+use baml_tests::bytecode::{ExecState, Object, Program, Value, Variant, assert_vm_executes};
+
+#[test]
+#[ignore = "enum variants not yet implemented"]
+fn return_enum_variant() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            enum Shape {
+                Square
+                Rectangle
+                Circle
+            }
+
+            function main() -> Shape {
+                Shape.Rectangle
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Variant(Variant {
+            enm: String::from("Shape"),
+            variant: String::from("Rectangle"),
+        }))),
+    })
+}
+
+#[test]
+#[ignore = "enum variants not yet implemented"]
+fn assign_enum_variant() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            enum Shape {
+                Square
+                Rectangle
+                Circle
+            }
+
+            function main() -> Shape {
+                let s = Shape.Rectangle;
+                s
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Variant(Variant {
+            enm: String::from("Shape"),
+            variant: String::from("Rectangle"),
+        }))),
+    })
+}
+
+#[test]
+#[ignore = "enum variants not yet implemented"]
+fn take_and_return_enum_variant() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            enum Shape {
+                Square
+                Rectangle
+                Circle
+            }
+
+            function return_shape(shape: Shape) -> Shape {
+                shape
+            }
+
+            function main() -> Shape {
+                return_shape(Shape.Rectangle)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Object(Object::Variant(Variant {
+            enm: String::from("Shape"),
+            variant: String::from("Rectangle"),
+        }))),
+    })
+}

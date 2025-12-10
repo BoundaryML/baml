@@ -1456,16 +1456,24 @@ impl<'a> Parser<'a> {
                         }
                     }
                 } else if p.at(TokenKind::Word) {
-                    // Simple iterator-style without let: for (i in expr)
-                    p.bump(); // variable name
-                    if p.at(TokenKind::In) {
+                    // Could be iterator-style: for (i in expr)
+                    // Or could be C-style starting with expression: for (i = 0; ...)
+                    // Look ahead to determine
+                    if p.peek(1).map(|t| t.kind == TokenKind::In).unwrap_or(false) {
+                        // Simple iterator-style without let: for (i in expr)
+                        p.bump(); // variable name
                         p.bump(); // in
                         p.parse_expr(); // iterator expression
                     } else {
-                        p.error("'in' keyword after loop variable".to_string());
+                        // C-style without initializer starting with expression
+                        // Just parse as expression-based C-style
+                        p.parse_c_style_for_body();
                     }
+                } else if p.at(TokenKind::Semicolon) {
+                    // C-style with empty initializer: for (; cond; update)
+                    p.parse_c_style_for_body();
                 } else {
-                    p.error("loop variable or 'let'".to_string());
+                    p.error("loop variable, 'let', or ';'".to_string());
                 }
 
                 p.expect(TokenKind::RParen);
@@ -1497,6 +1505,26 @@ impl<'a> Parser<'a> {
         self.peek(2)
             .map(|t| t.kind == TokenKind::In)
             .unwrap_or(false)
+    }
+
+    /// Parse C-style for loop body (condition and update parts): ; cond; update
+    /// Called when we've already consumed any initializer or are at the first semicolon.
+    fn parse_c_style_for_body(&mut self) {
+        // Consume first semicolon (separates initializer from condition)
+        self.eat(TokenKind::Semicolon);
+
+        // Parse condition expression (if present)
+        if !self.at(TokenKind::Semicolon) && !self.at(TokenKind::RParen) {
+            self.parse_expr();
+        }
+
+        // Consume second semicolon (separates condition from update)
+        self.eat(TokenKind::Semicolon);
+
+        // Parse update expression (if present)
+        if !self.at(TokenKind::RParen) {
+            self.parse_expr();
+        }
     }
 
     /// Parse a for-in loop pattern: let var (without initializer)

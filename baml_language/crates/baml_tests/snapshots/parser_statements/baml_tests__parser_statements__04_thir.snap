@@ -1,8 +1,36 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
+  Function mul_assign:
+    Return: Void
+  Function assign_in_loop:
+    Return: Void
+  Function multi_assign:
+    Return: Void
+  Function sub_assign:
+    Return: Void
+  Function add_assign:
+    Return: Void
+  Function simple_assign:
+    Return: Void
+  Function block_with_tail:
+    Return: Void
+  Function break_in_for:
+    Return: Void
+  Function simple_continue:
+    Return: Void
+  Function continue_with_locals:
+    Return: Void
+  Function simple_break:
+    Return: Void
+  Function nested_break:
+    Return: Void
+  Function continue_in_for:
+    Return: Void
+  Function break_with_locals:
+    Return: Void
   Function c_style_for_loop:
     Return: Void
   Function iterator_style_for_loop:

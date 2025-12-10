@@ -1,8 +1,9 @@
 //! Compiler tests for array construction.
 
-use baml_vm::test::{Instruction, Value};
-
-use super::common::{Program, assert_compiles};
+use baml_tests::{
+    codegen::{Program, assert_compiles},
+    vm::{Instruction, Value},
+};
 
 #[test]
 fn array_constructor() -> anyhow::Result<()> {
@@ -21,7 +22,6 @@ fn array_constructor() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
                 Instruction::LoadVar("a".to_string()),
-                Instruction::PopReplace(1),
                 Instruction::Return,
             ],
         )],

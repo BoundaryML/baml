@@ -877,9 +877,10 @@ impl CompilerRunner {
 
                 let bytecode_table = baml_vm::debug::display_bytecode(
                     func,
-                    &[], // Empty stack for static display
+                    &baml_vm::EvalStack::new(),
                     &program.objects,
                     &program.globals,
+                    false, // no colors for static display
                 );
 
                 if bytecode_table.is_empty() {

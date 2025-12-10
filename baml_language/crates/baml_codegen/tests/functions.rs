@@ -1,8 +1,9 @@
 //! Compiler tests for function calls, parameters, and returns.
 
-use baml_vm::test::{Instruction, Value};
-
-use super::common::{Program, assert_compiles};
+use baml_tests::{
+    codegen::{Program, assert_compiles},
+    vm::{Instruction, Value},
+};
 
 #[test]
 fn return_literal_int() -> anyhow::Result<()> {
@@ -109,7 +110,6 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
                     Instruction::LoadGlobal(Value::function("two")),
                     Instruction::Call(0),
                     Instruction::LoadVar("a".to_string()),
-                    Instruction::PopReplace(1),
                     Instruction::Return,
                 ],
             ),

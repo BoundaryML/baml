@@ -977,11 +977,36 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             }
 
             if let Some(upd) = update {
-                infer_expr(ctx, *upd, body);
+                check_stmt(ctx, *upd, body);
             }
 
             infer_expr(ctx, *for_body, body);
             ctx.pop_scope();
+        }
+
+        Stmt::Break | Stmt::Continue => {
+            // These are control flow statements with no expressions to type-check.
+            // Loop context validation could be added here in the future.
+        }
+
+        Stmt::Assign { target, value } => {
+            // Type-check both the target and value expressions
+            infer_expr(ctx, *target, body);
+            infer_expr(ctx, *value, body);
+            // TODO: Check that target is assignable (variable or field access)
+            // TODO: Check that value type is compatible with target type
+        }
+
+        Stmt::AssignOp {
+            target,
+            op: _,
+            value,
+        } => {
+            // Type-check both the target and value expressions
+            infer_expr(ctx, *target, body);
+            infer_expr(ctx, *value, body);
+            // TODO: Check that target is assignable
+            // TODO: Check that the operation is valid for the types
         }
 
         Stmt::Missing => {}

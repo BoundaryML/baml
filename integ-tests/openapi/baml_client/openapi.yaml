@@ -651,6 +651,19 @@ paths:
                 items:
                   $ref: '#/components/schemas/Person'
       operationId: ExtractPeople
+  /call/ExtractPersonWithMeta:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractPersonWithMeta'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractPersonWithMetaResponse
+                $ref: '#/components/schemas/PersonWithMeta'
+      operationId: ExtractPersonWithMeta
   /call/ExtractReceiptInfo:
     post:
       requestBody:
@@ -3989,6 +4002,22 @@ components:
             required:
             - text
             additionalProperties: false
+    ExtractPersonWithMeta:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractPersonWithMetaRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     ExtractReceiptInfo:
       required: true
       content:
@@ -7270,6 +7299,20 @@ components:
       - time
       - type
       additionalProperties: false
+    AddressWithMeta:
+      type: object
+      properties:
+        city:
+          type: string
+        street:
+          type: string
+        zipcode:
+          type: string
+      required:
+      - city
+      - street
+      - zipcode
+      additionalProperties: false
     AliasedEnum:
       enum:
       - KEY_ONE
@@ -8357,6 +8400,25 @@ components:
         name:
           type: string
       required: []
+      additionalProperties: false
+    PersonWithMeta:
+      type: object
+      properties:
+        address:
+          $ref: '#/components/schemas/AddressWithMeta'
+        age:
+          type: integer
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+      required:
+      - address
+      - age
+      - name
+      - tags
       additionalProperties: false
     PhoneNumber:
       type: object
