@@ -18,6 +18,7 @@ version = "0.0.0"
 [workspace.dependencies]
 # workspace dependencies
 baml_base = { path = "crates/baml_base" }
+baml_bytecode_tests = { path = "crates/baml_bytecode_tests" }
 baml_codegen = { path = "crates/baml_codegen" }
 baml_db = { path = "crates/baml_db" }
 baml_diagnostics = { path = "crates/baml_diagnostics" }

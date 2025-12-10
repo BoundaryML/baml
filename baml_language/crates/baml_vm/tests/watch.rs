@@ -1,7 +1,6 @@
 //! VM tests for watch functionality.
 
-mod common;
-use common::{Notification, WatchProgram, assert_vm_emits};
+use baml_bytecode_tests::{Notification, WatchProgram, assert_vm_emits};
 
 #[test]
 #[ignore = "watch not yet implemented"]
@@ -368,8 +367,8 @@ fn manual_notify() -> anyhow::Result<()> {
 #[test]
 #[ignore = "watch not yet implemented"]
 fn basic_block_notification() -> anyhow::Result<()> {
+    use baml_bytecode_tests::BlockEvent;
     use baml_vm::bytecode::BlockNotificationType;
-    use common::BlockEvent;
 
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -394,8 +393,8 @@ fn basic_block_notification() -> anyhow::Result<()> {
 #[test]
 #[ignore = "watch not yet implemented"]
 fn multiple_block_notifications() -> anyhow::Result<()> {
+    use baml_bytecode_tests::BlockEvent;
     use baml_vm::bytecode::BlockNotificationType;
-    use common::BlockEvent;
 
     assert_vm_emits(WatchProgram {
         source: r#"

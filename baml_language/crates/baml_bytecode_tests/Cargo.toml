@@ -1,5 +1,5 @@
 [package]
-name = "baml_vm"
+name = "baml_bytecode_tests"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -9,7 +9,6 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "BAML Virtual Machine"
 
 [lib]
 doctest = false
@@ -18,20 +17,10 @@ doctest = false
 workspace = true
 
 [dependencies]
+salsa = { workspace = true }
 anyhow = "1"
-colored = "2"
-indexmap = "2"
-tokio = { version = "1", features = ["sync"] }
 baml_base = { workspace = true }
-
-[dev-dependencies]
-anyhow = "1"
-indexmap = "2"
-divan = { workspace = true }
-tokio = { version = "1", features = ["rt", "macros"] }
-baml_bytecode_tests = { workspace = true }
+baml_hir = { workspace = true }
+baml_thir = { workspace = true }
 baml_codegen = { workspace = true }
-
-[[bench]]
-name = "fib"
-harness = false
+baml_vm = { workspace = true }

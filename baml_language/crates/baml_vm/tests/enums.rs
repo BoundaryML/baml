@@ -1,9 +1,6 @@
 //! VM tests for enum variants.
 
-mod common;
-use common::{ExecState, Program, Value, assert_vm_executes};
-
-use crate::common::{Object, Variant};
+use baml_bytecode_tests::{ExecState, Object, Program, Value, Variant, assert_vm_executes};
 
 #[test]
 #[ignore = "enum variants not yet implemented"]

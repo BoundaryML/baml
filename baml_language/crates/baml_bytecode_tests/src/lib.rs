@@ -1,8 +1,32 @@
-//! Common test utilities for VM tests.
+//! Shared test utilities for BAML bytecode testing.
 //!
-//! Re-exports types from `baml_vm::test` and adds helper functions that use the new compiler.
+//! This crate provides common infrastructure used by both `baml_codegen` and `baml_vm`
+//! for testing bytecode compilation and execution. It exists to break a circular
+//! dependency: `baml_codegen` depends on `baml_vm` for the bytecode types, but
+//! `baml_vm` tests need `baml_codegen` to compile source code to bytecode.
+//!
+//! By extracting the shared test utilities into this intermediate crate, both
+//! `baml_codegen` and `baml_vm` can use it as a dev-dependency without creating a cycle.
+//!
+//! # Contents
+//!
+//! - [`TestDatabase`]: A minimal salsa database for compilation.
+//! - [`compile_source`]: Compiles BAML source to a VM program.
+//! - [`assert_vm_executes`], [`assert_vm_fails`]: Test assertion helpers.
+//! - [`Program`], [`FailingProgram`]: Test input types.
+//!
+//! # Usage
+//!
+//! ```ignore
+//! use baml_bytecode_tests::{Program, ExecState, Value, assert_vm_executes};
+//!
+//! assert_vm_executes(Program {
+//!     source: "function main() -> int { 42 }",
+//!     function: "main",
+//!     expected: ExecState::Complete(Value::Int(42)),
+//! });
+//! ```
 
-#![allow(dead_code)] // Test utilities may not all be used yet
 #![allow(clippy::needless_pass_by_value)] // Test utilities intentionally take ownership
 
 use std::{
@@ -11,8 +35,11 @@ use std::{
 };
 
 use baml_base::{FileId, SourceFile};
-pub(crate) use baml_vm::test::*;
-use baml_vm::{ObjectIndex, Value as VmValue, Vm, VmExecState};
+// Re-export test types from baml_vm::test
+pub use baml_vm::test::{
+    BlockEvent, ExecState, Instance, Instruction, Notification, Object, Value, Variant,
+};
+use baml_vm::{ObjectIndex, Program as VmProgram, Value as VmValue, Vm, VmExecState};
 
 //
 // ──────────────────────────────────────────────────────── TEST DATABASE ─────
@@ -25,7 +52,7 @@ use baml_vm::{ObjectIndex, Value as VmValue, Vm, VmExecState};
 /// `baml_codegen` and `baml_db`.
 #[salsa::db]
 #[derive(Clone)]
-struct TestDatabase {
+pub struct TestDatabase {
     storage: salsa::Storage<Self>,
     next_file_id: Arc<AtomicU32>,
 }
@@ -39,15 +66,23 @@ impl baml_hir::Db for TestDatabase {}
 #[salsa::db]
 impl baml_thir::Db for TestDatabase {}
 
+impl Default for TestDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestDatabase {
-    fn new() -> Self {
+    /// Create a new empty test database.
+    pub fn new() -> Self {
         Self {
             storage: salsa::Storage::default(),
             next_file_id: Arc::new(AtomicU32::new(0)),
         }
     }
 
-    fn add_file(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceFile {
+    /// Add a source file to the database.
+    pub fn add_file(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceFile {
         let file_id = FileId::new(
             self.next_file_id
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
@@ -56,28 +91,44 @@ impl TestDatabase {
     }
 }
 
-/// Helper struct for testing VM execution.
-pub(crate) struct ProgramInput<Expect> {
-    pub source: &'static str,
-    pub function: &'static str,
-    pub expected: Expect,
-}
+//
+// ────────────────────────────────────────────────────────── COMPILATION ─────
+//
 
-pub(crate) type Program = ProgramInput<ExecState>;
-pub(crate) type FailingProgram = ProgramInput<baml_vm::errors::VmError>;
-
-/// Compile BAML source and return a VM program.
-fn compile_source(source: &str) -> baml_codegen::Program {
+/// Compile BAML source code into a VM program.
+pub fn compile_source(source: &str) -> VmProgram {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
     baml_codegen::compile_files(&db, &[file])
 }
 
-pub(crate) fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
+//
+// ──────────────────────────────────────────────────── VM TEST UTILITIES ─────
+//
+
+/// Helper struct for testing VM execution.
+pub struct ProgramInput<Expect> {
+    pub source: &'static str,
+    pub function: &'static str,
+    pub expected: Expect,
+}
+
+/// Test input for successful VM execution.
+pub type Program = ProgramInput<ExecState>;
+
+/// Test input for VM execution that should fail.
+pub type FailingProgram = ProgramInput<baml_vm::errors::VmError>;
+
+/// Test input for VM execution with watch/emit states.
+pub type WatchProgram = ProgramInput<Vec<Vec<Notification>>>;
+
+/// Assert that VM execution fails with the expected error.
+pub fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
     assert_vm_fails_with_inspection(input, |_vm| Ok(()))
 }
 
-pub(crate) fn assert_vm_fails_with_inspection(
+/// Assert that VM execution fails, with access to inspect the VM state.
+pub fn assert_vm_fails_with_inspection(
     input: FailingProgram,
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
@@ -95,13 +146,15 @@ pub(crate) fn assert_vm_fails_with_inspection(
     Ok(())
 }
 
+/// Assert that VM execution succeeds with the expected result.
 #[track_caller]
-pub(crate) fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
+pub fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
     assert_vm_executes_with_inspection(input, |_vm| Ok(()))
 }
 
+/// Assert that VM execution succeeds, with access to inspect the VM state.
 #[track_caller]
-pub(crate) fn assert_vm_executes_with_inspection(
+pub fn assert_vm_executes_with_inspection(
     input: Program,
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
@@ -122,7 +175,7 @@ pub(crate) fn assert_vm_executes_with_inspection(
 }
 
 /// Collects all VM execution states by repeatedly calling `exec()` until completion.
-pub(crate) fn collect_vm_exec_states(
+pub fn collect_vm_exec_states(
     source: &'static str,
     function: &str,
 ) -> anyhow::Result<(Vm, Vec<ExecState>)> {
@@ -151,16 +204,15 @@ pub(crate) fn collect_vm_exec_states(
     Ok((vm, states))
 }
 
-/// Helper type for testing VM execution with expected Emit states.
-pub(crate) type WatchProgram = ProgramInput<Vec<Vec<Notification>>>;
-
+/// Assert that VM execution emits the expected watch notifications.
 #[track_caller]
-pub(crate) fn assert_vm_emits(input: WatchProgram) -> anyhow::Result<()> {
+pub fn assert_vm_emits(input: WatchProgram) -> anyhow::Result<()> {
     assert_vm_emits_with_inspection(input, |_vm, _states| Ok(()))
 }
 
+/// Assert that VM execution emits notifications, with access to inspect the VM state.
 #[track_caller]
-pub(crate) fn assert_vm_emits_with_inspection(
+pub fn assert_vm_emits_with_inspection(
     input: WatchProgram,
     inspect: impl FnOnce(&Vm, &[ExecState]) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
@@ -201,19 +253,25 @@ fn setup_and_exec_program(
     Ok((vm, result))
 }
 
+//
+// ────────────────────────────────────────────────── BYTECODE TEST UTILS ─────
+//
+
 /// Helper struct for testing VM execution with direct bytecode.
-pub(crate) struct BytecodeProgram {
+pub struct BytecodeProgram {
     pub arity: usize,
     pub instructions: Vec<baml_vm::Instruction>,
     pub constants: Vec<VmValue>,
     pub expected: VmExecState,
 }
 
-pub(crate) fn assert_vm_executes_bytecode(input: BytecodeProgram) -> anyhow::Result<()> {
+/// Assert that direct bytecode execution succeeds with the expected result.
+pub fn assert_vm_executes_bytecode(input: BytecodeProgram) -> anyhow::Result<()> {
     assert_vm_executes_bytecode_with_inspection(input, |_vm, _result| Ok(()))
 }
 
-pub(crate) fn assert_vm_executes_bytecode_with_inspection(
+/// Assert that direct bytecode execution succeeds, with access to inspect the VM state.
+pub fn assert_vm_executes_bytecode_with_inspection(
     input: BytecodeProgram,
     inspect: impl FnOnce(&Vm, VmExecState) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
@@ -237,7 +295,7 @@ pub(crate) fn assert_vm_executes_bytecode_with_inspection(
         block_notifications: Vec::new(),
     };
 
-    let mut program = baml_vm::Program::new();
+    let mut program = VmProgram::new();
     let fn_idx = program.add_object(baml_vm::Object::Function(function));
     program.add_global(VmValue::Object(ObjectIndex::from_raw(fn_idx)));
     program

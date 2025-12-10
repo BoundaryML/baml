@@ -1,10 +1,7 @@
 //! VM tests for classes (constructors, field access, ...)
 
-mod common;
-use common::{ExecState, Program, Value, assert_vm_executes};
+use baml_bytecode_tests::{ExecState, Instance, Object, Program, Value, assert_vm_executes};
 use indexmap::indexmap;
-
-use crate::common::{Instance, Object};
 
 // Class tests
 #[test]

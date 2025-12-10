@@ -1,9 +1,9 @@
 //! VM tests for map operations.
 
+use baml_bytecode_tests::{
+    ExecState, FailingProgram, Program, Value, assert_vm_executes, assert_vm_fails,
+};
 use baml_vm::RuntimeError;
-
-mod common;
-use common::{ExecState, FailingProgram, Program, Value, assert_vm_executes, assert_vm_fails};
 
 #[test]
 #[ignore = "maps not yet implemented"]

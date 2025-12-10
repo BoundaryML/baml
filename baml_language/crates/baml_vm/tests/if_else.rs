@@ -1,7 +1,6 @@
 //! VM tests for if/else and block expressions.
 
-mod common;
-use common::{ExecState, Program, Value, assert_vm_executes};
+use baml_bytecode_tests::{ExecState, Program, Value, assert_vm_executes};
 
 #[test]
 #[ignore = "if/else codegen issue"]

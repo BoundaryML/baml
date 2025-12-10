@@ -109,6 +109,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_bytecode_tests"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "baml_base",
+ "baml_codegen",
+ "baml_hir",
+ "baml_thir",
+ "baml_vm",
+ "salsa",
+]
+
+[[package]]
 name = "baml_codegen"
 version = "0.0.0"
 dependencies = [
@@ -259,13 +272,11 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "baml_base",
+ "baml_bytecode_tests",
  "baml_codegen",
- "baml_hir",
- "baml_thir",
  "codspeed-divan-compat",
  "colored",
  "indexmap",
- "salsa",
  "tokio",
 ]
 

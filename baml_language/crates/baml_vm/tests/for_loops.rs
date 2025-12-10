@@ -1,7 +1,6 @@
 //! VM tests for for loops (for-in and C-style for).
 
-mod common;
-use common::{ExecState, Program, Value, assert_vm_executes};
+use baml_bytecode_tests::{ExecState, Program, Value, assert_vm_executes};
 
 #[test]
 #[ignore = "loop codegen causes infinite loop"]

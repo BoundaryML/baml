@@ -1,7 +1,6 @@
 //! VM tests for operators (arithmetic, logical, bitwise, comparison, assignment).
 
-mod common;
-use common::{ExecState, Program, Value, assert_vm_executes};
+use baml_bytecode_tests::{ExecState, Program, Value, assert_vm_executes};
 
 // Arithmetic operators
 #[test]

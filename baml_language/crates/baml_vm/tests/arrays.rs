@@ -1,7 +1,6 @@
 //! VM tests for arrays.
 
-mod common;
-use common::{ExecState, Object, Program, Value, assert_vm_executes};
+use baml_bytecode_tests::{ExecState, Object, Program, Value, assert_vm_executes};
 
 // Array tests
 #[test]

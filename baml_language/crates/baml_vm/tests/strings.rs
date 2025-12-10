@@ -1,9 +1,6 @@
 //! VM tests for strings.
 
-mod common;
-use common::{ExecState, Program, Value, assert_vm_executes};
-
-use crate::common::Object;
+use baml_bytecode_tests::{ExecState, Object, Program, Value, assert_vm_executes};
 
 #[test]
 #[ignore = "strings not yet implemented"]

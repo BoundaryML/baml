@@ -22,7 +22,7 @@ use baml_vm::test::{Instruction, Value};
 /// `baml_codegen` and `baml_db`.
 #[salsa::db]
 #[derive(Clone)]
-struct TestDatabase {
+pub struct TestDatabase {
     storage: salsa::Storage<Self>,
     next_file_id: Arc<AtomicU32>,
 }
@@ -36,15 +36,23 @@ impl baml_hir::Db for TestDatabase {}
 #[salsa::db]
 impl baml_thir::Db for TestDatabase {}
 
+impl Default for TestDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestDatabase {
-    fn new() -> Self {
+    /// Create a new empty test database.
+    pub fn new() -> Self {
         Self {
             storage: salsa::Storage::default(),
             next_file_id: Arc::new(AtomicU32::new(0)),
         }
     }
 
-    fn add_file(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceFile {
+    /// Add a source file to the database.
+    pub fn add_file(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceFile {
         let file_id = FileId::new(
             self.next_file_id
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
