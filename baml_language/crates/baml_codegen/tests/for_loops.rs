@@ -1,11 +1,10 @@
 //! Compiler tests for for-in loops.
 
+use baml_codegen::tests::{Program, assert_compiles};
 use baml_vm::{
     BinOp, CmpOp,
     test::{Instruction, Value},
 };
-
-use super::common::{Program, assert_compiles};
 
 // ============================================================================
 // For-in loops (require function parameters, currently ignored)

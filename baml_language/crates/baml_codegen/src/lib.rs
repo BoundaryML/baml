@@ -205,5 +205,6 @@ fn build_typing_context<'db>(
     context
 }
 
-#[cfg(test)]
-mod tests;
+/// Test utilities for bytecode compilation tests.
+#[doc(hidden)]
+pub mod tests;

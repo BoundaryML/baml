@@ -1,8 +1,7 @@
 //! Compiler tests for function calls, parameters, and returns.
 
+use baml_codegen::tests::{Program, assert_compiles};
 use baml_vm::test::{Instruction, Value};
-
-use super::common::{Program, assert_compiles};
 
 #[test]
 fn return_literal_int() -> anyhow::Result<()> {

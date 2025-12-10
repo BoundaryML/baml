@@ -1,11 +1,10 @@
 //! Compiler tests for map operations.
 
+use baml_codegen::tests::{Program, assert_compiles};
 use baml_vm::{
     BinOp,
     test::{Instruction, Value},
 };
-
-use super::common::{Program, assert_compiles};
 
 #[test]
 #[ignore = "maps not yet in HIR"]

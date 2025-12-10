@@ -49,7 +49,7 @@ fn get_locals_in_scope(source: &str, function_name: &str) -> Vec<Vec<String>> {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
 
-    let program = crate::compile_files(&db, &[file]);
+    let program = baml_codegen::compile_files(&db, &[file]);
 
     // Find the function
     let obj_idx = program

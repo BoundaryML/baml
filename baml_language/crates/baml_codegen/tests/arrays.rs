@@ -1,8 +1,7 @@
 //! Compiler tests for array construction.
 
+use baml_codegen::tests::{Program, assert_compiles};
 use baml_vm::test::{Instruction, Value};
-
-use super::common::{Program, assert_compiles};
 
 #[test]
 fn array_constructor() -> anyhow::Result<()> {

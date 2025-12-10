@@ -1,11 +1,10 @@
 //! Compiler tests for while loops, break, and continue.
 
+use baml_codegen::tests::{Program, assert_compiles};
 use baml_vm::{
     BinOp, CmpOp,
     test::{Instruction, Value},
 };
-
-use super::common::{Program, assert_compiles};
 
 // ============================================================================
 // While loops (all require assignment statements, currently ignored)

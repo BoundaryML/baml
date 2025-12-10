@@ -1,8 +1,7 @@
 //! Compiler tests for watch functionality.
 
+use baml_codegen::tests::{Program, assert_compiles};
 use baml_vm::test::{Instruction, Value};
-
-use super::common::{Program, assert_compiles};
 
 #[test]
 #[ignore = "watch not yet in HIR"]

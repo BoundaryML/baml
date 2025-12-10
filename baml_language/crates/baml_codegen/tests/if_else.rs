@@ -1,11 +1,10 @@
 //! Compiler tests for if/else expressions and statements.
 
+use baml_codegen::tests::{Program, assert_compiles};
 use baml_vm::{
     BinOp, CmpOp,
     test::{Instruction, Value},
 };
-
-use super::common::{Program, assert_compiles};
 
 // ============================================================================
 // If/else with literal conditions (no function parameters needed)
