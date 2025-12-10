@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -26,8 +26,7 @@ Function Calculate (arity: 0, kind: Exec):
      15   BIN_OP *       
      16   LOAD_VAR 4     (d)
      17   RETURN         
-     18   POP 4          
-     19   RETURN         
+     18   RETURN         
 
 Function FieldAccess (arity: 1, kind: Exec):
      0    LOAD_VAR 1           (user)
@@ -45,8 +44,7 @@ Function FieldAccess (arity: 1, kind: Exec):
      12   LOAD_ARRAY_ELEMENT   
      13   LOAD_VAR 4           (theme)
      14   RETURN               
-     15   POP 4                
-     16   RETURN               
+     15   RETURN               
 
 Function IndexAccess (arity: 1, kind: Exec):
      0    LOAD_VAR 1           (users)
@@ -68,8 +66,7 @@ Function IndexAccess (arity: 1, kind: Exec):
      16   LOAD_ARRAY_ELEMENT   
      17   LOAD_VAR 5           (firstName)
      18   RETURN               
-     19   POP 5                
-     20   RETURN               
+     19   RETURN               
 
 Function TestPrecedence (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (2)
@@ -97,5 +94,4 @@ Function TestPrecedence (arity: 0, kind: Exec):
      22   LOAD_CONST 5       (false)
      23   LOAD_VAR 4         (d)
      24   RETURN             
-     25   POP 4              
-     26   RETURN
+     25   RETURN

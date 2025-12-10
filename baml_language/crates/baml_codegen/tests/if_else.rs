@@ -541,6 +541,123 @@ fn chained_if_else_in_arithmetic() -> anyhow::Result<()> {
 // block has no trailing expression (i.e., doesn't produce a value).
 // Example: `if (cond) { x = 5; }` is valid, `if (cond) { 5 }` is a type error.
 
+#[test]
+fn if_without_else_statement() -> anyhow::Result<()> {
+    // If-without-else does NOT produce a value, so Stmt::Expr doesn't pop.
+    // Both paths pop the condition, then join at the end.
+    assert_compiles(Program {
+        source: "
+            function main() -> int {
+                let x = 0;
+                if (true) {
+                    x = 5;
+                }
+                x
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadConst(Value::Int(0)), // let x = 0
+                // if (true)
+                Instruction::LoadConst(Value::Bool(true)),
+                Instruction::JumpIfFalse(5), // jump to false path pop
+                Instruction::Pop(1),         // pop condition (true path)
+                // then block: x = 5
+                Instruction::LoadConst(Value::Int(5)),
+                Instruction::StoreVar("x".to_string()),
+                Instruction::Jump(2), // skip false path pop
+                // false path
+                Instruction::Pop(1), // pop condition (false path)
+                // No Stmt::Expr pop - if-without-else doesn't produce a value
+                // return x
+                Instruction::LoadVar("x".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn if_without_else_with_local_var() -> anyhow::Result<()> {
+    // If-without-else with a local variable in the then block
+    // The block's exit_scope pops the local, no Stmt::Expr pop needed
+    assert_compiles(Program {
+        source: "
+            function main() -> int {
+                let result = 0;
+                if (true) {
+                    let temp = 10;
+                }
+                result
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadConst(Value::Int(0)), // let result = 0
+                // if (true)
+                Instruction::LoadConst(Value::Bool(true)),
+                Instruction::JumpIfFalse(5), // jump to false path
+                Instruction::Pop(1),         // pop condition (true path)
+                // then block: let temp = 10
+                Instruction::LoadConst(Value::Int(10)),
+                Instruction::Pop(1),  // exit_scope pops temp
+                Instruction::Jump(2), // skip false path
+                // false path
+                Instruction::Pop(1), // pop condition (false path)
+                // No Stmt::Expr pop - if-without-else doesn't produce a value
+                // return result
+                Instruction::LoadVar("result".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn consecutive_if_without_else() -> anyhow::Result<()> {
+    // Two consecutive if-without-else statements
+    // Neither produces a value, so no Stmt::Expr pops
+    assert_compiles(Program {
+        source: "
+            function main() -> int {
+                let x = 0;
+                if (true) { x = 1; }
+                if (false) { x = 2; }
+                x
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadConst(Value::Int(0)), // let x = 0
+                // first if (true)
+                Instruction::LoadConst(Value::Bool(true)),
+                Instruction::JumpIfFalse(5),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("x".to_string()),
+                Instruction::Jump(2),
+                Instruction::Pop(1),
+                // No Stmt::Expr pop for first if
+                // second if (false)
+                Instruction::LoadConst(Value::Bool(false)),
+                Instruction::JumpIfFalse(5),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreVar("x".to_string()),
+                Instruction::Jump(2),
+                Instruction::Pop(1),
+                // No Stmt::Expr pop for second if
+                // return x
+                Instruction::LoadVar("x".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
 // ============================================================================
 // Block expressions
 // ============================================================================

@@ -168,7 +168,22 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                 }
             }
             FunctionBody::Missing => {
-                panic!("cannot compile function with missing body: {name}");
+                // TODO: cannot compile function with missing body: {name}
+                // Return an empty function as a placeholder
+                Function {
+                    name: name.to_string(),
+                    arity: params.len(),
+                    bytecode: Bytecode::new(),
+                    kind: FunctionKind::Exec,
+                    locals_in_scope: vec![
+                        params
+                            .iter()
+                            .map(std::string::ToString::to_string)
+                            .collect(),
+                    ],
+                    span: baml_base::Span::fake(),
+                    block_notifications: Vec::new(),
+                }
             }
         }
     }
@@ -214,6 +229,38 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                 .collect(),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
+        }
+    }
+
+    /// Check if an expression produces a value on the stack.
+    ///
+    /// Most expressions produce values, but some don't:
+    /// - If without else: never produces a value
+    /// - If with else: produces a value only if BOTH branches produce values
+    /// - Block without tail expression: never produces a value
+    /// - Block with tail expression: produces a value if tail produces a value
+    fn expr_produces_value(expr_id: ExprId, body: &ExprBody) -> bool {
+        match &body.exprs[expr_id] {
+            Expr::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                // If-without-else never produces a value
+                let Some(else_expr) = else_branch else {
+                    return false;
+                };
+                // If-with-else produces a value only if both branches do
+                Self::expr_produces_value(*then_branch, body)
+                    && Self::expr_produces_value(*else_expr, body)
+            }
+            Expr::Block { tail_expr, .. } => {
+                // Block produces a value only if it has a tail that produces a value
+                tail_expr
+                    .map(|tail| Self::expr_produces_value(tail, body))
+                    .unwrap_or(false)
+            }
+            _ => true,
         }
     }
 
@@ -291,20 +338,33 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                 then_branch,
                 else_branch,
             } => {
+                // Compile condition - leaves result on stack
                 self.compile_expr(*condition, body);
-                let skip_if = self.emit(Instruction::JumpIfFalse(0));
-                self.emit(Instruction::Pop(1)); // Pop condition (true path)
-                self.compile_expr(*then_branch, body);
-                let skip_else = self.emit(Instruction::Jump(0));
-                self.patch_jump(skip_if);
-                self.emit(Instruction::Pop(1)); // Pop condition (false path)
 
+                // Skip the if branch when condition is false
+                let skip_if = self.emit(Instruction::JumpIfFalse(0));
+
+                // Pop condition (true path)
+                self.emit(Instruction::Pop(1));
+
+                // Compile the if branch
+                self.compile_expr(*then_branch, body);
+
+                // Skip the else branch (or just the false-path pop if no else)
+                let skip_else = self.emit(Instruction::Jump(0));
+
+                // Patch skip_if to jump here (false path)
+                self.patch_jump(skip_if);
+
+                // Pop condition (false path)
+                self.emit(Instruction::Pop(1));
+
+                // Compile else branch if it exists
                 if let Some(else_expr) = else_branch {
                     self.compile_expr(*else_expr, body);
                 }
-                // If no else: then_branch must not produce a value (type checker ensures this).
-                // Both paths pop condition and leave stack in same state.
 
+                // Patch skip_else - if no else, this just skips the false-path pop
                 self.patch_jump(skip_else);
             }
 
@@ -385,7 +445,7 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             }
 
             Expr::Missing => {
-                panic!("cannot compile missing expression");
+                // TODO: cannot compile missing expression - skip
             }
         }
     }
@@ -420,9 +480,12 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             }
 
             Stmt::Expr(expr) => {
+                let produces_value = Self::expr_produces_value(*expr, body);
                 self.compile_expr(*expr, body);
-                // Expression statement - discard result
-                self.emit(Instruction::Pop(1));
+                // Only pop if the expression produced a value
+                if produces_value {
+                    self.emit(Instruction::Pop(1));
+                }
             }
 
             Stmt::Return(expr) => {
@@ -668,7 +731,7 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             }
 
             Stmt::Missing => {
-                panic!("cannot compile missing statement");
+                // TODO: cannot compile missing statement - skip
             }
         }
     }

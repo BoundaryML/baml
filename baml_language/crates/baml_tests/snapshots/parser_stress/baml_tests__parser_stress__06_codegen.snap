@@ -12,17 +12,16 @@ Function BodyTorture (arity: 0, kind: Exec):
      1    LOAD_VAR 1         (x)
      2    LOAD_CONST 1       (1)
      3    BIN_OP +           
-     4    POP 1              
+     4    STORE_VAR 1        (x)
      5    JUMP_IF_FALSE +7   (to 12)
      6    POP 1              
      7    LOAD_VAR 1         (x)
      8    LOAD_CONST 1       (1)
      9    BIN_OP +           
-     10   POP 1              
+     10   STORE_VAR 1        (x)
      11   JUMP -10           (to 1)
      12   POP 1              
-     13   POP 1              
-     14   RETURN             
+     13   RETURN             
 
 Function ComplexType (arity: 0, kind: Exec):
   (no bytecode)

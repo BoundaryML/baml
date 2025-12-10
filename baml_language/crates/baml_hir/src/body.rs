@@ -615,8 +615,33 @@ impl LoweringContext {
             return None;
         }
 
-        // Look for assignment operators
+        // FIRST: Check if there's an assignment operator before lowering anything.
+        // This avoids allocating expressions for non-assignment binary expressions.
         let mut assign_op: Option<Option<AssignOp>> = None; // None=not assignment, Some(None)=simple assign, Some(Some(op))=compound
+
+        for child in node.children_with_tokens() {
+            if let rowan::NodeOrToken::Token(token) = child {
+                match token.kind() {
+                    SyntaxKind::EQUALS => assign_op = Some(None),
+                    SyntaxKind::PLUS_EQUALS => assign_op = Some(Some(AssignOp::Add)),
+                    SyntaxKind::MINUS_EQUALS => assign_op = Some(Some(AssignOp::Sub)),
+                    SyntaxKind::STAR_EQUALS => assign_op = Some(Some(AssignOp::Mul)),
+                    SyntaxKind::SLASH_EQUALS => assign_op = Some(Some(AssignOp::Div)),
+                    SyntaxKind::PERCENT_EQUALS => assign_op = Some(Some(AssignOp::Mod)),
+                    SyntaxKind::AND_EQUALS => assign_op = Some(Some(AssignOp::BitAnd)),
+                    SyntaxKind::PIPE_EQUALS => assign_op = Some(Some(AssignOp::BitOr)),
+                    SyntaxKind::CARET_EQUALS => assign_op = Some(Some(AssignOp::BitXor)),
+                    SyntaxKind::LESS_LESS_EQUALS => assign_op = Some(Some(AssignOp::Shl)),
+                    SyntaxKind::GREATER_GREATER_EQUALS => assign_op = Some(Some(AssignOp::Shr)),
+                    _ => {}
+                }
+            }
+        }
+
+        // Early return if not an assignment - don't allocate any expressions
+        let assign_op = assign_op?;
+
+        // Now lower the operands since we know this is an assignment
         let mut lhs: Option<ExprId> = None;
         let mut rhs: Option<ExprId> = None;
 
@@ -631,19 +656,8 @@ impl LoweringContext {
                     }
                 }
                 rowan::NodeOrToken::Token(token) => {
+                    // Handle literals/identifiers as expressions (skip operators)
                     match token.kind() {
-                        SyntaxKind::EQUALS => assign_op = Some(None),
-                        SyntaxKind::PLUS_EQUALS => assign_op = Some(Some(AssignOp::Add)),
-                        SyntaxKind::MINUS_EQUALS => assign_op = Some(Some(AssignOp::Sub)),
-                        SyntaxKind::STAR_EQUALS => assign_op = Some(Some(AssignOp::Mul)),
-                        SyntaxKind::SLASH_EQUALS => assign_op = Some(Some(AssignOp::Div)),
-                        SyntaxKind::PERCENT_EQUALS => assign_op = Some(Some(AssignOp::Mod)),
-                        SyntaxKind::AND_EQUALS => assign_op = Some(Some(AssignOp::BitAnd)),
-                        SyntaxKind::PIPE_EQUALS => assign_op = Some(Some(AssignOp::BitOr)),
-                        SyntaxKind::CARET_EQUALS => assign_op = Some(Some(AssignOp::BitXor)),
-                        SyntaxKind::LESS_LESS_EQUALS => assign_op = Some(Some(AssignOp::Shl)),
-                        SyntaxKind::GREATER_GREATER_EQUALS => assign_op = Some(Some(AssignOp::Shr)),
-                        // Handle literals/identifiers as expressions
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
                             let expr_id = self.exprs.alloc(Expr::Literal(Literal::Int(value)));
@@ -672,9 +686,6 @@ impl LoweringContext {
                 }
             }
         }
-
-        // Only return Some if we found an assignment operator
-        let assign_op = assign_op?;
         let target = lhs.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
         let value = rhs.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
@@ -1110,28 +1121,38 @@ impl LoweringContext {
             .map(|token| Name::new(token.text()));
 
         // Extract fields from OBJECT_FIELD children
-        let fields =
-            node.children()
-                .filter(|n| n.kind() == SyntaxKind::OBJECT_FIELD)
-                .filter_map(|field_node| {
-                    // OBJECT_FIELD has: WORD (field name), COLON, value (EXPR or literal token)
-                    let field_name = field_node
-                        .children_with_tokens()
-                        .filter_map(baml_syntax::NodeOrToken::into_token)
-                        .find(|token| token.kind() == SyntaxKind::WORD)
-                        .map(|token| Name::new(token.text()))?;
+        let fields = node
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::OBJECT_FIELD)
+            .filter_map(|field_node| {
+                // OBJECT_FIELD has: WORD (field name), COLON, value (EXPR or literal token)
+                let field_name = field_node
+                    .children_with_tokens()
+                    .filter_map(baml_syntax::NodeOrToken::into_token)
+                    .find(|token| token.kind() == SyntaxKind::WORD)
+                    .map(|token| Name::new(token.text()))?;
 
-                    // Try to get value as a child node first
-                    let value = field_node
-                        .children()
-                        .next()
-                        .map(|n| self.lower_expr(&n))
-                        .or_else(|| {
-                            // Try to get value as a direct literal token
-                            field_node
-                                .children_with_tokens()
-                                .filter_map(baml_syntax::NodeOrToken::into_token)
-                                .find_map(|token| match token.kind() {
+                // Try to get value as a child node first
+                let value = field_node
+                    .children()
+                    .next()
+                    .map(|n| self.lower_expr(&n))
+                    .or_else(|| {
+                        // Try to get value as a direct token (literal or identifier)
+                        // Skip the field name WORD and look for the value token after COLON
+                        let mut seen_colon = false;
+                        field_node
+                            .children_with_tokens()
+                            .filter_map(baml_syntax::NodeOrToken::into_token)
+                            .find_map(|token| {
+                                if token.kind() == SyntaxKind::COLON {
+                                    seen_colon = true;
+                                    return None;
+                                }
+                                if !seen_colon {
+                                    return None;
+                                }
+                                match token.kind() {
                                     SyntaxKind::INTEGER_LITERAL => {
                                         let value = token.text().parse::<i64>().unwrap_or(0);
                                         Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))))
@@ -1153,49 +1174,78 @@ impl LoweringContext {
                                             content.to_string(),
                                         ))))
                                     }
+                                    SyntaxKind::WORD => {
+                                        // Variable reference or boolean/null literal
+                                        let text = token.text();
+                                        let expr = match text {
+                                            "true" => {
+                                                self.exprs.alloc(Expr::Literal(Literal::Bool(true)))
+                                            }
+                                            "false" => self
+                                                .exprs
+                                                .alloc(Expr::Literal(Literal::Bool(false))),
+                                            "null" => {
+                                                self.exprs.alloc(Expr::Literal(Literal::Null))
+                                            }
+                                            _ => self.exprs.alloc(Expr::Path(Name::new(text))),
+                                        };
+                                        Some(expr)
+                                    }
                                     _ => None,
-                                })
-                        })
-                        .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+                                }
+                            })
+                    })
+                    .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
-                    Some((field_name, value))
-                })
-                .collect();
+                Some((field_name, value))
+            })
+            .collect();
 
         self.exprs.alloc(Expr::Object { type_name, fields })
     }
 
     fn try_lower_literal_token(&mut self, node: &baml_syntax::SyntaxNode) -> Option<ExprId> {
-        use baml_syntax::SyntaxKind;
-
         // Check if this node contains a literal token
         node.children_with_tokens()
             .filter_map(baml_syntax::NodeOrToken::into_token)
-            .find_map(|token| match token.kind() {
-                SyntaxKind::WORD => {
-                    // Check if this is a boolean or null literal
-                    let text = token.text();
-                    match text {
-                        "true" => Some(self.exprs.alloc(Expr::Literal(Literal::Bool(true)))),
-                        "false" => Some(self.exprs.alloc(Expr::Literal(Literal::Bool(false)))),
-                        "null" => Some(self.exprs.alloc(Expr::Literal(Literal::Null))),
-                        _ => None,
-                    }
+            .find_map(|token| self.try_lower_token(&token))
+    }
+
+    /// Lower a bare token (WORD, `INTEGER_LITERAL`, `FLOAT_LITERAL`) to an expression.
+    fn lower_bare_token(&mut self, token: &baml_syntax::SyntaxToken) -> ExprId {
+        self.try_lower_token(token)
+            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing))
+    }
+
+    /// Try to lower a token to a literal expression.
+    fn try_lower_token(&mut self, token: &baml_syntax::SyntaxToken) -> Option<ExprId> {
+        use baml_syntax::SyntaxKind;
+
+        match token.kind() {
+            SyntaxKind::WORD => {
+                // Check if this is a boolean or null literal
+                let text = token.text();
+                match text {
+                    "true" => Some(self.exprs.alloc(Expr::Literal(Literal::Bool(true)))),
+                    "false" => Some(self.exprs.alloc(Expr::Literal(Literal::Bool(false)))),
+                    "null" => Some(self.exprs.alloc(Expr::Literal(Literal::Null))),
+                    _ => None,
                 }
-                SyntaxKind::INTEGER_LITERAL => {
-                    let text = token.text();
-                    let value = text.parse::<i64>().unwrap_or(0);
-                    Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))))
-                }
-                SyntaxKind::FLOAT_LITERAL => {
-                    let text = token.text();
-                    Some(
-                        self.exprs
-                            .alloc(Expr::Literal(Literal::Float(text.to_string()))),
-                    )
-                }
-                _ => None,
-            })
+            }
+            SyntaxKind::INTEGER_LITERAL => {
+                let text = token.text();
+                let value = text.parse::<i64>().unwrap_or(0);
+                Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))))
+            }
+            SyntaxKind::FLOAT_LITERAL => {
+                let text = token.text();
+                Some(
+                    self.exprs
+                        .alloc(Expr::Literal(Literal::Float(text.to_string()))),
+                )
+            }
+            _ => None,
+        }
     }
 
     fn lower_let_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
@@ -1397,7 +1447,16 @@ impl LoweringContext {
                 .let_stmt()
                 .map(|let_stmt| self.lower_let_stmt(let_stmt.syntax()));
 
-            let condition = for_expr.condition().map(|n| self.lower_expr(&n));
+            // Get condition as expression node, or fall back to bare token
+            let condition = for_expr
+                .condition()
+                .map(|n| self.lower_expr(&n))
+                .or_else(|| {
+                    for_expr.condition_token().map(|token| {
+                        // Lower bare token to expression
+                        self.lower_bare_token(&token)
+                    })
+                });
 
             // The update may be an assignment (i += 1) or a plain expression (f()).
             // Try to lower as assignment first, otherwise wrap as Stmt::Expr.

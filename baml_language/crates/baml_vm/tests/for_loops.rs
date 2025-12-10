@@ -127,7 +127,6 @@ fn c_for_sum_to_ten() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
 fn c_for_after_with_break_continue() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -156,7 +155,6 @@ fn c_for_after_with_break_continue() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
 fn c_for_only_cond() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -174,7 +172,6 @@ fn c_for_only_cond() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
 fn c_for_endless() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

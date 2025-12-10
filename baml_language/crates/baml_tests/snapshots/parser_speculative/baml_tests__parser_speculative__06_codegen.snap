@@ -66,8 +66,7 @@ Function ProcessAnalysis (arity: 1, kind: Exec):
      40   LOAD_FIELD 0       
      41   BIN_OP +           
      42   RETURN             
-     43   POP_REPLACE 1      
-     44   RETURN             
+     43   RETURN             
 
 Function ProcessData (arity: 1, kind: Exec):
      0    LOAD_VAR 1         (data)
@@ -84,11 +83,9 @@ Function ProcessData (arity: 1, kind: Exec):
      11   RETURN             
      12   JUMP +2            (to 14)
      13   POP 1              
-     14   POP 1              
-     15   LOAD_CONST 2       ( "low")
+     14   LOAD_CONST 2       ( "low")
+     15   RETURN             
      16   RETURN             
-     17   POP 1              
-     18   RETURN             
 
 Function SimpleCalc (arity: 2, kind: Exec):
      0   LOAD_VAR 1     (a)
