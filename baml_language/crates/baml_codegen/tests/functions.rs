@@ -110,7 +110,6 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
                     Instruction::LoadGlobal(Value::function("two")),
                     Instruction::Call(0),
                     Instruction::LoadVar("a".to_string()),
-                    Instruction::PopReplace(1),
                     Instruction::Return,
                 ],
             ),

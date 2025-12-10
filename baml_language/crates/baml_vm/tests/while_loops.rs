@@ -93,7 +93,6 @@ fn break_factorial() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
 fn break_nested_loops() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

@@ -155,15 +155,46 @@ pub enum Stmt {
     ForCStyle {
         initializer: Option<StmtId>,
         condition: Option<ExprId>,
-        update: Option<ExprId>,
+        update: Option<StmtId>,
         body: ExprId,
     },
 
     /// Return statement: `return "minor";`
     Return(Option<ExprId>),
 
+    /// Break statement: `break;`
+    Break,
+
+    /// Continue statement: `continue;`
+    Continue,
+
+    /// Simple assignment: `a = expr;`
+    Assign { target: ExprId, value: ExprId },
+
+    /// Compound assignment: `a += expr;`
+    AssignOp {
+        target: ExprId,
+        op: AssignOp,
+        value: ExprId,
+    },
+
     /// Missing/error statement
     Missing,
+}
+
+/// Compound assignment operators.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssignOp {
+    Add,    // +=
+    Sub,    // -=
+    Mul,    // *=
+    Div,    // /=
+    Mod,    // %=
+    BitAnd, // &=
+    BitOr,  // |=
+    BitXor, // ^=
+    Shl,    // <<=
+    Shr,    // >>=
 }
 
 /// The left-hand side of a let binding, or match arm in the future.
@@ -365,11 +396,20 @@ impl LoweringContext {
                         SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
                         SyntaxKind::FOR_EXPR => self.lower_for_stmt(node),
+                        SyntaxKind::BREAK_STMT => self.stmts.alloc(Stmt::Break),
+                        SyntaxKind::CONTINUE_STMT => self.stmts.alloc(Stmt::Continue),
                         _ => self.stmts.alloc(Stmt::Missing),
                     };
                     stmts.push(stmt_id);
                 }
                 BlockElement::ExprNode(node) => {
+                    // First, try to lower as an assignment statement
+                    if let Some(stmt_id) = self.try_lower_assignment(node) {
+                        stmts.push(stmt_id);
+                        continue;
+                    }
+
+                    // Not an assignment - lower as regular expression
                     let expr_id = self.lower_expr(node);
 
                     // Check if this expression is followed by a semicolon
@@ -564,6 +604,86 @@ impl LoweringContext {
         let op = op.unwrap_or(BinaryOp::Add);
 
         self.exprs.alloc(Expr::Binary { op, lhs, rhs })
+    }
+
+    /// Try to lower a `BINARY_EXPR` as an assignment statement.
+    /// Returns Some(StmtId) if it's an assignment, None otherwise.
+    fn try_lower_assignment(&mut self, node: &baml_syntax::SyntaxNode) -> Option<StmtId> {
+        use baml_syntax::SyntaxKind;
+
+        if node.kind() != SyntaxKind::BINARY_EXPR {
+            return None;
+        }
+
+        // Look for assignment operators
+        let mut assign_op: Option<Option<AssignOp>> = None; // None=not assignment, Some(None)=simple assign, Some(Some(op))=compound
+        let mut lhs: Option<ExprId> = None;
+        let mut rhs: Option<ExprId> = None;
+
+        for child in node.children_with_tokens() {
+            match child {
+                rowan::NodeOrToken::Node(n) => {
+                    let expr_id = self.lower_expr(&n);
+                    if lhs.is_none() {
+                        lhs = Some(expr_id);
+                    } else {
+                        rhs = Some(expr_id);
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    match token.kind() {
+                        SyntaxKind::EQUALS => assign_op = Some(None),
+                        SyntaxKind::PLUS_EQUALS => assign_op = Some(Some(AssignOp::Add)),
+                        SyntaxKind::MINUS_EQUALS => assign_op = Some(Some(AssignOp::Sub)),
+                        SyntaxKind::STAR_EQUALS => assign_op = Some(Some(AssignOp::Mul)),
+                        SyntaxKind::SLASH_EQUALS => assign_op = Some(Some(AssignOp::Div)),
+                        SyntaxKind::PERCENT_EQUALS => assign_op = Some(Some(AssignOp::Mod)),
+                        SyntaxKind::AND_EQUALS => assign_op = Some(Some(AssignOp::BitAnd)),
+                        SyntaxKind::PIPE_EQUALS => assign_op = Some(Some(AssignOp::BitOr)),
+                        SyntaxKind::CARET_EQUALS => assign_op = Some(Some(AssignOp::BitXor)),
+                        SyntaxKind::LESS_LESS_EQUALS => assign_op = Some(Some(AssignOp::Shl)),
+                        SyntaxKind::GREATER_GREATER_EQUALS => assign_op = Some(Some(AssignOp::Shr)),
+                        // Handle literals/identifiers as expressions
+                        SyntaxKind::INTEGER_LITERAL => {
+                            let value = token.text().parse::<i64>().unwrap_or(0);
+                            let expr_id = self.exprs.alloc(Expr::Literal(Literal::Int(value)));
+                            if lhs.is_none() {
+                                lhs = Some(expr_id);
+                            } else {
+                                rhs = Some(expr_id);
+                            }
+                        }
+                        SyntaxKind::WORD => {
+                            let text = token.text();
+                            let expr_id = match text {
+                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
+                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
+                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
+                                _ => self.exprs.alloc(Expr::Path(Name::new(text))),
+                            };
+                            if lhs.is_none() {
+                                lhs = Some(expr_id);
+                            } else {
+                                rhs = Some(expr_id);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        // Only return Some if we found an assignment operator
+        let assign_op = assign_op?;
+        let target = lhs.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+        let value = rhs.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+
+        let stmt = match assign_op {
+            None => Stmt::Assign { target, value },
+            Some(op) => Stmt::AssignOp { target, op, value },
+        };
+
+        Some(self.stmts.alloc(stmt))
     }
 
     fn lower_unary_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -1279,7 +1399,16 @@ impl LoweringContext {
 
             let condition = for_expr.condition().map(|n| self.lower_expr(&n));
 
-            let update = for_expr.update().map(|n| self.lower_expr(&n));
+            // The update may be an assignment (i += 1) or a plain expression (f()).
+            // Try to lower as assignment first, otherwise wrap as Stmt::Expr.
+            let update = for_expr.update().map(|n| {
+                if let Some(assign_stmt) = self.try_lower_assignment(&n) {
+                    assign_stmt
+                } else {
+                    let expr = self.lower_expr(&n);
+                    self.stmts.alloc(Stmt::Expr(expr))
+                }
+            });
 
             self.stmts.alloc(Stmt::ForCStyle {
                 initializer,

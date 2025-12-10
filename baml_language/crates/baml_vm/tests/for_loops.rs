@@ -109,7 +109,6 @@ fn for_loop_nested() -> anyhow::Result<()> {
 
 // C-style for loops
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
 fn c_for_sum_to_ten() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

@@ -31,7 +31,7 @@ pub use baml_vm::{
     ObjectIndex, Program, UnaryOp, Value,
 };
 use baml_workspace::Project;
-pub use compiler::{ClassInfo, CodegenContext, Compiler, compile_function};
+pub use compiler::{CodegenContext, Compiler, compile_function};
 
 /// Generate bytecode for all functions in a project.
 ///
@@ -67,8 +67,8 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
         }
     }
 
-    // Build classes map (class name -> ClassInfo) and add Class objects to program
-    let mut classes: HashMap<String, ClassInfo> = HashMap::new();
+    // Build classes map (class name -> field name -> field index) and add Class objects to program
+    let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
     let mut class_object_indices: HashMap<String, usize> = HashMap::new();
 
     for file in files {
@@ -89,18 +89,12 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                 // Add Class object to program and record its index
                 let class_obj = Object::Class(Class {
                     name: class_name.clone(),
-                    field_names: field_names.clone(),
+                    field_names,
                 });
                 let class_obj_idx = program.add_object(class_obj);
                 class_object_indices.insert(class_name.clone(), class_obj_idx);
 
-                classes.insert(
-                    class_name,
-                    ClassInfo {
-                        field_indices,
-                        field_names,
-                    },
-                );
+                classes.insert(class_name, field_indices);
             }
         }
     }

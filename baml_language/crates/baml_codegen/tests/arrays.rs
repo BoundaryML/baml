@@ -22,7 +22,6 @@ fn array_constructor() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
                 Instruction::LoadVar("a".to_string()),
-                Instruction::PopReplace(1),
                 Instruction::Return,
             ],
         )],

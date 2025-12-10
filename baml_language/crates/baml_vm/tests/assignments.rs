@@ -23,7 +23,6 @@ fn block_expr() -> anyhow::Result<()> {
 
 // Variable mutation
 #[test]
-#[ignore = "variable reassignment not yet implemented"]
 fn mutable_var_in_function() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

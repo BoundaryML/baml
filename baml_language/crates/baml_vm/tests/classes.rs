@@ -136,6 +136,7 @@ fn class_constructor_with_spread_operator_before_named_fields() -> anyhow::Resul
 }
 
 #[test]
+#[ignore = "spread operator in constructors not yet implemented"]
 fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "

@@ -31,7 +31,6 @@ fn class_constructor() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreField(1),
                 Instruction::LoadVar("p".to_string()),
-                Instruction::PopReplace(1),
                 Instruction::Return,
             ],
         )],
@@ -147,7 +146,6 @@ fn nested_class_construction() -> anyhow::Result<()> {
                 Instruction::StoreField(0), // Inner.value = 42
                 Instruction::StoreField(0), // Outer.inner = Inner
                 Instruction::LoadConst(Value::Int(42)),
-                Instruction::PopReplace(1),
                 Instruction::Return,
             ],
         )],
@@ -194,7 +192,6 @@ fn nested_class_with_multiple_fields() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(30)),
                 Instruction::StoreField(1), // Outer.value = 30
                 Instruction::LoadConst(Value::Int(30)),
-                Instruction::PopReplace(1),
                 Instruction::Return,
             ],
         )],

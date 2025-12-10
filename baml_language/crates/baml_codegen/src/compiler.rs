@@ -8,7 +8,8 @@ use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
 use baml_hir::{
-    BinaryOp, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, Pattern, StmtId, UnaryOp,
+    AssignOp, BinaryOp, Expr, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, Pattern,
+    StmtId, UnaryOp,
 };
 use baml_thir::{InferenceResult, Ty};
 use baml_vm::{
@@ -25,8 +26,8 @@ pub struct CodegenContext<'db, 'ctx, 'obj> {
     pub inference: &'db InferenceResult<'db>,
     /// Resolved global names to indices.
     pub globals: &'ctx HashMap<String, usize>,
-    /// Resolved class information (name -> `ClassInfo`).
-    pub classes: &'ctx HashMap<String, ClassInfo>,
+    /// Resolved class field indices (class name -> field name -> field index).
+    pub classes: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Pre-allocated Class object indices in the program's object pool.
     pub class_object_indices: &'ctx HashMap<String, usize>,
     /// Shared object pool for strings, etc.
@@ -50,20 +51,11 @@ struct Scope {
 struct LoopInfo {
     /// Length of scopes vec before entering loop body.
     /// Used by break/continue to know how many scopes to pop.
-    _scope_depth: usize,
+    scope_depth: usize,
     /// Jump instruction locations to patch for break statements.
     break_patch_list: Vec<usize>,
     /// Jump instruction locations to patch for continue statements.
     continue_patch_list: Vec<usize>,
-}
-
-/// Information about a class for bytecode generation.
-#[derive(Debug, Clone)]
-pub struct ClassInfo {
-    /// Maps field name to its index in the class.
-    pub field_indices: HashMap<String, usize>,
-    /// Ordered list of field names.
-    pub field_names: Vec<String>,
 }
 
 /// Compiler state for generating bytecode from THIR.
@@ -74,8 +66,8 @@ pub struct Compiler<'db, 'ctx, 'obj> {
     /// Resolved global names to indices.
     globals: &'ctx HashMap<String, usize>,
 
-    /// Resolved class information (name -> `ClassInfo`).
-    classes: &'ctx HashMap<String, ClassInfo>,
+    /// Resolved class field indices (class name -> field name -> field index).
+    classes: &'ctx HashMap<String, HashMap<String, usize>>,
 
     /// Pre-allocated Class object indices in the program's object pool.
     class_object_indices: &'ctx HashMap<String, usize>,
@@ -109,6 +101,8 @@ pub struct Compiler<'db, 'ctx, 'obj> {
 
 impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
     /// Create a new compiler with the given codegen context.
+    // CodegenContext contains `&mut ObjectPool` which must be moved, not borrowed.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(ctx: CodegenContext<'db, 'ctx, 'obj>) -> Self {
         Self {
             inference: ctx.inference,
@@ -174,16 +168,7 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                 }
             }
             FunctionBody::Missing => {
-                // Missing body - return empty function
-                Function {
-                    name: name.to_string(),
-                    arity: params.len(),
-                    bytecode: Bytecode::new(),
-                    kind: FunctionKind::Exec,
-                    locals_in_scope: Vec::new(),
-                    span: baml_base::Span::fake(),
-                    block_notifications: Vec::new(),
-                }
+                panic!("cannot compile function with missing body: {name}");
             }
         }
     }
@@ -345,42 +330,45 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             }
 
             Expr::Object { type_name, fields } => {
-                // Look up class information and pre-allocated object index
+                // Look up class field indices and pre-allocated object index
                 let name_str = type_name.as_ref().map(std::string::ToString::to_string);
-                let class_info = name_str
-                    .as_ref()
-                    .and_then(|name| self.classes.get(name).cloned());
+                let field_indices = name_str.as_ref().and_then(|name| self.classes.get(name));
                 let class_obj_idx = name_str
                     .as_ref()
                     .and_then(|name| self.class_object_indices.get(name).copied());
 
-                if let (Some(class_info), Some(obj_idx)) = (class_info, class_obj_idx) {
-                    // Emit AllocInstance with pre-allocated Class object index
-                    self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(obj_idx)));
+                let (Some(field_indices), Some(obj_idx)) = (field_indices, class_obj_idx) else {
+                    panic!(
+                        "undefined class: {}",
+                        name_str.as_deref().unwrap_or("<anonymous>")
+                    );
+                };
 
-                    // For each field: Copy instance, compile value, StoreField
-                    for (field_name, field_value) in fields {
-                        // Copy the instance reference (it's at top of stack)
-                        self.emit(Instruction::Copy(0));
+                // Emit AllocInstance with pre-allocated Class object index
+                self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(obj_idx)));
 
-                        // Compile the field value
-                        self.compile_expr(*field_value, body);
+                // For each field: Copy instance, compile value, StoreField
+                for (field_name, field_value) in fields {
+                    // Copy the instance reference (it's at top of stack)
+                    self.emit(Instruction::Copy(0));
 
-                        // Get field index and store
-                        let field_name_str: &str = field_name.as_ref();
-                        let field_idx = class_info
-                            .field_indices
+                    // Compile the field value
+                    self.compile_expr(*field_value, body);
+
+                    // Get field index and store
+                    let field_name_str: &str = field_name.as_ref();
+                    let field_idx =
+                        field_indices
                             .get(field_name_str)
                             .copied()
-                            .unwrap_or(0);
-                        self.emit(Instruction::StoreField(field_idx));
-                    }
-                } else {
-                    // Fallback: class not found, use array (shouldn't happen in well-typed code)
-                    for (_name, value) in fields {
-                        self.compile_expr(*value, body);
-                    }
-                    self.emit(Instruction::AllocArray(fields.len()));
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "undefined field '{}' in class '{}'",
+                                    field_name_str,
+                                    name_str.as_deref().unwrap_or("<anonymous>")
+                                )
+                            });
+                    self.emit(Instruction::StoreField(field_idx));
                 }
             }
 
@@ -397,9 +385,7 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             }
 
             Expr::Missing => {
-                // Emit null for missing expressions
-                let idx = self.add_constant(Value::Null);
-                self.emit(Instruction::LoadConst(idx));
+                panic!("cannot compile missing expression");
             }
         }
     }
@@ -571,8 +557,7 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                             |ctx| ctx.compile_expr(*for_body, body),
                             |ctx| {
                                 if let Some(upd) = update {
-                                    ctx.compile_expr(*upd, body);
-                                    ctx.emit(Instruction::Pop(1)); // Discard update result
+                                    ctx.compile_stmt(*upd, body);
                                 }
                             },
                         );
@@ -586,8 +571,7 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                         });
 
                         if let Some(upd) = update {
-                            self.compile_expr(*upd, body);
-                            self.emit(Instruction::Pop(1));
+                            self.compile_stmt(*upd, body);
                         }
 
                         self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
@@ -602,7 +586,90 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                 self.exit_scope(false);
             }
 
-            Stmt::Missing => {}
+            Stmt::Break => {
+                let loop_info = self
+                    .current_loop
+                    .as_ref()
+                    .expect("break statement outside of loop");
+                let pop_until = loop_info.scope_depth;
+
+                // Pop locals from nested scopes before jumping out
+                self.emit_scope_drops(pop_until);
+
+                let jump_loc = self.emit(Instruction::Jump(0));
+                self.current_loop
+                    .as_mut()
+                    .unwrap()
+                    .break_patch_list
+                    .push(jump_loc);
+            }
+
+            Stmt::Continue => {
+                let loop_info = self
+                    .current_loop
+                    .as_ref()
+                    .expect("continue statement outside of loop");
+                let pop_until = loop_info.scope_depth;
+
+                // Pop locals from nested scopes before jumping back
+                self.emit_scope_drops(pop_until);
+
+                let jump_loc = self.emit(Instruction::Jump(0));
+                self.current_loop
+                    .as_mut()
+                    .unwrap()
+                    .continue_patch_list
+                    .push(jump_loc);
+            }
+
+            Stmt::Assign { target, value } => {
+                let Expr::Path(name) = &body.exprs[*target] else {
+                    panic!(
+                        "assignment target must be a variable (field/array assignment not yet implemented)"
+                    );
+                };
+                let name_str = name.to_string();
+                let Some(&index) = self.locals.get(&name_str) else {
+                    panic!("cannot assign to undefined variable: {name_str}");
+                };
+
+                self.compile_expr(*value, body);
+                self.emit(Instruction::StoreVar(index));
+            }
+
+            Stmt::AssignOp { target, op, value } => {
+                let Expr::Path(name) = &body.exprs[*target] else {
+                    panic!(
+                        "assignment target must be a variable (field/array assignment not yet implemented)"
+                    );
+                };
+                let name_str = name.to_string();
+                let Some(&index) = self.locals.get(&name_str) else {
+                    panic!("cannot assign to undefined variable: {name_str}");
+                };
+
+                // Load current value, apply operation, store result
+                self.emit(Instruction::LoadVar(index));
+                self.compile_expr(*value, body);
+                let instr = match op {
+                    AssignOp::Add => Instruction::BinOp(BinOp::Add),
+                    AssignOp::Sub => Instruction::BinOp(BinOp::Sub),
+                    AssignOp::Mul => Instruction::BinOp(BinOp::Mul),
+                    AssignOp::Div => Instruction::BinOp(BinOp::Div),
+                    AssignOp::Mod => Instruction::BinOp(BinOp::Mod),
+                    AssignOp::BitAnd => Instruction::BinOp(BinOp::BitAnd),
+                    AssignOp::BitOr => Instruction::BinOp(BinOp::BitOr),
+                    AssignOp::BitXor => Instruction::BinOp(BinOp::BitXor),
+                    AssignOp::Shl => Instruction::BinOp(BinOp::Shl),
+                    AssignOp::Shr => Instruction::BinOp(BinOp::Shr),
+                };
+                self.emit(instr);
+                self.emit(Instruction::StoreVar(index));
+            }
+
+            Stmt::Missing => {
+                panic!("cannot compile missing statement");
+            }
         }
     }
 
@@ -741,20 +808,41 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
         }
 
         if let Some(scope) = self.scopes.pop() {
-            // At depth 0 (function body), we don't need to pop locals
-            // because the function will return
-            if scope.depth >= 1 && !scope.locals.is_empty() {
+            // depth 0 = function params, depth 1 = function body block
+            // Only emit Pop/PopReplace for nested blocks (depth > 1).
+            // Function body cleanup is handled by Return.
+            if scope.depth > 1 && !scope.locals.is_empty() {
                 if scope_has_trailing_expr {
                     self.emit(Instruction::PopReplace(scope.locals.len()));
                 } else {
                     self.emit(Instruction::Pop(scope.locals.len()));
                 }
-
-                // Remove locals from this scope
-                for local in &scope.locals {
-                    self.locals.remove(local);
-                }
             }
+
+            // Always remove locals from tracking (regardless of depth)
+            for local in &scope.locals {
+                self.locals.remove(local);
+            }
+        }
+    }
+
+    /// Emit instructions to drop scopes from `pop_until` to current.
+    ///
+    /// Used by break/continue to pop locals before jumping out of nested scopes.
+    /// Does NOT modify the scope stack - just emits Pop instructions.
+    fn emit_scope_drops(&mut self, pop_until: usize) {
+        let scopes = &self.scopes[pop_until..];
+
+        let local_count: usize = scopes
+            .iter()
+            .map(|s| {
+                // depth 0 is function body block, which will be cleaned up by return
+                if s.depth == 0 { 0 } else { s.locals.len() }
+            })
+            .sum();
+
+        if local_count > 0 {
+            self.emit(Instruction::Pop(local_count));
         }
     }
 
@@ -813,7 +901,7 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
         self.enter_scope();
 
         let old_loop = self.current_loop.replace(LoopInfo {
-            _scope_depth: self.scopes.len(),
+            scope_depth: self.scopes.len(),
             break_patch_list: Vec::new(),
             continue_patch_list: Vec::new(),
         });

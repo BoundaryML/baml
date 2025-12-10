@@ -622,7 +622,9 @@ impl BlockExpr {
                         SyntaxKind::LET_STMT
                         | SyntaxKind::RETURN_STMT
                         | SyntaxKind::WHILE_STMT
-                        | SyntaxKind::FOR_EXPR => Some(BlockElement::Stmt(n)),
+                        | SyntaxKind::FOR_EXPR
+                        | SyntaxKind::BREAK_STMT
+                        | SyntaxKind::CONTINUE_STMT => Some(BlockElement::Stmt(n)),
                         // Expression nodes
                         SyntaxKind::EXPR
                         | SyntaxKind::BINARY_EXPR
