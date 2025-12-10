@@ -8,7 +8,9 @@
     "directory": "typescript/nextjs-plugin"
   },
   "license": "MIT",
-  "files": ["dist/**/*"],
+  "files": [
+    "dist/**/*"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -37,7 +39,7 @@
   "devDependencies": {
     "@types/node": "24.0.3",
     "@types/webpack": "5.28.5",
-    "next": "15.3.3",
+    "next": "15.3.6",
     "typescript": "5.8.3"
   },
   "bugs": {
