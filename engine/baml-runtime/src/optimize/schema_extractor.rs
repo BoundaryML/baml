@@ -121,6 +121,11 @@ fn collect_reachable_types(
 
             // Find the class in IR
             if let Some(class_walker) = ir.walk_classes().find(|c| c.name() == name) {
+                let eval_ctx = baml_types::EvaluationContext::default();
+
+                // Extract class-level description
+                let class_description = class_walker.description(&eval_ctx).ok().flatten();
+
                 // Extract fields
                 let fields: Vec<SchemaFieldDefinition> = class_walker
                     .walk_fields()
@@ -138,18 +143,22 @@ fn collect_reachable_types(
                             visited_enums,
                         );
 
+                        // Extract field attributes
+                        let description = field_walker.description(&eval_ctx).ok().flatten();
+                        let alias = field_walker.alias(&eval_ctx).ok().flatten();
+
                         SchemaFieldDefinition {
                             field_name: field_walker.name().to_string(),
                             field_type: format_field_type(field_type_ir),
-                            description: None, // TODO: Extract from attributes
-                            alias: None,       // TODO: Extract from attributes
+                            description,
+                            alias,
                         }
                     })
                     .collect();
 
                 classes.push(ClassDefinition {
                     class_name: name.clone(),
-                    description: None, // TODO: Extract class description
+                    description: class_description,
                     fields,
                 });
             }
@@ -163,15 +172,25 @@ fn collect_reachable_types(
 
             // Find the enum in IR
             if let Some(enum_walker) = ir.walk_enums().find(|e| e.name() == name) {
-                let values: Vec<String> = enum_walker
-                    .walk_values()
-                    .map(|v| v.name().to_string())
-                    .collect();
+                let eval_ctx = baml_types::EvaluationContext::default();
+
+                let mut values = Vec::new();
+                let mut value_descriptions = HashMap::new();
+
+                for value_walker in enum_walker.walk_values() {
+                    let value_name = value_walker.name().to_string();
+                    values.push(value_name.clone());
+
+                    // Extract description for this enum value
+                    if let Ok(Some(desc)) = value_walker.description(&eval_ctx) {
+                        value_descriptions.insert(value_name, desc);
+                    }
+                }
 
                 enums.push(EnumDefinition {
                     enum_name: name.clone(),
                     values,
-                    value_descriptions: HashMap::new(), // TODO: Extract descriptions
+                    value_descriptions,
                 });
             }
         }
@@ -283,4 +302,282 @@ pub fn filter_functions(
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    /// Helper to create a test runtime from BAML source
+    fn create_test_runtime(baml_src: &str) -> Result<crate::BamlRuntime> {
+        let mut files = HashMap::new();
+        files.insert("test.baml".to_string(), baml_src.to_string());
+
+        crate::BamlRuntime::from_file_content(
+            ".",
+            &files,
+            HashMap::<String, String>::new(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
+        )
+    }
+
+    #[test]
+    fn test_field_descriptions_should_be_extracted() {
+        let baml_src = r##"
+            class TestClass {
+                field1 string @description("This is field1 description")
+                field2 int @description("This is field2 description")
+                field3 string // no description
+            }
+
+            function TestFunction(input: string) -> TestClass {
+                client GPT35
+                prompt #"Test"#
+            }
+
+            client<llm> GPT35 {
+                provider openai
+                options {
+                    model gpt-3.5-turbo
+                    api_key env.OPENAI_API_KEY
+                }
+            }
+
+            test TestFunction {
+                functions [TestFunction]
+                args { input "test" }
+            }
+        "##;
+
+        let runtime = create_test_runtime(baml_src).expect("Failed to create runtime ");
+        let result = extract_optimizable_function(&runtime, "TestFunction")
+            .expect("Failed to extract function ");
+
+        // Find the TestClass in the extracted schema
+        let test_class = result
+            .classes
+            .iter()
+            .find(|c| c.class_name == "TestClass")
+            .expect("TestClass not found ");
+
+        // Check that field descriptions ARE extracted from @description attributes
+        let field1 = test_class
+            .fields
+            .iter()
+            .find(|f| f.field_name == "field1")
+            .expect("field1 not found ");
+
+        assert_eq!(
+            field1.description,
+            Some("This is field1 description".to_string()),
+            "field1 should have description from @description attribute "
+        );
+
+        let field2 = test_class
+            .fields
+            .iter()
+            .find(|f| f.field_name == "field2")
+            .expect("field2 not found ");
+
+        assert_eq!(
+            field2.description,
+            Some("This is field2 description".to_string()),
+            "field2 should have description from @description attribute "
+        );
+
+        // field3 has no description annotation, should be None
+        let field3 = test_class
+            .fields
+            .iter()
+            .find(|f| f.field_name == "field3")
+            .expect("field3 not found ");
+
+        assert_eq!(
+            field3.description, None,
+            "field3 has no @description, should be None "
+        );
+    }
+
+    #[test]
+    fn test_field_aliases_should_be_extracted() {
+        let baml_src = r##"
+            class TestClass {
+                field1 string @alias("field_one")
+                field2 int @alias("field_two")
+                field3 string // no alias
+            }
+
+            function TestFunction(input: string) -> TestClass {
+                client GPT35
+                prompt #"Test"#
+            }
+
+            client<llm> GPT35 {
+                provider openai
+                options {
+                    model gpt-3.5-turbo
+                    api_key env.OPENAI_API_KEY
+                }
+            }
+
+            test TestFunction {
+                functions [TestFunction]
+                args { input "test" }
+            }
+        "##;
+
+        let runtime = create_test_runtime(baml_src).expect("Failed to create runtime ");
+        let result = extract_optimizable_function(&runtime, "TestFunction")
+            .expect("Failed to extract function ");
+
+        let test_class = result
+            .classes
+            .iter()
+            .find(|c| c.class_name == "TestClass")
+            .expect("TestClass not found ");
+
+        // Check that field aliases ARE extracted from @alias attributes
+        let field1 = test_class
+            .fields
+            .iter()
+            .find(|f| f.field_name == "field1")
+            .expect("field1 not found ");
+
+        assert_eq!(
+            field1.alias,
+            Some("field_one".to_string()),
+            "field1 should have alias from @alias attribute "
+        );
+
+        let field2 = test_class
+            .fields
+            .iter()
+            .find(|f| f.field_name == "field2")
+            .expect("field2 not found ");
+
+        assert_eq!(
+            field2.alias,
+            Some("field_two".to_string()),
+            "field2 should have alias from @alias attribute "
+        );
+
+        // field3 has no alias annotation, should be None
+        let field3 = test_class
+            .fields
+            .iter()
+            .find(|f| f.field_name == "field3")
+            .expect("field3 not found ");
+
+        assert_eq!(field3.alias, None, "field3 has no @alias, should be None ");
+    }
+
+    #[test]
+    fn test_class_description_should_be_extracted() {
+        let baml_src = r##"
+            class TestClass {
+                @@description("This is the class description")
+                field1 string
+            }
+
+            function TestFunction(input: string) -> TestClass {
+                client GPT35
+                prompt #"Test"#
+            }
+
+            client<llm> GPT35 {
+                provider openai
+                options {
+                    model gpt-3.5-turbo
+                    api_key env.OPENAI_API_KEY
+                }
+            }
+
+            test TestFunction {
+                functions [TestFunction]
+                args { input "test" }
+            }
+        "##;
+
+        let runtime = create_test_runtime(baml_src).expect("Failed to create runtime ");
+        let result = extract_optimizable_function(&runtime, "TestFunction")
+            .expect("Failed to extract function ");
+
+        let test_class = result
+            .classes
+            .iter()
+            .find(|c| c.class_name == "TestClass")
+            .expect("TestClass not found ");
+
+        // Check that class description IS extracted from @description attribute
+        assert_eq!(
+            test_class.description,
+            Some("This is the class description".to_string()),
+            "class should have description from @description attribute "
+        );
+    }
+
+    #[test]
+    fn test_enum_value_descriptions_should_be_extracted() {
+        let baml_src = r##"
+            enum Status {
+                Active @description("User is active")
+                Inactive @description("User is inactive")
+                Pending @description("User is pending")
+            }
+
+            function TestFunction(input: string) -> Status {
+                client GPT35
+                prompt #"Test"#
+            }
+
+            client<llm> GPT35 {
+                provider openai
+                options {
+                    model gpt-3.5-turbo
+                    api_key env.OPENAI_API_KEY
+                }
+            }
+
+            test TestFunction {
+                functions [TestFunction]
+                args { input "test" }
+            }
+        "##;
+
+        let runtime = create_test_runtime(baml_src).expect("Failed to create runtime ");
+        let result = extract_optimizable_function(&runtime, "TestFunction")
+            .expect("Failed to extract function ");
+
+        let status_enum = result
+            .enums
+            .iter()
+            .find(|e| e.enum_name == "Status")
+            .expect("Status enum not found ");
+
+        // Check that enum value descriptions ARE extracted from @description attributes
+        assert_eq!(
+            status_enum.value_descriptions.len(),
+            3,
+            "Should have 3 enum value descriptions "
+        );
+
+        assert_eq!(
+            status_enum.value_descriptions.get("Active"),
+            Some(&"User is active".to_string()),
+            "Active value should have description "
+        );
+
+        assert_eq!(
+            status_enum.value_descriptions.get("Inactive"),
+            Some(&"User is inactive".to_string()),
+            "Inactive value should have description "
+        );
+
+        assert_eq!(
+            status_enum.value_descriptions.get("Pending"),
+            Some(&"User is pending".to_string()),
+            "Pending value should have description "
+        );
+    }
 }

@@ -21,4 +21,4 @@
 - [x] Write "ctx.output_format writes the schema, so you don't have to write the schema".
 - [x] We need to improve gepa.baml to teach it how to use jinja
 - [x] Give gepa.baml more info about the parameters of ctx.output_format
-- [ ] Block on TODO extract descriptions and aliases
+- [x] Block on TODO extract descriptions and aliases

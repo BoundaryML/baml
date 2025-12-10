@@ -162,19 +162,25 @@ function ProposeImprovements(current_function: OptimizableFunction, failed_examp
                A list of names can be passed in order to isolate just some classes for
                hoisting.
 
-        2. **Prompt bugs:**
+        2. Attributes
+           - descriptions are a good place to specify approximately how many items
+             a list should have.
+           - aliases are a good way to rename fields from the LLM's perspective.
+             shorter aliases can save tokens, but may also confuse the LLM.
+
+        3. **Prompt bugs:**
            - Does the prompt contain instructions that cause wrong outputs?
            - Are there hardcoded values that should be extracted from input instead?
            - Does the prompt tell the LLM to do something different from what tests expect?
            - Does the prompt use the jinja expression \{\{ctx.output_format\}\} (in double-curly brackets)
              to specify how to format outputs?
 
-        3. **Prompt clarity:**
+        4. **Prompt clarity:**
            - Is the instruction clear and specific?
            - Should examples be added or modified?
            - Are edge cases addressed?
 
-        4. **Schema improvements:**
+        5. **Schema improvements:**
            - Should field @description annotations be added or improved?
            - Would @alias annotations help catch output variations?
 
