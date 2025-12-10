@@ -707,6 +707,20 @@ class BamlSyncClient:
                 "text": text,
             })
             return typing.cast(typing.List["types.Person"], result.cast_to(types, types, stream_types, False, __runtime__))
+    def ExtractPersonWithMeta(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.PersonWithMeta:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            stream = self.stream.ExtractPersonWithMeta(input=input,
+                baml_options=baml_options)
+            return stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="ExtractPersonWithMeta", args={
+                "input": input,
+            })
+            return typing.cast(types.PersonWithMeta, result.cast_to(types, types, stream_types, False, __runtime__))
     def ExtractReceiptInfo(self, email: str,reason: typing.Union[typing_extensions.Literal['curiosity'], typing_extensions.Literal['personal_finance']],
         baml_options: BamlCallOptions = {},
     ) -> types.ReceiptInfo:
@@ -4338,6 +4352,18 @@ class BamlStreamClient:
           lambda x: typing.cast(typing.List["types.Person"], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def ExtractPersonWithMeta(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[stream_types.PersonWithMeta, types.PersonWithMeta]:
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="ExtractPersonWithMeta", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[stream_types.PersonWithMeta, types.PersonWithMeta](
+          result,
+          lambda x: typing.cast(stream_types.PersonWithMeta, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.PersonWithMeta, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def ExtractReceiptInfo(self, email: str,reason: typing.Union[typing_extensions.Literal['curiosity'], typing_extensions.Literal['personal_finance']],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.ReceiptInfo, types.ReceiptInfo]:
@@ -7306,6 +7332,13 @@ class BamlHttpRequestClient:
             "text": text,
         }, mode="request")
         return result
+    def ExtractPersonWithMeta(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ExtractPersonWithMeta", args={
+            "input": input,
+        }, mode="request")
+        return result
     def ExtractReceiptInfo(self, email: str,reason: typing.Union[typing_extensions.Literal['curiosity'], typing_extensions.Literal['personal_finance']],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9167,6 +9200,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ExtractPeople", args={
             "text": text,
+        }, mode="stream")
+        return result
+    def ExtractPersonWithMeta(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="ExtractPersonWithMeta", args={
+            "input": input,
         }, mode="stream")
         return result
     def ExtractReceiptInfo(self, email: str,reason: typing.Union[typing_extensions.Literal['curiosity'], typing_extensions.Literal['personal_finance']],

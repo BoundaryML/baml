@@ -10,7 +10,7 @@ client<llm> ReflectionModel {
     provider anthropic
     options {
         temperature 0.7
-        model "claude-opus-4-20251101"
+        model "claude-opus-4-5-20251101"
     }
 }
 

@@ -89,6 +89,67 @@ func (u AddTodoItem) BamlEncodeName() *cffi.CFFITypeName {
 	}
 }
 
+type AddressWithMeta struct {
+	Street  *string `json:"street"`
+	City    *string `json:"city"`
+	Zipcode *string `json:"zipcode"`
+}
+
+func (c *AddressWithMeta) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	typeName := holder.Name
+	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
+		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
+	}
+	if typeName.Name != "AddressWithMeta" {
+		panic(fmt.Sprintf("expected AddressWithMeta, got %s", typeName.Name))
+	}
+
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		case "street":
+			c.Street = baml.Decode(valueHolder).Interface().(*string)
+
+		case "city":
+			c.City = baml.Decode(valueHolder).Interface().(*string)
+
+		case "zipcode":
+			c.Zipcode = baml.Decode(valueHolder).Interface().(*string)
+
+		default:
+
+			panic(fmt.Sprintf("unexpected field: %s in class AddressWithMeta", key))
+
+		}
+	}
+
+}
+
+func (c AddressWithMeta) Encode() (*cffi.CFFIValueHolder, error) {
+	fields := map[string]any{}
+
+	fields["street"] = c.Street
+
+	fields["city"] = c.City
+
+	fields["zipcode"] = c.Zipcode
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+}
+
+func (c AddressWithMeta) BamlTypeName() string {
+	return "AddressWithMeta"
+}
+
+func (u AddressWithMeta) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+		Name:      "AddressWithMeta",
+	}
+}
+
 type AnotherObject struct {
 	Id      *string `json:"id"`
 	Thingy2 *string `json:"thingy2"`
@@ -4244,6 +4305,73 @@ func (u Person) BamlEncodeName() *cffi.CFFITypeName {
 	return &cffi.CFFITypeName{
 		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
 		Name:      "Person",
+	}
+}
+
+type PersonWithMeta struct {
+	Name    *string          `json:"name"`
+	Age     *int64           `json:"age"`
+	Address *AddressWithMeta `json:"address"`
+	Tags    []string         `json:"tags"`
+}
+
+func (c *PersonWithMeta) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	typeName := holder.Name
+	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
+		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
+	}
+	if typeName.Name != "PersonWithMeta" {
+		panic(fmt.Sprintf("expected PersonWithMeta, got %s", typeName.Name))
+	}
+
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		case "name":
+			c.Name = baml.Decode(valueHolder).Interface().(*string)
+
+		case "age":
+			c.Age = baml.Decode(valueHolder).Interface().(*int64)
+
+		case "address":
+			c.Address = baml.Decode(valueHolder).Interface().(*AddressWithMeta)
+
+		case "tags":
+			c.Tags = baml.Decode(valueHolder).Interface().([]string)
+
+		default:
+
+			panic(fmt.Sprintf("unexpected field: %s in class PersonWithMeta", key))
+
+		}
+	}
+
+}
+
+func (c PersonWithMeta) Encode() (*cffi.CFFIValueHolder, error) {
+	fields := map[string]any{}
+
+	fields["name"] = c.Name
+
+	fields["age"] = c.Age
+
+	fields["address"] = c.Address
+
+	fields["tags"] = c.Tags
+
+	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+}
+
+func (c PersonWithMeta) BamlTypeName() string {
+	return "PersonWithMeta"
+}
+
+func (u PersonWithMeta) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
+		Name:      "PersonWithMeta",
 	}
 }
 

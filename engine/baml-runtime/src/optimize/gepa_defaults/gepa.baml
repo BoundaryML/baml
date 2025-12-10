@@ -16,7 +16,6 @@ class SchemaFieldDefinition {
     field_type string
     description string?
     alias string?
-    is_optional bool
 }
 
 /// Represents a class definition with its fields

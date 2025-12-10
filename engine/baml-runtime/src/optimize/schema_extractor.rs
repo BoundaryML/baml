@@ -306,8 +306,9 @@ pub fn filter_functions(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::HashMap;
+
+    use super::*;
 
     /// Helper to create a test runtime from BAML source
     fn create_test_runtime(baml_src: &str) -> Result<crate::BamlRuntime> {

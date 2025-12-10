@@ -275,7 +275,7 @@ impl CandidateApplier {
                 // Update field attributes
                 for field in &class_def.fields {
                     if field.description.is_some() || field.alias.is_some() {
-                        // We'll handle field attributes separately
+                        result = self.update_field_attributes(&result, class_name, field)?;
                     }
                 }
 
@@ -303,6 +303,136 @@ impl CandidateApplier {
                             attrs_str,
                             &result[insert_pos..]
                         );
+                    }
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Update field attributes (description, alias) in file content
+    fn update_field_attributes(
+        &self,
+        content: &str,
+        class_name: &str,
+        field: &super::candidate::SchemaFieldDefinition,
+    ) -> Result<String> {
+        let mut result = content.to_string();
+        let field_name = &field.field_name;
+
+        // Find the class definition first
+        if let Some(class_start) = result.find(&format!("class {}", class_name)) {
+            // Find the field within the class
+            let after_class = &result[class_start..];
+
+            // Search for the field name followed by a type (field_name type_name)
+            // This is a simple approach that should work for most cases
+            let field_pattern = format!("{} ", field_name);
+
+            if let Some(field_pos) = after_class.find(&field_pattern) {
+                let abs_field_pos = class_start + field_pos;
+                let field_end = abs_field_pos + field_name.len();
+                let after_field = &result[field_end..];
+
+                // Find the end of the line (where we'll insert attributes)
+                if let Some(newline_pos) = after_field.find('\n') {
+                    let line_rest = &after_field[..newline_pos];
+
+                    // Build the attributes to add/update
+                    let mut attrs_to_add = Vec::new();
+
+                    if let Some(desc) = &field.description {
+                        let escaped = escape_baml_string(desc);
+                        attrs_to_add.push(format!("@description(#\"{}\"#)", escaped));
+                    }
+
+                    if let Some(alias) = &field.alias {
+                        let escaped = escape_baml_string(alias);
+                        attrs_to_add.push(format!("@alias(#\"{}\"#)", escaped));
+                    }
+
+                    if attrs_to_add.is_empty() {
+                        return Ok(result);
+                    }
+
+                    // Check if there's already a @description or @alias on this line
+                    let has_desc = line_rest.contains("@description");
+                    let has_alias = line_rest.contains("@alias");
+
+                    // If we have descriptions/aliases to add or replace
+                    if field.description.is_some() && has_desc {
+                        // Replace existing @description
+                        if let Some(desc_start) = line_rest.find("@description") {
+                            let abs_desc_start = field_end + desc_start;
+                            if let Some(desc_end) = find_attribute_end(&result[abs_desc_start..]) {
+                                let escaped =
+                                    escape_baml_string(field.description.as_ref().unwrap());
+                                let before = &result[..abs_desc_start];
+                                let after = &result[abs_desc_start + desc_end..];
+                                result =
+                                    format!("{}@description(#\"{}\"#){}", before, escaped, after);
+                            }
+                        }
+                    } else if field.description.is_some() && !has_desc {
+                        // Add new @description
+                        let escaped = escape_baml_string(field.description.as_ref().unwrap());
+                        let insert_pos = field_end + newline_pos;
+                        result = format!(
+                            "{} @description(#\"{}\"#){}",
+                            &result[..insert_pos],
+                            escaped,
+                            &result[insert_pos..]
+                        );
+                    }
+
+                    // Re-find positions after potential modification
+                    if field.alias.is_some() {
+                        // Re-find the field position after description changes
+                        if let Some(class_start) = result.find(&format!("class {}", class_name)) {
+                            let after_class = &result[class_start..];
+                            if let Some(field_pos) = after_class.find(&field_pattern) {
+                                let abs_field_pos = class_start + field_pos;
+                                let field_end = abs_field_pos + field_name.len();
+                                let after_field = &result[field_end..];
+
+                                if let Some(newline_pos) = after_field.find('\n') {
+                                    let line_rest = &after_field[..newline_pos];
+                                    let has_alias_now = line_rest.contains("@alias");
+
+                                    if has_alias_now {
+                                        // Replace existing @alias
+                                        if let Some(alias_start) = line_rest.find("@alias") {
+                                            let abs_alias_start = field_end + alias_start;
+                                            if let Some(alias_end) =
+                                                find_attribute_end(&result[abs_alias_start..])
+                                            {
+                                                let escaped = escape_baml_string(
+                                                    field.alias.as_ref().unwrap(),
+                                                );
+                                                let before = &result[..abs_alias_start];
+                                                let after = &result[abs_alias_start + alias_end..];
+                                                result = format!(
+                                                    "{}@alias(#\"{}\"#){}",
+                                                    before, escaped, after
+                                                );
+                                            }
+                                        }
+                                    } else {
+                                        // Add new @alias
+                                        let escaped =
+                                            escape_baml_string(field.alias.as_ref().unwrap());
+                                        let insert_pos = field_end + newline_pos;
+                                        result = format!(
+                                            "{} @alias(#\"{}\"#){}",
+                                            &result[..insert_pos],
+                                            escaped,
+                                            &result[insert_pos..]
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -588,6 +718,7 @@ impl AppliedChange {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::optimize::candidate::SchemaFieldDefinition;
 
     #[test]
     fn test_escape_baml_string() {
@@ -699,5 +830,117 @@ function ExtractResume(input: string) -> Resume {
             1,
             "New prompt should appear exactly once"
         );
+    }
+
+    #[test]
+    fn test_update_field_description_new() {
+        // Test adding a new field description
+        let content = r##"class Person {
+  name string
+  age int
+}"##;
+        let applier = CandidateApplier::new(
+            std::path::Path::new("/tmp"),
+            HashMap::new(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
+        );
+
+        let field = SchemaFieldDefinition {
+            field_name: "name".to_string(),
+            field_type: "string".to_string(),
+            description: Some("The person's full name".to_string()),
+            alias: None,
+        };
+
+        let result = applier
+            .update_field_attributes(content, "Person", &field)
+            .unwrap();
+
+        assert!(result.contains("@description(#\"The person's full name\"#)"));
+        // Original field should still be there
+        assert!(result.contains("name string"));
+    }
+
+    #[test]
+    fn test_update_field_description_replace() {
+        // Test replacing an existing field description
+        let content = r##"class Person {
+  name string @description(#"Old description"#)
+  age int
+}"##;
+        let applier = CandidateApplier::new(
+            std::path::Path::new("/tmp"),
+            HashMap::new(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
+        );
+
+        let field = SchemaFieldDefinition {
+            field_name: "name".to_string(),
+            field_type: "string".to_string(),
+            description: Some("New description".to_string()),
+            alias: None,
+        };
+
+        let result = applier
+            .update_field_attributes(content, "Person", &field)
+            .unwrap();
+
+        assert!(result.contains("@description(#\"New description\"#)"));
+        assert!(!result.contains("Old description"));
+    }
+
+    #[test]
+    fn test_update_field_alias_new() {
+        // Test adding a new field alias
+        let content = r##"class Person {
+  name string
+  age int
+}"##;
+        let applier = CandidateApplier::new(
+            std::path::Path::new("/tmp"),
+            HashMap::new(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
+        );
+
+        let field = SchemaFieldDefinition {
+            field_name: "name".to_string(),
+            field_type: "string".to_string(),
+            description: None,
+            alias: Some("full_name".to_string()),
+        };
+
+        let result = applier
+            .update_field_attributes(content, "Person", &field)
+            .unwrap();
+
+        assert!(result.contains("@alias(#\"full_name\"#)"));
+    }
+
+    #[test]
+    fn test_update_field_description_and_alias() {
+        // Test adding both description and alias
+        let content = r##"class Person {
+  name string
+  age int
+}"##;
+        let applier = CandidateApplier::new(
+            std::path::Path::new("/tmp"),
+            HashMap::new(),
+            internal_baml_core::feature_flags::FeatureFlags::default(),
+        );
+
+        let field = SchemaFieldDefinition {
+            field_name: "name".to_string(),
+            field_type: "string".to_string(),
+            description: Some("The person's full name".to_string()),
+            alias: Some("full_name".to_string()),
+        };
+
+        let result = applier
+            .update_field_attributes(content, "Person", &field)
+            .unwrap();
+
+        assert!(result.contains("@description(#\"The person's full name\"#)"));
+        assert!(result.contains("@alias(#\"full_name\"#)"));
     }
 }
