@@ -62,6 +62,55 @@ fn while_loop_gcd() -> anyhow::Result<()> {
 
 #[test]
 #[ignore = "break statement and assignment not yet in HIR"]
+fn while_loop_with_ending_if() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function main() -> int {
+                let a = 1;
+
+                while (a < 5) {
+                    a += 1;
+
+                    if (a == 2) {
+                        break;
+                    }
+                }
+
+                a
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(5)),
+                Instruction::CmpOp(CmpOp::Lt),
+                Instruction::JumpIfFalse(15),
+                Instruction::Pop(1),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::BinOp(BinOp::Add),
+                Instruction::StoreVar("a".to_string()),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::JumpIfFalse(4),
+                Instruction::Pop(1),
+                Instruction::Jump(5),
+                Instruction::Jump(2),
+                Instruction::Pop(1),
+                Instruction::Jump(-17),
+                Instruction::Pop(1),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+#[ignore = "break statement and assignment not yet in HIR"]
 fn while_loop_with_break() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "

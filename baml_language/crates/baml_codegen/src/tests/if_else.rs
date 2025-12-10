@@ -581,6 +581,362 @@ fn block_expr() -> anyhow::Result<()> {
 
 #[test]
 #[ignore = "function parameters not yet tracked in HIR"]
+fn if_else_assignment_with_locals() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function main(b: bool) -> int {
+                let i = if (b) {
+                    let a = 1;
+                    a
+                } else {
+                    let a = 2;
+                    a
+                };
+
+                i
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadVar("b".to_string()),
+                Instruction::JumpIfFalse(6),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::PopReplace(1),
+                Instruction::Jump(5),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::PopReplace(1),
+                Instruction::LoadVar("i".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+#[ignore = "function parameters not yet tracked in HIR"]
+fn if_else_normal_statement() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function identity(i: int) -> int {
+                i
+            }
+
+            function main(b: bool) -> int {
+                let a = 1;
+
+                if (b) {
+                    let x = 1;
+                    let y = 2;
+                    identity(x);
+                } else {
+                    let x = 3;
+                    let y = 4;
+                    identity(y);
+                }
+
+                a
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("b".to_string()),
+                Instruction::JumpIfFalse(10),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadGlobal(Value::function("identity")),
+                Instruction::LoadVar("x".to_string()),
+                Instruction::Call(1),
+                Instruction::Pop(1),
+                Instruction::Pop(2),
+                Instruction::Jump(9),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::LoadConst(Value::Int(4)),
+                Instruction::LoadGlobal(Value::function("identity")),
+                Instruction::LoadVar("y".to_string()),
+                Instruction::Call(1),
+                Instruction::Pop(1),
+                Instruction::Pop(2),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+#[ignore = "function parameters not yet tracked in HIR"]
+fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function main(a: bool, b: bool) -> int {
+                if (a) {
+                    let x = 1;
+                    x
+                } else if (b) {
+                    let y = 2;
+                    y
+                } else {
+                    let z = 3;
+                    z
+                }
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadVar("a".to_string()),
+                Instruction::JumpIfFalse(6),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("x".to_string()),
+                Instruction::PopReplace(1),
+                Instruction::Jump(13),
+                Instruction::Pop(1),
+                Instruction::LoadVar("b".to_string()),
+                Instruction::JumpIfFalse(6),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadVar("y".to_string()),
+                Instruction::PopReplace(1),
+                Instruction::Jump(5),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::LoadVar("z".to_string()),
+                Instruction::PopReplace(1),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+#[ignore = "function parameters not yet tracked in HIR"]
+fn else_if_assignment() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function main(a: bool, b: bool) -> int {
+                let result = if (a) {
+                    1
+                } else if (b) {
+                    2
+                } else {
+                    3
+                };
+
+                result
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadVar("a".to_string()),
+                Instruction::JumpIfFalse(4),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::Jump(9),
+                Instruction::Pop(1),
+                Instruction::LoadVar("b".to_string()),
+                Instruction::JumpIfFalse(4),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::Jump(3),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::LoadVar("result".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+#[ignore = "function parameters not yet tracked in HIR"]
+fn else_if_assignment_with_locals() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function main(a: bool, b: bool) -> int {
+                let result = if (a) {
+                    let x = 1;
+                    x
+                } else if (b) {
+                    let y = 2;
+                    y
+                } else {
+                    let z = 3;
+                    z
+                };
+
+                result
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadVar("a".to_string()),
+                Instruction::JumpIfFalse(6),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("x".to_string()),
+                Instruction::PopReplace(1),
+                Instruction::Jump(13),
+                Instruction::Pop(1),
+                Instruction::LoadVar("b".to_string()),
+                Instruction::JumpIfFalse(6),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadVar("y".to_string()),
+                Instruction::PopReplace(1),
+                Instruction::Jump(5),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::LoadVar("z".to_string()),
+                Instruction::PopReplace(1),
+                Instruction::LoadVar("result".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+#[ignore = "assignment statements not yet in HIR"]
+fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function main() -> int {
+                let a = 1;
+
+                {
+                    let b = 2;
+                    let c = 3;
+                    a = b + c;
+
+                    if (a == 5) {
+                        a = 10;
+                    }
+                }
+
+                a
+            }
+        ",
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::LoadVar("b".to_string()),
+                Instruction::LoadVar("c".to_string()),
+                Instruction::BinOp(BinOp::Add),
+                Instruction::StoreVar("a".to_string()),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(5)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::JumpIfFalse(5),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(10)),
+                Instruction::StoreVar("a".to_string()),
+                Instruction::Jump(2),
+                Instruction::Pop(1),
+                Instruction::Pop(2),
+                Instruction::LoadVar("a".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+#[ignore = "function parameters not yet tracked in HIR"]
+fn return_with_stack() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function WithStack(x: int) -> int {
+              let a = 1;
+
+              // NOTE: currently there's no empty returns.
+
+              if (a == 0) { return 0; }
+
+              {
+                 let b = 1;
+                 if (a != b) {
+                    return 0;
+                 }
+              }
+
+              {
+                 let c = 2;
+                 let b = 3;
+                 while (b != c) {
+                    if (true) {
+                       return 0;
+                    }
+                 }
+              }
+
+               7
+            }
+        ",
+        expected: vec![(
+            "WithStack",
+            vec![
+                Instruction::LoadConst(Value::Int(1)), // 1
+                Instruction::LoadVar("a".to_string()), // a
+                Instruction::LoadConst(Value::Int(0)), // 0
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::JumpIfFalse(5), // to 9
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(0)), // 0
+                Instruction::Return,
+                Instruction::Jump(2), // to 10
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(1)), // 1
+                Instruction::LoadVar("a".to_string()), // a
+                Instruction::LoadVar("b".to_string()), // b
+                Instruction::CmpOp(CmpOp::NotEq),
+                Instruction::JumpIfFalse(5), // to 19
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(0)), // 0
+                Instruction::Return,
+                Instruction::Jump(2), // to 20
+                Instruction::Pop(1),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(2)), // 2
+                Instruction::LoadConst(Value::Int(3)), // 3
+                Instruction::LoadVar("b".to_string()), // b
+                Instruction::LoadVar("c".to_string()), // c
+                Instruction::CmpOp(CmpOp::NotEq),
+                Instruction::JumpIfFalse(10), // to 36
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Bool(true)), // true
+                Instruction::JumpIfFalse(5),               // to 34
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(0)), // 0
+                Instruction::Return,
+                Instruction::Jump(2), // to 35
+                Instruction::Pop(1),
+                Instruction::Jump(-12), // to 23
+                Instruction::Pop(1),
+                Instruction::Pop(2),
+                Instruction::LoadConst(Value::Int(7)), // 7
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+#[ignore = "function parameters not yet tracked in HIR"]
 fn if_else_return_expr() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
