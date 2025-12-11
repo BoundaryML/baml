@@ -418,6 +418,9 @@ navigation:
           - page: Modular API
             icon: fa-regular fa-cubes
             path: 01-guide/05-baml-advanced/modular-api.mdx
+          - page: Prompt Optimization
+            icon: fa-regular fa-aeropress
+            path: 01-guide/05-baml-advanced/prompt-optimization.mdx
       - section: Boundary Cloud
         contents:
           # - section: Functions
