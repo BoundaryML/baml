@@ -92,6 +92,28 @@ pub struct OptimizeArgs {
     #[arg(long, default_value_t = false, help = "Enable verbose output")]
     pub verbose: bool,
 
+    #[arg(
+        long,
+        short = 'v',
+        default_value_t = false,
+        help = "View optimization results in TUI"
+    )]
+    /// Open an interactive TUI to browse optimization results.
+    /// Use with --run-dir to view a specific run, or without to view the most recent run.
+    ///
+    /// Examples:
+    ///   baml-cli optimize --view
+    ///   baml-cli optimize --view --run-dir .baml_optimize/run_20250106_143022
+    pub view: bool,
+
+    #[arg(long, help = "Path to optimization run directory to view")]
+    /// Specify a specific optimization run directory to view.
+    /// Only used with --view flag.
+    ///
+    /// Example:
+    ///   --run-dir .baml_optimize/run_20250106_143022
+    pub run_dir: Option<PathBuf>,
+
     #[command(flatten)]
     pub dotenv: dotenv::DotenvArgs,
 }
@@ -128,6 +150,8 @@ pub enum OptimizeRunResult {
     Failed,
     /// GEPA prompts were reset (no optimization run)
     GepaPromptsReset,
+    /// TUI viewer was opened and closed successfully
+    ViewCompleted,
 }
 
 impl OptimizeArgs {
@@ -135,7 +159,12 @@ impl OptimizeArgs {
         &self,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<OptimizeRunResult> {
-        if !(feature_flags.is_beta_enabled()) {
+        // Handle --view mode first (doesn't require beta flag)
+        if self.view {
+            return self.run_view_mode();
+        }
+
+        if !(self.beta) {
             println!(
                 "`baml-cli optimize` is still in beta. Please use --beta flag and proceed with caution."
             );
@@ -438,5 +467,65 @@ impl OptimizeArgs {
         println!("Use 'git diff' to review changes, or 'git checkout .' to revert.");
 
         Ok(())
+    }
+
+    /// Run the TUI viewer mode
+    fn run_view_mode(&self) -> Result<OptimizeRunResult> {
+        let run_dir = if let Some(ref dir) = self.run_dir {
+            // Use explicitly specified run directory
+            if !dir.exists() {
+                anyhow::bail!("Specified run directory does not exist: {}", dir.display());
+            }
+            dir.clone()
+        } else {
+            // Find the most recent run in .baml_optimize/
+            let from = BamlRuntime::parse_baml_src_path(&self.from)?;
+            let optimize_base_dir = from
+                .parent()
+                .map(|p| p.join(".baml_optimize"))
+                .unwrap_or_else(|| PathBuf::from(".baml_optimize"));
+
+            if !optimize_base_dir.exists() {
+                anyhow::bail!(
+                    "No optimization runs found. Run 'baml-cli optimize' first.\n\
+                     Expected directory: {}",
+                    optimize_base_dir.display()
+                );
+            }
+
+            // Find the most recent run_* directory
+            let mut runs: Vec<_> = std::fs::read_dir(&optimize_base_dir)?
+                .filter_map(|entry| {
+                    let entry = entry.ok()?;
+                    let path = entry.path();
+                    if path.is_dir() {
+                        let name = path.file_name()?.to_string_lossy().to_string();
+                        if name.starts_with("run_") {
+                            return Some(path);
+                        }
+                    }
+                    None
+                })
+                .collect();
+
+            if runs.is_empty() {
+                anyhow::bail!(
+                    "No optimization runs found in {}.\n\
+                     Run 'baml-cli optimize' first to create an optimization run.",
+                    optimize_base_dir.display()
+                );
+            }
+
+            // Sort by name (which includes timestamp) and take the most recent
+            runs.sort();
+            runs.pop().unwrap()
+        };
+
+        println!("Opening optimization viewer for: {}", run_dir.display());
+
+        // Launch the TUI
+        crate::optimize::tui::run_tui(&run_dir)?;
+
+        Ok(OptimizeRunResult::ViewCompleted)
     }
 }

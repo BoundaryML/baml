@@ -15,10 +15,10 @@ use anyhow::{Context, Result};
 
 use super::{
     applier::CandidateApplier,
-    candidate::{Candidate, CandidateScores, OptimizableFunction},
+    candidate::{Candidate, CandidateScores, CurrentMetrics, ObjectiveStatus, OptimizableFunction, OptimizationObjectives},
     evaluator::{Evaluator, TestEvalResult},
     gepa_runtime::GEPARuntime,
-    pareto::{Objective, ParetoFrontier},
+    pareto::{Direction, Objective, ParetoFrontier},
     schema_extractor::{extract_optimizable_function, filter_functions},
     storage::{
         CandidateLineage, NormalizationStats, ObjectiveConfig, OptimizationConfig,
@@ -205,6 +205,10 @@ impl GEPAOrchestrator {
             self.storage
                 .save_reflection(self.current_iteration, parent_idx, &failures)?;
 
+            // Build optimization objectives and current metrics for the reflection
+            let optimization_objectives = self.build_optimization_objectives(parent);
+            let current_metrics = self.build_current_metrics(parent);
+
             // Call GEPA ProposeImprovements
             let improved = self
                 .gepa_runtime
@@ -216,6 +220,8 @@ impl GEPAOrchestrator {
                     } else {
                         Some(&successes)
                     },
+                    Some(&optimization_objectives),
+                    current_metrics.as_ref(),
                 )
                 .await
                 .context("Failed to propose improvements")?;
@@ -488,6 +494,69 @@ impl GEPAOrchestrator {
             pareto_frontier: self.pareto.frontier().to_vec(),
             best_candidate_id: best_idx,
             storage: OptimizationStorage::from_existing(self.storage.run_dir())?,
+        })
+    }
+
+    /// Build optimization objectives with current values for the reflection function
+    fn build_optimization_objectives(&self, candidate: &Candidate) -> OptimizationObjectives {
+        let objectives = self
+            .config
+            .objectives
+            .iter()
+            .map(|obj| {
+                let current_value = candidate
+                    .scores
+                    .as_ref()
+                    .map(|s| obj.get_value(s))
+                    .unwrap_or(0.0);
+
+                let status = match obj.name.as_str() {
+                    "accuracy" => {
+                        if current_value >= 1.0 {
+                            "All tests passing".to_string()
+                        } else if current_value >= 0.8 {
+                            "Good, minor improvements needed".to_string()
+                        } else if current_value >= 0.5 {
+                            "Needs improvement".to_string()
+                        } else {
+                            "Significant work needed".to_string()
+                        }
+                    }
+                    "tokens" | "prompt_tokens" | "completion_tokens" => {
+                        format!("{:.0} tokens avg", current_value)
+                    }
+                    "latency" => {
+                        format!("{:.0}ms avg", current_value)
+                    }
+                    _ => format!("{:.2}", current_value),
+                };
+
+                ObjectiveStatus {
+                    name: obj.name.clone(),
+                    weight: obj.weight,
+                    direction: match obj.direction {
+                        Direction::Maximize => "maximize".to_string(),
+                        Direction::Minimize => "minimize".to_string(),
+                    },
+                    current_value,
+                    status,
+                }
+            })
+            .collect();
+
+        OptimizationObjectives { objectives }
+    }
+
+    /// Build current metrics from candidate scores
+    fn build_current_metrics(&self, candidate: &Candidate) -> Option<CurrentMetrics> {
+        candidate.scores.as_ref().map(|s| CurrentMetrics {
+            test_pass_rate: s.test_pass_rate,
+            tests_passed: s.tests_passed,
+            tests_total: s.tests_total,
+            avg_prompt_tokens: s.avg_prompt_tokens,
+            avg_completion_tokens: s.avg_completion_tokens,
+            avg_total_tokens: s.avg_prompt_tokens + s.avg_completion_tokens,
+            avg_latency_ms: s.avg_latency_ms,
         })
     }
 }
