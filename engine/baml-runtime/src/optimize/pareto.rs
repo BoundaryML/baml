@@ -330,7 +330,11 @@ impl ParetoFrontier {
     }
 
     /// Identify the strengths of a candidate (which objectives it excels at)
-    pub fn identify_strengths(&self, scores: &CandidateScores, all_candidates: &[Candidate]) -> Vec<String> {
+    pub fn identify_strengths(
+        &self,
+        scores: &CandidateScores,
+        all_candidates: &[Candidate],
+    ) -> Vec<String> {
         let mut strengths = Vec::new();
 
         for obj in &self.objectives {
@@ -638,8 +642,10 @@ mod tests {
         frontier.add(0, candidates[0].scores.as_ref().unwrap(), &candidates);
         frontier.add(1, candidates[1].scores.as_ref().unwrap(), &candidates);
 
-        let strengths_0 = frontier.identify_strengths(candidates[0].scores.as_ref().unwrap(), &candidates);
-        let strengths_1 = frontier.identify_strengths(candidates[1].scores.as_ref().unwrap(), &candidates);
+        let strengths_0 =
+            frontier.identify_strengths(candidates[0].scores.as_ref().unwrap(), &candidates);
+        let strengths_1 =
+            frontier.identify_strengths(candidates[1].scores.as_ref().unwrap(), &candidates);
 
         // Candidate 0 should have best accuracy
         assert!(strengths_0.iter().any(|s| s.contains("accuracy")));

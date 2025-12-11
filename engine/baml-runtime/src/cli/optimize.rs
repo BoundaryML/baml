@@ -106,13 +106,13 @@ pub struct OptimizeArgs {
     ///   baml-cli optimize --view --run-dir .baml_optimize/run_20250106_143022
     pub view: bool,
 
-    #[arg(long, default_value_t = false, help = "Launch live TUI during optimization")]
-    /// Launch the TUI viewer in the background while optimization runs.
-    /// The TUI will automatically refresh to show new candidates as they are generated.
+    #[arg(long, default_value_t = false, help = "Disable the live TUI viewer")]
+    /// Disable the TUI viewer that normally launches during optimization.
+    /// Use this for CI/CD pipelines or when you prefer text-only output.
     ///
     /// Example:
-    ///   baml-cli optimize --beta -f MyFunction --live
-    pub live: bool,
+    ///   baml-cli optimize --beta -f MyFunction --no-ui
+    pub no_ui: bool,
 
     #[arg(long, help = "Path to optimization run directory to view")]
     /// Specify a specific optimization run directory to view.
@@ -266,6 +266,14 @@ impl OptimizeArgs {
 
         self.dotenv.load()?;
 
+        // Suppress BAML logging and tracing when TUI is active
+        if !self.no_ui {
+            // Set BAML_LOG=off to disable all logging output
+            std::env::set_var("BAML_LOG", "off");
+            // Remove BAML_TRACE_FILE to prevent trace output during TUI
+            std::env::remove_var("BAML_TRACE_FILE");
+        }
+
         let env_vars = std::env::vars().collect::<HashMap<String, String>>();
         let runtime = BamlRuntime::from_directory(&from, env_vars.clone(), feature_flags.clone())?;
         let runtime = std::sync::Arc::new(runtime);
@@ -368,15 +376,15 @@ impl OptimizeArgs {
                 parallel: self.parallel,
                 objectives,
                 verbose: self.verbose,
-                quiet: self.live, // Suppress output when TUI is active
+                quiet: !self.no_ui, // Suppress output when TUI is active
                 env_vars,
                 baml_src_path: from.clone(),
                 feature_flags,
             },
         )?;
 
-        // Launch live TUI in a separate thread if requested
-        let tui_handle = if self.live {
+        // Launch live TUI in a separate thread (default behavior, unless --no-ui)
+        let tui_handle = if !self.no_ui {
             let run_dir_clone = run_dir.clone();
             println!("Launching live TUI viewer...");
             println!("(Press 'q' to close TUI, 'Enter' to stop optimization and apply selected candidate)\n");
@@ -404,8 +412,13 @@ impl OptimizeArgs {
                     // Check if user selected a candidate to apply via TUI
                     if let Ok(()) = tui_result {
                         // Read back the apply request from storage
-                        if let Some(candidate_id) = crate::optimize::tui::read_apply_request(&run_dir) {
-                            println!("\nApplying candidate #{} from TUI selection...", candidate_id);
+                        if let Some(candidate_id) =
+                            crate::optimize::tui::read_apply_request(&run_dir)
+                        {
+                            println!(
+                                "\nApplying candidate #{} from TUI selection...",
+                                candidate_id
+                            );
                             self.apply_candidate(&from, &runtime, &result, candidate_id)?;
                         } else {
                             println!("\nNo candidate selected for application.");
@@ -468,10 +481,7 @@ impl OptimizeArgs {
                     }
                 } else {
                     println!("\nNo candidate selected for application.");
-                    println!(
-                        "Results saved to: {}",
-                        run_dir.display()
-                    );
+                    println!("Results saved to: {}", run_dir.display());
                 }
 
                 Ok(OptimizeRunResult::Success)

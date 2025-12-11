@@ -1,3 +1,4 @@
+#![allow(clippy::print_stdout)]
 //! TUI Visualization for GEPA Optimization
 //!
 //! Provides a real-time terminal user interface for visualizing the GEPA
@@ -25,8 +26,8 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{
-        Block, BorderType, Borders, Paragraph, Scrollbar,
-        ScrollbarOrientation, ScrollbarState, Wrap,
+        Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Wrap,
     },
     Frame, Terminal,
 };
@@ -142,7 +143,13 @@ impl App {
 
         let storage_path = storage.run_dir().display().to_string();
 
-        Self::from_candidates_with_config(candidates, function_name, storage_path, objectives, pareto_frontier)
+        Self::from_candidates_with_config(
+            candidates,
+            function_name,
+            storage_path,
+            objectives,
+            pareto_frontier,
+        )
     }
 
     /// Create a new App from a list of candidates with configuration
@@ -365,7 +372,9 @@ impl App {
     /// Get the currently selected candidate ID
     fn selected_candidate_id(&self) -> Option<usize> {
         let row = self.rows.get(self.selected_row)?;
-        let col = self.selected_col.min(row.candidate_ids.len().saturating_sub(1));
+        let col = self
+            .selected_col
+            .min(row.candidate_ids.len().saturating_sub(1));
         row.candidate_ids.get(col).copied()
     }
 
@@ -390,7 +399,10 @@ impl App {
         if self.selected_row > 0 {
             self.selected_row -= 1;
             // Clamp column to valid range for new row
-            let max_col = self.rows[self.selected_row].candidate_ids.len().saturating_sub(1);
+            let max_col = self.rows[self.selected_row]
+                .candidate_ids
+                .len()
+                .saturating_sub(1);
             self.selected_col = self.selected_col.min(max_col);
             self.prompt_scroll = 0;
             self.update_scroll_offset();
@@ -405,7 +417,10 @@ impl App {
         if self.selected_row < self.rows.len() - 1 {
             self.selected_row += 1;
             // Clamp column to valid range for new row
-            let max_col = self.rows[self.selected_row].candidate_ids.len().saturating_sub(1);
+            let max_col = self.rows[self.selected_row]
+                .candidate_ids
+                .len()
+                .saturating_sub(1);
             self.selected_col = self.selected_col.min(max_col);
             self.prompt_scroll = 0;
             self.update_scroll_offset();
@@ -572,7 +587,10 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
 
     // Build status display with spinner
     let status_display = match &app.status {
-        OptimizationStatus::Running { display_iteration, total_trials } => {
+        OptimizationStatus::Running {
+            display_iteration,
+            total_trials,
+        } => {
             // Get spinner frame based on time
             let spinner_idx = (std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -620,8 +638,7 @@ fn render_tree_panel(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_widget(block, area);
 
     if app.rows.is_empty() {
-        let msg = Paragraph::new("No candidates yet")
-            .style(Style::default().fg(Color::Gray));
+        let msg = Paragraph::new("No candidates yet").style(Style::default().fg(Color::Gray));
         frame.render_widget(msg, inner_area);
         return;
     }
@@ -661,14 +678,9 @@ fn render_tree_panel(frame: &mut Frame, app: &mut App, area: Rect) {
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
 
-        let mut scrollbar_state = ScrollbarState::new(app.rows.len())
-            .position(app.selected_row);
+        let mut scrollbar_state = ScrollbarState::new(app.rows.len()).position(app.selected_row);
 
-        frame.render_stateful_widget(
-            scrollbar,
-            inner_area,
-            &mut scrollbar_state,
-        );
+        frame.render_stateful_widget(scrollbar, inner_area, &mut scrollbar_state);
     }
 }
 
@@ -693,7 +705,9 @@ fn render_candidate_row(
     // Render iteration label on the left
     let iter_label = format!("T{}", row.iteration);
     let iter_style = if is_selected_row {
-        Style::default().fg(ACCENT_COLOR).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(ACCENT_COLOR)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::DarkGray)
     };
@@ -706,10 +720,7 @@ fn render_candidate_row(
         width: label_width,
         height: 1,
     };
-    frame.render_widget(
-        Paragraph::new(iter_label).style(iter_style),
-        label_area,
-    );
+    frame.render_widget(Paragraph::new(iter_label).style(iter_style), label_area);
 
     // Render each card in the row
     let cards_area = Rect {
@@ -798,40 +809,44 @@ fn render_candidate_card(
         if app.objectives.is_empty() {
             // Default: show pass rate
             let pass_text = format!("{:.0}%", scores.test_pass_rate * 100.0);
-            lines.push(Line::from(vec![
-                Span::styled(pass_text, Style::default().fg(score_color(scores.test_pass_rate))),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                pass_text,
+                Style::default().fg(score_color(scores.test_pass_rate)),
+            )]));
         } else {
             // Show each objective
             for obj in &app.objectives {
                 let value = App::get_objective_value(obj, scores);
                 let (text, color) = format_compact_metric(obj, value);
-                lines.push(Line::from(vec![
-                    Span::styled(text, Style::default().fg(color)),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    text,
+                    Style::default().fg(color),
+                )]));
             }
         }
 
         // Show parents if any
         if let Some(c) = candidate {
             if !c.parent_ids.is_empty() {
-                let parents: String = c.parent_ids
+                let parents: String = c
+                    .parent_ids
                     .iter()
                     .map(|id| format!("#{}", id))
                     .collect::<Vec<_>>()
                     .join(",");
-                lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("←{}", parents),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]));
+                lines.push(Line::from(vec![Span::styled(
+                    format!("←{}", parents),
+                    Style::default().fg(Color::DarkGray),
+                )]));
             }
         }
 
         lines
     } else {
-        vec![Line::from(Span::styled("...", Style::default().fg(Color::Gray)))]
+        vec![Line::from(Span::styled(
+            "...",
+            Style::default().fg(Color::Gray),
+        ))]
     };
 
     let paragraph = Paragraph::new(content);
@@ -956,10 +971,7 @@ fn render_metadata_panel(frame: &mut Frame, app: &App, area: Rect) {
 
                     lines.push(Line::from(vec![
                         Span::raw("  "),
-                        Span::styled(
-                            format!("{} ", obj.name),
-                            Style::default().fg(Color::Gray),
-                        ),
+                        Span::styled(format!("{} ", obj.name), Style::default().fg(Color::Gray)),
                         Span::styled(
                             format!("({}%): ", (obj.weight * 100.0) as i32),
                             Style::default().fg(Color::DarkGray),
@@ -1368,7 +1380,10 @@ fn syntax_highlight(code: &str) -> Text<'static> {
                         rest[..brace_pos].trim().to_string(),
                         Style::default().fg(Color::Cyan),
                     ));
-                    spans.push(Span::styled(" {".to_string(), Style::default().fg(Color::Gray)));
+                    spans.push(Span::styled(
+                        " {".to_string(),
+                        Style::default().fg(Color::Gray),
+                    ));
                 } else {
                     spans.push(Span::raw(rest.to_string()));
                 }
@@ -1667,11 +1682,7 @@ pub fn display_pareto_and_select(
         candidates.iter().map(|c| (c.id, c)).collect();
 
     println!("\n{}", "═".repeat(70));
-    println!(
-        "  {} Pareto Frontier Candidates for {}",
-        "★".to_string(),
-        function_name
-    );
+    println!("  * Pareto Frontier Candidates for {}", function_name);
     println!("{}", "═".repeat(70));
 
     // Print header

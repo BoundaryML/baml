@@ -15,7 +15,10 @@ use anyhow::{Context, Result};
 
 use super::{
     applier::CandidateApplier,
-    candidate::{Candidate, CandidateScores, CurrentMetrics, ObjectiveStatus, OptimizableFunction, OptimizationObjectives},
+    candidate::{
+        Candidate, CandidateScores, CurrentMetrics, ObjectiveStatus, OptimizableFunction,
+        OptimizationObjectives,
+    },
     evaluator::{Evaluator, TestEvalResult},
     gepa_runtime::GEPARuntime,
     pareto::{Direction, Objective, ParetoFrontier},
@@ -173,7 +176,8 @@ impl GEPAOrchestrator {
             qprint!(
                 self,
                 "\n[Iteration {}/{}]",
-                self.current_iteration, self.config.trials
+                self.current_iteration,
+                self.config.trials
             );
 
             // Decide whether to do a merge or reflection
@@ -233,7 +237,8 @@ impl GEPAOrchestrator {
 
             // Check if we have multiple objectives (beyond just accuracy)
             let has_multiple_objectives = self.config.objectives.len() > 1
-                || (self.config.objectives.len() == 1 && self.config.objectives[0].name != "accuracy");
+                || (self.config.objectives.len() == 1
+                    && self.config.objectives[0].name != "accuracy");
 
             if failures.is_empty() {
                 qprint!(self, "  All tests passing!");
@@ -251,7 +256,10 @@ impl GEPAOrchestrator {
                 }
 
                 // For multi-objective, continue optimizing other metrics even with 100% accuracy
-                qprint!(self, "  Continuing to optimize other objectives (tokens, latency, etc.)...");
+                qprint!(
+                    self,
+                    "  Continuing to optimize other objectives (tokens, latency, etc.)..."
+                );
             } else {
                 qprint!(self, "  Reflecting on {} failures...", failures.len());
             }
@@ -445,8 +453,18 @@ impl GEPAOrchestrator {
             .map(|s| self.pareto.identify_strengths(s, &self.candidates))
             .unwrap_or_default();
 
-        qprint!(self, "    Candidate #{} strengths: {:?}", idx_a, strengths_a);
-        qprint!(self, "    Candidate #{} strengths: {:?}", idx_b, strengths_b);
+        qprint!(
+            self,
+            "    Candidate #{} strengths: {:?}",
+            idx_a,
+            strengths_a
+        );
+        qprint!(
+            self,
+            "    Candidate #{} strengths: {:?}",
+            idx_b,
+            strengths_b
+        );
 
         // Call GEPA MergeVariants
         let merged = match self
@@ -520,8 +538,8 @@ impl GEPAOrchestrator {
     /// we've had no Pareto improvement for several iterations
     fn check_convergence(&self) -> bool {
         // If we only have one objective (accuracy), converge when all tests pass
-        let has_only_accuracy = self.config.objectives.len() == 1
-            && self.config.objectives[0].name == "accuracy";
+        let has_only_accuracy =
+            self.config.objectives.len() == 1 && self.config.objectives[0].name == "accuracy";
 
         if has_only_accuracy {
             if let Some(best_idx) = self.pareto.best_weighted(&self.candidates) {

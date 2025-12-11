@@ -15,7 +15,10 @@ use baml_types::BamlValue;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    candidate::{CurrentMetrics, ImprovedFunction, OptimizableFunction, OptimizationObjectives, ReflectiveExample},
+    candidate::{
+        CurrentMetrics, ImprovedFunction, OptimizableFunction, OptimizationObjectives,
+        ReflectiveExample,
+    },
     gepa_defaults,
 };
 use crate::{BamlRuntime, TripWire};
