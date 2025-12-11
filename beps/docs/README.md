@@ -34,6 +34,9 @@ Below is an auto-generated index of all BEPs.
     <tr>
       <td><a href="./proposals/BEP-005-prompt-optimization/"><strong>BEP-005</strong>: Prompt Optimization</a> &nbsp; <img src="https://img.shields.io/badge/Status-Accepted-brightgreen" alt="Accepted"><br><br>- `baml-cli` supports a new command called `optimize` that writes and improves prompts for you, similar to [DSPy](https://dspy.ai/). - Prompt optimization attempts to maximize the number of passing BAML test cases, and optionally minimize tokens and latency. - The optimizer is based on the [GEPA algorithm](https://arxiv.org/abs/2507.19457), which is partially encoded as BAML functions that you can tweak.<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): Greg Hale <imalsogreg@gmail.com></span></td>
     </tr>
+    <tr>
+      <td><a href="./proposals/BEP-006-compiler-errors/"><strong>BEP-006</strong>: compiler-errors</a> &nbsp; <img src="https://img.shields.io/badge/Status-Draft-lightgrey" alt="Draft"><br><br>Uniform user-facing experience for compiler errors.<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): Greg Hale <greg@boundary.com></span></td>
+    </tr>
   </tbody>
 </table>
 
