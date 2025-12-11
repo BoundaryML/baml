@@ -52,8 +52,8 @@ importers:
         specifier: ^11.4.1
         version: 11.9.0
       next:
-        specifier: 15.5.7
-        version: 15.5.7(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+        specifier: 15.5.8
+        version: 15.5.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       react:
         specifier: 19.2.1
         version: 19.2.1
@@ -211,14 +211,14 @@ importers:
         specifier: ^15.0.7
         version: 15.0.12
       next:
-        specifier: 15.2.6
-        version: 15.2.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+        specifier: 15.2.7
+        version: 15.2.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       nuqs:
         specifier: 2.4.1
-        version: 2.4.1(next@15.2.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1)
+        version: 2.4.1(next@15.2.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1)
       react:
         specifier: ^19.2.1
         version: 19.2.1
@@ -534,7 +534,7 @@ importers:
         version: 10.4.21(postcss@8.5.6)
       geist:
         specifier: 1.4.2
-        version: 1.4.2(next@15.4.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))
+        version: 1.4.2(next@15.4.9(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))
       http-proxy:
         specifier: 1.18.1
         version: 1.18.1(debug@4.4.1)
@@ -551,8 +551,8 @@ importers:
         specifier: 5.1.5
         version: 5.1.5
       next:
-        specifier: 15.4.8
-        version: 15.4.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+        specifier: 15.4.9
+        version: 15.4.9(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       next-themes:
         specifier: 0.4.6
         version: 0.4.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
@@ -625,7 +625,7 @@ importers:
         version: 1.20.4(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       jotai:
         specifier: 2.15.1
-        version: 2.15.1(@babel/core@7.27.7)(@babel/template@7.27.2)(@types/react@19.2.7)(react@19.2.1)
+        version: 2.15.1(@babel/core@7.28.4)(@babel/template@7.27.2)(@types/react@19.2.7)(react@19.2.1)
       next-themes:
         specifier: 0.4.6
         version: 0.4.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
@@ -683,7 +683,7 @@ importers:
         version: 0.202.1
       '@boundaryml/baml-nextjs-plugin':
         specifier: ^0.1.0
-        version: 0.1.0(next@15.4.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1)
+        version: 0.1.0(next@15.4.9(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1)
       '@notionhq/client':
         specifier: ^4.0.1
         version: 4.0.1
@@ -703,8 +703,8 @@ importers:
         specifier: 4.17.21
         version: 4.17.21
       next:
-        specifier: 15.4.8
-        version: 15.4.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+        specifier: 15.4.9
+        version: 15.4.9(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       openai:
         specifier: 4.87.3
         version: 4.87.3(ws@8.18.3)(zod@4.0.10)
@@ -989,8 +989,8 @@ importers:
         specifier: 5.28.5
         version: 5.28.5(@swc/core@1.12.7)
       next:
-        specifier: 15.3.6
-        version: 15.3.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+        specifier: 15.3.7
+        version: 15.3.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       typescript:
         specifier: 5.8.3
         version: 5.8.3
@@ -1381,14 +1381,14 @@ importers:
         specifier: 5.1.5
         version: 5.1.5
       next:
-        specifier: 15.3.6
-        version: 15.3.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+        specifier: 15.3.7
+        version: 15.3.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       next-themes:
         specifier: 0.4.6
         version: 0.4.6(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       nuqs:
         specifier: 2.4.3
-        version: 2.4.3(next@15.3.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1)
+        version: 2.4.3(next@15.3.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1)
       react:
         specifier: 19.2.1
         version: 19.2.1
@@ -1412,7 +1412,7 @@ importers:
         version: 3.0.3(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       react-scan:
         specifier: 0.3.4
-        version: 0.3.4(@types/react@19.2.7)(next@15.3.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(rollup@4.43.0)
+        version: 0.3.4(@types/react@19.2.7)(next@15.3.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(rollup@4.43.0)
       react-spring:
         specifier: 10.0.1
         version: 10.0.1(@react-three/fiber@9.1.2(@types/react@19.2.7)(immer@10.2.0)(react-dom@19.2.1(react@19.2.1))(react-native@0.80.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.1))(react@19.2.1)(three@0.177.0))(konva@9.3.20)(react-dom@19.2.1(react@19.2.1))(react-konva@19.0.6(@types/react@19.2.7)(konva@9.3.20)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react-native@0.80.0(@babel/core@7.28.4)(@types/react@19.2.7)(react@19.2.1))(react-zdog@1.2.2)(react@19.2.1)(three@0.177.0)(zdog@1.1.3)
@@ -3627,17 +3627,17 @@ packages:
     resolution: {integrity: sha512-GL43zmDN6AFmomd7eTJOdZkXDvocucjqJcBs/IY51ZTxHvBeb1SXTM0/rI2VJ7C3FTiyATTt2D8chonCi0UTgw==}
     engines: {node: '>= 10'}
 
-  '@next/env@15.2.6':
-    resolution: {integrity: sha512-kp1Mpm4K1IzSSJ5ZALfek0JBD2jBw9VGMXR/aT7ykcA2q/ieDARyBzg+e8J1TkeIb5AFj/YjtZdoajdy5uNy6w==}
+  '@next/env@15.2.7':
+    resolution: {integrity: sha512-jSxlawUghGPFc7jAzL+Sw4EokhNJ1wGw7JSX0ozGxLw9i41aQGll+MqCMu7uMZO9xicb71e3GcGLJx8vXS6zEQ==}
 
-  '@next/env@15.3.6':
-    resolution: {integrity: sha512-/cK+QPcfRbDZxmI/uckT4lu9pHCfRIPBLqy88MhE+7Vg5hKrEYc333Ae76dn/cw2FBP2bR/GoK/4DU+U7by/Nw==}
+  '@next/env@15.3.7':
+    resolution: {integrity: sha512-1fzTVgpRoCwd0zo0/Xs5dt0vM4Ir7/uoeC3FjmuluNALQlllIPQ1zCOL6GMV8QTwK92e9htZTwqaRedzudD7Bg==}
 
-  '@next/env@15.4.8':
-    resolution: {integrity: sha512-LydLa2MDI1NMrOFSkO54mTc8iIHSttj6R6dthITky9ylXV2gCGi0bHQjVCtLGRshdRPjyh2kXbxJukDtBWQZtQ==}
+  '@next/env@15.4.9':
+    resolution: {integrity: sha512-OYR0RulK5phnbxxzcLE4/ECgfx1PL3EHrDbjyelJ7jauaO+/Qvj5gG8JPMltB51CygC2KrZ0aAfYLjPYjYY17A==}
 
-  '@next/env@15.5.7':
-    resolution: {integrity: sha512-4h6Y2NyEkIEN7Z8YxkA27pq6zTkS09bUSYC0xjd0NpwFxjnIKeZEeH591o5WECSmjpUhLn3H2QLJcDye3Uzcvg==}
+  '@next/env@15.5.8':
+    resolution: {integrity: sha512-ejZHa3ogTxcy851dFoNtfB5B2h7AbSAtHbR5CymUlnz4yW1QjHNufVpvTu8PTnWBKFKjrd4k6Gbi2SsCiJKvxw==}
 
   '@next/swc-darwin-arm64@15.2.5':
     resolution: {integrity: sha512-4OimvVlFTbgzPdA0kh8A1ih6FN9pQkL4nPXGqemEYgk+e7eQhsst/p35siNNqA49eQA6bvKZ1ASsDtu9gtXuog==}
@@ -10561,8 +10561,8 @@ packages:
       react: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
       react-dom: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
 
-  next@15.2.6:
-    resolution: {integrity: sha512-DIKFctUpZoCq5ok2ztVU+PqhWsbiqM9xNP7rHL2cAp29NQcmDp7Y6JnBBhHRbFt4bCsCZigj6uh+/Gwh2158Wg==}
+  next@15.2.7:
+    resolution: {integrity: sha512-Tno/NgqoEz7UQpuZSbADLp90CFSUy2RCcHlgRfFtSrNOTefnoIQRbPy5oO7Dhj3DChcw/vd1S8dKHVVlk0WjLg==}
     engines: {node: ^18.18.0 || ^19.8.0 || >= 20.0.0}
     hasBin: true
     peerDependencies:
@@ -10582,8 +10582,8 @@ packages:
       sass:
         optional: true
 
-  next@15.3.6:
-    resolution: {integrity: sha512-oI6D1zbbsh6JzzZFDCSHnnx6Qpvd1fSkVJu/5d8uluqnxzuoqtodVZjYvNovooznUq8udSAiKp7MbwlfZ8Gm6w==}
+  next@15.3.7:
+    resolution: {integrity: sha512-7dzkjUftt7PAtspscMY+n7dx6Gg+/si89AwwwEMiupSd5bozpQNEbkYczzcIVaYloohZUTsGImq96FGrh0rFUw==}
     engines: {node: ^18.18.0 || ^19.8.0 || >= 20.0.0}
     hasBin: true
     peerDependencies:
@@ -10603,8 +10603,8 @@ packages:
       sass:
         optional: true
 
-  next@15.4.8:
-    resolution: {integrity: sha512-jwOXTz/bo0Pvlf20FSb6VXVeWRssA2vbvq9SdrOPEg9x8E1B27C2rQtvriAn600o9hH61kjrVRexEffv3JybuA==}
+  next@15.4.9:
+    resolution: {integrity: sha512-/NedNmbiH4Umt/7SohT9VKxEdBt02Lj33xHrukE7d8Li6juT+75sEq4a4U06jggrvdbklKgr78OZEyWZ8XRrtw==}
     engines: {node: ^18.18.0 || ^19.8.0 || >= 20.0.0}
     hasBin: true
     peerDependencies:
@@ -10624,8 +10624,8 @@ packages:
       sass:
         optional: true
 
-  next@15.5.7:
-    resolution: {integrity: sha512-+t2/0jIJ48kUpGKkdlhgkv+zPTEOoXyr60qXe68eB/pl3CMJaLeIGjzp5D6Oqt25hCBiBTt8wEeeAzfJvUKnPQ==}
+  next@15.5.8:
+    resolution: {integrity: sha512-Tma2R50eiM7Fx6fbDeHiThq7sPgl06mBr76j6Ga0lMFGrmaLitFsy31kykgb8Z++DR2uIEKi2RZ0iyjIwFd15Q==}
     engines: {node: ^18.18.0 || ^19.8.0 || >= 20.0.0}
     hasBin: true
     peerDependencies:
@@ -15219,9 +15219,9 @@ snapshots:
   '@boundaryml/baml-linux-x64-musl@0.202.1':
     optional: true
 
-  '@boundaryml/baml-nextjs-plugin@0.1.0(next@15.4.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1)':
+  '@boundaryml/baml-nextjs-plugin@0.1.0(next@15.4.9(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1)':
     dependencies:
-      next: 15.4.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      next: 15.4.9(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       react: 19.2.1
 
   '@boundaryml/baml-win32-x64-msvc@0.202.1':
@@ -16729,13 +16729,13 @@ snapshots:
       '@napi-rs/wasm-tools-win32-ia32-msvc': 1.0.0
       '@napi-rs/wasm-tools-win32-x64-msvc': 1.0.0
 
-  '@next/env@15.2.6': {}
+  '@next/env@15.2.7': {}
 
-  '@next/env@15.3.6': {}
+  '@next/env@15.3.7': {}
 
-  '@next/env@15.4.8': {}
+  '@next/env@15.4.9': {}
 
-  '@next/env@15.5.7': {}
+  '@next/env@15.5.8': {}
 
   '@next/swc-darwin-arm64@15.2.5':
     optional: true
@@ -22510,9 +22510,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  geist@1.4.2(next@15.4.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)):
+  geist@1.4.2(next@15.4.9(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)):
     dependencies:
-      next: 15.4.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      next: 15.4.9(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
 
   generic-pool@3.4.2: {}
 
@@ -23884,7 +23884,7 @@ snapshots:
       '@types/react': 19.2.7
       react: 19.2.1
 
-  jotai@2.15.1(@babel/core@7.27.7)(@babel/template@7.27.2)(@types/react@19.2.7)(react@19.2.1):
+  jotai@2.15.1(@babel/core@7.28.4)(@babel/template@7.27.2)(@types/react@19.2.7)(react@19.2.1):
     optionalDependencies:
       '@babel/core': 7.28.4
       '@babel/template': 7.27.2
@@ -25168,9 +25168,9 @@ snapshots:
       react: 19.2.1
       react-dom: 19.2.1(react@19.2.1)
 
-  next@15.2.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+  next@15.2.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
     dependencies:
-      '@next/env': 15.2.6
+      '@next/env': 15.2.7
       '@swc/counter': 0.1.3
       '@swc/helpers': 0.5.15
       busboy: 1.6.0
@@ -25194,9 +25194,9 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.3.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+  next@15.3.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
     dependencies:
-      '@next/env': 15.3.6
+      '@next/env': 15.3.7
       '@swc/counter': 0.1.3
       '@swc/helpers': 0.5.15
       busboy: 1.6.0
@@ -25220,9 +25220,9 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.4.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+  next@15.4.9(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
     dependencies:
-      '@next/env': 15.4.8
+      '@next/env': 15.4.9
       '@swc/helpers': 0.5.15
       caniuse-lite: 1.0.30001726
       postcss: 8.4.31
@@ -25244,9 +25244,9 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.5.7(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
+  next@15.5.8(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1):
     dependencies:
-      '@next/env': 15.5.7
+      '@next/env': 15.5.8
       '@swc/helpers': 0.5.15
       caniuse-lite: 1.0.30001726
       postcss: 8.4.31
@@ -25366,19 +25366,19 @@ snapshots:
 
   nullthrows@1.1.1: {}
 
-  nuqs@2.4.1(next@15.2.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1):
+  nuqs@2.4.1(next@15.2.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1):
     dependencies:
       mitt: 3.0.1
       react: 19.2.1
     optionalDependencies:
-      next: 15.2.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      next: 15.2.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
 
-  nuqs@2.4.3(next@15.3.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1):
+  nuqs@2.4.3(next@15.3.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react@19.2.1):
     dependencies:
       mitt: 3.0.1
       react: 19.2.1
     optionalDependencies:
-      next: 15.3.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      next: 15.3.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
 
   nwsapi@2.2.20: {}
 
@@ -26348,7 +26348,7 @@ snapshots:
       react: 19.2.1
       react-dom: 19.2.1(react@19.2.1)
 
-  react-scan@0.3.4(@types/react@19.2.7)(next@15.3.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(rollup@4.43.0):
+  react-scan@0.3.4(@types/react@19.2.7)(next@15.3.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(rollup@4.43.0):
     dependencies:
       '@babel/core': 7.27.7
       '@babel/generator': 7.27.5
@@ -26370,7 +26370,7 @@ snapshots:
       react-dom: 19.2.1(react@19.2.1)
       tsx: 4.20.3
     optionalDependencies:
-      next: 15.3.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      next: 15.3.7(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
       unplugin: 2.1.0
     transitivePeerDependencies:
       - '@types/react'

@@ -39,7 +39,7 @@
   "devDependencies": {
     "@types/node": "24.0.3",
     "@types/webpack": "5.28.5",
-    "next": "15.3.6",
+    "next": "15.3.7",
     "typescript": "5.8.3"
   },
   "bugs": {
