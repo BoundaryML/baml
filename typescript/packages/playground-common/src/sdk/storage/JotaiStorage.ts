@@ -169,6 +169,7 @@ export class JotaiStorage implements SDKStorage {
   // ============================================================================
 
   setNodeState(nodeId: string, state: NodeExecutionState) {
+    console.info('[sam] updating node state', { nodeId, state })
     // Register node first (ensures atom exists)
     this.store.set(registerNodeAtom, nodeId);
     // Set state
@@ -474,10 +475,10 @@ export class JotaiStorage implements SDKStorage {
     return this.store.get(highlightedBlocksAtom);
   }
 
-  addHighlightedBlock(lexicalNodeId: string) {
+  addHighlightedBlock(logFilterKey: string) {
     const current = this.store.get(highlightedBlocksAtom);
     const newSet = new Set(current);
-    newSet.add(lexicalNodeId);
+    newSet.add(logFilterKey);
     this.store.set(highlightedBlocksAtom, newSet);
   }
 

@@ -92,11 +92,11 @@ const testClick: NavigationRule = {
 
     if (workflow) {
       // Find the root node ID
-      const rootNode = workflow.nodes?.find((n) => n.id.includes('|root:'));
+      const rootNode = workflow.nodes?.find((n) => !n.parent);
       return {
         mode: 'workflow',
         workflowId: workflow.id,
-        selectedNodeId: rootNode?.id ?? `${workflow.id}|root:0`,
+        selectedNodeId: rootNode?.id ?? workflow.id,
         functionName: workflow.name,
         testName: target.testName ?? null,
       };

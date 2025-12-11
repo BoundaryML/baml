@@ -86,10 +86,10 @@ export interface TestCaseMetadata {
  * No WASM dependencies - pure TypeScript types
  */
 export interface FunctionMetadata {
-    name: string;
-    type: 'function' | 'llm_function' | 'workflow';
-    functionFlavor: 'llm' | 'expr';
-    span: SpanInfo;
+  name: string;
+  type: 'function' | 'llm_function' | 'workflow';
+  functionFlavor: 'llm' | 'expr';
+  span: SpanInfo;
   signature: string;
   testSnippet: string;
 
@@ -258,19 +258,26 @@ export interface TestResponseData {
 // EXECUTION CONTEXT
 // ============================================================================
 
+export type VizStateUpdateState = 'running' | 'completed' | 'not_running';
+
+export interface VizStateUpdate {
+  nodeId: number;
+  logFilterKey?: string;
+  newState: VizStateUpdateState;
+}
+
 export interface WatchNotification {
   variableName?: string;
   channelName?: string;
-  /**
-   * The lexical node ID (header title) this notification belongs to.
-   * For variable/stream notifications, this is set by the WASM runtime
-   * based on the most recent header that was entered.
-   */
-  lexicalNodeId?: string;
   /** Function name that emitted this notification */
   functionName?: string;
   isStream: boolean;
-  value: string;
+  /** Optional serialized payload; may be synthesized from stateUpdate */
+  value?: string;
+  /**
+   * Optional reducer-driven state update keyed by runtime node id; logFilterKey is metadata.
+   */
+  stateUpdate?: VizStateUpdate;
 }
 
 // ============================================================================
@@ -364,14 +371,6 @@ export type WatchNotificationValue =
   | WatchStreamUpdateValue
   | WatchStreamEndValue
   | WatchVariableValue;
-
-/**
- * Extended watch notification with parsed value
- */
-export interface RichWatchNotification extends WatchNotification {
-  /** Parsed and typed value (if parseable) */
-  parsedValue?: WatchNotificationValue;
-}
 
 export interface TestExecutionContext {
   apiKeys?: Record<string, string>;

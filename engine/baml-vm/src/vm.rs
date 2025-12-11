@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 
 use baml_types::{BamlMap, BamlMedia};
+use baml_viz_events::{parse_path_segment, PathSegment, VizExecDelta, VizExecEvent};
 
 use crate::{
-    bytecode::{BinOp, BlockNotification, CmpOp, Instruction},
+    bytecode::{BinOp, CmpOp, Instruction},
     errors::{ErrorLocation, InternalError, RuntimeError, VmError},
     indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
     types::{
-        FunctionKind, FunctionType, Future, FutureKind, FutureType, Instance, Object, ObjectType,
-        PendingFuture, Type, Value, Variant,
+        Function, FunctionKind, FunctionType, Future, FutureKind, FutureType, Instance, Object,
+        ObjectType, PendingFuture, Type, Value, Variant,
     },
     watch::{self, NodeId, RootState, Watch, WatchFilter},
     StackTrace, UnaryOp,
@@ -41,6 +42,38 @@ pub struct Frame {
 
     /// Local variables offset in the eval stack.
     pub locals_offset: StackIndex,
+}
+
+fn build_viz_exec_event(
+    function: &Function,
+    index: usize,
+    delta: VizExecDelta,
+) -> Result<VizExecEvent, VmError> {
+    let Some(node) = function.viz_nodes.get(index) else {
+        return Err(InternalError::ArrayIndexOutOfBounds {
+            index,
+            length: function.viz_nodes.len(),
+        }
+        .into());
+    };
+
+    let path_segment = parse_node_segment(&node.log_filter_key)
+        .unwrap_or(PathSegment::FunctionRoot { ordinal: 0 });
+
+    Ok(VizExecEvent {
+        event: delta,
+        node_id: node.node_id,
+        node_type: node.node_type.clone(),
+        path_segment,
+        label: node.label.clone(),
+        header_level: node.header_level,
+    })
+}
+
+fn parse_node_segment(log_filter_key: &str) -> Option<PathSegment> {
+    // log_filter_key is encoded as "<function>|<segment>|<segment>..."
+    let segment = log_filter_key.rsplit('|').next().unwrap_or(log_filter_key);
+    parse_path_segment(segment)
 }
 
 /// The beast.
@@ -230,7 +263,10 @@ pub enum VmExecState {
 #[derive(Debug, PartialEq)]
 pub enum WatchNotification {
     Variables(Vec<watch::NodeId>),
-    Block(BlockNotification),
+    Viz {
+        function_name: String,
+        event: VizExecEvent,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -508,18 +544,26 @@ impl Vm {
 
                 // Run user function to decide if we should notify.
                 WatchFilter::Function(filter_func) => {
-                    match self.interrupt(filter_func, &[state.value]) {
-                        Ok(VmExecState::Complete(Value::Bool(notify))) => {
-                            if notify {
-                                filtered_notifications.push(notification);
+                    let mut result = self.interrupt(filter_func, &[state.value]);
+                    loop {
+                        match result {
+                            Ok(VmExecState::Complete(Value::Bool(notify))) => {
+                                if notify {
+                                    filtered_notifications.push(notification);
+                                }
+                                break;
                             }
-                        }
-
-                        other => {
-                            return Err(RuntimeError::Other(format!(
-                                "Invalid filter function return: {other:?}"
-                            ))
-                            .into())
+                            Ok(VmExecState::Notify(_)) => {
+                                // Ignore viz/variable notifications produced by the filter and keep running it.
+                                result = self.exec();
+                            }
+                            Ok(other) => {
+                                return Err(RuntimeError::Other(format!(
+                                    "Invalid filter function return: {other:?}"
+                                ))
+                                .into());
+                            }
+                            Err(err) => return Err(err),
                         }
                     }
                 }
@@ -639,22 +683,20 @@ impl Vm {
             // }
 
             match function.bytecode.instructions[instruction_ptr as usize] {
-                Instruction::NotifyBlock(block_index) => {
-                    // Get the notification from the function's storage
-                    let notification = &function.block_notifications[block_index];
-
-                    // Create a copy with the function name populated
-                    let full_notification = crate::bytecode::BlockNotification {
-                        function_name: function.name.clone(),
-                        block_name: notification.block_name.clone(),
-                        level: notification.level,
-                        block_type: notification.block_type,
-                        is_enter: notification.is_enter,
+                Instruction::VizEnter(_) | Instruction::VizExit(_) => {
+                    let instruction = &function.bytecode.instructions[instruction_ptr as usize];
+                    let (index, delta) = match instruction {
+                        Instruction::VizEnter(index) => (*index, VizExecDelta::Enter),
+                        Instruction::VizExit(index) => (*index, VizExecDelta::Exit),
+                        _ => unreachable!("matched on viz instruction"),
                     };
 
-                    return Ok(VmExecState::Notify(WatchNotification::Block(
-                        full_notification,
-                    )));
+                    let event = build_viz_exec_event(function, index, delta)?;
+
+                    return Ok(VmExecState::Notify(WatchNotification::Viz {
+                        function_name: function.name.clone(),
+                        event,
+                    }));
                 }
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];

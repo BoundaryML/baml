@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: NestedScopes
-      lexical_id: "NestedScopes|root:0"
+      log_filter_key: "NestedScopes|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 284
     "1":
       label: Top Level
-      lexical_id: "NestedScopes|root:0|hdr:top-level:0"
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
       node_type: header
       parent: "0"
       span:
@@ -26,7 +26,7 @@ expr:
         end: 53
     "2":
       label: First Section
-      lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
       node_type: header
       parent: "1"
       span:
@@ -35,7 +35,7 @@ expr:
         end: 98
     "3":
       label: "if (x == \"hello\")"
-      lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
       node_type: branch-group
       parent: "2"
       span:
@@ -44,7 +44,7 @@ expr:
         end: 274
     "4":
       label: "if (x == \"hello\")"
-      lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
       node_type: branch-arm
       parent: "3"
       span:
@@ -53,7 +53,7 @@ expr:
         end: 211
     "5":
       label: Inside If Block
-      lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
       node_type: header
       parent: "4"
       span:
@@ -62,7 +62,7 @@ expr:
         end: 160
     "6":
       label: else
-      lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
       node_type: branch-arm
       parent: "3"
       span:
@@ -71,7 +71,7 @@ expr:
         end: 274
     "7":
       label: Inside Else Block
-      lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
       node_type: header
       parent: "6"
       span:
@@ -87,7 +87,7 @@ flattening:
       nodes:
         "0":
           label: NestedScopes
-          lexical_id: "NestedScopes|root:0"
+          log_filter_key: "NestedScopes|root:0"
           node_type: function
           parent: ~
           span:
@@ -96,7 +96,7 @@ flattening:
             end: 284
         "1":
           label: Top Level
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
           node_type: header
           parent: "0"
           span:
@@ -105,7 +105,7 @@ flattening:
             end: 53
         "2":
           label: First Section
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
           node_type: header
           parent: "1"
           span:
@@ -114,7 +114,7 @@ flattening:
             end: 98
         "3":
           label: "if (x == \"hello\")"
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -123,7 +123,7 @@ flattening:
             end: 274
         "4":
           label: "if (x == \"hello\")"
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
           node_type: branch-arm
           parent: "3"
           span:
@@ -132,7 +132,7 @@ flattening:
             end: 211
         "5":
           label: Inside If Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
           node_type: header
           parent: "4"
           span:
@@ -141,7 +141,7 @@ flattening:
             end: 160
         "6":
           label: else
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
           node_type: branch-arm
           parent: "3"
           span:
@@ -150,7 +150,7 @@ flattening:
             end: 274
         "7":
           label: Inside Else Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
           node_type: header
           parent: "6"
           span:
@@ -162,7 +162,7 @@ flattening:
       nodes:
         "0":
           label: NestedScopes
-          lexical_id: "NestedScopes|root:0"
+          log_filter_key: "NestedScopes|root:0"
           node_type: function
           parent: ~
           span:
@@ -171,7 +171,7 @@ flattening:
             end: 284
         "1":
           label: Top Level
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
           node_type: header
           parent: "0"
           span:
@@ -180,7 +180,7 @@ flattening:
             end: 53
         "2":
           label: First Section
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
           node_type: header
           parent: "1"
           span:
@@ -189,7 +189,7 @@ flattening:
             end: 98
         "3":
           label: "if (x == \"hello\")"
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -198,7 +198,7 @@ flattening:
             end: 274
         "4":
           label: "if (x == \"hello\")"
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
           node_type: branch-arm
           parent: "3"
           span:
@@ -207,7 +207,7 @@ flattening:
             end: 211
         "5":
           label: Inside If Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
           node_type: header
           parent: "4"
           span:
@@ -216,7 +216,7 @@ flattening:
             end: 160
         "6":
           label: else
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
           node_type: branch-arm
           parent: "3"
           span:
@@ -225,7 +225,7 @@ flattening:
             end: 274
         "7":
           label: Inside Else Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
           node_type: header
           parent: "6"
           span:
@@ -240,7 +240,7 @@ flattening:
       nodes:
         "0":
           label: NestedScopes
-          lexical_id: "NestedScopes|root:0"
+          log_filter_key: "NestedScopes|root:0"
           node_type: function
           parent: ~
           span:
@@ -249,7 +249,7 @@ flattening:
             end: 284
         "1":
           label: Top Level
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
           node_type: header
           parent: "0"
           span:
@@ -258,7 +258,7 @@ flattening:
             end: 53
         "2":
           label: First Section
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
           node_type: header
           parent: "1"
           span:
@@ -267,7 +267,7 @@ flattening:
             end: 98
         "3":
           label: "if (x == \"hello\")"
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -276,7 +276,7 @@ flattening:
             end: 274
         "4":
           label: "if (x == \"hello\")"
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
           node_type: branch-arm
           parent: "2"
           span:
@@ -285,7 +285,7 @@ flattening:
             end: 211
         "5":
           label: Inside If Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
           node_type: header
           parent: "4"
           span:
@@ -294,7 +294,7 @@ flattening:
             end: 160
         "6":
           label: else
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
           node_type: branch-arm
           parent: "2"
           span:
@@ -303,7 +303,7 @@ flattening:
             end: 274
         "7":
           label: Inside Else Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
           node_type: header
           parent: "6"
           span:
@@ -318,7 +318,7 @@ flattening:
       nodes:
         "0":
           label: NestedScopes
-          lexical_id: "NestedScopes|root:0"
+          log_filter_key: "NestedScopes|root:0"
           node_type: function
           parent: ~
           span:
@@ -327,7 +327,7 @@ flattening:
             end: 284
         "1":
           label: Top Level
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
           node_type: header
           parent: "0"
           span:
@@ -336,7 +336,7 @@ flattening:
             end: 53
         "2":
           label: First Section
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
           node_type: header
           parent: "1"
           span:
@@ -345,7 +345,7 @@ flattening:
             end: 98
         "3":
           label: "if (x == \"hello\")"
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -354,7 +354,7 @@ flattening:
             end: 274
         "4":
           label: "if (x == \"hello\")"
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
           node_type: branch-arm
           parent: "2"
           span:
@@ -363,7 +363,7 @@ flattening:
             end: 211
         "5":
           label: Inside If Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
           node_type: header
           parent: "4"
           span:
@@ -372,7 +372,7 @@ flattening:
             end: 160
         "6":
           label: else
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
           node_type: branch-arm
           parent: "2"
           span:
@@ -381,7 +381,7 @@ flattening:
             end: 274
         "7":
           label: Inside Else Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
           node_type: header
           parent: "6"
           span:
@@ -399,7 +399,7 @@ flattening:
       nodes:
         "0":
           label: NestedScopes
-          lexical_id: "NestedScopes|root:0"
+          log_filter_key: "NestedScopes|root:0"
           node_type: function
           parent: ~
           span:
@@ -408,7 +408,7 @@ flattening:
             end: 284
         "1":
           label: Top Level
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
           node_type: header
           parent: "0"
           span:
@@ -417,7 +417,7 @@ flattening:
             end: 53
         "2":
           label: First Section
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
           node_type: header
           parent: "1"
           span:
@@ -426,7 +426,7 @@ flattening:
             end: 98
         "3":
           label: "if (x == \"hello\")"
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -435,7 +435,7 @@ flattening:
             end: 274
         "5":
           label: Inside If Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
           node_type: header
           parent: "2"
           span:
@@ -444,7 +444,7 @@ flattening:
             end: 160
         "7":
           label: Inside Else Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
           node_type: header
           parent: "2"
           span:
@@ -459,7 +459,7 @@ flattening:
       nodes:
         "0":
           label: NestedScopes
-          lexical_id: "NestedScopes|root:0"
+          log_filter_key: "NestedScopes|root:0"
           node_type: function
           parent: ~
           span:
@@ -468,7 +468,7 @@ flattening:
             end: 284
         "1":
           label: Top Level
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
           node_type: header
           parent: "0"
           span:
@@ -477,7 +477,7 @@ flattening:
             end: 53
         "2":
           label: First Section
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
           node_type: header
           parent: "1"
           span:
@@ -486,7 +486,7 @@ flattening:
             end: 98
         "3":
           label: "if (x == \"hello\")"
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -495,7 +495,7 @@ flattening:
             end: 274
         "5":
           label: Inside If Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
           node_type: header
           parent: "2"
           span:
@@ -504,7 +504,7 @@ flattening:
             end: 160
         "7":
           label: Inside Else Block
-          lexical_id: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
           node_type: header
           parent: "2"
           span:

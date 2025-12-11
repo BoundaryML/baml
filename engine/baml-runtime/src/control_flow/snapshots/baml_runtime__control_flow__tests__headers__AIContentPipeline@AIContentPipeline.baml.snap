@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: AIContentPipeline
-      lexical_id: "AIContentPipeline|root:0"
+      log_filter_key: "AIContentPipeline|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 1530
     "1":
       label: Fetch Resources
-      lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
       node_type: header
       parent: "0"
       span:
@@ -26,7 +26,7 @@ expr:
         end: 164
     "10":
       label: Label Summary Category
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
       node_type: header
       parent: "8"
       span:
@@ -35,7 +35,7 @@ expr:
         end: 706
     "11":
       label: Save Summary
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
       node_type: header
       parent: "7"
       span:
@@ -44,7 +44,7 @@ expr:
         end: 782
     "12":
       label: else
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
       node_type: branch-arm
       parent: "6"
       span:
@@ -53,7 +53,7 @@ expr:
         end: 891
     "13":
       label: Skip Summarization
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
       node_type: header
       parent: "12"
       span:
@@ -62,7 +62,7 @@ expr:
         end: 861
     "14":
       label: Generate Drafts for Posts
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
       node_type: header
       parent: "4"
       span:
@@ -71,7 +71,7 @@ expr:
         end: 981
     "15":
       label: for (kind in content_types)
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
       node_type: loop
       parent: "14"
       span:
@@ -80,7 +80,7 @@ expr:
         end: 1282
     "16":
       label: Get Content Type and Generate Draft
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
       node_type: header
       parent: "15"
       span:
@@ -89,7 +89,7 @@ expr:
         end: 1069
     "17":
       label: Save Draft
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
       node_type: header
       parent: "15"
       span:
@@ -98,7 +98,7 @@ expr:
         end: 1201
     "18":
       label: Prepare Pull Request
-      lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
       node_type: header
       parent: "0"
       span:
@@ -107,7 +107,7 @@ expr:
         end: 1312
     "19":
       label: "if (summary != \"no-transcript\")"
-      lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
       node_type: branch-group
       parent: "18"
       span:
@@ -116,7 +116,7 @@ expr:
         end: 1498
     "2":
       label: Retrieve Emails and Posts from Database
-      lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
       node_type: header
       parent: "1"
       span:
@@ -125,7 +125,7 @@ expr:
         end: 214
     "20":
       label: "if (summary != \"no-transcript\")"
-      lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
       node_type: branch-arm
       parent: "19"
       span:
@@ -134,7 +134,7 @@ expr:
         end: 1439
     "21":
       label: Create GitHub PR
-      lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
       node_type: header
       parent: "20"
       span:
@@ -143,7 +143,7 @@ expr:
         end: 1397
     "22":
       label: else
-      lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
       node_type: branch-arm
       parent: "19"
       span:
@@ -152,7 +152,7 @@ expr:
         end: 1498
     "23":
       label: Missing Summary
-      lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
       node_type: header
       parent: "22"
       span:
@@ -161,7 +161,7 @@ expr:
         end: 1476
     "24":
       label: Complete
-      lexical_id: "AIContentPipeline|root:0|hdr:complete:3"
+      log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
       node_type: header
       parent: "0"
       span:
@@ -170,7 +170,7 @@ expr:
         end: 1517
     "3":
       label: Process and Load Video
-      lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+      log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
       node_type: header
       parent: "1"
       span:
@@ -179,7 +179,7 @@ expr:
         end: 305
     "4":
       label: Generate Content
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
       node_type: header
       parent: "0"
       span:
@@ -188,7 +188,7 @@ expr:
         end: 436
     "5":
       label: Video Summarization
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
       node_type: header
       parent: "4"
       span:
@@ -197,7 +197,7 @@ expr:
         end: 466
     "6":
       label: if (has_transcript)
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
       node_type: branch-group
       parent: "5"
       span:
@@ -206,7 +206,7 @@ expr:
         end: 891
     "7":
       label: if (has_transcript)
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
       node_type: branch-arm
       parent: "6"
       span:
@@ -215,7 +215,7 @@ expr:
         end: 821
     "8":
       label: Generate Summary
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
       node_type: header
       parent: "7"
       span:
@@ -224,7 +224,7 @@ expr:
         end: 580
     "9":
       label: Create Summary Text
-      lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
       node_type: header
       parent: "8"
       span:
@@ -256,7 +256,7 @@ flattening:
       nodes:
         "0":
           label: AIContentPipeline
-          lexical_id: "AIContentPipeline|root:0"
+          log_filter_key: "AIContentPipeline|root:0"
           node_type: function
           parent: ~
           span:
@@ -265,7 +265,7 @@ flattening:
             end: 1530
         "1":
           label: Fetch Resources
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
           node_type: header
           parent: "0"
           span:
@@ -274,7 +274,7 @@ flattening:
             end: 164
         "10":
           label: Label Summary Category
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
           node_type: header
           parent: "8"
           span:
@@ -283,7 +283,7 @@ flattening:
             end: 706
         "11":
           label: Save Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
           node_type: header
           parent: "7"
           span:
@@ -292,7 +292,7 @@ flattening:
             end: 782
         "12":
           label: else
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
           node_type: branch-arm
           parent: "6"
           span:
@@ -301,7 +301,7 @@ flattening:
             end: 891
         "13":
           label: Skip Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
           node_type: header
           parent: "12"
           span:
@@ -310,7 +310,7 @@ flattening:
             end: 861
         "14":
           label: Generate Drafts for Posts
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
           node_type: header
           parent: "4"
           span:
@@ -319,7 +319,7 @@ flattening:
             end: 981
         "15":
           label: for (kind in content_types)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
           node_type: loop
           parent: "14"
           span:
@@ -328,7 +328,7 @@ flattening:
             end: 1282
         "16":
           label: Get Content Type and Generate Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
           node_type: header
           parent: "15"
           span:
@@ -337,7 +337,7 @@ flattening:
             end: 1069
         "17":
           label: Save Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
           node_type: header
           parent: "15"
           span:
@@ -346,7 +346,7 @@ flattening:
             end: 1201
         "18":
           label: Prepare Pull Request
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
           node_type: header
           parent: "0"
           span:
@@ -355,7 +355,7 @@ flattening:
             end: 1312
         "19":
           label: "if (summary != \"no-transcript\")"
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
           node_type: branch-group
           parent: "18"
           span:
@@ -364,7 +364,7 @@ flattening:
             end: 1498
         "2":
           label: Retrieve Emails and Posts from Database
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
           node_type: header
           parent: "1"
           span:
@@ -373,7 +373,7 @@ flattening:
             end: 214
         "20":
           label: "if (summary != \"no-transcript\")"
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
           node_type: branch-arm
           parent: "19"
           span:
@@ -382,7 +382,7 @@ flattening:
             end: 1439
         "21":
           label: Create GitHub PR
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
           node_type: header
           parent: "20"
           span:
@@ -391,7 +391,7 @@ flattening:
             end: 1397
         "22":
           label: else
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
           node_type: branch-arm
           parent: "19"
           span:
@@ -400,7 +400,7 @@ flattening:
             end: 1498
         "23":
           label: Missing Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
           node_type: header
           parent: "22"
           span:
@@ -409,7 +409,7 @@ flattening:
             end: 1476
         "24":
           label: Complete
-          lexical_id: "AIContentPipeline|root:0|hdr:complete:3"
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
           node_type: header
           parent: "0"
           span:
@@ -418,7 +418,7 @@ flattening:
             end: 1517
         "3":
           label: Process and Load Video
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
           node_type: header
           parent: "1"
           span:
@@ -427,7 +427,7 @@ flattening:
             end: 305
         "4":
           label: Generate Content
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
           node_type: header
           parent: "0"
           span:
@@ -436,7 +436,7 @@ flattening:
             end: 436
         "5":
           label: Video Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
           node_type: header
           parent: "4"
           span:
@@ -445,7 +445,7 @@ flattening:
             end: 466
         "6":
           label: if (has_transcript)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
           node_type: branch-group
           parent: "5"
           span:
@@ -454,7 +454,7 @@ flattening:
             end: 891
         "7":
           label: if (has_transcript)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
           node_type: branch-arm
           parent: "6"
           span:
@@ -463,7 +463,7 @@ flattening:
             end: 821
         "8":
           label: Generate Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
           node_type: header
           parent: "7"
           span:
@@ -472,7 +472,7 @@ flattening:
             end: 580
         "9":
           label: Create Summary Text
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
           node_type: header
           parent: "8"
           span:
@@ -500,7 +500,7 @@ flattening:
       nodes:
         "0":
           label: AIContentPipeline
-          lexical_id: "AIContentPipeline|root:0"
+          log_filter_key: "AIContentPipeline|root:0"
           node_type: function
           parent: ~
           span:
@@ -509,7 +509,7 @@ flattening:
             end: 1530
         "1":
           label: Fetch Resources
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
           node_type: header
           parent: "0"
           span:
@@ -518,7 +518,7 @@ flattening:
             end: 164
         "10":
           label: Label Summary Category
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
           node_type: header
           parent: "8"
           span:
@@ -527,7 +527,7 @@ flattening:
             end: 706
         "11":
           label: Save Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
           node_type: header
           parent: "7"
           span:
@@ -536,7 +536,7 @@ flattening:
             end: 782
         "12":
           label: else
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
           node_type: branch-arm
           parent: "6"
           span:
@@ -545,7 +545,7 @@ flattening:
             end: 891
         "13":
           label: Skip Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
           node_type: header
           parent: "12"
           span:
@@ -554,7 +554,7 @@ flattening:
             end: 861
         "14":
           label: Generate Drafts for Posts
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
           node_type: header
           parent: "4"
           span:
@@ -563,7 +563,7 @@ flattening:
             end: 981
         "15":
           label: for (kind in content_types)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
           node_type: loop
           parent: "14"
           span:
@@ -572,7 +572,7 @@ flattening:
             end: 1282
         "16":
           label: Get Content Type and Generate Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
           node_type: header
           parent: "15"
           span:
@@ -581,7 +581,7 @@ flattening:
             end: 1069
         "17":
           label: Save Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
           node_type: header
           parent: "15"
           span:
@@ -590,7 +590,7 @@ flattening:
             end: 1201
         "18":
           label: Prepare Pull Request
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
           node_type: header
           parent: "0"
           span:
@@ -599,7 +599,7 @@ flattening:
             end: 1312
         "19":
           label: "if (summary != \"no-transcript\")"
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
           node_type: branch-group
           parent: "18"
           span:
@@ -608,7 +608,7 @@ flattening:
             end: 1498
         "2":
           label: Retrieve Emails and Posts from Database
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
           node_type: header
           parent: "1"
           span:
@@ -617,7 +617,7 @@ flattening:
             end: 214
         "20":
           label: "if (summary != \"no-transcript\")"
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
           node_type: branch-arm
           parent: "19"
           span:
@@ -626,7 +626,7 @@ flattening:
             end: 1439
         "21":
           label: Create GitHub PR
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
           node_type: header
           parent: "20"
           span:
@@ -635,7 +635,7 @@ flattening:
             end: 1397
         "22":
           label: else
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
           node_type: branch-arm
           parent: "19"
           span:
@@ -644,7 +644,7 @@ flattening:
             end: 1498
         "23":
           label: Missing Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
           node_type: header
           parent: "22"
           span:
@@ -653,7 +653,7 @@ flattening:
             end: 1476
         "24":
           label: Complete
-          lexical_id: "AIContentPipeline|root:0|hdr:complete:3"
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
           node_type: header
           parent: "0"
           span:
@@ -662,7 +662,7 @@ flattening:
             end: 1517
         "3":
           label: Process and Load Video
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
           node_type: header
           parent: "1"
           span:
@@ -671,7 +671,7 @@ flattening:
             end: 305
         "4":
           label: Generate Content
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
           node_type: header
           parent: "0"
           span:
@@ -680,7 +680,7 @@ flattening:
             end: 436
         "5":
           label: Video Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
           node_type: header
           parent: "4"
           span:
@@ -689,7 +689,7 @@ flattening:
             end: 466
         "6":
           label: if (has_transcript)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
           node_type: branch-group
           parent: "5"
           span:
@@ -698,7 +698,7 @@ flattening:
             end: 891
         "7":
           label: if (has_transcript)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
           node_type: branch-arm
           parent: "6"
           span:
@@ -707,7 +707,7 @@ flattening:
             end: 821
         "8":
           label: Generate Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
           node_type: header
           parent: "7"
           span:
@@ -716,7 +716,7 @@ flattening:
             end: 580
         "9":
           label: Create Summary Text
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
           node_type: header
           parent: "8"
           span:
@@ -747,7 +747,7 @@ flattening:
       nodes:
         "0":
           label: AIContentPipeline
-          lexical_id: "AIContentPipeline|root:0"
+          log_filter_key: "AIContentPipeline|root:0"
           node_type: function
           parent: ~
           span:
@@ -756,7 +756,7 @@ flattening:
             end: 1530
         "1":
           label: Fetch Resources
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
           node_type: header
           parent: "0"
           span:
@@ -765,7 +765,7 @@ flattening:
             end: 164
         "10":
           label: Label Summary Category
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
           node_type: header
           parent: "8"
           span:
@@ -774,7 +774,7 @@ flattening:
             end: 706
         "11":
           label: Save Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
           node_type: header
           parent: "7"
           span:
@@ -783,7 +783,7 @@ flattening:
             end: 782
         "12":
           label: else
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
           node_type: branch-arm
           parent: "5"
           span:
@@ -792,7 +792,7 @@ flattening:
             end: 891
         "13":
           label: Skip Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
           node_type: header
           parent: "12"
           span:
@@ -801,7 +801,7 @@ flattening:
             end: 861
         "14":
           label: Generate Drafts for Posts
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
           node_type: header
           parent: "4"
           span:
@@ -810,7 +810,7 @@ flattening:
             end: 981
         "15":
           label: for (kind in content_types)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
           node_type: loop
           parent: "14"
           span:
@@ -819,7 +819,7 @@ flattening:
             end: 1282
         "16":
           label: Get Content Type and Generate Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
           node_type: header
           parent: "15"
           span:
@@ -828,7 +828,7 @@ flattening:
             end: 1069
         "17":
           label: Save Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
           node_type: header
           parent: "15"
           span:
@@ -837,7 +837,7 @@ flattening:
             end: 1201
         "18":
           label: Prepare Pull Request
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
           node_type: header
           parent: "0"
           span:
@@ -846,7 +846,7 @@ flattening:
             end: 1312
         "19":
           label: "if (summary != \"no-transcript\")"
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
           node_type: branch-group
           parent: "18"
           span:
@@ -855,7 +855,7 @@ flattening:
             end: 1498
         "2":
           label: Retrieve Emails and Posts from Database
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
           node_type: header
           parent: "1"
           span:
@@ -864,7 +864,7 @@ flattening:
             end: 214
         "20":
           label: "if (summary != \"no-transcript\")"
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
           node_type: branch-arm
           parent: "18"
           span:
@@ -873,7 +873,7 @@ flattening:
             end: 1439
         "21":
           label: Create GitHub PR
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
           node_type: header
           parent: "20"
           span:
@@ -882,7 +882,7 @@ flattening:
             end: 1397
         "22":
           label: else
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
           node_type: branch-arm
           parent: "18"
           span:
@@ -891,7 +891,7 @@ flattening:
             end: 1498
         "23":
           label: Missing Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
           node_type: header
           parent: "22"
           span:
@@ -900,7 +900,7 @@ flattening:
             end: 1476
         "24":
           label: Complete
-          lexical_id: "AIContentPipeline|root:0|hdr:complete:3"
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
           node_type: header
           parent: "0"
           span:
@@ -909,7 +909,7 @@ flattening:
             end: 1517
         "3":
           label: Process and Load Video
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
           node_type: header
           parent: "1"
           span:
@@ -918,7 +918,7 @@ flattening:
             end: 305
         "4":
           label: Generate Content
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
           node_type: header
           parent: "0"
           span:
@@ -927,7 +927,7 @@ flattening:
             end: 436
         "5":
           label: Video Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
           node_type: header
           parent: "4"
           span:
@@ -936,7 +936,7 @@ flattening:
             end: 466
         "6":
           label: if (has_transcript)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
           node_type: branch-group
           parent: "5"
           span:
@@ -945,7 +945,7 @@ flattening:
             end: 891
         "7":
           label: if (has_transcript)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
           node_type: branch-arm
           parent: "5"
           span:
@@ -954,7 +954,7 @@ flattening:
             end: 821
         "8":
           label: Generate Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
           node_type: header
           parent: "7"
           span:
@@ -963,7 +963,7 @@ flattening:
             end: 580
         "9":
           label: Create Summary Text
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
           node_type: header
           parent: "8"
           span:
@@ -997,7 +997,7 @@ flattening:
       nodes:
         "0":
           label: AIContentPipeline
-          lexical_id: "AIContentPipeline|root:0"
+          log_filter_key: "AIContentPipeline|root:0"
           node_type: function
           parent: ~
           span:
@@ -1006,7 +1006,7 @@ flattening:
             end: 1530
         "1":
           label: Fetch Resources
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
           node_type: header
           parent: "0"
           span:
@@ -1015,7 +1015,7 @@ flattening:
             end: 164
         "10":
           label: Label Summary Category
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
           node_type: header
           parent: "8"
           span:
@@ -1024,7 +1024,7 @@ flattening:
             end: 706
         "11":
           label: Save Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
           node_type: header
           parent: "7"
           span:
@@ -1033,7 +1033,7 @@ flattening:
             end: 782
         "12":
           label: else
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
           node_type: branch-arm
           parent: "5"
           span:
@@ -1042,7 +1042,7 @@ flattening:
             end: 891
         "13":
           label: Skip Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
           node_type: header
           parent: "12"
           span:
@@ -1051,7 +1051,7 @@ flattening:
             end: 861
         "14":
           label: Generate Drafts for Posts
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
           node_type: header
           parent: "4"
           span:
@@ -1060,7 +1060,7 @@ flattening:
             end: 981
         "15":
           label: for (kind in content_types)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
           node_type: loop
           parent: "14"
           span:
@@ -1069,7 +1069,7 @@ flattening:
             end: 1282
         "16":
           label: Get Content Type and Generate Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
           node_type: header
           parent: "15"
           span:
@@ -1078,7 +1078,7 @@ flattening:
             end: 1069
         "17":
           label: Save Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
           node_type: header
           parent: "15"
           span:
@@ -1087,7 +1087,7 @@ flattening:
             end: 1201
         "18":
           label: Prepare Pull Request
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
           node_type: header
           parent: "0"
           span:
@@ -1096,7 +1096,7 @@ flattening:
             end: 1312
         "19":
           label: "if (summary != \"no-transcript\")"
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
           node_type: branch-group
           parent: "18"
           span:
@@ -1105,7 +1105,7 @@ flattening:
             end: 1498
         "2":
           label: Retrieve Emails and Posts from Database
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
           node_type: header
           parent: "1"
           span:
@@ -1114,7 +1114,7 @@ flattening:
             end: 214
         "20":
           label: "if (summary != \"no-transcript\")"
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
           node_type: branch-arm
           parent: "18"
           span:
@@ -1123,7 +1123,7 @@ flattening:
             end: 1439
         "21":
           label: Create GitHub PR
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
           node_type: header
           parent: "20"
           span:
@@ -1132,7 +1132,7 @@ flattening:
             end: 1397
         "22":
           label: else
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
           node_type: branch-arm
           parent: "18"
           span:
@@ -1141,7 +1141,7 @@ flattening:
             end: 1498
         "23":
           label: Missing Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
           node_type: header
           parent: "22"
           span:
@@ -1150,7 +1150,7 @@ flattening:
             end: 1476
         "24":
           label: Complete
-          lexical_id: "AIContentPipeline|root:0|hdr:complete:3"
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
           node_type: header
           parent: "0"
           span:
@@ -1159,7 +1159,7 @@ flattening:
             end: 1517
         "3":
           label: Process and Load Video
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
           node_type: header
           parent: "1"
           span:
@@ -1168,7 +1168,7 @@ flattening:
             end: 305
         "4":
           label: Generate Content
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
           node_type: header
           parent: "0"
           span:
@@ -1177,7 +1177,7 @@ flattening:
             end: 436
         "5":
           label: Video Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
           node_type: header
           parent: "4"
           span:
@@ -1186,7 +1186,7 @@ flattening:
             end: 466
         "6":
           label: if (has_transcript)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
           node_type: branch-group
           parent: "5"
           span:
@@ -1195,7 +1195,7 @@ flattening:
             end: 891
         "7":
           label: if (has_transcript)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
           node_type: branch-arm
           parent: "5"
           span:
@@ -1204,7 +1204,7 @@ flattening:
             end: 821
         "8":
           label: Generate Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
           node_type: header
           parent: "7"
           span:
@@ -1213,7 +1213,7 @@ flattening:
             end: 580
         "9":
           label: Create Summary Text
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
           node_type: header
           parent: "8"
           span:
@@ -1250,7 +1250,7 @@ flattening:
       nodes:
         "0":
           label: AIContentPipeline
-          lexical_id: "AIContentPipeline|root:0"
+          log_filter_key: "AIContentPipeline|root:0"
           node_type: function
           parent: ~
           span:
@@ -1259,7 +1259,7 @@ flattening:
             end: 1530
         "1":
           label: Fetch Resources
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
           node_type: header
           parent: "0"
           span:
@@ -1268,7 +1268,7 @@ flattening:
             end: 164
         "10":
           label: Label Summary Category
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
           node_type: header
           parent: "8"
           span:
@@ -1277,7 +1277,7 @@ flattening:
             end: 706
         "11":
           label: Save Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
           node_type: header
           parent: "5"
           span:
@@ -1286,7 +1286,7 @@ flattening:
             end: 782
         "13":
           label: Skip Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
           node_type: header
           parent: "5"
           span:
@@ -1295,7 +1295,7 @@ flattening:
             end: 861
         "14":
           label: Generate Drafts for Posts
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
           node_type: header
           parent: "4"
           span:
@@ -1304,7 +1304,7 @@ flattening:
             end: 981
         "15":
           label: for (kind in content_types)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
           node_type: loop
           parent: "14"
           span:
@@ -1313,7 +1313,7 @@ flattening:
             end: 1282
         "16":
           label: Get Content Type and Generate Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
           node_type: header
           parent: "15"
           span:
@@ -1322,7 +1322,7 @@ flattening:
             end: 1069
         "17":
           label: Save Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
           node_type: header
           parent: "15"
           span:
@@ -1331,7 +1331,7 @@ flattening:
             end: 1201
         "18":
           label: Prepare Pull Request
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
           node_type: header
           parent: "0"
           span:
@@ -1340,7 +1340,7 @@ flattening:
             end: 1312
         "19":
           label: "if (summary != \"no-transcript\")"
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
           node_type: branch-group
           parent: "18"
           span:
@@ -1349,7 +1349,7 @@ flattening:
             end: 1498
         "2":
           label: Retrieve Emails and Posts from Database
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
           node_type: header
           parent: "1"
           span:
@@ -1358,7 +1358,7 @@ flattening:
             end: 214
         "21":
           label: Create GitHub PR
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
           node_type: header
           parent: "18"
           span:
@@ -1367,7 +1367,7 @@ flattening:
             end: 1397
         "23":
           label: Missing Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
           node_type: header
           parent: "18"
           span:
@@ -1376,7 +1376,7 @@ flattening:
             end: 1476
         "24":
           label: Complete
-          lexical_id: "AIContentPipeline|root:0|hdr:complete:3"
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
           node_type: header
           parent: "0"
           span:
@@ -1385,7 +1385,7 @@ flattening:
             end: 1517
         "3":
           label: Process and Load Video
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
           node_type: header
           parent: "1"
           span:
@@ -1394,7 +1394,7 @@ flattening:
             end: 305
         "4":
           label: Generate Content
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
           node_type: header
           parent: "0"
           span:
@@ -1403,7 +1403,7 @@ flattening:
             end: 436
         "5":
           label: Video Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
           node_type: header
           parent: "4"
           span:
@@ -1412,7 +1412,7 @@ flattening:
             end: 466
         "6":
           label: if (has_transcript)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
           node_type: branch-group
           parent: "5"
           span:
@@ -1421,7 +1421,7 @@ flattening:
             end: 891
         "8":
           label: Generate Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
           node_type: header
           parent: "5"
           span:
@@ -1430,7 +1430,7 @@ flattening:
             end: 580
         "9":
           label: Create Summary Text
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
           node_type: header
           parent: "8"
           span:
@@ -1464,7 +1464,7 @@ flattening:
       nodes:
         "0":
           label: AIContentPipeline
-          lexical_id: "AIContentPipeline|root:0"
+          log_filter_key: "AIContentPipeline|root:0"
           node_type: function
           parent: ~
           span:
@@ -1473,7 +1473,7 @@ flattening:
             end: 1530
         "1":
           label: Fetch Resources
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
           node_type: header
           parent: "0"
           span:
@@ -1482,7 +1482,7 @@ flattening:
             end: 164
         "10":
           label: Label Summary Category
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
           node_type: header
           parent: "8"
           span:
@@ -1491,7 +1491,7 @@ flattening:
             end: 706
         "11":
           label: Save Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
           node_type: header
           parent: "5"
           span:
@@ -1500,7 +1500,7 @@ flattening:
             end: 782
         "13":
           label: Skip Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
           node_type: header
           parent: "5"
           span:
@@ -1509,7 +1509,7 @@ flattening:
             end: 861
         "14":
           label: Generate Drafts for Posts
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
           node_type: header
           parent: "4"
           span:
@@ -1518,7 +1518,7 @@ flattening:
             end: 981
         "15":
           label: for (kind in content_types)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
           node_type: loop
           parent: "14"
           span:
@@ -1527,7 +1527,7 @@ flattening:
             end: 1282
         "16":
           label: Get Content Type and Generate Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
           node_type: header
           parent: "15"
           span:
@@ -1536,7 +1536,7 @@ flattening:
             end: 1069
         "17":
           label: Save Draft
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
           node_type: header
           parent: "15"
           span:
@@ -1545,7 +1545,7 @@ flattening:
             end: 1201
         "18":
           label: Prepare Pull Request
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
           node_type: header
           parent: "0"
           span:
@@ -1554,7 +1554,7 @@ flattening:
             end: 1312
         "19":
           label: "if (summary != \"no-transcript\")"
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
           node_type: branch-group
           parent: "18"
           span:
@@ -1563,7 +1563,7 @@ flattening:
             end: 1498
         "2":
           label: Retrieve Emails and Posts from Database
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
           node_type: header
           parent: "1"
           span:
@@ -1572,7 +1572,7 @@ flattening:
             end: 214
         "21":
           label: Create GitHub PR
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
           node_type: header
           parent: "18"
           span:
@@ -1581,7 +1581,7 @@ flattening:
             end: 1397
         "23":
           label: Missing Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
           node_type: header
           parent: "18"
           span:
@@ -1590,7 +1590,7 @@ flattening:
             end: 1476
         "24":
           label: Complete
-          lexical_id: "AIContentPipeline|root:0|hdr:complete:3"
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
           node_type: header
           parent: "0"
           span:
@@ -1599,7 +1599,7 @@ flattening:
             end: 1517
         "3":
           label: Process and Load Video
-          lexical_id: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
           node_type: header
           parent: "1"
           span:
@@ -1608,7 +1608,7 @@ flattening:
             end: 305
         "4":
           label: Generate Content
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
           node_type: header
           parent: "0"
           span:
@@ -1617,7 +1617,7 @@ flattening:
             end: 436
         "5":
           label: Video Summarization
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
           node_type: header
           parent: "4"
           span:
@@ -1626,7 +1626,7 @@ flattening:
             end: 466
         "6":
           label: if (has_transcript)
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
           node_type: branch-group
           parent: "5"
           span:
@@ -1635,7 +1635,7 @@ flattening:
             end: 891
         "8":
           label: Generate Summary
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
           node_type: header
           parent: "5"
           span:
@@ -1644,7 +1644,7 @@ flattening:
             end: 580
         "9":
           label: Create Summary Text
-          lexical_id: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
           node_type: header
           parent: "8"
           span:

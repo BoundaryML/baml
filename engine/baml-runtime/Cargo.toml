@@ -33,6 +33,7 @@ baml-ids.workspace = true
 internal-baml-ast = { path = "../baml-lib/ast" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 baml-log.workspace = true
+baml-viz-events = { path = "../baml-viz-events" }
 baml-types.workspace = true
 baml-rpc.workspace = true
 baml-vm = { path = "../baml-vm" }

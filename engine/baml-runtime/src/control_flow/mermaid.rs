@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fmt::Write};
 
+use indexmap::IndexMap;
+
 use super::{ControlFlowVisualization, Node, NodeId, NodeType};
 
 /// Convert a `ControlFlowVisualization` into a Mermaid flowchart definition.
@@ -11,8 +13,8 @@ struct MermaidRenderer<'a> {
     viz: &'a ControlFlowVisualization,
     aliases: HashMap<NodeId, String>,
     roots: Vec<NodeId>,
-    children: HashMap<NodeId, Vec<NodeId>>,
-    edges_by_parent: HashMap<NodeId, Vec<(NodeId, NodeId)>>,
+    children: IndexMap<NodeId, Vec<NodeId>>,
+    edges_by_parent: IndexMap<NodeId, Vec<(NodeId, NodeId)>>,
     root_edges: Vec<(NodeId, NodeId)>,
 }
 
@@ -24,7 +26,7 @@ impl<'a> MermaidRenderer<'a> {
         }
 
         let mut roots = Vec::new();
-        let mut children: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+        let mut children: IndexMap<NodeId, Vec<NodeId>> = IndexMap::new();
         for node in viz.nodes.values() {
             if let Some(parent) = &node.parent_node_id {
                 children.entry(*parent).or_default().push(node.id);
@@ -33,7 +35,7 @@ impl<'a> MermaidRenderer<'a> {
             }
         }
 
-        let mut edges_by_parent: HashMap<NodeId, Vec<(NodeId, NodeId)>> = HashMap::new();
+        let mut edges_by_parent: IndexMap<NodeId, Vec<(NodeId, NodeId)>> = IndexMap::new();
         let mut root_edges = Vec::new();
         for (src_id, list) in &viz.edges_by_src {
             let parent = viz.nodes.get(src_id).and_then(|node| node.parent_node_id);

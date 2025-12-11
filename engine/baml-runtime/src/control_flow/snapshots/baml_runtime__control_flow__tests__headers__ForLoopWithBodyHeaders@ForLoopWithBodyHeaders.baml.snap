@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: ForLoopWithBodyHeaders
-      lexical_id: "ForLoopWithBodyHeaders|root:0"
+      log_filter_key: "ForLoopWithBodyHeaders|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 363
     "1":
       label: Loop Processing
-      lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
+      log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
       node_type: header
       parent: "0"
       span:
@@ -26,7 +26,7 @@ expr:
         end: 66
     "2":
       label: Main Loop
-      lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
+      log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
       node_type: header
       parent: "1"
       span:
@@ -35,7 +35,7 @@ expr:
         end: 139
     "3":
       label: for (item in items)
-      lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
+      log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
       node_type: loop
       parent: "2"
       span:
@@ -44,7 +44,7 @@ expr:
         end: 327
     "4":
       label: Item Processing
-      lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
+      log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
       node_type: header
       parent: "3"
       span:
@@ -53,7 +53,7 @@ expr:
         end: 199
     "5":
       label: Accumulation
-      lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
+      log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
       node_type: header
       parent: "4"
       span:
@@ -62,7 +62,7 @@ expr:
         end: 262
     "6":
       label: Final Result
-      lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
+      log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
       node_type: header
       parent: "1"
       span:
@@ -80,7 +80,7 @@ flattening:
       nodes:
         "0":
           label: ForLoopWithBodyHeaders
-          lexical_id: "ForLoopWithBodyHeaders|root:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0"
           node_type: function
           parent: ~
           span:
@@ -89,7 +89,7 @@ flattening:
             end: 363
         "1":
           label: Loop Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
           node_type: header
           parent: "0"
           span:
@@ -98,7 +98,7 @@ flattening:
             end: 66
         "2":
           label: Main Loop
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -107,7 +107,7 @@ flattening:
             end: 139
         "3":
           label: for (item in items)
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -116,7 +116,7 @@ flattening:
             end: 327
         "4":
           label: Item Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
           node_type: header
           parent: "3"
           span:
@@ -125,7 +125,7 @@ flattening:
             end: 199
         "5":
           label: Accumulation
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
           node_type: header
           parent: "4"
           span:
@@ -134,7 +134,7 @@ flattening:
             end: 262
         "6":
           label: Final Result
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
           node_type: header
           parent: "1"
           span:
@@ -148,7 +148,7 @@ flattening:
       nodes:
         "0":
           label: ForLoopWithBodyHeaders
-          lexical_id: "ForLoopWithBodyHeaders|root:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0"
           node_type: function
           parent: ~
           span:
@@ -157,7 +157,7 @@ flattening:
             end: 363
         "1":
           label: Loop Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
           node_type: header
           parent: "0"
           span:
@@ -166,7 +166,7 @@ flattening:
             end: 66
         "2":
           label: Main Loop
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -175,7 +175,7 @@ flattening:
             end: 139
         "3":
           label: for (item in items)
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -184,7 +184,7 @@ flattening:
             end: 327
         "4":
           label: Item Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
           node_type: header
           parent: "3"
           span:
@@ -193,7 +193,7 @@ flattening:
             end: 199
         "5":
           label: Accumulation
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
           node_type: header
           parent: "4"
           span:
@@ -202,7 +202,7 @@ flattening:
             end: 262
         "6":
           label: Final Result
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
           node_type: header
           parent: "1"
           span:
@@ -219,7 +219,7 @@ flattening:
       nodes:
         "0":
           label: ForLoopWithBodyHeaders
-          lexical_id: "ForLoopWithBodyHeaders|root:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0"
           node_type: function
           parent: ~
           span:
@@ -228,7 +228,7 @@ flattening:
             end: 363
         "1":
           label: Loop Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
           node_type: header
           parent: "0"
           span:
@@ -237,7 +237,7 @@ flattening:
             end: 66
         "2":
           label: Main Loop
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -246,7 +246,7 @@ flattening:
             end: 139
         "3":
           label: for (item in items)
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -255,7 +255,7 @@ flattening:
             end: 327
         "4":
           label: Item Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
           node_type: header
           parent: "3"
           span:
@@ -264,7 +264,7 @@ flattening:
             end: 199
         "5":
           label: Accumulation
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
           node_type: header
           parent: "4"
           span:
@@ -273,7 +273,7 @@ flattening:
             end: 262
         "6":
           label: Final Result
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
           node_type: header
           parent: "1"
           span:
@@ -287,7 +287,7 @@ flattening:
       nodes:
         "0":
           label: ForLoopWithBodyHeaders
-          lexical_id: "ForLoopWithBodyHeaders|root:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0"
           node_type: function
           parent: ~
           span:
@@ -296,7 +296,7 @@ flattening:
             end: 363
         "1":
           label: Loop Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
           node_type: header
           parent: "0"
           span:
@@ -305,7 +305,7 @@ flattening:
             end: 66
         "2":
           label: Main Loop
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -314,7 +314,7 @@ flattening:
             end: 139
         "3":
           label: for (item in items)
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -323,7 +323,7 @@ flattening:
             end: 327
         "4":
           label: Item Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
           node_type: header
           parent: "3"
           span:
@@ -332,7 +332,7 @@ flattening:
             end: 199
         "5":
           label: Accumulation
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
           node_type: header
           parent: "4"
           span:
@@ -341,7 +341,7 @@ flattening:
             end: 262
         "6":
           label: Final Result
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
           node_type: header
           parent: "1"
           span:
@@ -358,7 +358,7 @@ flattening:
       nodes:
         "0":
           label: ForLoopWithBodyHeaders
-          lexical_id: "ForLoopWithBodyHeaders|root:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0"
           node_type: function
           parent: ~
           span:
@@ -367,7 +367,7 @@ flattening:
             end: 363
         "1":
           label: Loop Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
           node_type: header
           parent: "0"
           span:
@@ -376,7 +376,7 @@ flattening:
             end: 66
         "2":
           label: Main Loop
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -385,7 +385,7 @@ flattening:
             end: 139
         "3":
           label: for (item in items)
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -394,7 +394,7 @@ flattening:
             end: 327
         "4":
           label: Item Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
           node_type: header
           parent: "3"
           span:
@@ -403,7 +403,7 @@ flattening:
             end: 199
         "5":
           label: Accumulation
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
           node_type: header
           parent: "4"
           span:
@@ -412,7 +412,7 @@ flattening:
             end: 262
         "6":
           label: Final Result
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
           node_type: header
           parent: "1"
           span:
@@ -426,7 +426,7 @@ flattening:
       nodes:
         "0":
           label: ForLoopWithBodyHeaders
-          lexical_id: "ForLoopWithBodyHeaders|root:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0"
           node_type: function
           parent: ~
           span:
@@ -435,7 +435,7 @@ flattening:
             end: 363
         "1":
           label: Loop Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0"
           node_type: header
           parent: "0"
           span:
@@ -444,7 +444,7 @@ flattening:
             end: 66
         "2":
           label: Main Loop
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -453,7 +453,7 @@ flattening:
             end: 139
         "3":
           label: for (item in items)
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -462,7 +462,7 @@ flattening:
             end: 327
         "4":
           label: Item Processing
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0"
           node_type: header
           parent: "3"
           span:
@@ -471,7 +471,7 @@ flattening:
             end: 199
         "5":
           label: Accumulation
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:main-loop:0|loop:for-item-in-items:0|hdr:item-processing:0|hdr:accumulation:0"
           node_type: header
           parent: "4"
           span:
@@ -480,7 +480,7 @@ flattening:
             end: 262
         "6":
           label: Final Result
-          lexical_id: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
+          log_filter_key: "ForLoopWithBodyHeaders|root:0|hdr:loop-processing:0|hdr:final-result:1"
           node_type: header
           parent: "1"
           span:

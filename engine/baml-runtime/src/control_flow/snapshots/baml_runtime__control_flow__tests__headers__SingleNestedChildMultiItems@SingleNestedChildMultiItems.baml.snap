@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: SingleNestedChildMultiItems
-      lexical_id: "SingleNestedChildMultiItems|root:0"
+      log_filter_key: "SingleNestedChildMultiItems|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 211
     "1":
       label: for (item in items)
-      lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
+      log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
       node_type: loop
       parent: "0"
       span:
@@ -26,7 +26,7 @@ expr:
         end: 197
     "2":
       label: First
-      lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
+      log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
       node_type: header
       parent: "1"
       span:
@@ -35,7 +35,7 @@ expr:
         end: 138
     "3":
       label: Second
-      lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
+      log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
       node_type: header
       parent: "1"
       span:
@@ -53,7 +53,7 @@ flattening:
       nodes:
         "0":
           label: SingleNestedChildMultiItems
-          lexical_id: "SingleNestedChildMultiItems|root:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0"
           node_type: function
           parent: ~
           span:
@@ -62,7 +62,7 @@ flattening:
             end: 211
         "1":
           label: for (item in items)
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "0"
           span:
@@ -71,7 +71,7 @@ flattening:
             end: 197
         "2":
           label: First
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
           node_type: header
           parent: "1"
           span:
@@ -80,7 +80,7 @@ flattening:
             end: 138
         "3":
           label: Second
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
           node_type: header
           parent: "1"
           span:
@@ -94,7 +94,7 @@ flattening:
       nodes:
         "0":
           label: SingleNestedChildMultiItems
-          lexical_id: "SingleNestedChildMultiItems|root:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0"
           node_type: function
           parent: ~
           span:
@@ -103,7 +103,7 @@ flattening:
             end: 211
         "1":
           label: for (item in items)
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "0"
           span:
@@ -112,7 +112,7 @@ flattening:
             end: 197
         "2":
           label: First
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
           node_type: header
           parent: "1"
           span:
@@ -121,7 +121,7 @@ flattening:
             end: 138
         "3":
           label: Second
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
           node_type: header
           parent: "1"
           span:
@@ -138,7 +138,7 @@ flattening:
       nodes:
         "0":
           label: SingleNestedChildMultiItems
-          lexical_id: "SingleNestedChildMultiItems|root:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0"
           node_type: function
           parent: ~
           span:
@@ -147,7 +147,7 @@ flattening:
             end: 211
         "1":
           label: for (item in items)
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "0"
           span:
@@ -156,7 +156,7 @@ flattening:
             end: 197
         "2":
           label: First
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
           node_type: header
           parent: "1"
           span:
@@ -165,7 +165,7 @@ flattening:
             end: 138
         "3":
           label: Second
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
           node_type: header
           parent: "1"
           span:
@@ -179,7 +179,7 @@ flattening:
       nodes:
         "0":
           label: SingleNestedChildMultiItems
-          lexical_id: "SingleNestedChildMultiItems|root:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0"
           node_type: function
           parent: ~
           span:
@@ -188,7 +188,7 @@ flattening:
             end: 211
         "1":
           label: for (item in items)
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "0"
           span:
@@ -197,7 +197,7 @@ flattening:
             end: 197
         "2":
           label: First
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
           node_type: header
           parent: "1"
           span:
@@ -206,7 +206,7 @@ flattening:
             end: 138
         "3":
           label: Second
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
           node_type: header
           parent: "1"
           span:
@@ -223,7 +223,7 @@ flattening:
       nodes:
         "0":
           label: SingleNestedChildMultiItems
-          lexical_id: "SingleNestedChildMultiItems|root:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0"
           node_type: function
           parent: ~
           span:
@@ -232,7 +232,7 @@ flattening:
             end: 211
         "1":
           label: for (item in items)
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "0"
           span:
@@ -241,7 +241,7 @@ flattening:
             end: 197
         "2":
           label: First
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
           node_type: header
           parent: "1"
           span:
@@ -250,7 +250,7 @@ flattening:
             end: 138
         "3":
           label: Second
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
           node_type: header
           parent: "1"
           span:
@@ -264,7 +264,7 @@ flattening:
       nodes:
         "0":
           label: SingleNestedChildMultiItems
-          lexical_id: "SingleNestedChildMultiItems|root:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0"
           node_type: function
           parent: ~
           span:
@@ -273,7 +273,7 @@ flattening:
             end: 211
         "1":
           label: for (item in items)
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "0"
           span:
@@ -282,7 +282,7 @@ flattening:
             end: 197
         "2":
           label: First
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:first:0"
           node_type: header
           parent: "1"
           span:
@@ -291,7 +291,7 @@ flattening:
             end: 138
         "3":
           label: Second
-          lexical_id: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
+          log_filter_key: "SingleNestedChildMultiItems|root:0|loop:for-item-in-items:0|hdr:second:1"
           node_type: header
           parent: "1"
           span:

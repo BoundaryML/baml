@@ -1009,6 +1009,7 @@ version = "0.214.0"
 dependencies = [
  "anyhow",
  "baml-types",
+ "baml-viz-events",
  "baml-vm",
  "internal-baml-ast",
  "internal-baml-diagnostics",
@@ -1214,6 +1215,7 @@ dependencies = [
  "baml-log",
  "baml-rpc",
  "baml-types",
+ "baml-viz-events",
  "baml-vm",
  "base64 0.22.1",
  "blake3",
@@ -1333,6 +1335,7 @@ dependencies = [
  "baml-ids",
  "baml-runtime",
  "baml-types",
+ "baml-viz-events",
  "cfg-if",
  "console_error_panic_hook",
  "console_log",
@@ -1427,6 +1430,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-viz-events"
+version = "0.214.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "baml-vm"
 version = "0.214.0"
 dependencies = [
@@ -1434,6 +1445,7 @@ dependencies = [
  "baml-compiler",
  "baml-runtime",
  "baml-types",
+ "baml-viz-events",
  "codspeed-divan-compat",
  "colored",
  "indexmap 2.9.0",
@@ -2611,7 +2623,7 @@ dependencies = [
  "filetime",
  "indexmap 2.9.0",
  "internal-baml-core",
- "pathdiff 0.1.0",
+ "pathdiff 0.2.3",
  "serde_json",
  "sugar_path",
  "walkdir",
