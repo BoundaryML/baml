@@ -379,6 +379,15 @@ impl OptimizationStorage {
         Ok(())
     }
 
+    /// Load the final optimization results
+    pub fn load_results(&self) -> Result<OptimizationResults> {
+        let path = self.run_dir.join("final_results.json");
+        let content = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read results from {}", path.display()))?;
+        let results: OptimizationResults = serde_json::from_str(&content)?;
+        Ok(results)
+    }
+
     /// Save the Pareto frontier
     pub fn save_pareto_frontier(&self, frontier: &[ParetoCandidate]) -> Result<()> {
         let path = self.run_dir.join("pareto_frontier.json");

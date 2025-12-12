@@ -373,7 +373,23 @@ impl OptimizeArgs {
                 println!("Optimization Complete!");
                 println!("{}", "=".repeat(60));
 
-                if let Some(best) = result.best_candidate() {
+                // Load objectives for display
+                let objectives = result
+                    .storage
+                    .load_config()
+                    .map(|c| c.objectives)
+                    .unwrap_or_default();
+
+                // Display Pareto frontier and let user select
+                let selected_id = if result.pareto_frontier_size() > 0 {
+                    crate::optimize::tui::display_pareto_and_select(
+                        &result.candidates,
+                        &result.pareto_frontier,
+                        &objectives,
+                        &result.function_name,
+                    )
+                } else if let Some(best) = result.best_candidate() {
+                    // Fallback to best candidate if no Pareto frontier
                     println!("\nBest candidate: #{}", best.id);
                     println!(
                         "  Test pass rate: {:.1}%",
@@ -382,29 +398,31 @@ impl OptimizeArgs {
                             .map(|s| s.test_pass_rate * 100.0)
                             .unwrap_or(0.0)
                     );
+                    Some(best.id)
+                } else {
+                    None
+                };
+
+                // Apply the selected candidate
+                if let Some(candidate_id) = selected_id {
                     println!(
-                        "\nCandidate saved to: {}",
-                        result.best_candidate_path().display()
+                        "\nCandidate #{} saved to: {}",
+                        candidate_id,
+                        result.candidate_path(candidate_id).display()
                     );
 
-                    // Apply changes to source files if --apply was specified
                     if self.apply {
-                        self.apply_best_candidate(&from, &runtime, &result)?;
+                        self.apply_candidate(&from, &runtime, &result, candidate_id)?;
                     } else {
                         println!("\nTo apply this optimization, either:");
                         println!("  1. Re-run with --apply flag to write changes directly");
                         println!("  2. Manually copy changes from the candidate file above");
                     }
-                }
-
-                if result.pareto_frontier_size() > 1 {
+                } else {
+                    println!("\nNo candidate selected for application.");
                     println!(
-                        "\nPareto frontier contains {} candidates with different trade-offs.",
-                        result.pareto_frontier_size()
-                    );
-                    println!(
-                        "See {} for details.",
-                        run_dir.join("pareto_frontier.json").display()
+                        "Results saved to: {}",
+                        run_dir.display()
                     );
                 }
 
@@ -417,20 +435,25 @@ impl OptimizeArgs {
         }
     }
 
-    /// Apply the best candidate's changes to source files
-    fn apply_best_candidate(
+    /// Apply a candidate's changes to source files
+    fn apply_candidate(
         &self,
         baml_src_path: &std::path::Path,
         runtime: &std::sync::Arc<BamlRuntime>,
         result: &crate::optimize::orchestrator::OptimizationRunResult,
+        candidate_id: usize,
     ) -> Result<()> {
-        let best = result.best_candidate().context("No best candidate found")?;
+        let candidate = result
+            .candidates
+            .iter()
+            .find(|c| c.id == candidate_id)
+            .context(format!("Candidate #{} not found", candidate_id))?;
 
-        // Create an ImprovedFunction from the best candidate
+        // Create an ImprovedFunction from the candidate
         let improved = crate::optimize::candidate::ImprovedFunction {
-            prompt_text: best.function.prompt_text.clone(),
-            classes: best.function.classes.clone(),
-            enums: best.function.enums.clone(),
+            prompt_text: candidate.function.prompt_text.clone(),
+            classes: candidate.function.classes.clone(),
+            enums: candidate.function.enums.clone(),
             rationale: String::new(),
         };
 
@@ -438,7 +461,7 @@ impl OptimizeArgs {
         let changes = crate::optimize::applier::apply_to_source_files(
             baml_src_path,
             runtime,
-            &best.function.function_name,
+            &candidate.function.function_name,
             &improved,
         )?;
 

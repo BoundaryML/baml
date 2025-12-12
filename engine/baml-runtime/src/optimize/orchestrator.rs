@@ -61,6 +61,11 @@ impl OptimizationRunResult {
         self.storage.best_candidate_path(self.best_candidate_id)
     }
 
+    /// Get path to a specific candidate file
+    pub fn candidate_path(&self, candidate_id: usize) -> PathBuf {
+        self.storage.best_candidate_path(candidate_id)
+    }
+
     /// Get the size of the Pareto frontier
     pub fn pareto_frontier_size(&self) -> usize {
         self.pareto_frontier.len()
@@ -151,6 +156,24 @@ impl GEPAOrchestrator {
                 self.current_iteration, self.config.trials
             );
 
+            // Decide whether to do a merge or reflection
+            // Do a merge every 3rd iteration if we have 2+ candidates on Pareto frontier
+            let should_merge = self.current_iteration % 3 == 0
+                && self.pareto.len() >= 2
+                && self.config.objectives.len() > 1;
+
+            if should_merge {
+                // Try to merge two diverse candidates from the Pareto frontier
+                if let Some((idx_a, idx_b)) = self.pareto.select_for_merge(&self.candidates) {
+                    if self.do_merge_iteration(idx_a, idx_b).await? {
+                        continue;
+                    }
+                    // If merge failed, fall through to regular reflection
+                    println!("  Merge failed, falling back to reflection...");
+                }
+            }
+
+            // Regular reflection iteration
             // Select a candidate from the Pareto frontier for reflection
             let parent_idx = self
                 .pareto
@@ -187,8 +210,12 @@ impl GEPAOrchestrator {
             );
             let successes = self.evaluator.collect_successes(&results, 2);
 
+            // Check if we have multiple objectives (beyond just accuracy)
+            let has_multiple_objectives = self.config.objectives.len() > 1
+                || (self.config.objectives.len() == 1 && self.config.objectives[0].name != "accuracy");
+
             if failures.is_empty() {
-                println!("  All tests passing! Checking for convergence...");
+                println!("  All tests passing!");
 
                 // Check if we've converged
                 if self.check_convergence() {
@@ -196,12 +223,19 @@ impl GEPAOrchestrator {
                     break;
                 }
 
-                continue;
+                // For single-objective (accuracy only), skip if all tests pass
+                if !has_multiple_objectives {
+                    println!("  Single objective (accuracy) at 100%, but checking for Pareto stability...");
+                    continue;
+                }
+
+                // For multi-objective, continue optimizing other metrics even with 100% accuracy
+                println!("  Continuing to optimize other objectives (tokens, latency, etc.)...");
+            } else {
+                println!("  Reflecting on {} failures...", failures.len());
             }
 
-            println!("  Reflecting on {} failures...", failures.len());
-
-            // Save reflection data
+            // Save reflection data (even if no failures, for multi-objective optimization)
             self.storage
                 .save_reflection(self.current_iteration, parent_idx, &failures)?;
 
@@ -210,6 +244,8 @@ impl GEPAOrchestrator {
             let current_metrics = self.build_current_metrics(parent);
 
             // Call GEPA ProposeImprovements
+            // When there are no failures but multiple objectives, we still want to
+            // optimize for token usage, latency, etc.
             let improved = self
                 .gepa_runtime
                 .propose_improvements(
@@ -358,24 +394,169 @@ impl GEPAOrchestrator {
         Ok(())
     }
 
+    /// Perform a merge iteration - combine two Pareto candidates
+    /// Returns true if the merge was successful, false otherwise
+    async fn do_merge_iteration(&mut self, idx_a: usize, idx_b: usize) -> Result<bool> {
+        let candidate_a = &self.candidates[idx_a];
+        let candidate_b = &self.candidates[idx_b];
+
+        println!(
+            "  Merging candidates #{} and #{} (Pareto frontier size: {})",
+            idx_a,
+            idx_b,
+            self.pareto.len()
+        );
+
+        // Identify strengths of each candidate
+        let strengths_a = candidate_a
+            .scores
+            .as_ref()
+            .map(|s| self.pareto.identify_strengths(s, &self.candidates))
+            .unwrap_or_default();
+
+        let strengths_b = candidate_b
+            .scores
+            .as_ref()
+            .map(|s| self.pareto.identify_strengths(s, &self.candidates))
+            .unwrap_or_default();
+
+        println!("    Candidate #{} strengths: {:?}", idx_a, strengths_a);
+        println!("    Candidate #{} strengths: {:?}", idx_b, strengths_b);
+
+        // Call GEPA MergeVariants
+        let merged = match self
+            .gepa_runtime
+            .merge_variants(
+                &candidate_a.function,
+                &candidate_b.function,
+                &strengths_a,
+                &strengths_b,
+            )
+            .await
+        {
+            Ok(m) => m,
+            Err(e) => {
+                log::warn!("MergeVariants failed: {}", e);
+                return Ok(false);
+            }
+        };
+
+        println!("  Merge rationale: {}", merged.rationale);
+
+        // Create new merged candidate
+        let new_id = self.candidates.len();
+        let new_candidate = Candidate::from_merge(
+            new_id,
+            self.current_iteration,
+            idx_a,
+            idx_b,
+            &candidate_a.function,
+            merged,
+        );
+
+        self.candidates.push(new_candidate);
+
+        // Evaluate the merged candidate
+        println!("  Evaluating merged candidate #{}...", new_id);
+        self.evaluate_candidate(new_id).await?;
+
+        let new_scores = self.candidates[new_id].scores.as_ref().unwrap();
+        println!(
+            "  Merged candidate #{}: {:.1}% pass rate ({}/{} tests)",
+            new_id,
+            new_scores.test_pass_rate * 100.0,
+            new_scores.tests_passed,
+            new_scores.tests_total
+        );
+
+        // Show objective values
+        for obj in &self.config.objectives {
+            let value = obj.get_value(new_scores);
+            println!("    {}: {:.2}", obj.name, value);
+        }
+
+        // Update Pareto frontier
+        let added_to_pareto = self.pareto.add(new_id, new_scores, &self.candidates);
+        if added_to_pareto {
+            println!("  Merged candidate added to Pareto frontier!");
+        }
+
+        // Save checkpoint
+        self.save_checkpoint()?;
+
+        Ok(true)
+    }
+
     /// Check if optimization has converged
+    ///
+    /// For single-objective (accuracy only): converge when all tests pass
+    /// For multi-objective: converge only when no improvement is possible or
+    /// we've had no Pareto improvement for several iterations
     fn check_convergence(&self) -> bool {
-        // Check if all tests pass
-        if let Some(best_idx) = self.pareto.best_weighted(&self.candidates) {
-            if let Some(scores) = self
-                .candidates
-                .get(best_idx)
-                .and_then(|c| c.scores.as_ref())
-            {
-                if scores.test_pass_rate >= 1.0 {
-                    return true;
+        // If we only have one objective (accuracy), converge when all tests pass
+        let has_only_accuracy = self.config.objectives.len() == 1
+            && self.config.objectives[0].name == "accuracy";
+
+        if has_only_accuracy {
+            if let Some(best_idx) = self.pareto.best_weighted(&self.candidates) {
+                if let Some(scores) = self
+                    .candidates
+                    .get(best_idx)
+                    .and_then(|c| c.scores.as_ref())
+                {
+                    if scores.test_pass_rate >= 1.0 {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // For multi-objective optimization, we should NOT converge just because
+        // accuracy hits 100%. We want to continue optimizing other objectives
+        // (tokens, latency, etc.) even after accuracy is perfect.
+
+        // Check if Pareto frontier has been stable (no new additions) for
+        // several iterations. This indicates we've likely found the optimal
+        // trade-off surface.
+        let iterations_since_pareto_change = self.iterations_since_pareto_change();
+
+        // If we haven't added to the Pareto frontier in 3+ iterations and
+        // all tests are passing, we've likely converged
+        if iterations_since_pareto_change >= 3 {
+            if let Some(best_idx) = self.pareto.best_weighted(&self.candidates) {
+                if let Some(scores) = self
+                    .candidates
+                    .get(best_idx)
+                    .and_then(|c| c.scores.as_ref())
+                {
+                    if scores.test_pass_rate >= 1.0 {
+                        println!(
+                            "  Pareto frontier stable for {} iterations with 100% accuracy",
+                            iterations_since_pareto_change
+                        );
+                        return true;
+                    }
                 }
             }
         }
 
-        // Check if we've had no improvement in recent iterations
-        // TODO: Implement proper convergence detection
         false
+    }
+
+    /// Count iterations since the last Pareto frontier change
+    fn iterations_since_pareto_change(&self) -> usize {
+        // Find the highest iteration number among Pareto frontier candidates
+        let max_pareto_iteration = self
+            .pareto
+            .frontier()
+            .iter()
+            .filter_map(|&idx| self.candidates.get(idx))
+            .map(|c| c.iteration)
+            .max()
+            .unwrap_or(0);
+
+        self.current_iteration.saturating_sub(max_pareto_iteration)
     }
 
     /// Save the optimization configuration

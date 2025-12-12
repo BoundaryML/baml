@@ -21,13 +21,16 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{
+        Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Scrollbar,
+        ScrollbarOrientation, ScrollbarState, Wrap,
+    },
     Frame, Terminal,
 };
 
 use super::{
     candidate::{Candidate, CandidateMethod, CandidateScores},
-    storage::OptimizationStorage,
+    storage::{ObjectiveConfig, OptimizationStorage},
 };
 
 /// Colors for the TUI
@@ -70,6 +73,10 @@ pub struct App {
     function_name: String,
     /// Maps candidate ID to candidate index in the Vec
     id_to_index: HashMap<usize, usize>,
+    /// Configured objectives from the optimization run
+    objectives: Vec<ObjectiveConfig>,
+    /// Pareto frontier candidate IDs
+    pareto_frontier: Vec<usize>,
 }
 
 impl App {
@@ -85,16 +92,37 @@ impl App {
             .map(|c| c.function_name.clone())
             .unwrap_or_else(|| "Unknown".to_string());
 
+        let objectives = config
+            .as_ref()
+            .map(|c| c.objectives.clone())
+            .unwrap_or_default();
+
+        // Load Pareto frontier from state or results
+        let pareto_frontier = storage
+            .load_state()
+            .ok()
+            .flatten()
+            .map(|s| s.pareto_frontier_indices)
+            .or_else(|| {
+                storage
+                    .load_results()
+                    .ok()
+                    .map(|r| r.pareto_frontier.iter().map(|p| p.id).collect())
+            })
+            .unwrap_or_default();
+
         let storage_path = storage.run_dir().display().to_string();
 
-        Self::from_candidates(candidates, function_name, storage_path)
+        Self::from_candidates_with_config(candidates, function_name, storage_path, objectives, pareto_frontier)
     }
 
-    /// Create a new App from a list of candidates
-    pub fn from_candidates(
+    /// Create a new App from a list of candidates with configuration
+    pub fn from_candidates_with_config(
         candidates: Vec<Candidate>,
         function_name: String,
         storage_path: String,
+        objectives: Vec<ObjectiveConfig>,
+        pareto_frontier: Vec<usize>,
     ) -> Result<Self> {
         // Build ID to index map
         let id_to_index: HashMap<usize, usize> = candidates
@@ -146,6 +174,8 @@ impl App {
             storage_path,
             function_name,
             id_to_index,
+            objectives,
+            pareto_frontier,
         })
     }
 
@@ -171,6 +201,11 @@ impl App {
                 .get(candidate_id)
                 .and_then(|&idx| self.candidates.get(idx)),
         }
+    }
+
+    /// Check if a candidate is on the Pareto frontier
+    fn is_pareto(&self, candidate_id: usize) -> bool {
+        self.pareto_frontier.contains(&candidate_id)
     }
 
     /// Move selection up
@@ -245,6 +280,22 @@ impl App {
             _ => {}
         }
     }
+
+    /// Get the metric value for a given objective name from scores
+    fn get_objective_value(objective: &ObjectiveConfig, scores: &CandidateScores) -> f64 {
+        match objective.name.as_str() {
+            "accuracy" => scores.test_pass_rate,
+            "tokens" => scores.avg_prompt_tokens + scores.avg_completion_tokens,
+            "prompt_tokens" => scores.avg_prompt_tokens,
+            "completion_tokens" => scores.avg_completion_tokens,
+            "latency" => scores.avg_latency_ms,
+            name if name.starts_with("check:") => {
+                let check_name = &name[6..];
+                scores.check_scores.get(check_name).copied().unwrap_or(0.0)
+            }
+            _ => 0.0,
+        }
+    }
 }
 
 /// Render the UI
@@ -275,21 +326,34 @@ fn render_ui(frame: &mut Frame, app: &mut App) {
 
 /// Render the header
 fn render_header(frame: &mut Frame, app: &App, area: Rect) {
-    let title = format!(
-        " GEPA Optimization Viewer - {} ",
-        app.function_name
-    );
+    let title = format!(" GEPA Optimization Viewer - {} ", app.function_name);
     let block = Block::default()
         .title(title)
-        .title_style(Style::default().fg(ACCENT_COLOR).add_modifier(Modifier::BOLD))
+        .title_style(
+            Style::default()
+                .fg(ACCENT_COLOR)
+                .add_modifier(Modifier::BOLD),
+        )
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(ACCENT_COLOR));
 
+    // Show objectives in header
+    let objectives_str = if app.objectives.is_empty() {
+        "default".to_string()
+    } else {
+        app.objectives
+            .iter()
+            .map(|o| format!("{}={:.0}%", o.name, o.weight * 100.0))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
     let stats = format!(
-        "Candidates: {} | Path: {}",
+        "Candidates: {} | Pareto: {} | Objectives: {}",
         app.candidates.len(),
-        app.storage_path
+        app.pareto_frontier.len(),
+        objectives_str
     );
     let paragraph = Paragraph::new(stats)
         .style(Style::default().fg(Color::Gray))
@@ -302,7 +366,11 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
 fn render_tree_panel(frame: &mut Frame, app: &mut App, area: Rect) {
     let block = Block::default()
         .title(" Trials & Candidates ")
-        .title_style(Style::default().fg(HEADER_COLOR).add_modifier(Modifier::BOLD))
+        .title_style(
+            Style::default()
+                .fg(HEADER_COLOR)
+                .add_modifier(Modifier::BOLD),
+        )
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded);
 
@@ -328,10 +396,7 @@ fn render_tree_panel(frame: &mut Frame, app: &mut App, area: Rect) {
                             .add_modifier(Modifier::BOLD)
                     };
                     ListItem::new(Line::from(vec![
-                        Span::styled(
-                            format!("Trial {} ", iteration),
-                            style,
-                        ),
+                        Span::styled(format!("Trial {} ", iteration), style),
                         Span::styled(
                             format!("({} candidates)", candidate_count),
                             Style::default().fg(Color::DarkGray),
@@ -344,22 +409,14 @@ fn render_tree_panel(frame: &mut Frame, app: &mut App, area: Rect) {
                         .get(candidate_id)
                         .and_then(|&idx| app.candidates.get(idx));
 
+                    let is_pareto = app.is_pareto(*candidate_id);
+
                     let (method_icon, method_color) = match candidate.map(|c| &c.method) {
-                        Some(CandidateMethod::Initial) => ("", Color::Blue),
-                        Some(CandidateMethod::Reflection) => ("", Color::Yellow),
-                        Some(CandidateMethod::Merge) => ("", Color::Magenta),
+                        Some(CandidateMethod::Initial) => ("◆", Color::Blue),
+                        Some(CandidateMethod::Reflection) => ("◇", Color::Yellow),
+                        Some(CandidateMethod::Merge) => ("◈", Color::Magenta),
                         None => ("?", Color::Gray),
                     };
-
-                    let score_text = candidate
-                        .and_then(|c| c.scores.as_ref())
-                        .map(|s| format!("{:.0}%", s.test_pass_rate * 100.0))
-                        .unwrap_or_else(|| "—".to_string());
-
-                    let score_color = candidate
-                        .and_then(|c| c.scores.as_ref())
-                        .map(|s| score_color(s.test_pass_rate))
-                        .unwrap_or(Color::Gray);
 
                     let style = if is_selected {
                         Style::default().bg(SELECTED_BG)
@@ -367,16 +424,40 @@ fn render_tree_panel(frame: &mut Frame, app: &mut App, area: Rect) {
                         Style::default()
                     };
 
-                    ListItem::new(Line::from(vec![
-                        Span::raw("  "),
+                    // Add star for Pareto frontier candidates
+                    let pareto_indicator = if is_pareto { "★ " } else { "  " };
+
+                    // Build metrics display based on configured objectives
+                    let mut spans = vec![
+                        Span::styled(pareto_indicator, Style::default().fg(Color::Yellow)),
                         Span::styled(method_icon, Style::default().fg(method_color)),
                         Span::styled(
-                            format!(" #{} ", candidate_id),
+                            format!(" #{:<2}", candidate_id),
                             style.add_modifier(Modifier::BOLD),
                         ),
-                        Span::styled(score_text, Style::default().fg(score_color)),
-                    ]))
-                    .style(style)
+                    ];
+
+                    // Add objective metrics
+                    if let Some(scores) = candidate.and_then(|c| c.scores.as_ref()) {
+                        for obj in &app.objectives {
+                            let value = App::get_objective_value(obj, scores);
+                            let (text, color) = format_compact_metric(obj, value);
+                            spans.push(Span::raw(" "));
+                            spans.push(Span::styled(text, Style::default().fg(color)));
+                        }
+
+                        // If no objectives configured, show default accuracy
+                        if app.objectives.is_empty() {
+                            let text = format!("{:.0}%", scores.test_pass_rate * 100.0);
+                            let color = score_color(scores.test_pass_rate);
+                            spans.push(Span::raw(" "));
+                            spans.push(Span::styled(text, Style::default().fg(color)));
+                        }
+                    } else {
+                        spans.push(Span::styled(" —", Style::default().fg(Color::Gray)));
+                    }
+
+                    ListItem::new(Line::from(spans)).style(style)
                 }
             }
         })
@@ -391,11 +472,15 @@ fn render_tree_panel(frame: &mut Frame, app: &mut App, area: Rect) {
 
 /// Render the right details panel
 fn render_details_panel(frame: &mut Frame, app: &App, area: Rect) {
+    // Calculate height needed for objectives (dynamic based on number of objectives)
+    let num_objectives = app.objectives.len().max(1);
+    let metadata_height = 6 + num_objectives as u16; // Base height + objectives
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(8),  // Metadata (parents, scores)
-            Constraint::Min(10),    // Prompt preview
+            Constraint::Length(metadata_height), // Metadata (parents, scores)
+            Constraint::Min(10),                 // Prompt preview
         ])
         .split(area);
 
@@ -407,7 +492,11 @@ fn render_details_panel(frame: &mut Frame, app: &App, area: Rect) {
 fn render_metadata_panel(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .title(" Candidate Details ")
-        .title_style(Style::default().fg(HEADER_COLOR).add_modifier(Modifier::BOLD))
+        .title_style(
+            Style::default()
+                .fg(HEADER_COLOR)
+                .add_modifier(Modifier::BOLD),
+        )
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded);
 
@@ -429,52 +518,150 @@ fn render_metadata_panel(frame: &mut Frame, app: &App, area: Rect) {
                 .join(", ")
         };
 
-        let scores_lines = if let Some(scores) = &candidate.scores {
-            format_scores(scores)
-        } else {
-            vec![Line::from(Span::styled(
-                "Not yet evaluated",
-                Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC),
-            ))]
-        };
+        let is_pareto = app.is_pareto(candidate.id);
 
         let mut lines = vec![
             Line::from(vec![
                 Span::styled("ID: ", Style::default().fg(Color::Gray)),
                 Span::styled(
                     format!("#{}", candidate.id),
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw("  "),
                 Span::styled("Method: ", Style::default().fg(Color::Gray)),
                 Span::styled(method_str, Style::default().fg(ACCENT_COLOR)),
+                if is_pareto {
+                    Span::styled("  ★ Pareto", Style::default().fg(Color::Yellow))
+                } else {
+                    Span::raw("")
+                },
             ]),
             Line::from(vec![
                 Span::styled("Parent(s): ", Style::default().fg(Color::Gray)),
                 Span::styled(parents_str, Style::default().fg(Color::Cyan)),
             ]),
             Line::from(""),
-            Line::from(Span::styled(
-                "Scores:",
-                Style::default().fg(HEADER_COLOR).add_modifier(Modifier::BOLD),
-            )),
         ];
-        lines.extend(scores_lines);
+
+        // Add objective-specific scores
+        if let Some(scores) = &candidate.scores {
+            lines.push(Line::from(Span::styled(
+                "Optimization Metrics:",
+                Style::default()
+                    .fg(HEADER_COLOR)
+                    .add_modifier(Modifier::BOLD),
+            )));
+
+            if app.objectives.is_empty() {
+                // Show default metrics if no objectives configured
+                lines.extend(format_default_scores(scores));
+            } else {
+                // Show only the configured objectives
+                for obj in &app.objectives {
+                    let value = App::get_objective_value(obj, scores);
+                    let (formatted_value, color) = format_objective_value(obj, value);
+
+                    lines.push(Line::from(vec![
+                        Span::raw("  "),
+                        Span::styled(
+                            format!("{} ", obj.name),
+                            Style::default().fg(Color::Gray),
+                        ),
+                        Span::styled(
+                            format!("({}%, {}): ", (obj.weight * 100.0) as i32, obj.direction),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(formatted_value, Style::default().fg(color)),
+                    ]));
+                }
+            }
+
+            // Add check scores if any
+            if !scores.check_scores.is_empty() {
+                lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled("Checks: ", Style::default().fg(Color::Gray)),
+                ]));
+                for (name, rate) in &scores.check_scores {
+                    lines.push(Line::from(vec![
+                        Span::raw("    "),
+                        Span::styled(format!("{}: ", name), Style::default().fg(Color::DarkGray)),
+                        Span::styled(
+                            format!("{:.0}%", rate * 100.0),
+                            Style::default().fg(score_color(*rate)),
+                        ),
+                    ]));
+                }
+            }
+        } else {
+            lines.push(Line::from(Span::styled(
+                "Not yet evaluated",
+                Style::default()
+                    .fg(Color::Gray)
+                    .add_modifier(Modifier::ITALIC),
+            )));
+        }
+
         lines
     } else {
         vec![Line::from(Span::styled(
             "Select a candidate to view details",
-            Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC),
+            Style::default()
+                .fg(Color::Gray)
+                .add_modifier(Modifier::ITALIC),
         ))]
     };
 
-    let paragraph = Paragraph::new(content).block(block).wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(content)
+        .block(block)
+        .wrap(Wrap { trim: false });
     frame.render_widget(paragraph, area);
 }
 
-/// Format scores into displayable lines
-fn format_scores(scores: &CandidateScores) -> Vec<Line<'static>> {
-    let mut lines = vec![
+/// Format an objective value for display
+fn format_objective_value(obj: &ObjectiveConfig, value: f64) -> (String, Color) {
+    match obj.name.as_str() {
+        "accuracy" => {
+            let formatted = format!("{:.1}%", value * 100.0);
+            let color = score_color(value);
+            (formatted, color)
+        }
+        "tokens" | "prompt_tokens" | "completion_tokens" => {
+            let formatted = format!("{:.0} tokens", value);
+            // Lower is better for tokens
+            let color = if value < 100.0 {
+                SCORE_GOOD
+            } else if value < 500.0 {
+                SCORE_MED
+            } else {
+                SCORE_BAD
+            };
+            (formatted, color)
+        }
+        "latency" => {
+            let formatted = format!("{:.0}ms", value);
+            // Lower is better for latency
+            let color = if value < 500.0 {
+                SCORE_GOOD
+            } else if value < 2000.0 {
+                SCORE_MED
+            } else {
+                SCORE_BAD
+            };
+            (formatted, color)
+        }
+        _ => {
+            let formatted = format!("{:.2}", value);
+            (formatted, Color::White)
+        }
+    }
+}
+
+/// Format default scores when no objectives are configured
+fn format_default_scores(scores: &CandidateScores) -> Vec<Line<'static>> {
+    vec![
         Line::from(vec![
             Span::raw("  "),
             Span::styled("Pass Rate: ", Style::default().fg(Color::Gray)),
@@ -507,34 +694,18 @@ fn format_scores(scores: &CandidateScores) -> Vec<Line<'static>> {
                 Style::default().fg(Color::Cyan),
             ),
         ]),
-    ];
-
-    // Add check scores if any
-    if !scores.check_scores.is_empty() {
-        lines.push(Line::from(vec![
-            Span::raw("  "),
-            Span::styled("Checks: ", Style::default().fg(Color::Gray)),
-        ]));
-        for (name, rate) in &scores.check_scores {
-            lines.push(Line::from(vec![
-                Span::raw("    "),
-                Span::styled(format!("{}: ", name), Style::default().fg(Color::DarkGray)),
-                Span::styled(
-                    format!("{:.0}%", rate * 100.0),
-                    Style::default().fg(score_color(*rate)),
-                ),
-            ]));
-        }
-    }
-
-    lines
+    ]
 }
 
 /// Render the prompt preview panel
 fn render_prompt_panel(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .title(" Prompt Preview ")
-        .title_style(Style::default().fg(HEADER_COLOR).add_modifier(Modifier::BOLD))
+        .title_style(
+            Style::default()
+                .fg(HEADER_COLOR)
+                .add_modifier(Modifier::BOLD),
+        )
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded);
 
@@ -599,7 +770,9 @@ fn render_prompt_panel(frame: &mut Frame, app: &App, area: Rect) {
     } else {
         Text::from(Span::styled(
             "Select a candidate to view its prompt",
-            Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC),
+            Style::default()
+                .fg(Color::Gray)
+                .add_modifier(Modifier::ITALIC),
         ))
     };
 
@@ -613,20 +786,33 @@ fn render_prompt_panel(frame: &mut Frame, app: &App, area: Rect) {
     // Render scrollbar
     if let Some(candidate) = app.selected_candidate() {
         let line_count = candidate.function.prompt_text.lines().count()
-            + candidate.function.classes.iter().map(|c| c.fields.len() + 3).sum::<usize>()
-            + candidate.function.enums.iter().map(|e| e.values.len() + 2).sum::<usize>()
+            + candidate
+                .function
+                .classes
+                .iter()
+                .map(|c| c.fields.len() + 3)
+                .sum::<usize>()
+            + candidate
+                .function
+                .enums
+                .iter()
+                .map(|e| e.values.len() + 2)
+                .sum::<usize>()
             + 10;
 
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some(""))
-            .end_symbol(Some(""));
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
 
-        let mut scrollbar_state = ScrollbarState::new(line_count)
-            .position(app.prompt_scroll as usize);
+        let mut scrollbar_state =
+            ScrollbarState::new(line_count).position(app.prompt_scroll as usize);
 
         frame.render_stateful_widget(
             scrollbar,
-            inner_area.inner(ratatui::layout::Margin { horizontal: 0, vertical: 0 }),
+            inner_area.inner(ratatui::layout::Margin {
+                horizontal: 0,
+                vertical: 0,
+            }),
             &mut scrollbar_state,
         );
     }
@@ -635,16 +821,37 @@ fn render_prompt_panel(frame: &mut Frame, app: &App, area: Rect) {
 /// Render the footer with key hints
 fn render_footer(frame: &mut Frame, area: Rect) {
     let hints = Line::from(vec![
-        Span::styled(" ↑/↓ ", Style::default().fg(ACCENT_COLOR).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " ↑/↓ ",
+            Style::default()
+                .fg(ACCENT_COLOR)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("Navigate  "),
-        Span::styled(" [/] ", Style::default().fg(ACCENT_COLOR).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [/] ",
+            Style::default()
+                .fg(ACCENT_COLOR)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("Scroll prompt  "),
-        Span::styled(" q/Esc ", Style::default().fg(ACCENT_COLOR).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " ★ ",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("Pareto frontier  "),
+        Span::styled(
+            " q/Esc ",
+            Style::default()
+                .fg(ACCENT_COLOR)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("Quit"),
     ]);
 
-    let paragraph = Paragraph::new(hints)
-        .style(Style::default().fg(Color::Gray));
+    let paragraph = Paragraph::new(hints).style(Style::default().fg(Color::Gray));
 
     frame.render_widget(paragraph, area);
 }
@@ -669,7 +876,9 @@ fn syntax_highlight(code: &str) -> Text<'static> {
             if parts.len() == 2 {
                 spans.push(Span::styled(
                     parts[0].to_string(),
-                    Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
                 ));
                 spans.push(Span::raw(" "));
                 // Find the name (before {)
@@ -679,17 +888,17 @@ fn syntax_highlight(code: &str) -> Text<'static> {
                         rest[..brace_pos].trim().to_string(),
                         Style::default().fg(Color::Cyan),
                     ));
-                    spans.push(Span::styled(
-                        " {".to_string(),
-                        Style::default().fg(Color::Gray),
-                    ));
+                    spans.push(Span::styled(" {".to_string(), Style::default().fg(Color::Gray)));
                 } else {
                     spans.push(Span::raw(rest.to_string()));
                 }
             } else {
                 spans.push(Span::raw(trimmed.to_string()));
             }
-        } else if trimmed.starts_with("prompt ") || trimmed.starts_with("\"#") || trimmed.starts_with("#\"") {
+        } else if trimmed.starts_with("prompt ")
+            || trimmed.starts_with("\"#")
+            || trimmed.starts_with("#\"")
+        {
             spans.push(Span::styled(
                 trimmed.to_string(),
                 Style::default().fg(Color::Green),
@@ -697,9 +906,11 @@ fn syntax_highlight(code: &str) -> Text<'static> {
         } else if trimmed.starts_with("//") {
             spans.push(Span::styled(
                 trimmed.to_string(),
-                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::ITALIC),
             ));
-        } else if trimmed.starts_with("@") || trimmed.starts_with("@@") {
+        } else if trimmed.starts_with('@') {
             spans.push(Span::styled(
                 trimmed.to_string(),
                 Style::default().fg(Color::Yellow),
@@ -760,6 +971,79 @@ fn score_color(score: f64) -> Color {
     }
 }
 
+/// Format a metric value compactly for the left panel display
+/// Returns a short string and appropriate color
+fn format_compact_metric(obj: &ObjectiveConfig, value: f64) -> (String, Color) {
+    match obj.name.as_str() {
+        "accuracy" => {
+            let text = format!("{:.0}%", value * 100.0);
+            let color = score_color(value);
+            (text, color)
+        }
+        "tokens" => {
+            // Combined tokens - use "t" suffix for brevity
+            let text = format!("{:.0}t", value);
+            // Lower is better for tokens
+            let color = if value < 200.0 {
+                SCORE_GOOD
+            } else if value < 500.0 {
+                SCORE_MED
+            } else {
+                SCORE_BAD
+            };
+            (text, color)
+        }
+        "prompt_tokens" => {
+            let text = format!("p:{:.0}", value);
+            let color = if value < 100.0 {
+                SCORE_GOOD
+            } else if value < 300.0 {
+                SCORE_MED
+            } else {
+                SCORE_BAD
+            };
+            (text, color)
+        }
+        "completion_tokens" => {
+            let text = format!("c:{:.0}", value);
+            let color = if value < 100.0 {
+                SCORE_GOOD
+            } else if value < 300.0 {
+                SCORE_MED
+            } else {
+                SCORE_BAD
+            };
+            (text, color)
+        }
+        "latency" => {
+            // Format latency - use ms or s depending on magnitude
+            let (text, color) = if value < 1000.0 {
+                (
+                    format!("{:.0}ms", value),
+                    if value < 500.0 { SCORE_GOOD } else { SCORE_MED },
+                )
+            } else {
+                (
+                    format!("{:.1}s", value / 1000.0),
+                    if value < 2000.0 { SCORE_MED } else { SCORE_BAD },
+                )
+            };
+            (text, color)
+        }
+        name if name.starts_with("check:") => {
+            // Check scores are 0.0-1.0, display as percentage
+            let text = format!("{:.0}%", value * 100.0);
+            let color = score_color(value);
+            (text, color)
+        }
+        _ => {
+            // Unknown metric - just display the raw value
+            let text = format!("{:.1}", value);
+            (text, Color::White)
+        }
+    }
+}
+
 /// Run the TUI application
 pub fn run_tui(storage_path: &Path) -> Result<()> {
     let storage = OptimizationStorage::from_existing(storage_path)
@@ -794,10 +1078,7 @@ pub fn run_tui(storage_path: &Path) -> Result<()> {
 }
 
 /// Main event loop
-fn run_app(
-    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
-    app: &mut App,
-) -> Result<()> {
+fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> Result<()> {
     loop {
         terminal.draw(|f| render_ui(f, app))?;
 
@@ -813,6 +1094,114 @@ fn run_app(
     }
 
     Ok(())
+}
+
+// =============================================================================
+// Post-optimization Pareto frontier display and selection
+// =============================================================================
+
+/// Display Pareto frontier candidates and let user choose one to apply
+pub fn display_pareto_and_select(
+    candidates: &[Candidate],
+    pareto_ids: &[usize],
+    objectives: &[ObjectiveConfig],
+    function_name: &str,
+) -> Option<usize> {
+    if pareto_ids.is_empty() {
+        println!("\nNo candidates on the Pareto frontier.");
+        return None;
+    }
+
+    // Build a map of candidate ID to candidate
+    let id_to_candidate: HashMap<usize, &Candidate> =
+        candidates.iter().map(|c| (c.id, c)).collect();
+
+    println!("\n{}", "═".repeat(70));
+    println!(
+        "  {} Pareto Frontier Candidates for {}",
+        "★".to_string(),
+        function_name
+    );
+    println!("{}", "═".repeat(70));
+
+    // Print header
+    let mut header = format!("  {:>4} │", "ID");
+    for obj in objectives {
+        header.push_str(&format!(" {:>12} │", obj.name));
+    }
+    println!("{}", header);
+    println!("  {}", "─".repeat(66));
+
+    // Print each Pareto candidate
+    for &id in pareto_ids {
+        if let Some(candidate) = id_to_candidate.get(&id) {
+            if let Some(scores) = &candidate.scores {
+                let mut row = format!("  #{:>3} │", id);
+                for obj in objectives {
+                    let value = App::get_objective_value(obj, scores);
+                    let formatted = match obj.name.as_str() {
+                        "accuracy" => format!("{:.1}%", value * 100.0),
+                        "tokens" | "prompt_tokens" | "completion_tokens" => {
+                            format!("{:.0}", value)
+                        }
+                        "latency" => format!("{:.0}ms", value),
+                        _ => format!("{:.2}", value),
+                    };
+                    row.push_str(&format!(" {:>12} │", formatted));
+                }
+                println!("{}", row);
+            }
+        }
+    }
+
+    println!("{}", "═".repeat(70));
+    println!();
+
+    // If only one candidate, suggest it
+    if pareto_ids.len() == 1 {
+        println!(
+            "Only one candidate on the Pareto frontier: #{}",
+            pareto_ids[0]
+        );
+        print!("Apply this candidate? [Y/n]: ");
+        io::Write::flush(&mut io::stdout()).ok();
+
+        let mut input = String::new();
+        if io::stdin().read_line(&mut input).is_ok() {
+            let input = input.trim().to_lowercase();
+            if input.is_empty() || input == "y" || input == "yes" {
+                return Some(pareto_ids[0]);
+            }
+        }
+        return None;
+    }
+
+    // Let user choose
+    println!("Enter candidate ID to apply (or press Enter to skip):");
+    print!("> ");
+    io::Write::flush(&mut io::stdout()).ok();
+
+    let mut input = String::new();
+    if io::stdin().read_line(&mut input).is_ok() {
+        let input = input.trim();
+        if input.is_empty() {
+            return None;
+        }
+
+        // Parse the input, removing '#' if present
+        let id_str = input.trim_start_matches('#');
+        if let Ok(id) = id_str.parse::<usize>() {
+            if pareto_ids.contains(&id) {
+                return Some(id);
+            } else {
+                println!("Candidate #{} is not on the Pareto frontier.", id);
+            }
+        } else {
+            println!("Invalid input: {}", input);
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -857,9 +1246,14 @@ mod tests {
             make_test_candidate(2, 2, 0.9),
         ];
 
-        let app =
-            App::from_candidates(candidates, "TestFunc".to_string(), "/tmp/test".to_string())
-                .unwrap();
+        let app = App::from_candidates_with_config(
+            candidates,
+            "TestFunc".to_string(),
+            "/tmp/test".to_string(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
 
         assert_eq!(app.candidates.len(), 3);
         assert_eq!(app.tree_items.len(), 6); // 3 trials + 3 candidates
@@ -872,9 +1266,14 @@ mod tests {
             make_test_candidate(1, 1, 0.7),
         ];
 
-        let mut app =
-            App::from_candidates(candidates, "TestFunc".to_string(), "/tmp/test".to_string())
-                .unwrap();
+        let mut app = App::from_candidates_with_config(
+            candidates,
+            "TestFunc".to_string(),
+            "/tmp/test".to_string(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
 
         assert_eq!(app.selected_index, 0);
 
@@ -894,5 +1293,25 @@ mod tests {
         assert_eq!(score_color(0.8), SCORE_GOOD);
         assert_eq!(score_color(0.6), SCORE_MED);
         assert_eq!(score_color(0.3), SCORE_BAD);
+    }
+
+    #[test]
+    fn test_pareto_detection() {
+        let candidates = vec![
+            make_test_candidate(0, 0, 0.5),
+            make_test_candidate(1, 1, 0.7),
+        ];
+
+        let app = App::from_candidates_with_config(
+            candidates,
+            "TestFunc".to_string(),
+            "/tmp/test".to_string(),
+            vec![],
+            vec![1], // Only candidate 1 is on Pareto frontier
+        )
+        .unwrap();
+
+        assert!(!app.is_pareto(0));
+        assert!(app.is_pareto(1));
     }
 }
