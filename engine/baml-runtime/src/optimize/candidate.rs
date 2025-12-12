@@ -212,6 +212,9 @@ pub struct Candidate {
     pub function: OptimizableFunction,
     /// Scores from evaluation (None if not yet evaluated)
     pub scores: Option<CandidateScores>,
+    /// Rationale from the reflection/merge that created this candidate
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rationale: Option<String>,
 }
 
 impl Candidate {
@@ -224,6 +227,7 @@ impl Candidate {
             method: CandidateMethod::Initial,
             function,
             scores: None,
+            rationale: None,
         }
     }
 
@@ -238,7 +242,7 @@ impl Candidate {
         // Merge the improved function with the base
         let function = OptimizableFunction {
             function_name: base_function.function_name.clone(),
-            prompt_text: improved.prompt_text,
+            prompt_text: improved.prompt_text.clone(),
             classes: merge_classes(&base_function.classes, &improved.classes),
             enums: merge_enums(&base_function.enums, &improved.enums),
             function_source: base_function.function_source.clone(),
@@ -251,6 +255,7 @@ impl Candidate {
             method: CandidateMethod::Reflection,
             function,
             scores: None,
+            rationale: Some(improved.rationale),
         }
     }
 
@@ -265,7 +270,7 @@ impl Candidate {
     ) -> Self {
         let function = OptimizableFunction {
             function_name: base_function.function_name.clone(),
-            prompt_text: improved.prompt_text,
+            prompt_text: improved.prompt_text.clone(),
             classes: merge_classes(&base_function.classes, &improved.classes),
             enums: merge_enums(&base_function.enums, &improved.enums),
             function_source: base_function.function_source.clone(),
@@ -278,6 +283,7 @@ impl Candidate {
             method: CandidateMethod::Merge,
             function,
             scores: None,
+            rationale: Some(improved.rationale),
         }
     }
 

@@ -534,6 +534,7 @@ mod tests {
                     function_source: None,
                 },
                 scores: Some(make_scores(0.9, 200.0, 1000.0)), // High accuracy, high tokens
+                rationale: None,
             },
             Candidate {
                 id: 1,
@@ -548,6 +549,7 @@ mod tests {
                     function_source: None,
                 },
                 scores: Some(make_scores(0.7, 100.0, 1000.0)), // Low accuracy, low tokens
+                rationale: None,
             },
         ];
 
@@ -614,6 +616,7 @@ mod tests {
                     function_source: None,
                 },
                 scores: Some(make_scores(0.9, 200.0, 1000.0)), // Best accuracy
+                rationale: None,
             },
             Candidate {
                 id: 1,
@@ -628,6 +631,7 @@ mod tests {
                     function_source: None,
                 },
                 scores: Some(make_scores(0.7, 100.0, 1000.0)), // Best tokens
+                rationale: None,
             },
         ];
 

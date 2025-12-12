@@ -629,16 +629,39 @@ fn render_details_panel(frame: &mut Frame, app: &App, area: Rect) {
     let num_objectives = app.objectives.len().max(1);
     let metadata_height = 6 + num_objectives as u16; // Base height + objectives
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
+    // Check if we have a rationale to display
+    let has_rationale = app
+        .selected_candidate()
+        .and_then(|c| c.rationale.as_ref())
+        .map(|r| !r.is_empty())
+        .unwrap_or(false);
+
+    let constraints = if has_rationale {
+        vec![
+            Constraint::Length(metadata_height), // Metadata (parents, scores)
+            Constraint::Length(10),              // Rationale (fixed height, scrollable)
+            Constraint::Min(10),                 // Prompt preview
+        ]
+    } else {
+        vec![
             Constraint::Length(metadata_height), // Metadata (parents, scores)
             Constraint::Min(10),                 // Prompt preview
-        ])
+        ]
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
         .split(area);
 
     render_metadata_panel(frame, app, chunks[0]);
-    render_prompt_panel(frame, app, chunks[1]);
+
+    if has_rationale {
+        render_rationale_panel(frame, app, chunks[1]);
+        render_prompt_panel(frame, app, chunks[2]);
+    } else {
+        render_prompt_panel(frame, app, chunks[1]);
+    }
 }
 
 /// Render candidate metadata (parents, scores)
@@ -773,6 +796,74 @@ fn render_metadata_panel(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
+/// Render the rationale panel showing why this candidate was created
+fn render_rationale_panel(frame: &mut Frame, app: &App, area: Rect) {
+    let block = Block::default()
+        .title(" Rationale ")
+        .title_style(
+            Style::default()
+                .fg(HEADER_COLOR)
+                .add_modifier(Modifier::BOLD),
+        )
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded);
+
+    let inner_area = block.inner(area);
+
+    let content = if let Some(candidate) = app.selected_candidate() {
+        if let Some(rationale) = &candidate.rationale {
+            // Wrap the rationale text
+            Text::from(
+                rationale
+                    .lines()
+                    .map(|line| {
+                        Line::from(Span::styled(
+                            line.to_string(),
+                            Style::default().fg(Color::White),
+                        ))
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            Text::from(Span::styled(
+                "No rationale available (initial candidate)",
+                Style::default()
+                    .fg(Color::Gray)
+                    .add_modifier(Modifier::ITALIC),
+            ))
+        }
+    } else {
+        Text::from(Span::styled(
+            "Select a candidate to view rationale",
+            Style::default()
+                .fg(Color::Gray)
+                .add_modifier(Modifier::ITALIC),
+        ))
+    };
+
+    let paragraph = Paragraph::new(content)
+        .block(block)
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(paragraph, area);
+
+    // Add scrollbar if content overflows
+    if let Some(candidate) = app.selected_candidate() {
+        if let Some(rationale) = &candidate.rationale {
+            let line_count = rationale.lines().count();
+            if line_count > inner_area.height as usize {
+                let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(Some("↑"))
+                    .end_symbol(Some("↓"));
+
+                let mut scrollbar_state = ScrollbarState::new(line_count).position(0);
+
+                frame.render_stateful_widget(scrollbar, inner_area, &mut scrollbar_state);
+            }
+        }
+    }
+}
+
 /// Format an objective value for display
 fn format_objective_value(obj: &ObjectiveConfig, value: f64) -> (String, Color) {
     match obj.name.as_str() {
@@ -794,7 +885,8 @@ fn format_objective_value(obj: &ObjectiveConfig, value: f64) -> (String, Color) 
             (formatted, color)
         }
         "latency" => {
-            let formatted = format!("{:.0}ms", value);
+            // Always display as seconds with 2 decimal places
+            let formatted = format!("{:.2}s", value / 1000.0);
             // Lower is better for latency
             let color = if value < 500.0 {
                 SCORE_GOOD
@@ -843,7 +935,7 @@ fn format_default_scores(scores: &CandidateScores) -> Vec<Line<'static>> {
             Span::raw("  "),
             Span::styled("Latency: ", Style::default().fg(Color::Gray)),
             Span::styled(
-                format!("{:.0}ms", scores.avg_latency_ms),
+                format!("{:.2}s", scores.avg_latency_ms / 1000.0),
                 Style::default().fg(Color::Cyan),
             ),
         ]),
@@ -1176,17 +1268,14 @@ fn format_compact_metric(obj: &ObjectiveConfig, value: f64) -> (String, Color) {
             (text, color)
         }
         "latency" => {
-            // Format latency - use ms or s depending on magnitude
-            let (text, color) = if value < 1000.0 {
-                (
-                    format!("{:.0}ms", value),
-                    if value < 500.0 { SCORE_GOOD } else { SCORE_MED },
-                )
+            // Always display as seconds with 2 decimal places
+            let text = format!("{:.2}s", value / 1000.0);
+            let color = if value < 500.0 {
+                SCORE_GOOD
+            } else if value < 2000.0 {
+                SCORE_MED
             } else {
-                (
-                    format!("{:.1}s", value / 1000.0),
-                    if value < 2000.0 { SCORE_MED } else { SCORE_BAD },
-                )
+                SCORE_BAD
             };
             (text, color)
         }
@@ -1395,6 +1484,11 @@ mod tests {
                 avg_latency_ms: 500.0,
                 check_scores: std::collections::HashMap::new(),
             }),
+            rationale: if id == 0 {
+                None
+            } else {
+                Some("Improved prompt clarity based on test failures.".to_string())
+            },
         }
     }
 
@@ -1472,6 +1566,7 @@ mod tests {
                     avg_latency_ms: 500.0,
                     check_scores: std::collections::HashMap::new(),
                 }),
+                rationale: Some("Test rationale".to_string()),
             },
         ];
 
