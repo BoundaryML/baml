@@ -27,18 +27,17 @@ use std::collections::HashMap;
 use baml_base::{Name, SourceFile};
 use baml_hir::{self, ItemId, function_body, function_signature};
 pub use baml_vm::{
-    BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, Instruction, Object, Program,
-    UnaryOp, Value,
+    BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
+    ObjectIndex, Program, UnaryOp, Value,
 };
 use baml_workspace::Project;
-pub use compiler::{ClassInfo, Compiler, compile_function};
+pub use compiler::{CodegenContext, Compiler, compile_function};
 
 /// Generate bytecode for all functions in a project.
 ///
 /// This is the main entry point for project-wide code generation.
 /// It collects all functions from HIR, type-checks them via THIR,
 /// and compiles them to bytecode.
-#[salsa::tracked]
 pub fn generate_project_bytecode(db: &dyn baml_thir::Db, root: Project) -> Program {
     let files = baml_workspace::project_files(db, root);
     compile_files(db, &files)
@@ -68,8 +67,8 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
         }
     }
 
-    // Build classes map (class name -> ClassInfo) and add Class objects to program
-    let mut classes: HashMap<String, ClassInfo> = HashMap::new();
+    // Build classes map (class name -> field name -> field index) and add Class objects to program
+    let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
     let mut class_object_indices: HashMap<String, usize> = HashMap::new();
 
     for file in files {
@@ -90,18 +89,12 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                 // Add Class object to program and record its index
                 let class_obj = Object::Class(Class {
                     name: class_name.clone(),
-                    field_names: field_names.clone(),
+                    field_names,
                 });
                 let class_obj_idx = program.add_object(class_obj);
                 class_object_indices.insert(class_name.clone(), class_obj_idx);
 
-                classes.insert(
-                    class_name,
-                    ClassInfo {
-                        field_indices,
-                        field_names,
-                    },
-                );
+                classes.insert(class_name, field_indices);
             }
         }
     }
@@ -123,34 +116,15 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                     None, // TODO: Pass class fields. Eventually remove this parameter.
                 );
 
-                // Get parameter names
-                let params: Vec<Name> = signature.params.iter().map(|p| p.name.clone()).collect();
-
-                // Compile to bytecode
-                let (mut compiled_fn, fn_objects) = compile_function(
-                    signature.name.as_str(),
-                    &params,
-                    &body,
-                    &inference,
-                    globals.clone(),
-                    classes.clone(),
-                    class_object_indices.clone(),
-                );
-
-                // Add function-local objects (strings, etc.) to program and track their new indices
-                // The base index for these objects is the current size of program.objects
-                let object_base_idx = program.objects.len();
-                for obj in fn_objects {
-                    program.add_object(obj);
-                }
-
-                // Remap Value::Object indices in the function's constants
-                // Old index (in compiler's local pool) -> new index (in program's pool)
-                for constant in &mut compiled_fn.bytecode.constants {
-                    if let Value::Object(idx) = constant {
-                        *idx += object_base_idx;
-                    }
-                }
+                // Compile to bytecode (objects are added directly to program.objects)
+                let ctx = CodegenContext {
+                    inference: &inference,
+                    globals: &globals,
+                    classes: &classes,
+                    class_object_indices: &class_object_indices,
+                    objects: &mut program.objects,
+                };
+                let compiled_fn = compile_function(&signature, &body, ctx);
 
                 // Add function object to program
                 let fn_obj_idx = program.add_object(Object::Function(compiled_fn));
@@ -161,7 +135,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                     .insert(signature.name.to_string(), fn_obj_idx);
 
                 // Add to globals
-                program.add_global(Value::Object(fn_obj_idx));
+                program.add_global(Value::Object(ObjectIndex::from_raw(fn_obj_idx)));
             }
         }
     }
@@ -205,6 +179,3 @@ fn build_typing_context<'db>(
 
     context
 }
-
-#[cfg(test)]
-mod tests;

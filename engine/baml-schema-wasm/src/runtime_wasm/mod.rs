@@ -3,7 +3,7 @@ pub mod runtime_prompt;
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, str::FromStr};
 
 use anyhow::Context;
-use baml_compiler::{hir::HeaderContext, watch::shared_handler};
+use baml_compiler::watch::{shared_handler, ReducedWatchBamlValue, WatchEventReducer};
 // Conditional runtime selection based on the "thir-interpreter" feature flag
 #[cfg(feature = "thir-interpreter")]
 pub use baml_runtime::async_interpreter_runtime::BamlAsyncInterpreterRuntime as CoreBamlRuntime;
@@ -23,6 +23,8 @@ use baml_runtime::{
     RenderedPrompt,
 };
 use baml_types::{BamlValue, GeneratorOutputType, ResponseCheck};
+use baml_viz_events::LexicalState;
+use futures::{channel::mpsc, stream::StreamExt};
 use generators_lib::version_check::{check_version, GeneratorType, VersionCheckMode};
 use indexmap::IndexMap;
 use internal_baml_core::feature_flags::FeatureFlags;
@@ -35,7 +37,9 @@ use wasm_bindgen::{prelude::*, JsError, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
 use self::runtime_prompt::WasmScope;
-use crate::runtime_wasm::runtime_prompt::WasmPrompt;
+use crate::{
+    abort_controller::js_abort_signal_to_tripwire, runtime_wasm::runtime_prompt::WasmPrompt,
+};
 
 type JsResult<T> = core::result::Result<T, JsError>;
 
@@ -91,86 +95,6 @@ pub fn on_wasm_init() {
 extern "C" {
     #[wasm_bindgen(js_name = __onWasmPanic)]
     fn on_wasm_panic(msg: &str);
-}
-
-/// Helper to serialize a header to JSON.
-/// Used for both "header" (enter) and "header_stopped" (exit) events.
-fn serialize_header_to_json(header: &HeaderContext, event_type: &str) -> String {
-    let serialized_span = SerializedSpan::serialize(&header.span);
-    serde_json::json!({
-        "type": event_type,
-        "label": header.title,
-        "level": header.level,
-        "span": {
-            "file_path": serialized_span.file_path,
-            "start_line": serialized_span.start_line,
-            "start_column": serialized_span.start,
-            "end_line": serialized_span.end_line,
-            "end_column": serialized_span.end,
-        }
-    })
-    .to_string()
-}
-
-/// HACK: Tracks active headers and emits synthetic "stopped" events when new headers arrive.
-/// This is a workaround until proper exit events are emitted from the interpreter.
-///
-/// When a new header comes in at level N, we emit "stopped" events for all headers
-/// at level >= N (in reverse order, deepest first).
-struct HeaderTracker {
-    /// Stack of active headers, sorted by level (lower levels first)
-    active_headers: Vec<HeaderContext>,
-}
-
-impl HeaderTracker {
-    fn new() -> Self {
-        Self {
-            active_headers: Vec::new(),
-        }
-    }
-
-    /// Process a new header entering scope.
-    /// Returns headers that should be marked as stopped (in the order they should be emitted).
-    fn on_header_enter(&mut self, header: HeaderContext) -> Vec<HeaderContext> {
-        let new_level = header.level;
-
-        // Find all headers at level >= new_level and remove them
-        let mut stopped_headers = Vec::new();
-        while let Some(last) = self.active_headers.last() {
-            if last.level >= new_level {
-                stopped_headers.push(self.active_headers.pop().unwrap());
-            } else {
-                break;
-            }
-        }
-
-        // Push the new header onto the stack
-        self.active_headers.push(header);
-
-        // Return stopped headers (already in reverse order - deepest first)
-        stopped_headers
-    }
-
-    /// Flush all remaining active headers (e.g., at end of execution).
-    /// Returns headers that should be marked as stopped (deepest first).
-    fn flush(&mut self) -> Vec<HeaderContext> {
-        let mut stopped = Vec::new();
-        while let Some(header) = self.active_headers.pop() {
-            stopped.push(header);
-        }
-        stopped
-    }
-
-    /// Get count of active headers (for debugging)
-    fn active_count(&self) -> usize {
-        self.active_headers.len()
-    }
-
-    /// Get the current (deepest) active header, if any.
-    /// This is the header that variable notifications should be associated with.
-    fn current_header(&self) -> Option<&HeaderContext> {
-        self.active_headers.last()
-    }
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -459,34 +383,6 @@ impl WasmSpan {
     }
 }
 
-#[wasm_bindgen(getter_with_clone, inspectable)]
-#[derive(Clone, Debug)]
-pub struct WasmEntityAtPosition {
-    /// The type of entity: "function", "node", or "test"
-    #[wasm_bindgen(readonly)]
-    pub entity_type: String,
-    /// The name of the entity (function name, node label, or test name)
-    #[wasm_bindgen(readonly)]
-    pub entity_name: String,
-    /// The name of the function this entity belongs to.
-    /// For function entities, this equals entity_name.
-    /// For node entities, this is the parent function name.
-    /// For test entities, this is the parent function name.
-    #[wasm_bindgen(readonly)]
-    pub function_name: String,
-    #[wasm_bindgen(readonly)]
-    pub span: WasmSpan,
-    #[wasm_bindgen(readonly)]
-    pub function_type: Option<WasmFunctionKind>,
-    #[wasm_bindgen(readonly)]
-    pub node_id: Option<String>,
-    #[wasm_bindgen(readonly)]
-    pub node_label: Option<String>,
-    /// For test entities, the name of the test case
-    #[wasm_bindgen(readonly)]
-    pub test_name: Option<String>,
-}
-
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WasmControlFlowNodeType {
@@ -506,7 +402,7 @@ pub struct WasmControlFlowNode {
     #[wasm_bindgen(readonly)]
     pub parent_id: Option<u32>,
     #[wasm_bindgen(readonly)]
-    pub lexical_id: String,
+    pub log_filter_key: String,
     #[wasm_bindgen(readonly)]
     pub label: String,
     #[wasm_bindgen(readonly)]
@@ -554,7 +450,7 @@ impl From<ControlFlowVisualization> for WasmControlFlowGraph {
             .map(|node| WasmControlFlowNode {
                 id: node.id.raw(),
                 parent_id: node.parent_node_id.map(|id| id.raw()),
-                lexical_id: node.lexical_id.clone(),
+                log_filter_key: node.log_filter_key.clone(),
                 label: node.label.clone(),
                 span: (&node.span).into(),
                 node_type: WasmControlFlowNodeType::from(&node.node_type),
@@ -573,6 +469,34 @@ impl From<ControlFlowVisualization> for WasmControlFlowGraph {
 
         WasmControlFlowGraph { nodes, edges }
     }
+}
+
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Clone, Debug)]
+pub struct WasmEntityAtPosition {
+    /// The type of entity: "function", "node", or "test"
+    #[wasm_bindgen(readonly)]
+    pub entity_type: String,
+    /// The name of the entity (function name, node label, or test name)
+    #[wasm_bindgen(readonly)]
+    pub entity_name: String,
+    /// The name of the function this entity belongs to.
+    /// For function entities, this equals entity_name.
+    /// For node entities, this is the parent function name.
+    /// For test entities, this is the parent function name.
+    #[wasm_bindgen(readonly)]
+    pub function_name: String,
+    #[wasm_bindgen(readonly)]
+    pub span: WasmSpan,
+    #[wasm_bindgen(readonly)]
+    pub function_type: Option<WasmFunctionKind>,
+    #[wasm_bindgen(readonly)]
+    pub node_id: Option<String>,
+    #[wasm_bindgen(readonly)]
+    pub node_label: Option<String>,
+    /// For test entities, the name of the test case
+    #[wasm_bindgen(readonly)]
+    pub test_name: Option<String>,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -1861,7 +1785,7 @@ impl WasmRuntime {
                             function_name: function.name.clone(),
                             span: node.span.clone(),
                             function_type: Some(function.function_type),
-                            node_id: Some(node.lexical_id.clone()),
+                            node_id: Some(node.log_filter_key.clone()),
                             node_label: Some(node.label.clone()),
                             test_name: None,
                         });
@@ -2116,7 +2040,7 @@ impl WasmRuntime {
     ) -> Result<WasmTestResponses, JsValue> {
         let parallel = parallel.unwrap_or(false);
         // Convert abort signal to tripwire
-        let tripwire = match crate::abort_controller::js_abort_signal_to_tripwire(abort_signal) {
+        let tripwire = match js_abort_signal_to_tripwire(abort_signal) {
             Ok(tripwire) => tripwire,
             Err(_e) => {
                 log::error!("WASM Parallel: Failed to setup abort handler");
@@ -2177,81 +2101,12 @@ impl WasmRuntime {
                     let on_tick = if false { Some(|| {}) } else { None };
 
                     // Create watch handler callback for this test
-                    // HACK: Track active headers to emit synthetic "stopped" events
-                    let header_tracker = Rc::new(RefCell::new(HeaderTracker::new()));
-                    let header_tracker_clone = header_tracker.clone();
-                    let header_tracker_for_flush = header_tracker.clone();
                     let watch_handler_clone = watch_handler.clone();
-                    // Clone for use after execution to flush remaining headers
-                    let watch_handler_for_flush = watch_handler.clone();
-                    let function_name_for_flush = function_name.clone();
-
+                    let viz_reducer = Rc::new(RefCell::new(WatchEventReducer::new()));
+                    let viz_reducer_clone = viz_reducer.clone();
                     let watch_handler_cb = shared_handler(move |notification| {
-                        // Helper to create and send a JS notification
-                        let send_notification =
-                            |function_name: &str, is_stream: bool, value_json: &str| {
-                                let js_notification = js_sys::Object::new();
+                        log::info!("watch_handler_cb: {:#?}", notification);
 
-                                js_sys::Reflect::set(
-                                    &js_notification,
-                                    &JsValue::from_str("function_name"),
-                                    &JsValue::from_str(function_name),
-                                )
-                                .unwrap();
-
-                                js_sys::Reflect::set(
-                                    &js_notification,
-                                    &JsValue::from_str("is_stream"),
-                                    &JsValue::from_bool(is_stream),
-                                )
-                                .unwrap();
-
-                                js_sys::Reflect::set(
-                                    &js_notification,
-                                    &JsValue::from_str("value"),
-                                    &JsValue::from_str(value_json),
-                                )
-                                .unwrap();
-
-                                watch_handler_clone
-                                    .call1(&JsValue::NULL, &js_notification)
-                                    .unwrap();
-                            };
-
-                        // Check if this is a Header notification - if so, emit stopped events first
-                        if let baml_compiler::watch::WatchBamlValue::Header(header) =
-                            &notification.value
-                        {
-                            log::info!(
-                                "[WASM run_tests] Header enter: level={} title={:?}",
-                                header.level,
-                                header.title
-                            );
-                            // Get headers that need to be stopped
-                            let stopped_headers = header_tracker_clone
-                                .borrow_mut()
-                                .on_header_enter(header.clone());
-
-                            log::info!(
-                                "[WASM run_tests] After on_header_enter: {} headers to stop, {} active",
-                                stopped_headers.len(),
-                                header_tracker_clone.borrow().active_count()
-                            );
-
-                            // Emit stopped notifications for each (deepest first)
-                            for stopped_header in stopped_headers {
-                                let stopped_json =
-                                    serialize_header_to_json(&stopped_header, "header_stopped");
-                                send_notification(
-                                    &notification.function_name,
-                                    false,
-                                    &stopped_json,
-                                );
-                            }
-                        }
-
-                        // Now handle the actual notification
-                        // Convert notification to a JS object
                         let js_notification = js_sys::Object::new();
 
                         if let Some(ref var_name) = notification.variable_name {
@@ -2286,60 +2141,126 @@ impl WasmRuntime {
                         )
                         .unwrap();
 
-                        // HACK: For variable notifications, include the current header's title
-                        // as lexical_node_id so the UI knows which block the variable belongs to
-                        if matches!(
-                            &notification.value,
-                            baml_compiler::watch::WatchBamlValue::Value(_)
-                                | baml_compiler::watch::WatchBamlValue::StreamStart(_)
-                                | baml_compiler::watch::WatchBamlValue::StreamUpdate(_, _)
-                                | baml_compiler::watch::WatchBamlValue::StreamEnd(_)
-                        ) {
-                            if let Some(current_header) =
-                                header_tracker_clone.borrow().current_header()
-                            {
-                                js_sys::Reflect::set(
-                                    &js_notification,
-                                    &JsValue::from_str("lexical_node_id"),
-                                    &JsValue::from_str(&current_header.title),
-                                )
-                                .unwrap();
+                        // Compute reduced watch events (includes viz state updates)
+                        let reduced_events = viz_reducer_clone
+                            .borrow_mut()
+                            .apply(&notification.function_name, notification.value.clone());
+
+                        let js_state_updates = js_sys::Array::new();
+                        for reduced in reduced_events {
+                            let js_update = js_sys::Object::new();
+                            match reduced {
+                                ReducedWatchBamlValue::VizStateUpdate(update) => {
+                                    let new_state = match update.new_state {
+                                        LexicalState::NotRunning => "not_running",
+                                        LexicalState::Running => "running",
+                                        LexicalState::Completed => "completed",
+                                    };
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("kind"),
+                                        &JsValue::from_str("viz_state_update"),
+                                    )
+                                    .unwrap();
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("node_id"),
+                                        &JsValue::from_f64(update.node_id as f64),
+                                    )
+                                    .unwrap();
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("log_filter_key"),
+                                        &JsValue::from_str(&update.log_filter_key),
+                                    )
+                                    .unwrap();
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("new_state"),
+                                        &JsValue::from_str(new_state),
+                                    )
+                                    .unwrap();
+                                }
+                                ReducedWatchBamlValue::Value(v) => {
+                                    let value: BamlValue = v.clone().into();
+                                    let value_json = serde_json::to_string(&value)
+                                        .unwrap_or_else(|_| format!("{value:?}"));
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("kind"),
+                                        &JsValue::from_str("value"),
+                                    )
+                                    .unwrap();
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("value"),
+                                        &JsValue::from_str(&value_json),
+                                    )
+                                    .unwrap();
+                                }
+                                ReducedWatchBamlValue::StreamStart(id) => {
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("kind"),
+                                        &JsValue::from_str("stream_start"),
+                                    )
+                                    .unwrap();
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("id"),
+                                        &JsValue::from_str(&id),
+                                    )
+                                    .unwrap();
+                                }
+                                ReducedWatchBamlValue::StreamUpdate(id, v) => {
+                                    let value: BamlValue = v.clone().into();
+                                    let value_json = serde_json::to_string(&value)
+                                        .unwrap_or_else(|_| format!("{value:?}"));
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("kind"),
+                                        &JsValue::from_str("stream_update"),
+                                    )
+                                    .unwrap();
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("id"),
+                                        &JsValue::from_str(&id),
+                                    )
+                                    .unwrap();
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("value"),
+                                        &JsValue::from_str(&value_json),
+                                    )
+                                    .unwrap();
+                                }
+                                ReducedWatchBamlValue::StreamEnd(id) => {
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("kind"),
+                                        &JsValue::from_str("stream_end"),
+                                    )
+                                    .unwrap();
+                                    js_sys::Reflect::set(
+                                        &js_update,
+                                        &JsValue::from_str("id"),
+                                        &JsValue::from_str(&id),
+                                    )
+                                    .unwrap();
+                                }
                             }
+                            js_state_updates.push(&js_update);
                         }
 
-                        // Serialize the value as JSON
-                        let value_json = match &notification.value {
-                            baml_compiler::watch::WatchBamlValue::Value(v) => {
-                                let value: BamlValue = v.clone().into();
-                                serde_json::to_string(&value)
-                                    .unwrap_or_else(|_| format!("{value:?}"))
-                            }
-                            baml_compiler::watch::WatchBamlValue::Header(header) => {
-                                serialize_header_to_json(header, "header")
-                            }
-                            baml_compiler::watch::WatchBamlValue::HeaderStopped(header) => {
-                                serialize_header_to_json(header, "header_stopped")
-                            }
-                            baml_compiler::watch::WatchBamlValue::StreamStart(id) => {
-                                serde_json::json!({ "type": "stream_start", "id": id }).to_string()
-                            }
-                            baml_compiler::watch::WatchBamlValue::StreamUpdate(id, v) => {
-                                let value: BamlValue = v.clone().into();
-                                let value_json = serde_json::to_string(&value)
-                                    .unwrap_or_else(|_| format!("{value:?}"));
-                                serde_json::json!({ "type": "stream_update", "id": id, "value": value_json }).to_string()
-                            }
-                            baml_compiler::watch::WatchBamlValue::StreamEnd(id) => {
-                                serde_json::json!({ "type": "stream_end", "id": id }).to_string()
-                            }
-                        };
-
-                        js_sys::Reflect::set(
-                            &js_notification,
-                            &JsValue::from_str("value"),
-                            &JsValue::from_str(&value_json),
-                        )
-                        .unwrap();
+                        if js_state_updates.length() > 0 {
+                            js_sys::Reflect::set(
+                                &js_notification,
+                                &JsValue::from_str("state_updates"),
+                                &js_state_updates,
+                            )
+                            .unwrap();
+                        }
 
                         watch_handler_clone
                             .call1(&JsValue::NULL, &js_notification)
@@ -2362,44 +2283,6 @@ impl WasmRuntime {
                                 Some(watch_handler_cb),
                             )
                             .await;
-
-                        // HACK: Flush remaining active headers after execution completes
-                        let remaining_headers = header_tracker_for_flush.borrow_mut().flush();
-                        log::info!(
-                            "[WASM run_tests] Flushing {} remaining headers for function={}",
-                            remaining_headers.len(),
-                            function_name_for_flush
-                        );
-                        for stopped_header in remaining_headers {
-                            let js_notification = js_sys::Object::new();
-
-                            js_sys::Reflect::set(
-                                &js_notification,
-                                &JsValue::from_str("function_name"),
-                                &JsValue::from_str(&function_name_for_flush),
-                            )
-                            .unwrap();
-
-                            js_sys::Reflect::set(
-                                &js_notification,
-                                &JsValue::from_str("is_stream"),
-                                &JsValue::from_bool(false),
-                            )
-                            .unwrap();
-
-                            let stopped_json =
-                                serialize_header_to_json(&stopped_header, "header_stopped");
-                            js_sys::Reflect::set(
-                                &js_notification,
-                                &JsValue::from_str("value"),
-                                &JsValue::from_str(&stopped_json),
-                            )
-                            .unwrap();
-
-                            watch_handler_for_flush
-                                .call1(&JsValue::NULL, &js_notification)
-                                .unwrap();
-                        }
 
                         // Return WasmTestResponse for this test
                         WasmTestResponse {
@@ -2738,6 +2621,490 @@ impl WasmFunction {
             .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
     }
 
+    #[wasm_bindgen]
+    pub async fn run_test_with_expr_events(
+        &self,
+        rt: &mut WasmRuntime,
+        test_name: String,
+        on_partial_response: js_sys::Function,
+        get_baml_src_cb: js_sys::Function,
+        on_expr_event: js_sys::Function,
+        env: js_sys::Object,
+        abort_signal: Option<js_sys::Object>,
+        watch_handler: js_sys::Function,
+    ) -> Result<WasmTestResponse, JsValue> {
+        // Convert abort signal to tripwire
+        let tripwire = js_abort_signal_to_tripwire(abort_signal).map_err(JsValue::from)?;
+
+        let rt = &rt.runtime;
+        let function_name = self.name.clone();
+        let function_name_for_test_pair = function_name.clone();
+        let test_name_for_test_pair = test_name.clone();
+        log::info!(
+            "[WasmFunction] run_test_with_expr_events start function={} test={}",
+            function_name,
+            test_name.as_str()
+        );
+
+        // Create the closure to handle partial responses:
+        let cb = Box::new(move |r: baml_runtime::FunctionResult| {
+            let this = JsValue::NULL;
+            let res = WasmFunctionResponse {
+                function_response: r,
+                func_test_pair: WasmFunctionTestPair {
+                    function_name: function_name_for_test_pair.clone(),
+                    test_name: test_name_for_test_pair.clone(),
+                },
+            }
+            .into();
+            on_partial_response.call1(&this, &res).unwrap();
+        });
+
+        let viz_reducer = Rc::new(RefCell::new(WatchEventReducer::new()));
+        let viz_reducer_clone = viz_reducer.clone();
+        let watch_handler_cb = shared_handler(move |notification| {
+            // Convert notification to a JS object
+            let js_notification = js_sys::Object::new();
+
+            if let Some(var_name) = &notification.variable_name {
+                js_sys::Reflect::set(
+                    &js_notification,
+                    &JsValue::from_str("variable_name"),
+                    &JsValue::from_str(var_name),
+                )
+                .unwrap();
+            }
+
+            if let Some(channel) = &notification.channel_name {
+                js_sys::Reflect::set(
+                    &js_notification,
+                    &JsValue::from_str("channel_name"),
+                    &JsValue::from_str(channel),
+                )
+                .unwrap();
+            }
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("function_name"),
+                &JsValue::from_str(&notification.function_name),
+            )
+            .unwrap();
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("is_stream"),
+                &JsValue::from_bool(notification.is_stream),
+            )
+            .unwrap();
+
+            let reduced_events = viz_reducer_clone
+                .borrow_mut()
+                .apply(&notification.function_name, notification.value.clone());
+
+            let js_state_updates = js_sys::Array::new();
+            for reduced in reduced_events {
+                let js_update = js_sys::Object::new();
+                match reduced {
+                    ReducedWatchBamlValue::VizStateUpdate(update) => {
+                        let state_str = match update.new_state {
+                            LexicalState::NotRunning => "not_running",
+                            LexicalState::Running => "running",
+                            LexicalState::Completed => "completed",
+                        };
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("kind"),
+                            &JsValue::from_str("viz_state_update"),
+                        )
+                        .unwrap();
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("node_id"),
+                            &JsValue::from_f64(update.node_id as f64),
+                        )
+                        .unwrap();
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("log_filter_key"),
+                            &JsValue::from_str(&update.log_filter_key),
+                        )
+                        .unwrap();
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("new_state"),
+                            &JsValue::from_str(state_str),
+                        )
+                        .unwrap();
+                    }
+                    ReducedWatchBamlValue::Value(v) => {
+                        let value: BamlValue = v.clone().into();
+                        let value_json =
+                            serde_json::to_string(&value).unwrap_or_else(|_| format!("{value:?}"));
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("kind"),
+                            &JsValue::from_str("value"),
+                        )
+                        .unwrap();
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("value"),
+                            &JsValue::from_str(&value_json),
+                        )
+                        .unwrap();
+                    }
+                    ReducedWatchBamlValue::StreamStart(id) => {
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("kind"),
+                            &JsValue::from_str("stream_start"),
+                        )
+                        .unwrap();
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("id"),
+                            &JsValue::from_str(&id),
+                        )
+                        .unwrap();
+                    }
+                    ReducedWatchBamlValue::StreamUpdate(id, v) => {
+                        let value: BamlValue = v.clone().into();
+                        let value_json =
+                            serde_json::to_string(&value).unwrap_or_else(|_| format!("{value:?}"));
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("kind"),
+                            &JsValue::from_str("stream_update"),
+                        )
+                        .unwrap();
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("id"),
+                            &JsValue::from_str(&id),
+                        )
+                        .unwrap();
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("value"),
+                            &JsValue::from_str(&value_json),
+                        )
+                        .unwrap();
+                    }
+                    ReducedWatchBamlValue::StreamEnd(id) => {
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("kind"),
+                            &JsValue::from_str("stream_end"),
+                        )
+                        .unwrap();
+                        js_sys::Reflect::set(
+                            &js_update,
+                            &JsValue::from_str("id"),
+                            &JsValue::from_str(&id),
+                        )
+                        .unwrap();
+                    }
+                }
+                js_state_updates.push(&js_update);
+            }
+
+            if js_state_updates.length() > 0 {
+                js_sys::Reflect::set(
+                    &js_notification,
+                    &JsValue::from_str("state_updates"),
+                    &js_state_updates,
+                )
+                .unwrap();
+            }
+
+            watch_handler
+                .call1(&JsValue::NULL, &js_notification)
+                .unwrap();
+        });
+
+        // Create the channel for expression events
+        let (tx, mut rx) = mpsc::unbounded::<Vec<SerializedSpan>>();
+
+        // Spawn a task to handle expression events
+        let on_expr_event_clone = on_expr_event.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            while let Some(spans) = rx.next().await {
+                let this = JsValue::NULL;
+                match serde_wasm_bindgen::to_value(&spans) {
+                    Ok(res) => {
+                        on_expr_event_clone.call1(&this, &res).expect("TODO");
+                    }
+                    Err(e) => {
+                        log::error!("Error serializing spans: {e}");
+                    }
+                }
+            }
+        });
+
+        // Create your evaluation context, etc.
+        let ctx = rt.create_ctx_manager_for_wasm(js_fn_to_baml_src_reader(get_baml_src_cb));
+
+        let entries = js_sys::Object::entries(&env);
+        let mut env_vars = HashMap::new();
+        for entry in entries.iter() {
+            let arr = entry.dyn_into::<js_sys::Array>().unwrap();
+            let key = arr.get(0).as_string().unwrap();
+            let value = arr.get(1).as_string().unwrap_or_default();
+            env_vars.insert(key, value);
+        }
+
+        // Pass the sender to run_test_with_expr_events with tripwire support
+        let on_tick = if false { Some(|| {}) } else { None };
+        let result = rt
+            .run_test_with_expr_events(
+                &function_name,
+                &test_name,
+                &ctx,
+                Some(cb),
+                Some(tx),
+                None,
+                env_vars.clone(),
+                None, // tags
+                tripwire,
+                on_tick,
+                Some(watch_handler_cb),
+            )
+            .await;
+
+        let (test_response, span) = result;
+        match &test_response {
+            Ok(_) => log::info!(
+                "[WasmFunction] run_test_with_expr_events success function={} test={}",
+                function_name,
+                test_name.as_str()
+            ),
+            Err(e) => log::error!(
+                "[WasmFunction] run_test_with_expr_events error function={} test={} err={:?}",
+                function_name,
+                test_name.as_str(),
+                e
+            ),
+        }
+
+        Ok(WasmTestResponse {
+            test_response,
+            span: Some(span.to_string()),
+            tracing_project_id: rt
+                .tracer_wrapper()
+                .get_or_create_tracer(&env_vars)
+                .tracing_project_id(),
+            func_test_pair: WasmFunctionTestPair {
+                function_name,
+                test_name,
+            },
+        })
+    }
+
+    #[wasm_bindgen]
+    pub async fn run_test(
+        &self,
+        rt: &mut WasmRuntime,
+        test_name: String,
+        on_partial_response: js_sys::Function,
+        get_baml_src_cb: js_sys::Function,
+        env: js_sys::Object,
+        abort_signal: Option<js_sys::Object>,
+        watch_handler: js_sys::Function,
+    ) -> Result<WasmTestResponse, JsValue> {
+        // Convert abort signal to tripwire
+        let tripwire = js_abort_signal_to_tripwire(abort_signal).map_err(JsValue::from)?;
+
+        let rt = &rt.runtime;
+        let function_name = self.name.clone();
+
+        let function_name_for_test_pair = function_name.clone();
+        let test_name_for_test_pair = test_name.clone();
+
+        // Create the closure to handle partial responses:
+        let cb = Box::new(move |r| {
+            let this = JsValue::NULL;
+            let res = WasmFunctionResponse {
+                function_response: r,
+                func_test_pair: WasmFunctionTestPair {
+                    function_name: function_name_for_test_pair.clone(),
+                    test_name: test_name_for_test_pair.clone(),
+                },
+            }
+            .into();
+            on_partial_response.call1(&this, &res).unwrap();
+        });
+
+        let viz_reducer = Rc::new(RefCell::new(WatchEventReducer::new()));
+        let viz_reducer_clone = viz_reducer.clone();
+        // Create the closure to handle watch notifications (similar to on_partial_response):
+        let watch_handler_cb = shared_handler(move |notification| {
+            // Convert notification to a JS object
+            let js_notification = js_sys::Object::new();
+
+            if let Some(var_name) = &notification.variable_name {
+                js_sys::Reflect::set(
+                    &js_notification,
+                    &JsValue::from_str("variable_name"),
+                    &JsValue::from_str(var_name),
+                )
+                .unwrap();
+            }
+
+            if let Some(channel) = &notification.channel_name {
+                js_sys::Reflect::set(
+                    &js_notification,
+                    &JsValue::from_str("channel_name"),
+                    &JsValue::from_str(channel),
+                )
+                .unwrap();
+            }
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("function_name"),
+                &JsValue::from_str(&notification.function_name),
+            )
+            .unwrap();
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("is_stream"),
+                &JsValue::from_bool(notification.is_stream),
+            )
+            .unwrap();
+
+            let reduced_events = viz_reducer_clone
+                .borrow_mut()
+                .apply(&notification.function_name, notification.value.clone());
+
+            let js_state_updates = js_sys::Array::new();
+            for reduced in reduced_events {
+                if let ReducedWatchBamlValue::VizStateUpdate(update) = reduced {
+                    let update_obj = js_sys::Object::new();
+                    let state_str = match update.new_state {
+                        LexicalState::NotRunning => "not_running",
+                        LexicalState::Running => "running",
+                        LexicalState::Completed => "completed",
+                    };
+                    js_sys::Reflect::set(
+                        &update_obj,
+                        &JsValue::from_str("node_id"),
+                        &JsValue::from_f64(update.node_id as f64),
+                    )
+                    .unwrap();
+                    js_sys::Reflect::set(
+                        &update_obj,
+                        &JsValue::from_str("log_filter_key"),
+                        &JsValue::from_str(&update.log_filter_key),
+                    )
+                    .unwrap();
+                    js_sys::Reflect::set(
+                        &update_obj,
+                        &JsValue::from_str("new_state"),
+                        &JsValue::from_str(state_str),
+                    )
+                    .unwrap();
+                    js_state_updates.push(&update_obj);
+                }
+            }
+
+            if js_state_updates.length() > 0 {
+                js_sys::Reflect::set(
+                    &js_notification,
+                    &JsValue::from_str("state_updates"),
+                    &js_state_updates,
+                )
+                .unwrap();
+            }
+
+            // Serialize the value as JSON
+            let value_json = match &notification.value {
+                baml_compiler::watch::WatchBamlValue::Value(v) => {
+                    let value: BamlValue = v.clone().into();
+                    serde_json::to_string(&value).unwrap_or_else(|_| format!("{value:?}"))
+                }
+                baml_compiler::watch::WatchBamlValue::VizExecState(event) => serde_json::json!({
+                    "type": "control_flow_context",
+                    "event": event.event,
+                    "node_id": event.node_id,
+                    "path_segment": event.path_segment,
+                    "node_type": event.node_type,
+                    "label": event.label,
+                    "header_level": event.header_level,
+                })
+                .to_string(),
+                baml_compiler::watch::WatchBamlValue::StreamStart(id) => {
+                    serde_json::json!({ "type": "stream_start", "id": id }).to_string()
+                }
+                baml_compiler::watch::WatchBamlValue::StreamUpdate(id, v) => {
+                    let value: BamlValue = v.clone().into();
+                    let value_json =
+                        serde_json::to_string(&value).unwrap_or_else(|_| format!("{value:?}"));
+                    serde_json::json!({ "type": "stream_update", "id": id, "value": value_json })
+                        .to_string()
+                }
+                baml_compiler::watch::WatchBamlValue::StreamEnd(id) => {
+                    serde_json::json!({ "type": "stream_end", "id": id }).to_string()
+                }
+            };
+
+            js_sys::Reflect::set(
+                &js_notification,
+                &JsValue::from_str("value"),
+                &JsValue::from_str(&value_json),
+            )
+            .unwrap();
+
+            watch_handler
+                .call1(&JsValue::NULL, &js_notification)
+                .unwrap();
+        });
+
+        // Create your evaluation context, etc.
+        let ctx = rt.create_ctx_manager_for_wasm(js_fn_to_baml_src_reader(get_baml_src_cb));
+
+        let entries = js_sys::Object::entries(&env);
+        let mut env_vars = HashMap::new();
+        for entry in entries.iter() {
+            let arr = entry.dyn_into::<js_sys::Array>().unwrap();
+            let key = arr.get(0).as_string().unwrap();
+            let value = arr.get(1).as_string().unwrap_or_default();
+            env_vars.insert(key, value);
+        }
+        // Now pass collector_arc to your runtime's run_test with tripwire support
+        let on_tick = if false { Some(|| {}) } else { None };
+        let result = rt
+            .run_test(
+                &function_name,
+                &test_name,
+                &ctx,
+                Some(cb),
+                None,
+                env_vars.clone(),
+                None, // tags
+                tripwire,
+                on_tick,
+                Some(watch_handler_cb),
+            )
+            .await;
+
+        let (test_response, span) = result;
+
+        Ok(WasmTestResponse {
+            test_response,
+            span: Some(span.to_string()),
+            tracing_project_id: rt
+                .tracer_wrapper()
+                .get_or_create_tracer(&env_vars)
+                .tracing_project_id(),
+            func_test_pair: WasmFunctionTestPair {
+                function_name,
+                test_name,
+            },
+        })
+    }
+
     pub fn function_graph(&self, rt: &WasmRuntime) -> Result<String, JsValue> {
         let rt = &rt.runtime;
         let ctx = rt
@@ -2758,12 +3125,19 @@ impl WasmFunction {
         let ctx = rt
             .create_ctx_manager(BamlValue::String("wasm".to_string()), None)
             .create_ctx_with_default();
-
+        log::info!(
+            "[wasm::function_graph_v2]: generating graph for function {}",
+            self.name
+        );
         let graph = rt
             .internal()
             .function_graph_v2(&self.name, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
-
+        log::info!(
+            "[wasm::function_graph_v2]: {} graph: {:#?}",
+            self.name,
+            graph
+        );
         Ok(graph.into())
     }
 

@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: SimpleTest
-      lexical_id: "SimpleTest|root:0"
+      log_filter_key: "SimpleTest|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 82
     "1":
       label: Main Header
-      lexical_id: "SimpleTest|root:0|hdr:main-header:0"
+      log_filter_key: "SimpleTest|root:0|hdr:main-header:0"
       node_type: header
       parent: "0"
       span:
@@ -33,7 +33,7 @@ flattening:
       nodes:
         "0":
           label: SimpleTest
-          lexical_id: "SimpleTest|root:0"
+          log_filter_key: "SimpleTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -42,7 +42,7 @@ flattening:
             end: 82
         "1":
           label: Main Header
-          lexical_id: "SimpleTest|root:0|hdr:main-header:0"
+          log_filter_key: "SimpleTest|root:0|hdr:main-header:0"
           node_type: header
           parent: "0"
           span:
@@ -54,7 +54,7 @@ flattening:
       nodes:
         "0":
           label: SimpleTest
-          lexical_id: "SimpleTest|root:0"
+          log_filter_key: "SimpleTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -63,7 +63,7 @@ flattening:
             end: 82
         "1":
           label: Main Header
-          lexical_id: "SimpleTest|root:0|hdr:main-header:0"
+          log_filter_key: "SimpleTest|root:0|hdr:main-header:0"
           node_type: header
           parent: "0"
           span:
@@ -78,7 +78,7 @@ flattening:
       nodes:
         "0":
           label: SimpleTest
-          lexical_id: "SimpleTest|root:0"
+          log_filter_key: "SimpleTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -87,7 +87,7 @@ flattening:
             end: 82
         "1":
           label: Main Header
-          lexical_id: "SimpleTest|root:0|hdr:main-header:0"
+          log_filter_key: "SimpleTest|root:0|hdr:main-header:0"
           node_type: header
           parent: "0"
           span:
@@ -99,7 +99,7 @@ flattening:
       nodes:
         "0":
           label: SimpleTest
-          lexical_id: "SimpleTest|root:0"
+          log_filter_key: "SimpleTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -108,7 +108,7 @@ flattening:
             end: 82
         "1":
           label: Main Header
-          lexical_id: "SimpleTest|root:0|hdr:main-header:0"
+          log_filter_key: "SimpleTest|root:0|hdr:main-header:0"
           node_type: header
           parent: "0"
           span:
@@ -123,7 +123,7 @@ flattening:
       nodes:
         "0":
           label: SimpleTest
-          lexical_id: "SimpleTest|root:0"
+          log_filter_key: "SimpleTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -132,7 +132,7 @@ flattening:
             end: 82
         "1":
           label: Main Header
-          lexical_id: "SimpleTest|root:0|hdr:main-header:0"
+          log_filter_key: "SimpleTest|root:0|hdr:main-header:0"
           node_type: header
           parent: "0"
           span:
@@ -144,7 +144,7 @@ flattening:
       nodes:
         "0":
           label: SimpleTest
-          lexical_id: "SimpleTest|root:0"
+          log_filter_key: "SimpleTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -153,7 +153,7 @@ flattening:
             end: 82
         "1":
           label: Main Header
-          lexical_id: "SimpleTest|root:0|hdr:main-header:0"
+          log_filter_key: "SimpleTest|root:0|hdr:main-header:0"
           node_type: header
           parent: "0"
           span:

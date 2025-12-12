@@ -16,7 +16,6 @@ import type {
   WatchStreamStartValue,
   WatchStreamUpdateValue,
   WatchStreamEndValue,
-  RichWatchNotification,
   FunctionWithCallGraph,
   GraphNode,
 } from '../interface';
@@ -101,20 +100,7 @@ function findNodeIdByLabel(
 /**
  * Enrich watch notification with parsed value and context
  */
-function enrichNotificationWithContext(
-  notification: WatchNotification,
-  nodes: GraphNode[]
-): RichWatchNotification {
-  const enriched: RichWatchNotification = { ...notification };
-  const parsedValue = parseWatchValue(notification.value);
-  enriched.parsedValue = parsedValue;
-
-  if (parsedValue?.type === 'header') {
-    enriched.lexicalNodeId = parsedValue.label;
-  }
-
-  return enriched;
-}
+// No enrichment helper anymore; tests should directly use stateUpdate+parsed value
 
 // ============================================================================
 // Tests
@@ -257,30 +243,33 @@ describe('Watch Notification Parsing', () => {
 describe('Node ID Matching', () => {
   const mockNodes: GraphNode[] = [
     {
-      id: 'SimpleWorkflow|root:0',
+      id: '0',
       type: 'group',
       label: 'SimpleWorkflow',
       functionName: 'SimpleWorkflow',
       codeHash: '',
       lastModified: Date.now(),
+      metadata: { logFilterKey: 'SimpleWorkflow|root:0' },
     },
     {
-      id: 'SimpleWorkflow|root:0|hdr:gather-applicant-context:0',
+      id: '1',
       type: 'group',
       label: 'gather applicant context',
       functionName: 'SimpleWorkflow',
-      parent: 'SimpleWorkflow|root:0',
+      parent: '0',
       codeHash: '',
       lastModified: Date.now(),
+      metadata: { logFilterKey: 'SimpleWorkflow|root:0|hdr:gather-applicant-context:0' },
     },
     {
-      id: 'SimpleWorkflow|root:0|hdr:normalize-profile-signals:1',
+      id: '2',
       type: 'group',
       label: 'normalize profile signals',
       functionName: 'SimpleWorkflow',
-      parent: 'SimpleWorkflow|root:0',
+      parent: '0',
       codeHash: '',
       lastModified: Date.now(),
+      metadata: { logFilterKey: 'SimpleWorkflow|root:0|hdr:normalize-profile-signals:1' },
     },
   ];
 
@@ -288,19 +277,19 @@ describe('Node ID Matching', () => {
     it('should find node by exact label match', () => {
       const nodeId = findNodeIdByLabel(mockNodes, 'gather applicant context');
 
-      expect(nodeId).toBe('SimpleWorkflow|root:0|hdr:gather-applicant-context:0');
+      expect(nodeId).toBe('1');
     });
 
     it('should find second header node', () => {
       const nodeId = findNodeIdByLabel(mockNodes, 'normalize profile signals');
 
-      expect(nodeId).toBe('SimpleWorkflow|root:0|hdr:normalize-profile-signals:1');
+      expect(nodeId).toBe('2');
     });
 
     it('should find root node', () => {
       const nodeId = findNodeIdByLabel(mockNodes, 'SimpleWorkflow');
 
-      expect(nodeId).toBe('SimpleWorkflow|root:0');
+      expect(nodeId).toBe('0');
     });
 
     it('should return undefined for non-existent label', () => {
@@ -317,74 +306,6 @@ describe('Node ID Matching', () => {
   });
 });
 
-describe('Watch Notification Enrichment', () => {
-  const mockNodes: GraphNode[] = [
-    {
-      id: 'TestWorkflow|root:0|hdr:section-one:0',
-      type: 'group',
-      label: 'Section One',
-      functionName: 'TestWorkflow',
-      codeHash: '',
-      lastModified: Date.now(),
-    },
-  ];
-
-  describe('enrichNotificationWithContext', () => {
-    it('should enrich header notification with lexicalNodeId', () => {
-      const notification: WatchNotification = {
-        functionName: 'TestWorkflow',
-        isStream: false,
-        value: JSON.stringify({
-          type: 'header',
-          label: 'Section One',
-          level: 1,
-        }),
-      };
-
-      const enriched = enrichNotificationWithContext(notification, mockNodes);
-
-      expect(enriched.lexicalNodeId).toBe('Section One');
-      expect(enriched.parsedValue).toBeDefined();
-      expect(enriched.parsedValue?.type).toBe('header');
-    });
-
-    it('should preserve original notification fields', () => {
-      const notification: WatchNotification = {
-        variableName: 'testVar',
-        channelName: 'testChannel',
-        functionName: 'TestWorkflow',
-        isStream: true,
-        value: JSON.stringify({
-          type: 'stream_start',
-          id: 'stream-456',
-        }),
-      };
-
-      const enriched = enrichNotificationWithContext(notification, mockNodes);
-
-      expect(enriched.variableName).toBe('testVar');
-      expect(enriched.channelName).toBe('testChannel');
-      expect(enriched.functionName).toBe('TestWorkflow');
-      expect(enriched.isStream).toBe(true);
-      expect(enriched.value).toBe(notification.value);
-    });
-
-    it('should not set lexicalNodeId for non-header events', () => {
-      const notification: WatchNotification = {
-        functionName: 'TestWorkflow',
-        isStream: false,
-        value: JSON.stringify({
-          name: 'regular value',
-        }),
-      };
-
-      const enriched = enrichNotificationWithContext(notification, mockNodes);
-
-      expect(enriched.lexicalNodeId).toBeUndefined();
-    });
-  });
-});
-
 describe('Node State Updates', () => {
   let store: ReturnType<typeof createStore>;
 
@@ -393,7 +314,7 @@ describe('Node State Updates', () => {
   });
 
   it('should update node state to running when header event is received', () => {
-    const nodeId = 'TestWorkflow|root:0|hdr:section-one:0';
+    const nodeId = '0';
 
     // Register the node
     store.set(registerNodeAtom, nodeId);
@@ -407,8 +328,8 @@ describe('Node State Updates', () => {
   });
 
   it('should handle multiple node state updates', () => {
-    const nodeId1 = 'TestWorkflow|root:0|hdr:section-one:0';
-    const nodeId2 = 'TestWorkflow|root:0|hdr:section-two:1';
+    const nodeId1 = '0';
+    const nodeId2 = '1';
 
     // Register nodes
     store.set(registerNodeAtom, nodeId1);
@@ -430,7 +351,7 @@ describe('Node State Updates', () => {
   });
 
   it('should allow transitioning node states', () => {
-    const nodeId = 'TestWorkflow|root:0|hdr:section-one:0';
+    const nodeId = '0';
 
     // Register node
     store.set(registerNodeAtom, nodeId);
@@ -445,7 +366,7 @@ describe('Node State Updates', () => {
   });
 
   it('should handle error state', () => {
-    const nodeId = 'TestWorkflow|root:0|hdr:section-one:0';
+    const nodeId = '0';
 
     // Register node
     store.set(registerNodeAtom, nodeId);
@@ -462,30 +383,33 @@ describe('Node State Updates', () => {
 describe('End-to-End Watch Notification Flow', () => {
   const mockNodes: GraphNode[] = [
     {
-      id: 'SimpleWorkflow|root:0',
+      id: '0',
       type: 'group',
       label: 'SimpleWorkflow',
       functionName: 'SimpleWorkflow',
       codeHash: '',
       lastModified: Date.now(),
+      metadata: { logFilterKey: 'SimpleWorkflow|root:0' },
     },
     {
-      id: 'SimpleWorkflow|root:0|hdr:gather-applicant-context:0',
+      id: '1',
       type: 'group',
       label: 'gather applicant context',
       functionName: 'SimpleWorkflow',
-      parent: 'SimpleWorkflow|root:0',
+      parent: '0',
       codeHash: '',
       lastModified: Date.now(),
+      metadata: { logFilterKey: 'SimpleWorkflow|root:0|hdr:gather-applicant-context:0' },
     },
     {
-      id: 'SimpleWorkflow|root:0|hdr:normalize-profile-signals:1',
+      id: '2',
       type: 'group',
       label: 'normalize profile signals',
       functionName: 'SimpleWorkflow',
-      parent: 'SimpleWorkflow|root:0',
+      parent: '0',
       codeHash: '',
       lastModified: Date.now(),
+      metadata: { logFilterKey: 'SimpleWorkflow|root:0|hdr:normalize-profile-signals:1' },
     },
   ];
 
@@ -506,6 +430,11 @@ describe('End-to-End Watch Notification Flow', () => {
     const notification1: WatchNotification = {
       functionName: 'SimpleWorkflow',
       isStream: false,
+      stateUpdate: {
+        nodeId: 1,
+        logFilterKey: 'SimpleWorkflow|root:0|hdr:gather-applicant-context:0',
+        newState: 'running',
+      },
       value: JSON.stringify({
         type: 'header',
         label: 'gather applicant context',
@@ -520,24 +449,30 @@ describe('End-to-End Watch Notification Flow', () => {
       }),
     };
 
-    const enriched1 = enrichNotificationWithContext(notification1, mockNodes);
-    expect(enriched1.lexicalNodeId).toBe('gather applicant context');
+    const parsed1 = parseWatchValue(notification1.value ?? '');
+    const vizNodeId1 = notification1.stateUpdate?.nodeId.toString();
+    expect(notification1.stateUpdate?.logFilterKey).toBe('SimpleWorkflow|root:0|hdr:gather-applicant-context:0');
 
     // Find node and update state
-    const nodeId1 = findNodeIdByLabel(mockNodes, enriched1.lexicalNodeId!);
-    expect(nodeId1).toBe('SimpleWorkflow|root:0|hdr:gather-applicant-context:0');
+    const nodeId1 = vizNodeId1;
+    expect(nodeId1).toBe('1');
 
     if (nodeId1) {
       store.set(nodeStateAtomFamily(nodeId1), 'running');
     }
 
-    expect(store.get(nodeStateAtomFamily('SimpleWorkflow|root:0|hdr:gather-applicant-context:0'))).toBe('running');
-    expect(store.get(nodeStateAtomFamily('SimpleWorkflow|root:0|hdr:normalize-profile-signals:1'))).toBe('not-started');
+    expect(store.get(nodeStateAtomFamily('1'))).toBe('running');
+    expect(store.get(nodeStateAtomFamily('2'))).toBe('not-started');
 
     // 2. Second header event: "normalize profile signals"
     const notification2: WatchNotification = {
       functionName: 'SimpleWorkflow',
       isStream: false,
+      stateUpdate: {
+        nodeId: 2,
+        logFilterKey: 'SimpleWorkflow|root:0|hdr:normalize-profile-signals:1',
+        newState: 'running',
+      },
       value: JSON.stringify({
         type: 'header',
         label: 'normalize profile signals',
@@ -552,19 +487,20 @@ describe('End-to-End Watch Notification Flow', () => {
       }),
     };
 
-    const enriched2 = enrichNotificationWithContext(notification2, mockNodes);
-    expect(enriched2.lexicalNodeId).toBe('normalize profile signals');
+    const parsed2 = parseWatchValue(notification2.value ?? '');
+    const vizNodeId2 = notification2.stateUpdate?.nodeId.toString();
+    expect(notification2.stateUpdate?.logFilterKey).toBe('SimpleWorkflow|root:0|hdr:normalize-profile-signals:1');
 
-    const nodeId2 = findNodeIdByLabel(mockNodes, enriched2.lexicalNodeId!);
-    expect(nodeId2).toBe('SimpleWorkflow|root:0|hdr:normalize-profile-signals:1');
+    const nodeId2 = vizNodeId2;
+    expect(nodeId2).toBe('2');
 
     if (nodeId2) {
       store.set(nodeStateAtomFamily(nodeId2), 'running');
     }
 
     // Both should now be running (or first could be success)
-    expect(store.get(nodeStateAtomFamily('SimpleWorkflow|root:0|hdr:gather-applicant-context:0'))).toBe('running');
-    expect(store.get(nodeStateAtomFamily('SimpleWorkflow|root:0|hdr:normalize-profile-signals:1'))).toBe('running');
+    expect(store.get(nodeStateAtomFamily('1'))).toBe('running');
+    expect(store.get(nodeStateAtomFamily('2'))).toBe('running');
   });
 
   it('should handle stream events within workflow', () => {
@@ -581,8 +517,8 @@ describe('End-to-End Watch Notification Flow', () => {
       }),
     };
 
-    const enrichedHeader = enrichNotificationWithContext(headerNotification, mockNodes);
-    expect(enrichedHeader.parsedValue?.type).toBe('header');
+    const enrichedHeader = parseWatchValue(headerNotification.value ?? '');
+    expect(enrichedHeader?.type).toBe('header');
 
     // Stream start
     const streamStartNotification: WatchNotification = {
@@ -595,10 +531,10 @@ describe('End-to-End Watch Notification Flow', () => {
       }),
     };
 
-    const enrichedStart = enrichNotificationWithContext(streamStartNotification, mockNodes);
-    expect(enrichedStart.parsedValue?.type).toBe('stream_start');
-    if (enrichedStart.parsedValue?.type === 'stream_start') {
-      expect(enrichedStart.parsedValue.id).toBe('profile-stream-1');
+    const enrichedStart = parseWatchValue(streamStartNotification.value ?? '');
+    expect(enrichedStart?.type).toBe('stream_start');
+    if (enrichedStart?.type === 'stream_start') {
+      expect(enrichedStart.id).toBe('profile-stream-1');
     }
 
     // Stream update
@@ -613,8 +549,8 @@ describe('End-to-End Watch Notification Flow', () => {
       }),
     };
 
-    const enrichedUpdate = enrichNotificationWithContext(streamUpdateNotification, mockNodes);
-    expect(enrichedUpdate.parsedValue?.type).toBe('stream_update');
+    const enrichedUpdate = parseWatchValue(streamUpdateNotification.value ?? '');
+    expect(enrichedUpdate?.type).toBe('stream_update');
 
     // Stream end
     const streamEndNotification: WatchNotification = {
@@ -627,7 +563,7 @@ describe('End-to-End Watch Notification Flow', () => {
       }),
     };
 
-    const enrichedEnd = enrichNotificationWithContext(streamEndNotification, mockNodes);
-    expect(enrichedEnd.parsedValue?.type).toBe('stream_end');
+    const enrichedEnd = parseWatchValue(streamEndNotification.value ?? '');
+    expect(enrichedEnd?.type).toBe('stream_end');
   });
 });

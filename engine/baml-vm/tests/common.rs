@@ -30,18 +30,31 @@ pub fn assert_vm_fails_with_inspection(
     input: FailingProgram,
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
+    let (mut vm, mut result) = setup_and_exec_program(input.source, input.function)?;
 
-    assert_eq!(
-        result,
-        Err(input.expected),
-        "VM execution result mismatch for function '{}'",
-        input.function
-    );
-
-    inspect(&vm)?;
-
-    Ok(())
+    loop {
+        match result {
+            Err(err) => {
+                assert_eq!(
+                    err, input.expected,
+                    "VM execution result mismatch for function '{}'",
+                    input.function
+                );
+                inspect(&vm)?;
+                return Ok(());
+            }
+            Ok(state) => {
+                // Keep stepping until we hit the expected error.
+                if matches!(state, VmExecState::Complete(_)) {
+                    panic!(
+                        "VM unexpectedly completed without error for function '{}'",
+                        input.function
+                    );
+                }
+                result = vm.exec();
+            }
+        }
+    }
 }
 
 #[track_caller]
@@ -54,10 +67,11 @@ pub fn assert_vm_executes_with_inspection(
     input: Program,
     inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    let (vm, result) = setup_and_exec_program(input.source, input.function)?;
-    let result = result?;
-
-    let test_result = ExecState::from_vm_exec_state(result, &vm)?;
+    let (vm, states) = collect_vm_exec_states(input.source, input.function)?;
+    let test_result = states
+        .last()
+        .cloned()
+        .expect("execution should produce at least one state");
 
     assert_eq!(
         test_result, input.expected,
@@ -134,7 +148,18 @@ pub fn assert_vm_emits_with_inspection(
     let emit_states: Vec<Vec<Notification>> = states
         .iter()
         .filter_map(|state| match state {
-            ExecState::Emit(roots) => Some(roots.clone()),
+            ExecState::Emit(roots) => {
+                let filtered: Vec<Notification> = roots
+                    .iter()
+                    .cloned()
+                    .filter(|n| !matches!(n, Notification::Viz { .. }))
+                    .collect();
+                if filtered.is_empty() {
+                    None
+                } else {
+                    Some(filtered)
+                }
+            }
             _ => None,
         })
         .collect();
@@ -215,7 +240,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             vec![names]
         },
         span: internal_baml_diagnostics::Span::fake(),
-        block_notifications: Vec::new(),
+        viz_nodes: Vec::new(),
     };
 
     let objects = vec![VmObject::Function(function)];

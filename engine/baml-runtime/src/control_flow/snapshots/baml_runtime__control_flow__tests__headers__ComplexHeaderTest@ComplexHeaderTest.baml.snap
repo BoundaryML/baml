@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: ComplexHeaderTest
-      lexical_id: "ComplexHeaderTest|root:0"
+      log_filter_key: "ComplexHeaderTest|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 863
     "1":
       label: Initialization
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0"
       node_type: header
       parent: "0"
       span:
@@ -26,7 +26,7 @@ expr:
         end: 79
     "10":
       label: another header in the statement
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
       node_type: header
       parent: "9"
       span:
@@ -35,7 +35,7 @@ expr:
         end: 501
     "11":
       label: True totally
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
       node_type: header
       parent: "9"
       span:
@@ -44,7 +44,7 @@ expr:
         end: 566
     "12":
       label: else
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1"
       node_type: branch-arm
       parent: "7"
       span:
@@ -53,7 +53,7 @@ expr:
         end: 660
     "13":
       label: False other branch
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
       node_type: header
       parent: "12"
       span:
@@ -62,7 +62,7 @@ expr:
         end: 635
     "14":
       label: very useful header
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
       node_type: header
       parent: "4"
       span:
@@ -71,7 +71,7 @@ expr:
         end: 694
     "15":
       label: Result
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
       node_type: header
       parent: "14"
       span:
@@ -80,7 +80,7 @@ expr:
         end: 746
     "16":
       label: Final Processing
-      lexical_id: "ComplexHeaderTest|root:0|hdr:final-processing:1"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:final-processing:1"
       node_type: header
       parent: "0"
       span:
@@ -89,7 +89,7 @@ expr:
         end: 793
     "17":
       label: Return Result
-      lexical_id: "ComplexHeaderTest|root:0|hdr:return-result:2"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:return-result:2"
       node_type: header
       parent: "0"
       span:
@@ -98,7 +98,7 @@ expr:
         end: 844
     "2":
       label: Processing Loop
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
       node_type: header
       parent: "1"
       span:
@@ -107,7 +107,7 @@ expr:
         end: 159
     "3":
       label: for (item in items)
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
       node_type: loop
       parent: "2"
       span:
@@ -116,7 +116,7 @@ expr:
         end: 767
     "4":
       label: Markdown Header tester
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
       node_type: header
       parent: "3"
       span:
@@ -125,7 +125,7 @@ expr:
         end: 225
     "5":
       label: Item Analysis
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
       node_type: header
       parent: "4"
       span:
@@ -134,7 +134,7 @@ expr:
         end: 283
     "6":
       label: Validation
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
       node_type: header
       parent: "4"
       span:
@@ -143,7 +143,7 @@ expr:
         end: 336
     "7":
       label: if (true)
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
       node_type: branch-group
       parent: "6"
       span:
@@ -152,7 +152,7 @@ expr:
         end: 660
     "8":
       label: if (true)
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "7"
       span:
@@ -161,7 +161,7 @@ expr:
         end: 591
     "9":
       label: Markdown Header tester in statement
-      lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
+      log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
       node_type: header
       parent: "8"
       span:
@@ -187,7 +187,7 @@ flattening:
       nodes:
         "0":
           label: ComplexHeaderTest
-          lexical_id: "ComplexHeaderTest|root:0"
+          log_filter_key: "ComplexHeaderTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -196,7 +196,7 @@ flattening:
             end: 863
         "1":
           label: Initialization
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0"
           node_type: header
           parent: "0"
           span:
@@ -205,7 +205,7 @@ flattening:
             end: 79
         "10":
           label: another header in the statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
           node_type: header
           parent: "9"
           span:
@@ -214,7 +214,7 @@ flattening:
             end: 501
         "11":
           label: True totally
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
           node_type: header
           parent: "9"
           span:
@@ -223,7 +223,7 @@ flattening:
             end: 566
         "12":
           label: else
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "7"
           span:
@@ -232,7 +232,7 @@ flattening:
             end: 660
         "13":
           label: False other branch
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
           node_type: header
           parent: "12"
           span:
@@ -241,7 +241,7 @@ flattening:
             end: 635
         "14":
           label: very useful header
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
           node_type: header
           parent: "4"
           span:
@@ -250,7 +250,7 @@ flattening:
             end: 694
         "15":
           label: Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
           node_type: header
           parent: "14"
           span:
@@ -259,7 +259,7 @@ flattening:
             end: 746
         "16":
           label: Final Processing
-          lexical_id: "ComplexHeaderTest|root:0|hdr:final-processing:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:final-processing:1"
           node_type: header
           parent: "0"
           span:
@@ -268,7 +268,7 @@ flattening:
             end: 793
         "17":
           label: Return Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:return-result:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:return-result:2"
           node_type: header
           parent: "0"
           span:
@@ -277,7 +277,7 @@ flattening:
             end: 844
         "2":
           label: Processing Loop
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -286,7 +286,7 @@ flattening:
             end: 159
         "3":
           label: for (item in items)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -295,7 +295,7 @@ flattening:
             end: 767
         "4":
           label: Markdown Header tester
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
           node_type: header
           parent: "3"
           span:
@@ -304,7 +304,7 @@ flattening:
             end: 225
         "5":
           label: Item Analysis
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
           node_type: header
           parent: "4"
           span:
@@ -313,7 +313,7 @@ flattening:
             end: 283
         "6":
           label: Validation
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
           node_type: header
           parent: "4"
           span:
@@ -322,7 +322,7 @@ flattening:
             end: 336
         "7":
           label: if (true)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
           node_type: branch-group
           parent: "6"
           span:
@@ -331,7 +331,7 @@ flattening:
             end: 660
         "8":
           label: if (true)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "7"
           span:
@@ -340,7 +340,7 @@ flattening:
             end: 591
         "9":
           label: Markdown Header tester in statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
           node_type: header
           parent: "8"
           span:
@@ -362,7 +362,7 @@ flattening:
       nodes:
         "0":
           label: ComplexHeaderTest
-          lexical_id: "ComplexHeaderTest|root:0"
+          log_filter_key: "ComplexHeaderTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -371,7 +371,7 @@ flattening:
             end: 863
         "1":
           label: Initialization
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0"
           node_type: header
           parent: "0"
           span:
@@ -380,7 +380,7 @@ flattening:
             end: 79
         "10":
           label: another header in the statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
           node_type: header
           parent: "9"
           span:
@@ -389,7 +389,7 @@ flattening:
             end: 501
         "11":
           label: True totally
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
           node_type: header
           parent: "9"
           span:
@@ -398,7 +398,7 @@ flattening:
             end: 566
         "12":
           label: else
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "7"
           span:
@@ -407,7 +407,7 @@ flattening:
             end: 660
         "13":
           label: False other branch
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
           node_type: header
           parent: "12"
           span:
@@ -416,7 +416,7 @@ flattening:
             end: 635
         "14":
           label: very useful header
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
           node_type: header
           parent: "4"
           span:
@@ -425,7 +425,7 @@ flattening:
             end: 694
         "15":
           label: Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
           node_type: header
           parent: "14"
           span:
@@ -434,7 +434,7 @@ flattening:
             end: 746
         "16":
           label: Final Processing
-          lexical_id: "ComplexHeaderTest|root:0|hdr:final-processing:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:final-processing:1"
           node_type: header
           parent: "0"
           span:
@@ -443,7 +443,7 @@ flattening:
             end: 793
         "17":
           label: Return Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:return-result:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:return-result:2"
           node_type: header
           parent: "0"
           span:
@@ -452,7 +452,7 @@ flattening:
             end: 844
         "2":
           label: Processing Loop
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -461,7 +461,7 @@ flattening:
             end: 159
         "3":
           label: for (item in items)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -470,7 +470,7 @@ flattening:
             end: 767
         "4":
           label: Markdown Header tester
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
           node_type: header
           parent: "3"
           span:
@@ -479,7 +479,7 @@ flattening:
             end: 225
         "5":
           label: Item Analysis
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
           node_type: header
           parent: "4"
           span:
@@ -488,7 +488,7 @@ flattening:
             end: 283
         "6":
           label: Validation
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
           node_type: header
           parent: "4"
           span:
@@ -497,7 +497,7 @@ flattening:
             end: 336
         "7":
           label: if (true)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
           node_type: branch-group
           parent: "6"
           span:
@@ -506,7 +506,7 @@ flattening:
             end: 660
         "8":
           label: if (true)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "7"
           span:
@@ -515,7 +515,7 @@ flattening:
             end: 591
         "9":
           label: Markdown Header tester in statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
           node_type: header
           parent: "8"
           span:
@@ -540,7 +540,7 @@ flattening:
       nodes:
         "0":
           label: ComplexHeaderTest
-          lexical_id: "ComplexHeaderTest|root:0"
+          log_filter_key: "ComplexHeaderTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -549,7 +549,7 @@ flattening:
             end: 863
         "1":
           label: Initialization
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0"
           node_type: header
           parent: "0"
           span:
@@ -558,7 +558,7 @@ flattening:
             end: 79
         "10":
           label: another header in the statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
           node_type: header
           parent: "9"
           span:
@@ -567,7 +567,7 @@ flattening:
             end: 501
         "11":
           label: True totally
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
           node_type: header
           parent: "9"
           span:
@@ -576,7 +576,7 @@ flattening:
             end: 566
         "12":
           label: else
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "6"
           span:
@@ -585,7 +585,7 @@ flattening:
             end: 660
         "13":
           label: False other branch
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
           node_type: header
           parent: "12"
           span:
@@ -594,7 +594,7 @@ flattening:
             end: 635
         "14":
           label: very useful header
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
           node_type: header
           parent: "4"
           span:
@@ -603,7 +603,7 @@ flattening:
             end: 694
         "15":
           label: Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
           node_type: header
           parent: "14"
           span:
@@ -612,7 +612,7 @@ flattening:
             end: 746
         "16":
           label: Final Processing
-          lexical_id: "ComplexHeaderTest|root:0|hdr:final-processing:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:final-processing:1"
           node_type: header
           parent: "0"
           span:
@@ -621,7 +621,7 @@ flattening:
             end: 793
         "17":
           label: Return Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:return-result:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:return-result:2"
           node_type: header
           parent: "0"
           span:
@@ -630,7 +630,7 @@ flattening:
             end: 844
         "2":
           label: Processing Loop
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -639,7 +639,7 @@ flattening:
             end: 159
         "3":
           label: for (item in items)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -648,7 +648,7 @@ flattening:
             end: 767
         "4":
           label: Markdown Header tester
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
           node_type: header
           parent: "3"
           span:
@@ -657,7 +657,7 @@ flattening:
             end: 225
         "5":
           label: Item Analysis
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
           node_type: header
           parent: "4"
           span:
@@ -666,7 +666,7 @@ flattening:
             end: 283
         "6":
           label: Validation
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
           node_type: header
           parent: "4"
           span:
@@ -675,7 +675,7 @@ flattening:
             end: 336
         "7":
           label: if (true)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
           node_type: branch-group
           parent: "6"
           span:
@@ -684,7 +684,7 @@ flattening:
             end: 660
         "8":
           label: if (true)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "6"
           span:
@@ -693,7 +693,7 @@ flattening:
             end: 591
         "9":
           label: Markdown Header tester in statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
           node_type: header
           parent: "8"
           span:
@@ -718,7 +718,7 @@ flattening:
       nodes:
         "0":
           label: ComplexHeaderTest
-          lexical_id: "ComplexHeaderTest|root:0"
+          log_filter_key: "ComplexHeaderTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -727,7 +727,7 @@ flattening:
             end: 863
         "1":
           label: Initialization
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0"
           node_type: header
           parent: "0"
           span:
@@ -736,7 +736,7 @@ flattening:
             end: 79
         "10":
           label: another header in the statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
           node_type: header
           parent: "9"
           span:
@@ -745,7 +745,7 @@ flattening:
             end: 501
         "11":
           label: True totally
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
           node_type: header
           parent: "9"
           span:
@@ -754,7 +754,7 @@ flattening:
             end: 566
         "12":
           label: else
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "6"
           span:
@@ -763,7 +763,7 @@ flattening:
             end: 660
         "13":
           label: False other branch
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
           node_type: header
           parent: "12"
           span:
@@ -772,7 +772,7 @@ flattening:
             end: 635
         "14":
           label: very useful header
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
           node_type: header
           parent: "4"
           span:
@@ -781,7 +781,7 @@ flattening:
             end: 694
         "15":
           label: Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
           node_type: header
           parent: "14"
           span:
@@ -790,7 +790,7 @@ flattening:
             end: 746
         "16":
           label: Final Processing
-          lexical_id: "ComplexHeaderTest|root:0|hdr:final-processing:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:final-processing:1"
           node_type: header
           parent: "0"
           span:
@@ -799,7 +799,7 @@ flattening:
             end: 793
         "17":
           label: Return Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:return-result:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:return-result:2"
           node_type: header
           parent: "0"
           span:
@@ -808,7 +808,7 @@ flattening:
             end: 844
         "2":
           label: Processing Loop
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -817,7 +817,7 @@ flattening:
             end: 159
         "3":
           label: for (item in items)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -826,7 +826,7 @@ flattening:
             end: 767
         "4":
           label: Markdown Header tester
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
           node_type: header
           parent: "3"
           span:
@@ -835,7 +835,7 @@ flattening:
             end: 225
         "5":
           label: Item Analysis
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
           node_type: header
           parent: "4"
           span:
@@ -844,7 +844,7 @@ flattening:
             end: 283
         "6":
           label: Validation
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
           node_type: header
           parent: "4"
           span:
@@ -853,7 +853,7 @@ flattening:
             end: 336
         "7":
           label: if (true)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
           node_type: branch-group
           parent: "6"
           span:
@@ -862,7 +862,7 @@ flattening:
             end: 660
         "8":
           label: if (true)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "6"
           span:
@@ -871,7 +871,7 @@ flattening:
             end: 591
         "9":
           label: Markdown Header tester in statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
           node_type: header
           parent: "8"
           span:
@@ -899,7 +899,7 @@ flattening:
       nodes:
         "0":
           label: ComplexHeaderTest
-          lexical_id: "ComplexHeaderTest|root:0"
+          log_filter_key: "ComplexHeaderTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -908,7 +908,7 @@ flattening:
             end: 863
         "1":
           label: Initialization
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0"
           node_type: header
           parent: "0"
           span:
@@ -917,7 +917,7 @@ flattening:
             end: 79
         "10":
           label: another header in the statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
           node_type: header
           parent: "9"
           span:
@@ -926,7 +926,7 @@ flattening:
             end: 501
         "11":
           label: True totally
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
           node_type: header
           parent: "9"
           span:
@@ -935,7 +935,7 @@ flattening:
             end: 566
         "13":
           label: False other branch
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
           node_type: header
           parent: "6"
           span:
@@ -944,7 +944,7 @@ flattening:
             end: 635
         "14":
           label: very useful header
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
           node_type: header
           parent: "4"
           span:
@@ -953,7 +953,7 @@ flattening:
             end: 694
         "15":
           label: Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
           node_type: header
           parent: "14"
           span:
@@ -962,7 +962,7 @@ flattening:
             end: 746
         "16":
           label: Final Processing
-          lexical_id: "ComplexHeaderTest|root:0|hdr:final-processing:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:final-processing:1"
           node_type: header
           parent: "0"
           span:
@@ -971,7 +971,7 @@ flattening:
             end: 793
         "17":
           label: Return Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:return-result:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:return-result:2"
           node_type: header
           parent: "0"
           span:
@@ -980,7 +980,7 @@ flattening:
             end: 844
         "2":
           label: Processing Loop
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -989,7 +989,7 @@ flattening:
             end: 159
         "3":
           label: for (item in items)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -998,7 +998,7 @@ flattening:
             end: 767
         "4":
           label: Markdown Header tester
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
           node_type: header
           parent: "3"
           span:
@@ -1007,7 +1007,7 @@ flattening:
             end: 225
         "5":
           label: Item Analysis
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
           node_type: header
           parent: "4"
           span:
@@ -1016,7 +1016,7 @@ flattening:
             end: 283
         "6":
           label: Validation
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
           node_type: header
           parent: "4"
           span:
@@ -1025,7 +1025,7 @@ flattening:
             end: 336
         "7":
           label: if (true)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
           node_type: branch-group
           parent: "6"
           span:
@@ -1034,7 +1034,7 @@ flattening:
             end: 660
         "9":
           label: Markdown Header tester in statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
           node_type: header
           parent: "6"
           span:
@@ -1059,7 +1059,7 @@ flattening:
       nodes:
         "0":
           label: ComplexHeaderTest
-          lexical_id: "ComplexHeaderTest|root:0"
+          log_filter_key: "ComplexHeaderTest|root:0"
           node_type: function
           parent: ~
           span:
@@ -1068,7 +1068,7 @@ flattening:
             end: 863
         "1":
           label: Initialization
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0"
           node_type: header
           parent: "0"
           span:
@@ -1077,7 +1077,7 @@ flattening:
             end: 79
         "10":
           label: another header in the statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:another-header-in-the-statement:0"
           node_type: header
           parent: "9"
           span:
@@ -1086,7 +1086,7 @@ flattening:
             end: 501
         "11":
           label: True totally
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0|hdr:true-totally:1"
           node_type: header
           parent: "9"
           span:
@@ -1095,7 +1095,7 @@ flattening:
             end: 566
         "13":
           label: False other branch
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:else:1|hdr:false-other-branch:0"
           node_type: header
           parent: "6"
           span:
@@ -1104,7 +1104,7 @@ flattening:
             end: 635
         "14":
           label: very useful header
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2"
           node_type: header
           parent: "4"
           span:
@@ -1113,7 +1113,7 @@ flattening:
             end: 694
         "15":
           label: Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:very-useful-header:2|hdr:result:0"
           node_type: header
           parent: "14"
           span:
@@ -1122,7 +1122,7 @@ flattening:
             end: 746
         "16":
           label: Final Processing
-          lexical_id: "ComplexHeaderTest|root:0|hdr:final-processing:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:final-processing:1"
           node_type: header
           parent: "0"
           span:
@@ -1131,7 +1131,7 @@ flattening:
             end: 793
         "17":
           label: Return Result
-          lexical_id: "ComplexHeaderTest|root:0|hdr:return-result:2"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:return-result:2"
           node_type: header
           parent: "0"
           span:
@@ -1140,7 +1140,7 @@ flattening:
             end: 844
         "2":
           label: Processing Loop
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0"
           node_type: header
           parent: "1"
           span:
@@ -1149,7 +1149,7 @@ flattening:
             end: 159
         "3":
           label: for (item in items)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0"
           node_type: loop
           parent: "2"
           span:
@@ -1158,7 +1158,7 @@ flattening:
             end: 767
         "4":
           label: Markdown Header tester
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0"
           node_type: header
           parent: "3"
           span:
@@ -1167,7 +1167,7 @@ flattening:
             end: 225
         "5":
           label: Item Analysis
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:item-analysis:0"
           node_type: header
           parent: "4"
           span:
@@ -1176,7 +1176,7 @@ flattening:
             end: 283
         "6":
           label: Validation
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1"
           node_type: header
           parent: "4"
           span:
@@ -1185,7 +1185,7 @@ flattening:
             end: 336
         "7":
           label: if (true)
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0"
           node_type: branch-group
           parent: "6"
           span:
@@ -1194,7 +1194,7 @@ flattening:
             end: 660
         "9":
           label: Markdown Header tester in statement
-          lexical_id: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
+          log_filter_key: "ComplexHeaderTest|root:0|hdr:initialization:0|hdr:processing-loop:0|loop:for-item-in-items:0|hdr:markdown-header-tester:0|hdr:validation:1|bg:if-true:0|arm:if-true:0|hdr:markdown-header-tester-in-statement:0"
           node_type: header
           parent: "6"
           span:

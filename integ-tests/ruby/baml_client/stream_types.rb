@@ -26,7 +26,7 @@ module BamlClient
       const :state, Symbol
   end
   # #########################################################################
-  # Generated classes (105)
+  # Generated classes (107)
   # #########################################################################
 
 
@@ -36,6 +36,14 @@ module BamlClient
       const :item, T.nilable(String)
       const :time, T.nilable(String)
       const :description, T.nilable(String)
+  end
+
+
+  class AddressWithMeta < T::Struct
+      include Baml::Sorbet::Struct
+      const :street, T.nilable(String)
+      const :city, T.nilable(String)
+      const :zipcode, T.nilable(String)
   end
 
 
@@ -575,6 +583,15 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :name, T.nilable(String)
       const :hair_color, T.nilable(T.any(BamlClient::Types::Color, String))
+  end
+
+
+  class PersonWithMeta < T::Struct
+      include Baml::Sorbet::Struct
+      const :name, T.nilable(String)
+      const :age, T.nilable(Integer)
+      const :address, T.nilable(AddressWithMeta)
+      const :tags, T::Array[String]
   end
 
 

@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: BasicIf
-      lexical_id: "BasicIf|root:0"
+      log_filter_key: "BasicIf|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 517
     "1":
       label: if (true)
-      lexical_id: "BasicIf|root:0|bg:if-true:0"
+      log_filter_key: "BasicIf|root:0|bg:if-true:0"
       node_type: branch-group
       parent: "0"
       span:
@@ -26,7 +26,7 @@ expr:
         end: 113
     "10":
       label: else
-      lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
       node_type: branch-arm
       parent: "5"
       span:
@@ -35,7 +35,7 @@ expr:
         end: 353
     "11":
       label: else inside if-elseif-else
-      lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
       node_type: header
       parent: "10"
       span:
@@ -44,7 +44,7 @@ expr:
         end: 327
     "12":
       label: This is a named statement
-      lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
       node_type: header
       parent: "0"
       span:
@@ -53,7 +53,7 @@ expr:
         end: 388
     "13":
       label: if (true)
-      lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
       node_type: branch-group
       parent: "12"
       span:
@@ -62,7 +62,7 @@ expr:
         end: 507
     "14":
       label: if (true)
-      lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "13"
       span:
@@ -71,7 +71,7 @@ expr:
         end: 456
     "15":
       label: Then Statement
-      lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
       node_type: header
       parent: "14"
       span:
@@ -80,7 +80,7 @@ expr:
         end: 439
     "16":
       label: else
-      lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
       node_type: branch-arm
       parent: "13"
       span:
@@ -89,7 +89,7 @@ expr:
         end: 507
     "17":
       label: Else Statement
-      lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
       node_type: header
       parent: "16"
       span:
@@ -98,7 +98,7 @@ expr:
         end: 490
     "2":
       label: if (true)
-      lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "1"
       span:
@@ -107,7 +107,7 @@ expr:
         end: 113
     "3":
       label: standalone then
-      lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+      log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
       node_type: header
       parent: "2"
       span:
@@ -116,7 +116,7 @@ expr:
         end: 87
     "4":
       label: else
-      lexical_id: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+      log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
       node_type: branch-arm
       parent: "1"
       span:
@@ -125,7 +125,7 @@ expr:
         end: 113
     "5":
       label: if (x == 2)
-      lexical_id: "BasicIf|root:0|bg:if-x-2:1"
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
       node_type: branch-group
       parent: "0"
       span:
@@ -134,7 +134,7 @@ expr:
         end: 353
     "6":
       label: if (x == 2)
-      lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
       node_type: branch-arm
       parent: "5"
       span:
@@ -143,7 +143,7 @@ expr:
         end: 195
     "7":
       label: if inside if-elseif-else
-      lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
       node_type: header
       parent: "6"
       span:
@@ -152,7 +152,7 @@ expr:
         end: 169
     "8":
       label: else if (x == 3)
-      lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
       node_type: branch-arm
       parent: "5"
       span:
@@ -161,7 +161,7 @@ expr:
         end: 281
     "9":
       label: elseif inside if-elseif-else
-      lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
       node_type: header
       parent: "8"
       span:
@@ -181,7 +181,7 @@ flattening:
       nodes:
         "0":
           label: BasicIf
-          lexical_id: "BasicIf|root:0"
+          log_filter_key: "BasicIf|root:0"
           node_type: function
           parent: ~
           span:
@@ -190,7 +190,7 @@ flattening:
             end: 517
         "1":
           label: if (true)
-          lexical_id: "BasicIf|root:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
           node_type: branch-group
           parent: "0"
           span:
@@ -199,7 +199,7 @@ flattening:
             end: 113
         "10":
           label: else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
           node_type: branch-arm
           parent: "5"
           span:
@@ -208,7 +208,7 @@ flattening:
             end: 353
         "11":
           label: else inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
           node_type: header
           parent: "10"
           span:
@@ -217,7 +217,7 @@ flattening:
             end: 327
         "12":
           label: This is a named statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
           node_type: header
           parent: "0"
           span:
@@ -226,7 +226,7 @@ flattening:
             end: 388
         "13":
           label: if (true)
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
           node_type: branch-group
           parent: "12"
           span:
@@ -235,7 +235,7 @@ flattening:
             end: 507
         "14":
           label: if (true)
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "13"
           span:
@@ -244,7 +244,7 @@ flattening:
             end: 456
         "15":
           label: Then Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
           node_type: header
           parent: "14"
           span:
@@ -253,7 +253,7 @@ flattening:
             end: 439
         "16":
           label: else
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "13"
           span:
@@ -262,7 +262,7 @@ flattening:
             end: 507
         "17":
           label: Else Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
           node_type: header
           parent: "16"
           span:
@@ -271,7 +271,7 @@ flattening:
             end: 490
         "2":
           label: if (true)
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "1"
           span:
@@ -280,7 +280,7 @@ flattening:
             end: 113
         "3":
           label: standalone then
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "2"
           span:
@@ -289,7 +289,7 @@ flattening:
             end: 87
         "4":
           label: else
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -298,7 +298,7 @@ flattening:
             end: 113
         "5":
           label: if (x == 2)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
           node_type: branch-group
           parent: "0"
           span:
@@ -307,7 +307,7 @@ flattening:
             end: 353
         "6":
           label: if (x == 2)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
           node_type: branch-arm
           parent: "5"
           span:
@@ -316,7 +316,7 @@ flattening:
             end: 195
         "7":
           label: if inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
           node_type: header
           parent: "6"
           span:
@@ -325,7 +325,7 @@ flattening:
             end: 169
         "8":
           label: else if (x == 3)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
           node_type: branch-arm
           parent: "5"
           span:
@@ -334,7 +334,7 @@ flattening:
             end: 281
         "9":
           label: elseif inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
           node_type: header
           parent: "8"
           span:
@@ -350,7 +350,7 @@ flattening:
       nodes:
         "0":
           label: BasicIf
-          lexical_id: "BasicIf|root:0"
+          log_filter_key: "BasicIf|root:0"
           node_type: function
           parent: ~
           span:
@@ -359,7 +359,7 @@ flattening:
             end: 517
         "1":
           label: if (true)
-          lexical_id: "BasicIf|root:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
           node_type: branch-group
           parent: "0"
           span:
@@ -368,7 +368,7 @@ flattening:
             end: 113
         "10":
           label: else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
           node_type: branch-arm
           parent: "5"
           span:
@@ -377,7 +377,7 @@ flattening:
             end: 353
         "11":
           label: else inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
           node_type: header
           parent: "10"
           span:
@@ -386,7 +386,7 @@ flattening:
             end: 327
         "12":
           label: This is a named statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
           node_type: header
           parent: "0"
           span:
@@ -395,7 +395,7 @@ flattening:
             end: 388
         "13":
           label: if (true)
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
           node_type: branch-group
           parent: "12"
           span:
@@ -404,7 +404,7 @@ flattening:
             end: 507
         "14":
           label: if (true)
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "13"
           span:
@@ -413,7 +413,7 @@ flattening:
             end: 456
         "15":
           label: Then Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
           node_type: header
           parent: "14"
           span:
@@ -422,7 +422,7 @@ flattening:
             end: 439
         "16":
           label: else
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "13"
           span:
@@ -431,7 +431,7 @@ flattening:
             end: 507
         "17":
           label: Else Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
           node_type: header
           parent: "16"
           span:
@@ -440,7 +440,7 @@ flattening:
             end: 490
         "2":
           label: if (true)
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "1"
           span:
@@ -449,7 +449,7 @@ flattening:
             end: 113
         "3":
           label: standalone then
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "2"
           span:
@@ -458,7 +458,7 @@ flattening:
             end: 87
         "4":
           label: else
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -467,7 +467,7 @@ flattening:
             end: 113
         "5":
           label: if (x == 2)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
           node_type: branch-group
           parent: "0"
           span:
@@ -476,7 +476,7 @@ flattening:
             end: 353
         "6":
           label: if (x == 2)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
           node_type: branch-arm
           parent: "5"
           span:
@@ -485,7 +485,7 @@ flattening:
             end: 195
         "7":
           label: if inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
           node_type: header
           parent: "6"
           span:
@@ -494,7 +494,7 @@ flattening:
             end: 169
         "8":
           label: else if (x == 3)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
           node_type: branch-arm
           parent: "5"
           span:
@@ -503,7 +503,7 @@ flattening:
             end: 281
         "9":
           label: elseif inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
           node_type: header
           parent: "8"
           span:
@@ -522,7 +522,7 @@ flattening:
       nodes:
         "0":
           label: BasicIf
-          lexical_id: "BasicIf|root:0"
+          log_filter_key: "BasicIf|root:0"
           node_type: function
           parent: ~
           span:
@@ -531,7 +531,7 @@ flattening:
             end: 517
         "1":
           label: if (true)
-          lexical_id: "BasicIf|root:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
           node_type: branch-group
           parent: "0"
           span:
@@ -540,7 +540,7 @@ flattening:
             end: 113
         "10":
           label: else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
           node_type: branch-arm
           parent: "0"
           span:
@@ -549,7 +549,7 @@ flattening:
             end: 353
         "11":
           label: else inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
           node_type: header
           parent: "10"
           span:
@@ -558,7 +558,7 @@ flattening:
             end: 327
         "12":
           label: This is a named statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
           node_type: header
           parent: "0"
           span:
@@ -567,7 +567,7 @@ flattening:
             end: 388
         "13":
           label: if (true)
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
           node_type: branch-group
           parent: "12"
           span:
@@ -576,7 +576,7 @@ flattening:
             end: 507
         "14":
           label: if (true)
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "12"
           span:
@@ -585,7 +585,7 @@ flattening:
             end: 456
         "15":
           label: Then Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
           node_type: header
           parent: "14"
           span:
@@ -594,7 +594,7 @@ flattening:
             end: 439
         "16":
           label: else
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "12"
           span:
@@ -603,7 +603,7 @@ flattening:
             end: 507
         "17":
           label: Else Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
           node_type: header
           parent: "16"
           span:
@@ -612,7 +612,7 @@ flattening:
             end: 490
         "2":
           label: if (true)
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "0"
           span:
@@ -621,7 +621,7 @@ flattening:
             end: 113
         "3":
           label: standalone then
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "2"
           span:
@@ -630,7 +630,7 @@ flattening:
             end: 87
         "4":
           label: else
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "0"
           span:
@@ -639,7 +639,7 @@ flattening:
             end: 113
         "5":
           label: if (x == 2)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
           node_type: branch-group
           parent: "0"
           span:
@@ -648,7 +648,7 @@ flattening:
             end: 353
         "6":
           label: if (x == 2)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
           node_type: branch-arm
           parent: "0"
           span:
@@ -657,7 +657,7 @@ flattening:
             end: 195
         "7":
           label: if inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
           node_type: header
           parent: "6"
           span:
@@ -666,7 +666,7 @@ flattening:
             end: 169
         "8":
           label: else if (x == 3)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
           node_type: branch-arm
           parent: "0"
           span:
@@ -675,7 +675,7 @@ flattening:
             end: 281
         "9":
           label: elseif inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
           node_type: header
           parent: "8"
           span:
@@ -707,7 +707,7 @@ flattening:
       nodes:
         "0":
           label: BasicIf
-          lexical_id: "BasicIf|root:0"
+          log_filter_key: "BasicIf|root:0"
           node_type: function
           parent: ~
           span:
@@ -716,7 +716,7 @@ flattening:
             end: 517
         "1":
           label: if (true)
-          lexical_id: "BasicIf|root:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
           node_type: branch-group
           parent: "0"
           span:
@@ -725,7 +725,7 @@ flattening:
             end: 113
         "10":
           label: else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
           node_type: branch-arm
           parent: "0"
           span:
@@ -734,7 +734,7 @@ flattening:
             end: 353
         "11":
           label: else inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
           node_type: header
           parent: "10"
           span:
@@ -743,7 +743,7 @@ flattening:
             end: 327
         "12":
           label: This is a named statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
           node_type: header
           parent: "0"
           span:
@@ -752,7 +752,7 @@ flattening:
             end: 388
         "13":
           label: if (true)
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
           node_type: branch-group
           parent: "12"
           span:
@@ -761,7 +761,7 @@ flattening:
             end: 507
         "14":
           label: if (true)
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "12"
           span:
@@ -770,7 +770,7 @@ flattening:
             end: 456
         "15":
           label: Then Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
           node_type: header
           parent: "14"
           span:
@@ -779,7 +779,7 @@ flattening:
             end: 439
         "16":
           label: else
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "12"
           span:
@@ -788,7 +788,7 @@ flattening:
             end: 507
         "17":
           label: Else Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
           node_type: header
           parent: "16"
           span:
@@ -797,7 +797,7 @@ flattening:
             end: 490
         "2":
           label: if (true)
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "0"
           span:
@@ -806,7 +806,7 @@ flattening:
             end: 113
         "3":
           label: standalone then
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "2"
           span:
@@ -815,7 +815,7 @@ flattening:
             end: 87
         "4":
           label: else
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "0"
           span:
@@ -824,7 +824,7 @@ flattening:
             end: 113
         "5":
           label: if (x == 2)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
           node_type: branch-group
           parent: "0"
           span:
@@ -833,7 +833,7 @@ flattening:
             end: 353
         "6":
           label: if (x == 2)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
           node_type: branch-arm
           parent: "0"
           span:
@@ -842,7 +842,7 @@ flattening:
             end: 195
         "7":
           label: if inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
           node_type: header
           parent: "6"
           span:
@@ -851,7 +851,7 @@ flattening:
             end: 169
         "8":
           label: else if (x == 3)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
           node_type: branch-arm
           parent: "0"
           span:
@@ -860,7 +860,7 @@ flattening:
             end: 281
         "9":
           label: elseif inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
           node_type: header
           parent: "8"
           span:
@@ -895,7 +895,7 @@ flattening:
       nodes:
         "0":
           label: BasicIf
-          lexical_id: "BasicIf|root:0"
+          log_filter_key: "BasicIf|root:0"
           node_type: function
           parent: ~
           span:
@@ -904,7 +904,7 @@ flattening:
             end: 517
         "1":
           label: if (true)
-          lexical_id: "BasicIf|root:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
           node_type: branch-group
           parent: "0"
           span:
@@ -913,7 +913,7 @@ flattening:
             end: 113
         "11":
           label: else inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
           node_type: header
           parent: "0"
           span:
@@ -922,7 +922,7 @@ flattening:
             end: 327
         "12":
           label: This is a named statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
           node_type: header
           parent: "0"
           span:
@@ -931,7 +931,7 @@ flattening:
             end: 388
         "13":
           label: if (true)
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
           node_type: branch-group
           parent: "12"
           span:
@@ -940,7 +940,7 @@ flattening:
             end: 507
         "15":
           label: Then Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
           node_type: header
           parent: "12"
           span:
@@ -949,7 +949,7 @@ flattening:
             end: 439
         "17":
           label: Else Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
           node_type: header
           parent: "12"
           span:
@@ -958,7 +958,7 @@ flattening:
             end: 490
         "3":
           label: standalone then
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "0"
           span:
@@ -967,7 +967,7 @@ flattening:
             end: 87
         "4":
           label: else
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "0"
           span:
@@ -976,7 +976,7 @@ flattening:
             end: 113
         "5":
           label: if (x == 2)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
           node_type: branch-group
           parent: "0"
           span:
@@ -985,7 +985,7 @@ flattening:
             end: 353
         "7":
           label: if inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
           node_type: header
           parent: "0"
           span:
@@ -994,7 +994,7 @@ flattening:
             end: 169
         "9":
           label: elseif inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
           node_type: header
           parent: "0"
           span:
@@ -1026,7 +1026,7 @@ flattening:
       nodes:
         "0":
           label: BasicIf
-          lexical_id: "BasicIf|root:0"
+          log_filter_key: "BasicIf|root:0"
           node_type: function
           parent: ~
           span:
@@ -1035,7 +1035,7 @@ flattening:
             end: 517
         "1":
           label: if (true)
-          lexical_id: "BasicIf|root:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
           node_type: branch-group
           parent: "0"
           span:
@@ -1044,7 +1044,7 @@ flattening:
             end: 113
         "11":
           label: else inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
           node_type: header
           parent: "0"
           span:
@@ -1053,7 +1053,7 @@ flattening:
             end: 327
         "12":
           label: This is a named statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
           node_type: header
           parent: "0"
           span:
@@ -1062,7 +1062,7 @@ flattening:
             end: 388
         "13":
           label: if (true)
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
           node_type: branch-group
           parent: "12"
           span:
@@ -1071,7 +1071,7 @@ flattening:
             end: 507
         "15":
           label: Then Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
           node_type: header
           parent: "12"
           span:
@@ -1080,7 +1080,7 @@ flattening:
             end: 439
         "17":
           label: Else Statement
-          lexical_id: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
           node_type: header
           parent: "12"
           span:
@@ -1089,7 +1089,7 @@ flattening:
             end: 490
         "3":
           label: standalone then
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "0"
           span:
@@ -1098,7 +1098,7 @@ flattening:
             end: 87
         "4":
           label: else
-          lexical_id: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "0"
           span:
@@ -1107,7 +1107,7 @@ flattening:
             end: 113
         "5":
           label: if (x == 2)
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
           node_type: branch-group
           parent: "0"
           span:
@@ -1116,7 +1116,7 @@ flattening:
             end: 353
         "7":
           label: if inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
           node_type: header
           parent: "0"
           span:
@@ -1125,7 +1125,7 @@ flattening:
             end: 169
         "9":
           label: elseif inside if-elseif-else
-          lexical_id: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
           node_type: header
           parent: "0"
           span:

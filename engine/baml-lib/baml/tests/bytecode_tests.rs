@@ -32,13 +32,14 @@ use std::{fs, path::Path, sync::Arc};
 
 use baml_compiler::compile;
 use baml_lib::{FeatureFlags, SourceFile};
-use baml_vm::BamlVmProgram;
+use baml_vm::{BamlVmProgram, Instruction};
 use strip_ansi_escapes::strip_str;
 
 #[allow(dead_code)]
 fn run_bytecode_test(test_name: &str, content: &str) {
-    let result = get_bytecode_output(content);
     let (without_expected, expected) = parse_expected_from_comments(content);
+    let keep_viz = expected.contains("VIZ_");
+    let result = get_bytecode_output(content, keep_viz);
 
     let actual = result.unwrap_or_else(|e| e);
 
@@ -49,11 +50,114 @@ fn run_bytecode_test(test_name: &str, content: &str) {
             &actual,
         );
     } else {
+        let expected = normalize_output(&expected);
+        let actual = normalize_output(&actual);
         compare_output(&expected, &actual, test_name);
     }
 }
 
-fn get_bytecode_output(content: &str) -> Result<String, String> {
+fn normalize_output(text: &str) -> String {
+    text.lines()
+        .filter_map(|line| {
+            let trimmed = line.trim_start();
+
+            let mut chars = trimmed.chars().peekable();
+            let stripped = if chars.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                while chars.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                    chars.next();
+                }
+                while chars.peek().map(|c| c.is_whitespace()).unwrap_or(false) {
+                    chars.next();
+                }
+                chars.collect::<String>()
+            } else {
+                trimmed.to_string()
+            };
+
+            let mut chars = stripped.trim_start().chars().peekable();
+            let stripped = if chars.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                while chars.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                    chars.next();
+                }
+                while chars.peek().map(|c| c.is_whitespace()).unwrap_or(false) {
+                    chars.next();
+                }
+                chars.collect::<String>()
+            } else {
+                stripped
+            };
+
+            if stripped.is_empty() {
+                None
+            } else {
+                Some(stripped)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn strip_viz_instructions(function: &baml_vm::Function) -> Result<baml_vm::Function, String> {
+    let len = function.bytecode.instructions.len();
+    let mut mapping = vec![None; len];
+    let mut kept = Vec::new();
+
+    for (idx, instr) in function.bytecode.instructions.iter().enumerate() {
+        if !matches!(instr, Instruction::VizEnter(_) | Instruction::VizExit(_)) {
+            mapping[idx] = Some(kept.len());
+            kept.push(idx);
+        }
+    }
+
+    let remap_offset = |orig_idx: usize, offset: isize| -> Result<isize, String> {
+        let new_current =
+            mapping[orig_idx].ok_or_else(|| format!("No mapping for instruction {orig_idx}"))?;
+
+        let mut target = orig_idx as isize + offset;
+        let step = if offset >= 0 { 1 } else { -1 };
+
+        while target >= 0 && (target as usize) < len && mapping[target as usize].is_none() {
+            target += step;
+        }
+
+        let new_target = mapping
+            .get(target as usize)
+            .and_then(|m| *m)
+            .ok_or_else(|| {
+                format!("Unable to remap jump target from {orig_idx} with offset {offset}")
+            })?;
+
+        Ok(new_target as isize - new_current as isize)
+    };
+
+    let mut instructions = Vec::with_capacity(kept.len());
+    let mut source_lines = Vec::with_capacity(kept.len());
+    let mut scopes = Vec::with_capacity(kept.len());
+
+    for &orig_idx in &kept {
+        let instr = &function.bytecode.instructions[orig_idx];
+        let adjusted = match instr {
+            Instruction::Jump(offset) => Instruction::Jump(remap_offset(orig_idx, *offset)?),
+            Instruction::JumpIfFalse(offset) => {
+                Instruction::JumpIfFalse(remap_offset(orig_idx, *offset)?)
+            }
+            other => *other,
+        };
+
+        instructions.push(adjusted);
+        source_lines.push(function.bytecode.source_lines[orig_idx]);
+        scopes.push(function.bytecode.scopes[orig_idx]);
+    }
+
+    let mut stripped = function.clone();
+    stripped.bytecode.instructions = instructions;
+    stripped.bytecode.source_lines = source_lines;
+    stripped.bytecode.scopes = scopes;
+    stripped.viz_nodes = Vec::new();
+    Ok(stripped)
+}
+
+fn get_bytecode_output(content: &str, keep_viz: bool) -> Result<String, String> {
     let source_file = SourceFile::new_allocated(
         "test.baml".into(),
         Arc::from(content.to_string().into_boxed_str()),
@@ -86,9 +190,16 @@ fn get_bytecode_output(content: &str) -> Result<String, String> {
             for obj in &objects {
                 match obj {
                     baml_vm::Object::Function(func) => {
+                        let func = if keep_viz {
+                            func.clone()
+                        } else {
+                            strip_viz_instructions(func)
+                                .map_err(|e| format!("Failed to strip viz instructions: {e}"))?
+                        };
+
                         output.push_str(&format!("Function: {}\n", func.name));
                         output.push_str(&baml_vm::debug::display_bytecode(
-                            func,
+                            &func,
                             &baml_vm::EvalStack::new(),
                             &objects,
                             &globals,

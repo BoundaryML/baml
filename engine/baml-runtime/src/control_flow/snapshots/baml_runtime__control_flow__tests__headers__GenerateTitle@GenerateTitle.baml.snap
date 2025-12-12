@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: GenerateTitle
-      lexical_id: "GenerateTitle|root:0"
+      log_filter_key: "GenerateTitle|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 188
     "1":
       label: "LLM client: GPT4"
-      lexical_id: "GenerateTitle|root:0|scope:llm:0"
+      log_filter_key: "GenerateTitle|root:0|scope:llm:0"
       node_type: other-scope
       parent: "0"
       span:
@@ -35,7 +35,7 @@ flattening:
       nodes:
         "0":
           label: GenerateTitle
-          lexical_id: "GenerateTitle|root:0"
+          log_filter_key: "GenerateTitle|root:0"
           node_type: function
           parent: ~
           span:
@@ -47,7 +47,7 @@ flattening:
       nodes:
         "0":
           label: GenerateTitle
-          lexical_id: "GenerateTitle|root:0"
+          log_filter_key: "GenerateTitle|root:0"
           node_type: function
           parent: ~
           span:
@@ -62,7 +62,7 @@ flattening:
       nodes:
         "0":
           label: GenerateTitle
-          lexical_id: "GenerateTitle|root:0"
+          log_filter_key: "GenerateTitle|root:0"
           node_type: function
           parent: ~
           span:
@@ -74,7 +74,7 @@ flattening:
       nodes:
         "0":
           label: GenerateTitle
-          lexical_id: "GenerateTitle|root:0"
+          log_filter_key: "GenerateTitle|root:0"
           node_type: function
           parent: ~
           span:
@@ -89,7 +89,7 @@ flattening:
       nodes:
         "0":
           label: GenerateTitle
-          lexical_id: "GenerateTitle|root:0"
+          log_filter_key: "GenerateTitle|root:0"
           node_type: function
           parent: ~
           span:
@@ -101,7 +101,7 @@ flattening:
       nodes:
         "0":
           label: GenerateTitle
-          lexical_id: "GenerateTitle|root:0"
+          log_filter_key: "GenerateTitle|root:0"
           node_type: function
           parent: ~
           span:

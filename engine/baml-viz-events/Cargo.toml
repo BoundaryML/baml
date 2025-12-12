@@ -1,0 +1,22 @@
+[package]
+edition = "2021"
+name = "baml-viz-events"
+version.workspace = true
+authors.workspace = true
+description = "Shared types for runtime visualization events"
+license-file.workspace = true
+
+[package.metadata.rustflags]
+RSTEST_TIMEOUT = "10"
+
+[lints.rust]
+dead_code = "deny"
+elided_named_lifetimes = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json.workspace = true

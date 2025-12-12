@@ -3,6 +3,7 @@ import { cn } from '@baml/ui/lib/utils';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useAtomCallback } from 'jotai/utils';
 import { ChevronDown, ChevronRight, Edit2, File, X } from 'lucide-react';
+import type React from 'react';
 import { useCallback, useEffect } from 'react';
 import type { NodeRendererProps } from 'react-arborist';
 import { SiPython, SiTypescript } from 'react-icons/si';
@@ -84,7 +85,7 @@ const Node = ({ node, style, dragHandle, tree }: NodeRendererProps<any>) => {
         }`,
         [node.state.isSelected ? 'dark:bg-gray-800 bg-gray-200' : ''],
       )}
-      style={style}
+      style={style as React.CSSProperties}
       ref={dragHandle}
     >
       <div

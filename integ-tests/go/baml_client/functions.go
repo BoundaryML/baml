@@ -2927,6 +2927,72 @@ func ExtractPeople(ctx context.Context, text string, opts ...CallOptionFunc) ([]
 	}
 }
 
+func ExtractPersonWithMeta(ctx context.Context, input string, opts ...CallOptionFunc) (types.PersonWithMeta, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "ExtractPersonWithMeta", encoded, callOpts.onTick)
+		if err != nil {
+			return types.PersonWithMeta{}, err
+		}
+
+		if result.Error != nil {
+			return types.PersonWithMeta{}, result.Error
+		}
+
+		casted := (result.Data).(types.PersonWithMeta)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "ExtractPersonWithMeta", encoded, callOpts.onTick)
+		if err != nil {
+			return types.PersonWithMeta{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.PersonWithMeta{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.PersonWithMeta), nil
+			}
+		}
+
+		return types.PersonWithMeta{}, fmt.Errorf("No data returned from stream")
+	}
+}
+
 func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union2KcuriosityOrKpersonal_finance, opts ...CallOptionFunc) (types.ReceiptInfo, error) {
 
 	var callOpts callOption

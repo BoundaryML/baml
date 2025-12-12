@@ -1,0 +1,262 @@
+---
+source: baml-runtime/tests/viz-runtime.rs
+expression: "&snapshot"
+input_file: baml-runtime/tests/viz-runtime/testdata/simple_loop.baml
+---
+fixture: simple_loop.baml
+snapshots:
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: Main
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "Main|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: MyFunction1
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "MyFunction1|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 1
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: loop
+          ordinal: 0
+        label: Loop
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:loop:0"
+    emitted_events:
+      - node_id: 1
+        log_filter_key: "MyFunction1|root:0|hdr:loop:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 2
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-items
+          ordinal: 0
+        label: for (item in items)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:loop:0"
+      - "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+        new_state: running
+  - watch_event:
+      kind: other
+      header: ~
+      viz_event: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:loop:0"
+      - "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+    emitted_events: []
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 2
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-items
+          ordinal: 0
+        label: for (item in items)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:loop:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 2
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-items
+          ordinal: 0
+        label: for (item in items)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:loop:0"
+      - "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+        new_state: running
+  - watch_event:
+      kind: other
+      header: ~
+      viz_event: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:loop:0"
+      - "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+    emitted_events: []
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 2
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-items
+          ordinal: 0
+        label: for (item in items)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:loop:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 2
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-items
+          ordinal: 0
+        label: for (item in items)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:loop:0"
+      - "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+        new_state: running
+  - watch_event:
+      kind: other
+      header: ~
+      viz_event: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:loop:0"
+      - "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+    emitted_events: []
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 2
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-items
+          ordinal: 0
+        label: for (item in items)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:loop:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction1|root:0|hdr:loop:0|loop:for-item-in-items:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: MyFunction1
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+    emitted_events:
+      - node_id: 1
+        log_filter_key: "MyFunction1|root:0|hdr:loop:0"
+        new_state: completed
+      - node_id: 0
+        log_filter_key: "MyFunction1|root:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: Main
+        header_level: ~
+    stack_after: []
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "Main|root:0"
+        new_state: completed

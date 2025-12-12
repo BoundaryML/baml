@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -53,7 +53,7 @@ function GreetBaz {
   return: String
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Missing
+      Idx::<Expr>(0): Path("n")
       Idx::<Expr>(1): Object { type_name: Some("Baz"), fields: [("name", Idx::<Expr>(0))] }
       Idx::<Expr>(2): Path("baz")
       Idx::<Expr>(3): FieldAccess { base: Idx::<Expr>(2), field: "Greeting" }

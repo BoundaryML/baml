@@ -217,7 +217,7 @@ mod tests {
         Node {
             id: NodeId::new(id),
             parent_node_id: parent.map(NodeId::new),
-            lexical_id: format!("f|{id}"),
+            log_filter_key: format!("f|{id}"),
             label: label.to_string(),
             span: Span::fake(),
             node_type,

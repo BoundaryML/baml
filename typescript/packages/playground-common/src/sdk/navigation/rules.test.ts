@@ -18,7 +18,7 @@ describe('Navigation Rules', () => {
       const currentState: SelectionState = {
         mode: 'workflow',
         workflowId: 'SimpleWorkflow',
-        selectedNodeId: 'SimpleWorkflow|root:0',
+        selectedNodeId: '0',
         functionName: 'SimpleWorkflow',
         testName: 'test_simple_failure', // <-- Second test is selected
       };
@@ -30,13 +30,13 @@ describe('Navigation Rules', () => {
         exists: true,
         workflowMemberships: [{
           workflowId: 'SimpleWorkflow',
-          nodeId: 'SimpleWorkflow|root:0',
+          nodeId: '0',
           nodeLabel: 'SimpleWorkflow',
           calledFunctions: ['SimpleWorkflow'],
         }],
         availableTests: ['test_simple_success', 'test_simple_failure'],
         workflowId: 'SimpleWorkflow',
-        nodeId: 'SimpleWorkflow|root:0',
+        nodeId: '0',
       };
 
       const result = ruleEngine.decide(target, currentState);
@@ -54,7 +54,7 @@ describe('Navigation Rules', () => {
       const currentState: SelectionState = {
         mode: 'workflow',
         workflowId: 'SimpleWorkflow',
-        selectedNodeId: 'SimpleWorkflow|root:0',
+        selectedNodeId: '0',
         functionName: 'SimpleWorkflow',
         testName: 'test_simple_failure', // <-- Second test is selected
       };
@@ -66,13 +66,13 @@ describe('Navigation Rules', () => {
         exists: true,
         workflowMemberships: [{
           workflowId: 'SimpleWorkflow',
-          nodeId: 'SimpleWorkflow|step1:0',
+          nodeId: '1',
           nodeLabel: 'ProcessStep',
           calledFunctions: ['ProcessStep'],
         }],
         availableTests: ['test_simple_success', 'test_simple_failure'],
         workflowId: 'SimpleWorkflow',
-        nodeId: 'SimpleWorkflow|step1:0',
+        nodeId: '1',
       };
 
       const result = ruleEngine.decide(target, currentState);
@@ -89,7 +89,7 @@ describe('Navigation Rules', () => {
       const currentState: SelectionState = {
         mode: 'workflow',
         workflowId: 'SimpleWorkflow',
-        selectedNodeId: 'SimpleWorkflow|root:0',
+        selectedNodeId: '0',
         functionName: 'SimpleWorkflow',
         testName: null,
       };
@@ -101,13 +101,13 @@ describe('Navigation Rules', () => {
         exists: true,
         workflowMemberships: [{
           workflowId: 'SimpleWorkflow',
-          nodeId: 'SimpleWorkflow|root:0',
+          nodeId: '0',
           nodeLabel: 'SimpleWorkflow',
           calledFunctions: ['SimpleWorkflow'],
         }],
         availableTests: ['test_simple_success', 'test_simple_failure'],
         workflowId: 'SimpleWorkflow',
-        nodeId: 'SimpleWorkflow|root:0',
+        nodeId: '0',
       };
 
       const result = ruleEngine.decide(target, currentState);
@@ -124,7 +124,7 @@ describe('Navigation Rules', () => {
       const currentState: SelectionState = {
         mode: 'workflow',
         workflowId: 'SimpleWorkflow',
-        selectedNodeId: 'SimpleWorkflow|root:0',
+        selectedNodeId: '0',
         functionName: 'SimpleWorkflow',
         testName: 'nonexistent_test',
       };
@@ -136,13 +136,13 @@ describe('Navigation Rules', () => {
         exists: true,
         workflowMemberships: [{
           workflowId: 'SimpleWorkflow',
-          nodeId: 'SimpleWorkflow|root:0',
+          nodeId: '0',
           nodeLabel: 'SimpleWorkflow',
           calledFunctions: ['SimpleWorkflow'],
         }],
         availableTests: ['test_simple_success', 'test_simple_failure'],
         workflowId: 'SimpleWorkflow',
-        nodeId: 'SimpleWorkflow|root:0',
+        nodeId: '0',
       };
 
       const result = ruleEngine.decide(target, currentState);
@@ -178,7 +178,7 @@ describe('Navigation Rules', () => {
       filePath: 'test.baml',
       startLine: 1,
       endLine: 10,
-      nodes: [{ id: `${name}|root:0`, type: 'function', label: name, codeHash: '', lastModified: Date.now() }],
+      nodes: [{ id: '0', type: 'function', label: name, codeHash: '', lastModified: Date.now() }],
       edges: [],
       entryPoint: name,
       parameters: [],
@@ -223,7 +223,7 @@ describe('Navigation Rules', () => {
       expect(result.state.mode).toBe('workflow');
       if (result.state.mode === 'workflow') {
         expect(result.state.workflowId).toBe('EchoWorkflow');
-        expect(result.state.selectedNodeId).toBe('EchoWorkflow|root:0');
+        expect(result.state.selectedNodeId).toBe('0');
         expect(result.state.testName).toBe('EchoWorkflowTest');
       }
     });
@@ -276,7 +276,7 @@ describe('Navigation Rules', () => {
         exists: true,
         workflowMemberships: [{
           workflowId: 'MainWorkflow',
-          nodeId: 'MainWorkflow|step1:0',
+          nodeId: '1',
           nodeLabel: 'HelperFunction',
           calledFunctions: ['HelperFunction'],
         }],
@@ -298,7 +298,7 @@ describe('Navigation Rules', () => {
       expect(result.state.mode).toBe('workflow');
       if (result.state.mode === 'workflow') {
         expect(result.state.workflowId).toBe('MainWorkflow');
-        expect(result.state.selectedNodeId).toBe('MainWorkflow|step1:0');
+        expect(result.state.selectedNodeId).toBe('1');
         expect(result.state.testName).toBe('HelperFunctionTest');
       }
     });
@@ -316,7 +316,7 @@ describe('Navigation Rules', () => {
         exists: true,
         workflowMemberships: [{
           workflowId: 'ParentWorkflow',
-          nodeId: 'ParentWorkflow|step1:0',
+          nodeId: '1',
           nodeLabel: 'SharedHelper',
           calledFunctions: ['SharedHelper'],
         }],

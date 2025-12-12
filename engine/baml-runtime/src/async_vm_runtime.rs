@@ -390,17 +390,15 @@ impl BamlAsyncVmRuntime {
                                 }
                             }
                         }
-                        baml_vm::vm::WatchNotification::Block(notification) => {
+                        baml_vm::vm::WatchNotification::Viz {
+                            function_name,
+                            event,
+                        } => {
                             if let Some(handler) = watch_handler.as_ref() {
                                 if let Ok(mut handler) = handler.lock() {
-                                    let header = baml_compiler::hir::HeaderContext {
-                                        level: notification.level as u8,
-                                        title: notification.block_name.clone(),
-                                        span: internal_baml_core::ast::Span::fake(),
-                                    };
-                                    handler.notify(watch::WatchNotification::new_block(
-                                        header,
-                                        notification.function_name.clone(),
+                                    handler.notify(watch::WatchNotification::new_viz_exec_state(
+                                        event,
+                                        function_name,
                                     ));
                                 }
                             }

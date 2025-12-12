@@ -45,7 +45,6 @@ export type {
   WatchStreamEndValue,
   WatchVariableValue,
   WatchNotificationValue,
-  RichWatchNotification,
 
   // Event types
   RichExecutionEvent,

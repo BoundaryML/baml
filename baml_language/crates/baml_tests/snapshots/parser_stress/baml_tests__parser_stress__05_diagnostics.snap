@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -14035,16 +14035,6 @@ expression: output
    │ Note: Error code: E0011
 ───╯
 
-  [type] Error: Cannot apply operator 'Add' to types unknown and int
-   ╭─[ 0:1:1 ]
-   │
- 1 │ class StringTorture {
-   │ │ 
-   │ ╰─ Cannot apply operator 'Add' to types unknown and int
-   │ 
-   │ Note: Error code: E0004
-───╯
-
   [type] Error: Expected bool, found void
    ╭─[ 0:1:1 ]
    │
@@ -14053,14 +14043,4 @@ expression: output
    │ ╰─ Expected bool, found void
    │ 
    │ Note: Error code: E0001
-───╯
-
-  [type] Error: Cannot apply operator 'Add' to types unknown and int
-   ╭─[ 0:1:1 ]
-   │
- 1 │ class StringTorture {
-   │ │ 
-   │ ╰─ Cannot apply operator 'Add' to types unknown and int
-   │ 
-   │ Note: Error code: E0004
 ───╯

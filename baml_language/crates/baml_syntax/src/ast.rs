@@ -436,20 +436,108 @@ impl ForExpr {
     }
 
     /// Get the condition expression (for C-style loops).
-    /// This is the expression after the first semicolon.
+    /// This is the expression between the first and second semicolon.
     pub fn condition(&self) -> Option<SyntaxNode> {
         if self.is_iterator_style() {
             return None;
         }
-        // For C-style, the condition is the second expression child (after LET_STMT)
-        let mut found_let = false;
-        for child in self.syntax.children() {
-            if child.kind() == SyntaxKind::LET_STMT {
-                found_let = true;
-                continue;
+        // For C-style, condition is after the initializer's semicolon, before the second semicolon.
+        // Note: If there's a LET_STMT, its trailing semicolon is INSIDE the LET_STMT node.
+        // So for `for (let i = 0; ; update)`:
+        //   - LET_STMT contains `let i = 0;` (first semicolon inside)
+        //   - Sibling semicolon (second semicolon overall)
+        //   - update expression
+        // For `for (; cond; update)`:
+        //   - First sibling semicolon
+        //   - condition expression
+        //   - Second sibling semicolon
+        //   - update expression
+
+        let has_initializer = self.let_stmt().is_some();
+        let mut sibling_semicolon_count = 0;
+
+        for element in self.syntax.children_with_tokens() {
+            match element {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::SEMICOLON {
+                        sibling_semicolon_count += 1;
+                    }
+                }
+                rowan::NodeOrToken::Node(node) => {
+                    // Skip LET_STMT (initializer) and BLOCK_EXPR (body)
+                    if matches!(node.kind(), SyntaxKind::LET_STMT | SyntaxKind::BLOCK_EXPR) {
+                        continue;
+                    }
+                    // Condition position depends on whether there's an initializer:
+                    // - With initializer: after LET_STMT, before first sibling semicolon
+                    // - Without initializer: after first sibling semicolon, before second
+                    let condition_position = i32::from(!has_initializer);
+                    if sibling_semicolon_count == condition_position {
+                        return Some(node);
+                    }
+                }
             }
-            if found_let && child.kind() != SyntaxKind::BLOCK_EXPR {
-                return Some(child);
+        }
+        None
+    }
+
+    /// Get a bare token as condition (for C-style loops like `for (; false;)`).
+    /// Used when `condition()` returns None but there's a literal token between semicolons.
+    pub fn condition_token(&self) -> Option<SyntaxToken> {
+        if self.is_iterator_style() {
+            return None;
+        }
+        // Only look for tokens if there's no expression node
+        if self.condition().is_some() {
+            return None;
+        }
+
+        // Condition position depends on whether there's an initializer.
+        // With initializer (LET_STMT contains first semicolon):
+        //   condition is BEFORE first sibling semicolon
+        // Without initializer:
+        //   condition is AFTER first sibling semicolon, BEFORE second
+
+        let has_initializer = self.let_stmt().is_some();
+        let mut sibling_semicolon_count = 0;
+        let mut after_let_stmt = !has_initializer;
+
+        for element in self.syntax.children_with_tokens() {
+            match element {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::SEMICOLON {
+                        sibling_semicolon_count += 1;
+                        // Check if we're past the condition position
+                        if has_initializer && sibling_semicolon_count >= 1 {
+                            return None; // Past condition position for initializer case
+                        }
+                        if !has_initializer && sibling_semicolon_count >= 2 {
+                            return None; // Past condition position for no-initializer case
+                        }
+                    } else if after_let_stmt {
+                        // Check for condition token
+                        let in_condition_position = if has_initializer {
+                            sibling_semicolon_count == 0
+                        } else {
+                            sibling_semicolon_count == 1
+                        };
+                        if in_condition_position {
+                            match token.kind() {
+                                SyntaxKind::WORD
+                                | SyntaxKind::INTEGER_LITERAL
+                                | SyntaxKind::FLOAT_LITERAL => {
+                                    return Some(token);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                rowan::NodeOrToken::Node(node) => {
+                    if node.kind() == SyntaxKind::LET_STMT {
+                        after_let_stmt = true;
+                    }
+                }
             }
         }
         None
@@ -461,18 +549,38 @@ impl ForExpr {
         if self.is_iterator_style() {
             return None;
         }
-        // For C-style, the update is the third expression child
-        let mut count = 0;
-        for child in self.syntax.children() {
-            if child.kind() == SyntaxKind::LET_STMT {
-                continue;
-            }
-            if child.kind() == SyntaxKind::BLOCK_EXPR {
-                continue;
-            }
-            count += 1;
-            if count == 2 {
-                return Some(child);
+        // For C-style, update is after the condition's semicolon.
+        // Note: If there's a LET_STMT, its trailing semicolon is INSIDE the LET_STMT node.
+        // So for `for (let i = 0; ; update)`:
+        //   - LET_STMT contains first semicolon
+        //   - Sibling semicolon count 1 marks end of condition position
+        //   - update expression is at sibling_semicolon_count == 1
+        // For `for (; cond; update)`:
+        //   - update expression is at sibling_semicolon_count == 2
+
+        let has_initializer = self.let_stmt().is_some();
+        let mut sibling_semicolon_count = 0;
+
+        for element in self.syntax.children_with_tokens() {
+            match element {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::SEMICOLON {
+                        sibling_semicolon_count += 1;
+                    }
+                }
+                rowan::NodeOrToken::Node(node) => {
+                    // Skip LET_STMT (initializer) and BLOCK_EXPR (body)
+                    if matches!(node.kind(), SyntaxKind::LET_STMT | SyntaxKind::BLOCK_EXPR) {
+                        continue;
+                    }
+                    // Update position depends on whether there's an initializer:
+                    // - With initializer: after first sibling semicolon
+                    // - Without initializer: after second sibling semicolon
+                    let update_position = if has_initializer { 1 } else { 2 };
+                    if sibling_semicolon_count == update_position {
+                        return Some(node);
+                    }
+                }
             }
         }
         None
@@ -622,7 +730,9 @@ impl BlockExpr {
                         SyntaxKind::LET_STMT
                         | SyntaxKind::RETURN_STMT
                         | SyntaxKind::WHILE_STMT
-                        | SyntaxKind::FOR_EXPR => Some(BlockElement::Stmt(n)),
+                        | SyntaxKind::FOR_EXPR
+                        | SyntaxKind::BREAK_STMT
+                        | SyntaxKind::CONTINUE_STMT => Some(BlockElement::Stmt(n)),
                         // Expression nodes
                         SyntaxKind::EXPR
                         | SyntaxKind::BINARY_EXPR

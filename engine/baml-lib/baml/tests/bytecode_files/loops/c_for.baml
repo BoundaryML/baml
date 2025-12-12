@@ -60,7 +60,7 @@ function Nothing() -> int {
 //     9    BIN_OP +            
 //     10   STORE_VAR 1         (s)
 //
-// 3   11   LOAD_VAR 2          (i)
+//      11   LOAD_VAR 2          (i)
 //     12   LOAD_CONST 3        (1)
 //     13   BIN_OP +            
 //     14   STORE_VAR 2         (i)
@@ -99,11 +99,11 @@ function Nothing() -> int {
 //      20   JUMP +2            (to 22)
 //      21   POP 1              
 //
-// 13   22   LOAD_VAR 1         (s)
+//      22   LOAD_VAR 1         (s)
 //      23   LOAD_VAR 2         (i)
 //      24   BIN_OP +           
 //      25   STORE_VAR 1        (s)
-//      26   JUMP -24           (to 2)
+//      26   JUMP -25           (to 1)
 //      27   POP 1              
 //
 // 23   28   LOAD_VAR 1         (s)
@@ -124,7 +124,7 @@ function Nothing() -> int {
 // Function: Nothing
 // 38   0   LOAD_CONST 0   (0)
 //      1   JUMP +2        (to 3)
-//      2   JUMP -1        (to 1)
+//      2   JUMP -2        (to 0)
 //
 // 44   3   LOAD_VAR 1     (s)
 //      4   RETURN         
