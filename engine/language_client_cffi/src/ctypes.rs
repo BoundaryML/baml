@@ -1,4 +1,3 @@
-mod baml_type_encode;
 mod baml_value_decode;
 mod baml_value_encode;
 mod baml_value_with_meta_encode;

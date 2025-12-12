@@ -432,6 +432,13 @@ impl<T> UnionTypeGeneric<T> {
     }
 }
 
+pub struct SelectedTypeIndexResult<'a, T> {
+    // If None, then value is a null
+    pub index: usize,
+    // Null should be in the options list if its allowed
+    pub options: Vec<&'a TypeGeneric<T>>,
+}
+
 impl<T: std::cmp::Eq + std::hash::Hash> UnionTypeGeneric<T>
 where
     TypeGeneric<T>: std::fmt::Display,
@@ -440,13 +447,8 @@ where
         &self,
         type_to_find: &TypeGeneric<T>,
         lookup: &impl TypeLookupsMeta<T>,
-    ) -> Result<Option<(usize, Vec<&TypeGeneric<T>>)>, anyhow::Error> {
-        let options = match self.view() {
-            // singles don't apply (only one option)
-            UnionTypeViewGeneric::Null | UnionTypeViewGeneric::Optional(..) => return Ok(None),
-            UnionTypeViewGeneric::OneOf(type_generics) => type_generics,
-            UnionTypeViewGeneric::OneOfOptional(type_generics) => type_generics,
-        };
+    ) -> Result<SelectedTypeIndexResult<'_, T>, anyhow::Error> {
+        let options = self.iter_include_null();
 
         for (i, t) in options.iter().enumerate() {
             if match t {
@@ -455,7 +457,7 @@ where
                 }
                 _ => *t == type_to_find,
             } {
-                return Ok(Some((i, options)));
+                return Ok(SelectedTypeIndexResult { index: i, options });
             }
         }
 
@@ -687,10 +689,14 @@ impl<T> TypeGeneric<T> {
         }
     }
 
-    pub fn is_optional(&self) -> bool
-    where
-        T: std::fmt::Debug + Default,
-    {
+    pub fn is_literal(&self) -> bool {
+        match self {
+            TypeGeneric::Literal(_, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_optional(&self) -> bool {
         match self {
             TypeGeneric::Primitive(TypeValue::Null, _) => true,
             TypeGeneric::Union(choices, _) => choices.is_optional(),

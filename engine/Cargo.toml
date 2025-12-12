@@ -13,7 +13,7 @@ members = [
   "cli",
   "tools",
   "language_client_python",
-  "language_client_ruby/ext/ruby_ffi",
+  # "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
   "language_server",
   "language_client_cffi",
@@ -21,7 +21,6 @@ members = [
   "generators/utils/*",
   "generators/languages/*",
   "sandbox",
-  "llm-response-parser",
   "boundary-udf",
   "playground-server",
 ]
