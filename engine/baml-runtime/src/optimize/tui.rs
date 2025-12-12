@@ -2,6 +2,9 @@
 //!
 //! Provides a real-time terminal user interface for visualizing the GEPA
 //! optimization process, showing trials, candidates, and their metrics.
+//!
+//! The left panel shows candidates as cards arranged in rows by iteration.
+//! Multiple candidates in the same iteration appear side-by-side.
 
 use std::{
     collections::HashMap,
@@ -22,7 +25,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{
-        Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Scrollbar,
+        Block, BorderType, Borders, Paragraph, Scrollbar,
         ScrollbarOrientation, ScrollbarState, Wrap,
     },
     Frame, Terminal,
@@ -33,36 +36,37 @@ use super::{
     storage::{ObjectiveConfig, OptimizationStorage},
 };
 
-/// Colors for the TUI
-const ACCENT_COLOR: Color = Color::Rgb(142, 36, 170); // Purple
-const SELECTED_BG: Color = Color::Rgb(60, 60, 80);
+/// Colors for the TUI (optimized for dark/black terminal backgrounds)
+const ACCENT_COLOR: Color = Color::Rgb(180, 100, 255); // Bright purple
+const SELECTED_BG: Color = Color::Rgb(40, 40, 60);
 const HEADER_COLOR: Color = Color::Cyan;
-const SCORE_GOOD: Color = Color::Green;
-const SCORE_MED: Color = Color::Yellow;
-const SCORE_BAD: Color = Color::Red;
+const SCORE_GOOD: Color = Color::Rgb(100, 255, 100); // Bright green
+const SCORE_MED: Color = Color::Rgb(255, 220, 100); // Bright yellow
+const SCORE_BAD: Color = Color::Rgb(255, 100, 100); // Bright red
+const CARD_BORDER: Color = Color::Rgb(100, 100, 120); // Lighter gray for visibility
+const CARD_SELECTED_BORDER: Color = Color::Rgb(180, 100, 255); // Bright purple
 
-/// Represents a selectable item in the trial/candidate tree
+/// A row of candidates (all from the same iteration)
 #[derive(Clone, Debug)]
-pub enum TreeItem {
-    /// A trial (iteration) header
-    Trial {
-        iteration: usize,
-        candidate_count: usize,
-    },
-    /// A candidate within a trial
-    Candidate { candidate_id: usize },
+pub struct CandidateRow {
+    /// The iteration number for this row
+    pub iteration: usize,
+    /// Candidate IDs in this row (left to right)
+    pub candidate_ids: Vec<usize>,
 }
 
 /// Main application state for the TUI
 pub struct App {
     /// All candidates loaded from storage
     candidates: Vec<Candidate>,
-    /// Tree items for the left panel (trials and candidates)
-    tree_items: Vec<TreeItem>,
-    /// Currently selected index in the tree
-    selected_index: usize,
-    /// List state for ratatui
-    list_state: ListState,
+    /// Rows of candidates grouped by iteration
+    rows: Vec<CandidateRow>,
+    /// Currently selected row index
+    selected_row: usize,
+    /// Currently selected column within the row (for rows with multiple candidates)
+    selected_col: usize,
+    /// Scroll offset for the card panel (which row is at the top)
+    scroll_offset: usize,
     /// Scroll position for the prompt preview
     prompt_scroll: u16,
     /// Whether the app should quit
@@ -131,8 +135,7 @@ impl App {
             .map(|(idx, c)| (c.id, idx))
             .collect();
 
-        // Build tree structure grouped by iteration
-        let mut tree_items = Vec::new();
+        // Build rows grouped by iteration
         let mut candidates_by_iteration: HashMap<usize, Vec<usize>> = HashMap::new();
 
         for candidate in &candidates {
@@ -142,33 +145,28 @@ impl App {
                 .push(candidate.id);
         }
 
-        // Sort iterations
+        // Sort iterations and build rows
         let mut iterations: Vec<usize> = candidates_by_iteration.keys().copied().collect();
         iterations.sort();
 
-        for iteration in iterations {
-            let cand_ids = candidates_by_iteration.get(&iteration).unwrap();
-            tree_items.push(TreeItem::Trial {
-                iteration,
-                candidate_count: cand_ids.len(),
-            });
-            for &cand_id in cand_ids {
-                tree_items.push(TreeItem::Candidate {
-                    candidate_id: cand_id,
-                });
-            }
-        }
-
-        let mut list_state = ListState::default();
-        if !tree_items.is_empty() {
-            list_state.select(Some(0));
-        }
+        let rows: Vec<CandidateRow> = iterations
+            .into_iter()
+            .map(|iteration| {
+                let mut candidate_ids = candidates_by_iteration.remove(&iteration).unwrap();
+                candidate_ids.sort(); // Sort candidate IDs within a row
+                CandidateRow {
+                    iteration,
+                    candidate_ids,
+                }
+            })
+            .collect();
 
         Ok(Self {
             candidates,
-            tree_items,
-            selected_index: 0,
-            list_state,
+            rows,
+            selected_row: 0,
+            selected_col: 0,
+            scroll_offset: 0,
             prompt_scroll: 0,
             should_quit: false,
             storage_path,
@@ -179,28 +177,19 @@ impl App {
         })
     }
 
+    /// Get the currently selected candidate ID
+    fn selected_candidate_id(&self) -> Option<usize> {
+        let row = self.rows.get(self.selected_row)?;
+        let col = self.selected_col.min(row.candidate_ids.len().saturating_sub(1));
+        row.candidate_ids.get(col).copied()
+    }
+
     /// Get the currently selected candidate, if any
     fn selected_candidate(&self) -> Option<&Candidate> {
-        match self.tree_items.get(self.selected_index)? {
-            TreeItem::Trial { .. } => {
-                // If a trial is selected, show the first candidate in that trial
-                if self.selected_index + 1 < self.tree_items.len() {
-                    if let TreeItem::Candidate { candidate_id } =
-                        &self.tree_items[self.selected_index + 1]
-                    {
-                        return self
-                            .id_to_index
-                            .get(candidate_id)
-                            .and_then(|&idx| self.candidates.get(idx));
-                    }
-                }
-                None
-            }
-            TreeItem::Candidate { candidate_id } => self
-                .id_to_index
-                .get(candidate_id)
-                .and_then(|&idx| self.candidates.get(idx)),
-        }
+        let candidate_id = self.selected_candidate_id()?;
+        self.id_to_index
+            .get(&candidate_id)
+            .and_then(|&idx| self.candidates.get(idx))
     }
 
     /// Check if a candidate is on the Pareto frontier
@@ -208,27 +197,60 @@ impl App {
         self.pareto_frontier.contains(&candidate_id)
     }
 
-    /// Move selection up
-    fn select_previous(&mut self) {
-        if self.tree_items.is_empty() {
+    /// Move selection up (previous row)
+    fn select_previous_row(&mut self) {
+        if self.rows.is_empty() {
             return;
         }
-        if self.selected_index > 0 {
-            self.selected_index -= 1;
-            self.list_state.select(Some(self.selected_index));
+        if self.selected_row > 0 {
+            self.selected_row -= 1;
+            // Clamp column to valid range for new row
+            let max_col = self.rows[self.selected_row].candidate_ids.len().saturating_sub(1);
+            self.selected_col = self.selected_col.min(max_col);
+            self.prompt_scroll = 0;
+            self.update_scroll_offset();
+        }
+    }
+
+    /// Move selection down (next row)
+    fn select_next_row(&mut self) {
+        if self.rows.is_empty() {
+            return;
+        }
+        if self.selected_row < self.rows.len() - 1 {
+            self.selected_row += 1;
+            // Clamp column to valid range for new row
+            let max_col = self.rows[self.selected_row].candidate_ids.len().saturating_sub(1);
+            self.selected_col = self.selected_col.min(max_col);
+            self.prompt_scroll = 0;
+            self.update_scroll_offset();
+        }
+    }
+
+    /// Move selection left (previous candidate in same row)
+    fn select_previous_col(&mut self) {
+        if self.selected_col > 0 {
+            self.selected_col -= 1;
             self.prompt_scroll = 0;
         }
     }
 
-    /// Move selection down
-    fn select_next(&mut self) {
-        if self.tree_items.is_empty() {
-            return;
+    /// Move selection right (next candidate in same row)
+    fn select_next_col(&mut self) {
+        if let Some(row) = self.rows.get(self.selected_row) {
+            if self.selected_col < row.candidate_ids.len().saturating_sub(1) {
+                self.selected_col += 1;
+                self.prompt_scroll = 0;
+            }
         }
-        if self.selected_index < self.tree_items.len() - 1 {
-            self.selected_index += 1;
-            self.list_state.select(Some(self.selected_index));
-            self.prompt_scroll = 0;
+    }
+
+    /// Update scroll offset to keep selected row visible
+    fn update_scroll_offset(&mut self) {
+        // This will be called after the visible_rows is known during rendering
+        // For now, just ensure basic bounds
+        if self.selected_row < self.scroll_offset {
+            self.scroll_offset = self.selected_row;
         }
     }
 
@@ -249,32 +271,34 @@ impl App {
             KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
                 self.should_quit = true
             }
-            KeyCode::Up | KeyCode::Char('k') => self.select_previous(),
-            KeyCode::Down | KeyCode::Char('j') => self.select_next(),
+            KeyCode::Up | KeyCode::Char('k') => self.select_previous_row(),
+            KeyCode::Down | KeyCode::Char('j') => self.select_next_row(),
+            KeyCode::Left | KeyCode::Char('h') => self.select_previous_col(),
+            KeyCode::Right | KeyCode::Char('l') => self.select_next_col(),
             KeyCode::PageUp => {
                 for _ in 0..5 {
-                    self.select_previous();
+                    self.select_previous_row();
                 }
             }
             KeyCode::PageDown => {
                 for _ in 0..5 {
-                    self.select_next();
+                    self.select_next_row();
                 }
             }
             KeyCode::Home => {
-                self.selected_index = 0;
-                self.list_state.select(Some(0));
+                self.selected_row = 0;
+                self.selected_col = 0;
+                self.scroll_offset = 0;
                 self.prompt_scroll = 0;
             }
             KeyCode::End => {
-                if !self.tree_items.is_empty() {
-                    self.selected_index = self.tree_items.len() - 1;
-                    self.list_state.select(Some(self.selected_index));
+                if !self.rows.is_empty() {
+                    self.selected_row = self.rows.len() - 1;
+                    self.selected_col = 0;
                     self.prompt_scroll = 0;
+                    self.update_scroll_offset();
                 }
             }
-            KeyCode::Left | KeyCode::Char('h') => self.scroll_prompt_up(),
-            KeyCode::Right | KeyCode::Char('l') => self.scroll_prompt_down(),
             KeyCode::Char('[') => self.scroll_prompt_up(),
             KeyCode::Char(']') => self.scroll_prompt_down(),
             _ => {}
@@ -362,10 +386,13 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
-/// Render the left panel with trial/candidate tree
+/// Height of each candidate card (in terminal rows)
+const CARD_HEIGHT: u16 = 5;
+
+/// Render the left panel with candidate cards arranged by iteration
 fn render_tree_panel(frame: &mut Frame, app: &mut App, area: Rect) {
     let block = Block::default()
-        .title(" Trials & Candidates ")
+        .title(" Candidates ")
         .title_style(
             Style::default()
                 .fg(HEADER_COLOR)
@@ -374,100 +401,226 @@ fn render_tree_panel(frame: &mut Frame, app: &mut App, area: Rect) {
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded);
 
-    let items: Vec<ListItem> = app
-        .tree_items
-        .iter()
-        .enumerate()
-        .map(|(idx, item)| {
-            let is_selected = idx == app.selected_index;
-            match item {
-                TreeItem::Trial {
-                    iteration,
-                    candidate_count,
-                } => {
-                    let style = if is_selected {
-                        Style::default()
-                            .fg(ACCENT_COLOR)
-                            .add_modifier(Modifier::BOLD)
-                            .bg(SELECTED_BG)
-                    } else {
-                        Style::default()
-                            .fg(ACCENT_COLOR)
-                            .add_modifier(Modifier::BOLD)
-                    };
-                    ListItem::new(Line::from(vec![
-                        Span::styled(format!("Trial {} ", iteration), style),
-                        Span::styled(
-                            format!("({} candidates)", candidate_count),
-                            Style::default().fg(Color::DarkGray),
-                        ),
-                    ]))
-                }
-                TreeItem::Candidate { candidate_id } => {
-                    let candidate = app
-                        .id_to_index
-                        .get(candidate_id)
-                        .and_then(|&idx| app.candidates.get(idx));
+    let inner_area = block.inner(area);
+    frame.render_widget(block, area);
 
-                    let is_pareto = app.is_pareto(*candidate_id);
+    if app.rows.is_empty() {
+        let msg = Paragraph::new("No candidates yet")
+            .style(Style::default().fg(Color::Gray));
+        frame.render_widget(msg, inner_area);
+        return;
+    }
 
-                    let (method_icon, method_color) = match candidate.map(|c| &c.method) {
-                        Some(CandidateMethod::Initial) => ("◆", Color::Blue),
-                        Some(CandidateMethod::Reflection) => ("◇", Color::Yellow),
-                        Some(CandidateMethod::Merge) => ("◈", Color::Magenta),
-                        None => ("?", Color::Gray),
-                    };
+    // Calculate how many rows can fit
+    let visible_rows = (inner_area.height / CARD_HEIGHT) as usize;
 
-                    let style = if is_selected {
-                        Style::default().bg(SELECTED_BG)
-                    } else {
-                        Style::default()
-                    };
+    // Update scroll offset to keep selected row visible
+    if app.selected_row >= app.scroll_offset + visible_rows {
+        app.scroll_offset = app.selected_row - visible_rows + 1;
+    }
+    if app.selected_row < app.scroll_offset {
+        app.scroll_offset = app.selected_row;
+    }
 
-                    // Add star for Pareto frontier candidates
-                    let pareto_indicator = if is_pareto { "★ " } else { "  " };
+    // Render each visible row
+    let mut y_offset = 0u16;
+    for (row_idx, row) in app.rows.iter().enumerate().skip(app.scroll_offset) {
+        if y_offset + CARD_HEIGHT > inner_area.height {
+            break;
+        }
 
-                    // Build metrics display based on configured objectives
-                    let mut spans = vec![
-                        Span::styled(pareto_indicator, Style::default().fg(Color::Yellow)),
-                        Span::styled(method_icon, Style::default().fg(method_color)),
-                        Span::styled(
-                            format!(" #{:<2}", candidate_id),
-                            style.add_modifier(Modifier::BOLD),
-                        ),
-                    ];
+        let row_area = Rect {
+            x: inner_area.x,
+            y: inner_area.y + y_offset,
+            width: inner_area.width,
+            height: CARD_HEIGHT,
+        };
 
-                    // Add objective metrics
-                    if let Some(scores) = candidate.and_then(|c| c.scores.as_ref()) {
-                        for obj in &app.objectives {
-                            let value = App::get_objective_value(obj, scores);
-                            let (text, color) = format_compact_metric(obj, value);
-                            spans.push(Span::raw(" "));
-                            spans.push(Span::styled(text, Style::default().fg(color)));
-                        }
+        render_candidate_row(frame, app, row, row_idx, row_area);
+        y_offset += CARD_HEIGHT;
+    }
 
-                        // If no objectives configured, show default accuracy
-                        if app.objectives.is_empty() {
-                            let text = format!("{:.0}%", scores.test_pass_rate * 100.0);
-                            let color = score_color(scores.test_pass_rate);
-                            spans.push(Span::raw(" "));
-                            spans.push(Span::styled(text, Style::default().fg(color)));
-                        }
-                    } else {
-                        spans.push(Span::styled(" —", Style::default().fg(Color::Gray)));
-                    }
+    // Render scrollbar if needed
+    if app.rows.len() > visible_rows {
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
 
-                    ListItem::new(Line::from(spans)).style(style)
-                }
+        let mut scrollbar_state = ScrollbarState::new(app.rows.len())
+            .position(app.selected_row);
+
+        frame.render_stateful_widget(
+            scrollbar,
+            inner_area,
+            &mut scrollbar_state,
+        );
+    }
+}
+
+/// Render a row of candidate cards (all from same iteration)
+fn render_candidate_row(
+    frame: &mut Frame,
+    app: &App,
+    row: &CandidateRow,
+    row_idx: usize,
+    area: Rect,
+) {
+    let is_selected_row = row_idx == app.selected_row;
+    let num_cards = row.candidate_ids.len();
+
+    // Calculate card width - divide available space equally
+    let card_width = if num_cards > 0 {
+        (area.width / num_cards as u16).min(area.width).max(12)
+    } else {
+        area.width
+    };
+
+    // Render iteration label on the left
+    let iter_label = format!("T{}", row.iteration);
+    let iter_style = if is_selected_row {
+        Style::default().fg(ACCENT_COLOR).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    // Reserve space for iteration label
+    let label_width = 3u16;
+    let label_area = Rect {
+        x: area.x,
+        y: area.y + CARD_HEIGHT / 2,
+        width: label_width,
+        height: 1,
+    };
+    frame.render_widget(
+        Paragraph::new(iter_label).style(iter_style),
+        label_area,
+    );
+
+    // Render each card in the row
+    let cards_area = Rect {
+        x: area.x + label_width,
+        y: area.y,
+        width: area.width.saturating_sub(label_width),
+        height: area.height,
+    };
+
+    for (col_idx, &candidate_id) in row.candidate_ids.iter().enumerate() {
+        let is_selected = is_selected_row && col_idx == app.selected_col;
+
+        let card_x = cards_area.x + (col_idx as u16 * card_width);
+        let card_area = Rect {
+            x: card_x,
+            y: cards_area.y,
+            width: card_width.min(cards_area.width.saturating_sub(col_idx as u16 * card_width)),
+            height: CARD_HEIGHT,
+        };
+
+        if card_area.width > 2 {
+            render_candidate_card(frame, app, candidate_id, is_selected, card_area);
+        }
+    }
+}
+
+/// Render a single candidate card
+fn render_candidate_card(
+    frame: &mut Frame,
+    app: &App,
+    candidate_id: usize,
+    is_selected: bool,
+    area: Rect,
+) {
+    let candidate = app
+        .id_to_index
+        .get(&candidate_id)
+        .and_then(|&idx| app.candidates.get(idx));
+
+    let is_pareto = app.is_pareto(candidate_id);
+
+    let (method_icon, method_color) = match candidate.map(|c| &c.method) {
+        Some(CandidateMethod::Initial) => ("◆", Color::Blue),
+        Some(CandidateMethod::Reflection) => ("◇", Color::Yellow),
+        Some(CandidateMethod::Merge) => ("◈", Color::Magenta),
+        None => ("?", Color::Gray),
+    };
+
+    // Card border style
+    let border_color = if is_selected {
+        CARD_SELECTED_BORDER
+    } else if is_pareto {
+        Color::Yellow
+    } else {
+        CARD_BORDER
+    };
+
+    let border_type = if is_selected {
+        BorderType::Double
+    } else {
+        BorderType::Rounded
+    };
+
+    // Card title with ID and method icon
+    let pareto_star = if is_pareto { "★" } else { "" };
+    let title = format!(" {}{} #{} ", pareto_star, method_icon, candidate_id);
+
+    let block = Block::default()
+        .title(title)
+        .title_style(
+            Style::default()
+                .fg(method_color)
+                .add_modifier(Modifier::BOLD),
+        )
+        .borders(Borders::ALL)
+        .border_type(border_type)
+        .border_style(Style::default().fg(border_color));
+
+    let inner_area = block.inner(area);
+    frame.render_widget(block, area);
+
+    // Card content - metrics
+    let content = if let Some(scores) = candidate.and_then(|c| c.scores.as_ref()) {
+        let mut lines = Vec::new();
+
+        if app.objectives.is_empty() {
+            // Default: show pass rate
+            let pass_text = format!("{:.0}%", scores.test_pass_rate * 100.0);
+            lines.push(Line::from(vec![
+                Span::styled(pass_text, Style::default().fg(score_color(scores.test_pass_rate))),
+            ]));
+        } else {
+            // Show each objective
+            for obj in &app.objectives {
+                let value = App::get_objective_value(obj, scores);
+                let (text, color) = format_compact_metric(obj, value);
+                lines.push(Line::from(vec![
+                    Span::styled(text, Style::default().fg(color)),
+                ]));
             }
-        })
-        .collect();
+        }
 
-    let list = List::new(items)
-        .block(block)
-        .highlight_style(Style::default().bg(SELECTED_BG));
+        // Show parents if any
+        if let Some(c) = candidate {
+            if !c.parent_ids.is_empty() {
+                let parents: String = c.parent_ids
+                    .iter()
+                    .map(|id| format!("#{}", id))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("←{}", parents),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+            }
+        }
 
-    frame.render_stateful_widget(list, area, &mut app.list_state);
+        lines
+    } else {
+        vec![Line::from(Span::styled("...", Style::default().fg(Color::Gray)))]
+    };
+
+    let paragraph = Paragraph::new(content);
+    frame.render_widget(paragraph, inner_area);
 }
 
 /// Render the right details panel
@@ -827,23 +980,30 @@ fn render_footer(frame: &mut Frame, area: Rect) {
                 .fg(ACCENT_COLOR)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw("Navigate  "),
+        Span::raw("Row  "),
+        Span::styled(
+            " ←/→ ",
+            Style::default()
+                .fg(ACCENT_COLOR)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("Card  "),
         Span::styled(
             " [/] ",
             Style::default()
                 .fg(ACCENT_COLOR)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw("Scroll prompt  "),
+        Span::raw("Scroll  "),
         Span::styled(
             " ★ ",
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw("Pareto frontier  "),
+        Span::raw("Pareto  "),
         Span::styled(
-            " q/Esc ",
+            " q ",
             Style::default()
                 .fg(ACCENT_COLOR)
                 .add_modifier(Modifier::BOLD),
@@ -1256,7 +1416,8 @@ mod tests {
         .unwrap();
 
         assert_eq!(app.candidates.len(), 3);
-        assert_eq!(app.tree_items.len(), 6); // 3 trials + 3 candidates
+        assert_eq!(app.rows.len(), 3); // 3 iterations = 3 rows
+        assert_eq!(app.rows[0].candidate_ids.len(), 1); // 1 candidate per iteration
     }
 
     #[test]
@@ -1275,20 +1436,70 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(app.selected_index, 0);
+        assert_eq!(app.selected_row, 0);
+        assert_eq!(app.selected_col, 0);
 
-        app.select_next();
-        assert_eq!(app.selected_index, 1);
+        app.select_next_row();
+        assert_eq!(app.selected_row, 1);
 
-        app.select_next();
-        assert_eq!(app.selected_index, 2);
+        app.select_previous_row();
+        assert_eq!(app.selected_row, 0);
+    }
 
-        app.select_previous();
-        assert_eq!(app.selected_index, 1);
+    #[test]
+    fn test_multi_candidate_row() {
+        // Create two candidates in the same iteration
+        let candidates = vec![
+            make_test_candidate(0, 0, 0.5),
+            Candidate {
+                id: 1,
+                iteration: 0, // Same iteration as candidate 0
+                parent_ids: vec![0],
+                method: CandidateMethod::Reflection,
+                function: OptimizableFunction {
+                    function_name: "TestFunction".to_string(),
+                    prompt_text: "Test prompt".to_string(),
+                    classes: vec![],
+                    enums: vec![],
+                    function_source: None,
+                },
+                scores: Some(CandidateScores {
+                    test_pass_rate: 0.6,
+                    tests_passed: 6,
+                    tests_total: 10,
+                    avg_prompt_tokens: 100.0,
+                    avg_completion_tokens: 50.0,
+                    avg_latency_ms: 500.0,
+                    check_scores: std::collections::HashMap::new(),
+                }),
+            },
+        ];
+
+        let mut app = App::from_candidates_with_config(
+            candidates,
+            "TestFunc".to_string(),
+            "/tmp/test".to_string(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+
+        assert_eq!(app.rows.len(), 1); // 1 row (both in iteration 0)
+        assert_eq!(app.rows[0].candidate_ids.len(), 2); // 2 candidates in that row
+
+        // Test horizontal navigation
+        assert_eq!(app.selected_col, 0);
+        app.select_next_col();
+        assert_eq!(app.selected_col, 1);
+        app.select_next_col();
+        assert_eq!(app.selected_col, 1); // Can't go past last
+        app.select_previous_col();
+        assert_eq!(app.selected_col, 0);
     }
 
     #[test]
     fn test_score_color() {
+        // Test that high scores get good color, mid scores get medium, low get bad
         assert_eq!(score_color(1.0), SCORE_GOOD);
         assert_eq!(score_color(0.8), SCORE_GOOD);
         assert_eq!(score_color(0.6), SCORE_MED);
