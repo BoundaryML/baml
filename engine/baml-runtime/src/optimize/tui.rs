@@ -55,6 +55,21 @@ pub struct CandidateRow {
     pub candidate_ids: Vec<usize>,
 }
 
+/// Optimization run status
+#[derive(Clone, Debug, PartialEq)]
+pub enum OptimizationStatus {
+    /// Optimization is still running
+    Running {
+        /// The iteration currently being worked on (1-indexed for display)
+        display_iteration: usize,
+        total_trials: usize,
+    },
+    /// Optimization has completed
+    Completed,
+    /// Status unknown (couldn't read state)
+    Unknown,
+}
+
 /// Main application state for the TUI
 pub struct App {
     /// All candidates loaded from storage
@@ -81,6 +96,16 @@ pub struct App {
     objectives: Vec<ObjectiveConfig>,
     /// Pareto frontier candidate IDs
     pareto_frontier: Vec<usize>,
+    /// Whether live reload mode is enabled
+    live_mode: bool,
+    /// Path to storage directory for reloading (only set in live mode)
+    storage_path_for_reload: Option<std::path::PathBuf>,
+    /// Current optimization status
+    status: OptimizationStatus,
+    /// Total trials configured
+    total_trials: usize,
+    /// Candidate ID to apply (set when user presses Enter)
+    apply_candidate_id: Option<usize>,
 }
 
 impl App {
@@ -174,7 +199,167 @@ impl App {
             id_to_index,
             objectives,
             pareto_frontier,
+            live_mode: false,
+            storage_path_for_reload: None,
+            status: OptimizationStatus::Unknown,
+            total_trials: 0,
+            apply_candidate_id: None,
         })
+    }
+
+    /// Try to reload data from storage (used in live mode)
+    fn try_reload(&mut self) {
+        let Some(ref storage_path) = self.storage_path_for_reload else {
+            return;
+        };
+
+        let Ok(storage) = OptimizationStorage::from_existing(storage_path) else {
+            return;
+        };
+
+        // Load candidates
+        let Ok(new_candidates) = storage.load_candidates() else {
+            return;
+        };
+
+        // Only update if we have new candidates
+        if new_candidates.len() == self.candidates.len() {
+            // Check if Pareto frontier changed
+            let new_pareto = storage
+                .load_state()
+                .ok()
+                .flatten()
+                .map(|s| s.pareto_frontier_indices)
+                .or_else(|| {
+                    storage
+                        .load_results()
+                        .ok()
+                        .map(|r| r.pareto_frontier.iter().map(|p| p.id).collect())
+                })
+                .unwrap_or_default();
+
+            if new_pareto != self.pareto_frontier {
+                self.pareto_frontier = new_pareto;
+            }
+            return;
+        }
+
+        // Remember current selection
+        let selected_id = self.selected_candidate_id();
+
+        // Update candidates
+        self.candidates = new_candidates;
+
+        // Rebuild id_to_index map
+        self.id_to_index = self
+            .candidates
+            .iter()
+            .enumerate()
+            .map(|(idx, c)| (c.id, idx))
+            .collect();
+
+        // Rebuild rows
+        let mut candidates_by_iteration: HashMap<usize, Vec<usize>> = HashMap::new();
+        for candidate in &self.candidates {
+            candidates_by_iteration
+                .entry(candidate.iteration)
+                .or_default()
+                .push(candidate.id);
+        }
+
+        let mut iterations: Vec<usize> = candidates_by_iteration.keys().copied().collect();
+        iterations.sort();
+
+        self.rows = iterations
+            .into_iter()
+            .map(|iteration| {
+                let mut candidate_ids = candidates_by_iteration.remove(&iteration).unwrap();
+                candidate_ids.sort();
+                CandidateRow {
+                    iteration,
+                    candidate_ids,
+                }
+            })
+            .collect();
+
+        // Try to restore selection, or select the last row
+        if let Some(old_id) = selected_id {
+            // Find which row contains our previously selected candidate
+            for (row_idx, row) in self.rows.iter().enumerate() {
+                if let Some(col_idx) = row.candidate_ids.iter().position(|&id| id == old_id) {
+                    self.selected_row = row_idx;
+                    self.selected_col = col_idx;
+                    self.update_scroll_offset();
+                    break;
+                }
+            }
+        } else if !self.rows.is_empty() {
+            // Select the last row (newest candidates)
+            self.selected_row = self.rows.len() - 1;
+            self.selected_col = 0;
+            self.update_scroll_offset();
+        }
+
+        // Reload Pareto frontier
+        self.pareto_frontier = storage
+            .load_state()
+            .ok()
+            .flatten()
+            .map(|s| s.pareto_frontier_indices)
+            .or_else(|| {
+                storage
+                    .load_results()
+                    .ok()
+                    .map(|r| r.pareto_frontier.iter().map(|p| p.id).collect())
+            })
+            .unwrap_or_default();
+
+        // Reload config (objectives might have been saved)
+        if let Ok(config) = storage.load_config() {
+            self.objectives = config.objectives;
+            self.function_name = config.function_name;
+            self.total_trials = config.trials;
+        }
+
+        // Update optimization status
+        self.update_status(&storage);
+    }
+
+    /// Update optimization status from storage
+    fn update_status(&mut self, storage: &OptimizationStorage) {
+        // Check if final results exist (optimization complete)
+        if storage.load_results().is_ok() {
+            self.status = OptimizationStatus::Completed;
+            return;
+        }
+
+        // Try to get current iteration from state
+        // state.iteration is the last COMPLETED iteration, so we show +1 for what's in progress
+        if let Ok(Some(state)) = storage.load_state() {
+            self.status = OptimizationStatus::Running {
+                display_iteration: state.iteration + 1,
+                total_trials: self.total_trials,
+            };
+            return;
+        }
+
+        // Fallback: estimate from number of candidates/rows, or show 0/N if just starting
+        if !self.rows.is_empty() {
+            // If we have candidates but no state file, estimate from visible iterations
+            let max_iteration = self.rows.last().map(|r| r.iteration).unwrap_or(0);
+            self.status = OptimizationStatus::Running {
+                display_iteration: max_iteration + 1,
+                total_trials: self.total_trials,
+            };
+        } else if self.live_mode && self.total_trials > 0 {
+            // In live mode with no candidates yet, show "Running 0/N" to indicate startup/preparing
+            self.status = OptimizationStatus::Running {
+                display_iteration: 0,
+                total_trials: self.total_trials,
+            };
+        } else {
+            self.status = OptimizationStatus::Unknown;
+        }
     }
 
     /// Get the currently selected candidate ID
@@ -271,6 +456,15 @@ impl App {
             KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
                 self.should_quit = true
             }
+            KeyCode::Enter => {
+                // In live mode, Enter applies the selected candidate (aborts optimization if still running)
+                if self.live_mode {
+                    if let Some(candidate_id) = self.selected_candidate_id() {
+                        self.apply_candidate_id = Some(candidate_id);
+                        self.should_quit = true;
+                    }
+                }
+            }
             KeyCode::Up | KeyCode::Char('k') => self.select_previous_row(),
             KeyCode::Down | KeyCode::Char('j') => self.select_next_row(),
             KeyCode::Left | KeyCode::Char('h') => self.select_previous_col(),
@@ -345,8 +539,11 @@ fn render_ui(frame: &mut Frame, app: &mut App) {
 
     render_tree_panel(frame, app, content_chunks[0]);
     render_details_panel(frame, app, content_chunks[1]);
-    render_footer(frame, main_chunks[2]);
+    render_footer(frame, app, main_chunks[2]);
 }
+
+/// Spinner frames for running status
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 /// Render the header
 fn render_header(frame: &mut Frame, app: &App, area: Rect) {
@@ -373,11 +570,29 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
             .join(", ")
     };
 
+    // Build status display with spinner
+    let status_display = match &app.status {
+        OptimizationStatus::Running { display_iteration, total_trials } => {
+            // Get spinner frame based on time
+            let spinner_idx = (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() / 100)
+                .unwrap_or(0) as usize)
+                % SPINNER_FRAMES.len();
+            let spinner = SPINNER_FRAMES[spinner_idx];
+            // display_iteration is pre-computed: 0 at startup, then iteration+1 once running
+            format!("{} Running {}/{}", spinner, display_iteration, total_trials)
+        }
+        OptimizationStatus::Completed => "✓ Complete".to_string(),
+        OptimizationStatus::Unknown => "".to_string(),
+    };
+
     let stats = format!(
-        "Candidates: {} | Pareto: {} | Objectives: {}",
+        "Candidates: {} | Pareto: {} | Objectives: {} | {}",
         app.candidates.len(),
         app.pareto_frontier.len(),
-        objectives_str
+        objectives_str,
+        status_display
     );
     let paragraph = Paragraph::new(stats)
         .style(Style::default().fg(Color::Gray))
@@ -746,7 +961,7 @@ fn render_metadata_panel(frame: &mut Frame, app: &App, area: Rect) {
                             Style::default().fg(Color::Gray),
                         ),
                         Span::styled(
-                            format!("({}%, {}): ", (obj.weight * 100.0) as i32, obj.direction),
+                            format!("({}%): ", (obj.weight * 100.0) as i32),
                             Style::default().fg(Color::DarkGray),
                         ),
                         Span::styled(formatted_value, Style::default().fg(color)),
@@ -1064,8 +1279,8 @@ fn render_prompt_panel(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 /// Render the footer with key hints
-fn render_footer(frame: &mut Frame, area: Rect) {
-    let hints = Line::from(vec![
+fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
+    let mut spans = vec![
         Span::styled(
             " ↑/↓ ",
             Style::default()
@@ -1094,15 +1309,28 @@ fn render_footer(frame: &mut Frame, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw("Pareto  "),
-        Span::styled(
-            " q ",
-            Style::default()
-                .fg(ACCENT_COLOR)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw("Quit"),
-    ]);
+    ];
 
+    // In live mode, show Enter hint for applying (can be pressed at any time to abort and apply)
+    if app.live_mode {
+        spans.push(Span::styled(
+            " Enter ",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::raw("Apply  "));
+    }
+
+    spans.push(Span::styled(
+        " q ",
+        Style::default()
+            .fg(ACCENT_COLOR)
+            .add_modifier(Modifier::BOLD),
+    ));
+    spans.push(Span::raw("Quit"));
+
+    let hints = Line::from(spans);
     let paragraph = Paragraph::new(hints).style(Style::default().fg(Color::Gray));
 
     frame.render_widget(paragraph, area);
@@ -1295,12 +1523,31 @@ fn format_compact_metric(obj: &ObjectiveConfig, value: f64) -> (String, Color) {
 
 /// Run the TUI application
 pub fn run_tui(storage_path: &Path) -> Result<()> {
+    run_tui_internal(storage_path, false)
+}
+
+/// Run the TUI application in live mode (polls for updates)
+pub fn run_tui_live(storage_path: &Path) -> Result<()> {
+    run_tui_internal(storage_path, true)
+}
+
+/// Internal TUI runner with optional live reload
+fn run_tui_internal(storage_path: &Path, live_mode: bool) -> Result<()> {
     let storage = OptimizationStorage::from_existing(storage_path)
         .context("Failed to open optimization storage")?;
 
     let mut app = App::from_storage(&storage)?;
+    app.live_mode = live_mode;
+    app.storage_path_for_reload = Some(storage_path.to_path_buf());
 
-    if app.candidates.is_empty() {
+    // Load initial status and config
+    if let Ok(config) = storage.load_config() {
+        app.total_trials = config.trials;
+    }
+    app.update_status(&storage);
+
+    // In live mode, allow starting with no candidates (optimization hasn't started yet)
+    if !live_mode && app.candidates.is_empty() {
         anyhow::bail!("No candidates found in {}", storage_path.display());
     }
 
@@ -1323,13 +1570,67 @@ pub fn run_tui(storage_path: &Path) -> Result<()> {
     )?;
     terminal.show_cursor()?;
 
+    // If user selected a candidate to apply, write the request to disk
+    if let Some(candidate_id) = app.apply_candidate_id {
+        write_apply_request(storage_path, candidate_id)?;
+    }
+
     result
+}
+
+/// Write an apply request to the storage directory
+fn write_apply_request(storage_path: &Path, candidate_id: usize) -> Result<()> {
+    let request_path = storage_path.join("apply_request.json");
+    let content = serde_json::json!({
+        "candidate_id": candidate_id
+    });
+    std::fs::write(&request_path, serde_json::to_string_pretty(&content)?)?;
+
+    // Also write a stop signal to abort the optimization
+    let stop_path = storage_path.join("stop_requested");
+    std::fs::write(&stop_path, "stop")?;
+
+    Ok(())
+}
+
+/// Check if a stop has been requested (file-based signal from TUI)
+pub fn is_stop_requested(storage_path: &Path) -> bool {
+    storage_path.join("stop_requested").exists()
+}
+
+/// Read an apply request from the storage directory (returns the candidate ID to apply)
+pub fn read_apply_request(storage_path: &Path) -> Option<usize> {
+    let request_path = storage_path.join("apply_request.json");
+    if !request_path.exists() {
+        return None;
+    }
+
+    let content = std::fs::read_to_string(&request_path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let candidate_id = value.get("candidate_id")?.as_u64()? as usize;
+
+    // Clean up the request file and stop signal after reading
+    let _ = std::fs::remove_file(&request_path);
+    let _ = std::fs::remove_file(storage_path.join("stop_requested"));
+
+    Some(candidate_id)
 }
 
 /// Main event loop
 fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> Result<()> {
+    use std::time::Instant;
+
+    let mut last_reload = Instant::now();
+    let reload_interval = Duration::from_millis(500);
+
     loop {
         terminal.draw(|f| render_ui(f, app))?;
+
+        // In live mode, periodically reload data from disk
+        if app.live_mode && last_reload.elapsed() >= reload_interval {
+            app.try_reload();
+            last_reload = Instant::now();
+        }
 
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {

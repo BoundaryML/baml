@@ -106,6 +106,14 @@ pub struct OptimizeArgs {
     ///   baml-cli optimize --view --run-dir .baml_optimize/run_20250106_143022
     pub view: bool,
 
+    #[arg(long, default_value_t = false, help = "Launch live TUI during optimization")]
+    /// Launch the TUI viewer in the background while optimization runs.
+    /// The TUI will automatically refresh to show new candidates as they are generated.
+    ///
+    /// Example:
+    ///   baml-cli optimize --beta -f MyFunction --live
+    pub live: bool,
+
     #[arg(long, help = "Path to optimization run directory to view")]
     /// Specify a specific optimization run directory to view.
     /// Only used with --view flag.
@@ -360,15 +368,55 @@ impl OptimizeArgs {
                 parallel: self.parallel,
                 objectives,
                 verbose: self.verbose,
+                quiet: self.live, // Suppress output when TUI is active
                 env_vars,
                 baml_src_path: from.clone(),
                 feature_flags,
             },
         )?;
 
+        // Launch live TUI in a separate thread if requested
+        let tui_handle = if self.live {
+            let run_dir_clone = run_dir.clone();
+            println!("Launching live TUI viewer...");
+            println!("(Press 'q' to close TUI, 'Enter' to stop optimization and apply selected candidate)\n");
+
+            // Give a moment for the storage directory to be fully created
+            std::thread::sleep(std::time::Duration::from_millis(100));
+
+            Some(std::thread::spawn(move || {
+                if let Err(e) = crate::optimize::tui::run_tui_live(&run_dir_clone) {
+                    eprintln!("TUI error: {}", e);
+                }
+            }))
+        } else {
+            None
+        };
+
         // Run optimization
         match orchestrator.run().await {
             Ok(result) => {
+                // If TUI was launched in live mode, wait for it to close and get the selected candidate
+                if let Some(handle) = tui_handle {
+                    // Wait for TUI to close - user can press Enter to apply a candidate
+                    let tui_result = handle.join();
+
+                    // Check if user selected a candidate to apply via TUI
+                    if let Ok(()) = tui_result {
+                        // Read back the apply request from storage
+                        if let Some(candidate_id) = crate::optimize::tui::read_apply_request(&run_dir) {
+                            println!("\nApplying candidate #{} from TUI selection...", candidate_id);
+                            self.apply_candidate(&from, &runtime, &result, candidate_id)?;
+                        } else {
+                            println!("\nNo candidate selected for application.");
+                            println!("Results saved to: {}", run_dir.display());
+                        }
+                    }
+
+                    return Ok(OptimizeRunResult::Success);
+                }
+
+                // Non-live mode: show completion message and Pareto selection
                 println!("\n{}", "=".repeat(60));
                 println!("Optimization Complete!");
                 println!("{}", "=".repeat(60));
@@ -429,6 +477,11 @@ impl OptimizeArgs {
                 Ok(OptimizeRunResult::Success)
             }
             Err(e) => {
+                // If TUI was launched, wait for it to close even on error
+                if let Some(handle) = tui_handle {
+                    let _ = handle.join();
+                }
+
                 eprintln!("\nOptimization failed: {e}");
                 Ok(OptimizeRunResult::Failed)
             }

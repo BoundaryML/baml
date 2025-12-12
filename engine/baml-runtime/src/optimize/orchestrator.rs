@@ -24,6 +24,7 @@ use super::{
         CandidateLineage, NormalizationStats, ObjectiveConfig, OptimizationConfig,
         OptimizationResults, OptimizationState, OptimizationStorage, ParetoCandidate, StatsSummary,
     },
+    tui::is_stop_requested,
 };
 use crate::{test_executor::TestFilter, BamlRuntime, InternalRuntimeInterface};
 
@@ -36,6 +37,8 @@ pub struct OrchestratorConfig {
     pub parallel: usize,
     pub objectives: Vec<Objective>,
     pub verbose: bool,
+    /// Suppress all stdout output (used when TUI is active)
+    pub quiet: bool,
     pub env_vars: HashMap<String, String>,
     pub baml_src_path: PathBuf,
     pub feature_flags: internal_baml_core::feature_flags::FeatureFlags,
@@ -87,6 +90,15 @@ pub struct GEPAOrchestrator {
     total_evals: usize,
 }
 
+/// Macro to conditionally print based on quiet mode
+macro_rules! qprint {
+    ($self:expr, $($arg:tt)*) => {
+        if !$self.config.quiet {
+            println!($($arg)*);
+        }
+    };
+}
+
 impl GEPAOrchestrator {
     /// Create a new orchestrator
     pub fn new(
@@ -134,7 +146,8 @@ impl GEPAOrchestrator {
 
     /// Run the optimization loop
     pub async fn run(&mut self) -> Result<OptimizationRunResult> {
-        println!(
+        qprint!(
+            self,
             "\n[Optimization] Optimizing function: {}",
             self.function_name
         );
@@ -149,9 +162,16 @@ impl GEPAOrchestrator {
         while self.current_iteration < self.config.trials
             && self.total_evals < self.config.max_evals
         {
+            // Check for stop signal from TUI (user pressed Enter to apply a candidate)
+            if is_stop_requested(self.storage.run_dir()) {
+                qprint!(self, "\nOptimization stopped by user request.");
+                break;
+            }
+
             self.current_iteration += 1;
 
-            println!(
+            qprint!(
+                self,
                 "\n[Iteration {}/{}]",
                 self.current_iteration, self.config.trials
             );
@@ -169,7 +189,7 @@ impl GEPAOrchestrator {
                         continue;
                     }
                     // If merge failed, fall through to regular reflection
-                    println!("  Merge failed, falling back to reflection...");
+                    qprint!(self, "  Merge failed, falling back to reflection...");
                 }
             }
 
@@ -182,7 +202,8 @@ impl GEPAOrchestrator {
 
             let parent = &self.candidates[parent_idx];
 
-            println!(
+            qprint!(
+                self,
                 "  Selected parent candidate #{} (pass rate: {:.1}%)",
                 parent.id,
                 parent
@@ -215,24 +236,24 @@ impl GEPAOrchestrator {
                 || (self.config.objectives.len() == 1 && self.config.objectives[0].name != "accuracy");
 
             if failures.is_empty() {
-                println!("  All tests passing!");
+                qprint!(self, "  All tests passing!");
 
                 // Check if we've converged
                 if self.check_convergence() {
-                    println!("  Converged - stopping optimization");
+                    qprint!(self, "  Converged - stopping optimization");
                     break;
                 }
 
                 // For single-objective (accuracy only), skip if all tests pass
                 if !has_multiple_objectives {
-                    println!("  Single objective (accuracy) at 100%, but checking for Pareto stability...");
+                    qprint!(self, "  Single objective (accuracy) at 100%, but checking for Pareto stability...");
                     continue;
                 }
 
                 // For multi-objective, continue optimizing other metrics even with 100% accuracy
-                println!("  Continuing to optimize other objectives (tokens, latency, etc.)...");
+                qprint!(self, "  Continuing to optimize other objectives (tokens, latency, etc.)...");
             } else {
-                println!("  Reflecting on {} failures...", failures.len());
+                qprint!(self, "  Reflecting on {} failures...", failures.len());
             }
 
             // Save reflection data (even if no failures, for multi-objective optimization)
@@ -262,7 +283,7 @@ impl GEPAOrchestrator {
                 .await
                 .context("Failed to propose improvements")?;
 
-            println!("  GEPA proposed improvements: {}", improved.rationale);
+            qprint!(self, "  GEPA proposed improvements: {}", improved.rationale);
 
             // Create new candidate
             let new_id = self.candidates.len();
@@ -277,11 +298,12 @@ impl GEPAOrchestrator {
             self.candidates.push(new_candidate);
 
             // Evaluate new candidate
-            println!("  Evaluating new candidate #{}...", new_id);
+            qprint!(self, "  Evaluating new candidate #{}...", new_id);
             self.evaluate_candidate(new_id).await?;
 
             let new_scores = self.candidates[new_id].scores.as_ref().unwrap();
-            println!(
+            qprint!(
+                self,
                 "  Candidate #{}: {:.1}% pass rate ({}/{} tests)",
                 new_id,
                 new_scores.test_pass_rate * 100.0,
@@ -302,12 +324,13 @@ impl GEPAOrchestrator {
 
     /// Initialize with the current prompt/schema as candidate 0
     async fn initialize(&mut self) -> Result<()> {
-        println!("  Extracting current prompt and schema...");
+        qprint!(self, "  Extracting current prompt and schema...");
 
         // Extract optimizable function
         let opt_func = extract_optimizable_function(&self.user_runtime, &self.function_name)?;
 
-        println!(
+        qprint!(
+            self,
             "  Found {} classes, {} enums",
             opt_func.classes.len(),
             opt_func.enums.len()
@@ -318,11 +341,12 @@ impl GEPAOrchestrator {
         self.candidates.push(initial);
 
         // Evaluate initial candidate
-        println!("  Evaluating initial candidate...");
+        qprint!(self, "  Evaluating initial candidate...");
         self.evaluate_candidate(0).await?;
 
         let scores = self.candidates[0].scores.as_ref().unwrap();
-        println!(
+        qprint!(
+            self,
             "  Initial: {:.1}% pass rate ({}/{} tests)",
             scores.test_pass_rate * 100.0,
             scores.tests_passed,
@@ -400,7 +424,8 @@ impl GEPAOrchestrator {
         let candidate_a = &self.candidates[idx_a];
         let candidate_b = &self.candidates[idx_b];
 
-        println!(
+        qprint!(
+            self,
             "  Merging candidates #{} and #{} (Pareto frontier size: {})",
             idx_a,
             idx_b,
@@ -420,8 +445,8 @@ impl GEPAOrchestrator {
             .map(|s| self.pareto.identify_strengths(s, &self.candidates))
             .unwrap_or_default();
 
-        println!("    Candidate #{} strengths: {:?}", idx_a, strengths_a);
-        println!("    Candidate #{} strengths: {:?}", idx_b, strengths_b);
+        qprint!(self, "    Candidate #{} strengths: {:?}", idx_a, strengths_a);
+        qprint!(self, "    Candidate #{} strengths: {:?}", idx_b, strengths_b);
 
         // Call GEPA MergeVariants
         let merged = match self
@@ -441,7 +466,7 @@ impl GEPAOrchestrator {
             }
         };
 
-        println!("  Merge rationale: {}", merged.rationale);
+        qprint!(self, "  Merge rationale: {}", merged.rationale);
 
         // Create new merged candidate
         let new_id = self.candidates.len();
@@ -457,11 +482,12 @@ impl GEPAOrchestrator {
         self.candidates.push(new_candidate);
 
         // Evaluate the merged candidate
-        println!("  Evaluating merged candidate #{}...", new_id);
+        qprint!(self, "  Evaluating merged candidate #{}...", new_id);
         self.evaluate_candidate(new_id).await?;
 
         let new_scores = self.candidates[new_id].scores.as_ref().unwrap();
-        println!(
+        qprint!(
+            self,
             "  Merged candidate #{}: {:.1}% pass rate ({}/{} tests)",
             new_id,
             new_scores.test_pass_rate * 100.0,
@@ -472,13 +498,13 @@ impl GEPAOrchestrator {
         // Show objective values
         for obj in &self.config.objectives {
             let value = obj.get_value(new_scores);
-            println!("    {}: {:.2}", obj.name, value);
+            qprint!(self, "    {}: {:.2}", obj.name, value);
         }
 
         // Update Pareto frontier
         let added_to_pareto = self.pareto.add(new_id, new_scores, &self.candidates);
         if added_to_pareto {
-            println!("  Merged candidate added to Pareto frontier!");
+            qprint!(self, "  Merged candidate added to Pareto frontier!");
         }
 
         // Save checkpoint
@@ -531,7 +557,8 @@ impl GEPAOrchestrator {
                     .and_then(|c| c.scores.as_ref())
                 {
                     if scores.test_pass_rate >= 1.0 {
-                        println!(
+                        qprint!(
+                            self,
                             "  Pareto frontier stable for {} iterations with 100% accuracy",
                             iterations_since_pareto_change
                         );
