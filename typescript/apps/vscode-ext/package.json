@@ -140,14 +140,18 @@
           ".baml.jinja",
           ".baml.jinja"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./jinja-language-configuration.json"
       }
     ],
     "grammars": [
       {
         "language": "baml",
         "scopeName": "source.baml",
-        "path": "./syntaxes/baml.tmLanguage.json"
+        "path": "./syntaxes/baml.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.baml-jinja": "baml-jinja",
+          "string.quoted.block.baml.prompt": "baml-jinja"
+        }
       },
       {
         "language": "baml-jinja",

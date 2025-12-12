@@ -140,7 +140,6 @@ aws-config = { version = "=1.5.3", default-features = false, features = [] }
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
 aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, features = [
-
 ] }
 colored = { version = "2.1.0", default-features = false, features = [
   "no-color",
