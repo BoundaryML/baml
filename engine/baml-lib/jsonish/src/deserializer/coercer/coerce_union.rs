@@ -3,7 +3,11 @@ use baml_types::LiteralValue;
 use internal_baml_core::ir::{TypeIR, TypeValue};
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
-use crate::deserializer::{coercer::array_helper, types::BamlValueWithFlags};
+use crate::deserializer::{
+    coercer::array_helper,
+    score::WithScore,
+    types::BamlValueWithFlags,
+};
 
 pub(super) fn try_cast_union(
     ctx: &ParsingContext,
@@ -33,11 +37,18 @@ pub(super) fn try_cast_union(
         return Some(result);
     }
 
-    let mut filtered_options = options
-        .iter_skip_null()
-        .into_iter()
-        .filter_map(|opt| opt.try_cast(ctx, union_target, Some(value)))
-        .collect::<Vec<_>>();
+    // Optimization: collect try_cast results, but short-circuit if we find a perfect match (score 0)
+    let mut filtered_options = Vec::new();
+    for opt in options.iter_skip_null() {
+        if let Some(cast_result) = opt.try_cast(ctx, union_target, Some(value)) {
+            let score = cast_result.score();
+            filtered_options.push(cast_result);
+            // Perfect match - no need to try other options
+            if score == 0 {
+                break;
+            }
+        }
+    }
 
     let mut result = match filtered_options.len() {
         0 => None,
@@ -84,11 +95,24 @@ pub(super) fn coerce_union(
         _ => unreachable!("coerce_union"),
     };
 
-    let parsed = options
-        .iter_include_null()
-        .iter()
-        .map(|option| option.coerce(ctx, union_target, value))
-        .collect::<Vec<_>>();
+    // Optimization: Use lazy evaluation with early termination for perfect matches
+    let mut parsed: Vec<Result<BamlValueWithFlags, ParsingError>> = Vec::new();
+    let mut best_score = i32::MAX;
+
+    for option in options.iter_include_null().iter() {
+        let result = option.coerce(ctx, union_target, value);
+        if let Ok(ref val) = result {
+            let score = val.score();
+            // If we find a perfect match (score 0), we can stop immediately
+            if score == 0 {
+                return result;
+            }
+            if score < best_score {
+                best_score = score;
+            }
+        }
+        parsed.push(result);
+    }
 
     array_helper::pick_best(ctx, union_target, &parsed)
 }

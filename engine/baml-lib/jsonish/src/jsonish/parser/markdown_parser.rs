@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::sync::LazyLock;
 
 use super::ParseOptions;
 use crate::jsonish::{
@@ -12,18 +13,26 @@ pub enum MarkdownResult {
     String(String),
 }
 
+// Cache compiled regexes for markdown parsing - these are compiled once and reused
+static MD_TAG_START: LazyLock<regex::Regex> = LazyLock::new(|| {
+    // Anchor fences to the start of a line (optionally indented) to avoid
+    // confusing content like ```json that appears inside strings/code.
+    regex::Regex::new(r"(?m)^[ \t]*```([a-zA-Z0-9 ]+)(?:\n|$)")
+        .expect("Failed to compile md-tag-start regex")
+});
+
+static MD_TAG_END: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^[ \t]*```(?:\n|$)")
+        .expect("Failed to compile md-tag-end regex")
+});
+
 pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
     let mut values: Vec<MarkdownResult> = vec![];
 
     let mut remaining = str;
-    // Find regex for markdown blocks (```<tag><EOF|newline>)
 
-    // Anchor fences to the start of a line (optionally indented) to avoid
-    // confusing content like ```json that appears inside strings/code.
-    let md_tag_start = regex::Regex::new(r"(?m)^[ \t]*```([a-zA-Z0-9 ]+)(?:\n|$)")
-        .map_err(|e| anyhow::Error::from(e).context("Failed to build regex for md-tag-start"))?;
-    let md_tag_end = regex::Regex::new(r"(?m)^[ \t]*```(?:\n|$)")
-        .map_err(|e| anyhow::Error::from(e).context("Failed to build regex for md-tag-end"))?;
+    let md_tag_start = &*MD_TAG_START;
+    let md_tag_end = &*MD_TAG_END;
 
     let mut should_loop = true;
 

@@ -245,35 +245,87 @@ impl std::fmt::Display for Value {
 // Lists, strings and objects at the top level are necessarily complete, because
 // serde will not parse an array, string or an object unless the closing
 // delimiter is present.
+
+/// A serde Visitor that constructs Value directly from the deserializer,
+/// avoiding the intermediate serde_json::Value allocation and double-parsing.
+struct ValueVisitor;
+
+impl<'de> serde::de::Visitor<'de> for ValueVisitor {
+    type Value = Value;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("any valid JSON value")
+    }
+
+    fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> {
+        Ok(Value::Boolean(v))
+    }
+
+    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> {
+        Ok(Value::Number(v.into(), CompletionState::Complete))
+    }
+
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E> {
+        Ok(Value::Number(v.into(), CompletionState::Complete))
+    }
+
+    fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match serde_json::Number::from_f64(v) {
+            Some(n) => Ok(Value::Number(n, CompletionState::Complete)),
+            None => Err(serde::de::Error::custom(format!(
+                "f64 value cannot be represented as JSON number: {}",
+                v
+            ))),
+        }
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
+        Ok(Value::String(v.to_owned(), CompletionState::Complete))
+    }
+
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E> {
+        Ok(Value::String(v, CompletionState::Complete))
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_unit<E>(self) -> Result<Self::Value, E> {
+        Ok(Value::Null)
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'de>,
+    {
+        let mut vec = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+        while let Some(elem) = seq.next_element::<Value>()? {
+            vec.push(elem);
+        }
+        Ok(Value::Array(vec, CompletionState::Complete))
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::MapAccess<'de>,
+    {
+        let mut object = Vec::with_capacity(map.size_hint().unwrap_or(0));
+        while let Some((key, value)) = map.next_entry::<String, Value>()? {
+            object.push((key, value));
+        }
+        Ok(Value::Object(object, CompletionState::Complete))
+    }
+}
+
 impl<'de> serde::Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let value = serde_json::Value::deserialize(deserializer)?;
-        match value {
-            serde_json::Value::String(s) => Ok(Value::String(s, CompletionState::Complete)),
-            serde_json::Value::Number(n) => Ok(Value::Number(n, CompletionState::Complete)),
-            serde_json::Value::Bool(b) => Ok(Value::Boolean(b)),
-            serde_json::Value::Null => Ok(Value::Null),
-            serde_json::Value::Object(o) => {
-                let mut map = Vec::new();
-                for (k, v) in o {
-                    let parsed_value =
-                        serde_json::from_value(v).map_err(serde::de::Error::custom)?;
-                    map.push((k, parsed_value));
-                }
-                Ok(Value::Object(map, CompletionState::Complete))
-            }
-            serde_json::Value::Array(a) => {
-                let mut vec = Vec::new();
-                for v in a {
-                    let parsed_value =
-                        serde_json::from_value(v).map_err(serde::de::Error::custom)?;
-                    vec.push(parsed_value);
-                }
-                Ok(Value::Array(vec, CompletionState::Complete))
-            }
-        }
+        deserializer.deserialize_any(ValueVisitor)
     }
 }
