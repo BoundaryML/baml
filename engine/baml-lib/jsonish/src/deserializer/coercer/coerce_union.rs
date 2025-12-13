@@ -59,14 +59,16 @@ pub(super) fn try_cast_union(
     // Collect try_cast results, short-circuit if we find a perfect match (score 0)
     let mut filtered_options: Vec<(usize, BamlValueWithFlags)> = Vec::new();
     for (i, opt) in all_options.iter().enumerate() {
-        if let Some(cast_result) = opt.try_cast(ctx, union_target, Some(value)) {
+        if let Some(mut cast_result) = opt.try_cast(ctx, union_target, Some(value)) {
             let score = cast_result.score();
             // Perfect match - no need to try other options
             if score == 0 {
-                let mut result = cast_result;
-                result.add_flag(Flag::UnionMatch(i, vec![]));
-                return Some(result);
+                cast_result.add_flag(Flag::UnionMatch(i, vec![]));
+                return Some(cast_result);
             }
+            // Add the flag with the CORRECT original index before storing.
+            // This prevents pick_best from adding a flag with wrong (filtered list) index.
+            cast_result.add_flag(Flag::UnionMatch(i, vec![]));
             filtered_options.push((i, cast_result));
         }
     }
@@ -74,10 +76,11 @@ pub(super) fn try_cast_union(
     let mut result = match filtered_options.len() {
         0 => None,
         1 => {
-            let (i, mut v) = filtered_options.remove(0);
-            v.add_flag(Flag::UnionMatch(i, vec![]));
+            let (_, v) = filtered_options.remove(0);
+            // Flag already added above with correct index
             Some(v)
         }
+        // pick_best will see the existing UnionMatch flag and won't add a duplicate
         _ => array_helper::pick_best(
             ctx,
             union_target,
