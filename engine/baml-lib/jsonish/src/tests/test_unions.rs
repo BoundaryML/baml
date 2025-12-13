@@ -372,9 +372,12 @@ test_deserializer!(
 
 #[test_log::test]
 fn test_try_cast_union_early_return_preserves_incomplete_flag() {
-    use crate::deserializer::coercer::{ParsingContext, TypeCoercer};
-    use crate::jsonish::Value as JsonishValue;
     use baml_types::CompletionState;
+
+    use crate::{
+        deserializer::coercer::{ParsingContext, TypeCoercer},
+        jsonish::Value as JsonishValue,
+    };
 
     // Create a simple union type: string | int
     let union_type = TypeIR::union(vec![
@@ -398,7 +401,10 @@ fn test_try_cast_union_early_return_preserves_incomplete_flag() {
 
     // First, coerce without hint to establish baseline and get the winning variant index
     let result_no_hint = union_type.try_cast(&ctx, &union_type, Some(&incomplete_value));
-    assert!(result_no_hint.is_some(), "try_cast should succeed for string in string|int union");
+    assert!(
+        result_no_hint.is_some(),
+        "try_cast should succeed for string in string|int union"
+    );
 
     let result_no_hint = result_no_hint.unwrap();
 
@@ -413,8 +419,12 @@ fn test_try_cast_union_early_return_preserves_incomplete_flag() {
     // The hint should cause try_cast_union to use the early-return path
     let ctx_with_hint = ctx.enter_scope_with_hint("test", Some(0)); // hint to try string first
 
-    let result_with_hint = union_type.try_cast(&ctx_with_hint, &union_type, Some(&incomplete_value));
-    assert!(result_with_hint.is_some(), "try_cast with hint should succeed");
+    let result_with_hint =
+        union_type.try_cast(&ctx_with_hint, &union_type, Some(&incomplete_value));
+    assert!(
+        result_with_hint.is_some(),
+        "try_cast with hint should succeed"
+    );
 
     let result_with_hint = result_with_hint.unwrap();
 
@@ -438,7 +448,6 @@ fn test_try_cast_union_early_return_preserves_incomplete_flag() {
         "BUG: try_cast_union early return (hint path) does not preserve Flag::Incomplete. \
          The result should have Flag::Incomplete because the input value was incomplete. \
          Without hint: has_incomplete={}, With hint: has_incomplete={}",
-        has_incomplete_no_hint,
-        has_incomplete_with_hint
+        has_incomplete_no_hint, has_incomplete_with_hint
     );
 }
