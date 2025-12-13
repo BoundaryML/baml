@@ -30,6 +30,8 @@ pub struct TestCase {
     pub go: Option<(String, String)>,
     /// For enum tests: the expected values
     pub enum_values: Option<Vec<String>>,
+    /// Line number in the markdown file where this test is defined (1-indexed)
+    pub line_number: usize,
 }
 
 /// Parse the test specification markdown into test cases.
@@ -136,7 +138,8 @@ pub fn parse_test_spec(content: &str) -> Vec<TestCase> {
                 }
             }
             let name = line[3..].trim().to_string();
-            current_test = Some(TestCaseBuilder::new(name));
+            // Line numbers are 1-indexed for user display
+            current_test = Some(TestCaseBuilder::new(name, i + 1));
             current_language = None;
             parse_mode = ParseMode::None;
             pending_non_streaming = None;
@@ -272,10 +275,11 @@ struct TestCaseBuilder {
     typescript: Option<(String, String)>,
     go: Option<(String, String)>,
     enum_values: Option<Vec<String>>,
+    line_number: usize,
 }
 
 impl TestCaseBuilder {
-    fn new(name: String) -> Self {
+    fn new(name: String, line_number: usize) -> Self {
         Self {
             name,
             baml: String::new(),
@@ -284,6 +288,7 @@ impl TestCaseBuilder {
             typescript: None,
             go: None,
             enum_values: None,
+            line_number,
         }
     }
 
@@ -297,6 +302,7 @@ impl TestCaseBuilder {
             typescript: self.typescript,
             go: self.go,
             enum_values: self.enum_values,
+            line_number: self.line_number,
         })
     }
 }
@@ -399,6 +405,7 @@ pub fn generate_test_code(language: &str) -> String {
             ));
             code.push_str(&format!("            r#\"{}\"#,\n", baml_escaped));
             code.push_str(&format!("            \"{}\",\n", test.target));
+            code.push_str(&format!("            {},\n", test.line_number));
             code.push_str("            [");
             for (i, v) in values.iter().enumerate() {
                 if i > 0 {
@@ -423,6 +430,7 @@ pub fn generate_test_code(language: &str) -> String {
             ));
             code.push_str(&format!("            r#\"{}\"#,\n", baml_escaped));
             code.push_str(&format!("            \"{}\",\n", test.target));
+            code.push_str(&format!("            {},\n", test.line_number));
             // Use raw strings - no need to escape quotes inside r#"..."#
             code.push_str(&format!("            r#\"{}\"#,\n", non_streaming));
             code.push_str(&format!("            r#\"{}\"#\n", streaming));

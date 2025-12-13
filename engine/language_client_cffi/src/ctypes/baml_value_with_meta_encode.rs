@@ -302,7 +302,7 @@ impl Encode<CffiFieldTypeLiteral> for &baml_types::LiteralValue {
     }
 }
 
-impl<'a, TypeLookups, T: IsChecked> Encode<CffiValueHolder>
+impl<'a, TypeLookups, T: IsChecked + type_meta::MayHaveMeta> Encode<CffiValueHolder>
     for WithIr<'a, BamlValueWithMeta<Meta<'_, T>>, TypeLookups, T>
 where
     TypeLookups: baml_types::baml_value::TypeLookupsMeta<T> + 'a,
@@ -420,7 +420,7 @@ where
                 name: Some(create_cffi_type_name(
                     curr_type.to_union_name().as_str(),
                     match curr_type
-                        .mode(&mode, lookup)
+                        .mode(&mode, lookup, 1)
                         .expect("Failed to get mode for field type")
                     {
                         baml_types::StreamingMode::NonStreaming => CffiTypeNamespace::Types,
@@ -572,7 +572,7 @@ where
                         name: Some(create_cffi_type_name(
                             name,
                             match curr_type
-                                .mode(&mode, lookup)
+                                .mode(&mode, lookup, 0)
                                 .expect("Failed to get mode for field type")
                             {
                                 baml_types::StreamingMode::NonStreaming => CffiTypeNamespace::Types,
@@ -608,7 +608,7 @@ where
                         name: Some(create_cffi_type_name(
                             name,
                             match curr_type
-                                .mode(&mode, lookup)
+                                .mode(&mode, lookup, 0)
                                 .expect("Failed to get mode for field type")
                             {
                                 baml_types::StreamingMode::NonStreaming => CffiTypeNamespace::Types,

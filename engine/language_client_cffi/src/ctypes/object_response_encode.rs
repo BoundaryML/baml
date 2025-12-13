@@ -1,4 +1,4 @@
-use baml_types::{BamlValue, type_meta, ir_type::UnionConstructor};
+use baml_types::{ir_type::UnionConstructor, type_meta, BamlValue};
 
 use crate::{
     baml::cffi::{InvocationResponse, InvocationResponseSuccess},
@@ -32,7 +32,8 @@ impl BamlObjectResponseSuccess {
 }
 
 // BamlValue uses type_meta::IR for its types when encoding
-impl<'a, TypeLookups> Encode<InvocationResponse> for WithIr<'a, BamlObjectResponse, TypeLookups, type_meta::IR>
+impl<'a, TypeLookups> Encode<InvocationResponse>
+    for WithIr<'a, BamlObjectResponse, TypeLookups, type_meta::IR>
 where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
 {
@@ -62,8 +63,8 @@ where
                             use baml_runtime::TypeIR;
                             use baml_types::BamlMediaType;
 
-                             fn get_type_ir(val: &BamlValue) -> TypeIR {
-                                 match val {
+                            fn get_type_ir(val: &BamlValue) -> TypeIR {
+                                match val {
                                     BamlValue::Null => TypeIR::null(),
                                     BamlValue::Bool(_) => TypeIR::bool(),
                                     BamlValue::Int(_) => TypeIR::int(),
@@ -71,7 +72,9 @@ where
                                     BamlValue::String(_) => TypeIR::string(),
                                     BamlValue::Map(index_map) => TypeIR::map(
                                         TypeIR::string(),
-                                        TypeIR::union(index_map.values().map(get_type_ir).collect()),
+                                        TypeIR::union(
+                                            index_map.values().map(get_type_ir).collect(),
+                                        ),
                                     ),
                                     BamlValue::List(baml_values) => TypeIR::list(TypeIR::union(
                                         baml_values.iter().map(get_type_ir).collect(),
@@ -90,15 +93,15 @@ where
                             let curr_type = get_type_ir(value);
 
                             cResult::Value(
-                            WithIr {
-                                value,
-                                lookup: self.lookup,
-                                mode: self.mode,
-                                curr_type,
-                            }
-                            .encode(),
-                        )
-                        },
+                                WithIr {
+                                    value,
+                                    lookup: self.lookup,
+                                    mode: self.mode,
+                                    curr_type,
+                                }
+                                .encode(),
+                            )
+                        }
                     }),
                 })),
             },
@@ -113,14 +116,15 @@ where
 // (it doesn't implement HasType)
 use crate::ctypes::utils::EncodeToBuffer;
 
-impl<TypeLookups> EncodeToBuffer<InvocationResponse, TypeLookups, type_meta::IR> for BamlObjectResponseWrapper
+impl<TypeLookups> EncodeToBuffer<InvocationResponse, TypeLookups, type_meta::IR>
+    for BamlObjectResponseWrapper
 where
     TypeLookups: baml_types::baml_value::TypeLookups,
 {
     fn encode_to_c_buffer(&self, lookup: &TypeLookups, mode: baml_types::StreamingMode) -> Vec<u8> {
         // We use type_meta::IR because that's what BamlValue uses
-         // 1. Build the IR & convert to the prost message --------------------
-         let msg: InvocationResponse = WithIr {
+        // 1. Build the IR & convert to the prost message --------------------
+        let msg: InvocationResponse = WithIr {
             value: &self.0,
             lookup,
             mode,

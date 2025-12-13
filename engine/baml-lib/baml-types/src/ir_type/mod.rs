@@ -322,7 +322,7 @@ enum UnionTypeViewGenericMut<'a, T> {
     OneOfOptional(Vec<&'a mut TypeGeneric<T>>),
 }
 
-impl<T: Default + std::fmt::Debug + Clone> UnionTypeViewGeneric<'_, T> {
+impl<T: Default + std::fmt::Debug + Clone + type_meta::MayHaveMeta> UnionTypeViewGeneric<'_, T> {
     /// A helper-function for the `FieldType::flatten`.
     /// See `FieldType::flatten` for context.
     fn flatten(&self) -> Vec<TypeGeneric<T>> {
@@ -505,12 +505,23 @@ impl<T> TypeGeneric<T> {
     ///
     /// e.g. (( ((int | null) | int) | (map<string,string> | null ))) =>
     ///         int | int | map<string,string> | null
+    ///
+    /// Note: Unions with @check constraints are NOT flattened - they are
+    /// preserved as a unit to avoid losing the check metadata.
     pub fn flatten(&self) -> Vec<TypeGeneric<T>>
     where
-        T: Clone + std::fmt::Debug + Default,
+        T: Clone + std::fmt::Debug + Default + type_meta::MayHaveMeta,
     {
         match self {
-            TypeGeneric::Union(inner, _) => inner.view().flatten(),
+            TypeGeneric::Union(inner, meta) => {
+                // Don't flatten unions that have @check constraints - they are
+                // "wrapped" types that should be preserved as a unit
+                if meta.has_checks() {
+                    vec![self.clone()]
+                } else {
+                    inner.view().flatten()
+                }
+            }
             _ => vec![self.clone()],
         }
     }
@@ -800,14 +811,19 @@ fn merge_modes<Mode: Iterator<Item = anyhow::Result<StreamingMode>>>(
     Ok(StreamingMode::NonStreaming)
 }
 
-impl<T> TypeGeneric<T> {
+impl<T: type_meta::MayHaveMeta> TypeGeneric<T> {
     pub fn mode(
         &self,
         mode: &StreamingMode,
         _lookup: &impl TypeLookups,
+        union_depth: usize,
     ) -> anyhow::Result<StreamingMode> {
         if *mode == StreamingMode::NonStreaming {
             return Ok(StreamingMode::NonStreaming);
+        }
+
+        if union_depth > 1 && self.meta().has_stream_state() {
+            return Ok(StreamingMode::Streaming);
         }
 
         match self {
@@ -817,21 +833,23 @@ impl<T> TypeGeneric<T> {
             | TypeGeneric::Primitive(_, _)
             | TypeGeneric::Enum { .. }
             | TypeGeneric::Literal(_, _) => Ok(StreamingMode::NonStreaming),
-            TypeGeneric::List(inner, _) => inner.mode(mode, _lookup),
+            TypeGeneric::List(inner, _) => inner.mode(mode, _lookup, union_depth),
             TypeGeneric::Map(key, value, ..) => {
-                let items: Vec<Result<StreamingMode, anyhow::Error>> =
-                    vec![key.mode(mode, _lookup), value.mode(mode, _lookup)];
+                let items: Vec<Result<StreamingMode, anyhow::Error>> = vec![
+                    key.mode(mode, _lookup, union_depth),
+                    value.mode(mode, _lookup, union_depth),
+                ];
                 merge_modes(items.into_iter())
             }
             TypeGeneric::RecursiveTypeAlias { mode, .. } => Ok(*mode),
             TypeGeneric::Tuple(inner, _) => {
-                merge_modes(inner.iter().map(|t| t.mode(mode, _lookup)))
+                merge_modes(inner.iter().map(|t| t.mode(mode, _lookup, union_depth)))
             }
             TypeGeneric::Union(union_type_generic, _) => merge_modes(
                 union_type_generic
                     .types
                     .iter()
-                    .map(|t| t.mode(mode, _lookup)),
+                    .map(|t| t.mode(mode, _lookup, union_depth + 1)),
             ),
         }
     }

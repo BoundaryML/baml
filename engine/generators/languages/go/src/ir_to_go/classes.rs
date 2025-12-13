@@ -46,6 +46,14 @@ pub fn ir_class_to_go_stream<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -
 fn ir_field_to_go<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldGo<'a> {
     let non_streaming = field.elem.r#type.elem.to_non_streaming_type(pkg.lookup());
     let go_type = super::type_to_go(&non_streaming, pkg.lookup());
+    #[cfg(test)]
+    {
+        use crate::r#type::SerializeType;
+
+        println!("Non-streaming type: {}", non_streaming.to_string());
+        println!("Go type: {}", go_type.serialize_type(pkg));
+    }
+
     FieldGo {
         name: field.elem.name.clone(),
         r#type: go_type,
@@ -60,10 +68,18 @@ fn ir_field_to_go<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldGo<'
 
 fn ir_field_to_go_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldGo<'a> {
     let partialized = field.elem.r#type.elem.to_streaming_type(pkg.lookup());
+    let go_type = super::stream_type_to_go(&partialized, pkg.lookup());
+
+    #[cfg(test)]
+    {
+        use crate::r#type::SerializeType;
+        println!("Streaming type: {}", partialized.to_string());
+        println!("Go type: {}", go_type.serialize_type(pkg));
+    }
 
     FieldGo {
         name: field.elem.name.clone(),
-        r#type: super::stream_type_to_go(&partialized, pkg.lookup()),
+        r#type: go_type,
         docstring: field
             .elem
             .docstring

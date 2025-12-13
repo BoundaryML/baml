@@ -159,7 +159,10 @@ fn safe_name(name: &str) -> String {
 impl TypeGo {
     // for unions, we need a default name for the type when the union is not named
     pub fn default_name_within_union(&self) -> String {
-        match self {
+        let meta = self.meta();
+
+        // Get base name without wrappers
+        let base_name = match self {
             TypeGo::String(val, _) => val.as_ref().map_or("String".to_string(), |v| {
                 let safe_name = safe_name(v);
                 format!("K{safe_name}")
@@ -186,7 +189,22 @@ impl TypeGo {
                 value.default_name_within_union()
             ),
             TypeGo::Any { .. } => "Any".to_string(),
-        }
+        };
+
+        // Apply prefixes in order: StreamState, then Checked
+        let with_checked = if meta.is_checked() {
+            format!("Checked{}", base_name)
+        } else {
+            base_name
+        };
+
+        let with_stream_state = if meta.wrap_stream_state {
+            format!("StreamState{}", with_checked)
+        } else {
+            with_checked
+        };
+
+        with_stream_state
     }
 
     pub fn zero_value(&self, pkg: &CurrentRenderPackage) -> String {

@@ -3,7 +3,25 @@
 This file defines test cases for BAML type serialization across all target languages.
 Each test specifies the BAML source, target path, and expected type strings for each language.
 
-**Format:**
+## Running Tests
+
+Run these commands from the `engine/` directory:
+
+```bash
+# Run all type serialization tests for all languages
+cargo test --lib type_gen
+
+# Run tests for a specific language
+cargo test -p generators-python --lib type_gen    # Python
+cargo test -p generators-typescript --lib type_gen # TypeScript
+cargo test -p generators-go --lib type_gen         # Go
+
+# Run a specific test by name
+cargo test -p generators-python --lib type_gen::check_on_optional
+```
+
+## Format
+
 - Short types: `- Non-streaming: <type>` and `- Streaming: <type>`
 - Long types: Use code blocks with the language identifier
 
@@ -20,14 +38,17 @@ class T { f string }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `str`
 - Streaming: `typing.Optional[str]`
 
 ### TypeScript
+
 - Non-streaming: `string`
 - Streaming: `string | null`
 
 ### Go
+
 - Non-streaming: `string`
 - Streaming: `*string`
 
@@ -42,14 +63,17 @@ class T { f int }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `int`
 - Streaming: `typing.Optional[int]`
 
 ### TypeScript
+
 - Non-streaming: `number`
 - Streaming: `number | null`
 
 ### Go
+
 - Non-streaming: `int64`
 - Streaming: `*int64`
 
@@ -64,14 +88,17 @@ class T { f float }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `float`
 - Streaming: `typing.Optional[float]`
 
 ### TypeScript
+
 - Non-streaming: `number`
 - Streaming: `number | null`
 
 ### Go
+
 - Non-streaming: `float64`
 - Streaming: `*float64`
 
@@ -86,14 +113,17 @@ class T { f bool }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `bool`
 - Streaming: `typing.Optional[bool]`
 
 ### TypeScript
+
 - Non-streaming: `boolean`
 - Streaming: `boolean | null`
 
 ### Go
+
 - Non-streaming: `bool`
 - Streaming: `*bool`
 
@@ -110,14 +140,17 @@ class T { f string? }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Optional[str]`
 - Streaming: `typing.Optional[str]`
 
 ### TypeScript
+
 - Non-streaming: `string | null`
 - Streaming: `string | null`
 
 ### Go
+
 - Non-streaming: `*string`
 - Streaming: `*string`
 
@@ -132,14 +165,17 @@ class T { f int? }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Optional[int]`
 - Streaming: `typing.Optional[int]`
 
 ### TypeScript
+
 - Non-streaming: `number | null`
 - Streaming: `number | null`
 
 ### Go
+
 - Non-streaming: `*int64`
 - Streaming: `*int64`
 
@@ -156,14 +192,17 @@ class T { f "hello" }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing_extensions.Literal['hello']`
 - Streaming: `typing.Optional[typing_extensions.Literal['hello']]`
 
 ### TypeScript
+
 - Non-streaming: `"hello"`
 - Streaming: `"hello" | null`
 
 ### Go
+
 - Non-streaming: `string`
 - Streaming: `*string`
 
@@ -178,14 +217,17 @@ class T { f 42 }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing_extensions.Literal[42]`
 - Streaming: `typing.Optional[typing_extensions.Literal[42]]`
 
 ### TypeScript
+
 - Non-streaming: `42`
 - Streaming: `42 | null`
 
 ### Go
+
 - Non-streaming: `int64`
 - Streaming: `*int64`
 
@@ -200,14 +242,17 @@ class T { f true }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing_extensions.Literal[True]`
 - Streaming: `typing.Optional[typing_extensions.Literal[True]]`
 
 ### TypeScript
+
 - Non-streaming: `true`
 - Streaming: `true | null`
 
 ### Go
+
 - Non-streaming: `bool`
 - Streaming: `*bool`
 
@@ -222,14 +267,17 @@ class T { f false }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing_extensions.Literal[False]`
 - Streaming: `typing.Optional[typing_extensions.Literal[False]]`
 
 ### TypeScript
+
 - Non-streaming: `false`
 - Streaming: `false | null`
 
 ### Go
+
 - Non-streaming: `bool`
 - Streaming: `*bool`
 
@@ -246,14 +294,17 @@ class T { f string[] }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.List[str]`
 - Streaming: `typing.List[str]`
 
 ### TypeScript
+
 - Non-streaming: `string[]`
 - Streaming: `string[]`
 
 ### Go
+
 - Non-streaming: `[]string`
 - Streaming: `[]string`
 
@@ -268,14 +319,17 @@ class T { f int[] }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.List[int]`
 - Streaming: `typing.List[int]`
 
 ### TypeScript
+
 - Non-streaming: `number[]`
 - Streaming: `number[]`
 
 ### Go
+
 - Non-streaming: `[]int64`
 - Streaming: `[]int64`
 
@@ -290,14 +344,17 @@ class T { f string[][] }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.List[typing.List[str]]`
 - Streaming: `typing.List[typing.List[str]]`
 
 ### TypeScript
+
 - Non-streaming: `string[][]`
 - Streaming: `string[][]`
 
 ### Go
+
 - Non-streaming: `[][]string`
 - Streaming: `[][]string`
 
@@ -312,14 +369,17 @@ class T { f string[]? }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Optional[typing.List[str]]`
 - Streaming: `typing.Optional[typing.List[str]]`
 
 ### TypeScript
+
 - Non-streaming: `string[] | null`
 - Streaming: `string[] | null`
 
 ### Go
+
 - Non-streaming: `*[]string`
 - Streaming: `*[]string`
 
@@ -334,14 +394,17 @@ class T { f map<string, int> }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Dict[str, int]`
 - Streaming: `typing.Dict[str, int]`
 
 ### TypeScript
+
 - Non-streaming: `Record<string, number>`
 - Streaming: `Record<string, number>`
 
 ### Go
+
 - Non-streaming: `map[string]int64`
 - Streaming: `map[string]int64`
 
@@ -356,14 +419,17 @@ class T { f map<string, string> }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Dict[str, str]`
 - Streaming: `typing.Dict[str, str]`
 
 ### TypeScript
+
 - Non-streaming: `Record<string, string>`
 - Streaming: `Record<string, string>`
 
 ### Go
+
 - Non-streaming: `map[string]string`
 - Streaming: `map[string]string`
 
@@ -378,14 +444,17 @@ class T { f map<string, int>? }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Optional[typing.Dict[str, int]]`
 - Streaming: `typing.Optional[typing.Dict[str, int]]`
 
 ### TypeScript
+
 - Non-streaming: `Record<string, number> | null`
 - Streaming: `Record<string, number> | null`
 
 ### Go
+
 - Non-streaming: `*map[string]int64`
 - Streaming: `*map[string]int64`
 
@@ -400,14 +469,17 @@ class T { f map<string, int[]> }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Dict[str, typing.List[int]]`
 - Streaming: `typing.Dict[str, typing.List[int]]`
 
 ### TypeScript
+
 - Non-streaming: `Record<string, number[]>`
 - Streaming: `Record<string, number[]>`
 
 ### Go
+
 - Non-streaming: `map[string][]int64`
 - Streaming: `map[string][]int64`
 
@@ -424,14 +496,17 @@ class T { f int | string }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Union[int, str]`
 - Streaming: `typing.Optional[typing.Union[int, str]]`
 
 ### TypeScript
+
 - Non-streaming: `number | string`
 - Streaming: `number | string | null`
 
 ### Go
+
 - Non-streaming: `Union2IntOrString`
 - Streaming: `*types.Union2IntOrString`
 
@@ -446,14 +521,17 @@ class T { f int | string | bool }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Union[int, str, bool]`
 - Streaming: `typing.Optional[typing.Union[int, str, bool]]`
 
 ### TypeScript
+
 - Non-streaming: `number | string | boolean`
 - Streaming: `number | string | boolean | null`
 
 ### Go
+
 - Non-streaming: `Union3BoolOrIntOrString`
 - Streaming: `*types.Union3BoolOrIntOrString`
 
@@ -468,14 +546,17 @@ class T { f (int | string)? }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Optional[typing.Union[int, str]]`
 - Streaming: `typing.Optional[typing.Union[int, str]]`
 
 ### TypeScript
+
 - Non-streaming: `number | string | null`
 - Streaming: `number | string | null`
 
 ### Go
+
 - Non-streaming: `*Union2IntOrString`
 - Streaming: `*types.Union2IntOrString`
 
@@ -493,14 +574,17 @@ class Outer { inner Inner }
 ### target: `Outer.inner`
 
 ### Python
+
 - Non-streaming: `Inner`
 - Streaming: `typing.Optional["Inner"]`
 
 ### TypeScript
+
 - Non-streaming: `Inner`
 - Streaming: `Inner | null`
 
 ### Go
+
 - Non-streaming: `Inner`
 - Streaming: `*Inner`
 
@@ -517,14 +601,17 @@ class C { b B }
 ### target: `C.b`
 
 ### Python
+
 - Non-streaming: `B`
 - Streaming: `typing.Optional["B"]`
 
 ### TypeScript
+
 - Non-streaming: `B`
 - Streaming: `B | null`
 
 ### Go
+
 - Non-streaming: `B`
 - Streaming: `*B`
 
@@ -541,14 +628,17 @@ class C { b B }
 ### target: `B.a`
 
 ### Python
+
 - Non-streaming: `A`
 - Streaming: `typing.Optional["A"]`
 
 ### TypeScript
+
 - Non-streaming: `A`
 - Streaming: `A | null`
 
 ### Go
+
 - Non-streaming: `A`
 - Streaming: `*A`
 
@@ -569,14 +659,17 @@ class T { status Status }
 ### target: `T.status`
 
 ### Python
+
 - Non-streaming: `Status`
 - Streaming: `typing.Optional[types.Status]`
 
 ### TypeScript
+
 - Non-streaming: `Status`
 - Streaming: `types.Status | null`
 
 ### Go
+
 - Non-streaming: `Status`
 - Streaming: `*types.Status`
 
@@ -595,14 +688,17 @@ class T { status Status? }
 ### target: `T.status`
 
 ### Python
+
 - Non-streaming: `typing.Optional[Status]`
 - Streaming: `typing.Optional[types.Status]`
 
 ### TypeScript
+
 - Non-streaming: `Status | null`
 - Streaming: `types.Status | null`
 
 ### Go
+
 - Non-streaming: `*Status`
 - Streaming: `*types.Status`
 
@@ -619,14 +715,17 @@ class T { f string @stream.with_state }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `str`
 - Streaming: `StreamState[typing.Optional[str]]`
 
 ### TypeScript
+
 - Non-streaming: `string`
 - Streaming: `StreamState<string | null>`
 
 ### Go
+
 - Non-streaming: `string`
 - Streaming: `baml.StreamState[*string]`
 
@@ -641,14 +740,17 @@ class T { f int @stream.with_state }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `int`
 - Streaming: `StreamState[typing.Optional[int]]`
 
 ### TypeScript
+
 - Non-streaming: `number`
 - Streaming: `StreamState<number | null>`
 
 ### Go
+
 - Non-streaming: `int64`
 - Streaming: `baml.StreamState[*int64]`
 
@@ -663,14 +765,17 @@ class T { f string? @stream.with_state }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Optional[str]`
 - Streaming: `StreamState[typing.Optional[str]]`
 
 ### TypeScript
+
 - Non-streaming: `string | null`
 - Streaming: `StreamState<string | null>`
 
 ### Go
+
 - Non-streaming: `*string`
 - Streaming: `baml.StreamState[*string]`
 
@@ -685,14 +790,17 @@ class T { f string @stream.not_null }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `str`
 - Streaming: `str`
 
 ### TypeScript
+
 - Non-streaming: `string`
 - Streaming: `string`
 
 ### Go
+
 - Non-streaming: `string`
 - Streaming: `string`
 
@@ -707,14 +815,17 @@ class T { f int @stream.not_null }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `int`
 - Streaming: `int`
 
 ### TypeScript
+
 - Non-streaming: `number`
 - Streaming: `number`
 
 ### Go
+
 - Non-streaming: `int64`
 - Streaming: `int64`
 
@@ -727,17 +838,23 @@ class T { f (int @stream.with_state | string) }
 ```
 
 ### target: `T.f`
-### Python 
+
+### Python
+
 - Non-streaming: `typing.Union[int, str]`
 - Streaming: `typing.Optional[typing.Union[StreamState[int], str]]`
 
 ### TypeScript
+
 - Non-streaming: `number | string`
 - Streaming: `StreamState<number> | string | null`
 
 ### Go
+
 - Non-streaming: `Union2IntOrString`
 - Streaming: `*Union2StreamStateIntOrString`
+
+---
 
 ## stream_not_null_with_state
 
@@ -748,14 +865,17 @@ class T { f string @stream.not_null @stream.with_state }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `str`
 - Streaming: `StreamState[str]`
 
 ### TypeScript
+
 - Non-streaming: `string`
 - Streaming: `StreamState<string>`
 
 ### Go
+
 - Non-streaming: `string`
 - Streaming: `baml.StreamState[string]`
 
@@ -771,14 +891,17 @@ class T { inner Inner @stream.done }
 ### target: `T.inner`
 
 ### Python
+
 - Non-streaming: `Inner`
 - Streaming: `typing.Optional["types.Inner"]`
 
 ### TypeScript
+
 - Non-streaming: `Inner`
 - Streaming: `types.Inner | null`
 
 ### Go
+
 - Non-streaming: `Inner`
 - Streaming: `*types.Inner`
 
@@ -794,23 +917,23 @@ class T { inner Inner @stream.done @stream.with_state }
 ### target: `T.inner`
 
 ### Python
+
 - Non-streaming: `Inner`
 - Streaming: `StreamState[typing.Optional["types.Inner"]]`
 
 ### TypeScript
+
 - Non-streaming: `Inner`
 - Streaming: `StreamState<types.Inner | null>`
 
 ### Go
+
 - Non-streaming: `Inner`
 - Streaming: `baml.StreamState[*types.Inner]`
 
 ---
 
 ## list_of_stream_done_classes
-
-A list where each element is a class marked with `@stream.done`.
-In streaming mode, each element uses the complete (non-partial) class type.
 
 ```baml
 class Inner { x int }
@@ -820,23 +943,23 @@ class T { items (Inner @stream.done)[] }
 ### target: `T.items`
 
 ### Python
+
 - Non-streaming: `typing.List["Inner"]`
 - Streaming: `typing.List["types.Inner"]`
 
 ### TypeScript
+
 - Non-streaming: `Inner[]`
 - Streaming: `types.Inner[]`
 
 ### Go
+
 - Non-streaming: `[]Inner`
 - Streaming: `[]types.Inner`
 
 ---
 
 ## list_field_with_stream_done
-
-`@stream.done` on the whole list field should propagate to elements.
-In streaming mode, elements should use the complete class type from the types module.
 
 ```baml
 class Inner { x int }
@@ -846,23 +969,23 @@ class T { items Inner[] @stream.done }
 ### target: `T.items`
 
 ### Python
+
 - Non-streaming: `typing.List["Inner"]`
 - Streaming: `typing.List["types.Inner"]`
 
 ### TypeScript
+
 - Non-streaming: `Inner[]`
 - Streaming: `types.Inner[]`
 
 ### Go
+
 - Non-streaming: `[]Inner`
 - Streaming: `[]types.Inner`
 
 ---
 
 ## nested_list_with_stream_done
-
-`@stream.done` on a deeply nested list should propagate through all levels.
-Each nested container and the innermost class should use the complete type.
 
 ```baml
 class Inner { x int }
@@ -872,23 +995,23 @@ class T { matrix Inner[][][] @stream.done }
 ### target: `T.matrix`
 
 ### Python
+
 - Non-streaming: `typing.List[typing.List[typing.List["Inner"]]]`
 - Streaming: `typing.List[typing.List[typing.List["types.Inner"]]]`
 
 ### TypeScript
+
 - Non-streaming: `Inner[][][]`
 - Streaming: `types.Inner[][][]`
 
 ### Go
+
 - Non-streaming: `[][][]Inner`
 - Streaming: `[][][]types.Inner`
 
 ---
 
 ## map_with_stream_done
-
-`@stream.done` on a map should propagate to the value type.
-In streaming mode, value elements should use the complete class type.
 
 ```baml
 class Inner { x int }
@@ -898,14 +1021,17 @@ class T { lookup map<string, Inner> @stream.done }
 ### target: `T.lookup`
 
 ### Python
+
 - Non-streaming: `typing.Dict[str, "Inner"]`
 - Streaming: `typing.Dict[str, "types.Inner"]`
 
 ### TypeScript
+
 - Non-streaming: `Record<string, Inner>`
 - Streaming: `Record<string, types.Inner>`
 
 ### Go
+
 - Non-streaming: `map[string]Inner`
 - Streaming: `map[string]types.Inner`
 
@@ -923,14 +1049,17 @@ class T { f int @stream.done | string }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Union[int, str]`
 - Streaming: `typing.Optional[typing.Union[int, str]]`
 
 ### TypeScript
+
 - Non-streaming: `number | string`
 - Streaming: `number | string | null`
 
 ### Go
+
 - Non-streaming: `Union2IntOrString`
 - Streaming: `*types.Union2IntOrString`
 
@@ -947,14 +1076,17 @@ class T { f A | B }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Union["A", "B"]`
 - Streaming: `typing.Optional[typing.Union["A", "B"]]`
 
 ### TypeScript
+
 - Non-streaming: `A | B`
 - Streaming: `A | B | null`
 
 ### Go
+
 - Non-streaming: `Union2AOrB`
 - Streaming: `*Union2AOrB`
 
@@ -970,14 +1102,17 @@ class T { f Inner | string }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Union["Inner", str]`
 - Streaming: `typing.Optional[typing.Union["Inner", str]]`
 
 ### TypeScript
+
 - Non-streaming: `Inner | string`
 - Streaming: `Inner | string | null`
 
 ### Go
+
 - Non-streaming: `Union2InnerOrString`
 - Streaming: `*Union2InnerOrString`
 
@@ -992,14 +1127,17 @@ class T { f (int | string) @stream.not_null }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Union[int, str]`
 - Streaming: `typing.Union[int, str]`
 
 ### TypeScript
+
 - Non-streaming: `number | string`
 - Streaming: `number | string`
 
 ### Go
+
 - Non-streaming: `Union2IntOrString`
 - Streaming: `types.Union2IntOrString`
 
@@ -1014,14 +1152,17 @@ class T { f (int | string) @stream.with_state }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Union[int, str]`
 - Streaming: `StreamState[typing.Optional[typing.Union[int, str]]]`
 
 ### TypeScript
+
 - Non-streaming: `number | string`
 - Streaming: `StreamState<number | string | null>`
 
 ### Go
+
 - Non-streaming: `Union2IntOrString`
 - Streaming: `baml.StreamState[*types.Union2IntOrString]`
 
@@ -1038,17 +1179,21 @@ class T { age int @check(valid_age, {{ this >= 0 }}) }
 ### target: `T.age`
 
 ### Python
+
 - Non-streaming: `Checked[int, typing_extensions.Literal['valid_age']]`
 - Streaming:
+
 ```python
 typing.Optional[types.Checked[int, typing_extensions.Literal['valid_age']]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number,"valid_age">`
 - Streaming: `types.Checked<number,"valid_age"> | null`
 
 ### Go
+
 - Non-streaming: `Checked[int64]`
 - Streaming: `*types.Checked[int64]`
 
@@ -1063,16 +1208,53 @@ class T { age int? @check(valid_age, {{ this >= 0 }}) }
 ### target: `T.age`
 
 ### Python
+
 - Non-streaming: `Checked[typing.Optional[int], typing_extensions.Literal['valid_age']]`
 - Streaming: `types.Checked[typing.Optional[int], typing_extensions.Literal['valid_age']]`
 
 ### TypeScript
+
 - Non-streaming: `Checked<number | null,"valid_age">`
 - Streaming: `types.Checked<number | null,"valid_age">`
 
 ### Go
+
 - Non-streaming: `Checked[*int64]`
-- Streaming: `*types.Checked[int64]`
+- Streaming: `types.Checked[*int64]`
+
+---
+
+## check_on_optional_with_outer_null
+
+```baml
+class T { f (int? @check(valid, {{ this >= 0 }})) | null }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming:
+
+```python
+Checked[typing.Optional[int], typing_extensions.Literal['valid']]
+```
+
+- Streaming:
+
+```python
+types.Checked[typing.Optional[int], typing_extensions.Literal['valid']]
+```
+
+### TypeScript
+
+- Non-streaming: `Checked<number | null,"valid">`
+- Streaming: `types.Checked<number | null,"valid">`
+
+### Go
+
+- Non-streaming: `Checked[*int64]`
+- Streaming: `types.Checked[*int64]`
 
 ---
 
@@ -1085,14 +1267,17 @@ class T { age int @check(valid_age, {{ this >= 0 }}) @stream.not_null }
 ### target: `T.age`
 
 ### Python
+
 - Non-streaming: `Checked[int, typing_extensions.Literal['valid_age']]`
 - Streaming: `types.Checked[int, typing_extensions.Literal['valid_age']]`
 
 ### TypeScript
+
 - Non-streaming: `Checked<number,"valid_age">`
 - Streaming: `types.Checked<number,"valid_age">`
 
 ### Go
+
 - Non-streaming: `Checked[int64]`
 - Streaming: `types.Checked[int64]`
 
@@ -1107,17 +1292,21 @@ class T { age int @check(valid_age, {{ this >= 0 }}) @stream.with_state }
 ### target: `T.age`
 
 ### Python
+
 - Non-streaming: `Checked[int, typing_extensions.Literal['valid_age']]`
 - Streaming:
+
 ```python
 StreamState[typing.Optional[types.Checked[int, typing_extensions.Literal['valid_age']]]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number,"valid_age">`
 - Streaming: `StreamState<types.Checked<number,"valid_age"> | null>`
 
 ### Go
+
 - Non-streaming: `Checked[int64]`
 - Streaming: `baml.StreamState[*types.Checked[int64]]`
 
@@ -1132,19 +1321,175 @@ class T { age int @check(positive, {{ this > 0 }}) @check(small, {{ this < 100 }
 ### target: `T.age`
 
 ### Python
+
 - Non-streaming: `Checked[int, typing_extensions.Literal['positive', 'small']]`
 - Streaming:
+
 ```python
 typing.Optional[types.Checked[int, typing_extensions.Literal['positive', 'small']]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number,"positive" | "small">`
 - Streaming: `types.Checked<number,"positive" | "small"> | null`
 
 ### Go
+
 - Non-streaming: `Checked[int64]`
 - Streaming: `*types.Checked[int64]`
+
+---
+
+# Assert Attributes
+
+## assert_on_primitive
+
+```baml
+class T { age int @assert(valid_age, {{ this >= 0 }}) }
+```
+
+### target: `T.age`
+
+### Python
+
+- Non-streaming: `int`
+- Streaming: `typing.Optional[int]`
+
+### TypeScript
+
+- Non-streaming: `number`
+- Streaming: `number | null`
+
+### Go
+
+- Non-streaming: `int64`
+- Streaming: `*int64`
+
+---
+
+## assert_on_optional
+
+```baml
+class T { age int? @assert(valid_age, {{ this >= 0 }}) }
+```
+
+### target: `T.age`
+
+### Python
+
+- Non-streaming: `typing.Optional[int]`
+- Streaming: `typing.Optional[int]`
+
+### TypeScript
+
+- Non-streaming: `number | null`
+- Streaming: `number | null`
+
+### Go
+
+- Non-streaming: `*int64`
+- Streaming: `*int64`
+
+---
+
+## assert_on_optional_with_outer_null
+
+```baml
+class T { f (int? @assert(valid, {{ this >= 0 }})) | null }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Optional[int]`
+- Streaming: `typing.Optional[int]`
+
+### TypeScript
+
+- Non-streaming: `number | null`
+- Streaming: `number | null`
+
+### Go
+
+- Non-streaming: `*int64`
+- Streaming: `*int64`
+
+---
+
+## assert_with_stream_not_null
+
+```baml
+class T { age int @assert(valid_age, {{ this >= 0 }}) @stream.not_null }
+```
+
+### target: `T.age`
+
+### Python
+
+- Non-streaming: `int`
+- Streaming: `int`
+
+### TypeScript
+
+- Non-streaming: `number`
+- Streaming: `number`
+
+### Go
+
+- Non-streaming: `int64`
+- Streaming: `int64`
+
+---
+
+## assert_with_stream_with_state
+
+```baml
+class T { age int @assert(valid_age, {{ this >= 0 }}) @stream.with_state }
+```
+
+### target: `T.age`
+
+### Python
+
+- Non-streaming: `int`
+- Streaming: `StreamState[typing.Optional[int]]`
+
+### TypeScript
+
+- Non-streaming: `number`
+- Streaming: `StreamState<number | null>`
+
+### Go
+
+- Non-streaming: `int64`
+- Streaming: `baml.StreamState[*int64]`
+
+---
+
+## multiple_asserts
+
+```baml
+class T { age int @assert(positive, {{ this > 0 }}) @assert(small, {{ this < 100 }}) }
+```
+
+### target: `T.age`
+
+### Python
+
+- Non-streaming: `int`
+- Streaming: `typing.Optional[int]`
+
+### TypeScript
+
+- Non-streaming: `number`
+- Streaming: `number | null`
+
+### Go
+
+- Non-streaming: `int64`
+- Streaming: `*int64`
 
 ---
 
@@ -1159,14 +1504,17 @@ class T { f (int @stream.done | string) @stream.with_state }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Union[int, str]`
 - Streaming: `StreamState[typing.Optional[typing.Union[int, str]]]`
 
 ### TypeScript
+
 - Non-streaming: `number | string`
 - Streaming: `StreamState<number | string | null>`
 
 ### Go
+
 - Non-streaming: `Union2IntOrString`
 - Streaming: `baml.StreamState[*types.Union2IntOrString]`
 
@@ -1181,14 +1529,17 @@ class T { f (int @stream.not_null | string) @stream.with_state }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Union[int, str]`
 - Streaming: `StreamState[typing.Optional[typing.Union[int, str]]]`
 
 ### TypeScript
+
 - Non-streaming: `number | string`
 - Streaming: `StreamState<number | string | null>`
 
 ### Go
+
 - Non-streaming: `Union2IntOrString`
 - Streaming: `baml.StreamState[*types.Union2IntOrString]`
 
@@ -1203,14 +1554,17 @@ class T { f int @stream.done | string @stream.not_null }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Union[int, str]`
 - Streaming: `typing.Union[int, str]`
 
 ### TypeScript
+
 - Non-streaming: `number | string`
 - Streaming: `number | string`
 
 ### Go
+
 - Non-streaming: `Union2IntOrString`
 - Streaming: `types.Union2IntOrString`
 
@@ -1225,22 +1579,28 @@ class T { f int @check(positive, {{ this > 0 }}) | string }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming:
+
 ```python
 typing.Union[Checked[int, typing_extensions.Literal['positive']], str]
 ```
+
 - Streaming:
+
 ```python
 typing.Optional[typing.Union[types.Checked[int, typing_extensions.Literal['positive']], str]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number,"positive"> | string`
 - Streaming: `types.Checked<number,"positive"> | string | null`
 
 ### Go
-- Non-streaming: `Union2IntOrString`
-- Streaming: `*types.Union2IntOrString`
+
+- Non-streaming: `Union2CheckedIntOrString`
+- Streaming: `*types.Union2CheckedIntOrString`
 
 ---
 
@@ -1253,17 +1613,21 @@ class T { f (int | string) @check(valid, {{ true }}) }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `Checked[typing.Union[int, str], typing_extensions.Literal['valid']]`
 - Streaming:
+
 ```python
 typing.Optional[types.Checked[typing.Union[int, str], typing_extensions.Literal['valid']]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number | string,"valid">`
 - Streaming: `types.Checked<number | string,"valid"> | null`
 
 ### Go
+
 - Non-streaming: `Checked[Union2IntOrString]`
 - Streaming: `*types.Checked[types.Union2IntOrString]`
 
@@ -1278,20 +1642,26 @@ class T { f (int | string | null) @check(valid, {{ true }}) }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming:
+
 ```python
 Checked[typing.Optional[typing.Union[int, str]], typing_extensions.Literal['valid']]
 ```
+
 - Streaming:
+
 ```python
 types.Checked[typing.Optional[typing.Union[int, str]], typing_extensions.Literal['valid']]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number | string | null,"valid">`
 - Streaming: `types.Checked<number | string | null,"valid">`
 
 ### Go
+
 - Non-streaming: `*Checked[Union2IntOrString]`
 - Streaming: `*types.Checked[types.Union2IntOrString]`
 
@@ -1306,22 +1676,28 @@ class T { f (int @check(positive, {{ this > 0 }}) | string) @check(valid, {{ tru
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming:
+
 ```python
 Checked[typing.Union[Checked[int, typing_extensions.Literal['positive']], str], typing_extensions.Literal['valid']]
 ```
+
 - Streaming:
+
 ```python
 typing.Optional[types.Checked[typing.Union[types.Checked[int, typing_extensions.Literal['positive']], str], typing_extensions.Literal['valid']]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<Checked<number,"positive"> | string,"valid">`
 - Streaming: `types.Checked<types.Checked<number,"positive"> | string,"valid"> | null`
 
 ### Go
-- Non-streaming: `Checked[Union2IntOrString]`
-- Streaming: `*types.Checked[types.Union2IntOrString]`
+
+- Non-streaming: `Checked[Union2CheckedIntOrString]`
+- Streaming: `*types.Checked[types.Union2CheckedIntOrString]`
 
 ---
 
@@ -1334,22 +1710,28 @@ class T { f (int @check(positive, {{ this > 0 }}) | string) @stream.with_state }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming:
+
 ```python
 typing.Union[Checked[int, typing_extensions.Literal['positive']], str]
 ```
+
 - Streaming:
+
 ```python
 StreamState[typing.Optional[typing.Union[types.Checked[int, typing_extensions.Literal['positive']], str]]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number,"positive"> | string`
 - Streaming: `StreamState<types.Checked<number,"positive"> | string | null>`
 
 ### Go
-- Non-streaming: `Union2IntOrString`
-- Streaming: `baml.StreamState[*types.Union2IntOrString]`
+
+- Non-streaming: `Union2CheckedIntOrString`
+- Streaming: `baml.StreamState[*types.Union2CheckedIntOrString]`
 
 ---
 
@@ -1362,25 +1744,634 @@ class T { f (int @check(positive, {{ this > 0 }}) @stream.done | string) @check(
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming:
+
 ```python
 Checked[typing.Union[Checked[int, typing_extensions.Literal['positive']], str], typing_extensions.Literal['valid']]
 ```
+
 - Streaming:
+
 ```python
 StreamState[typing.Optional[types.Checked[typing.Union[types.Checked[int, typing_extensions.Literal['positive']], str], typing_extensions.Literal['valid']]]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<Checked<number,"positive"> | string,"valid">`
 - Streaming:
+
 ```typescript
 StreamState<types.Checked<types.Checked<number,"positive"> | string,"valid"> | null>
 ```
 
 ### Go
+
+- Non-streaming: `Checked[Union2CheckedIntOrString]`
+- Streaming: `baml.StreamState[*types.Checked[types.Union2CheckedIntOrString]]`
+
+---
+
+## union_with_assert_on_variant
+
+```baml
+class T { f int @assert(positive, {{ this > 0 }}) | string }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `typing.Optional[typing.Union[int, str]]`
+
+### TypeScript
+
+- Non-streaming: `number | string`
+- Streaming: `number | string | null`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `*types.Union2IntOrString`
+
+---
+
+## union_with_assert_on_whole_union
+
+```baml
+class T { f (int | string) @assert(valid, {{ true }}) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `typing.Optional[typing.Union[int, str]]`
+
+### TypeScript
+
+- Non-streaming: `number | string`
+- Streaming: `number | string | null`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `*types.Union2IntOrString`
+
+---
+
+## union_with_assert_on_whole_union_optional
+
+```baml
+class T { f (int | string | null) @assert(valid, {{ true }}) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Optional[typing.Union[int, str]]`
+- Streaming: `typing.Optional[typing.Union[int, str]]`
+
+### TypeScript
+
+- Non-streaming: `number | string | null`
+- Streaming: `number | string | null`
+
+### Go
+
+- Non-streaming: `*Union2IntOrString`
+- Streaming: `*types.Union2IntOrString`
+
+---
+
+## union_assert_on_variant_and_whole
+
+```baml
+class T { f (int @assert(positive, {{ this > 0 }}) | string) @assert(valid, {{ true }}) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `typing.Optional[typing.Union[int, str]]`
+
+### TypeScript
+
+- Non-streaming: `number | string`
+- Streaming: `number | string | null`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `*types.Union2IntOrString`
+
+---
+
+## union_assert_and_stream_attrs_mixed
+
+```baml
+class T { f (int @assert(positive, {{ this > 0 }}) | string) @stream.with_state }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `StreamState[typing.Optional[typing.Union[int, str]]]`
+
+### TypeScript
+
+- Non-streaming: `number | string`
+- Streaming: `StreamState<number | string | null>`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `baml.StreamState[*types.Union2IntOrString]`
+
+---
+
+## union_all_attrs_combined_with_assert
+
+```baml
+class T { f (int @assert(positive, {{ this > 0 }}) @stream.done | string) @assert(valid, {{ true }}) @stream.with_state }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `StreamState[typing.Optional[typing.Union[int, str]]]`
+
+### TypeScript
+
+- Non-streaming: `number | string`
+- Streaming: `StreamState<number | string | null>`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `baml.StreamState[*types.Union2IntOrString]`
+
+---
+
+# Check Simplification Scenarios
+
+## check_simplification_scenario_1_same_check_all_variants
+
+```baml
+class T { f (int @check(valid, {{ this > 0 }})) | (string @check(valid, {{ this > 0 }})) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming:
+
+```python
+typing.Union[Checked[int, typing_extensions.Literal['valid']], Checked[str, typing_extensions.Literal['valid']]]
+```
+
+- Streaming:
+
+```python
+typing.Optional[typing.Union[types.Checked[int, typing_extensions.Literal['valid']], types.Checked[str, typing_extensions.Literal['valid']]]]
+```
+
+### TypeScript
+
+- Non-streaming: `Checked<number,"valid"> | Checked<string,"valid">`
+- Streaming: `types.Checked<number,"valid"> | types.Checked<string,"valid"> | null`
+
+### Go
+
+- Non-streaming: `Union2CheckedIntOrCheckedString`
+- Streaming: `*types.Union2CheckedIntOrCheckedString`
+
+---
+
+## check_simplification_scenario_2_same_name_diff_expr
+
+```baml
+class T { f (int @check(valid, {{ this > 0 }})) | (string @check(valid, {{ this != "" }})) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming:
+
+```python
+typing.Union[Checked[int, typing_extensions.Literal['valid']], Checked[str, typing_extensions.Literal['valid']]]
+```
+
+- Streaming:
+
+```python
+typing.Optional[typing.Union[types.Checked[int, typing_extensions.Literal['valid']], types.Checked[str, typing_extensions.Literal['valid']]]]
+```
+
+### TypeScript
+
+- Non-streaming: `Checked<number,"valid"> | Checked<string,"valid">`
+- Streaming: `types.Checked<number,"valid"> | types.Checked<string,"valid"> | null`
+
+### Go
+
+- Non-streaming: `Union2CheckedIntOrCheckedString`
+- Streaming: `*types.Union2CheckedIntOrCheckedString`
+
+---
+
+## check_simplification_scenario_3a_diff_names
+
+```baml
+class T { f (int @check(positive, {{ this > 0 }})) | (string @check(non_empty, {{ this != "" }})) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming:
+
+```python
+typing.Union[Checked[int, typing_extensions.Literal['positive']], Checked[str, typing_extensions.Literal['non_empty']]]
+```
+
+- Streaming:
+
+```python
+typing.Optional[typing.Union[types.Checked[int, typing_extensions.Literal['positive']], types.Checked[str, typing_extensions.Literal['non_empty']]]]
+```
+
+### TypeScript
+
+- Non-streaming: `Checked<number,"positive"> | Checked<string,"non_empty">`
+- Streaming: `types.Checked<number,"positive"> | types.Checked<string,"non_empty"> | null`
+
+### Go
+
+- Non-streaming: `Union2CheckedIntOrCheckedString`
+- Streaming: `*types.Union2CheckedIntOrCheckedString`
+
+---
+
+## check_simplification_scenario_3b_diff_names_same_expr
+
+```baml
+class T { f (int @check(positive, {{ true }})) | (string @check(non_empty, {{ true }})) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming:
+
+```python
+typing.Union[Checked[int, typing_extensions.Literal['positive']], Checked[str, typing_extensions.Literal['non_empty']]]
+```
+
+- Streaming:
+
+```python
+typing.Optional[typing.Union[types.Checked[int, typing_extensions.Literal['positive']], types.Checked[str, typing_extensions.Literal['non_empty']]]]
+```
+
+### TypeScript
+
+- Non-streaming: `Checked<number,"positive"> | Checked<string,"non_empty">`
+- Streaming: `types.Checked<number,"positive"> | types.Checked<string,"non_empty"> | null`
+
+### Go
+
+- Non-streaming: `Union2CheckedIntOrCheckedString`
+- Streaming: `*types.Union2CheckedIntOrCheckedString`
+
+---
+
+## check_simplification_scenario_4_checked_union_with_unchecked
+
+```baml
+class T { f (int | string) @check(valid, {{ true }}) | string }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `Checked[typing.Union[int, str], typing_extensions.Literal['valid']]`
+- Streaming: `typing.Optional[types.Checked[typing.Union[int, str], typing_extensions.Literal['valid']]]`
+
+### TypeScript
+
+- Non-streaming: `Checked<number | string,"valid">`
+- Streaming: `types.Checked<number | string,"valid"> | null`
+
+### Go
+
 - Non-streaming: `Checked[Union2IntOrString]`
-- Streaming: `baml.StreamState[*types.Checked[types.Union2IntOrString]]`
+- Streaming: `*types.Checked[types.Union2IntOrString]`
+
+---
+
+## check_simplification_scenario_5_checked_union_with_unchecked_reverse
+
+```baml
+class T { f string | (int | string) @check(valid, {{ true }}) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `Checked[typing.Union[str, int], typing_extensions.Literal['valid']]`
+- Streaming:
+
+```python
+typing.Optional[types.Checked[typing.Union[str, int], typing_extensions.Literal['valid']]]
+```
+
+### TypeScript
+
+- Non-streaming: `Checked<string | number,"valid">`
+- Streaming: `types.Checked<string | number,"valid"> | null`
+
+### Go
+
+- Non-streaming: `Checked[Union2IntOrString]`
+- Streaming: `*types.Checked[types.Union2IntOrString]`
+
+---
+
+## check_simplification_scenario_7_checked_union_with_unchecked_null
+
+```baml
+class T { f (int | null) @check(valid, {{ true }}) | null }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `Checked[typing.Optional[int], typing_extensions.Literal['valid']]`
+- Streaming:
+
+```python
+types.Checked[typing.Optional[int], typing_extensions.Literal['valid']]
+```
+
+### TypeScript
+
+- Non-streaming: `Checked<number | null,"valid">`
+- Streaming: `types.Checked<number | null,"valid">`
+
+### Go
+
+- Non-streaming: `Checked[*int64]`
+- Streaming: `types.Checked[*int64]`
+
+---
+
+## check_simplification_scenario_8_checked_union_with_unchecked_null_reverse
+
+```baml
+class T { f null | (int | null) @check(valid, {{ true }}) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `Checked[typing.Optional[int], typing_extensions.Literal['valid']]`
+- Streaming:
+
+```python
+types.Checked[typing.Optional[int], typing_extensions.Literal['valid']]
+```
+
+### TypeScript
+
+- Non-streaming: `Checked<number | null,"valid">`
+- Streaming: `types.Checked<number | null,"valid">`
+
+### Go
+
+- Non-streaming: `Checked[*int64]`
+- Streaming: `types.Checked[*int64]`
+
+---
+
+# Assert Simplification Scenarios
+
+## assert_simplification_scenario_1_same_assert_all_variants
+
+```baml
+class T { f (int @assert(valid, {{ this > 0 }})) | (string @assert(valid, {{ this > 0 }})) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `typing.Optional[typing.Union[int, str]]`
+
+### TypeScript
+
+- Non-streaming: `number | string`
+- Streaming: `number | string | null`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `*types.Union2IntOrString`
+
+---
+
+## assert_simplification_scenario_2_same_name_diff_expr
+
+```baml
+class T { f (int @assert(valid, {{ this > 0 }})) | (string @assert(valid, {{ this != "" }})) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `typing.Optional[typing.Union[int, str]]`
+
+### TypeScript
+
+- Non-streaming: `number | string`
+- Streaming: `number | string | null`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `*types.Union2IntOrString`
+
+---
+
+## assert_simplification_scenario_3a_diff_names
+
+```baml
+class T { f (int @assert(positive, {{ this > 0 }})) | (string @assert(non_empty, {{ this != "" }})) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `typing.Optional[typing.Union[int, str]]`
+
+### TypeScript
+
+- Non-streaming: `number | string`
+- Streaming: `number | string | null`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `*types.Union2IntOrString`
+
+---
+
+## assert_simplification_scenario_3b_diff_names_same_expr
+
+```baml
+class T { f (int @assert(positive, {{ true }})) | (string @assert(non_empty, {{ true }})) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `typing.Optional[typing.Union[int, str]]`
+
+### TypeScript
+
+- Non-streaming: `number | string`
+- Streaming: `number | string | null`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `*types.Union2IntOrString`
+
+---
+
+## assert_simplification_scenario_4_asserted_union_with_unasserted
+
+```baml
+class T { f (int | string) @assert(valid, {{ true }}) | string }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[int, str]`
+- Streaming: `typing.Optional[typing.Union[int, str]]`
+
+### TypeScript
+
+- Non-streaming: `number | string`
+- Streaming: `number | string | null`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `*types.Union2IntOrString`
+
+---
+
+## assert_simplification_scenario_5_asserted_union_with_unasserted_reverse
+
+```baml
+class T { f string | (int | string) @assert(valid, {{ true }}) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Union[str, int]`
+- Streaming: `typing.Optional[typing.Union[str, int]]`
+
+### TypeScript
+
+- Non-streaming: `string | number`
+- Streaming: `string | number | null`
+
+### Go
+
+- Non-streaming: `Union2IntOrString`
+- Streaming: `*types.Union2IntOrString`
+
+---
+
+## assert_simplification_scenario_7_asserted_union_with_unasserted_null
+
+```baml
+class T { f (int | null) @assert(valid, {{ true }}) | null }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Optional[int]`
+- Streaming: `typing.Optional[int]`
+
+### TypeScript
+
+- Non-streaming: `number | null`
+- Streaming: `number | null`
+
+### Go
+
+- Non-streaming: `*int64`
+- Streaming: `*int64`
+
+---
+
+## assert_simplification_scenario_8_asserted_union_with_unasserted_null_reverse
+
+```baml
+class T { f null | (int | null) @assert(valid, {{ true }}) }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Optional[int]`
+- Streaming: `typing.Optional[int]`
+
+### TypeScript
+
+- Non-streaming: `number | null`
+- Streaming: `number | null`
+
+### Go
+
+- Non-streaming: `*int64`
+- Streaming: `*int64`
 
 ---
 
@@ -1395,14 +2386,17 @@ type StringList = string[]
 ### target: `StringList`
 
 ### Python
+
 - Non-streaming: `typing.List[str]`
 - Streaming: `typing.List[str]`
 
 ### TypeScript
+
 - Non-streaming: `string[]`
 - Streaming: `string[]`
 
 ### Go
+
 - Non-streaming: `[]string`
 - Streaming: `[]string`
 
@@ -1417,14 +2411,17 @@ type IntMap = map<string, int>
 ### target: `IntMap`
 
 ### Python
+
 - Non-streaming: `typing.Dict[str, int]`
 - Streaming: `typing.Dict[str, int]`
 
 ### TypeScript
+
 - Non-streaming: `Record<string, number>`
 - Streaming: `Record<string, number>`
 
 ### Go
+
 - Non-streaming: `map[string]int64`
 - Streaming: `map[string]int64`
 
@@ -1439,14 +2436,17 @@ type MaybeInt = int?
 ### target: `MaybeInt`
 
 ### Python
+
 - Non-streaming: `typing.Optional[int]`
 - Streaming: `typing.Optional[int]`
 
 ### TypeScript
+
 - Non-streaming: `number | null`
 - Streaming: `number | null`
 
 ### Go
+
 - Non-streaming: `*int64`
 - Streaming: `*int64`
 
@@ -1463,14 +2463,17 @@ class T { f map<string, int>[] }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.List[typing.Dict[str, int]]`
 - Streaming: `typing.List[typing.Dict[str, int]]`
 
 ### TypeScript
+
 - Non-streaming: `Record<string, number>[]`
 - Streaming: `Record<string, number>[]`
 
 ### Go
+
 - Non-streaming: `[]map[string]int64`
 - Streaming: `[]map[string]int64`
 
@@ -1485,14 +2488,17 @@ class T { f map<string, string[]> }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.Dict[str, typing.List[str]]`
 - Streaming: `typing.Dict[str, typing.List[str]]`
 
 ### TypeScript
+
 - Non-streaming: `Record<string, string[]>`
 - Streaming: `Record<string, string[]>`
 
 ### Go
+
 - Non-streaming: `map[string][]string`
 - Streaming: `map[string][]string`
 
@@ -1507,14 +2513,17 @@ class T { f (string?)[] }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `typing.List[typing.Optional[str]]`
 - Streaming: `typing.List[typing.Optional[str]]`
 
 ### TypeScript
+
 - Non-streaming: `(string | null)[]`
 - Streaming: `(string | null)[]`
 
 ### Go
+
 - Non-streaming: `[]*string`
 - Streaming: `[]*string`
 
@@ -1529,21 +2538,25 @@ class T { f int @stream.with_state @check(positive, {{ this > 0 }}) }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `Checked[int, typing_extensions.Literal['positive']]`
 - Streaming:
+
 ```python
 StreamState[typing.Optional[types.Checked[int, typing_extensions.Literal['positive']]]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number,"positive">`
 - Streaming: `StreamState<types.Checked<number,"positive"> | null>`
 
 ### Go
+
 - Non-streaming: `Checked[int64]`
 - Streaming: `baml.StreamState[*types.Checked[int64]]`
----
 
+---
 
 ## checked_stream_state
 
@@ -1554,19 +2567,24 @@ class T { f int @check(positive, {{ this > 0 }}) @stream.with_state }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `Checked[int, typing_extensions.Literal['positive']]`
 - Streaming:
+
 ```python
 StreamState[typing.Optional[types.Checked[int, typing_extensions.Literal['positive']]]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number,"positive">`
 - Streaming: `StreamState<types.Checked<number,"positive"> | null>`
 
 ### Go
+
 - Non-streaming: `Checked[int64]`
 - Streaming: `baml.StreamState[*types.Checked[int64]]`
+
 ---
 
 ## stream_state_checked_paren
@@ -1578,21 +2596,25 @@ class T { f (int @stream.with_state) @check(positive, {{ this > 0 }}) }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `Checked[int, typing_extensions.Literal['positive']]`
 - Streaming:
+
 ```python
 StreamState[typing.Optional[types.Checked[int, typing_extensions.Literal['positive']]]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number,"positive">`
 - Streaming: `StreamState<types.Checked<number,"positive"> | null>`
 
 ### Go
+
 - Non-streaming: `Checked[int64]`
 - Streaming: `baml.StreamState[*types.Checked[int64]]`
----
 
+---
 
 ## checked_stream_state_paren
 
@@ -1603,22 +2625,25 @@ class T { f (int @check(positive, {{ this > 0 }})) @stream.with_state }
 ### target: `T.f`
 
 ### Python
+
 - Non-streaming: `Checked[int, typing_extensions.Literal['positive']]`
 - Streaming:
+
 ```python
 StreamState[typing.Optional[types.Checked[int, typing_extensions.Literal['positive']]]]
 ```
 
 ### TypeScript
+
 - Non-streaming: `Checked<number,"positive">`
 - Streaming: `StreamState<types.Checked<number,"positive"> | null>`
 
 ### Go
+
 - Non-streaming: `Checked[int64]`
 - Streaming: `baml.StreamState[*types.Checked[int64]]`
+
 ---
-
-
 
 # Real-World Example
 
@@ -1644,14 +2669,17 @@ class Task {
 ### target: `Task.id`
 
 ### Python
+
 - Non-streaming: `int`
 - Streaming: `typing.Optional[int]`
 
 ### TypeScript
+
 - Non-streaming: `number`
 - Streaming: `number | null`
 
 ### Go
+
 - Non-streaming: `int64`
 - Streaming: `*int64`
 
@@ -1679,14 +2707,17 @@ class Task {
 ### target: `Task.title`
 
 ### Python
+
 - Non-streaming: `str`
 - Streaming: `StreamState[typing.Optional[str]]`
 
 ### TypeScript
+
 - Non-streaming: `string`
 - Streaming: `StreamState<string | null>`
 
 ### Go
+
 - Non-streaming: `string`
 - Streaming: `baml.StreamState[*string]`
 
@@ -1714,14 +2745,17 @@ class Task {
 ### target: `Task.description`
 
 ### Python
+
 - Non-streaming: `typing.Optional[str]`
 - Streaming: `typing.Optional[str]`
 
 ### TypeScript
+
 - Non-streaming: `string | null`
 - Streaming: `string | null`
 
 ### Go
+
 - Non-streaming: `*string`
 - Streaming: `*string`
 
@@ -1749,14 +2783,17 @@ class Task {
 ### target: `Task.priority`
 
 ### Python
+
 - Non-streaming: `Priority`
 - Streaming: `typing.Optional[types.Priority]`
 
 ### TypeScript
+
 - Non-streaming: `Priority`
 - Streaming: `types.Priority | null`
 
 ### Go
+
 - Non-streaming: `Priority`
 - Streaming: `*types.Priority`
 
@@ -1784,14 +2821,17 @@ class Task {
 ### target: `Task.tags`
 
 ### Python
+
 - Non-streaming: `typing.List[str]`
 - Streaming: `typing.List[str]`
 
 ### TypeScript
+
 - Non-streaming: `string[]`
 - Streaming: `string[]`
 
 ### Go
+
 - Non-streaming: `[]string`
 - Streaming: `[]string`
 
@@ -1819,14 +2859,17 @@ class Task {
 ### target: `Task.metadata`
 
 ### Python
+
 - Non-streaming: `typing.Optional[typing.Dict[str, str]]`
 - Streaming: `typing.Optional[typing.Dict[str, str]]`
 
 ### TypeScript
+
 - Non-streaming: `Record<string, string> | null`
 - Streaming: `Record<string, string> | null`
 
 ### Go
+
 - Non-streaming: `*map[string]string`
 - Streaming: `*map[string]string`
 
@@ -1854,14 +2897,17 @@ class Task {
 ### target: `Task.completed`
 
 ### Python
+
 - Non-streaming: `bool`
 - Streaming: `bool`
 
 ### TypeScript
+
 - Non-streaming: `boolean`
 - Streaming: `boolean`
 
 ### Go
+
 - Non-streaming: `bool`
 - Streaming: `bool`
 
@@ -1880,6 +2926,7 @@ enum Color {
 ```
 
 ### target: `Color`
+
 ### enum_values: `Red`, `Green`, `Blue`
 
 ---
@@ -1896,4 +2943,5 @@ enum Status {
 ```
 
 ### target: `Status`
+
 ### enum_values: `Active`, `Inactive`, `Pending`, `Archived`

@@ -96,6 +96,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
             },
             baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                 let mut type_go = recursive_fn(type_generic);
+                type_go.meta_mut().make_optional();
                 if union_meta
                     .constraints
                     .iter()
@@ -103,7 +104,6 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
                 {
                     type_go.meta_mut().make_checked();
                 }
-                type_go.meta_mut().make_optional();
                 if union_meta.streaming_behavior.state {
                     type_go.meta_mut().set_stream_state();
                 }
@@ -119,7 +119,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
                 name.sort();
                 let name = name.join("Or");
                 TypeGo::Union {
-                    package: match field.mode(&baml_types::StreamingMode::Streaming, lookup) {
+                    package: match field.mode(&baml_types::StreamingMode::Streaming, lookup, 1) {
                         Ok(baml_types::StreamingMode::NonStreaming) => types_pkg.clone(),
                         Ok(baml_types::StreamingMode::Streaming) => stream_pkg.clone(),
                         Err(e) => {
@@ -145,7 +145,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
                 let mut meta = meta;
                 meta.make_optional();
                 TypeGo::Union {
-                    package: match field.mode(&baml_types::StreamingMode::Streaming, lookup) {
+                    package: match field.mode(&baml_types::StreamingMode::Streaming, lookup, 1) {
                         Ok(baml_types::StreamingMode::NonStreaming) => types_pkg.clone(),
                         Ok(baml_types::StreamingMode::Streaming) => stream_pkg.clone(),
                         Err(e) => {

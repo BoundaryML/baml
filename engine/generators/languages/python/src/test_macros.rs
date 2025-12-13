@@ -42,9 +42,11 @@
 #[macro_export]
 macro_rules! test_py_type {
     // Class field: "Class.field" with non-streaming and streaming expectations
+    // With line number from type_serialization_tests.md
     (
         $baml:expr,
         $class_dot_field:expr,
+        $line_number:expr,
         $expected_non_streaming:expr,
         $expected_streaming:expr
     ) => {{
@@ -54,6 +56,7 @@ macro_rules! test_py_type {
         use $crate::r#type::SerializeType;
 
         let path = $class_dot_field;
+        let line_num: usize = $line_number;
         let parts: Vec<&str> = path.split('.').collect();
 
         let ir = make_test_ir($baml).expect("Valid BAML");
@@ -84,8 +87,9 @@ macro_rules! test_py_type {
             assert_eq!(
                 field.r#type.serialize_type(&pkg),
                 $expected_non_streaming,
-                "Non-streaming type mismatch for {}",
-                path
+                "Non-streaming type mismatch for {} (type_serialization_tests.md:{})",
+                path,
+                line_num
             );
 
             // Test streaming (debug output is printed in ir_class_to_py_stream)
@@ -102,8 +106,9 @@ macro_rules! test_py_type {
             assert_eq!(
                 field.r#type.serialize_type(&pkg),
                 $expected_streaming,
-                "Streaming type mismatch for {}",
-                path
+                "Streaming type mismatch for {} (type_serialization_tests.md:{})",
+                path,
+                line_num
             );
         } else if parts.len() == 1 {
             // Type alias case (no dot)
@@ -121,8 +126,9 @@ macro_rules! test_py_type {
             assert_eq!(
                 alias_py.type_.serialize_type(&pkg),
                 $expected_non_streaming,
-                "Non-streaming type alias mismatch for {}",
-                alias_name
+                "Non-streaming type alias mismatch for {} (type_serialization_tests.md:{})",
+                alias_name,
+                line_num
             );
 
             // Streaming
@@ -131,21 +137,25 @@ macro_rules! test_py_type {
             assert_eq!(
                 alias_py_stream.type_.serialize_type(&pkg),
                 $expected_streaming,
-                "Streaming type alias mismatch for {}",
-                alias_name
+                "Streaming type alias mismatch for {} (type_serialization_tests.md:{})",
+                alias_name,
+                line_num
             );
         } else {
             panic!(
-                "Invalid path format: {}. Use 'Class.field' or 'TypeAlias'",
-                path
+                "Invalid path format: {}. Use 'Class.field' or 'TypeAlias' (type_serialization_tests.md:{})",
+                path,
+                line_num
             );
         }
     }};
 
     // Enum case: just enum name and list of values
+    // With line number from type_serialization_tests.md
     (
         $baml:expr,
         $enum_name:expr,
+        $line_number:expr,
         [$( $value:expr ),* $(,)?]
     ) => {{
         use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
@@ -155,6 +165,7 @@ macro_rules! test_py_type {
         let ir = make_test_ir($baml).expect("Valid BAML");
         let ir = std::sync::Arc::new(ir);
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
+        let line_num: usize = $line_number;
 
         let enm = ir
             .find_enum($enum_name)
@@ -166,7 +177,13 @@ macro_rules! test_py_type {
 
         let expected_values: Vec<&str> = vec![$( $value ),*];
         let actual_values: Vec<&str> = enum_py.values.iter().map(|(v, _)| v.as_str()).collect();
-        assert_eq!(actual_values, expected_values, "Enum values mismatch for {}", $enum_name);
+        assert_eq!(
+            actual_values,
+            expected_values,
+            "Enum values mismatch for {} (type_serialization_tests.md:{})",
+            $enum_name,
+            line_num
+        );
     }};
 }
 
