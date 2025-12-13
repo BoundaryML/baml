@@ -17,7 +17,10 @@ pub fn coerce_array_to_singular(
     let mut best = pick_best(ctx, target, &parsed);
 
     if let Ok(ref mut f) = best {
-        f.add_flag(Flag::FirstMatch(0, parsed.to_vec()))
+        // Store empty vec - the full results are only used for debugging display
+        // TODO: Restore if detailed debugging is needed:
+        // f.add_flag(Flag::FirstMatch(0, parsed.to_vec()))
+        f.add_flag(Flag::FirstMatch(0, vec![]))
     }
 
     best
@@ -264,10 +267,17 @@ pub(super) fn pick_best(
         Some(&(i, _, _, v)) => {
             let mut v = v.clone();
             if res.len() > 1 {
+                // Store empty vec - the full results are only used for debugging display
+                // TODO: Restore if detailed debugging is needed:
+                // v.add_flag(if matches!(target, TypeIR::Union(_, _)) {
+                //     Flag::UnionMatch(i, res.to_vec())
+                // } else {
+                //     Flag::FirstMatch(i, res.to_vec())
+                // });
                 v.add_flag(if matches!(target, TypeIR::Union(_, _)) {
-                    Flag::UnionMatch(i, res.to_vec())
+                    Flag::UnionMatch(i, vec![])
                 } else {
-                    Flag::FirstMatch(i, res.to_vec())
+                    Flag::FirstMatch(i, vec![])
                 });
             }
             Ok(v.to_owned())
