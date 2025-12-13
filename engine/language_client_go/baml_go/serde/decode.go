@@ -74,7 +74,7 @@ type DynamicUnion struct {
 }
 
 func (d *DynamicUnion) Decode(holder *cffi.CFFIValueUnionVariant, typeMap TypeMap) {
-	d.Variant = string(holder.VariantName)
+	d.Variant = string(holder.ValueOptionName)
 	d.Value = Decode(holder.Value, typeMap).Interface()
 }
 
@@ -84,10 +84,10 @@ func decodeListValue(valueList *cffi.CFFIValueList, typeMap TypeMap) reflect.Val
 		panic("decodeListValue: valueList is nil")
 	}
 
-	elementType := valueList.ValueType
+	elementType := valueList.ItemType
 	goElementType := convertFieldTypeToGoType(elementType, typeMap)
 
-	length := len(valueList.Values)
+	length := len(valueList.Items)
 	debugLog("goElementType: %v\n", goElementType)
 	debugLog("length: %v\n", length)
 	sliceOf := reflect.SliceOf(goElementType)
@@ -95,7 +95,7 @@ func decodeListValue(valueList *cffi.CFFIValueList, typeMap TypeMap) reflect.Val
 	values := reflect.MakeSlice(sliceOf, length, length)
 	debugLog("values: %v\n", values)
 
-	for i, v := range valueList.Values {
+	for i, v := range valueList.Items {
 		decodedValue := Decode(v, typeMap)
 		values.Index(i).Set(decodedValue)
 	}
@@ -194,10 +194,10 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant, typeMap TypeMap) r
 	var isOptionalPattern bool = false
 
 	// Check if this is an optional pattern (T | null)
-	if len(valueUnion.FieldTypes) == 2 {
+	if len(valueUnion.OptionTypes) == 2 {
 		hasNull := false
 		hasNonNull := false
-		for _, ft := range valueUnion.FieldTypes {
+		for _, ft := range valueUnion.OptionTypes {
 			if ft.GetNullType() != nil {
 				hasNull = true
 			} else {
@@ -235,7 +235,7 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant, typeMap TypeMap) r
 
 }
 
-func decodeCheckedValue(valueChecked *cffi.CFFIValueChecked, fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeMap) reflect.Value {
+func decodeCheckedValue(valueChecked *cffi.CFFIValueChecked, typeMap TypeMap) reflect.Value {
 	if valueChecked == nil {
 		panic("decodeCheckedValue: valueChecked is nil")
 	}
@@ -252,7 +252,7 @@ func decodeCheckedValue(valueChecked *cffi.CFFIValueChecked, fieldType *cffi.CFF
 		}
 	}
 
-	goType := convertFieldTypeToGoType(fieldType, typeMap)
+	goType := convertFieldTypeToGoType(valueChecked.ValueType, typeMap)
 	checkedValue := reflect.New(goType)
 
 	// set checkedValue.value = decodedValue
@@ -379,12 +379,12 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 
 	if list, ok := type_.(*cffi.CFFIFieldTypeHolder_ListType); ok {
 		listType := list.ListType
-		return reflect.SliceOf(convertFieldTypeToGoType(listType.Element, typeMap))
+		return reflect.SliceOf(convertFieldTypeToGoType(listType.ItemType, typeMap))
 	}
 
 	if map_, ok := type_.(*cffi.CFFIFieldTypeHolder_MapType); ok {
 		mapType := map_.MapType
-		return reflect.MapOf(convertFieldTypeToGoType(mapType.Key, typeMap), convertFieldTypeToGoType(mapType.Value, typeMap))
+		return reflect.MapOf(convertFieldTypeToGoType(mapType.KeyType, typeMap), convertFieldTypeToGoType(mapType.ValueType, typeMap))
 	}
 
 	if typeAlias, ok := type_.(*cffi.CFFIFieldTypeHolder_TypeAliasType); ok {
@@ -526,39 +526,36 @@ func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) reflect.Value {
 	debugLog("Decode: holder.Value: %v\n", value)
 
 	if _, ok := value.(*cffi.CFFIValueHolder_NullValue); ok {
-		retType := convertFieldTypeToGoType(holder.Type, typeMap)
-		// return as the null value of the type.
-		val := reflect.Zero(retType)
+		val := reflect.ValueOf(nil)
 		return val
 	}
 
 	if primitiveValue, found := maybeDecodePrimitive(holder); found {
-		return maybeOptional(*primitiveValue, holder.Type, false, typeMap)
+		return *primitiveValue
 	}
 
 	if listVal, ok := value.(*cffi.CFFIValueHolder_ListValue); ok {
-		return maybeOptional(decodeListValue(listVal.ListValue, typeMap), holder.Type, false, typeMap)
+		return decodeListValue(listVal.ListValue, typeMap)
 	}
 
 	if mapVal, ok := value.(*cffi.CFFIValueHolder_MapValue); ok {
-		return maybeOptional(decodeMapValue(mapVal.MapValue, typeMap), holder.Type, false, typeMap)
+		return decodeMapValue(mapVal.MapValue, typeMap)
 	}
 
 	if classVal, ok := value.(*cffi.CFFIValueHolder_ClassValue); ok {
-		return maybeOptional(decodeClassValue(classVal.ClassValue, typeMap), holder.Type, false, typeMap)
+		return decodeClassValue(classVal.ClassValue, typeMap)
 	}
 
 	if enumVal, ok := value.(*cffi.CFFIValueHolder_EnumValue); ok {
-		return maybeOptional(decodeEnumValue(enumVal.EnumValue, typeMap), holder.Type, false, typeMap)
+		return decodeEnumValue(enumVal.EnumValue, typeMap)
 	}
 
 	if unionVal, ok := value.(*cffi.CFFIValueHolder_UnionVariantValue); ok {
-		decoded := decodeUnionValue(unionVal.UnionVariantValue, typeMap)
-		return maybeOptional(decoded, holder.Type, true, typeMap)
+		return decodeUnionValue(unionVal.UnionVariantValue, typeMap)
 	}
 
 	if checkedVal, ok := value.(*cffi.CFFIValueHolder_CheckedValue); ok {
-		return maybeOptional(decodeCheckedValue(checkedVal.CheckedValue, holder.Type, typeMap), holder.Type, false, typeMap)
+		return decodeCheckedValue(checkedVal.CheckedValue, typeMap)
 	}
 
 	if streamingVal, ok := value.(*cffi.CFFIValueHolder_StreamingStateValue); ok {

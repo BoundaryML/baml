@@ -31,7 +31,7 @@ type Union2IntOrListRecursive1 struct {
 
 func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int":
 		u.variant = "Int"
@@ -169,7 +169,7 @@ type Union2KresourceOrKservice struct {
 
 func (u *Union2KresourceOrKservice) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_service":
 		u.variant = "Kservice"
@@ -317,7 +317,7 @@ type Union3IntOrRecursive1OrString struct {
 
 func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Recursive1":
 		u.variant = "Recursive1"

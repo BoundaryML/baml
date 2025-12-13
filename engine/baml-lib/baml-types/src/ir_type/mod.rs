@@ -531,8 +531,9 @@ impl<T> TypeGeneric<T> {
         predicate: &impl Fn(&TypeGeneric<T>) -> bool,
         ignore_map_keys: bool,
     ) -> Vec<&'a TypeGeneric<T>> {
+        let mut result = vec![];
         if predicate(self) {
-            return vec![self];
+            result.push(self);
         }
 
         match self {
@@ -541,24 +542,34 @@ impl<T> TypeGeneric<T> {
             | TypeGeneric::Enum { .. }
             | TypeGeneric::Literal(..)
             | TypeGeneric::Class { .. }
-            | TypeGeneric::RecursiveTypeAlias { .. } => vec![],
-            TypeGeneric::List(inner, _) => inner.find_if(predicate, ignore_map_keys),
+            | TypeGeneric::RecursiveTypeAlias { .. } => {}
+            TypeGeneric::List(inner, _) => {
+                result.extend(inner.find_if(predicate, ignore_map_keys));
+            }
             TypeGeneric::Map(key_type, value_type, _) => {
                 let mut res = value_type.find_if(predicate, ignore_map_keys);
                 if !ignore_map_keys {
                     res.extend(key_type.find_if(predicate, ignore_map_keys));
                 }
-                res
+                result.extend(res);
             }
-            TypeGeneric::Tuple(type_generics, _) => type_generics
-                .iter()
-                .flat_map(|t| t.find_if(predicate, ignore_map_keys))
-                .collect(),
-            TypeGeneric::Union(union_type_generic, _) => union_type_generic
-                .iter_skip_null()
-                .iter()
-                .flat_map(|t| t.find_if(predicate, ignore_map_keys))
-                .collect(),
+            TypeGeneric::Tuple(type_generics, _) => {
+                for t in type_generics
+                    .iter()
+                    .flat_map(|t| t.find_if(predicate, ignore_map_keys))
+                {
+                    result.push(t);
+                }
+            }
+            TypeGeneric::Union(union_type_generic, _) => {
+                for t in union_type_generic
+                    .iter_skip_null()
+                    .iter()
+                    .flat_map(|t| t.find_if(predicate, ignore_map_keys))
+                {
+                    result.push(t);
+                }
+            }
             TypeGeneric::Arrow(arrow_generic, _) => {
                 let res = arrow_generic
                     .param_types
@@ -568,9 +579,11 @@ impl<T> TypeGeneric<T> {
                     .return_type
                     .find_if(predicate, ignore_map_keys);
                 returned.extend(res);
-                returned
+                result.extend(returned);
             }
-        }
+        };
+
+        result
     }
 
     pub fn set_meta(&mut self, meta: T) {

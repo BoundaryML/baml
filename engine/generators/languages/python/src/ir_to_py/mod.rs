@@ -1,13 +1,12 @@
 use baml_types::{
     baml_value::TypeLookups,
     ir_type::{TypeNonStreaming, TypeStreaming},
-    type_meta::{self, stream::TypeMetaStreaming},
     BamlMediaType, ConstraintLevel, TypeValue,
 };
 
 use crate::{
     package::Package,
-    r#type::{EscapedPythonString, LiteralValue, MediaTypePy, TypeMetaPy, TypePy},
+    r#type::{EscapedPythonString, LiteralValue, MediaTypePy, TypePy},
 };
 
 pub mod classes;
@@ -18,7 +17,6 @@ pub mod type_aliases;
 pub fn stream_type_to_py(field: &TypeStreaming, _lookup: &impl TypeLookups) -> TypePy {
     use TypeStreaming as T;
     let recursive_fn = |field| stream_type_to_py(field, _lookup);
-    let meta = stream_meta_to_py(field.meta());
     let should_wrap_stream_state = field.meta().streaming_behavior.state;
 
     let types_pkg: Package = Package::types();
@@ -41,24 +39,20 @@ pub fn stream_type_to_py(field: &TypeStreaming, _lookup: &impl TypeLookups) -> T
     let mut type_py: TypePy = match field {
         T::Primitive(type_value, _) => {
             let t: TypePy = type_value.into();
-            t.with_meta(meta)
+            t
         }
         T::Enum { name, dynamic, .. } => TypePy::Enum {
             package: types_pkg.clone(),
             name: name.clone(),
             dynamic: *dynamic,
-            meta,
         },
-        T::Literal(literal_value, _) => TypePy::Literal(
-            vec![match literal_value {
-                baml_types::LiteralValue::String(val) => {
-                    LiteralValue::String(EscapedPythonString::new(val))
-                }
-                baml_types::LiteralValue::Int(val) => LiteralValue::Int(*val),
-                baml_types::LiteralValue::Bool(val) => LiteralValue::Bool(*val),
-            }],
-            meta,
-        ),
+        T::Literal(literal_value, _) => TypePy::Literal(vec![match literal_value {
+            baml_types::LiteralValue::String(val) => {
+                LiteralValue::String(EscapedPythonString::new(val))
+            }
+            baml_types::LiteralValue::Int(val) => LiteralValue::Int(*val),
+            baml_types::LiteralValue::Bool(val) => LiteralValue::Bool(*val),
+        }]),
         T::Class {
             name,
             dynamic,
@@ -71,13 +65,11 @@ pub fn stream_type_to_py(field: &TypeStreaming, _lookup: &impl TypeLookups) -> T
             },
             name: name.clone(),
             dynamic: *dynamic,
-            meta,
         },
-        T::List(type_generic, _) => TypePy::List(Box::new(recursive_fn(type_generic)), meta),
+        T::List(type_generic, _) => TypePy::List(Box::new(recursive_fn(type_generic))),
         T::Map(type_generic, type_generic1, _) => TypePy::Map(
             Box::new(recursive_fn(type_generic)),
             Box::new(recursive_fn(type_generic1)),
-            meta,
         ),
         T::RecursiveTypeAlias {
             name,
@@ -89,64 +81,40 @@ pub fn stream_type_to_py(field: &TypeStreaming, _lookup: &impl TypeLookups) -> T
                 false => stream_pkg.clone(),
             },
             name: name.clone(),
-            meta,
         },
         T::Tuple(..) => TypePy::Any {
             reason: "tuples are not supported in Py".to_string(),
-            meta,
         },
         T::Arrow(..) => TypePy::Any {
             reason: "arrow types are not supported in Py".to_string(),
-            meta,
         },
         T::Union(union_type_generic, _union_meta) => {
             // Checks for Union are handled inside the match to support OneOfOptional ordering
             match union_type_generic.view() {
                 baml_types::ir_type::UnionTypeViewGeneric::Null => {
-                    let mut t = TypePy::Any {
+                    let t = TypePy::Any {
                         reason: "Null types are not supported in Py".to_string(),
-                        meta,
                     };
-                    // if !checks.is_empty() {
-                    //      t = t.as_checked(checks.clone());
-                    // }
                     t
                 }
                 baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                     // T | Null
                     // For single optional, we prefer Checked[Optional[T]]
                     let type_py = recursive_fn(type_generic);
-                    let mut t = type_py.as_optional();
-                    // if !checks.is_empty() {
-                    //      t = t.as_checked(checks.clone());
-                    // }
-                    t
+                    type_py.as_optional()
                 }
                 baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => {
                     // T1 | T2
                     let options: Vec<_> = type_generics.into_iter().map(&recursive_fn).collect();
-                    let mut t = TypePy::Union {
-                        variants: options,
-                        meta,
-                    };
-                    // if !checks.is_empty() {
-                    //      t = t.as_checked(checks.clone());
-                    // }
+                    let t = TypePy::Union { variants: options };
                     t
                 }
                 baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
                     // T1 | T2 | Null (Streaming Union)
                     // We prefer Optional[Checked[Union[T1, T2]]]
                     let options: Vec<_> = type_generics.into_iter().map(recursive_fn).collect();
-                    let mut t = TypePy::Union {
-                        variants: options,
-                        meta,
-                    };
-                    t = t.as_optional();
-                    // if !checks.is_empty() {
-                    //      t = t.as_checked(checks.clone());
-                    // }
-                    t
+                    let t = TypePy::Union { variants: options };
+                    t.as_optional()
                 }
             }
         }
@@ -171,59 +139,49 @@ pub fn stream_type_to_py(field: &TypeStreaming, _lookup: &impl TypeLookups) -> T
 pub fn type_to_py(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -> TypePy {
     use TypeNonStreaming as T;
     let recursive_fn = |field| type_to_py(field, _lookup);
-    let meta = meta_to_py(field.meta());
 
     let type_pkg = Package::types();
 
     let mut type_py = match field {
         T::Primitive(type_value, _) => {
             let t: TypePy = type_value.into();
-            t.with_meta(meta)
+            t
         }
         T::Enum { name, dynamic, .. } => TypePy::Enum {
             package: type_pkg.clone(),
             name: name.clone(),
             dynamic: *dynamic,
-            meta,
         },
-        T::Literal(literal_value, _) => TypePy::Literal(
-            vec![match literal_value {
-                baml_types::LiteralValue::String(val) => {
-                    LiteralValue::String(EscapedPythonString::new(val))
-                }
-                baml_types::LiteralValue::Int(val) => LiteralValue::Int(*val),
-                baml_types::LiteralValue::Bool(val) => LiteralValue::Bool(*val),
-            }],
-            meta,
-        ),
+        T::Literal(literal_value, _) => TypePy::Literal(vec![match literal_value {
+            baml_types::LiteralValue::String(val) => {
+                LiteralValue::String(EscapedPythonString::new(val))
+            }
+            baml_types::LiteralValue::Int(val) => LiteralValue::Int(*val),
+            baml_types::LiteralValue::Bool(val) => LiteralValue::Bool(*val),
+        }]),
         T::Class { name, dynamic, .. } => TypePy::Class {
             package: type_pkg.clone(),
             name: name.clone(),
             dynamic: *dynamic,
-            meta,
         },
-        T::List(type_generic, _) => TypePy::List(Box::new(recursive_fn(type_generic)), meta),
+        T::List(type_generic, _) => TypePy::List(Box::new(recursive_fn(type_generic))),
         T::Map(type_generic, type_generic1, _) => TypePy::Map(
             Box::new(recursive_fn(type_generic)),
             Box::new(recursive_fn(type_generic1)),
-            meta,
         ),
         T::Tuple(..) => TypePy::Any {
             reason: "tuples are not supported in Py".to_string(),
-            meta,
         },
         T::Arrow(..) => TypePy::Any {
             reason: "arrow types are not supported in Py".to_string(),
-            meta,
         },
         T::RecursiveTypeAlias { name, .. } => TypePy::TypeAlias {
             package: type_pkg.clone(),
             name: name.clone(),
-            meta,
         },
         T::Union(union_type_generic, _union_meta) => match union_type_generic.view() {
             baml_types::ir_type::UnionTypeViewGeneric::Null => {
-                TypePy::Literal(vec![LiteralValue::None], meta)
+                TypePy::Literal(vec![LiteralValue::None])
             }
             baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                 let type_py = recursive_fn(type_generic);
@@ -231,18 +189,11 @@ pub fn type_to_py(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -> TypeP
             }
             baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => {
                 let options: Vec<_> = type_generics.into_iter().map(&recursive_fn).collect();
-                TypePy::Union {
-                    variants: options,
-                    meta,
-                }
+                TypePy::Union { variants: options }
             }
             baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
                 let options: Vec<_> = type_generics.into_iter().map(recursive_fn).collect();
-                TypePy::Union {
-                    variants: options,
-                    meta,
-                }
-                .as_optional()
+                TypePy::Union { variants: options }.as_optional()
             }
         },
         T::Top(_) => panic!(
@@ -272,30 +223,17 @@ pub fn type_to_py(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -> TypeP
     type_py
 }
 
-// convert ir metadata to py metadata
-fn meta_to_py(_meta: &type_meta::NonStreaming) -> TypeMetaPy {
-    // optionality and checks are handled by TypePy variants
-    TypeMetaPy::default()
-}
-
-fn stream_meta_to_py(_meta: &TypeMetaStreaming) -> TypeMetaPy {
-    // checks and stream_state are handled by TypePy variants
-    TypeMetaPy::default()
-}
-
 impl From<&TypeValue> for TypePy {
     fn from(type_value: &TypeValue) -> Self {
-        let meta = TypeMetaPy::default();
         match type_value {
-            TypeValue::String => TypePy::String(meta),
-            TypeValue::Int => TypePy::Int(meta),
-            TypeValue::Float => TypePy::Float(meta),
-            TypeValue::Bool => TypePy::Bool(meta),
+            TypeValue::String => TypePy::String,
+            TypeValue::Int => TypePy::Int,
+            TypeValue::Float => TypePy::Float,
+            TypeValue::Bool => TypePy::Bool,
             TypeValue::Null => TypePy::Any {
                 reason: "Null types are not supported in Py".to_string(),
-                meta,
             },
-            TypeValue::Media(baml_media_type) => TypePy::Media(baml_media_type.into(), meta),
+            TypeValue::Media(baml_media_type) => TypePy::Media(baml_media_type.into()),
         }
     }
 }

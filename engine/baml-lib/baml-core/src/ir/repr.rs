@@ -731,10 +731,13 @@ impl IntermediateRepr {
 
     pub fn walk_all_non_streaming_unions(&self) -> impl Iterator<Item = TypeNonStreaming> {
         // finding types used in classes
-        let class_fields = self
-            .classes
-            .iter()
-            .flat_map(|c| c.elem.static_fields.iter().map(|f| &f.elem.r#type.elem));
+        let class_fields = self.classes.iter().flat_map(|c| {
+            c.elem.static_fields.iter().map(|f| {
+                println!("{}.{}: {}", c.elem.name, f.elem.name, f.elem.r#type.elem);
+                &f.elem.r#type.elem
+            })
+        });
+        println!("--------------------------------");
 
         // finding types used in type aliases
         let type_alias_fields = self.type_aliases.iter().map(|c| &c.elem.r#type.elem);
@@ -758,8 +761,22 @@ impl IntermediateRepr {
         let mut res = vec![];
         all_types.for_each(|t| {
             let found = t.to_non_streaming_type(self);
-            res.extend(found.find_if(&is_union, false).into_iter().cloned());
+            let found_types = found.find_if(&is_union, false);
+            if found_types.len() > 0 {
+                println!("found_types:");
+                for t in found_types.iter() {
+                    println!("{t}");
+                }
+                println!("--------------------------------");
+            }
+            res.extend(found_types.into_iter().cloned());
         });
+
+        println!("walk_all_non_streaming_unions:");
+        for t in res.iter() {
+            println!("{t}");
+        }
+        println!("--------------------------------");
 
         res.into_iter()
     }

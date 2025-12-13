@@ -33,7 +33,7 @@ type Union3ProductOrTagOrUser struct {
 
 func (u *Union3ProductOrTagOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "User":
 		u.variant = "User"

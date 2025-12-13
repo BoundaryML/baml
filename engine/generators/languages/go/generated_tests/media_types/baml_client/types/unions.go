@@ -35,7 +35,7 @@ type Union4AudioOrImageOrPDFOrVideo struct {
 
 func (u *Union4AudioOrImageOrPDFOrVideo) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "image":
 		u.variant = "Image"

@@ -909,7 +909,7 @@ type KitchenSink struct {
 	Name        *string                                        `json:"name"`
 	Score       *float64                                       `json:"score"`
 	Active      *bool                                          `json:"active"`
-	Nothing     any                                            `json:"nothing"`
+	Nothing     *any                                           `json:"nothing"`
 	Status      *types.Union3KarchivedOrKdraftOrKpublished     `json:"status"`
 	Priority    *types.Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 `json:"priority"`
 	Tags        []string                                       `json:"tags"`
@@ -953,7 +953,7 @@ func (c *KitchenSink) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			c.Active = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "nothing":
-			c.Nothing = baml.Decode(valueHolder).Interface().(any)
+			c.Nothing = baml.Decode(valueHolder).Interface().(*any)
 
 		case "status":
 			c.Status = baml.Decode(valueHolder).Interface().(*types.Union3KarchivedOrKdraftOrKpublished)

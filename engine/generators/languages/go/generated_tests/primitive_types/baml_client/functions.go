@@ -550,7 +550,7 @@ func TestTopLevelInt(ctx context.Context, input string, opts ...CallOptionFunc) 
 	}
 }
 
-func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc) (any, error) {
+func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc) (*any, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -593,7 +593,7 @@ func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc)
 			return nil, result.Error
 		}
 
-		casted := (result.Data).(any)
+		casted := (result.Data).(*any)
 
 		return casted, nil
 	} else {
@@ -608,7 +608,7 @@ func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc)
 			}
 
 			if result.HasData {
-				return result.Data.(any), nil
+				return result.Data.(*any), nil
 			}
 		}
 

@@ -25,7 +25,7 @@ type MixedPrimitives struct {
 	Age          int64     `json:"age"`
 	Height       float64   `json:"height"`
 	IsActive     bool      `json:"isActive"`
-	Metadata     any       `json:"metadata"`
+	Metadata     *any      `json:"metadata"`
 	Tags         []string  `json:"tags"`
 	Scores       []int64   `json:"scores"`
 	Measurements []float64 `json:"measurements"`
@@ -59,7 +59,7 @@ func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.IsActive = baml.Decode(valueHolder).Interface().(bool)
 
 		case "metadata":
-			c.Metadata = baml.Decode(valueHolder).Interface().(any)
+			c.Metadata = baml.Decode(valueHolder).Interface().(*any)
 
 		case "tags":
 			c.Tags = baml.Decode(valueHolder).Interface().([]string)
@@ -235,7 +235,7 @@ type PrimitiveTypes struct {
 	IntField    int64   `json:"intField"`
 	FloatField  float64 `json:"floatField"`
 	BoolField   bool    `json:"boolField"`
-	NullField   any     `json:"nullField"`
+	NullField   *any    `json:"nullField"`
 }
 
 func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -265,7 +265,7 @@ func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.BoolField = baml.Decode(valueHolder).Interface().(bool)
 
 		case "nullField":
-			c.NullField = baml.Decode(valueHolder).Interface().(any)
+			c.NullField = baml.Decode(valueHolder).Interface().(*any)
 
 		default:
 

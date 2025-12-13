@@ -31,7 +31,7 @@ type Union2ExampleOrExample2 struct {
 
 func (u *Union2ExampleOrExample2) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Example":
 		u.variant = "Example"

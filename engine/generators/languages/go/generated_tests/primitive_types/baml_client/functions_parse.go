@@ -402,8 +402,8 @@ func (*parse) TestTopLevelInt(text string, opts ...CallOptionFunc) (int64, error
 	return casted, nil
 }
 
-// / Parse version of TestTopLevelNull (Takes in string and returns any)
-func (*parse) TestTopLevelNull(text string, opts ...CallOptionFunc) (any, error) {
+// / Parse version of TestTopLevelNull (Takes in string and returns *any)
+func (*parse) TestTopLevelNull(text string, opts ...CallOptionFunc) (*any, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -444,7 +444,7 @@ func (*parse) TestTopLevelNull(text string, opts ...CallOptionFunc) (any, error)
 		return nil, err
 	}
 
-	casted := (result).(any)
+	casted := (result).(*any)
 
 	return casted, nil
 }

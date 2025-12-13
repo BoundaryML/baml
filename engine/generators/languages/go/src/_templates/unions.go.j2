@@ -7,7 +7,7 @@ type {{ name }} struct {
 
 func (u *{{ name }}) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
     valueHolder := holder.Value
-    variantName := holder.VariantName
+    variantName := holder.ValueOptionName
 	switch variantName {
     {% for v in variants -%}
 	    case "{{ v.cffi_name }}":

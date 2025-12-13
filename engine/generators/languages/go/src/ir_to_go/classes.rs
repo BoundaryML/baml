@@ -46,13 +46,13 @@ pub fn ir_class_to_go_stream<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -
 fn ir_field_to_go<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldGo<'a> {
     let non_streaming = field.elem.r#type.elem.to_non_streaming_type(pkg.lookup());
     let go_type = super::type_to_go(&non_streaming, pkg.lookup());
-    #[cfg(test)]
-    {
-        use crate::r#type::SerializeType;
+    // #[cfg(test)]
+    // {
+    //     use crate::r#type::SerializeType;
 
-        println!("Non-streaming type: {}", non_streaming.to_string());
-        println!("Go type: {}", go_type.serialize_type(pkg));
-    }
+    //     println!("Non-streaming type: {}", non_streaming.to_string());
+    //     println!("Go type: {}", go_type.serialize_type(pkg));
+    // }
 
     FieldGo {
         name: field.elem.name.clone(),
@@ -70,12 +70,12 @@ fn ir_field_to_go_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> Fi
     let partialized = field.elem.r#type.elem.to_streaming_type(pkg.lookup());
     let go_type = super::stream_type_to_go(&partialized, pkg.lookup());
 
-    #[cfg(test)]
-    {
-        use crate::r#type::SerializeType;
-        println!("Streaming type: {}", partialized.to_string());
-        println!("Go type: {}", go_type.serialize_type(pkg));
-    }
+    // #[cfg(test)]
+    // {
+    //     use crate::r#type::SerializeType;
+    //     println!("Streaming type: {}", partialized.to_string());
+    //     println!("Go type: {}", go_type.serialize_type(pkg));
+    // }
 
     FieldGo {
         name: field.elem.name.clone(),
@@ -111,7 +111,7 @@ mod tests {
         let class_go = ir_class_to_go_stream(class, &pkg);
         assert_eq!(class_go.name, "SimpleClass");
         assert_eq!(class_go.fields.len(), 1);
-        assert!(class_go.fields[0].r#type.meta().wrap_stream_state);
+        assert!(class_go.fields[0].r#type.is_stream_state());
     }
 
     #[test]
@@ -129,7 +129,7 @@ mod tests {
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
         let class_go = ir_class_to_go_stream(class, &pkg);
         let digits_field = class_go.fields.iter().find(|f| f.name == "digits").unwrap();
-        assert!(digits_field.r#type.meta().wrap_stream_state);
+        assert!(digits_field.r#type.is_stream_state());
         assert_eq!(class_go.name, "ChildClass");
         assert_eq!(class_go.fields.len(), 1);
     }

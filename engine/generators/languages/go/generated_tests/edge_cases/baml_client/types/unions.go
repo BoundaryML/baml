@@ -33,7 +33,7 @@ type Union3BoolOrIntOrString struct {
 
 func (u *Union3BoolOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"

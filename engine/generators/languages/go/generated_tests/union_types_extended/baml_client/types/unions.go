@@ -31,7 +31,7 @@ type Union2BoolOrString struct {
 
 func (u *Union2BoolOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "bool":
 		u.variant = "Bool"
@@ -169,7 +169,7 @@ type Union2DataResponseOrErrorResponse struct {
 
 func (u *Union2DataResponseOrErrorResponse) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "DataResponse":
 		u.variant = "DataResponse"
@@ -307,7 +307,7 @@ type Union2FloatOrInt struct {
 
 func (u *Union2FloatOrInt) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int":
 		u.variant = "Int"
@@ -445,7 +445,7 @@ type Union2FloatOrString struct {
 
 func (u *Union2FloatOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -583,7 +583,7 @@ type Union2IntOrString struct {
 
 func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -721,7 +721,7 @@ type Union2ListIntOrString struct {
 
 func (u *Union2ListIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -859,7 +859,7 @@ type Union2ProductOrUser struct {
 
 func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "User":
 		u.variant = "User"
@@ -997,7 +997,7 @@ type Union2RecursiveUnionOrString struct {
 
 func (u *Union2RecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -1137,7 +1137,7 @@ type Union3AdminOrProductOrUser struct {
 
 func (u *Union3AdminOrProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "User":
 		u.variant = "User"
@@ -1329,7 +1329,7 @@ type Union3ApiErrorOrApiPendingOrApiSuccess struct {
 
 func (u *Union3ApiErrorOrApiPendingOrApiSuccess) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "ApiSuccess":
 		u.variant = "ApiSuccess"
@@ -1521,7 +1521,7 @@ type Union3BirdOrCatOrDog struct {
 
 func (u *Union3BirdOrCatOrDog) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Dog":
 		u.variant = "Dog"
@@ -1713,7 +1713,7 @@ type Union3CircleOrRectangleOrTriangle struct {
 
 func (u *Union3CircleOrRectangleOrTriangle) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Circle":
 		u.variant = "Circle"
@@ -1905,7 +1905,7 @@ type Union3ErrorOrSuccessOrWarning struct {
 
 func (u *Union3ErrorOrSuccessOrWarning) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Success":
 		u.variant = "Success"
@@ -2097,7 +2097,7 @@ type Union3FloatOrIntOrString struct {
 
 func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -2289,7 +2289,7 @@ type Union3IntOrRecursiveUnionOrString struct {
 
 func (u *Union3IntOrRecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -2483,7 +2483,7 @@ type Union4BoolOrFloatOrIntOrString struct {
 
 func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"

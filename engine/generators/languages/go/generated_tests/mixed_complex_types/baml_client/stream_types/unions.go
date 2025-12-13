@@ -31,7 +31,7 @@ type Union2ConditionOrSimpleCondition struct {
 
 func (u *Union2ConditionOrSimpleCondition) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Condition":
 		u.variant = "Condition"
@@ -169,7 +169,7 @@ type Union2ErrorOrSuccess struct {
 
 func (u *Union2ErrorOrSuccess) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Success":
 		u.variant = "Success"
@@ -309,7 +309,7 @@ type Union3DataObjectOrIntOrString struct {
 
 func (u *Union3DataObjectOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -503,7 +503,7 @@ type Union4IntOrListNodeOrMapStringKeyNodeValueOrString struct {
 
 func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"

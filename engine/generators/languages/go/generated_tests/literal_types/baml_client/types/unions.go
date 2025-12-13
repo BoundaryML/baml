@@ -31,7 +31,7 @@ type Union2BoolKFalseOrBoolKTrue struct {
 
 func (u *Union2BoolKFalseOrBoolKTrue) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "bool_true":
 		u.variant = "BoolKTrue"
@@ -179,7 +179,7 @@ type Union3IntK1OrIntK2OrIntK3 struct {
 
 func (u *Union3IntK1OrIntK2OrIntK3) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int_1":
 		u.variant = "IntK1"
@@ -383,7 +383,7 @@ type Union3IntK200OrIntK404OrIntK500 struct {
 
 func (u *Union3IntK200OrIntK404OrIntK500) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int_200":
 		u.variant = "IntK200"
@@ -587,7 +587,7 @@ type Union3KactiveOrKinactiveOrKpending struct {
 
 func (u *Union3KactiveOrKinactiveOrKpending) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_active":
 		u.variant = "Kactive"
@@ -791,7 +791,7 @@ type Union3KadminOrKguestOrKuser struct {
 
 func (u *Union3KadminOrKguestOrKuser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_user":
 		u.variant = "Kuser"
@@ -995,7 +995,7 @@ type Union3KdevOrKprodOrKstaging struct {
 
 func (u *Union3KdevOrKprodOrKstaging) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_dev":
 		u.variant = "Kdev"
@@ -1199,7 +1199,7 @@ type Union3KerrorOrKsuccessOrKtimeout struct {
 
 func (u *Union3KerrorOrKsuccessOrKtimeout) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_success":
 		u.variant = "Ksuccess"
@@ -1403,7 +1403,7 @@ type Union3Kv1OrKv2OrKv3 struct {
 
 func (u *Union3Kv1OrKv2OrKv3) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_v1":
 		u.variant = "Kv1"
@@ -1609,7 +1609,7 @@ type Union4IntK0OrIntK1OrIntK3OrIntK5 struct {
 
 func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int_0":
 		u.variant = "IntK0"
@@ -1875,7 +1875,7 @@ type Union4KDELETEOrKGETOrKPOSTOrKPUT struct {
 
 func (u *Union4KDELETEOrKGETOrKPOSTOrKPUT) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_GET":
 		u.variant = "KGET"
@@ -2141,7 +2141,7 @@ type Union4KarchivedOrKdeletedOrKdraftOrKpublished struct {
 
 func (u *Union4KarchivedOrKdeletedOrKdraftOrKpublished) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_draft":
 		u.variant = "Kdraft"
@@ -2409,7 +2409,7 @@ type Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 struct {
 
 func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int_1":
 		u.variant = "IntK1"
@@ -2741,7 +2741,7 @@ type Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 struct {
 
 func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int_200":
 		u.variant = "IntK200"
@@ -3077,7 +3077,7 @@ type Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 struct {
 
 func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int_0":
 		u.variant = "IntK0"

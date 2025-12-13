@@ -1,8 +1,5 @@
 use crate::package::{CurrentRenderPackage, Package};
 
-#[derive(Clone, PartialEq, Debug, Default)]
-pub struct TypeMetaPy;
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum MediaTypePy {
     Image,
@@ -52,60 +49,47 @@ impl LiteralValue {
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum TypePy {
-    Literal(Vec<LiteralValue>, TypeMetaPy),
-    String(TypeMetaPy),
-    Int(TypeMetaPy),
-    Float(TypeMetaPy),
-    Bool(TypeMetaPy),
-    Media(MediaTypePy, TypeMetaPy),
+    Literal(Vec<LiteralValue>),
+    String,
+    Int,
+    Float,
+    Bool,
+    Media(MediaTypePy),
     // unions become classes
     Class {
         package: Package,
         name: String,
         dynamic: bool,
-        meta: TypeMetaPy,
     },
     Union {
         variants: Vec<TypePy>,
-        meta: TypeMetaPy,
     },
     Enum {
         package: Package,
         name: String,
         dynamic: bool,
-        meta: TypeMetaPy,
     },
     TypeAlias {
         name: String,
         package: Package,
-        meta: TypeMetaPy,
     },
-    List(Box<TypePy>, TypeMetaPy),
-    Map(Box<TypePy>, Box<TypePy>, TypeMetaPy),
-    Optional(Box<TypePy>, TypeMetaPy),
+    List(Box<TypePy>),
+    Map(Box<TypePy>, Box<TypePy>),
+    Optional(Box<TypePy>),
     Checked {
         inner: Box<TypePy>,
         names: Vec<EscapedPythonString>,
-        meta: TypeMetaPy,
     },
     StreamState(Box<TypePy>),
     // For any type that we can't represent in Py, we'll use this
     Any {
         reason: String,
-        meta: TypeMetaPy,
     },
 }
 
 impl TypePy {
-    pub fn with_meta(mut self, meta: TypeMetaPy) -> Self {
-        if let Some(m) = self.meta_mut() {
-            *m = meta;
-        }
-        self
-    }
-
     pub fn as_optional(self) -> Self {
-        TypePy::Optional(Box::new(self), TypeMetaPy::default())
+        TypePy::Optional(Box::new(self))
     }
 
     pub fn as_checked<T: AsRef<str>>(self, names: Vec<T>) -> Self {
@@ -115,7 +99,6 @@ impl TypePy {
                 .into_iter()
                 .map(|s| EscapedPythonString::new(s.as_ref()))
                 .collect(),
-            meta: TypeMetaPy::default(),
         }
     }
 
@@ -133,48 +116,6 @@ impl TypePy {
             TypePy::Optional(..) => Some("None".to_string()),
             _ => None,
         }
-    }
-
-    pub fn meta(&self) -> Option<&TypeMetaPy> {
-        Some(match self {
-            TypePy::Literal(_, meta) => meta,
-            TypePy::String(meta) => meta,
-            TypePy::Int(meta) => meta,
-            TypePy::Float(meta) => meta,
-            TypePy::Bool(meta) => meta,
-            TypePy::Media(_, meta) => meta,
-            TypePy::Class { meta, .. } => meta,
-            TypePy::TypeAlias { meta, .. } => meta,
-            TypePy::Union { meta, .. } => meta,
-            TypePy::Enum { meta, .. } => meta,
-            TypePy::List(_, meta) => meta,
-            TypePy::Map(_, _, meta) => meta,
-            TypePy::Any { meta, .. } => meta,
-            TypePy::Optional(_, meta) => meta,
-            TypePy::Checked { meta, .. } => meta,
-            TypePy::StreamState(_) => return None,
-        })
-    }
-
-    pub fn meta_mut(&mut self) -> Option<&mut TypeMetaPy> {
-        Some(match self {
-            TypePy::Literal(_, meta) => meta,
-            TypePy::String(meta) => meta,
-            TypePy::Int(meta) => meta,
-            TypePy::Float(meta) => meta,
-            TypePy::Bool(meta) => meta,
-            TypePy::Media(_, meta) => meta,
-            TypePy::Class { meta, .. } => meta,
-            TypePy::TypeAlias { meta, .. } => meta,
-            TypePy::Union { meta, .. } => meta,
-            TypePy::Enum { meta, .. } => meta,
-            TypePy::List(_, meta) => meta,
-            TypePy::Map(_, _, meta) => meta,
-            TypePy::Any { meta, .. } => meta,
-            TypePy::Optional(_, meta) => meta,
-            TypePy::Checked { meta, .. } => meta,
-            TypePy::StreamState(_) => return None,
-        })
     }
 }
 
@@ -195,7 +136,7 @@ impl SerializeType for TypePy {
         };
 
         match self {
-            TypePy::Literal(items, _) => {
+            TypePy::Literal(items) => {
                 format!(
                     "typing_extensions.Literal[{}]",
                     items
@@ -205,11 +146,11 @@ impl SerializeType for TypePy {
                         .join(", ")
                 )
             }
-            TypePy::String(_) => "str".to_string(),
-            TypePy::Int(_) => "int".to_string(),
-            TypePy::Float(_) => "float".to_string(),
-            TypePy::Bool(_) => "bool".to_string(),
-            TypePy::Media(media, _) => media.serialize_type(pkg),
+            TypePy::String => "str".to_string(),
+            TypePy::Int => "int".to_string(),
+            TypePy::Float => "float".to_string(),
+            TypePy::Bool => "bool".to_string(),
+            TypePy::Media(media) => media.serialize_type(pkg),
             TypePy::Class { package, name, .. } | TypePy::TypeAlias { package, name, .. } => {
                 if pkg.get().in_type_definition() {
                     format!("\"{}{}\"", package.relative_from(pkg), name)
@@ -241,11 +182,11 @@ impl SerializeType for TypePy {
                     enm
                 }
             }
-            TypePy::List(inner, _) => format!(
+            TypePy::List(inner) => format!(
                 "typing.List[{}]",
                 inner.serialize_type(&pkg.in_type_definition())
             ),
-            TypePy::Map(key, value, _) => {
+            TypePy::Map(key, value) => {
                 let pkg = pkg.in_type_definition();
                 format!(
                     "typing.Dict[{}, {}]",
@@ -253,8 +194,8 @@ impl SerializeType for TypePy {
                     value.serialize_type(&pkg)
                 )
             }
-            TypePy::Optional(inner, _) => format!("typing.Optional[{}]", inner.serialize_type(pkg)),
-            TypePy::Checked { inner, names, .. } => format!(
+            TypePy::Optional(inner) => format!("typing.Optional[{}]", inner.serialize_type(pkg)),
+            TypePy::Checked { inner, names } => format!(
                 "{}Checked[{}, typing_extensions.Literal[{}]]",
                 Package::checked().relative_from(pkg),
                 inner.serialize_type(pkg),

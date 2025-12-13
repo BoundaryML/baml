@@ -31,7 +31,7 @@ type Union2ConditionOrSimpleCondition struct {
 
 func (u *Union2ConditionOrSimpleCondition) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Condition":
 		u.variant = "Condition"
@@ -169,7 +169,7 @@ type Union2ErrorOrSuccess struct {
 
 func (u *Union2ErrorOrSuccess) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Success":
 		u.variant = "Success"
@@ -307,7 +307,7 @@ type Union2KbranchOrKleaf struct {
 
 func (u *Union2KbranchOrKleaf) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_leaf":
 		u.variant = "Kleaf"
@@ -453,7 +453,7 @@ type Union2KerrorOrKsuccess struct {
 
 func (u *Union2KerrorOrKsuccess) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_success":
 		u.variant = "Ksuccess"
@@ -601,7 +601,7 @@ type Union3BoolOrIntOrString struct {
 
 func (u *Union3BoolOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -793,7 +793,7 @@ type Union3DataObjectOrIntOrString struct {
 
 func (u *Union3DataObjectOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -985,7 +985,7 @@ type Union3FloatOrIntOrString struct {
 
 func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -1177,7 +1177,7 @@ type Union3KandOrKnotOrKor struct {
 
 func (u *Union3KandOrKnotOrKor) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_and":
 		u.variant = "Kand"
@@ -1381,7 +1381,7 @@ type Union3KarchivedOrKdraftOrKpublished struct {
 
 func (u *Union3KarchivedOrKdraftOrKpublished) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_draft":
 		u.variant = "Kdraft"
@@ -1585,7 +1585,7 @@ type Union3KaudioOrKdocumentOrKimage struct {
 
 func (u *Union3KaudioOrKdocumentOrKimage) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_image":
 		u.variant = "Kimage"
@@ -1789,7 +1789,7 @@ type Union3KflexOrKgridOrKstack struct {
 
 func (u *Union3KflexOrKgridOrKstack) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_flex":
 		u.variant = "Kflex"
@@ -1993,7 +1993,7 @@ type Union3KhtmlOrKmarkdownOrKplain struct {
 
 func (u *Union3KhtmlOrKmarkdownOrKplain) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_plain":
 		u.variant = "Kplain"
@@ -2199,7 +2199,7 @@ type Union4BoolOrFloatOrIntOrString struct {
 
 func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -2449,7 +2449,7 @@ type Union4IntOrListNodeOrMapStringKeyNodeValueOrString struct {
 
 func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -2699,7 +2699,7 @@ type Union4KbuttonOrKcontainerOrKimageOrKtext struct {
 
 func (u *Union4KbuttonOrKcontainerOrKimageOrKtext) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_button":
 		u.variant = "Kbutton"
@@ -2967,7 +2967,7 @@ type Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 struct {
 
 func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int_1":
 		u.variant = "IntK1"
@@ -3299,7 +3299,7 @@ type Union5KcontainsOrKeqOrKgtOrKltOrKne struct {
 
 func (u *Union5KcontainsOrKeqOrKgtOrKltOrKne) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_eq":
 		u.variant = "Keq"
