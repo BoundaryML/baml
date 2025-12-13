@@ -22,3 +22,5 @@ pub mod orchestrator;
 pub mod pareto;
 pub mod schema_extractor;
 pub mod storage;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod tui;

@@ -304,6 +304,9 @@ impl Evaluator {
                     failure_location: failure_location(r),
                     test_source,
                     test_name: Some(r.test_name.clone()),
+                    prompt_tokens: r.prompt_tokens,
+                    completion_tokens: r.completion_tokens,
+                    latency_ms: Some(r.latency_ms),
                 }
             })
             .collect()
@@ -334,6 +337,9 @@ impl Evaluator {
                 failure_location: None,
                 test_source: None,
                 test_name: Some(r.test_name.clone()),
+                prompt_tokens: r.prompt_tokens,
+                completion_tokens: r.completion_tokens,
+                latency_ms: Some(r.latency_ms),
             })
             .collect()
     }

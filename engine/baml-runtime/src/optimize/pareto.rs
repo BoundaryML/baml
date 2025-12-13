@@ -266,6 +266,119 @@ impl ParetoFrontier {
     pub fn best_weighted(&self, candidates: &[Candidate]) -> Option<usize> {
         self.select_for_reflection(candidates)
     }
+
+    /// Select two candidates from the frontier for merging
+    /// Returns None if there are fewer than 2 candidates on the frontier
+    /// Selects candidates that are diverse (different strengths on different objectives)
+    pub fn select_for_merge(&self, candidates: &[Candidate]) -> Option<(usize, usize)> {
+        if self.frontier.len() < 2 {
+            return None;
+        }
+
+        // Find the two most diverse candidates on the frontier
+        // "Diverse" means they are good on different objectives
+        let mut best_pair: Option<(usize, usize, f64)> = None;
+
+        for (i, &idx_a) in self.frontier.iter().enumerate() {
+            for &idx_b in self.frontier.iter().skip(i + 1) {
+                let diversity = self.compute_diversity(
+                    candidates.get(idx_a).and_then(|c| c.scores.as_ref()),
+                    candidates.get(idx_b).and_then(|c| c.scores.as_ref()),
+                );
+
+                if best_pair.is_none() || diversity > best_pair.unwrap().2 {
+                    best_pair = Some((idx_a, idx_b, diversity));
+                }
+            }
+        }
+
+        best_pair.map(|(a, b, _)| (a, b))
+    }
+
+    /// Compute diversity between two candidates
+    /// Higher diversity means they excel on different objectives
+    fn compute_diversity(
+        &self,
+        scores_a: Option<&CandidateScores>,
+        scores_b: Option<&CandidateScores>,
+    ) -> f64 {
+        let (Some(a), Some(b)) = (scores_a, scores_b) else {
+            return 0.0;
+        };
+
+        // Compute how different the candidates are across objectives
+        // We want candidates where A is better on some objectives and B is better on others
+        let mut diversity = 0.0;
+
+        for obj in &self.objectives {
+            let a_val = obj.get_value(a);
+            let b_val = obj.get_value(b);
+
+            // Normalize values to make comparison fair
+            let stats = self.stats.get(&obj.name).cloned().unwrap_or_default();
+            let range = stats.max - stats.min;
+
+            if range > 0.0 {
+                let a_norm = (a_val - stats.min) / range;
+                let b_norm = (b_val - stats.min) / range;
+                // Add absolute difference - diverse candidates differ more
+                diversity += (a_norm - b_norm).abs();
+            }
+        }
+
+        diversity
+    }
+
+    /// Identify the strengths of a candidate (which objectives it excels at)
+    pub fn identify_strengths(
+        &self,
+        scores: &CandidateScores,
+        all_candidates: &[Candidate],
+    ) -> Vec<String> {
+        let mut strengths = Vec::new();
+
+        for obj in &self.objectives {
+            let value = obj.get_value(scores);
+
+            // Get all values for this objective from Pareto candidates
+            let pareto_values: Vec<f64> = self
+                .frontier
+                .iter()
+                .filter_map(|&idx| all_candidates.get(idx))
+                .filter_map(|c| c.scores.as_ref())
+                .map(|s| obj.get_value(s))
+                .collect();
+
+            if pareto_values.is_empty() {
+                continue;
+            }
+
+            // Check if this candidate is among the best for this objective
+            let is_best = match obj.direction {
+                Direction::Maximize => pareto_values.iter().all(|&v| value >= v - 0.001),
+                Direction::Minimize => pareto_values.iter().all(|&v| value <= v + 0.001),
+            };
+
+            // Check if this candidate is in top half for this objective
+            let rank = match obj.direction {
+                Direction::Maximize => pareto_values.iter().filter(|&&v| v > value).count(),
+                Direction::Minimize => pareto_values.iter().filter(|&&v| v < value).count(),
+            };
+            let is_top_half = rank < pareto_values.len() / 2 + 1;
+
+            if is_best {
+                strengths.push(format!("Best {} ({:.2})", obj.name, value));
+            } else if is_top_half {
+                strengths.push(format!("Good {} ({:.2})", obj.name, value));
+            }
+        }
+
+        if strengths.is_empty() {
+            strengths.push("Balanced across objectives".to_string());
+        }
+
+        strengths
+    }
 }
 
 /// Parse weight arguments from CLI (e.g., "accuracy=0.8,tokens=0.2")
@@ -389,5 +502,154 @@ mod tests {
         let objectives = parse_weight_args(&[]).unwrap();
         assert_eq!(objectives.len(), 1);
         assert_eq!(objectives[0].name, "accuracy");
+    }
+
+    #[test]
+    fn test_select_for_merge() {
+        use super::super::candidate::{Candidate, CandidateMethod, OptimizableFunction};
+
+        let objectives = vec![
+            Objective {
+                name: "accuracy".to_string(),
+                weight: 0.5,
+                direction: Direction::Maximize,
+            },
+            Objective {
+                name: "tokens".to_string(),
+                weight: 0.5,
+                direction: Direction::Minimize,
+            },
+        ];
+
+        let mut frontier = ParetoFrontier::new(objectives);
+
+        // Create candidates with different trade-offs
+        let candidates = vec![
+            Candidate {
+                id: 0,
+                iteration: 0,
+                parent_ids: vec![],
+                method: CandidateMethod::Initial,
+                function: OptimizableFunction {
+                    function_name: "test".to_string(),
+                    prompt_text: "test".to_string(),
+                    classes: vec![],
+                    enums: vec![],
+                    function_source: None,
+                },
+                scores: Some(make_scores(0.9, 200.0, 1000.0)), // High accuracy, high tokens
+                rationale: None,
+            },
+            Candidate {
+                id: 1,
+                iteration: 1,
+                parent_ids: vec![0],
+                method: CandidateMethod::Reflection,
+                function: OptimizableFunction {
+                    function_name: "test".to_string(),
+                    prompt_text: "test".to_string(),
+                    classes: vec![],
+                    enums: vec![],
+                    function_source: None,
+                },
+                scores: Some(make_scores(0.7, 100.0, 1000.0)), // Low accuracy, low tokens
+                rationale: None,
+            },
+        ];
+
+        // Add both to frontier
+        frontier.add(0, candidates[0].scores.as_ref().unwrap(), &candidates);
+        frontier.add(1, candidates[1].scores.as_ref().unwrap(), &candidates);
+
+        // Update stats for diversity calculation
+        frontier.update_stats(&candidates);
+
+        // Should be able to select two candidates for merge
+        let merge_pair = frontier.select_for_merge(&candidates);
+        assert!(merge_pair.is_some());
+
+        let (a, b) = merge_pair.unwrap();
+        assert!((a == 0 && b == 1) || (a == 1 && b == 0));
+    }
+
+    #[test]
+    fn test_select_for_merge_single_candidate() {
+        let objectives = vec![Objective {
+            name: "accuracy".to_string(),
+            weight: 1.0,
+            direction: Direction::Maximize,
+        }];
+
+        let frontier = ParetoFrontier::new(objectives);
+
+        // With only one candidate, should return None
+        let candidates: Vec<Candidate> = vec![];
+        assert!(frontier.select_for_merge(&candidates).is_none());
+    }
+
+    #[test]
+    fn test_identify_strengths() {
+        use super::super::candidate::{Candidate, CandidateMethod, OptimizableFunction};
+
+        let objectives = vec![
+            Objective {
+                name: "accuracy".to_string(),
+                weight: 0.5,
+                direction: Direction::Maximize,
+            },
+            Objective {
+                name: "tokens".to_string(),
+                weight: 0.5,
+                direction: Direction::Minimize,
+            },
+        ];
+
+        let mut frontier = ParetoFrontier::new(objectives);
+
+        let candidates = vec![
+            Candidate {
+                id: 0,
+                iteration: 0,
+                parent_ids: vec![],
+                method: CandidateMethod::Initial,
+                function: OptimizableFunction {
+                    function_name: "test".to_string(),
+                    prompt_text: "test".to_string(),
+                    classes: vec![],
+                    enums: vec![],
+                    function_source: None,
+                },
+                scores: Some(make_scores(0.9, 200.0, 1000.0)), // Best accuracy
+                rationale: None,
+            },
+            Candidate {
+                id: 1,
+                iteration: 1,
+                parent_ids: vec![0],
+                method: CandidateMethod::Reflection,
+                function: OptimizableFunction {
+                    function_name: "test".to_string(),
+                    prompt_text: "test".to_string(),
+                    classes: vec![],
+                    enums: vec![],
+                    function_source: None,
+                },
+                scores: Some(make_scores(0.7, 100.0, 1000.0)), // Best tokens
+                rationale: None,
+            },
+        ];
+
+        frontier.add(0, candidates[0].scores.as_ref().unwrap(), &candidates);
+        frontier.add(1, candidates[1].scores.as_ref().unwrap(), &candidates);
+
+        let strengths_0 =
+            frontier.identify_strengths(candidates[0].scores.as_ref().unwrap(), &candidates);
+        let strengths_1 =
+            frontier.identify_strengths(candidates[1].scores.as_ref().unwrap(), &candidates);
+
+        // Candidate 0 should have best accuracy
+        assert!(strengths_0.iter().any(|s| s.contains("accuracy")));
+        // Candidate 1 should have best tokens
+        assert!(strengths_1.iter().any(|s| s.contains("tokens")));
     }
 }
