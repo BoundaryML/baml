@@ -85,27 +85,27 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                     //  - All the items as a list
                     //  - The original string
 
-	                    let others = items
-	                        .iter()
-	                        .filter_map(|res| match res {
-	                            MarkdownResult::String(s) => Some(s.as_str()),
-	                            _ => None,
-	                        })
-	                        .filter_map(|s| {
-	                            parse_func(
-	                                s,
-	                                options.next_from_mode(
-	                                    crate::jsonish::parser::ParsingMode::JsonMarkdownString,
-	                                ),
-	                                false,
-	                            )
-	                            .map_err(|e| {
-	                                log::debug!("Error parsing markdown string: {e:?}");
-	                                e
-	                            })
-	                            .ok()
-	                        })
-	                        .collect::<Vec<_>>();
+                    let others = items
+                        .iter()
+                        .filter_map(|res| match res {
+                            MarkdownResult::String(s) => Some(s.as_str()),
+                            _ => None,
+                        })
+                        .filter_map(|s| {
+                            parse_func(
+                                s,
+                                options.next_from_mode(
+                                    crate::jsonish::parser::ParsingMode::JsonMarkdownString,
+                                ),
+                                false,
+                            )
+                            .map_err(|e| {
+                                log::debug!("Error parsing markdown string: {e:?}");
+                                e
+                            })
+                            .ok()
+                        })
+                        .collect::<Vec<_>>();
 
                     let items = items
                         .into_iter()
@@ -364,15 +364,15 @@ i"#;
         fn contains_trimmed_string(value: &Value, needle: &str) -> bool {
             match value {
                 Value::String(s, _) => s.trim() == needle,
-                Value::Object(kvs, _) => kvs.iter().any(|(_, v)| contains_trimmed_string(v, needle)),
+                Value::Object(kvs, _) => {
+                    kvs.iter().any(|(_, v)| contains_trimmed_string(v, needle))
+                }
                 Value::Array(items, _) => items.iter().any(|v| contains_trimmed_string(v, needle)),
                 Value::Markdown(_, v, _) => contains_trimmed_string(v, needle),
                 Value::FixedJson(v, _) => contains_trimmed_string(v, needle),
                 Value::AnyOf(choices, original) => {
                     original.trim() == needle
-                        || choices
-                            .iter()
-                            .any(|v| contains_trimmed_string(v, needle))
+                        || choices.iter().any(|v| contains_trimmed_string(v, needle))
                 }
                 Value::Number(_, _) | Value::Boolean(_) | Value::Null => false,
             }

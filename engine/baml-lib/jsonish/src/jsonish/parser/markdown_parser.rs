@@ -1,5 +1,6 @@
-use anyhow::Result;
 use std::sync::LazyLock;
+
+use anyhow::Result;
 
 use super::ParseOptions;
 use crate::jsonish::{
@@ -22,8 +23,7 @@ static MD_TAG_START: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 
 static MD_TAG_END: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"(?m)^[ \t]*```(?:\n|$)")
-        .expect("Failed to compile md-tag-end regex")
+    regex::Regex::new(r"(?m)^[ \t]*```(?:\n|$)").expect("Failed to compile md-tag-end regex")
 });
 
 pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
@@ -257,7 +257,8 @@ dolor sit amet
     }
 
     #[test]
-    fn fence_like_sequence_inside_triple_backtick_string_does_not_split_markdown_blocks() -> Result<()> {
+    fn fence_like_sequence_inside_triple_backtick_string_does_not_split_markdown_blocks(
+    ) -> Result<()> {
         let res = parse(
             r#"
 ```json
@@ -289,7 +290,8 @@ dolor sit amet
                 Value::Markdown(_, v, _) => contains_substring(v, needle),
                 Value::FixedJson(v, _) => contains_substring(v, needle),
                 Value::AnyOf(choices, original) => {
-                    original.contains(needle) || choices.iter().any(|v| contains_substring(v, needle))
+                    original.contains(needle)
+                        || choices.iter().any(|v| contains_substring(v, needle))
                 }
                 Value::Number(_, _) | Value::Boolean(_) | Value::Null => false,
             }

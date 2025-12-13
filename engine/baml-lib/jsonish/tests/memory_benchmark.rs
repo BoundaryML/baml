@@ -1,7 +1,10 @@
 #[cfg(not(target_arch = "wasm32"))]
 use baml_types::TypeIR;
 #[cfg(not(target_arch = "wasm32"))]
-use jsonish::{from_str, helpers::common::{UNION_SCHEMA, ARRAY_UNION_SCHEMA}};
+use jsonish::{
+    from_str,
+    helpers::common::{ARRAY_UNION_SCHEMA, UNION_SCHEMA},
+};
 #[cfg(not(target_arch = "wasm32"))]
 use peak_alloc::PeakAlloc;
 

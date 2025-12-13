@@ -167,9 +167,8 @@ fn coerce_string(
                 })
                 .max_by_key(|(s, _)| s.len());
 
-            let (string_val, completion_state) = string_value.unwrap_or_else(|| {
-                (original_string.clone(), value.completion_state().clone())
-            });
+            let (string_val, completion_state) = string_value
+                .unwrap_or_else(|| (original_string.clone(), value.completion_state().clone()));
 
             let mut baml_value = BamlValueWithFlags::String((string_val, target).into());
             if completion_state == CompletionState::Incomplete {

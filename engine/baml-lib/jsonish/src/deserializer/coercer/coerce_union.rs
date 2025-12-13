@@ -4,10 +4,7 @@ use internal_baml_core::ir::{TypeIR, TypeValue};
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::deserializer::{
-    coercer::array_helper,
-    deserialize_flags::Flag,
-    score::WithScore,
-    types::BamlValueWithFlags,
+    coercer::array_helper, deserialize_flags::Flag, score::WithScore, types::BamlValueWithFlags,
 };
 
 pub(super) fn try_cast_union(
@@ -43,7 +40,9 @@ pub(super) fn try_cast_union(
     // Optimization: If we have a hint from a previous array element, try that variant first.
     if let Some(hint_idx) = ctx.union_variant_hint {
         if hint_idx < all_options.len() {
-            if let Some(mut cast_result) = all_options[hint_idx].try_cast(ctx, union_target, Some(value)) {
+            if let Some(mut cast_result) =
+                all_options[hint_idx].try_cast(ctx, union_target, Some(value))
+            {
                 if cast_result.score() == 0 {
                     log::debug!(
                         "scope: {scope} :: try_cast union hint {hint_idx} succeeded for {name}",
@@ -82,7 +81,10 @@ pub(super) fn try_cast_union(
         _ => array_helper::pick_best(
             ctx,
             union_target,
-            &filtered_options.into_iter().map(|(_, v)| Ok(v)).collect::<Vec<_>>(),
+            &filtered_options
+                .into_iter()
+                .map(|(_, v)| Ok(v))
+                .collect::<Vec<_>>(),
         )
         .ok(),
     };

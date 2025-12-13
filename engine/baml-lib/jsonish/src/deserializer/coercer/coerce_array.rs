@@ -11,12 +11,14 @@ use crate::deserializer::{
 /// Extract the winning union variant index from a coerced value's flags.
 /// Returns None if the value wasn't from a union coercion.
 fn extract_union_winner_index(value: &BamlValueWithFlags) -> Option<usize> {
-    value.conditions().flags().iter().find_map(|flag| {
-        match flag {
+    value
+        .conditions()
+        .flags()
+        .iter()
+        .find_map(|flag| match flag {
             Flag::UnionMatch(idx, _) => Some(*idx),
             _ => None,
-        }
-    })
+        })
 }
 
 pub(super) fn try_cast_array(

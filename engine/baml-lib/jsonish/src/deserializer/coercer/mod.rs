@@ -69,7 +69,11 @@ impl ParsingContext<'_> {
 
     /// Enter a scope with a union variant hint for optimizing arrays of unions.
     /// The hint suggests which variant to try first based on previous successful coercions.
-    pub(crate) fn enter_scope_with_hint(&self, scope: &str, hint: Option<usize>) -> ParsingContext<'_> {
+    pub(crate) fn enter_scope_with_hint(
+        &self,
+        scope: &str,
+        hint: Option<usize>,
+    ) -> ParsingContext<'_> {
         let mut new_scope = self.scope.clone();
         new_scope.push(scope.to_string());
         ParsingContext {
