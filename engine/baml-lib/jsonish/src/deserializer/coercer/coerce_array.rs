@@ -10,11 +10,17 @@ use crate::deserializer::{
 
 /// Extract the winning union variant index from a coerced value's flags.
 /// Returns None if the value wasn't from a union coercion.
+///
+/// IMPORTANT: We iterate in REVERSE to get the LAST (outermost) UnionMatch flag.
+/// When coercing nested unions like `(A | B)[]` where `B = (C | D)`, the inner
+/// union's flag is added first, then the outer union's flag. We want the outer
+/// union's index for the array hint, not the inner one.
 fn extract_union_winner_index(value: &BamlValueWithFlags) -> Option<usize> {
     value
         .conditions()
         .flags()
         .iter()
+        .rev()
         .find_map(|flag| match flag {
             Flag::UnionMatch(idx, _) => Some(*idx),
             _ => None,
