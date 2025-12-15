@@ -47,7 +47,7 @@ func (c *Action) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Parameters = baml.Decode(valueHolder).Interface().(map[string]Union3BoolOrIntOrString)
 
 		case "async_":
-			c.Async_ = baml.Decode(valueHolder).Interface().(bool)
+			c.Async_ = baml.Decode(valueHolder).Bool()
 
 		default:
 
@@ -96,7 +96,7 @@ func (c *Asset) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "type":
 			c.Type = baml.Decode(valueHolder).Interface().(Union3KaudioOrKdocumentOrKimage)
@@ -160,7 +160,7 @@ func (c *AssetMetadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.Filename = baml.Decode(valueHolder).Interface().(string)
 
 		case "size":
-			c.Size = baml.Decode(valueHolder).Interface().(int64)
+			c.Size = baml.Decode(valueHolder).Int()
 
 		case "mimeType":
 			c.MimeType = baml.Decode(valueHolder).Interface().(string)
@@ -538,10 +538,10 @@ func (c *Dimensions) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "width":
-			c.Width = baml.Decode(valueHolder).Interface().(int64)
+			c.Width = baml.Decode(valueHolder).Int()
 
 		case "height":
-			c.Height = baml.Decode(valueHolder).Interface().(int64)
+			c.Height = baml.Decode(valueHolder).Int()
 
 		default:
 
@@ -653,7 +653,7 @@ func (c *Error) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Message = baml.Decode(valueHolder).Interface().(string)
 
 		case "code":
-			c.Code = baml.Decode(valueHolder).Interface().(int64)
+			c.Code = baml.Decode(valueHolder).Int()
 
 		default:
 
@@ -759,7 +759,7 @@ func (c *Feature) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "enabled":
-			c.Enabled = baml.Decode(valueHolder).Interface().(bool)
+			c.Enabled = baml.Decode(valueHolder).Bool()
 
 		case "config":
 			c.Config = baml.Decode(valueHolder).Interface().(*map[string]Union3BoolOrIntOrString)
@@ -864,7 +864,7 @@ func (c *Item) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -907,7 +907,7 @@ type KitchenSink struct {
 	Name        string                                  `json:"name"`
 	Score       float64                                 `json:"score"`
 	Active      bool                                    `json:"active"`
-	Nothing     *any                                    `json:"nothing"`
+	Nothing     *interface{}                            `json:"nothing"`
 	Status      Union3KarchivedOrKdraftOrKpublished     `json:"status"`
 	Priority    Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 `json:"priority"`
 	Tags        []string                                `json:"tags"`
@@ -939,19 +939,19 @@ func (c *KitchenSink) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "score":
-			c.Score = baml.Decode(valueHolder).Interface().(float64)
+			c.Score = baml.Decode(valueHolder).Float()
 
 		case "active":
-			c.Active = baml.Decode(valueHolder).Interface().(bool)
+			c.Active = baml.Decode(valueHolder).Bool()
 
 		case "nothing":
-			c.Nothing = baml.Decode(valueHolder).Interface().(*any)
+			c.Nothing = (*interface{})(nil)
 
 		case "status":
 			c.Status = baml.Decode(valueHolder).Interface().(Union3KarchivedOrKdraftOrKpublished)
@@ -1074,7 +1074,7 @@ func (c *Node) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "type":
 			c.Type = baml.Decode(valueHolder).Interface().(Union2KbranchOrKleaf)
@@ -1247,7 +1247,7 @@ func (c *Record) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "data":
 			c.Data = baml.Decode(valueHolder).Interface().(map[string]*Union3BoolOrIntOrString)
@@ -1308,10 +1308,10 @@ func (c *ResponseMetadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 			c.RequestId = baml.Decode(valueHolder).Interface().(string)
 
 		case "duration":
-			c.Duration = baml.Decode(valueHolder).Interface().(int64)
+			c.Duration = baml.Decode(valueHolder).Int()
 
 		case "retries":
-			c.Retries = baml.Decode(valueHolder).Interface().(int64)
+			c.Retries = baml.Decode(valueHolder).Int()
 
 		default:
 
@@ -1363,7 +1363,7 @@ func (c *Rule) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -1375,7 +1375,7 @@ func (c *Rule) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Actions = baml.Decode(valueHolder).Interface().([]Action)
 
 		case "priority":
-			c.Priority = baml.Decode(valueHolder).Interface().(int64)
+			c.Priority = baml.Decode(valueHolder).Int()
 
 		default:
 
@@ -1637,7 +1637,7 @@ func (c *TertiaryData) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.Parsed = baml.Decode(valueHolder).Interface().(*map[string]string)
 
 		case "valid":
-			c.Valid = baml.Decode(valueHolder).Interface().(bool)
+			c.Valid = baml.Decode(valueHolder).Bool()
 
 		default:
 
@@ -1805,7 +1805,7 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "profile":
 			c.Profile = baml.Decode(valueHolder).Interface().(UserProfile)
@@ -1983,10 +1983,10 @@ func (c *Variant) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Sku = baml.Decode(valueHolder).Interface().(string)
 
 		case "price":
-			c.Price = baml.Decode(valueHolder).Interface().(float64)
+			c.Price = baml.Decode(valueHolder).Float()
 
 		case "stock":
-			c.Stock = baml.Decode(valueHolder).Interface().(int64)
+			c.Stock = baml.Decode(valueHolder).Int()
 
 		case "options":
 			c.Options = baml.Decode(valueHolder).Interface().(map[string]string)

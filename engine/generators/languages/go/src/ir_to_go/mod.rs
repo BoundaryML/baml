@@ -95,9 +95,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
             let has_union_stream_state = union_meta.streaming_behavior.state;
 
             match union_type_generic.view() {
-                baml_types::ir_type::UnionTypeViewGeneric::Null => TypeGo::Any {
-                    reason: "Null types are not supported in Go".to_string(),
-                },
+                baml_types::ir_type::UnionTypeViewGeneric::Null => TypeGo::Null,
                 baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                     let mut type_go = recursive_fn(type_generic);
                     // Order: inner type -> Optional -> Checked -> StreamState
@@ -263,9 +261,7 @@ pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
                 .any(|c| matches!(c.level, ConstraintLevel::Check));
 
             match union_type_generic.view() {
-                baml_types::ir_type::UnionTypeViewGeneric::Null => TypeGo::Any {
-                    reason: "Null types are not supported in Go".to_string(),
-                },
+                baml_types::ir_type::UnionTypeViewGeneric::Null => TypeGo::Null,
                 baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                     let mut type_go = recursive_fn(type_generic);
                     // Order: inner type -> Optional -> Checked
@@ -337,10 +333,7 @@ impl From<&TypeValue> for TypeGo {
             TypeValue::Int => TypeGo::Int(None),
             TypeValue::Float => TypeGo::Float,
             TypeValue::Bool => TypeGo::Bool(None),
-            TypeValue::Null => TypeGo::Any {
-                reason: "Null types are not supported in Go".to_string(),
-            }
-            .as_optional(),
+            TypeValue::Null => TypeGo::Null,
             TypeValue::Media(baml_media_type) => TypeGo::Media(baml_media_type.into()),
         }
     }

@@ -35,7 +35,7 @@ func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant, t
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "List__Recursive1":
 		u.variant = "ListRecursive1"
@@ -179,7 +179,7 @@ func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVarian
 		u.variant_Recursive1 = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
@@ -375,11 +375,11 @@ func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Decode(holde
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).Interface().(float64)
+		value := baml.Decode(valueHolder).Float()
 		u.variant_Float = &value
 	case "Map__string_JSON":
 		u.variant = "MapStringKeyJSONValue"

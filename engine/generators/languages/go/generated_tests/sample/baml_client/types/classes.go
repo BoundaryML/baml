@@ -44,9 +44,7 @@ func (c *Example) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Type = baml.Decode(valueHolder).Interface().(string)
 
 		case "a":
-			c.A = baml.DecodeChecked(valueHolder, func(inner *cffi.CFFIValueHolder) int64 {
-				return baml.Decode(inner).Interface().(int64)
-			})
+			c.A = baml.Decode(valueHolder).Interface().(Checked[int64])
 
 		case "b":
 			c.B = baml.Decode(valueHolder).Interface().(string)

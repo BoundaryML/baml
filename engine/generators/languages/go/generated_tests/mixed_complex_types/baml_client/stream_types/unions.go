@@ -317,7 +317,7 @@ func (u *Union3DataObjectOrIntOrString) Decode(holder *cffi.CFFIValueUnionVarian
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "DataObject":
 		u.variant = "DataObject"
@@ -511,7 +511,7 @@ func (u *Union4IntOrListNodeOrMapStringKeyNodeValueOrString) Decode(holder *cffi
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "List__Node":
 		u.variant = "ListNode"

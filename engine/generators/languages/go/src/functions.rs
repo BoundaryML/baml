@@ -268,6 +268,8 @@ struct FunctionParseStreamTemplate<'a> {
 /// import (
 ///     "{{ go_mod_name }}/baml_client/types"
 ///     "{{ go_mod_name }}/baml_client/stream_types"
+///
+///      baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 /// )
 ///
 /// var typeMap = map[string]reflect.Type{
@@ -290,9 +292,11 @@ struct FunctionParseStreamTemplate<'a> {
 /// {% for type_alias in stream_type_aliases -%}
 ///     "STREAM_TYPES.{{ type_alias.name }}": reflect.TypeOf({{ type_alias.type_.construct_instance(pkg) }}),
 /// {% endfor %}
-/// {% for checked_type in checked_types -%}
-///     {% let inner_type = checked_type.clone_without_checked() %}
-///     "CHECKED_TYPES.{{ inner_type.serialize_type(pkg) }}": reflect.TypeOf({{ checked_type.construct_instance(pkg) }}),
+/// {% for (name, checked_type) in checked_types -%}
+///     "CHECKED_TYPES.{{ name }}": reflect.TypeOf({{ checked_type.construct_instance(pkg) }}),
+/// {% endfor %}
+/// {% for (name, stream_state_type) in stream_state_types -%}
+///     "STREAM_STATE_TYPES.{{ name }}": reflect.TypeOf({{ stream_state_type.construct_instance(pkg) }}),
 /// {% endfor %}
 /// }
 /// ```
@@ -305,7 +309,8 @@ struct TypeMap<'a> {
     stream_unions: &'a [UnionGo<'a>],
     type_aliases: &'a [TypeAliasGo<'a>],
     stream_type_aliases: &'a [TypeAliasGo<'a>],
-    checked_types: &'a [TypeGo],
+    checked_types: &'a [(String, TypeGo)],
+    stream_state_types: &'a [(String, TypeGo)],
     go_mod_name: &'a str,
     pkg: &'a CurrentRenderPackage,
 }
@@ -318,7 +323,8 @@ pub fn render_type_map(
     stream_unions: &[UnionGo],
     type_aliases: &[TypeAliasGo],
     stream_type_aliases: &[TypeAliasGo],
-    checked_types: &[TypeGo],
+    checked_types: &[(String, TypeGo)],
+    stream_state_types: &[(String, TypeGo)],
     go_mod_name: &str,
     pkg: &CurrentRenderPackage,
 ) -> Result<String, askama::Error> {
@@ -330,6 +336,7 @@ pub fn render_type_map(
         type_aliases,
         stream_type_aliases,
         checked_types,
+        stream_state_types,
         go_mod_name,
         pkg,
     }

@@ -43,7 +43,7 @@ func (c *ExistingSystemComponent) Decode(holder *cffi.CFFIValueClass, typeMap ba
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)

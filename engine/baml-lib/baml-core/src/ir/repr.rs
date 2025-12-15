@@ -695,7 +695,10 @@ impl IntermediateRepr {
         self.functions.iter().map(|e| Walker { ir: self, item: e })
     }
 
-    pub fn walk_all_types_with_checks(&self) -> impl Iterator<Item = TypeNonStreaming> {
+    fn walk_all_types_with_filter<F, T>(&self, filter: F) -> Vec<T>
+    where
+        F: Fn(&TypeIR) -> Vec<T>,
+    {
         let class_fields = self
             .classes
             .iter()
@@ -713,107 +716,74 @@ impl IntermediateRepr {
 
         let all_types = class_fields.chain(type_alias_fields).chain(function_fields);
 
-        fn is_checked(t: &TypeNonStreaming) -> bool {
+        all_types.flat_map(|t| filter(t)).collect::<Vec<_>>()
+    }
+
+    fn walk_all_non_streaming_types_with_filter<F>(&self, filter: F) -> Vec<TypeNonStreaming>
+    where
+        F: Fn(&TypeNonStreaming) -> bool,
+    {
+        let is_non_streaming = move |t: &TypeIR| -> Vec<TypeNonStreaming> {
+            let t = t.to_non_streaming_type(self);
+            t.find_if(&filter, false)
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
+        self.walk_all_types_with_filter(is_non_streaming)
+    }
+
+    fn walk_all_streaming_types_with_filter<F>(&self, filter: F) -> Vec<TypeStreaming>
+    where
+        F: Fn(&TypeStreaming) -> bool,
+    {
+        let is_streaming = move |t: &TypeIR| -> Vec<TypeStreaming> {
+            let t = t.to_streaming_type(self);
+            t.find_if(&filter, false)
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
+        self.walk_all_types_with_filter(is_streaming)
+    }
+
+    pub fn walk_all_types_with_checks(&self) -> impl Iterator<Item = TypeNonStreaming> {
+        self.walk_all_non_streaming_types_with_filter(|t| {
             t.meta()
                 .constraints
                 .iter()
                 .any(|c| c.level == ConstraintLevel::Check)
-        }
+        })
+        .into_iter()
+    }
 
-        let mut res = vec![];
-        all_types.for_each(|t| {
-            let found = t.to_non_streaming_type(self);
-            res.extend(found.find_if(&is_checked, false).into_iter().cloned());
-        });
-
-        res.into_iter()
+    pub fn walk_all_streaming_types_with_stream_state(
+        &self,
+    ) -> impl Iterator<Item = TypeStreaming> {
+        self.walk_all_streaming_types_with_filter(|t| t.meta().streaming_behavior.state)
+            .into_iter()
     }
 
     pub fn walk_all_non_streaming_unions(&self) -> impl Iterator<Item = TypeNonStreaming> {
-        // finding types used in classes
-        let class_fields = self.classes.iter().flat_map(|c| {
-            c.elem.static_fields.iter().map(|f| {
-                println!("{}.{}: {}", c.elem.name, f.elem.name, f.elem.r#type.elem);
-                &f.elem.r#type.elem
-            })
-        });
-        println!("--------------------------------");
+        self.walk_all_non_streaming_types_with_filter(|t| matches!(t, TypeNonStreaming::Union(..)))
+            .into_iter()
+    }
 
-        // finding types used in type aliases
-        let type_alias_fields = self.type_aliases.iter().map(|c| &c.elem.r#type.elem);
-
-        // finding types used in functions
-        let function_fields = self.functions.iter().flat_map(|f| {
-            f.elem
-                .inputs
+    pub fn walk_all_streaming_types_with_checks(&self) -> impl Iterator<Item = TypeStreaming> {
+        self.walk_all_streaming_types_with_filter(|t| {
+            t.meta()
+                .constraints
                 .iter()
-                .map(|(_, t)| t)
-                .chain(std::iter::once(&f.elem.output))
-        });
-
-        let all_types = class_fields.chain(type_alias_fields).chain(function_fields);
-
-        // also then flatten the types so any inner types are also included
-        fn is_union(t: &TypeNonStreaming) -> bool {
-            matches!(t, TypeNonStreaming::Union(..))
-        }
-
-        let mut res = vec![];
-        all_types.for_each(|t| {
-            let found = t.to_non_streaming_type(self);
-            let found_types = found.find_if(&is_union, false);
-            if found_types.len() > 0 {
-                println!("found_types:");
-                for t in found_types.iter() {
-                    println!("{t}");
-                }
-                println!("--------------------------------");
-            }
-            res.extend(found_types.into_iter().cloned());
-        });
-
-        println!("walk_all_non_streaming_unions:");
-        for t in res.iter() {
-            println!("{t}");
-        }
-        println!("--------------------------------");
-
-        res.into_iter()
+                .any(|c| c.level == ConstraintLevel::Check)
+        })
+        .into_iter()
     }
 
     pub fn walk_all_streaming_unions(&self) -> impl Iterator<Item = TypeStreaming> {
-        // finding types used in classes
-        let class_fields = self
-            .classes
-            .iter()
-            .flat_map(|c| c.elem.static_fields.iter().map(|f| &f.elem.r#type.elem));
-
-        // finding types used in type aliases
-        let type_alias_fields = self.type_aliases.iter().map(|c| &c.elem.r#type.elem);
-
-        // finding types used in functions
-        let function_fields = self.functions.iter().flat_map(|f| {
-            f.elem
-                .inputs
-                .iter()
-                .map(|(_, t)| t)
-                .chain(std::iter::once(&f.elem.output))
-        });
-
-        let all_types = class_fields.chain(type_alias_fields).chain(function_fields);
-
-        // also then flatten the types so any inner types are also included
-        fn is_union(t: &TypeStreaming) -> bool {
-            matches!(t, TypeStreaming::Union(..))
-        }
-
-        let mut res = vec![];
-        all_types.for_each(|t| {
-            let found = t.to_streaming_type(self);
-            res.extend(found.find_if(&is_union, false).into_iter().cloned());
-        });
-
-        res.into_iter()
+        self.walk_all_streaming_types_with_filter(|t| matches!(t, TypeStreaming::Union(..)))
+            .into_iter()
     }
 
     // TODO: This is a quick workaround in order to make expr_fns compatible

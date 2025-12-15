@@ -41,6 +41,8 @@ enum CFFITypeNamespace {
   INTERNAL = 0;
   TYPES = 1;
   STREAM_TYPES = 2;
+  STREAM_STATE_TYPES = 3;
+  CHECKED_TYPES = 4;
 }
 
 // wrapper for the name of a type
@@ -91,14 +93,15 @@ message CFFIValueRawObject {
 // For the Rust variant `Union(Vec<CFFIFieldType>, Box<CFFIValue>)`
 message CFFIValueUnionVariant {
   CFFITypeName name = 1;
-  repeated CFFIFieldTypeHolder option_types = 3;
-  int32 value_option_type_index = 4;
-  string value_option_name = 2;
-  CFFIValueHolder value = 5;
+  bool is_optional = 2;
+  bool is_single_pattern = 3;
+  CFFIFieldTypeHolder self_type = 4;
+  string value_option_name = 5;
+  CFFIValueHolder value = 6;
 }
 
 message CFFIValueChecked {
-  CFFIFieldTypeHolder value_type = 1;
+  CFFITypeName name = 1;
   CFFIValueHolder value = 2;
   repeated CFFICheckValue checks = 3;
 }
@@ -200,7 +203,6 @@ message CFFIFieldTypeMap {
 
 message CFFIFieldTypeUnionVariant {
   CFFITypeName name = 1;
-  repeated CFFIFieldTypeHolder options = 2;
 }
 
 message CFFIFieldTypeOptional {
@@ -249,5 +251,5 @@ enum CFFIStreamState {
 message CFFIValueStreamingState {
   CFFIValueHolder value = 1;
   CFFIStreamState state = 2;
-  CFFIFieldTypeHolder value_type = 3;
+  CFFITypeName name = 3;
 }

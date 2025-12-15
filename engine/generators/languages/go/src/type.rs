@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use baml_types::baml_value::TypeLookups;
 
 use crate::package::{CurrentRenderPackage, Package};
@@ -12,6 +14,8 @@ pub enum MediaTypeGo {
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum TypeGo {
+    // In case the user has an explicit Null type somewhere
+    Null,
     // Primitive types (with optional literal value)
     String(Option<String>),
     Int(Option<i64>),
@@ -68,18 +72,6 @@ impl TypeGo {
         TypeGo::StreamState(Box::new(self))
     }
 
-    pub fn is_optional(&self) -> bool {
-        matches!(self, TypeGo::Optional(_))
-    }
-
-    pub fn is_checked(&self) -> bool {
-        matches!(self, TypeGo::Checked(_))
-    }
-
-    pub fn is_stream_state(&self) -> bool {
-        matches!(self, TypeGo::StreamState(_))
-    }
-
     pub fn flatten_unions(self) -> Vec<TypeGo> {
         match self {
             TypeGo::Union { .. } => {
@@ -95,6 +87,7 @@ impl TypeGo {
     // for unions, we need a default name for the type when the union is not named
     pub fn default_name_within_union(&self) -> String {
         match self {
+            TypeGo::Null => "Null".to_string(),
             // Handle wrapper types first - they delegate to inner type with prefix
             TypeGo::Optional(inner) => format!("Optional{}", inner.default_name_within_union()),
             TypeGo::Checked(inner) => format!("Checked{}", inner.default_name_within_union()),
@@ -133,6 +126,7 @@ impl TypeGo {
 
     pub fn zero_value(&self, pkg: &CurrentRenderPackage) -> String {
         match self {
+            TypeGo::Null => "(*interface{})(nil)".to_string(),
             TypeGo::Optional(_) => "nil".to_string(),
             TypeGo::Checked(_) | TypeGo::StreamState(_) => {
                 format!("{}{{}}", self.serialize_type(pkg))
@@ -178,15 +172,9 @@ impl TypeGo {
         }
     }
 
-    pub fn clone_without_checked(&self) -> Self {
-        match self {
-            TypeGo::Checked(inner) => (**inner).clone(),
-            _ => self.clone(),
-        }
-    }
-
     pub fn construct_instance(&self, pkg: &CurrentRenderPackage) -> String {
         match self {
+            TypeGo::Null => "(*interface{})(nil)".to_string(),
             TypeGo::Optional(inner) => {
                 let base_type = inner.serialize_type(pkg);
                 format!("(*{base_type})(nil)")
@@ -225,54 +213,26 @@ impl TypeGo {
 
     pub fn cast_from_function(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
         match self {
-            TypeGo::StreamState(inner) => {
-                format!(
-                    "baml.CastStreamState({param}, func(inner any) {t} {{
-                return {casted}
-            }})",
-                    t = inner.serialize_type(pkg),
-                    casted = inner.cast_from_function("inner", pkg)
-                )
-            }
-            TypeGo::Checked(inner) => {
-                format!(
-                    "baml.CastChecked({param}, func(inner any) {t} {{
-                return {casted}
-            }})",
-                    t = inner.serialize_type(pkg),
-                    casted = inner.cast_from_function("inner", pkg)
-                )
-            }
             _ => format!("({param}).({})", self.serialize_type(pkg)),
         }
     }
 
     pub fn decode_from_any(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
         match self {
-            TypeGo::StreamState(inner) => {
-                format!(
-                    "baml.DecodeStreamingState({param}, func(inner *cffi.CFFIValueHolder) {t} {{
-                return {casted}
-            }})",
-                    t = inner.serialize_type(pkg),
-                    casted = inner.decode_from_any("inner", pkg)
-                )
+            TypeGo::Null => self.zero_value(pkg),
+            TypeGo::Bool(_) => {
+                format!("baml.Decode({param}).Bool()")
             }
-            TypeGo::Checked(inner) => {
-                format!(
-                    "baml.DecodeChecked({param}, func(inner *cffi.CFFIValueHolder) {t} {{
-                return {casted}
-            }})",
-                    t = inner.serialize_type(pkg),
-                    casted = inner.decode_from_any("inner", pkg)
-                )
+            TypeGo::Int(_) => {
+                format!("baml.Decode({param}).Int()")
             }
-            _ => {
-                format!(
-                    "baml.Decode({param}).Interface().({})",
-                    self.serialize_type(pkg)
-                )
+            TypeGo::Float => {
+                format!("baml.Decode({param}).Float()")
             }
+            _ => format!(
+                "baml.Decode({param}).Interface().({})",
+                self.serialize_type(pkg)
+            ),
         }
     }
 }
@@ -284,6 +244,7 @@ pub trait SerializeType {
 impl SerializeType for TypeGo {
     fn serialize_type(&self, pkg: &CurrentRenderPackage) -> String {
         match self {
+            TypeGo::Null => "*interface{}".to_string(),
             // Wrapper types
             TypeGo::Optional(inner) => format!("*{}", inner.serialize_type(pkg)),
             TypeGo::Checked(inner) => format!(

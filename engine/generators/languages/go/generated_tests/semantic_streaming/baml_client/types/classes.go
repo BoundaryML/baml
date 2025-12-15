@@ -40,7 +40,7 @@ func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Ty
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
+			c.I_16_digits = baml.Decode(valueHolder).Int()
 
 		case "s_20_words":
 			c.S_20_words = baml.Decode(valueHolder).Interface().(string)
@@ -88,7 +88,7 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
+			c.I_16_digits = baml.Decode(valueHolder).Int()
 
 		case "s_20_words":
 			c.S_20_words = baml.Decode(valueHolder).Interface().(string)
@@ -142,7 +142,7 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass, typeMap baml.Typ
 		switch key {
 
 		case "sixteen_digit_number":
-			c.Sixteen_digit_number = baml.Decode(valueHolder).Interface().(int64)
+			c.Sixteen_digit_number = baml.Decode(valueHolder).Int()
 
 		case "string_with_twenty_words":
 			c.String_with_twenty_words = baml.Decode(valueHolder).Interface().(string)
@@ -220,10 +220,10 @@ func (c *SmallThing) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
+			c.I_16_digits = baml.Decode(valueHolder).Int()
 
 		case "i_8_digits":
-			c.I_8_digits = baml.Decode(valueHolder).Interface().(int64)
+			c.I_8_digits = baml.Decode(valueHolder).Int()
 
 		default:
 

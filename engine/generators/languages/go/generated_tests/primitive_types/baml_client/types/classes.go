@@ -21,15 +21,15 @@ import (
 )
 
 type MixedPrimitives struct {
-	Name         string    `json:"name"`
-	Age          int64     `json:"age"`
-	Height       float64   `json:"height"`
-	IsActive     bool      `json:"isActive"`
-	Metadata     *any      `json:"metadata"`
-	Tags         []string  `json:"tags"`
-	Scores       []int64   `json:"scores"`
-	Measurements []float64 `json:"measurements"`
-	Flags        []bool    `json:"flags"`
+	Name         string       `json:"name"`
+	Age          int64        `json:"age"`
+	Height       float64      `json:"height"`
+	IsActive     bool         `json:"isActive"`
+	Metadata     *interface{} `json:"metadata"`
+	Tags         []string     `json:"tags"`
+	Scores       []int64      `json:"scores"`
+	Measurements []float64    `json:"measurements"`
+	Flags        []bool       `json:"flags"`
 }
 
 func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -50,16 +50,16 @@ func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "age":
-			c.Age = baml.Decode(valueHolder).Interface().(int64)
+			c.Age = baml.Decode(valueHolder).Int()
 
 		case "height":
-			c.Height = baml.Decode(valueHolder).Interface().(float64)
+			c.Height = baml.Decode(valueHolder).Float()
 
 		case "isActive":
-			c.IsActive = baml.Decode(valueHolder).Interface().(bool)
+			c.IsActive = baml.Decode(valueHolder).Bool()
 
 		case "metadata":
-			c.Metadata = baml.Decode(valueHolder).Interface().(*any)
+			c.Metadata = (*interface{})(nil)
 
 		case "tags":
 			c.Tags = baml.Decode(valueHolder).Interface().([]string)
@@ -231,11 +231,11 @@ func (c PrimitiveMaps) BamlTypeName() string {
 }
 
 type PrimitiveTypes struct {
-	StringField string  `json:"stringField"`
-	IntField    int64   `json:"intField"`
-	FloatField  float64 `json:"floatField"`
-	BoolField   bool    `json:"boolField"`
-	NullField   *any    `json:"nullField"`
+	StringField string       `json:"stringField"`
+	IntField    int64        `json:"intField"`
+	FloatField  float64      `json:"floatField"`
+	BoolField   bool         `json:"boolField"`
+	NullField   *interface{} `json:"nullField"`
 }
 
 func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -256,16 +256,16 @@ func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.StringField = baml.Decode(valueHolder).Interface().(string)
 
 		case "intField":
-			c.IntField = baml.Decode(valueHolder).Interface().(int64)
+			c.IntField = baml.Decode(valueHolder).Int()
 
 		case "floatField":
-			c.FloatField = baml.Decode(valueHolder).Interface().(float64)
+			c.FloatField = baml.Decode(valueHolder).Float()
 
 		case "boolField":
-			c.BoolField = baml.Decode(valueHolder).Interface().(bool)
+			c.BoolField = baml.Decode(valueHolder).Bool()
 
 		case "nullField":
-			c.NullField = baml.Decode(valueHolder).Interface().(*any)
+			c.NullField = (*interface{})(nil)
 
 		default:
 

@@ -43,7 +43,7 @@ func (c *Person) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "age":
-			c.Age = baml.Decode(valueHolder).Interface().(int64)
+			c.Age = baml.Decode(valueHolder).Int()
 
 		default:
 

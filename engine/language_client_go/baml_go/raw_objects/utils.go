@@ -178,9 +178,10 @@ func decodeObjectResponse(rt unsafe.Pointer, response *cffi.InvocationResponse) 
 			return parsed, nil
 		case *cffi.InvocationResponseSuccess_Value:
 			value := success.GetValue()
-			return serde.Decode(value, serde.TypeMap{
+			decodedValue, _ := serde.Decode(value, serde.TypeMap{
 				"INTERNAL.nil": reflect.TypeOf((*interface{})(nil)).Elem(),
-			}).Interface(), nil
+			})
+			return decodedValue.Interface(), nil
 		default:
 			panic("unexpected cffi.isCFFIObjectResponseSuccess_Result")
 		}

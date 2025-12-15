@@ -93,9 +93,7 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 			c.I_16_digits = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "s_20_words":
-			c.S_20_words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
-				return baml.Decode(inner).Interface().(*string)
-			})
+			c.S_20_words = baml.Decode(valueHolder).Interface().(baml.StreamState[*string])
 
 		default:
 
@@ -224,7 +222,7 @@ func (c *SmallThing) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
+			c.I_16_digits = baml.Decode(valueHolder).Int()
 
 		case "i_8_digits":
 			c.I_8_digits = baml.Decode(valueHolder).Interface().(*int64)

@@ -1,19 +1,14 @@
-use baml_runtime::TypeIR;
 use baml_types::{
     baml_value::TypeQuery, ir_type::TypeGeneric, type_meta, BamlValueWithMeta, HasType, ToUnionName,
 };
 
 use crate::{
     baml::cffi::*,
-    ctypes::utils::{Encode, IsChecked, UnionAllowance, WithIr},
+    ctypes::{
+        baml_type_encode::create_cffi_type_name,
+        utils::{Encode, IsChecked, UnionAllowance, WithIr},
+    },
 };
-
-fn create_cffi_type_name(name: impl ToString, namespace: CffiTypeNamespace) -> CffiTypeName {
-    CffiTypeName {
-        name: name.to_string(),
-        namespace: namespace.into(),
-    }
-}
 
 pub struct Meta<'a, T> {
     pub field_type: TypeGeneric<T>,
@@ -26,284 +21,8 @@ impl<T> HasType<T> for Meta<'_, T> {
     }
 }
 
-// Encode for Types (moved from baml_type_encode.rs)
-impl<'a, TypeLookups, T: IsChecked> Encode<CffiFieldTypeHolder>
-    for WithIr<'a, (&'a TypeGeneric<T>, UnionAllowance), TypeLookups, T>
-where
-    TypeLookups: baml_types::baml_value::TypeLookups + 'a,
-    T: std::hash::Hash + std::cmp::Eq + Clone,
-{
-    fn encode(self) -> CffiFieldTypeHolder {
-        let WithIr {
-            value,
-            lookup,
-            mode,
-            mut curr_type,
-        } = self;
-
-        use cffi_field_type_holder::Type as cType;
-
-        let c_type = if curr_type.meta().stream_with_state() {
-            curr_type.meta_mut().pop_stream_state();
-            cType::StreamStateType(Box::new(CffiFieldTypeStreamState {
-                value: Some(Box::new(
-                    WithIr {
-                        value,
-                        lookup,
-                        mode,
-                        curr_type,
-                    }
-                    .encode(),
-                )),
-            }))
-        } else if let Some(checks) = curr_type.meta().checks() {
-            let checks = checks
-                .iter()
-                .map(|c| CffiCheckType {
-                    name: c.to_string(),
-                })
-                .collect();
-            curr_type.meta_mut().pop_checks();
-            cType::CheckedType(Box::new(CffiFieldTypeChecked {
-                value: Some(Box::new(
-                    WithIr {
-                        value,
-                        lookup,
-                        mode,
-                        curr_type,
-                    }
-                    .encode(),
-                )),
-                checks,
-            }))
-        } else {
-            match curr_type {
-            TypeGeneric::Top(_) => panic!(
-                "TypeGeneric::Top should have been resolved by the compiler before code generation. \
-                 This indicates a bug in the type resolution phase."
-            ),
-            TypeGeneric::Tuple(_, _) => panic!("Tuple types are not supported in CFFI"),
-            TypeGeneric::Arrow(_, _) => panic!("Arrow types are not supported in CFFI"),
-            TypeGeneric::Primitive(type_value, _) => type_value.encode(),
-            TypeGeneric::Literal(literal_value, _) => cType::LiteralType(literal_value.encode()),
-            TypeGeneric::Enum {
-                name,
-                dynamic: _,
-                meta: _,
-            } => cType::EnumType(CffiFieldTypeEnum { name }),
-            TypeGeneric::Class {
-                name,
-                mode,
-                dynamic: _,
-                meta: _,
-            } => {
-                cType::ClassType(CffiFieldTypeClass {
-                    name: Some(create_cffi_type_name(name, match mode {
-                        baml_types::StreamingMode::NonStreaming => CffiTypeNamespace::Types,
-                        baml_types::StreamingMode::Streaming => CffiTypeNamespace::StreamTypes,
-                    })),
-                })
-            }
-            TypeGeneric::RecursiveTypeAlias { name, mode, meta: _ } => cType::TypeAliasType(CffiFieldTypeTypeAlias {
-                name: Some(create_cffi_type_name(
-                        name,
-                    match mode {
-                        baml_types::StreamingMode::NonStreaming => CffiTypeNamespace::Types,
-                        baml_types::StreamingMode::Streaming => CffiTypeNamespace::StreamTypes,
-                    }))
-            }),
-            // Container Types
-            TypeGeneric::List(type_generic, _) => cType::ListType(Box::new(CffiFieldTypeList {
-                item_type: Some(Box::new(WithIr {
-                    value,
-                    lookup,
-                    mode,
-                    curr_type: *type_generic,
-                }.encode())),
-            })),
-            TypeGeneric::Map(key_type, value_type, _) => cType::MapType(Box::new(CffiFieldTypeMap {
-                key_type: Some(Box::new(WithIr {
-                    value,
-                    lookup,
-                    mode,
-                    curr_type: *key_type,
-                }.encode())),
-                value_type: Some(Box::new(WithIr {
-                    value,
-                    lookup,
-                    mode,
-                    curr_type: *value_type,
-                }.encode())),
-            })),
-            TypeGeneric::Union(_, _) => cType::UnionVariantType(CffiFieldTypeUnionVariant {
-                name: todo!(),
-                options: todo!(),
-            }),
-        }
-        };
-
-        CffiFieldTypeHolder {
-            r#type: Some(c_type),
-        }
-
-        // let checks = curr_type.meta().checks();
-
-        // TypeGeneric::Union(union_type_generic, _) => {
-        //     let view = union_type_generic.view();
-        //     match view {
-        //         baml_types::ir_type::UnionTypeViewGeneric::Null => {
-        //             cType::NullType(CffiFieldTypeNull {})
-        //         }
-        //         baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
-        //             if matches!(allow_user_defined_unions, UnionAllowance::Disallow) {
-        //                 cType::AnyType(CffiFieldTypeAny::default())
-        //             } else {
-        //                 let inner = WithIr {
-        //                     value: &(type_generic, allow_user_defined_unions),
-        //                     lookup,
-        //                     mode,
-        //                     curr_type: type_generic.clone(),
-        //                 }
-        //                 .encode();
-        //                 cType::OptionalType(Box::new(CffiFieldTypeOptional {
-        //                     value: Some(Box::new(inner)),
-        //                 }))
-        //             }
-        //         }
-        //         baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => {
-        //             if matches!(allow_user_defined_unions, UnionAllowance::Disallow) {
-        //                 cType::AnyType(CffiFieldTypeAny::default())
-        //             } else {
-        //                 let elements = type_generics
-        //                     .into_iter()
-        //                     .map(|t| {
-        //                         WithIr {
-        //                             value: &(t, allow_user_defined_unions),
-        //                             lookup,
-        //                             mode,
-        //                             curr_type: t.clone(),
-        //                         }
-        //                         .encode()
-        //                     })
-        //                     .collect();
-        //                 cType::UnionVariantType(CffiFieldTypeUnionVariant {
-        //                     name: Some(CffiTypeName {
-        //                         namespace: match value.mode(&mode, lookup) {
-        //                             Ok(baml_types::StreamingMode::NonStreaming) => {
-        //                                 CffiTypeNamespace::Types.into()
-        //                             }
-        //                             Ok(baml_types::StreamingMode::Streaming) => {
-        //                                 CffiTypeNamespace::StreamTypes.into()
-        //                             }
-        //                             Err(e) => {
-        //                                 panic!("Failed to get mode for field type: {e}");
-        //                             }
-        //                         },
-        //                         name: value.to_union_name().to_string(),
-        //                     }),
-        //                     options: elements,
-        //                 })
-        //             }
-        //         }
-        //         baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
-        //             if matches!(allow_user_defined_unions, UnionAllowance::Disallow) {
-        //                 cType::AnyType(CffiFieldTypeAny::default())
-        //             } else {
-        //                 let elements = type_generics
-        //                     .into_iter()
-        //                     .map(|t| {
-        //                         WithIr {
-        //                             value: &(t, allow_user_defined_unions),
-        //                             lookup,
-        //                             mode,
-        //                             curr_type: t.clone(),
-        //                         }
-        //                         .encode()
-        //                     })
-        //                     .collect();
-        //                 let inner = cType::UnionVariantType(CffiFieldTypeUnionVariant {
-        //                     name: Some(CffiTypeName {
-        //                         namespace: match value.mode(&mode, lookup) {
-        //                             Ok(baml_types::StreamingMode::NonStreaming) => {
-        //                                 CffiTypeNamespace::Types.into()
-        //                             }
-        //                             Ok(baml_types::StreamingMode::Streaming) => {
-        //                                 CffiTypeNamespace::StreamTypes.into()
-        //                             }
-        //                             Err(e) => {
-        //                                 panic!("Failed to get mode for field type: {e}");
-        //                             }
-        //                         },
-        //                         name: value.to_union_name().to_string(),
-        //                     }),
-        //                     options: elements,
-        //                 });
-        //                 let inner = CffiFieldTypeHolder {
-        //                     r#type: Some(inner),
-        //                 };
-        //                 cType::OptionalType(Box::new(CffiFieldTypeOptional {
-        //                     value: Some(Box::new(inner)),
-        //                 }))
-        //             }
-        //         }
-        //     }
-        // }
-    }
-}
-
-impl Encode<cffi_field_type_holder::Type> for &baml_types::TypeValue {
-    fn encode(self) -> cffi_field_type_holder::Type {
-        use cffi_field_type_holder::Type as cType;
-        match self {
-            baml_types::TypeValue::String => cType::StringType(Default::default()),
-            baml_types::TypeValue::Int => cType::IntType(Default::default()),
-            baml_types::TypeValue::Float => cType::FloatType(Default::default()),
-            baml_types::TypeValue::Bool => cType::BoolType(Default::default()),
-            baml_types::TypeValue::Null => cType::NullType(Default::default()),
-            baml_types::TypeValue::Media(baml_media_type) => {
-                cType::MediaType(baml_media_type.encode())
-            }
-        }
-    }
-}
-
-impl Encode<CffiFieldTypeMedia> for &baml_types::BamlMediaType {
-    fn encode(self) -> CffiFieldTypeMedia {
-        CffiFieldTypeMedia {
-            media: match self {
-                baml_types::BamlMediaType::Image => MediaTypeEnum::Image,
-                baml_types::BamlMediaType::Audio => MediaTypeEnum::Audio,
-                baml_types::BamlMediaType::Pdf => MediaTypeEnum::Pdf,
-                baml_types::BamlMediaType::Video => MediaTypeEnum::Video,
-            }
-            .into(),
-        }
-    }
-}
-
-impl Encode<CffiFieldTypeLiteral> for &baml_types::LiteralValue {
-    fn encode(self) -> CffiFieldTypeLiteral {
-        use cffi_field_type_literal::Literal;
-        let literal = match self {
-            baml_types::LiteralValue::String(val) => {
-                Literal::StringLiteral(CffiLiteralString { value: val.clone() })
-            }
-            baml_types::LiteralValue::Int(val) => {
-                Literal::IntLiteral(CffiLiteralInt { value: *val })
-            }
-            baml_types::LiteralValue::Bool(val) => {
-                Literal::BoolLiteral(CffiLiteralBool { value: *val })
-            }
-        };
-
-        CffiFieldTypeLiteral {
-            literal: Some(literal),
-        }
-    }
-}
-
-impl<'a, TypeLookups, T: IsChecked + type_meta::MayHaveMeta> Encode<CffiValueHolder>
-    for WithIr<'a, BamlValueWithMeta<Meta<'_, T>>, TypeLookups, T>
+impl<'a, TypeLookups, T: IsChecked + type_meta::MayHaveMeta + baml_types::ir_type::MetaSuffix>
+    Encode<CffiValueHolder> for WithIr<'a, BamlValueWithMeta<Meta<'_, T>>, TypeLookups, T>
 where
     TypeLookups: baml_types::baml_value::TypeLookupsMeta<T> + 'a,
     for<'b> BamlValueWithMeta<Meta<'b, T>>: TypeQuery<T>,
@@ -331,17 +50,13 @@ where
             }
             .encode();
 
-            let encoded_type = WithIr {
-                value: &(&curr_type, UnionAllowance::Allow),
-                lookup,
-                mode,
-                curr_type: inner_type.clone(),
-            }
-            .encode();
             return CffiValueHolder {
                 value: Some(cffi_value_holder::Value::StreamingStateValue(Box::new(
                     CffiValueStreamingState {
-                        value_type: Some(encoded_type),
+                        name: Some(create_cffi_type_name(
+                            inner_type.to_union_name(true).as_str(),
+                            CffiTypeNamespace::StreamStateTypes,
+                        )),
                         value: Some(Box::new(inner_holder)),
                         // TODO: This should be the actual stream state as this is completely incorrect
                         // we don't currently plumb this through BamlValueWithMeta. To fix this, we need to
@@ -372,23 +87,31 @@ where
                 }
             });
 
-            let encoded_type = WithIr {
-                value: &(&curr_type, UnionAllowance::Allow),
-                lookup,
-                mode,
-                curr_type: inner_type,
-            }
-            .encode();
             return CffiValueHolder {
                 value: Some(cffi_value_holder::Value::CheckedValue(Box::new(
                     CffiValueChecked {
-                        value_type: Some(encoded_type),
+                        name: Some(create_cffi_type_name(
+                            inner_type.to_union_name(true).as_str(),
+                            CffiTypeNamespace::CheckedTypes,
+                        )),
                         value: Some(Box::new(inner_holder)),
                         checks: check_result.collect(),
                     },
                 ))),
             };
         }
+
+        let curr_type = match curr_type {
+            TypeGeneric::RecursiveTypeAlias { name, mode, meta } => {
+                let expanded_type =
+                    baml_types::baml_value::TypeLookupsMeta::<T>::expand_recursive_type(
+                        lookup, &name,
+                    )
+                    .expect(&format!("Failed to expand recursive type alias {name}"));
+                expanded_type
+            }
+            other => other,
+        };
 
         if let TypeGeneric::Union(u, _) = &curr_type {
             let real_type = value.real_type(lookup);
@@ -415,10 +138,10 @@ where
                 return inner_value;
             }
 
-            let variant_name = options[value_type_index].to_union_name();
+            let variant_name = options[value_type_index].to_union_name(false);
             let union_variant = CffiValueUnionVariant {
                 name: Some(create_cffi_type_name(
-                    curr_type.to_union_name().as_str(),
+                    curr_type.to_union_name(false).as_str(),
                     match curr_type
                         .mode(&mode, lookup, 1)
                         .expect("Failed to get mode for field type")
@@ -427,19 +150,20 @@ where
                         baml_types::StreamingMode::Streaming => CffiTypeNamespace::StreamTypes,
                     },
                 )),
-                option_types: options
-                    .into_iter()
-                    .map(|t| {
-                        WithIr {
-                            value: &(t, UnionAllowance::Allow),
-                            lookup,
-                            mode,
-                            curr_type: t.clone(),
-                        }
-                        .encode()
-                    })
-                    .collect(),
-                value_option_type_index: value_type_index as i32,
+                is_optional: curr_type.is_optional(),
+                is_single_pattern: matches!(
+                    u.view(),
+                    baml_types::ir_type::UnionTypeViewGeneric::Optional(_)
+                ),
+                self_type: Some(
+                    WithIr {
+                        value: &(&curr_type, UnionAllowance::Allow),
+                        lookup,
+                        mode,
+                        curr_type: curr_type.clone(),
+                    }
+                    .encode(),
+                ),
                 value_option_name: variant_name,
                 value: Some(Box::new(inner_value)),
             };
@@ -487,8 +211,9 @@ where
                 }
                 BamlValueWithMeta::Float(val, _) => Value::FloatValue(*val),
                 BamlValueWithMeta::Map(index_map, _) => {
+                    let curr_type = curr_type.resolve_map(lookup).unwrap();
                     let TypeGeneric::Map(key_type, value_type, _) = &curr_type else {
-                        panic!("Expected map type ir");
+                        panic!("resolve_map somehow returned a non-map type: {curr_type}");
                     };
                     let encoded_key_type = WithIr {
                         value: &(key_type.as_ref(), UnionAllowance::Allow),
@@ -526,8 +251,9 @@ where
                     })
                 }
                 BamlValueWithMeta::List(baml_value_with_metas, _) => {
+                    let curr_type = curr_type.resolve_list(lookup).unwrap();
                     let TypeGeneric::List(item_type, _) = &curr_type else {
-                        panic!("Expected list type ir");
+                        panic!("resolve_list somehow returned a non-list type: {curr_type}");
                     };
                     let encoded_item_type = WithIr {
                         value: &(item_type.as_ref(), UnionAllowance::Allow),
@@ -565,8 +291,9 @@ where
                     })
                 }
                 BamlValueWithMeta::Enum(_, value, _) => {
+                    let curr_type = curr_type.resolve_enum(lookup).unwrap();
                     let TypeGeneric::Enum { name, dynamic, .. } = &curr_type else {
-                        panic!("Expected enum type ir");
+                        panic!("resolve_enum somehow returned a non-enum type: {curr_type}");
                     };
                     Value::EnumValue(CffiValueEnum {
                         name: Some(create_cffi_type_name(
@@ -586,8 +313,9 @@ where
                     })
                 }
                 BamlValueWithMeta::Class(_, index_map, _) => {
+                    let curr_type = curr_type.resolve_class(lookup).unwrap();
                     let TypeGeneric::Class { name, .. } = &curr_type else {
-                        panic!("Expected class type ir");
+                        panic!("resolve_class somehow returned a non-class type: {curr_type}");
                     };
                     let fields = index_map
                         .iter()

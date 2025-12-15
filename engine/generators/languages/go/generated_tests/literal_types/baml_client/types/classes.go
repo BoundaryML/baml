@@ -41,10 +41,10 @@ func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		switch key {
 
 		case "alwaysTrue":
-			c.AlwaysTrue = baml.Decode(valueHolder).Interface().(bool)
+			c.AlwaysTrue = baml.Decode(valueHolder).Bool()
 
 		case "alwaysFalse":
-			c.AlwaysFalse = baml.Decode(valueHolder).Interface().(bool)
+			c.AlwaysFalse = baml.Decode(valueHolder).Bool()
 
 		case "eitherBool":
 			c.EitherBool = baml.Decode(valueHolder).Interface().(Union2BoolKFalseOrBoolKTrue)
@@ -217,7 +217,7 @@ func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "type":
 			c.Type = baml.Decode(valueHolder).Interface().(Union3KadminOrKguestOrKuser)

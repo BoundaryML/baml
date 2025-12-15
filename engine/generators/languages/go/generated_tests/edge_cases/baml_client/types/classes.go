@@ -115,10 +115,10 @@ func (c *BooleanEdgeCases) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 		switch key {
 
 		case "explicitTrue":
-			c.ExplicitTrue = baml.Decode(valueHolder).Interface().(bool)
+			c.ExplicitTrue = baml.Decode(valueHolder).Bool()
 
 		case "explicitFalse":
-			c.ExplicitFalse = baml.Decode(valueHolder).Interface().(bool)
+			c.ExplicitFalse = baml.Decode(valueHolder).Bool()
 
 		case "arrayOfTrue":
 			c.ArrayOfTrue = baml.Decode(valueHolder).Interface().([]bool)
@@ -181,7 +181,7 @@ func (c *CircularReference) Decode(holder *cffi.CFFIValueClass, typeMap baml.Typ
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -443,49 +443,49 @@ func (c *LargeStructure) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.Field5 = baml.Decode(valueHolder).Interface().(string)
 
 		case "field6":
-			c.Field6 = baml.Decode(valueHolder).Interface().(int64)
+			c.Field6 = baml.Decode(valueHolder).Int()
 
 		case "field7":
-			c.Field7 = baml.Decode(valueHolder).Interface().(int64)
+			c.Field7 = baml.Decode(valueHolder).Int()
 
 		case "field8":
-			c.Field8 = baml.Decode(valueHolder).Interface().(int64)
+			c.Field8 = baml.Decode(valueHolder).Int()
 
 		case "field9":
-			c.Field9 = baml.Decode(valueHolder).Interface().(int64)
+			c.Field9 = baml.Decode(valueHolder).Int()
 
 		case "field10":
-			c.Field10 = baml.Decode(valueHolder).Interface().(int64)
+			c.Field10 = baml.Decode(valueHolder).Int()
 
 		case "field11":
-			c.Field11 = baml.Decode(valueHolder).Interface().(float64)
+			c.Field11 = baml.Decode(valueHolder).Float()
 
 		case "field12":
-			c.Field12 = baml.Decode(valueHolder).Interface().(float64)
+			c.Field12 = baml.Decode(valueHolder).Float()
 
 		case "field13":
-			c.Field13 = baml.Decode(valueHolder).Interface().(float64)
+			c.Field13 = baml.Decode(valueHolder).Float()
 
 		case "field14":
-			c.Field14 = baml.Decode(valueHolder).Interface().(float64)
+			c.Field14 = baml.Decode(valueHolder).Float()
 
 		case "field15":
-			c.Field15 = baml.Decode(valueHolder).Interface().(float64)
+			c.Field15 = baml.Decode(valueHolder).Float()
 
 		case "field16":
-			c.Field16 = baml.Decode(valueHolder).Interface().(bool)
+			c.Field16 = baml.Decode(valueHolder).Bool()
 
 		case "field17":
-			c.Field17 = baml.Decode(valueHolder).Interface().(bool)
+			c.Field17 = baml.Decode(valueHolder).Bool()
 
 		case "field18":
-			c.Field18 = baml.Decode(valueHolder).Interface().(bool)
+			c.Field18 = baml.Decode(valueHolder).Bool()
 
 		case "field19":
-			c.Field19 = baml.Decode(valueHolder).Interface().(bool)
+			c.Field19 = baml.Decode(valueHolder).Bool()
 
 		case "field20":
-			c.Field20 = baml.Decode(valueHolder).Interface().(bool)
+			c.Field20 = baml.Decode(valueHolder).Bool()
 
 		case "array1":
 			c.Array1 = baml.Decode(valueHolder).Interface().([]string)
@@ -792,28 +792,28 @@ func (c *NumberEdgeCases) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		switch key {
 
 		case "zero":
-			c.Zero = baml.Decode(valueHolder).Interface().(int64)
+			c.Zero = baml.Decode(valueHolder).Int()
 
 		case "negativeInt":
-			c.NegativeInt = baml.Decode(valueHolder).Interface().(int64)
+			c.NegativeInt = baml.Decode(valueHolder).Int()
 
 		case "largeInt":
-			c.LargeInt = baml.Decode(valueHolder).Interface().(int64)
+			c.LargeInt = baml.Decode(valueHolder).Int()
 
 		case "veryLargeInt":
-			c.VeryLargeInt = baml.Decode(valueHolder).Interface().(int64)
+			c.VeryLargeInt = baml.Decode(valueHolder).Int()
 
 		case "smallFloat":
-			c.SmallFloat = baml.Decode(valueHolder).Interface().(float64)
+			c.SmallFloat = baml.Decode(valueHolder).Float()
 
 		case "largeFloat":
-			c.LargeFloat = baml.Decode(valueHolder).Interface().(float64)
+			c.LargeFloat = baml.Decode(valueHolder).Float()
 
 		case "negativeFloat":
-			c.NegativeFloat = baml.Decode(valueHolder).Interface().(float64)
+			c.NegativeFloat = baml.Decode(valueHolder).Float()
 
 		case "scientificNotation":
-			c.ScientificNotation = baml.Decode(valueHolder).Interface().(float64)
+			c.ScientificNotation = baml.Decode(valueHolder).Float()
 
 		case "infinity":
 			c.Infinity = baml.Decode(valueHolder).Interface().(*float64)
@@ -1144,7 +1144,7 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)

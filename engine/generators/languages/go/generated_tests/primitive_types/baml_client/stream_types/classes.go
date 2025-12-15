@@ -21,15 +21,15 @@ import (
 )
 
 type MixedPrimitives struct {
-	Name         *string   `json:"name"`
-	Age          *int64    `json:"age"`
-	Height       *float64  `json:"height"`
-	IsActive     *bool     `json:"isActive"`
-	Metadata     *any      `json:"metadata"`
-	Tags         []string  `json:"tags"`
-	Scores       []int64   `json:"scores"`
-	Measurements []float64 `json:"measurements"`
-	Flags        []bool    `json:"flags"`
+	Name         *string      `json:"name"`
+	Age          *int64       `json:"age"`
+	Height       *float64     `json:"height"`
+	IsActive     *bool        `json:"isActive"`
+	Metadata     *interface{} `json:"metadata"`
+	Tags         []string     `json:"tags"`
+	Scores       []int64      `json:"scores"`
+	Measurements []float64    `json:"measurements"`
+	Flags        []bool       `json:"flags"`
 }
 
 func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -59,7 +59,7 @@ func (c *MixedPrimitives) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.IsActive = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "metadata":
-			c.Metadata = baml.Decode(valueHolder).Interface().(*any)
+			c.Metadata = (*interface{})(nil)
 
 		case "tags":
 			c.Tags = baml.Decode(valueHolder).Interface().([]string)
@@ -231,11 +231,11 @@ func (c PrimitiveMaps) BamlTypeName() string {
 }
 
 type PrimitiveTypes struct {
-	StringField *string  `json:"stringField"`
-	IntField    *int64   `json:"intField"`
-	FloatField  *float64 `json:"floatField"`
-	BoolField   *bool    `json:"boolField"`
-	NullField   *any     `json:"nullField"`
+	StringField *string      `json:"stringField"`
+	IntField    *int64       `json:"intField"`
+	FloatField  *float64     `json:"floatField"`
+	BoolField   *bool        `json:"boolField"`
+	NullField   *interface{} `json:"nullField"`
 }
 
 func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -265,7 +265,7 @@ func (c *PrimitiveTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.BoolField = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "nullField":
-			c.NullField = baml.Decode(valueHolder).Interface().(*any)
+			c.NullField = (*interface{})(nil)
 
 		default:
 

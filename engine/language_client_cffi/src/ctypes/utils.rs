@@ -15,15 +15,22 @@ pub trait IsChecked {
 
 impl IsChecked for baml_types::type_meta::base::TypeMeta {
     fn checks(&self) -> Option<Vec<&str>> {
-        if self.constraints.is_empty() {
+        let checks: Vec<_> = self
+            .constraints
+            .iter()
+            .filter_map(|c| {
+                if c.level == baml_types::ConstraintLevel::Check {
+                    c.label.as_ref().map(|l| l.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if checks.is_empty() {
             None
         } else {
-            Some(
-                self.constraints
-                    .iter()
-                    .filter_map(|c| c.label.as_ref().map(|l| l.as_str()))
-                    .collect(),
-            )
+            Some(checks)
         }
     }
 
@@ -42,15 +49,22 @@ impl IsChecked for baml_types::type_meta::base::TypeMeta {
 
 impl IsChecked for baml_types::type_meta::NonStreaming {
     fn checks(&self) -> Option<Vec<&str>> {
-        if self.constraints.is_empty() {
+        let checks: Vec<_> = self
+            .constraints
+            .iter()
+            .filter_map(|c| {
+                if c.level == baml_types::ConstraintLevel::Check {
+                    c.label.as_ref().map(|l| l.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if checks.is_empty() {
             None
         } else {
-            Some(
-                self.constraints
-                    .iter()
-                    .filter_map(|c| c.label.as_ref().map(|l| l.as_str()))
-                    .collect(),
-            )
+            Some(checks)
         }
     }
     fn stream_with_state(&self) -> bool {
@@ -66,15 +80,22 @@ impl IsChecked for baml_types::type_meta::NonStreaming {
 
 impl IsChecked for baml_types::type_meta::Streaming {
     fn checks(&self) -> Option<Vec<&str>> {
-        if self.constraints.is_empty() {
+        let checks: Vec<_> = self
+            .constraints
+            .iter()
+            .filter_map(|c| {
+                if c.level == baml_types::ConstraintLevel::Check {
+                    c.label.as_ref().map(|l| l.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if checks.is_empty() {
             None
         } else {
-            Some(
-                self.constraints
-                    .iter()
-                    .filter_map(|c| c.label.as_ref().map(|l| l.as_str()))
-                    .collect(),
-            )
+            Some(checks)
         }
     }
     fn stream_with_state(&self) -> bool {

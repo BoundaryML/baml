@@ -43,9 +43,7 @@ func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			c.Digits = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "words":
-			c.Words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
-				return baml.Decode(inner).Interface().(*string)
-			})
+			c.Words = baml.Decode(valueHolder).Interface().(baml.StreamState[*string])
 
 		default:
 

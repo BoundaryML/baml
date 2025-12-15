@@ -5,6 +5,7 @@ use itertools::Itertools;
 
 use crate::{
     baml_value::{TypeLookups, TypeLookupsMeta},
+    type_meta::MayHaveMeta,
     BamlMediaType, ConstraintLevel,
 };
 
@@ -83,6 +84,31 @@ impl<T> TypeGeneric<T> {
             TypeGeneric::Union(_, _) => "union",
         }
     }
+}
+
+macro_rules! impl_as_variant {
+    ($method_name:ident, $variant:pat, $err_msg:literal) => {
+        pub fn $method_name<U: TypeLookupsMeta<T>>(
+            self,
+            lookup: &U,
+        ) -> anyhow::Result<TypeGeneric<T>> {
+            match self {
+                $variant => Ok(self),
+                TypeGeneric::RecursiveTypeAlias { name, .. } => {
+                    let expanded_type = TypeLookupsMeta::<T>::expand_recursive_type(lookup, &name)?;
+                    expanded_type.$method_name::<U>(lookup)
+                }
+                _ => anyhow::bail!(concat!("Expected a ", $err_msg, ", got: {}"), self),
+            }
+        }
+    };
+}
+
+impl<T: MetaSuffix> TypeGeneric<T> {
+    impl_as_variant!(resolve_map, TypeGeneric::Map(..), "map type");
+    impl_as_variant!(resolve_list, TypeGeneric::List(..), "list type");
+    impl_as_variant!(resolve_enum, TypeGeneric::Enum { .. }, "enum type");
+    impl_as_variant!(resolve_class, TypeGeneric::Class { .. }, "class type");
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, strum::Display)]
@@ -881,11 +907,11 @@ impl TypeGeneric<type_meta::IR> {
 }
 
 pub trait ToUnionName<T> {
-    fn to_union_name(&self) -> String;
+    fn to_union_name(&self, include_metadata: bool) -> String;
     fn find_union_types(&self) -> IndexSet<&TypeGeneric<T>>;
 }
 
-impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Meta> {
+impl<Meta: std::hash::Hash + std::cmp::Eq + MayHaveMeta> ToUnionName<Meta> for TypeGeneric<Meta> {
     fn find_union_types(&self) -> IndexSet<&TypeGeneric<Meta>> {
         use TypeGeneric as T;
         // TODO: its pretty hard to get type aliases here
@@ -909,9 +935,10 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
         }
     }
 
-    fn to_union_name(&self) -> String {
+    fn to_union_name(&self, include_metadata: bool) -> String {
         use TypeGeneric as T;
-        match self {
+
+        let result = match self {
             T::Top(_) => "ANY".to_string(),
             T::Primitive(type_value, _) => type_value.to_string(),
             T::Enum { name, .. } => name.to_string(),
@@ -928,42 +955,74 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
             },
             T::Class { name, .. } => name.to_string(),
             T::List(field_type, _) => {
-                format!("List__{}", field_type.to_union_name())
+                format!("List__{}", field_type.to_union_name(include_metadata))
             }
             T::Map(field_type, field_type1, _) => {
                 format!(
                     "Map__{}_{}",
-                    field_type.to_union_name(),
-                    field_type1.to_union_name()
+                    field_type.to_union_name(include_metadata),
+                    field_type1.to_union_name(include_metadata)
                 )
             }
-            T::Union(field_types, _) => match field_types.view() {
-                UnionTypeViewGeneric::Null => "null".to_string(),
-                UnionTypeViewGeneric::Optional(field_type) => field_type.to_union_name(),
-                UnionTypeViewGeneric::OneOf(field_types)
-                | UnionTypeViewGeneric::OneOfOptional(field_types) => {
-                    format!(
-                        "Union__{}",
-                        field_types
-                            .iter()
-                            .map(|t| t.to_union_name())
-                            .sorted()
-                            .collect::<Vec<_>>()
-                            .join("__")
-                    )
+            T::Union(field_types, _) => {
+                let format_union_name = |options: Vec<&TypeGeneric<Meta>>| -> String {
+                    options
+                        .iter()
+                        .map(|t| t.to_union_name(include_metadata))
+                        .sorted()
+                        .collect::<Vec<_>>()
+                        .join("__")
+                };
+                let wrap_optional = |name: String| -> String {
+                    if include_metadata {
+                        format!("Optional__{}", name)
+                    } else {
+                        name
+                    }
+                };
+
+                match field_types.view() {
+                    UnionTypeViewGeneric::Null => "null".to_string(),
+                    UnionTypeViewGeneric::Optional(field_type) => {
+                        wrap_optional(field_type.to_union_name(include_metadata))
+                    }
+                    UnionTypeViewGeneric::OneOf(field_types) => format_union_name(field_types),
+                    UnionTypeViewGeneric::OneOfOptional(field_types) => {
+                        wrap_optional(format_union_name(field_types))
+                    }
                 }
-            },
+            }
             T::Tuple(field_types, _) => format!(
                 "Tuple__{}",
                 field_types
                     .iter()
-                    .map(|v| v.to_union_name())
+                    .map(|v| v.to_union_name(include_metadata))
                     .collect::<Vec<_>>()
                     .join("__")
             ),
             T::RecursiveTypeAlias { name, .. } => name.to_string(),
             T::Arrow(_, _) => "function".to_string(),
-        }
+        };
+
+        let result = if include_metadata {
+            let result = if self.meta().has_stream_state() {
+                format!("StreamState__{}", result)
+            } else {
+                result
+            };
+
+            let result = if self.meta().has_checks() {
+                format!("Checked__{}", result)
+            } else {
+                result
+            };
+
+            result
+        } else {
+            result
+        };
+
+        return result;
     }
 }
 

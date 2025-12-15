@@ -40,7 +40,7 @@ func (c *SimpleClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 		switch key {
 
 		case "digits":
-			c.Digits = baml.Decode(valueHolder).Interface().(int64)
+			c.Digits = baml.Decode(valueHolder).Int()
 
 		case "words":
 			c.Words = baml.Decode(valueHolder).Interface().(string)

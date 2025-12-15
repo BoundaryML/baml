@@ -102,7 +102,7 @@ func (c *MixedOptionalNullable) Decode(holder *cffi.CFFIValueClass, typeMap baml
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "description":
 			c.Description = baml.Decode(valueHolder).Interface().(*string)
@@ -328,13 +328,13 @@ func (c *OptionalFields) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 			c.OptionalString = baml.Decode(valueHolder).Interface().(*string)
 
 		case "requiredInt":
-			c.RequiredInt = baml.Decode(valueHolder).Interface().(int64)
+			c.RequiredInt = baml.Decode(valueHolder).Int()
 
 		case "optionalInt":
 			c.OptionalInt = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "requiredBool":
-			c.RequiredBool = baml.Decode(valueHolder).Interface().(bool)
+			c.RequiredBool = baml.Decode(valueHolder).Bool()
 
 		case "optionalBool":
 			c.OptionalBool = baml.Decode(valueHolder).Interface().(*bool)
@@ -402,7 +402,7 @@ func (c *OptionalItem) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -509,7 +509,7 @@ func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -624,7 +624,7 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)

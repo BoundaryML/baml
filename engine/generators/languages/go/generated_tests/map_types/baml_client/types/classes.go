@@ -110,10 +110,10 @@ func (c *Config) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Url = baml.Decode(valueHolder).Interface().(string)
 
 		case "port":
-			c.Port = baml.Decode(valueHolder).Interface().(int64)
+			c.Port = baml.Decode(valueHolder).Int()
 
 		case "debug":
-			c.Debug = baml.Decode(valueHolder).Interface().(bool)
+			c.Debug = baml.Decode(valueHolder).Bool()
 
 		default:
 
@@ -348,13 +348,13 @@ func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "price":
-			c.Price = baml.Decode(valueHolder).Interface().(float64)
+			c.Price = baml.Decode(valueHolder).Float()
 
 		case "tags":
 			c.Tags = baml.Decode(valueHolder).Interface().([]string)
@@ -474,7 +474,7 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -483,7 +483,7 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Email = baml.Decode(valueHolder).Interface().(string)
 
 		case "active":
-			c.Active = baml.Decode(valueHolder).Interface().(bool)
+			c.Active = baml.Decode(valueHolder).Bool()
 
 		default:
 

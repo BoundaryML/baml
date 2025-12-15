@@ -1415,7 +1415,7 @@ func (u *Union3IntOrRecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVa
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "RecursiveUnion":
 		u.variant = "RecursiveUnion"

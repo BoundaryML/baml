@@ -42,7 +42,7 @@ func (c *Admin) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -107,7 +107,7 @@ func (c *ApiError) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Message = baml.Decode(valueHolder).Interface().(string)
 
 		case "code":
-			c.Code = baml.Decode(valueHolder).Interface().(int64)
+			c.Code = baml.Decode(valueHolder).Int()
 
 		default:
 
@@ -158,7 +158,7 @@ func (c *ApiPending) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Status = baml.Decode(valueHolder).Interface().(string)
 
 		case "progress":
-			c.Progress = baml.Decode(valueHolder).Interface().(float64)
+			c.Progress = baml.Decode(valueHolder).Float()
 
 		case "eta":
 			c.Eta = baml.Decode(valueHolder).Interface().(*int64)
@@ -260,7 +260,7 @@ func (c *Bird) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Species = baml.Decode(valueHolder).Interface().(string)
 
 		case "canFly":
-			c.CanFly = baml.Decode(valueHolder).Interface().(bool)
+			c.CanFly = baml.Decode(valueHolder).Bool()
 
 		case "wingspan":
 			c.Wingspan = baml.Decode(valueHolder).Interface().(*float64)
@@ -317,7 +317,7 @@ func (c *Cat) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Color = baml.Decode(valueHolder).Interface().(string)
 
 		case "lives":
-			c.Lives = baml.Decode(valueHolder).Interface().(int64)
+			c.Lives = baml.Decode(valueHolder).Int()
 
 		default:
 
@@ -367,7 +367,7 @@ func (c *Circle) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Shape = baml.Decode(valueHolder).Interface().(string)
 
 		case "radius":
-			c.Radius = baml.Decode(valueHolder).Interface().(float64)
+			c.Radius = baml.Decode(valueHolder).Float()
 
 		default:
 
@@ -482,7 +482,7 @@ func (c *DataResponse) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 			c.Data = baml.Decode(valueHolder).Interface().(string)
 
 		case "timestamp":
-			c.Timestamp = baml.Decode(valueHolder).Interface().(int64)
+			c.Timestamp = baml.Decode(valueHolder).Int()
 
 		case "status":
 			c.Status = baml.Decode(valueHolder).Interface().(string)
@@ -593,7 +593,7 @@ func (c *Dog) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Breed = baml.Decode(valueHolder).Interface().(string)
 
 		case "goodBoy":
-			c.GoodBoy = baml.Decode(valueHolder).Interface().(bool)
+			c.GoodBoy = baml.Decode(valueHolder).Bool()
 
 		default:
 
@@ -648,7 +648,7 @@ func (c *Error) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Message = baml.Decode(valueHolder).Interface().(string)
 
 		case "code":
-			c.Code = baml.Decode(valueHolder).Interface().(int64)
+			c.Code = baml.Decode(valueHolder).Int()
 
 		case "details":
 			c.Details = baml.Decode(valueHolder).Interface().(*string)
@@ -704,7 +704,7 @@ func (c *ErrorResponse) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 			c.Error = baml.Decode(valueHolder).Interface().(string)
 
 		case "code":
-			c.Code = baml.Decode(valueHolder).Interface().(int64)
+			c.Code = baml.Decode(valueHolder).Int()
 
 		case "status":
 			c.Status = baml.Decode(valueHolder).Interface().(string)
@@ -822,13 +822,13 @@ func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "price":
-			c.Price = baml.Decode(valueHolder).Interface().(float64)
+			c.Price = baml.Decode(valueHolder).Float()
 
 		case "type":
 			c.Type = baml.Decode(valueHolder).Interface().(string)
@@ -884,10 +884,10 @@ func (c *Rectangle) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Shape = baml.Decode(valueHolder).Interface().(string)
 
 		case "width":
-			c.Width = baml.Decode(valueHolder).Interface().(float64)
+			c.Width = baml.Decode(valueHolder).Float()
 
 		case "height":
-			c.Height = baml.Decode(valueHolder).Interface().(float64)
+			c.Height = baml.Decode(valueHolder).Float()
 
 		default:
 
@@ -1088,10 +1088,10 @@ func (c *Triangle) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Shape = baml.Decode(valueHolder).Interface().(string)
 
 		case "base":
-			c.Base = baml.Decode(valueHolder).Interface().(float64)
+			c.Base = baml.Decode(valueHolder).Float()
 
 		case "height":
-			c.Height = baml.Decode(valueHolder).Interface().(float64)
+			c.Height = baml.Decode(valueHolder).Float()
 
 		default:
 
@@ -1199,7 +1199,7 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -1259,7 +1259,7 @@ func (c *Warning) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Message = baml.Decode(valueHolder).Interface().(string)
 
 		case "level":
-			c.Level = baml.Decode(valueHolder).Interface().(int64)
+			c.Level = baml.Decode(valueHolder).Int()
 
 		default:
 

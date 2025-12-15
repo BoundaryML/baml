@@ -35,7 +35,7 @@ func (u *Union2BoolOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap 
 	switch variantName {
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).Interface().(bool)
+		value := baml.Decode(valueHolder).Bool()
 		u.variant_Bool = &value
 	case "string":
 		u.variant = "String"
@@ -311,11 +311,11 @@ func (u *Union2FloatOrInt) Decode(holder *cffi.CFFIValueUnionVariant, typeMap ba
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).Interface().(float64)
+		value := baml.Decode(valueHolder).Float()
 		u.variant_Float = &value
 
 	default:
@@ -453,7 +453,7 @@ func (u *Union2FloatOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap
 		u.variant_String = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).Interface().(float64)
+		value := baml.Decode(valueHolder).Float()
 		u.variant_Float = &value
 
 	default:
@@ -591,7 +591,7 @@ func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap b
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 
 	default:
@@ -2105,11 +2105,11 @@ func (u *Union3FloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVariant, ty
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).Interface().(float64)
+		value := baml.Decode(valueHolder).Float()
 		u.variant_Float = &value
 
 	default:
@@ -2297,7 +2297,7 @@ func (u *Union3IntOrRecursiveUnionOrString) Decode(holder *cffi.CFFIValueUnionVa
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "RecursiveUnion":
 		u.variant = "RecursiveUnion"
@@ -2491,15 +2491,15 @@ func (u *Union4BoolOrFloatOrIntOrString) Decode(holder *cffi.CFFIValueUnionVaria
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).Interface().(float64)
+		value := baml.Decode(valueHolder).Float()
 		u.variant_Float = &value
 	case "bool":
 		u.variant = "Bool"
-		value := baml.Decode(valueHolder).Interface().(bool)
+		value := baml.Decode(valueHolder).Bool()
 		u.variant_Bool = &value
 
 	default:

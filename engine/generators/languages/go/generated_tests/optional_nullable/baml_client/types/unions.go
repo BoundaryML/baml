@@ -39,7 +39,7 @@ func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap b
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 
 	default:

@@ -91,7 +91,7 @@ func (c *MediaArrayAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap b
 			c.AnalysisText = baml.Decode(valueHolder).Interface().(string)
 
 		case "mediaCount":
-			c.MediaCount = baml.Decode(valueHolder).Interface().(int64)
+			c.MediaCount = baml.Decode(valueHolder).Int()
 
 		default:
 
@@ -140,7 +140,7 @@ func (c *MediaMapAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap bam
 			c.AnalysisText = baml.Decode(valueHolder).Interface().(string)
 
 		case "keyCount":
-			c.KeyCount = baml.Decode(valueHolder).Interface().(int64)
+			c.KeyCount = baml.Decode(valueHolder).Int()
 
 		case "keys":
 			c.Keys = baml.Decode(valueHolder).Interface().([]string)
@@ -202,19 +202,19 @@ func (c *MixedMediaAnalysisResult) Decode(holder *cffi.CFFIValueClass, typeMap b
 			c.Description = baml.Decode(valueHolder).Interface().(string)
 
 		case "hasImage":
-			c.HasImage = baml.Decode(valueHolder).Interface().(bool)
+			c.HasImage = baml.Decode(valueHolder).Bool()
 
 		case "hasVideo":
-			c.HasVideo = baml.Decode(valueHolder).Interface().(bool)
+			c.HasVideo = baml.Decode(valueHolder).Bool()
 
 		case "hasAudio":
-			c.HasAudio = baml.Decode(valueHolder).Interface().(bool)
+			c.HasAudio = baml.Decode(valueHolder).Bool()
 
 		case "hasPdf":
-			c.HasPdf = baml.Decode(valueHolder).Interface().(bool)
+			c.HasPdf = baml.Decode(valueHolder).Bool()
 
 		case "additionalImageCount":
-			c.AdditionalImageCount = baml.Decode(valueHolder).Interface().(int64)
+			c.AdditionalImageCount = baml.Decode(valueHolder).Int()
 
 		case "metadataKeys":
 			c.MetadataKeys = baml.Decode(valueHolder).Interface().([]string)

@@ -25,7 +25,7 @@ pub fn ir_union_to_go<'a>(
                         let go_type = crate::ir_to_go::type_to_go(t, pkg.lookup());
                         crate::generated_types::VariantGo {
                             name: go_type.default_name_within_union(),
-                            cffi_name: t.to_union_name(),
+                            cffi_name: t.to_union_name(false),
                             literal_repr: match t {
                                 TypeGeneric::Literal(l, ..) => match l {
                                     baml_types::LiteralValue::String(s) => Some(format!(
@@ -48,7 +48,7 @@ pub fn ir_union_to_go<'a>(
                     .collect::<Vec<_>>();
                 Some(crate::generated_types::UnionGo {
                     name: name.clone(),
-                    cffi_name: union.to_union_name(),
+                    cffi_name: union.to_union_name(false),
                     docstring: Some(format!("Generated from: {union}")),
                     variants,
                     pkg,
@@ -88,7 +88,7 @@ pub fn ir_union_to_go_stream<'a>(
                         let go_type = crate::ir_to_go::stream_type_to_go(t, pkg.lookup());
                         crate::generated_types::VariantGo {
                             name: go_type.default_name_within_union(),
-                            cffi_name: t.to_union_name(),
+                            cffi_name: t.to_union_name(false),
                             literal_repr: match t {
                                 TypeGeneric::Literal(l, ..) => match l {
                                     baml_types::LiteralValue::String(s) => Some(format!(
@@ -111,7 +111,7 @@ pub fn ir_union_to_go_stream<'a>(
                     .collect::<Vec<_>>();
                 Some(crate::generated_types::UnionGo {
                     name,
-                    cffi_name: stream_union.to_union_name(),
+                    cffi_name: stream_union.to_union_name(false),
                     docstring: Some(format!("Generated from: {stream_union}")),
                     variants,
                     pkg,

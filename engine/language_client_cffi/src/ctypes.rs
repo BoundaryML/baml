@@ -2,6 +2,7 @@ mod baml_value_decode;
 mod baml_value_encode;
 mod baml_value_with_meta_encode;
 
+mod baml_type_encode;
 mod cffi_value_decode;
 mod function_args_decode;
 pub mod object_args_decode;

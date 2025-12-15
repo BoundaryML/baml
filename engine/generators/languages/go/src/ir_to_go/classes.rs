@@ -93,6 +93,8 @@ fn ir_field_to_go_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> Fi
 mod tests {
     use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
 
+    use crate::r#type::TypeGo;
+
     use super::*;
 
     #[test]
@@ -111,7 +113,7 @@ mod tests {
         let class_go = ir_class_to_go_stream(class, &pkg);
         assert_eq!(class_go.name, "SimpleClass");
         assert_eq!(class_go.fields.len(), 1);
-        assert!(class_go.fields[0].r#type.is_stream_state());
+        assert!(matches!(class_go.fields[0].r#type, TypeGo::StreamState(_)));
     }
 
     #[test]
@@ -129,7 +131,7 @@ mod tests {
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
         let class_go = ir_class_to_go_stream(class, &pkg);
         let digits_field = class_go.fields.iter().find(|f| f.name == "digits").unwrap();
-        assert!(digits_field.r#type.is_stream_state());
+        assert!(matches!(digits_field.r#type, TypeGo::StreamState(_)));
         assert_eq!(class_go.name, "ChildClass");
         assert_eq!(class_go.fields.len(), 1);
     }

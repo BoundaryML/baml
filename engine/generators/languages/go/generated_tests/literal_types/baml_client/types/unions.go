@@ -35,11 +35,11 @@ func (u *Union2BoolKFalseOrBoolKTrue) Decode(holder *cffi.CFFIValueUnionVariant,
 	switch variantName {
 	case "bool_true":
 		u.variant = "BoolKTrue"
-		value := baml.Decode(valueHolder).Interface().(bool)
+		value := baml.Decode(valueHolder).Bool()
 		u.variant_BoolKTrue = &value
 	case "bool_false":
 		u.variant = "BoolKFalse"
-		value := baml.Decode(valueHolder).Interface().(bool)
+		value := baml.Decode(valueHolder).Bool()
 		u.variant_BoolKFalse = &value
 
 	default:
@@ -183,15 +183,15 @@ func (u *Union3IntK1OrIntK2OrIntK3) Decode(holder *cffi.CFFIValueUnionVariant, t
 	switch variantName {
 	case "int_1":
 		u.variant = "IntK1"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK1 = &value
 	case "int_2":
 		u.variant = "IntK2"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK2 = &value
 	case "int_3":
 		u.variant = "IntK3"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK3 = &value
 
 	default:
@@ -387,15 +387,15 @@ func (u *Union3IntK200OrIntK404OrIntK500) Decode(holder *cffi.CFFIValueUnionVari
 	switch variantName {
 	case "int_200":
 		u.variant = "IntK200"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK200 = &value
 	case "int_404":
 		u.variant = "IntK404"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK404 = &value
 	case "int_500":
 		u.variant = "IntK500"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK500 = &value
 
 	default:
@@ -1613,19 +1613,19 @@ func (u *Union4IntK0OrIntK1OrIntK3OrIntK5) Decode(holder *cffi.CFFIValueUnionVar
 	switch variantName {
 	case "int_0":
 		u.variant = "IntK0"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK0 = &value
 	case "int_1":
 		u.variant = "IntK1"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK1 = &value
 	case "int_3":
 		u.variant = "IntK3"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK3 = &value
 	case "int_5":
 		u.variant = "IntK5"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK5 = &value
 
 	default:
@@ -2413,23 +2413,23 @@ func (u *Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5) Decode(holder *cffi.CFFIValueU
 	switch variantName {
 	case "int_1":
 		u.variant = "IntK1"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK1 = &value
 	case "int_2":
 		u.variant = "IntK2"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK2 = &value
 	case "int_3":
 		u.variant = "IntK3"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK3 = &value
 	case "int_4":
 		u.variant = "IntK4"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK4 = &value
 	case "int_5":
 		u.variant = "IntK5"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK5 = &value
 
 	default:
@@ -2745,23 +2745,23 @@ func (u *Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500) Decode(holder *cffi.
 	switch variantName {
 	case "int_200":
 		u.variant = "IntK200"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK200 = &value
 	case "int_201":
 		u.variant = "IntK201"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK201 = &value
 	case "int_400":
 		u.variant = "IntK400"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK400 = &value
 	case "int_404":
 		u.variant = "IntK404"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK404 = &value
 	case "int_500":
 		u.variant = "IntK500"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK500 = &value
 
 	default:
@@ -3081,31 +3081,31 @@ func (u *Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8) Decode(holder *
 	switch variantName {
 	case "int_0":
 		u.variant = "IntK0"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK0 = &value
 	case "int_1":
 		u.variant = "IntK1"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK1 = &value
 	case "int_2":
 		u.variant = "IntK2"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK2 = &value
 	case "int_3":
 		u.variant = "IntK3"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK3 = &value
 	case "int_5":
 		u.variant = "IntK5"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK5 = &value
 	case "int_8":
 		u.variant = "IntK8"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK8 = &value
 	case "int_13":
 		u.variant = "IntK13"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_IntK13 = &value
 
 	default:

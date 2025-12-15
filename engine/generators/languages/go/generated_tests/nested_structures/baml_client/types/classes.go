@@ -120,7 +120,7 @@ func (c *Approval) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Date = baml.Decode(valueHolder).Interface().(string)
 
 		case "amount":
-			c.Amount = baml.Decode(valueHolder).Interface().(float64)
+			c.Amount = baml.Decode(valueHolder).Float()
 
 		case "notes":
 			c.Notes = baml.Decode(valueHolder).Interface().(*string)
@@ -174,10 +174,10 @@ func (c *Budget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "total":
-			c.Total = baml.Decode(valueHolder).Interface().(float64)
+			c.Total = baml.Decode(valueHolder).Float()
 
 		case "spent":
-			c.Spent = baml.Decode(valueHolder).Interface().(float64)
+			c.Spent = baml.Decode(valueHolder).Float()
 
 		case "categories":
 			c.Categories = baml.Decode(valueHolder).Interface().(map[string]float64)
@@ -235,7 +235,7 @@ func (c *Company) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -478,10 +478,10 @@ func (c *Coordinates) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 		switch key {
 
 		case "latitude":
-			c.Latitude = baml.Decode(valueHolder).Interface().(float64)
+			c.Latitude = baml.Decode(valueHolder).Float()
 
 		case "longitude":
-			c.Longitude = baml.Decode(valueHolder).Interface().(float64)
+			c.Longitude = baml.Decode(valueHolder).Float()
 
 		default:
 
@@ -572,7 +572,7 @@ func (c *Department) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -584,7 +584,7 @@ func (c *Department) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Members = baml.Decode(valueHolder).Interface().([]Employee)
 
 		case "budget":
-			c.Budget = baml.Decode(valueHolder).Interface().(float64)
+			c.Budget = baml.Decode(valueHolder).Float()
 
 		case "projects":
 			c.Projects = baml.Decode(valueHolder).Interface().([]Project)
@@ -641,7 +641,7 @@ func (c *DisplaySettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		switch key {
 
 		case "fontSize":
-			c.FontSize = baml.Decode(valueHolder).Interface().(int64)
+			c.FontSize = baml.Decode(valueHolder).Int()
 
 		case "colorScheme":
 			c.ColorScheme = baml.Decode(valueHolder).Interface().(string)
@@ -700,7 +700,7 @@ func (c *Employee) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -1033,7 +1033,7 @@ func (c *Metadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.UpdatedAt = baml.Decode(valueHolder).Interface().(string)
 
 		case "version":
-			c.Version = baml.Decode(valueHolder).Interface().(int64)
+			c.Version = baml.Decode(valueHolder).Int()
 
 		case "tags":
 			c.Tags = baml.Decode(valueHolder).Interface().([]string)
@@ -1093,7 +1093,7 @@ func (c *Milestone) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -1102,7 +1102,7 @@ func (c *Milestone) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.DueDate = baml.Decode(valueHolder).Interface().(string)
 
 		case "completed":
-			c.Completed = baml.Decode(valueHolder).Interface().(bool)
+			c.Completed = baml.Decode(valueHolder).Bool()
 
 		case "tasks":
 			c.Tasks = baml.Decode(valueHolder).Interface().([]Task)
@@ -1158,13 +1158,13 @@ func (c *NotificationSettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.
 		switch key {
 
 		case "email":
-			c.Email = baml.Decode(valueHolder).Interface().(bool)
+			c.Email = baml.Decode(valueHolder).Bool()
 
 		case "push":
-			c.Push = baml.Decode(valueHolder).Interface().(bool)
+			c.Push = baml.Decode(valueHolder).Bool()
 
 		case "sms":
-			c.Sms = baml.Decode(valueHolder).Interface().(bool)
+			c.Sms = baml.Decode(valueHolder).Bool()
 
 		case "frequency":
 			c.Frequency = baml.Decode(valueHolder).Interface().(Union3KdailyOrKimmediateOrKweekly)
@@ -1274,10 +1274,10 @@ func (c *PrivacySettings) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 			c.ProfileVisibility = baml.Decode(valueHolder).Interface().(Union3KfriendsOrKprivateOrKpublic)
 
 		case "showEmail":
-			c.ShowEmail = baml.Decode(valueHolder).Interface().(bool)
+			c.ShowEmail = baml.Decode(valueHolder).Bool()
 
 		case "showPhone":
-			c.ShowPhone = baml.Decode(valueHolder).Interface().(bool)
+			c.ShowPhone = baml.Decode(valueHolder).Bool()
 
 		default:
 
@@ -1389,7 +1389,7 @@ func (c *Project) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -1465,7 +1465,7 @@ func (c *RecursiveStructure) Decode(holder *cffi.CFFIValueClass, typeMap baml.Ty
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
@@ -1647,7 +1647,7 @@ func (c *Task) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "title":
 			c.Title = baml.Decode(valueHolder).Interface().(string)
@@ -1722,7 +1722,7 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "name":
 			c.Name = baml.Decode(valueHolder).Interface().(string)
