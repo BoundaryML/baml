@@ -6286,10 +6286,10 @@ function BodyTorture {
   return: Int
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Path("x")
+      Idx::<Expr>(0): Path(["x"])
       Idx::<Expr>(1): Literal(Int(1))
       Idx::<Expr>(2): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
-      Idx::<Expr>(3): Path("x")
+      Idx::<Expr>(3): Path(["x"])
       Idx::<Expr>(4): Literal(Int(1))
       Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(2)], tail_expr: None }
       Idx::<Expr>(6): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(3)], tail_expr: None }

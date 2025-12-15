@@ -278,16 +278,27 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
         match expr {
             Expr::Literal(lit) => self.compile_literal(lit),
 
-            Expr::Path(name) => {
-                let name_str = name.to_string();
-                if let Some(&index) = self.locals.get(&name_str) {
-                    self.emit(Instruction::LoadVar(index));
-                } else if let Some(&index) = self.globals.get(&name_str) {
-                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(index)));
+            Expr::Path(segments) => {
+                if segments.is_empty() {
+                    // TODO: Error case - empty path should not reach codegen,
+                    // should be caught during parsing or type checking
                 } else {
-                    // Unknown variable - this should have been caught by type checker
-                    // For now, treat as global 0 (error recovery)
-                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(0)));
+                    // Load the first segment
+                    let first_name = segments[0].to_string();
+                    if let Some(&index) = self.locals.get(&first_name) {
+                        self.emit(Instruction::LoadVar(index));
+                    } else if let Some(&index) = self.globals.get(&first_name) {
+                        self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(index)));
+                    } else {
+                        // TODO: Error case - unknown variable should be caught by type checker,
+                        // codegen should not run on code with type errors
+                    }
+
+                    // Apply field accesses for remaining segments
+                    // TODO: Resolve field index when class system is complete
+                    for _field in &segments[1..] {
+                        self.emit(Instruction::LoadField(0));
+                    }
                 }
             }
 
@@ -686,12 +697,16 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             }
 
             Stmt::Assign { target, value } => {
-                let Expr::Path(name) = &body.exprs[*target] else {
+                let Expr::Path(segments) = &body.exprs[*target] else {
                     panic!(
                         "assignment target must be a variable (field/array assignment not yet implemented)"
                     );
                 };
-                let name_str = name.to_string();
+                assert!(
+                    (segments.len() == 1),
+                    "assignment target must be a simple variable (field assignment not yet implemented)"
+                );
+                let name_str = segments[0].to_string();
                 let Some(&index) = self.locals.get(&name_str) else {
                     panic!("cannot assign to undefined variable: {name_str}");
                 };
@@ -701,12 +716,16 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             }
 
             Stmt::AssignOp { target, op, value } => {
-                let Expr::Path(name) = &body.exprs[*target] else {
+                let Expr::Path(segments) = &body.exprs[*target] else {
                     panic!(
                         "assignment target must be a variable (field/array assignment not yet implemented)"
                     );
                 };
-                let name_str = name.to_string();
+                assert!(
+                    (segments.len() == 1),
+                    "assignment target must be a simple variable (field assignment not yet implemented)"
+                );
+                let name_str = segments[0].to_string();
                 let Some(&index) = self.locals.get(&name_str) else {
                     panic!("cannot assign to undefined variable: {name_str}");
                 };

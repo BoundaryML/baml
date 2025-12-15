@@ -29,6 +29,7 @@ mod generics;
 mod ids;
 mod item_tree;
 mod loc;
+mod module;
 mod path;
 mod signature;
 mod type_ref;
@@ -39,6 +40,7 @@ pub use generics::*;
 pub use ids::*;
 pub use item_tree::*;
 pub use loc::*;
+pub use module::*;
 pub use path::*;
 // Re-export signature types explicitly (no wildcards to avoid conflicts)
 pub use signature::{FunctionSignature, Param};

@@ -170,7 +170,14 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
     fn describe_expr(expr: &Expr, ty: &str) -> String {
         match expr {
             Expr::Literal(lit) => format!("Literal({lit:?}): {ty}"),
-            Expr::Path(name) => format!("Path({name}): {ty}"),
+            Expr::Path(segments) => {
+                let path = segments
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                format!("Path({path}): {ty}")
+            }
             Expr::Binary { op, .. } => format!("Binary({op:?}): {ty}"),
             Expr::Unary { op, .. } => format!("Unary({op:?}): {ty}"),
             Expr::Call { .. } => format!("Call: {ty}"),
@@ -441,7 +448,11 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
             Literal::Bool(b) => b.to_string(),
             Literal::Null => "null".to_string(),
         },
-        Expr::Path(name) => name.to_string(),
+        Expr::Path(segments) => segments
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("."),
         Expr::Binary { op, lhs, rhs } => {
             let lhs_str = expr_to_string(*lhs, body);
             let rhs_str = expr_to_string(*rhs, body);
