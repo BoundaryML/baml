@@ -38,12 +38,9 @@ pub use types::*;
 /// possibilities.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedPath {
-    /// Local variable with field accesses: `user.name.length`
-    /// The first segment is a local variable, remaining segments are field accesses.
-    Local {
-        name: Name,
-        field_accesses: Vec<Name>,
-    },
+    /// Local variable: `user` or `user.name.length`
+    /// The name is the local variable. Field access types are in `path_segment_types`.
+    Local { name: Name },
 
     /// Enum variant: `Status.Active`
     /// First segment is the enum type, second is the variant name.
@@ -354,7 +351,6 @@ impl<'db> TypeContext<'db> {
         if self.lookup(first).is_some() {
             return ResolvedPath::Local {
                 name: first.clone(),
-                field_accesses: segments[1..].to_vec(),
             };
         }
 

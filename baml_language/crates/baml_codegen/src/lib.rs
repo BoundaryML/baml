@@ -79,7 +79,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
         for item in items_struct.items(db) {
             if let ItemId::Class(class_loc) = item {
                 let class = &item_tree[class_loc.id(db)];
-                let class_name = class.name.clone();
+                let class_name = class.name.to_string();
 
                 let mut field_indices = HashMap::new();
                 let mut field_types = HashMap::new();
@@ -94,14 +94,14 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
 
                 // Add Class object to program and record its index
                 let class_obj = Object::Class(Class {
-                    name: class_name.to_string(),
+                    name: class_name.clone(),
                     field_names,
                 });
                 let class_obj_idx = program.add_object(class_obj);
-                class_object_indices.insert(class_name.to_string(), class_obj_idx);
+                class_object_indices.insert(class_name.clone(), class_obj_idx);
 
-                classes.insert(class_name.to_string(), field_indices);
-                class_field_types.insert(class_name, field_types);
+                classes.insert(class_name, field_indices);
+                class_field_types.insert(class.name.clone(), field_types);
             }
         }
     }
