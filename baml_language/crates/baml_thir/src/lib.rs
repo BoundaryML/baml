@@ -215,6 +215,10 @@ pub struct InferenceResult<'db> {
     pub param_types: HashMap<Name, Ty<'db>>,
     /// Types inferred for each expression.
     pub expr_types: HashMap<ExprId, Ty<'db>>,
+    /// For multi-segment path expressions, the type of each segment.
+    /// For `o.inner.value` where `o: Outer`, stores `[Outer, Inner, int]`.
+    /// Used by codegen to look up field indices at each step.
+    pub path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
     /// Type checking errors.
     pub errors: Vec<TypeError<Ty<'db>>>,
 }
@@ -232,6 +236,8 @@ pub struct TypeContext<'db> {
     class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
     /// Inferred types for expressions.
     expr_types: HashMap<ExprId, Ty<'db>>,
+    /// For multi-segment paths, the type of each segment.
+    path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
     /// Accumulated type errors.
     errors: Vec<TypeError<Ty<'db>>>,
 }
@@ -247,6 +253,7 @@ impl<'db> TypeContext<'db> {
             scopes: vec![globals],
             class_fields: HashMap::new(),
             expr_types: HashMap::new(),
+            path_segment_types: HashMap::new(),
             errors: Vec::new(),
         }
     }
@@ -262,6 +269,7 @@ impl<'db> TypeContext<'db> {
             scopes: vec![globals],
             class_fields,
             expr_types: HashMap::new(),
+            path_segment_types: HashMap::new(),
             errors: Vec::new(),
         }
     }
@@ -436,6 +444,7 @@ pub fn infer_function_body<'db>(
         return_type,
         param_types,
         expr_types: ctx.expr_types,
+        path_segment_types: ctx.path_segment_types,
         errors: ctx.errors,
     }
 }
@@ -523,10 +532,18 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
                     return Ty::Unknown;
                 };
 
+                // Record segment types for codegen (first segment type, then each field access result)
+                let mut segment_types = vec![ty.clone()];
+
                 // Apply field accesses for remaining segments
                 for field in &segments[1..] {
                     ty = infer_field_access(ctx, &ty, field, span);
+                    segment_types.push(ty.clone());
                 }
+
+                // Store segment types for this path expression
+                ctx.path_segment_types.insert(expr_id, segment_types);
+
                 ty
             }
         }

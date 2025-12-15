@@ -72,7 +72,7 @@ pub struct Compiler<'db, 'ctx, 'obj> {
     /// Pre-allocated Class object indices in the program's object pool.
     class_object_indices: &'ctx HashMap<String, usize>,
 
-    /// Resolved local variable names to stack indices.
+    /// Local variable names to stack indices.
     locals: HashMap<String, usize>,
 
     /// Scopes for tracking local variable lifetimes.
@@ -123,6 +123,19 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
     /// Get the type of an expression from the inference result.
     fn expr_type(&self, expr_id: ExprId) -> Option<&Ty<'db>> {
         self.inference.expr_types.get(&expr_id)
+    }
+
+    /// Extract the class name from a type, if it's a class type.
+    fn class_name_from_ty(ty: &Ty<'db>) -> Option<String> {
+        match ty {
+            Ty::Named(name) => Some(name.to_string()),
+            Ty::Class(class_id) => {
+                // For resolved class types, we'd need to look up the name
+                // For now, fall back to debug representation
+                Some(format!("{class_id:?}"))
+            }
+            _ => None,
+        }
     }
 
     /// Generate a unique compiler-internal variable name.
@@ -294,10 +307,26 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                         // codegen should not run on code with type errors
                     }
 
-                    // Apply field accesses for remaining segments
-                    // TODO: Resolve field index when class system is complete
-                    for _field in &segments[1..] {
-                        self.emit(Instruction::LoadField(0));
+                    // Apply field accesses for remaining segments using segment types from THIR
+                    if segments.len() > 1 {
+                        // Get segment types computed during type inference
+                        let segment_types = self.inference.path_segment_types.get(&expr_id);
+
+                        for (i, field) in segments[1..].iter().enumerate() {
+                            let field_name = field.to_string();
+
+                            // Get the type of the object we're accessing the field on
+                            // segment_types[i] is the type of the i-th segment (0 = first var, 1 = after first field, etc.)
+                            let field_index = segment_types
+                                .and_then(|types| types.get(i))
+                                .and_then(Self::class_name_from_ty)
+                                .and_then(|class_name| self.classes.get(&class_name))
+                                .and_then(|fields| fields.get(&field_name))
+                                .copied()
+                                .unwrap_or(0); // Default to 0 if not found (error case)
+
+                            self.emit(Instruction::LoadField(field_index));
+                        }
                     }
                 }
             }
