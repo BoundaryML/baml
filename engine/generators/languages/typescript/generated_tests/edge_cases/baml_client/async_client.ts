@@ -101,44 +101,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.CircularReference> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestCircularReference(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestCircularReference(
           input,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestCircularReference",
             {
             "input": input
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.CircularReference
+            return __raw__.parsed(false) as types.CircularReference
             } catch (error) {
             throw toBamlError(error);
             }
@@ -149,44 +149,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.DeepRecursion> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestDeepRecursion(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestDeepRecursion(
           depth,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestDeepRecursion",
             {
             "depth": depth
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.DeepRecursion
+            return __raw__.parsed(false) as types.DeepRecursion
             } catch (error) {
             throw toBamlError(error);
             }
@@ -197,44 +197,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.EmptyCollections> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestEmptyCollections(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestEmptyCollections(
           input,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestEmptyCollections",
             {
             "input": input
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.EmptyCollections
+            return __raw__.parsed(false) as types.EmptyCollections
             } catch (error) {
             throw toBamlError(error);
             }
@@ -245,44 +245,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.LargeStructure> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestLargeStructure(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestLargeStructure(
           input,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestLargeStructure",
             {
             "input": input
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.LargeStructure
+            return __raw__.parsed(false) as types.LargeStructure
             } catch (error) {
             throw toBamlError(error);
             }
@@ -293,44 +293,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.NumberEdgeCases> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestNumberEdgeCases(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestNumberEdgeCases(
           input,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestNumberEdgeCases",
             {
             "input": input
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.NumberEdgeCases
+            return __raw__.parsed(false) as types.NumberEdgeCases
             } catch (error) {
             throw toBamlError(error);
             }
@@ -341,44 +341,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.SpecialCharacters> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestSpecialCharacters(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestSpecialCharacters(
           input,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestSpecialCharacters",
             {
             "input": input
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.SpecialCharacters
+            return __raw__.parsed(false) as types.SpecialCharacters
             } catch (error) {
             throw toBamlError(error);
             }
@@ -404,28 +404,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.CircularReference, types.CircularReference>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestCircularReference", error);
               }
@@ -433,31 +433,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestCircularReference",
                 {
                 "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.CircularReference, types.CircularReference>(
-                  raw,
+                  __raw__,
                   (a): partial_types.CircularReference => a,
                   (a): types.CircularReference => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);
@@ -470,28 +470,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.DeepRecursion, types.DeepRecursion>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestDeepRecursion", error);
               }
@@ -499,31 +499,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestDeepRecursion",
                 {
                 "depth": depth
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.DeepRecursion, types.DeepRecursion>(
-                  raw,
+                  __raw__,
                   (a): partial_types.DeepRecursion => a,
                   (a): types.DeepRecursion => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);
@@ -536,28 +536,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.EmptyCollections, types.EmptyCollections>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestEmptyCollections", error);
               }
@@ -565,31 +565,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestEmptyCollections",
                 {
                 "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.EmptyCollections, types.EmptyCollections>(
-                  raw,
+                  __raw__,
                   (a): partial_types.EmptyCollections => a,
                   (a): types.EmptyCollections => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);
@@ -602,28 +602,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.LargeStructure, types.LargeStructure>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestLargeStructure", error);
               }
@@ -631,31 +631,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestLargeStructure",
                 {
                 "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.LargeStructure, types.LargeStructure>(
-                  raw,
+                  __raw__,
                   (a): partial_types.LargeStructure => a,
                   (a): types.LargeStructure => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);
@@ -668,28 +668,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.NumberEdgeCases, types.NumberEdgeCases>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestNumberEdgeCases", error);
               }
@@ -697,31 +697,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestNumberEdgeCases",
                 {
                 "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.NumberEdgeCases, types.NumberEdgeCases>(
-                  raw,
+                  __raw__,
                   (a): partial_types.NumberEdgeCases => a,
                   (a): types.NumberEdgeCases => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);
@@ -734,28 +734,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.SpecialCharacters, types.SpecialCharacters>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestSpecialCharacters", error);
               }
@@ -763,31 +763,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestSpecialCharacters",
                 {
                 "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.SpecialCharacters, types.SpecialCharacters>(
-                  raw,
+                  __raw__,
                   (a): partial_types.SpecialCharacters => a,
                   (a): types.SpecialCharacters => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);

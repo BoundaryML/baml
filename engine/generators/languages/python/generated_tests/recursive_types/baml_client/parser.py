@@ -27,14 +27,14 @@ class LlmResponseParser:
     def Foo(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.JSON:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="Foo", llm_response=llm_response, mode="request")
-        return typing.cast(types.JSON, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="Foo", llm_response=llm_response, mode="request")
+        return typing.cast(types.JSON, __result__)
 
     def JsonInput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.JSON:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="JsonInput", llm_response=llm_response, mode="request")
-        return typing.cast(types.JSON, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="JsonInput", llm_response=llm_response, mode="request")
+        return typing.cast(types.JSON, __result__)
 
     
 
@@ -47,13 +47,13 @@ class LlmStreamParser:
     def Foo(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.JSON:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="Foo", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.JSON, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="Foo", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.JSON, __result__)
 
     def JsonInput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.JSON:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="JsonInput", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.JSON, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="JsonInput", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.JSON, __result__)
 
     

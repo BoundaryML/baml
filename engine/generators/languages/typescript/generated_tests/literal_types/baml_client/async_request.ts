@@ -46,9 +46,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestBooleanLiterals",
@@ -59,7 +59,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -71,9 +71,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestComplexLiterals",
@@ -84,7 +84,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -96,9 +96,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestIntegerLiterals",
@@ -109,7 +109,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -121,9 +121,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestMixedLiterals",
@@ -134,7 +134,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -146,9 +146,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestStringLiterals",
@@ -159,7 +159,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -177,9 +177,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestBooleanLiterals",
@@ -190,7 +190,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -202,9 +202,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestComplexLiterals",
@@ -215,7 +215,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -227,9 +227,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestIntegerLiterals",
@@ -240,7 +240,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -252,9 +252,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestMixedLiterals",
@@ -265,7 +265,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -277,9 +277,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestStringLiterals",
@@ -290,7 +290,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);

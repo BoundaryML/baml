@@ -27,32 +27,32 @@ class LlmResponseParser:
     def TestAllNull(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.NullableTypes:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestAllNull", llm_response=llm_response, mode="request")
-        return typing.cast(types.NullableTypes, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestAllNull", llm_response=llm_response, mode="request")
+        return typing.cast(types.NullableTypes, __result__)
 
     def TestAllOptionalOmitted(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.OptionalFields:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestAllOptionalOmitted", llm_response=llm_response, mode="request")
-        return typing.cast(types.OptionalFields, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestAllOptionalOmitted", llm_response=llm_response, mode="request")
+        return typing.cast(types.OptionalFields, __result__)
 
     def TestMixedOptionalNullable(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.MixedOptionalNullable:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedOptionalNullable", llm_response=llm_response, mode="request")
-        return typing.cast(types.MixedOptionalNullable, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedOptionalNullable", llm_response=llm_response, mode="request")
+        return typing.cast(types.MixedOptionalNullable, __result__)
 
     def TestNullableTypes(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.NullableTypes:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestNullableTypes", llm_response=llm_response, mode="request")
-        return typing.cast(types.NullableTypes, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestNullableTypes", llm_response=llm_response, mode="request")
+        return typing.cast(types.NullableTypes, __result__)
 
     def TestOptionalFields(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.OptionalFields:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOptionalFields", llm_response=llm_response, mode="request")
-        return typing.cast(types.OptionalFields, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestOptionalFields", llm_response=llm_response, mode="request")
+        return typing.cast(types.OptionalFields, __result__)
 
     
 
@@ -65,31 +65,31 @@ class LlmStreamParser:
     def TestAllNull(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.NullableTypes:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestAllNull", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.NullableTypes, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestAllNull", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.NullableTypes, __result__)
 
     def TestAllOptionalOmitted(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.OptionalFields:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestAllOptionalOmitted", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.OptionalFields, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestAllOptionalOmitted", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.OptionalFields, __result__)
 
     def TestMixedOptionalNullable(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.MixedOptionalNullable:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedOptionalNullable", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.MixedOptionalNullable, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedOptionalNullable", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.MixedOptionalNullable, __result__)
 
     def TestNullableTypes(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.NullableTypes:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestNullableTypes", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.NullableTypes, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestNullableTypes", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.NullableTypes, __result__)
 
     def TestOptionalFields(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.OptionalFields:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestOptionalFields", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.OptionalFields, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestOptionalFields", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.OptionalFields, __result__)
 
     

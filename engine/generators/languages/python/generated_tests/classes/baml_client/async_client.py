@@ -78,37 +78,37 @@ class BamlAsyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     async def ConsumeSimpleClass(self, item: types.SimpleClass,
         baml_options: BamlCallOptions = {},
     ) -> types.SimpleClass:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.ConsumeSimpleClass(item=item,
+            __stream__ = self.stream.ConsumeSimpleClass(item=item,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="ConsumeSimpleClass", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ConsumeSimpleClass", args={
                 "item": item,
             })
-            return typing.cast(types.SimpleClass, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.SimpleClass, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def MakeSimpleClass(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.SimpleClass:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.MakeSimpleClass(
+            __stream__ = self.stream.MakeSimpleClass(
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="MakeSimpleClass", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="MakeSimpleClass", args={
                 
             })
-            return typing.cast(types.SimpleClass, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.SimpleClass, __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -121,26 +121,26 @@ class BamlStreamClient:
     def ConsumeSimpleClass(self, item: types.SimpleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.SimpleClass, types.SimpleClass]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ConsumeSimpleClass", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ConsumeSimpleClass", args={
             "item": item,
         })
         return baml_py.BamlStream[stream_types.SimpleClass, types.SimpleClass](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.SimpleClass, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.SimpleClass, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def MakeSimpleClass(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.SimpleClass, types.SimpleClass]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeSimpleClass", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeSimpleClass", args={
             
         })
         return baml_py.BamlStream[stream_types.SimpleClass, types.SimpleClass](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.SimpleClass, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.SimpleClass, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     
 
@@ -153,17 +153,17 @@ class BamlHttpRequestClient:
     async def ConsumeSimpleClass(self, item: types.SimpleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ConsumeSimpleClass", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ConsumeSimpleClass", args={
             "item": item,
         }, mode="request")
-        return result
+        return __result__
     async def MakeSimpleClass(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeSimpleClass", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeSimpleClass", args={
             
         }, mode="request")
-        return result
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -175,17 +175,17 @@ class BamlHttpStreamRequestClient:
     async def ConsumeSimpleClass(self, item: types.SimpleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ConsumeSimpleClass", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ConsumeSimpleClass", args={
             "item": item,
         }, mode="stream")
-        return result
+        return __result__
     async def MakeSimpleClass(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeSimpleClass", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeSimpleClass", args={
             
         }, mode="stream")
-        return result
+        return __result__
     
 
 b = BamlAsyncClient(DoNotUseDirectlyCallManager({}))

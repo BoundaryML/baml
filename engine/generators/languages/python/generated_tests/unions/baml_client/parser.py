@@ -27,8 +27,8 @@ class LlmResponseParser:
     def JsonInput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="JsonInput", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[str], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="JsonInput", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[str], __result__)
 
     
 
@@ -41,7 +41,7 @@ class LlmStreamParser:
     def JsonInput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="JsonInput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[str], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="JsonInput", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[str], __result__)
 
     

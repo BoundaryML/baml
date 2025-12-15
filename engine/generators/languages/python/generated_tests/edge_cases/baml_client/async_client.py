@@ -78,97 +78,97 @@ class BamlAsyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     async def TestCircularReference(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.CircularReference:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestCircularReference(input=input,
+            __stream__ = self.stream.TestCircularReference(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestCircularReference", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestCircularReference", args={
                 "input": input,
             })
-            return typing.cast(types.CircularReference, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.CircularReference, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestDeepRecursion(self, depth: int,
         baml_options: BamlCallOptions = {},
     ) -> types.DeepRecursion:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestDeepRecursion(depth=depth,
+            __stream__ = self.stream.TestDeepRecursion(depth=depth,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestDeepRecursion", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestDeepRecursion", args={
                 "depth": depth,
             })
-            return typing.cast(types.DeepRecursion, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.DeepRecursion, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.EmptyCollections:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestEmptyCollections(input=input,
+            __stream__ = self.stream.TestEmptyCollections(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestEmptyCollections", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestEmptyCollections", args={
                 "input": input,
             })
-            return typing.cast(types.EmptyCollections, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.EmptyCollections, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestLargeStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.LargeStructure:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestLargeStructure(input=input,
+            __stream__ = self.stream.TestLargeStructure(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestLargeStructure", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestLargeStructure", args={
                 "input": input,
             })
-            return typing.cast(types.LargeStructure, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.LargeStructure, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestNumberEdgeCases(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.NumberEdgeCases:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestNumberEdgeCases(input=input,
+            __stream__ = self.stream.TestNumberEdgeCases(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestNumberEdgeCases", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestNumberEdgeCases", args={
                 "input": input,
             })
-            return typing.cast(types.NumberEdgeCases, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.NumberEdgeCases, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestSpecialCharacters(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SpecialCharacters:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestSpecialCharacters(input=input,
+            __stream__ = self.stream.TestSpecialCharacters(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestSpecialCharacters", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestSpecialCharacters", args={
                 "input": input,
             })
-            return typing.cast(types.SpecialCharacters, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.SpecialCharacters, __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -181,74 +181,74 @@ class BamlStreamClient:
     def TestCircularReference(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.CircularReference, types.CircularReference]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestCircularReference", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestCircularReference", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.CircularReference, types.CircularReference](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.CircularReference, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.CircularReference, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestDeepRecursion(self, depth: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.DeepRecursion, types.DeepRecursion]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestDeepRecursion", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestDeepRecursion", args={
             "depth": depth,
         })
         return baml_py.BamlStream[stream_types.DeepRecursion, types.DeepRecursion](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.DeepRecursion, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.DeepRecursion, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.EmptyCollections, types.EmptyCollections]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestEmptyCollections", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestEmptyCollections", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.EmptyCollections, types.EmptyCollections](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.EmptyCollections, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.EmptyCollections, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestLargeStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.LargeStructure, types.LargeStructure]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestLargeStructure", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestLargeStructure", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.LargeStructure, types.LargeStructure](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.LargeStructure, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.LargeStructure, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestNumberEdgeCases(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.NumberEdgeCases, types.NumberEdgeCases]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestNumberEdgeCases", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestNumberEdgeCases", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.NumberEdgeCases, types.NumberEdgeCases](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.NumberEdgeCases, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.NumberEdgeCases, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestSpecialCharacters(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.SpecialCharacters, types.SpecialCharacters]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestSpecialCharacters", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestSpecialCharacters", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.SpecialCharacters, types.SpecialCharacters](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.SpecialCharacters, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.SpecialCharacters, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     
 
@@ -261,45 +261,45 @@ class BamlHttpRequestClient:
     async def TestCircularReference(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestCircularReference", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestCircularReference", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestDeepRecursion(self, depth: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestDeepRecursion", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestDeepRecursion", args={
             "depth": depth,
         }, mode="request")
-        return result
+        return __result__
     async def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestEmptyCollections", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestEmptyCollections", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestLargeStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestLargeStructure", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestLargeStructure", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestNumberEdgeCases(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestNumberEdgeCases", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestNumberEdgeCases", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestSpecialCharacters(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestSpecialCharacters", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestSpecialCharacters", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -311,45 +311,45 @@ class BamlHttpStreamRequestClient:
     async def TestCircularReference(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestCircularReference", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestCircularReference", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestDeepRecursion(self, depth: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestDeepRecursion", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestDeepRecursion", args={
             "depth": depth,
         }, mode="stream")
-        return result
+        return __result__
     async def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestEmptyCollections", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestEmptyCollections", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestLargeStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestLargeStructure", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestLargeStructure", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestNumberEdgeCases(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestNumberEdgeCases", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestNumberEdgeCases", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestSpecialCharacters(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestSpecialCharacters", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestSpecialCharacters", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     
 
 b = BamlAsyncClient(DoNotUseDirectlyCallManager({}))

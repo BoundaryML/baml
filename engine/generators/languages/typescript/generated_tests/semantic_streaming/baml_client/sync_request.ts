@@ -42,9 +42,9 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
         "MakeClassWithBlockDone",
@@ -55,7 +55,7 @@ export class HttpRequest {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
-        env,
+        __env__,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -67,9 +67,9 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
         "MakeClassWithExternalDone",
@@ -80,7 +80,7 @@ export class HttpRequest {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
-        env,
+        __env__,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -92,9 +92,9 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
         "MakeSemanticContainer",
@@ -105,7 +105,7 @@ export class HttpRequest {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
-        env,
+        __env__,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -123,9 +123,9 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
         "MakeClassWithBlockDone",
@@ -136,7 +136,7 @@ export class HttpStreamRequest {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
-        env,
+        __env__,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -148,9 +148,9 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
         "MakeClassWithExternalDone",
@@ -161,7 +161,7 @@ export class HttpStreamRequest {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
-        env,
+        __env__,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -173,9 +173,9 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions<never>
   ): HTTPRequest {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.buildRequestSync(
         "MakeSemanticContainer",
@@ -186,7 +186,7 @@ export class HttpStreamRequest {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
-        env,
+        __env__,
       )
     } catch (error) {
       throw toBamlError(error);

@@ -6,17 +6,17 @@ def {{ fn.name }}(
         {%- endfor %}
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}]:
-        options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
-        __tb__ = options.get("tb", None)
+        __options__: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+        __tb__ = __options__.get("tb", None)
         if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
         else:
         tb = None
-        __cr__ = options.get("client_registry", None)
-        collector = options.get("collector", None)
-        collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-        env = env_vars_to_dict(options.get("env", {}))
-        raw = self.__runtime.stream_function_sync(
+        __cr__ = __options__.get("client_registry", None)
+        __collector__ = __options__.get("collector", None)
+        __collectors__ = __collector__ if isinstance(__collector__, list) else [__collector__] if __collector__ is not None else []
+        __env__ = env_vars_to_dict(__options__.get("env", {}))
+        __raw__ = self.__runtime.stream_function_sync(
         "{{fn.name}}",
         {
             {%- for arg in fn.args %}
@@ -27,12 +27,12 @@ def {{ fn.name }}(
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        collectors,
-        env,
+        __collectors__,
+        __env__,
         )
 
         return baml_py.BamlSyncStream[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}](
-        raw,
+        __raw__,
         lambda x: cast({{fn.stream_return_type.serialize_type(pkg)}}, x.cast_to(types, types, partial_types, True)),
         lambda x: cast({{fn.return_type.serialize_type(pkg)}}, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),

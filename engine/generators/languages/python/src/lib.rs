@@ -168,6 +168,28 @@ mod python_tests {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn templates_keep_baml_options_in_signature() {
+        // For Python, `baml_options` is part of the public API for generated clients.
+        // Keep it explicit in signatures so callers can pass options positionally/keyword.
+
+        let async_client = include_str!("./_templates/async_client.py.j2");
+        assert!(async_client.contains("baml_options: BamlCallOptions"));
+        assert!(!async_client.contains("**kwargs"));
+        assert!(!async_client.contains("ctx, __result__"));
+        assert!(async_client.contains("__ctx__, __result__"));
+
+        let sync_client = include_str!("./_templates/sync_client.py.j2");
+        assert!(sync_client.contains("baml_options: BamlCallOptions"));
+        assert!(!sync_client.contains("**kwargs"));
+        assert!(!sync_client.contains("ctx, __result__"));
+        assert!(sync_client.contains("__ctx__, __result__"));
+
+        let parser = include_str!("./_templates/parser.py.j2");
+        assert!(parser.contains("baml_options: BamlCallOptions"));
+        assert!(!parser.contains("**kwargs"));
+    }
+
+    #[test]
     fn test_name() {
         use std::str::FromStr;
 

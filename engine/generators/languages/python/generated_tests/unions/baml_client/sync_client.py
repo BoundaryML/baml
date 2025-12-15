@@ -90,21 +90,21 @@ class BamlSyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     def JsonInput(self, x: typing.List["types.ExistingSystemComponent"],
         baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.JsonInput(x=x,
+            __stream__ = self.stream.JsonInput(x=x,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="JsonInput", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="JsonInput", args={
                 "x": x,
             })
-            return typing.cast(typing.List[str], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[str], __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -117,14 +117,14 @@ class BamlStreamClient:
     def JsonInput(self, x: typing.List["types.ExistingSystemComponent"],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[str], typing.List[str]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="JsonInput", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="JsonInput", args={
             "x": x,
         })
         return baml_py.BamlSyncStream[typing.List[str], typing.List[str]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     
 
@@ -137,10 +137,10 @@ class BamlHttpRequestClient:
     def JsonInput(self, x: typing.List["types.ExistingSystemComponent"],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="JsonInput", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="JsonInput", args={
             "x": x,
         }, mode="request")
-        return result
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -152,10 +152,10 @@ class BamlHttpStreamRequestClient:
     def JsonInput(self, x: typing.List["types.ExistingSystemComponent"],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="JsonInput", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="JsonInput", args={
             "x": x,
         }, mode="stream")
-        return result
+        return __result__
     
 
 b = BamlSyncClient(DoNotUseDirectlyCallManager({}))

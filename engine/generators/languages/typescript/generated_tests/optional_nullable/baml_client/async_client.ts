@@ -101,44 +101,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.NullableTypes> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestAllNull(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestAllNull(
           input,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestAllNull",
             {
             "input": input
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.NullableTypes
+            return __raw__.parsed(false) as types.NullableTypes
             } catch (error) {
             throw toBamlError(error);
             }
@@ -149,44 +149,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.OptionalFields> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestAllOptionalOmitted(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestAllOptionalOmitted(
           input,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestAllOptionalOmitted",
             {
             "input": input
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.OptionalFields
+            return __raw__.parsed(false) as types.OptionalFields
             } catch (error) {
             throw toBamlError(error);
             }
@@ -197,44 +197,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.MixedOptionalNullable> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestMixedOptionalNullable(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestMixedOptionalNullable(
           input,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestMixedOptionalNullable",
             {
             "input": input
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.MixedOptionalNullable
+            return __raw__.parsed(false) as types.MixedOptionalNullable
             } catch (error) {
             throw toBamlError(error);
             }
@@ -245,44 +245,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.NullableTypes> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestNullableTypes(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestNullableTypes(
           input,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestNullableTypes",
             {
             "input": input
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.NullableTypes
+            return __raw__.parsed(false) as types.NullableTypes
             } catch (error) {
             throw toBamlError(error);
             }
@@ -293,44 +293,44 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         __baml_options__?: BamlCallOptions<never>
         ): Promise<types.OptionalFields> {
           try {
-          const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-          const signal = options.signal;
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
 
-          if (signal?.aborted) {
-          throw new BamlAbortError('Operation was aborted', signal.reason);
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
           }
 
           // Check if onTick is provided - route through streaming if so
-          if (options.onTick) {
-          const stream = this.stream.TestOptionalFields(
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TestOptionalFields(
           input,
           __baml_options__
           );
 
-          return await stream.getFinalResponse();
+          return await __stream__.getFinalResponse();
           }
 
-          const collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-          [options.collector]) : [];
-          const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-          const env: Record<string, string> = Object.fromEntries(
-            Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
-            const raw = await this.runtime.callFunction(
+            const __raw__ = await this.runtime.callFunction(
             "TestOptionalFields",
             {
             "input": input
             },
             this.ctxManager.cloneContext(),
-            options.tb?.__tb(),
-            options.clientRegistry,
-            collector,
-            options.tags || {},
-            env,
-            signal,
-            options.watchers,
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
             )
-            return raw.parsed(false) as types.OptionalFields
+            return __raw__.parsed(false) as types.OptionalFields
             } catch (error) {
             throw toBamlError(error);
             }
@@ -356,28 +356,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.NullableTypes, types.NullableTypes>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestAllNull", error);
               }
@@ -385,31 +385,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestAllNull",
                 {
                 "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.NullableTypes, types.NullableTypes>(
-                  raw,
+                  __raw__,
                   (a): partial_types.NullableTypes => a,
                   (a): types.NullableTypes => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);
@@ -422,28 +422,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.OptionalFields, types.OptionalFields>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestAllOptionalOmitted", error);
               }
@@ -451,31 +451,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestAllOptionalOmitted",
                 {
                 "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.OptionalFields, types.OptionalFields>(
-                  raw,
+                  __raw__,
                   (a): partial_types.OptionalFields => a,
                   (a): types.OptionalFields => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);
@@ -488,28 +488,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.MixedOptionalNullable, types.MixedOptionalNullable>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestMixedOptionalNullable", error);
               }
@@ -517,31 +517,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestMixedOptionalNullable",
                 {
                 "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.MixedOptionalNullable, types.MixedOptionalNullable>(
-                  raw,
+                  __raw__,
                   (a): partial_types.MixedOptionalNullable => a,
                   (a): types.MixedOptionalNullable => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);
@@ -554,28 +554,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.NullableTypes, types.NullableTypes>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestNullableTypes", error);
               }
@@ -583,31 +583,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestNullableTypes",
                 {
                 "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.NullableTypes, types.NullableTypes>(
-                  raw,
+                  __raw__,
                   (a): partial_types.NullableTypes => a,
                   (a): types.NullableTypes => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);
@@ -620,28 +620,28 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             ): BamlStream<partial_types.OptionalFields, types.OptionalFields>
               {
               try {
-              const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-              const signal = options.signal;
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
 
-              if (signal?.aborted) {
-              throw new BamlAbortError('Operation was aborted', signal.reason);
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
               }
 
-              let collector = options.collector ? (Array.isArray(options.collector) ? options.collector :
-              [options.collector]) : [];
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
 
-              let onTickWrapper: (() => void) | undefined;
+              let __onTickWrapper__: (() => void) | undefined;
 
               // Create collector and wrap onTick if provided
-              if (options.onTick) {
-              const tickCollector = new Collector("on-tick-collector");
-              collector = [...collector, tickCollector];
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
 
-              onTickWrapper = () => {
-              const log = tickCollector.last;
-              if (log) {
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
               try {
-              options.onTick!("Unknown", log);
+              __options__.onTick!("Unknown", __log__);
               } catch (error) {
               console.error("Error in onTick callback for TestOptionalFields", error);
               }
@@ -649,31 +649,31 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               };
               }
 
-              const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-              const env: Record<string, string> = Object.fromEntries(
-                Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
-                const raw = this.runtime.streamFunction(
+                const __raw__ = this.runtime.streamFunction(
                 "TestOptionalFields",
                 {
                 "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),
-                options.tb?.__tb(),
-                options.clientRegistry,
-                collector,
-                options.tags || {},
-                env,
-                signal,
-                onTickWrapper,
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
                 )
                 return new BamlStream<partial_types.OptionalFields, types.OptionalFields>(
-                  raw,
+                  __raw__,
                   (a): partial_types.OptionalFields => a,
                   (a): types.OptionalFields => a,
                   this.ctxManager.cloneContext(),
-                  options.signal,
+                  __options__.signal,
                   )
                   } catch (error) {
                   throw toBamlError(error);
