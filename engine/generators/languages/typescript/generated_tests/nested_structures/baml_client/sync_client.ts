@@ -101,38 +101,38 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.ComplexNested {
     try {
-      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.signal;
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __signal__ = __options__.signal;
 
-      if (signal?.aborted) {
-        throw new BamlAbortError('Operation was aborted', signal.reason);
+      if (__signal__?.aborted) {
+        throw new BamlAbortError('Operation was aborted', __signal__.reason);
       }
 
       // Check if onTick is provided and reject for sync operations
-      if (options.onTick) {
+      if (__options__.onTick) {
         throw new Error("onTick is not supported for synchronous functions. Please use the async client instead.");
       }
 
-      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector : [__options__.collector]) : [];
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
-      const raw = this.runtime.callFunctionSync(
+      const __raw__ = this.runtime.callFunctionSync(
         "TestComplexNested",
         {
           "input": input
         },
         this.ctxManager.cloneContext(),
-        options.tb?.__tb(),
-        options.clientRegistry,
-        collector,
-        options.tags || {},
-        env,
-        signal,
-        options.watchers,
+        __options__.tb?.__tb(),
+        __options__.clientRegistry,
+        __collector__,
+        __options__.tags || {},
+        __env__,
+        __signal__,
+        __options__.watchers,
       )
-      return raw.parsed(false) as types.ComplexNested
+      return __raw__.parsed(false) as types.ComplexNested
     } catch (error: any) {
       throw toBamlError(error);
     }
@@ -143,38 +143,38 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.DeeplyNested {
     try {
-      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.signal;
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __signal__ = __options__.signal;
 
-      if (signal?.aborted) {
-        throw new BamlAbortError('Operation was aborted', signal.reason);
+      if (__signal__?.aborted) {
+        throw new BamlAbortError('Operation was aborted', __signal__.reason);
       }
 
       // Check if onTick is provided and reject for sync operations
-      if (options.onTick) {
+      if (__options__.onTick) {
         throw new Error("onTick is not supported for synchronous functions. Please use the async client instead.");
       }
 
-      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector : [__options__.collector]) : [];
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
-      const raw = this.runtime.callFunctionSync(
+      const __raw__ = this.runtime.callFunctionSync(
         "TestDeeplyNested",
         {
           "input": input
         },
         this.ctxManager.cloneContext(),
-        options.tb?.__tb(),
-        options.clientRegistry,
-        collector,
-        options.tags || {},
-        env,
-        signal,
-        options.watchers,
+        __options__.tb?.__tb(),
+        __options__.clientRegistry,
+        __collector__,
+        __options__.tags || {},
+        __env__,
+        __signal__,
+        __options__.watchers,
       )
-      return raw.parsed(false) as types.DeeplyNested
+      return __raw__.parsed(false) as types.DeeplyNested
     } catch (error: any) {
       throw toBamlError(error);
     }
@@ -185,38 +185,38 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.RecursiveStructure {
     try {
-      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.signal;
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __signal__ = __options__.signal;
 
-      if (signal?.aborted) {
-        throw new BamlAbortError('Operation was aborted', signal.reason);
+      if (__signal__?.aborted) {
+        throw new BamlAbortError('Operation was aborted', __signal__.reason);
       }
 
       // Check if onTick is provided and reject for sync operations
-      if (options.onTick) {
+      if (__options__.onTick) {
         throw new Error("onTick is not supported for synchronous functions. Please use the async client instead.");
       }
 
-      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector : [__options__.collector]) : [];
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
-      const raw = this.runtime.callFunctionSync(
+      const __raw__ = this.runtime.callFunctionSync(
         "TestRecursiveStructure",
         {
           "input": input
         },
         this.ctxManager.cloneContext(),
-        options.tb?.__tb(),
-        options.clientRegistry,
-        collector,
-        options.tags || {},
-        env,
-        signal,
-        options.watchers,
+        __options__.tb?.__tb(),
+        __options__.clientRegistry,
+        __collector__,
+        __options__.tags || {},
+        __env__,
+        __signal__,
+        __options__.watchers,
       )
-      return raw.parsed(false) as types.RecursiveStructure
+      return __raw__.parsed(false) as types.RecursiveStructure
     } catch (error: any) {
       throw toBamlError(error);
     }
@@ -227,38 +227,38 @@ export class BamlSyncClient {
       __baml_options__?: BamlCallOptions<never>
   ): types.SimpleNested {
     try {
-      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const signal = options.signal;
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __signal__ = __options__.signal;
 
-      if (signal?.aborted) {
-        throw new BamlAbortError('Operation was aborted', signal.reason);
+      if (__signal__?.aborted) {
+        throw new BamlAbortError('Operation was aborted', __signal__.reason);
       }
 
       // Check if onTick is provided and reject for sync operations
-      if (options.onTick) {
+      if (__options__.onTick) {
         throw new Error("onTick is not supported for synchronous functions. Please use the async client instead.");
       }
 
-      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector : [__options__.collector]) : [];
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
-      const raw = this.runtime.callFunctionSync(
+      const __raw__ = this.runtime.callFunctionSync(
         "TestSimpleNested",
         {
           "input": input
         },
         this.ctxManager.cloneContext(),
-        options.tb?.__tb(),
-        options.clientRegistry,
-        collector,
-        options.tags || {},
-        env,
-        signal,
-        options.watchers,
+        __options__.tb?.__tb(),
+        __options__.clientRegistry,
+        __collector__,
+        __options__.tags || {},
+        __env__,
+        __signal__,
+        __options__.watchers,
       )
-      return raw.parsed(false) as types.SimpleNested
+      return __raw__.parsed(false) as types.SimpleNested
     } catch (error: any) {
       throw toBamlError(error);
     }

@@ -23,6 +23,8 @@ import (
 var typeMap = map[string]reflect.Type{
 	"TYPES.AddTodoItem":                          reflect.TypeOf(types.AddTodoItem{}),
 	"STREAM_TYPES.AddTodoItem":                   reflect.TypeOf(stream_types.AddTodoItem{}),
+	"TYPES.AddressWithMeta":                      reflect.TypeOf(types.AddressWithMeta{}),
+	"STREAM_TYPES.AddressWithMeta":               reflect.TypeOf(stream_types.AddressWithMeta{}),
 	"TYPES.AnotherObject":                        reflect.TypeOf(types.AnotherObject{}),
 	"STREAM_TYPES.AnotherObject":                 reflect.TypeOf(stream_types.AnotherObject{}),
 	"TYPES.BigNumbers":                           reflect.TypeOf(types.BigNumbers{}),
@@ -171,6 +173,8 @@ var typeMap = map[string]reflect.Type{
 	"STREAM_TYPES.OriginalB":                     reflect.TypeOf(stream_types.OriginalB{}),
 	"TYPES.Person":                               reflect.TypeOf(types.Person{}),
 	"STREAM_TYPES.Person":                        reflect.TypeOf(stream_types.Person{}),
+	"TYPES.PersonWithMeta":                       reflect.TypeOf(types.PersonWithMeta{}),
+	"STREAM_TYPES.PersonWithMeta":                reflect.TypeOf(stream_types.PersonWithMeta{}),
 	"TYPES.PhoneNumber":                          reflect.TypeOf(types.PhoneNumber{}),
 	"STREAM_TYPES.PhoneNumber":                   reflect.TypeOf(stream_types.PhoneNumber{}),
 	"TYPES.Quantity":                             reflect.TypeOf(types.Quantity{}),

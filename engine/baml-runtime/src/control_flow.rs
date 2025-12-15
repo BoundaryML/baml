@@ -55,7 +55,7 @@ enum PathSegment {
 pub struct Node {
     pub id: NodeId,
     pub parent_node_id: Option<NodeId>,
-    pub lexical_id: String,
+    pub log_filter_key: String,
     pub label: String,
     pub span: Span,
     pub node_type: NodeType,
@@ -65,7 +65,7 @@ impl Node {
     fn new(
         id: NodeId,
         parent_node_id: Option<NodeId>,
-        lexical_id: impl Into<String>,
+        log_filter_key: impl Into<String>,
         label: impl Into<String>,
         span: Span,
         node_type: NodeType,
@@ -73,7 +73,7 @@ impl Node {
         Self {
             id,
             parent_node_id,
-            lexical_id: lexical_id.into(),
+            log_filter_key: log_filter_key.into(),
             label: label.into(),
             span,
             node_type,
@@ -82,11 +82,18 @@ impl Node {
 
     fn root(
         id: NodeId,
-        lexical_id: impl Into<String>,
+        log_filter_key: impl Into<String>,
         span: Span,
         label: impl Into<String>,
     ) -> Self {
-        Self::new(id, None, lexical_id, label, span, NodeType::FunctionRoot)
+        Self::new(
+            id,
+            None,
+            log_filter_key,
+            label,
+            span,
+            NodeType::FunctionRoot,
+        )
     }
 }
 
@@ -340,22 +347,22 @@ fn build_llm_function_graph(func: &hir::LlmFunction) -> ControlFlowVisualization
     let mut builder = ControlFlowVizBuilder::default();
     let root_id = builder.allocate_id();
     let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
-    let root_lexical = encode_segments(&func.name, std::slice::from_ref(&root_segment));
+    let root_log_filter_key = encode_segments(&func.name, std::slice::from_ref(&root_segment));
     builder.add_node(Node::root(
         root_id,
-        root_lexical,
+        root_log_filter_key,
         func.span.clone(),
         &func.name,
     ));
 
     let slug = slug_or_default("llm", "llm");
     let segment = PathSegment::OtherScope { slug, ordinal: 0 };
-    let lexical_id = encode_segments(&func.name, &[root_segment, segment.clone()]);
+    let log_filter_key = encode_segments(&func.name, &[root_segment, segment]);
     let loop_id = builder.allocate_id();
     let node = Node::new(
         loop_id,
         Some(root_id),
-        lexical_id,
+        log_filter_key,
         format!("LLM client: {}", func.client),
         func.span.clone(),
         NodeType::OtherScope,
@@ -411,7 +418,7 @@ impl HirTraversalContext {
         self.frames.last().map(|frame| frame.node_id)
     }
 
-    fn build_lexical_id(&self, segment: &PathSegment) -> String {
+    fn build_log_filter_key(&self, segment: &PathSegment) -> String {
         let mut segments: Vec<PathSegment> = self
             .frames
             .iter()
@@ -460,14 +467,14 @@ impl HirTraversalContext {
             slug_base
         };
         let segment = PathSegment::OtherScope { slug, ordinal };
-        let lexical_id = self.build_lexical_id(&segment);
+        let log_filter_key = self.build_log_filter_key(&segment);
         let node_id = self.graph.allocate_id();
         let parent_id = self.current_parent_id();
         let node_label = label.unwrap_or_default();
         let node = Node::new(
             node_id,
             parent_id,
-            lexical_id,
+            log_filter_key,
             node_label,
             span,
             NodeType::OtherScope,
@@ -605,13 +612,13 @@ impl HirTraversalContext {
             }
         };
         let segment = PathSegment::BranchGroup { slug, ordinal };
-        let lexical_id = self.build_lexical_id(&segment);
+        let log_filter_key = self.build_log_filter_key(&segment);
         let node_id = self.graph.allocate_id();
         let parent_id = self.current_parent_id();
         let node = Node::new(
             node_id,
             parent_id,
-            lexical_id,
+            log_filter_key,
             label,
             span.clone(),
             NodeType::BranchGroup,
@@ -674,13 +681,13 @@ impl HirTraversalContext {
             slug_base
         };
         let segment = PathSegment::BranchArm { slug, ordinal };
-        let lexical_id = self.build_lexical_id(&segment);
+        let log_filter_key = self.build_log_filter_key(&segment);
         let node_id = self.graph.allocate_id();
         let parent_id = self.current_parent_id();
         let node = Node::new(
             node_id,
             parent_id,
-            lexical_id,
+            log_filter_key,
             label,
             span,
             NodeType::BranchArm,
@@ -711,10 +718,17 @@ impl HirTraversalContext {
             slug_base
         };
         let segment = PathSegment::Loop { slug, ordinal };
-        let lexical_id = self.build_lexical_id(&segment);
+        let log_filter_key = self.build_log_filter_key(&segment);
         let node_id = self.graph.allocate_id();
         let parent_id = self.current_parent_id();
-        let node = Node::new(node_id, parent_id, lexical_id, label, span, NodeType::Loop);
+        let node = Node::new(
+            node_id,
+            parent_id,
+            log_filter_key,
+            label,
+            span,
+            NodeType::Loop,
+        );
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, &node_id);
@@ -742,13 +756,13 @@ impl HirTraversalContext {
         }
 
         let segment = PathSegment::Header { slug, ordinal };
-        let lexical_id = self.build_lexical_id(&segment);
+        let log_filter_key = self.build_log_filter_key(&segment);
         let node_id = self.graph.allocate_id();
         let parent_id = self.current_parent_id();
         let node = Node::new(
             node_id,
             parent_id,
-            lexical_id,
+            log_filter_key,
             header.title.clone(),
             header.span.clone(),
             NodeType::HeaderContextEnter,

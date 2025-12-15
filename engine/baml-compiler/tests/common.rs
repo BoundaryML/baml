@@ -110,19 +110,11 @@ fn convert_instruction(
         Instruction::Await => test::Instruction::Await,
         Instruction::Watch(idx) => test::Instruction::Watch(*idx),
         Instruction::Notify(idx) => test::Instruction::Notify(*idx),
+        Instruction::VizEnter(idx) => test::Instruction::VizEnter(*idx),
+        Instruction::VizExit(idx) => test::Instruction::VizExit(*idx),
         Instruction::Call(n) => test::Instruction::Call(*n),
         Instruction::Return => test::Instruction::Return,
         Instruction::Assert => test::Instruction::Assert,
-        Instruction::NotifyBlock(block_idx) => {
-            // Get the block notification from the function's block_notifications array
-            let notification = function
-                .block_notifications
-                .get(*block_idx)
-                .ok_or_else(|| {
-                    anyhow::anyhow!("Block notification index {} not found", block_idx)
-                })?;
-            test::Instruction::NotifyBlock(notification.clone())
-        }
     })
 }
 
@@ -189,7 +181,7 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
         );
 
         // Convert runtime instructions to test instructions
-        let actual_instructions: Vec<test::Instruction> = function
+        let actual_with_idx: Vec<(usize, test::Instruction)> = function
             .bytecode
             .instructions
             .iter()
@@ -203,6 +195,82 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
                     &globals,
                     function,
                 )
+                .map(|instr| (inst_idx, instr))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        let instr_len = actual_with_idx.len();
+        let mut mapping = vec![None; instr_len];
+
+        let is_viz_flags: Vec<bool> = actual_with_idx
+            .iter()
+            .map(|(_, instr)| {
+                matches!(
+                    instr,
+                    test::Instruction::VizEnter(_) | test::Instruction::VizExit(_)
+                )
+            })
+            .collect();
+
+        let is_viz_idx = |idx: usize| is_viz_flags[idx];
+
+        for (new_idx, (orig_idx, _instr)) in actual_with_idx
+            .iter()
+            .filter(|(_, instr)| {
+                !matches!(
+                    instr,
+                    test::Instruction::VizEnter(_) | test::Instruction::VizExit(_)
+                )
+            })
+            .enumerate()
+        {
+            mapping[*orig_idx] = Some(new_idx);
+        }
+
+        let remap_offset = |orig_idx: usize, offset: isize| -> anyhow::Result<isize> {
+            let new_current = mapping[orig_idx]
+                .ok_or_else(|| anyhow::anyhow!("No mapping for instruction {orig_idx}"))?;
+
+            let mut target = orig_idx as isize + offset;
+            let step = if offset >= 0 { 1 } else { -1 };
+
+            while target >= 0 && (target as usize) < instr_len && mapping[target as usize].is_none()
+            {
+                target += step;
+            }
+
+            let new_target = mapping
+                .get(target as usize)
+                .and_then(|m| *m)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Unable to remap jump target from {orig_idx} with offset {offset}"
+                    )
+                })?;
+
+            Ok(new_target as isize - new_current as isize)
+        };
+
+        let actual_instructions: Vec<test::Instruction> = actual_with_idx
+            .into_iter()
+            .filter(|(_, instr)| {
+                !matches!(
+                    instr,
+                    test::Instruction::VizEnter(_) | test::Instruction::VizExit(_)
+                )
+            })
+            .map(|(orig_idx, instr)| {
+                let adjusted = match instr {
+                    test::Instruction::Jump(offset) => {
+                        test::Instruction::Jump(remap_offset(orig_idx, offset)?)
+                    }
+                    test::Instruction::JumpIfFalse(offset) => {
+                        test::Instruction::JumpIfFalse(remap_offset(orig_idx, offset)?)
+                    }
+                    other => other,
+                };
+
+                Ok(adjusted)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
 

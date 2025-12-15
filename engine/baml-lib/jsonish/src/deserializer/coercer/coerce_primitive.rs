@@ -151,14 +151,21 @@ fn coerce_string(
         // If one of the variants is a String, prefer that over the raw input.
         // Otherwise, use the original raw string.
         crate::jsonish::Value::AnyOf(choices, original_string) => {
-            // Try to find a String variant in the choices
-            let string_value = choices.iter().find_map(|choice| {
-                if let crate::jsonish::Value::String(s, completion_state) = choice {
-                    Some((s.clone(), completion_state.clone()))
-                } else {
-                    None
-                }
-            });
+            // Prefer a String choice only when it looks like it comes from the original raw input.
+            // In streaming/partial cases the String choice is often a prefix of the raw input.
+            // Some parse paths can also produce derived String choices (e.g. extracted from an object);
+            // in those cases fall back to the raw string to preserve the user's content.
+            let string_value = choices
+                .iter()
+                .filter_map(|choice| match choice {
+                    crate::jsonish::Value::String(s, completion_state)
+                        if original_string.starts_with(s) || s == original_string =>
+                    {
+                        Some((s.clone(), completion_state.clone()))
+                    }
+                    _ => None,
+                })
+                .max_by_key(|(s, _)| s.len());
 
             let (string_val, completion_state) = string_value
                 .unwrap_or_else(|| (original_string.clone(), value.completion_state().clone()));

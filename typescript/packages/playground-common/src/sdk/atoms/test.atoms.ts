@@ -129,6 +129,7 @@ export const categorizedNotificationsAtom = atom<CategorizedNotifications>((get)
   const notifications = get(currentWatchNotificationsAtom);
 
   const isBlock = (notification: WatchNotification) => {
+    if (!notification.value) return false;
     try {
       const parsed = JSON.parse(notification.value) as { type?: string } | undefined;
       if (parsed?.type === 'block') return true;
@@ -138,7 +139,7 @@ export const categorizedNotificationsAtom = atom<CategorizedNotifications>((get)
 
   const isStream = (notification: WatchNotification) => {
     if (notification.isStream) return true;
-    return notification.value.startsWith('Stream(');
+    return notification.value?.startsWith('Stream(') ?? false;
   };
 
   return {

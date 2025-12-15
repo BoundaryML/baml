@@ -1,10 +1,5 @@
 import { BamlStream } from "@boundaryml/baml"
 
-export interface BlockNotification {
-  block_label: string
-  notification_type: "enter" | "exit"
-}
-
 export interface VarNotification<T> {
   variable_name: string
   value: T
@@ -68,14 +63,12 @@ class NotificationStream<PartialT, FinalT> implements BamlStream<PartialT, Final
   }
 }
 
-type BlockHandler = (event: BlockNotification) => void
 type VarHandler<T> = (event: VarNotification<T>) => void
 type StreamHandler<PartialT, FinalT> = (event: VarNotification<BamlStream<PartialT, FinalT>>) => void
 type InternalStreamHandler = (event: InternalStreamEvent) => void
 
 export interface InternalEventBindings {
   functionName: string
-  block: BlockHandler[]
   vars: Record<string, VarHandler<any>[]>
   streams: Record<string, InternalStreamHandler[]>
   functions: Record<string, InternalEventBindings>
@@ -101,7 +94,6 @@ type {{ collector.interface_name }}StreamTypes = {
 {% endif %}
 
 export interface {{ collector.interface_name }} extends EventCollectorInternal {
-  on_block(handler: BlockHandler): void
   {% if collector.has_var_notifications %}
   on_var<K extends keyof {{ collector.interface_name }}VarTypes>(channel: K, handler: (event: VarNotification<{{ collector.interface_name }}VarTypes[K]>) => void): void
   {% for var in collector.var_notifications %}
@@ -114,8 +106,6 @@ export interface {{ collector.interface_name }} extends EventCollectorInternal {
 }
 
 export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
-  const blockHandlers = new Set<BlockHandler>()
-
   {% for var in collector.var_notifications %}
   const varHandlers_{{ var.method_suffix }} = new Set<VarHandler<{{ var.value_type }}>>()
   const streamHandlers_{{ var.method_suffix }} = new Set<StreamHandler<{{ var.stream_type }}, {{ var.stream_type }}>>()
@@ -192,9 +182,6 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
   {% endfor %}
 
   return {
-    on_block(handler) {
-      blockHandlers.add(handler)
-    },
     {% if collector.has_var_notifications %}
     on_var<K extends keyof {{ collector.interface_name }}VarTypes>(channel: K, handler: (notif: VarNotification<{{ collector.interface_name }}VarTypes[K]>) => void) {
       const handlers = varHandlerMap[channel]
@@ -239,7 +226,6 @@ export function {{ collector.factory_name }}(): {{ collector.interface_name }} {
 
       return {
         functionName: "{{ collector.baml_name }}",
-        block: Array.from(blockHandlers),
         vars,
         streams,
         functions,

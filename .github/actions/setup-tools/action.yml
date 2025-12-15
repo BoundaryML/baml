@@ -20,10 +20,13 @@ runs:
         # we use rsync instead of rm -rf for faster deletion
         set -euxo pipefail
         mkdir -p /tmp/empty
-        sudo rsync -a --delete /tmp/empty/ /usr/share/dotnet/
-        sudo rsync -a --delete /tmp/empty/ /usr/local/lib/android/
-        sudo rsync -a --delete /tmp/empty/ /opt/ghc/
-        sudo rsync -a --delete /tmp/empty/ /opt/hostedtoolcache/CodeQL/
+        
+        # Only delete directories if they exist
+        [ -d /usr/share/dotnet ] && sudo rsync -a --delete /tmp/empty/ /usr/share/dotnet/
+        [ -d /usr/local/lib/android ] && sudo rsync -a --delete /tmp/empty/ /usr/local/lib/android/
+        [ -d /opt/ghc ] && sudo rsync -a --delete /tmp/empty/ /opt/ghc/
+        [ -d /opt/hostedtoolcache/CodeQL ] && sudo rsync -a --delete /tmp/empty/ /opt/hostedtoolcache/CodeQL/
+        
         df -h /
     - name: Setup mise
       uses: jdx/mise-action@v2

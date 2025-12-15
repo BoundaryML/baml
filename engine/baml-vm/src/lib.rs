@@ -25,5 +25,6 @@ pub use errors::{InternalError, RuntimeError, StackTrace};
 pub use indexable::{EvalStack, GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 pub use types::{
     Class, Enum, Function, FunctionKind, Future, FutureKind, Object, ObjectType, Value, Variant,
+    VizNodeMeta,
 };
 pub use vm::{BamlVmProgram, Frame, Vm, VmExecState};

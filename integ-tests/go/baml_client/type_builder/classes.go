@@ -59,6 +59,46 @@ func (t *AddTodoItemClassView) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 
+type AddressWithMetaClassView struct {
+	inner baml.ClassBuilder
+}
+
+func (t *AddressWithMetaClassView) ListProperties() ([]ClassPropertyView, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyView, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *AddressWithMetaClassView) PropertyStreet() (ClassPropertyView, error) {
+	return t.inner.Property("street")
+}
+
+func (t *AddressWithMetaClassView) PropertyCity() (ClassPropertyView, error) {
+	return t.inner.Property("city")
+}
+
+func (t *AddressWithMetaClassView) PropertyZipcode() (ClassPropertyView, error) {
+	return t.inner.Property("zipcode")
+}
+
+func (t *TypeBuilder) AddressWithMeta() (*AddressWithMetaClassView, error) {
+	bld, err := t.inner.Class("AddressWithMeta")
+	if err != nil {
+		return nil, err
+	}
+	return &AddressWithMetaClassView{inner: bld}, nil
+}
+
+func (t *AddressWithMetaClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
 type AnotherObjectClassView struct {
 	inner baml.ClassBuilder
 }
@@ -2816,6 +2856,50 @@ func (t *TypeBuilder) Person() (*PersonClassBuilder, error) {
 }
 
 func (t *PersonClassBuilder) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
+type PersonWithMetaClassView struct {
+	inner baml.ClassBuilder
+}
+
+func (t *PersonWithMetaClassView) ListProperties() ([]ClassPropertyView, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyView, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *PersonWithMetaClassView) PropertyName() (ClassPropertyView, error) {
+	return t.inner.Property("name")
+}
+
+func (t *PersonWithMetaClassView) PropertyAge() (ClassPropertyView, error) {
+	return t.inner.Property("age")
+}
+
+func (t *PersonWithMetaClassView) PropertyAddress() (ClassPropertyView, error) {
+	return t.inner.Property("address")
+}
+
+func (t *PersonWithMetaClassView) PropertyTags() (ClassPropertyView, error) {
+	return t.inner.Property("tags")
+}
+
+func (t *TypeBuilder) PersonWithMeta() (*PersonWithMetaClassView, error) {
+	bld, err := t.inner.Class("PersonWithMeta")
+	if err != nil {
+		return nil, err
+	}
+	return &PersonWithMetaClassView{inner: bld}, nil
+}
+
+func (t *PersonWithMetaClassView) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 

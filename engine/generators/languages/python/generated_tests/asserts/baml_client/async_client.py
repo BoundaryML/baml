@@ -78,22 +78,22 @@ class BamlAsyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     async def PersonTest(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.Person:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.PersonTest(
+            __stream__ = self.stream.PersonTest(
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="PersonTest", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="PersonTest", args={
                 
             })
-            return typing.cast(types.Person, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.Person, __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -106,14 +106,14 @@ class BamlStreamClient:
     def PersonTest(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.Person, types.Person]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="PersonTest", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="PersonTest", args={
             
         })
         return baml_py.BamlStream[stream_types.Person, types.Person](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.Person, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.Person, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     
 
@@ -126,10 +126,10 @@ class BamlHttpRequestClient:
     async def PersonTest(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PersonTest", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PersonTest", args={
             
         }, mode="request")
-        return result
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -141,10 +141,10 @@ class BamlHttpStreamRequestClient:
     async def PersonTest(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PersonTest", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PersonTest", args={
             
         }, mode="stream")
-        return result
+        return __result__
     
 
 b = BamlAsyncClient(DoNotUseDirectlyCallManager({}))

@@ -98,19 +98,20 @@ impl TyLowering {
                     "audio" => Ty::Audio,
                     "video" => Ty::Video,
                     "pdf" => Ty::Pdf,
-                    _ => Ty::Unknown,
+                    // User-defined type - return as Named for now
+                    _ => Ty::Named(name.clone()),
                 }
             }
-            // For user-defined types, we need name resolution
-            // This requires looking up the name in the project's items
-            // For now, return Unknown since we don't have full name resolution yet
-            //
-            // In a full implementation, this would:
-            // 1. Look up the path in the current file's items
-            // 2. Look up the path in imported modules
-            // 3. Return Ty::Class(ClassId) or Ty::Enum(EnumId) if found
-            // 4. Return Ty::Error and emit a diagnostic if not found
-            _ => Ty::Unknown,
+            // For qualified paths, join them with :: and return as Named
+            _ => {
+                let full_path = path
+                    .segments
+                    .iter()
+                    .map(smol_str::SmolStr::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                Ty::Named(baml_base::Name::new(&full_path))
+            }
         }
     }
 }

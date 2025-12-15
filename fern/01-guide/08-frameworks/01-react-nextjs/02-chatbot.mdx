@@ -68,44 +68,60 @@ baml-cli generate
 
 ## Step 2: Implement the Chat Interface
 
-You can implement the chat interface in two ways:
-
-### Option A: Using the Generated Hook Directly
-
-The simplest approach is to use the generated hook directly:
+The `useChat` hook's `data` property contains the assistant's streaming response (a `string`), not the messages array. You need to maintain your own message state:
 
 <CodeBlocks>
 ```tsx title="app/components/chat-interface.tsx"
 'use client'
 
 import { useChat } from "@/baml_client/react/hooks";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import type { Message } from "@/baml_client/types";
 
 export function ChatInterface() {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
 
   const chat = useChat();
 
-  const handleSubmit = async () => {
-    const newMessages = [
-      ...chat.data?.messages,
-      { role: "user", content: input }
-    ];
+  // When the assistant responds, add the response to the message history
+  useEffect(() => {
+    if (chat.isSuccess && chat.finalData) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: chat.finalData! }
+      ]);
+    }
+  }, [chat.isSuccess, chat.finalData]);
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || chat.isLoading) return;
+
+    const userMessage: Message = { role: "user", content: input };
+    const newMessages = [...messages, userMessage];
+
+    // Update local state immediately
+    setMessages(newMessages);
     setInput("");
 
-    await chat.mutate({ messages: newMessages });
+    // Send the full message history to the Chat function
+    await chat.mutate(newMessages);
   };
 
   return (
     <div>
       <div>
-        {chat.data?.messages.map((message, i) => (
+        {messages.map((message, i) => (
           <div key={i}>
-            {message.content}
+            <strong>{message.role}:</strong> {message.content}
           </div>
         ))}
-        {chat.isLoading && <div>Generating...</div>}
+        {chat.isLoading && (
+          <div>
+            <strong>assistant:</strong> {chat.data ?? "Generating..."}
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -124,61 +140,53 @@ export function ChatInterface() {
 ```
 </CodeBlocks>
 
-### Option B: Using a Custom Server Action
+### Using Callbacks for Fine-Grained Control
 
-Alternatively, you can create a custom server action for more control over the server-side implementation:
+You can use the hook's callbacks for more control over streaming events. This is useful for logging, analytics, or custom state management. The highlighted lines show the additions to the base example:
 
 <CodeBlocks>
-```ts title="app/actions/chat.ts"
-'use server'
-
-import { b } from "@/baml_client";
-import { Message } from "@/baml_client/types";
-
-export async function streamChat(messages: Message[]) {
-  const user = await authUser();
-
-  if (!user) {
-    throw new Error("User not authenticated");
-  }
-
-  return b.stream.Chat(messages).toStreamable();
-}
-```
-
-```tsx title="app/components/chat-interface-with-action.tsx"
+```tsx {9, 12-29, 54} title="app/components/chat-interface.tsx"
 'use client'
 
 import { useChat } from "@/baml_client/react/hooks";
-import { streamChat } from "../actions/chat";
 import { useState } from "react";
+import type { Message } from "@/baml_client/types";
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [streamingContent, setStreamingContent] = useState("");
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
 
-  const handleSubmit = async () => {
-    const newMessages = [
-      ...messages,
-      { role: "user", content: input }
-    ];
-    setInput("");
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const stream = await streamChat(newMessages);
-
-      for await (const message of stream) {
-        setMessages((prev) => [...prev, message]);
+  const chat = useChat({
+    // Called on each streaming partial update
+    onStreamData: (partial) => {
+      if (partial) {
+        setStreamingContent(partial);
       }
-    } catch (error) {
-      setError(error as Error);
-    } finally {
-      setIsLoading(false);
-    }
+    },
+    // Called when streaming completes with the final response
+    onFinalData: (final) => {
+      if (final) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: final }
+        ]);
+        setStreamingContent("");
+      }
+    },
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || chat.isLoading) return;
+
+    const userMessage: Message = { role: "user", content: input };
+    const newMessages = [...messages, userMessage];
+
+    setMessages(newMessages);
+    setInput("");
+
+    await chat.mutate(newMessages);
   };
 
   return (
@@ -186,23 +194,25 @@ export function ChatInterface() {
       <div>
         {messages.map((message, i) => (
           <div key={i}>
-            {message.content}
+            <strong>{message.role}:</strong> {message.content}
           </div>
         ))}
-        {isLoading && <div>Typing...</div>}
+        {chat.isLoading && (
+          <div>
+            <strong>assistant:</strong> {streamingContent || "Generating..."}
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-          />
-          <button type="submit" disabled={isLoading}>
-            Send
-          </button>
-        </div>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your message..."
+        />
+        <button type="submit" disabled={chat.isLoading}>
+          Send
+        </button>
       </form>
     </div>
   );
@@ -210,12 +220,11 @@ export function ChatInterface() {
 ```
 </CodeBlocks>
 
-The server action approach is useful when you need to:
-- Add custom server-side logic
-- Handle authentication
-- Add logging or monitoring
-- Implement rate limiting
-- Add custom error handling
+With callbacks, you can:
+- Track streaming progress with `onStreamData`
+- Handle completion with `onFinalData`
+- Add error handling with `onError`
+- Integrate analytics or logging on each event
 
 ## Next Steps
 

@@ -90,35 +90,35 @@ class BamlSyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     def Bar(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> typing.Union["types.Example", "types.Example2"]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.Bar(x=x,
+            __stream__ = self.stream.Bar(x=x,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="Bar", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="Bar", args={
                 "x": x,
             })
-            return typing.cast(typing.Union["types.Example", "types.Example2"], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.Union["types.Example", "types.Example2"], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> typing.Union["types.Example2", "types.Example"]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.Foo(x=x,
+            __stream__ = self.stream.Foo(x=x,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="Foo", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="Foo", args={
                 "x": x,
             })
-            return typing.cast(typing.Union["types.Example2", "types.Example"], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.Union["types.Example2", "types.Example"], __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -131,26 +131,26 @@ class BamlStreamClient:
     def Bar(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.Union["stream_types.Example", "stream_types.Example2"], typing.Union["types.Example", "types.Example2"]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="Bar", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="Bar", args={
             "x": x,
         })
         return baml_py.BamlSyncStream[typing.Union["stream_types.Example", "stream_types.Example2"], typing.Union["types.Example", "types.Example2"]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.Union["stream_types.Example", "stream_types.Example2"], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Union["types.Example", "types.Example2"], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.Union["stream_types.Example2", "stream_types.Example"], typing.Union["types.Example2", "types.Example"]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="Foo", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="Foo", args={
             "x": x,
         })
         return baml_py.BamlSyncStream[typing.Union["stream_types.Example2", "stream_types.Example"], typing.Union["types.Example2", "types.Example"]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.Union["stream_types.Example2", "stream_types.Example"], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Union["types.Example2", "types.Example"], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     
 
@@ -163,17 +163,17 @@ class BamlHttpRequestClient:
     def Bar(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Bar", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Bar", args={
             "x": x,
         }, mode="request")
-        return result
+        return __result__
     def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Foo", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Foo", args={
             "x": x,
         }, mode="request")
-        return result
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -185,17 +185,17 @@ class BamlHttpStreamRequestClient:
     def Bar(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Bar", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Bar", args={
             "x": x,
         }, mode="stream")
-        return result
+        return __result__
     def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Foo", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Foo", args={
             "x": x,
         }, mode="stream")
-        return result
+        return __result__
     
 
 b = BamlSyncClient(DoNotUseDirectlyCallManager({}))

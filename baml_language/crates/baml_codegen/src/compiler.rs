@@ -7,9 +7,33 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
-use baml_hir::{BinaryOp, ExprBody, ExprId, FunctionBody, Literal, Pattern, StmtId, UnaryOp};
+use baml_hir::{
+    AssignOp, BinaryOp, Expr, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, Pattern,
+    StmtId, UnaryOp,
+};
 use baml_thir::{InferenceResult, Ty};
-use baml_vm::{BinOp, Bytecode, CmpOp, Function, FunctionKind, Instruction, Object, Value};
+use baml_vm::{
+    BinOp, Bytecode, CmpOp, Function, FunctionKind, GlobalIndex, Instruction, Object, ObjectIndex,
+    ObjectPool, Value,
+};
+
+/// Context for compiling functions to bytecode.
+///
+/// Contains all the shared state needed during compilation:
+/// type inference results, global mappings, class information, and the shared object pool.
+pub struct CodegenContext<'db, 'ctx, 'obj> {
+    /// Type inference result from THIR.
+    pub inference: &'db InferenceResult<'db>,
+    /// Resolved global names to indices.
+    pub globals: &'ctx HashMap<String, usize>,
+    /// Resolved class field indices (class name -> field name -> field index).
+    pub classes: &'ctx HashMap<String, HashMap<String, usize>>,
+    /// Pre-allocated Class object indices in the program's object pool.
+    pub class_object_indices: &'ctx HashMap<String, usize>,
+    /// Shared object pool for strings, etc.
+    /// Objects are added directly here with correct indices, eliminating remapping.
+    pub objects: &'obj mut ObjectPool,
+}
 
 /// Block scope for tracking local variables.
 #[derive(Debug, Default)]
@@ -22,13 +46,31 @@ struct Scope {
     id: usize,
 }
 
+/// Information about the current loop for break/continue handling.
+#[derive(Debug)]
+struct LoopInfo {
+    /// Length of scopes vec before entering loop body.
+    /// Used by break/continue to know how many scopes to pop.
+    scope_depth: usize,
+    /// Jump instruction locations to patch for break statements.
+    break_patch_list: Vec<usize>,
+    /// Jump instruction locations to patch for continue statements.
+    continue_patch_list: Vec<usize>,
+}
+
 /// Compiler state for generating bytecode from THIR.
-pub struct Compiler<'db> {
+pub struct Compiler<'db, 'ctx, 'obj> {
     /// Type inference result from THIR.
     inference: &'db InferenceResult<'db>,
 
     /// Resolved global names to indices.
-    globals: HashMap<String, usize>,
+    globals: &'ctx HashMap<String, usize>,
+
+    /// Resolved class field indices (class name -> field name -> field index).
+    classes: &'ctx HashMap<String, HashMap<String, usize>>,
+
+    /// Pre-allocated Class object indices in the program's object pool.
+    class_object_indices: &'ctx HashMap<String, usize>,
 
     /// Resolved local variable names to stack indices.
     locals: HashMap<String, usize>,
@@ -45,28 +87,36 @@ pub struct Compiler<'db> {
     /// Bytecode being generated.
     bytecode: Bytecode,
 
-    /// Objects pool (for strings, classes, etc.).
-    objects: Vec<Object>,
+    /// Shared objects pool (for strings, etc. - NOT classes, those are pre-allocated).
+    objects: &'obj mut ObjectPool,
 
     /// Counter for generating unique compiler-internal variable names.
     /// Used to avoid collisions when the same internal variable name
     /// (like the iterator temp) appears in nested scopes.
     gensym_counter: usize,
+
+    /// Current loop info for break/continue handling.
+    current_loop: Option<LoopInfo>,
 }
 
-impl<'db> Compiler<'db> {
-    /// Create a new compiler with the given type inference result and global mappings.
-    pub fn new(inference: &'db InferenceResult<'db>, globals: HashMap<String, usize>) -> Self {
+impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
+    /// Create a new compiler with the given codegen context.
+    // CodegenContext contains `&mut ObjectPool` which must be moved, not borrowed.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(ctx: CodegenContext<'db, 'ctx, 'obj>) -> Self {
         Self {
-            inference,
-            globals,
+            inference: ctx.inference,
+            globals: ctx.globals,
+            classes: ctx.classes,
+            class_object_indices: ctx.class_object_indices,
             locals: HashMap::new(),
             scopes: Vec::new(),
             locals_in_scope: Vec::new(),
             current_source_line: 0,
             bytecode: Bytecode::new(),
-            objects: Vec::new(),
+            objects: ctx.objects,
             gensym_counter: 0,
+            current_loop: None,
         }
     }
 
@@ -86,8 +136,7 @@ impl<'db> Compiler<'db> {
     /// Compile a function from its THIR-typed body.
     pub fn compile_function(
         &mut self,
-        name: &str,
-        params: &[Name],
+        signature: &FunctionSignature,
         body: &FunctionBody,
     ) -> Function {
         // Reset state for this function
@@ -96,8 +145,11 @@ impl<'db> Compiler<'db> {
         self.locals_in_scope.clear();
         self.bytecode = Bytecode::new();
 
+        let name = signature.name.as_str();
+        let params: Vec<Name> = signature.params.iter().map(|p| p.name.clone()).collect();
+
         match body {
-            FunctionBody::Expr(expr_body) => self.compile_expr_function(name, params, expr_body),
+            FunctionBody::Expr(expr_body) => self.compile_expr_function(name, &params, expr_body),
             FunctionBody::Llm(_) => {
                 // LLM functions have no bytecode to compile
                 Function {
@@ -111,16 +163,26 @@ impl<'db> Compiler<'db> {
                             .map(std::string::ToString::to_string)
                             .collect(),
                     ],
+                    span: baml_base::Span::fake(),
+                    block_notifications: Vec::new(),
                 }
             }
             FunctionBody::Missing => {
-                // Missing body - return empty function
+                // TODO: cannot compile function with missing body: {name}
+                // Return an empty function as a placeholder
                 Function {
                     name: name.to_string(),
                     arity: params.len(),
                     bytecode: Bytecode::new(),
                     kind: FunctionKind::Exec,
-                    locals_in_scope: Vec::new(),
+                    locals_in_scope: vec![
+                        params
+                            .iter()
+                            .map(std::string::ToString::to_string)
+                            .collect(),
+                    ],
+                    span: baml_base::Span::fake(),
+                    block_notifications: Vec::new(),
                 }
             }
         }
@@ -165,6 +227,40 @@ impl<'db> Compiler<'db> {
                     names
                 })
                 .collect(),
+            span: baml_base::Span::fake(),
+            block_notifications: Vec::new(),
+        }
+    }
+
+    /// Check if an expression produces a value on the stack.
+    ///
+    /// Most expressions produce values, but some don't:
+    /// - If without else: never produces a value
+    /// - If with else: produces a value only if BOTH branches produce values
+    /// - Block without tail expression: never produces a value
+    /// - Block with tail expression: produces a value if tail produces a value
+    fn expr_produces_value(expr_id: ExprId, body: &ExprBody) -> bool {
+        match &body.exprs[expr_id] {
+            Expr::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                // If-without-else never produces a value
+                let Some(else_expr) = else_branch else {
+                    return false;
+                };
+                // If-with-else produces a value only if both branches do
+                Self::expr_produces_value(*then_branch, body)
+                    && Self::expr_produces_value(*else_expr, body)
+            }
+            Expr::Block { tail_expr, .. } => {
+                // Block produces a value only if it has a tail that produces a value
+                tail_expr
+                    .map(|tail| Self::expr_produces_value(tail, body))
+                    .unwrap_or(false)
+            }
+            _ => true,
         }
     }
 
@@ -187,11 +283,11 @@ impl<'db> Compiler<'db> {
                 if let Some(&index) = self.locals.get(&name_str) {
                     self.emit(Instruction::LoadVar(index));
                 } else if let Some(&index) = self.globals.get(&name_str) {
-                    self.emit(Instruction::LoadGlobal(index));
+                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(index)));
                 } else {
                     // Unknown variable - this should have been caught by type checker
                     // For now, treat as global 0 (error recovery)
-                    self.emit(Instruction::LoadGlobal(0));
+                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(0)));
                 }
             }
 
@@ -242,16 +338,33 @@ impl<'db> Compiler<'db> {
                 then_branch,
                 else_branch,
             } => {
+                // Compile condition - leaves result on stack
                 self.compile_expr(*condition, body);
+
+                // Skip the if branch when condition is false
                 let skip_if = self.emit(Instruction::JumpIfFalse(0));
+
+                // Pop condition (true path)
                 self.emit(Instruction::Pop(1));
+
+                // Compile the if branch
                 self.compile_expr(*then_branch, body);
+
+                // Skip the else branch (or just the false-path pop if no else)
                 let skip_else = self.emit(Instruction::Jump(0));
+
+                // Patch skip_if to jump here (false path)
                 self.patch_jump(skip_if);
+
+                // Pop condition (false path)
                 self.emit(Instruction::Pop(1));
+
+                // Compile else branch if it exists
                 if let Some(else_expr) = else_branch {
                     self.compile_expr(*else_expr, body);
                 }
+
+                // Patch skip_else - if no else, this just skips the false-path pop
                 self.patch_jump(skip_else);
             }
 
@@ -276,16 +389,47 @@ impl<'db> Compiler<'db> {
                 self.emit(Instruction::AllocArray(elements.len()));
             }
 
-            Expr::Object {
-                type_name: _,
-                fields,
-            } => {
-                // For now, just compile fields in order
-                // TODO: Proper class allocation when class system is complete
-                for (_name, value) in fields {
-                    self.compile_expr(*value, body);
+            Expr::Object { type_name, fields } => {
+                // Look up class field indices and pre-allocated object index
+                let name_str = type_name.as_ref().map(std::string::ToString::to_string);
+                let field_indices = name_str.as_ref().and_then(|name| self.classes.get(name));
+                let class_obj_idx = name_str
+                    .as_ref()
+                    .and_then(|name| self.class_object_indices.get(name).copied());
+
+                let (Some(field_indices), Some(obj_idx)) = (field_indices, class_obj_idx) else {
+                    panic!(
+                        "undefined class: {}",
+                        name_str.as_deref().unwrap_or("<anonymous>")
+                    );
+                };
+
+                // Emit AllocInstance with pre-allocated Class object index
+                self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(obj_idx)));
+
+                // For each field: Copy instance, compile value, StoreField
+                for (field_name, field_value) in fields {
+                    // Copy the instance reference (it's at top of stack)
+                    self.emit(Instruction::Copy(0));
+
+                    // Compile the field value
+                    self.compile_expr(*field_value, body);
+
+                    // Get field index and store
+                    let field_name_str: &str = field_name.as_ref();
+                    let field_idx =
+                        field_indices
+                            .get(field_name_str)
+                            .copied()
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "undefined field '{}' in class '{}'",
+                                    field_name_str,
+                                    name_str.as_deref().unwrap_or("<anonymous>")
+                                )
+                            });
+                    self.emit(Instruction::StoreField(field_idx));
                 }
-                self.emit(Instruction::AllocArray(fields.len()));
             }
 
             Expr::FieldAccess { base, field: _ } => {
@@ -301,9 +445,7 @@ impl<'db> Compiler<'db> {
             }
 
             Expr::Missing => {
-                // Emit null for missing expressions
-                let idx = self.add_constant(Value::Null);
-                self.emit(Instruction::LoadConst(idx));
+                // TODO: cannot compile missing expression - skip
             }
         }
     }
@@ -338,9 +480,12 @@ impl<'db> Compiler<'db> {
             }
 
             Stmt::Expr(expr) => {
+                let produces_value = Self::expr_produces_value(*expr, body);
                 self.compile_expr(*expr, body);
-                // Expression statement - discard result
-                self.emit(Instruction::Pop(1));
+                // Only pop if the expression produced a value
+                if produces_value {
+                    self.emit(Instruction::Pop(1));
+                }
             }
 
             Stmt::Return(expr) => {
@@ -358,15 +503,15 @@ impl<'db> Compiler<'db> {
                 condition,
                 body: while_body,
             } => {
-                let loop_start = self.next_insn_index();
-                self.compile_expr(*condition, body);
-                let exit_jump = self.emit(Instruction::JumpIfFalse(0));
-                self.emit(Instruction::Pop(1));
-                self.compile_expr(*while_body, body);
-                self.emit(Instruction::Pop(1)); // Discard body result
-                self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
-                self.patch_jump(exit_jump);
-                self.emit(Instruction::Pop(1)); // Pop condition on exit
+                self.compile_while_loop(
+                    |ctx| ctx.compile_expr(*condition, body),
+                    |ctx| {
+                        ctx.compile_expr(*while_body, body);
+                        // The body result is not used, but if it's a block expression
+                        // it will handle its own stack through exit_scope
+                    },
+                    |_| {}, // No after code for simple while
+                );
             }
 
             Stmt::ForIn {
@@ -374,46 +519,82 @@ impl<'db> Compiler<'db> {
                 iterator,
                 body: for_body,
             } => {
-                // Compile iterator
+                // For-in loop compilation:
+                // let @array = (iterator);
+                // let @array_len = baml.Array.length(@array);
+                // let @loop_i = 0;
+                // while (@loop_i < @array_len) {
+                //     let <pattern> = @array[@loop_i];
+                //     @loop_i = @loop_i + 1;
+                //     (body)
+                // }
+
+                // Compile iterator expression - this puts the array on the stack
                 self.compile_expr(*iterator, body);
 
                 self.enter_scope();
 
-                // Store iterator in temp variable (unique name to avoid collisions in nested loops)
-                let iter_var = self.gensym("iter");
-                self.track_local(&iter_var);
+                // Store array in temp variable
+                let array_var = self.gensym("for_array");
+                let array_location = self.track_local(&array_var);
 
-                // Store length
-                // TODO: Call length method when native functions are available
-
-                // Store index = 0 (unique name to avoid collisions in nested loops)
-                let idx_var = self.gensym("idx");
-                let zero_idx = self.add_constant(Value::Int(0));
-                self.emit(Instruction::LoadConst(zero_idx));
-                self.track_local(&idx_var);
-
-                let loop_start = self.next_insn_index();
-
-                // Check if index < length
-                // For now, this is a simplified implementation
-                // TODO: Proper iterator protocol
-
-                // Extract variable name from pattern
-                let pat = &body.patterns[*pattern];
-                match pat {
-                    Pattern::Binding(name) => {
-                        self.track_local(name.as_ref());
-                    }
+                // Get array length: baml.Array.length(@array)
+                let length_var = self.gensym("for_len");
+                if let Some(&len_fn_idx) = self.globals.get("baml.Array.length") {
+                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(len_fn_idx)));
+                    self.emit(Instruction::LoadVar(array_location));
+                    self.emit(Instruction::Call(1));
+                } else {
+                    // Fallback: push 0 for length (loop won't execute)
+                    let zero = self.add_constant(Value::Int(0));
+                    self.emit(Instruction::LoadConst(zero));
                 }
+                let length_location = self.track_local(&length_var);
 
-                // Compile body
-                self.compile_expr(*for_body, body);
-                self.emit(Instruction::Pop(1)); // Discard body result
+                // Initialize loop index to 0
+                let idx_var = self.gensym("for_idx");
+                let zero = self.add_constant(Value::Int(0));
+                self.emit(Instruction::LoadConst(zero));
+                let idx_location = self.track_local(&idx_var);
 
-                // Increment index
-                // TODO: Proper loop mechanics
+                // Now compile the while loop
+                self.compile_while_loop(
+                    |ctx| {
+                        // Condition: @loop_i < @array_len
+                        ctx.emit(Instruction::LoadVar(idx_location));
+                        ctx.emit(Instruction::LoadVar(length_location));
+                        ctx.emit(Instruction::CmpOp(CmpOp::Lt));
+                    },
+                    |ctx| {
+                        ctx.enter_scope();
 
-                self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
+                        // Extract variable name from pattern and track it
+                        let pat = &body.patterns[*pattern];
+                        match pat {
+                            Pattern::Binding(name) => {
+                                ctx.track_local(name.as_ref());
+                            }
+                        }
+
+                        // let <pattern> = @array[@loop_i]
+                        ctx.emit(Instruction::LoadVar(array_location));
+                        ctx.emit(Instruction::LoadVar(idx_location));
+                        ctx.emit(Instruction::LoadArrayElement);
+
+                        // Increment index: @loop_i = @loop_i + 1
+                        ctx.emit(Instruction::LoadVar(idx_location));
+                        let one = ctx.add_constant(Value::Int(1));
+                        ctx.emit(Instruction::LoadConst(one));
+                        ctx.emit(Instruction::BinOp(BinOp::Add));
+                        ctx.emit(Instruction::StoreVar(idx_location));
+
+                        // Compile body
+                        ctx.compile_expr(*for_body, body);
+
+                        ctx.exit_scope(false);
+                    },
+                    |_| {}, // No after code
+                );
 
                 self.exit_scope(false);
             }
@@ -431,44 +612,127 @@ impl<'db> Compiler<'db> {
                     self.compile_stmt(*init_stmt, body);
                 }
 
-                let loop_start = self.next_insn_index();
-
-                // Compile condition
-                if let Some(cond) = condition {
-                    self.compile_expr(*cond, body);
-                    let exit_jump = self.emit(Instruction::JumpIfFalse(0));
-                    self.emit(Instruction::Pop(1));
-
-                    // Compile body
-                    self.compile_expr(*for_body, body);
-                    self.emit(Instruction::Pop(1));
-
-                    // Compile update
-                    if let Some(upd) = update {
-                        self.compile_expr(*upd, body);
-                        self.emit(Instruction::Pop(1));
+                match condition {
+                    Some(cond) => {
+                        // Loop with condition
+                        self.compile_while_loop(
+                            |ctx| ctx.compile_expr(*cond, body),
+                            |ctx| ctx.compile_expr(*for_body, body),
+                            |ctx| {
+                                if let Some(upd) = update {
+                                    ctx.compile_stmt(*upd, body);
+                                }
+                            },
+                        );
                     }
+                    None => {
+                        // Infinite loop
+                        let loop_start = self.next_insn_index();
 
-                    self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
-                    self.patch_jump(exit_jump);
-                    self.emit(Instruction::Pop(1));
-                } else {
-                    // Infinite loop
-                    self.compile_expr(*for_body, body);
-                    self.emit(Instruction::Pop(1));
+                        let break_locs = self.wrap_loop_body(|ctx| {
+                            ctx.compile_expr(*for_body, body);
+                        });
 
-                    if let Some(upd) = update {
-                        self.compile_expr(*upd, body);
-                        self.emit(Instruction::Pop(1));
+                        if let Some(upd) = update {
+                            self.compile_stmt(*upd, body);
+                        }
+
+                        self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
+
+                        // Patch break locations
+                        for loc in break_locs {
+                            self.patch_jump(loc);
+                        }
                     }
-
-                    self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
                 }
 
                 self.exit_scope(false);
             }
 
-            Stmt::Missing => {}
+            Stmt::Break => {
+                let loop_info = self
+                    .current_loop
+                    .as_ref()
+                    .expect("break statement outside of loop");
+                let pop_until = loop_info.scope_depth;
+
+                // Pop locals from nested scopes before jumping out
+                self.emit_scope_drops(pop_until);
+
+                let jump_loc = self.emit(Instruction::Jump(0));
+                self.current_loop
+                    .as_mut()
+                    .unwrap()
+                    .break_patch_list
+                    .push(jump_loc);
+            }
+
+            Stmt::Continue => {
+                let loop_info = self
+                    .current_loop
+                    .as_ref()
+                    .expect("continue statement outside of loop");
+                let pop_until = loop_info.scope_depth;
+
+                // Pop locals from nested scopes before jumping back
+                self.emit_scope_drops(pop_until);
+
+                let jump_loc = self.emit(Instruction::Jump(0));
+                self.current_loop
+                    .as_mut()
+                    .unwrap()
+                    .continue_patch_list
+                    .push(jump_loc);
+            }
+
+            Stmt::Assign { target, value } => {
+                let Expr::Path(name) = &body.exprs[*target] else {
+                    panic!(
+                        "assignment target must be a variable (field/array assignment not yet implemented)"
+                    );
+                };
+                let name_str = name.to_string();
+                let Some(&index) = self.locals.get(&name_str) else {
+                    panic!("cannot assign to undefined variable: {name_str}");
+                };
+
+                self.compile_expr(*value, body);
+                self.emit(Instruction::StoreVar(index));
+            }
+
+            Stmt::AssignOp { target, op, value } => {
+                let Expr::Path(name) = &body.exprs[*target] else {
+                    panic!(
+                        "assignment target must be a variable (field/array assignment not yet implemented)"
+                    );
+                };
+                let name_str = name.to_string();
+                let Some(&index) = self.locals.get(&name_str) else {
+                    panic!("cannot assign to undefined variable: {name_str}");
+                };
+
+                // Load current value, apply operation, store result
+                self.emit(Instruction::LoadVar(index));
+                self.compile_expr(*value, body);
+                let instr = match op {
+                    AssignOp::Add => Instruction::BinOp(BinOp::Add),
+                    AssignOp::Sub => Instruction::BinOp(BinOp::Sub),
+                    AssignOp::Mul => Instruction::BinOp(BinOp::Mul),
+                    AssignOp::Div => Instruction::BinOp(BinOp::Div),
+                    AssignOp::Mod => Instruction::BinOp(BinOp::Mod),
+                    AssignOp::BitAnd => Instruction::BinOp(BinOp::BitAnd),
+                    AssignOp::BitOr => Instruction::BinOp(BinOp::BitOr),
+                    AssignOp::BitXor => Instruction::BinOp(BinOp::BitXor),
+                    AssignOp::Shl => Instruction::BinOp(BinOp::Shl),
+                    AssignOp::Shr => Instruction::BinOp(BinOp::Shr),
+                };
+                self.emit(instr);
+                self.emit(Instruction::StoreVar(index));
+            }
+
+            Stmt::Missing => {
+                // TODO: cannot compile missing statement - skip
+            }
         }
     }
 
@@ -487,7 +751,7 @@ impl<'db> Compiler<'db> {
             Literal::String(v) => {
                 let obj_idx = self.objects.len();
                 self.objects.push(Object::String(v.clone()));
-                let idx = self.add_constant(Value::Object(obj_idx));
+                let idx = self.add_constant(Value::Object(ObjectIndex::from_raw(obj_idx)));
                 self.emit(Instruction::LoadConst(idx));
             }
             Literal::Bool(v) => {
@@ -607,20 +871,128 @@ impl<'db> Compiler<'db> {
         }
 
         if let Some(scope) = self.scopes.pop() {
-            // At depth 0 (function body), we don't need to pop locals
-            // because the function will return
-            if scope.depth >= 1 && !scope.locals.is_empty() {
+            // depth 0 = function params, depth 1 = function body block
+            // Only emit Pop/PopReplace for nested blocks (depth > 1).
+            // Function body cleanup is handled by Return.
+            if scope.depth > 1 && !scope.locals.is_empty() {
                 if scope_has_trailing_expr {
                     self.emit(Instruction::PopReplace(scope.locals.len()));
                 } else {
                     self.emit(Instruction::Pop(scope.locals.len()));
                 }
-
-                // Remove locals from this scope
-                for local in &scope.locals {
-                    self.locals.remove(local);
-                }
             }
+
+            // Always remove locals from tracking (regardless of depth)
+            for local in &scope.locals {
+                self.locals.remove(local);
+            }
+        }
+    }
+
+    /// Emit instructions to drop scopes from `pop_until` to current.
+    ///
+    /// Used by break/continue to pop locals before jumping out of nested scopes.
+    /// Does NOT modify the scope stack - just emits Pop instructions.
+    fn emit_scope_drops(&mut self, pop_until: usize) {
+        let scopes = &self.scopes[pop_until..];
+
+        let local_count: usize = scopes
+            .iter()
+            .map(|s| {
+                // depth 0 is function body block, which will be cleaned up by return
+                if s.depth == 0 { 0 } else { s.locals.len() }
+            })
+            .sum();
+
+        if local_count > 0 {
+            self.emit(Instruction::Pop(local_count));
+        }
+    }
+
+    /// Compile a while loop with proper break/continue support.
+    ///
+    /// The loop structure is:
+    /// ```text
+    /// loop_start:
+    ///   compile_condition
+    ///   JumpIfFalse exit_pop
+    ///   Pop 1  // pop condition
+    ///   compile_body
+    ///   compile_after (for continue handling)
+    ///   Jump loop_start
+    /// exit_pop:
+    ///   Pop 1  // pop condition
+    /// ```
+    fn compile_while_loop(
+        &mut self,
+        compile_condition: impl FnOnce(&mut Self),
+        compile_body: impl FnOnce(&mut Self),
+        compile_after: impl FnOnce(&mut Self),
+    ) {
+        let loop_start = self.next_insn_index();
+
+        compile_condition(self);
+
+        // This jump needs patching - it jumps to exit when condition is false
+        let bail_jump = self.emit(Instruction::JumpIfFalse(0));
+        self.emit(Instruction::Pop(1)); // Pop condition (true case)
+
+        // Wrap body in loop context for break/continue
+        let break_locs = self.wrap_loop_body(compile_body);
+
+        // Code that runs after each iteration (for continue targets)
+        compile_after(self);
+
+        // Jump back to loop start
+        self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
+
+        // Exit point: pop condition (false case)
+        let pop_if_condition = self.emit(Instruction::Pop(1));
+        self.patch_jump_to(bail_jump, pop_if_condition);
+
+        // Patch all break statements to jump here (after condition pop)
+        for loc in break_locs {
+            self.patch_jump(loc);
+        }
+    }
+
+    /// Wrap a loop body to handle break/continue.
+    ///
+    /// Returns the break patch list - locations that need to be patched
+    /// to point to the loop exit.
+    fn wrap_loop_body(&mut self, compile_body: impl FnOnce(&mut Self)) -> Vec<usize> {
+        self.enter_scope();
+
+        let old_loop = self.current_loop.replace(LoopInfo {
+            scope_depth: self.scopes.len(),
+            break_patch_list: Vec::new(),
+            continue_patch_list: Vec::new(),
+        });
+
+        compile_body(self);
+
+        let loop_info = std::mem::replace(&mut self.current_loop, old_loop)
+            .expect("loop info should exist after compile_body");
+
+        self.exit_scope(false);
+
+        // Patch continue jumps to point to current position
+        // (which is right before the "after" code and jump back to start)
+        for continue_jmp in loop_info.continue_patch_list {
+            self.patch_jump(continue_jmp);
+        }
+
+        loop_info.break_patch_list
+    }
+
+    /// Patch a jump instruction to point to a specific destination.
+    #[allow(clippy::cast_possible_wrap)]
+    fn patch_jump_to(&mut self, instruction_ptr: usize, destination: usize) {
+        match &mut self.bytecode.instructions[instruction_ptr] {
+            Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
+                *offset = destination as isize - instruction_ptr as isize;
+            }
+            _ => panic!("expected jump instruction at index {instruction_ptr}"),
         }
     }
 }
@@ -630,23 +1002,17 @@ impl<'db> Compiler<'db> {
 /// This is the main entry point for compiling a single function.
 ///
 /// # Arguments
-/// * `name` - Function name
-/// * `params` - Parameter names
+/// * `signature` - Function signature (name, parameters, return type)
 /// * `body` - HIR function body
-/// * `inference` - THIR type inference result
-/// * `globals` - Global name to index mapping
+/// * `ctx` - Codegen context containing type inference, globals, class info, and shared object pool
 ///
-/// # Returns
-/// A tuple of (Function, `Vec<Object>`) where the objects are the object pool
-/// containing strings, classes, etc. referenced by the function's bytecode.
-pub fn compile_function<'db>(
-    name: &str,
-    params: &[Name],
+/// Objects (strings, etc.) are added directly to `ctx.objects` with correct indices,
+/// eliminating the need for post-compilation index remapping.
+pub fn compile_function(
+    signature: &FunctionSignature,
     body: &FunctionBody,
-    inference: &'db InferenceResult<'db>,
-    globals: HashMap<String, usize>,
-) -> (Function, Vec<Object>) {
-    let mut compiler = Compiler::new(inference, globals);
-    let function = compiler.compile_function(name, params, body);
-    (function, compiler.objects)
+    ctx: CodegenContext<'_, '_, '_>,
+) -> Function {
+    let mut compiler = Compiler::new(ctx);
+    compiler.compile_function(signature, body)
 }

@@ -84,7 +84,15 @@ type RichWasmFunction = WasmFunction & { function_type: WasmFunctionKind };
 
 // Type for test execution callbacks
 type WasmPartialResponse = WasmFunctionResponse | WasmTestResponse; // Can be either partial or complete response
-type WasmNotification = { variable_name?: string; channel_name?: string; block_name?: string; is_stream: boolean; value: string };
+type WasmStateUpdate = { node_id: number; log_filter_key: string; new_state: 'not_running' | 'running' | 'completed' };
+type WasmNotification = {
+  variable_name?: string;
+  channel_name?: string;
+  block_name?: string;
+  is_stream: boolean;
+  value: string;
+  state_updates?: WasmStateUpdate[];
+};
 
 // Type for test result from run_tests
 // type WasmTestResult = {
@@ -206,9 +214,8 @@ export function buildControlFlowArtifacts(
 
   for (const node of nodes) {
     nodeById.set(node.id, node);
-    // Use lexical_id for all nodes including root - this ensures we get
-    // IDs like "SimpleWorkflow|root:0" instead of just "SimpleWorkflow"
-    const key = deriveNodeKey(node, options.rootName);
+    // Use the wasm node id (stringified) as the canonical graph node id
+    const key = node.id.toString();
     nodeKeyById.set(node.id, key);
     if (node.parent_id !== undefined) {
       const siblings = childrenByParent.get(node.parent_id) ?? [];
@@ -250,7 +257,7 @@ export function buildControlFlowArtifacts(
       llmClient: node.node_type === WasmControlFlowNodeType.FunctionRoot ? options.llmClient : undefined,
       metadata: {
         wasmNodeId: node.id,
-        lexicalId: node.lexical_id,
+        logFilterKey: node.log_filter_key,
         controlFlowType: WasmControlFlowNodeType[node.node_type] ?? 'Unknown',
       },
     };
@@ -347,14 +354,6 @@ function mapNodeTypeToBlockType(nodeType: WasmControlFlowNodeType): BlockType | 
     default:
       return undefined;
   }
-}
-
-function deriveNodeKey(node: WasmControlFlowNode, rootName: string): string {
-  const lexical = node.lexical_id?.trim();
-  if (lexical) {
-    return lexical;
-  }
-  return `${rootName}_${node.id}`;
 }
 
 function computeCallGraphDepth(node: CallGraphNode | undefined): number {
@@ -836,16 +835,57 @@ export class BamlRuntime implements BamlRuntimeInterface {
       context.abortSignal || null,
       // watch_handler - for watch notifications
       (notification: WasmNotification & { function_name?: string; test_name?: string }) => {
-        const watchNotification = {
+        const rawStateUpdates = (notification as any).state_updates ?? (notification as any).stateUpdates;
+        const vizUpdates = Array.isArray(rawStateUpdates)
+          ? rawStateUpdates
+              .filter((u) => u?.kind === 'viz_state_update')
+              .map((u) => ({
+                nodeId: u.node_id,
+                logFilterKey: u.log_filter_key,
+                newState: u.new_state as 'not_running' | 'running' | 'completed',
+              }))
+          : undefined;
+
+        // Derive a display value from the reduced events, falling back to an empty string
+        let derivedValue: string | undefined;
+        if (Array.isArray(rawStateUpdates)) {
+          const valueEvent = rawStateUpdates.find((u) => u?.kind === 'value');
+          if (valueEvent && typeof valueEvent.value === 'string') {
+            derivedValue = valueEvent.value;
+          }
+        }
+
+        const value = derivedValue ?? notification.value ?? '';
+
+        console.info('[BamlRuntime] watch notification', {
+          functionName: notification.function_name,
+          testName: notification.test_name,
+          value,
+          stateUpdates: vizUpdates,
+          variable: notification.variable_name,
+          channel: notification.channel_name,
+          isStream: notification.is_stream,
+        });
+        const baseNotification = {
           variableName: notification.variable_name,
           channelName: notification.channel_name,
           blockName: notification.block_name,
           functionName: notification.function_name,
           isStream: notification.is_stream,
-          value: notification.value,
+          value,
         };
-        if (context.onWatchNotification) {
-          context.onWatchNotification(watchNotification);
+        const notifications: Array<typeof baseNotification & { stateUpdate?: { nodeId: number; logFilterKey?: string; newState: 'not_running' | 'running' | 'completed' } }> = [];
+        if (vizUpdates && vizUpdates.length > 0) {
+          for (const update of vizUpdates) {
+            notifications.push({ ...baseNotification, stateUpdate: update });
+          }
+        } else {
+          notifications.push({ ...baseNotification, stateUpdate: undefined });
+        }
+
+        const watchHandler = context.onWatchNotification;
+        if (watchHandler) {
+          notifications.forEach((n) => watchHandler(n));
         }
       },
       // parallel - whether to run tests in parallel (default: false, optional in WASM)

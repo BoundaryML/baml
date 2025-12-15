@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -41,23 +41,30 @@ function FieldAccess {
   return: String
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Path("user::name")
-      Idx::<Expr>(1): Path("user::profile::bio")
-      Idx::<Expr>(2): Path("user::profile::settings::theme")
-      Idx::<Expr>(3): Path("user::tags")
-      Idx::<Expr>(4): Literal(Int(0))
-      Idx::<Expr>(5): Index { base: Idx::<Expr>(3), index: Idx::<Expr>(4) }
-      Idx::<Expr>(6): Path("theme")
-      Idx::<Expr>(7): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
+      Idx::<Expr>(0): Path("user")
+      Idx::<Expr>(1): FieldAccess { base: Idx::<Expr>(0), field: "name" }
+      Idx::<Expr>(2): Path("user")
+      Idx::<Expr>(3): FieldAccess { base: Idx::<Expr>(2), field: "profile" }
+      Idx::<Expr>(4): FieldAccess { base: Idx::<Expr>(3), field: "bio" }
+      Idx::<Expr>(5): Path("user")
+      Idx::<Expr>(6): FieldAccess { base: Idx::<Expr>(5), field: "profile" }
+      Idx::<Expr>(7): FieldAccess { base: Idx::<Expr>(6), field: "settings" }
+      Idx::<Expr>(8): FieldAccess { base: Idx::<Expr>(7), field: "theme" }
+      Idx::<Expr>(9): Path("user")
+      Idx::<Expr>(10): FieldAccess { base: Idx::<Expr>(9), field: "tags" }
+      Idx::<Expr>(11): Literal(Int(0))
+      Idx::<Expr>(12): Index { base: Idx::<Expr>(10), index: Idx::<Expr>(11) }
+      Idx::<Expr>(13): Path("theme")
+      Idx::<Expr>(14): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
-      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, initializer: Some(Idx::<Expr>(5)) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(6)))
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(4)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(8)) }
+      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, initializer: Some(Idx::<Expr>(12)) }
+      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(13)))
     ]
-    root: Idx::<Expr>(7)
+    root: Idx::<Expr>(14)
   }
 }
 class Settings {
@@ -73,7 +80,7 @@ class Profile {
   settings: Path(Path { segments: ["Settings"], kind: Plain })
 }
 function IndexAccess {
-  params: [users: List(Path(Path { segments: ["User"], kind: Plain }))]
+  params: [users: List(Path(Path { segments: ["IndexUser"], kind: Plain }))]
   return: String
   body: Expr {
     exprs: [
@@ -108,7 +115,7 @@ function IndexAccess {
     root: Idx::<Expr>(18)
   }
 }
-class User {
+class IndexUser {
   name: String
   age: Int
   tags: List(Path(Path { segments: ["string"], kind: Plain }))

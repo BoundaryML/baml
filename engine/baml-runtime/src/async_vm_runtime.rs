@@ -390,17 +390,15 @@ impl BamlAsyncVmRuntime {
                                 }
                             }
                         }
-                        baml_vm::vm::WatchNotification::Block(notification) => {
+                        baml_vm::vm::WatchNotification::Viz {
+                            function_name,
+                            event,
+                        } => {
                             if let Some(handler) = watch_handler.as_ref() {
                                 if let Ok(mut handler) = handler.lock() {
-                                    let header = baml_compiler::hir::HeaderContext {
-                                        level: notification.level as u8,
-                                        title: notification.block_name.clone(),
-                                        span: internal_baml_core::ast::Span::fake(),
-                                    };
-                                    handler.notify(watch::WatchNotification::new_block(
-                                        header,
-                                        notification.function_name.clone(),
+                                    handler.notify(watch::WatchNotification::new_viz_exec_state(
+                                        event,
+                                        function_name,
                                     ));
                                 }
                             }
@@ -961,9 +959,10 @@ impl BamlAsyncVmRuntime {
         input_files: &indexmap::IndexMap<std::path::PathBuf, String>,
         no_version_check: bool,
         generator_type: generators_lib::version_check::GeneratorType,
+        strip_tests: bool,
     ) -> anyhow::Result<Vec<generators_lib::GenerateOutput>> {
         self.llm_runtime
-            .run_codegen(input_files, no_version_check, generator_type)
+            .run_codegen(input_files, no_version_check, generator_type, strip_tests)
     }
 
     pub fn codegen_generators(

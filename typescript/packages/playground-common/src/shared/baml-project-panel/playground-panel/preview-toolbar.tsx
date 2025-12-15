@@ -49,7 +49,7 @@ const RunButton: React.FC<{ className?: string }> = ({ className }) => {
   const isRunning = useAtomValue(areTestsRunningAtom);
   const selection = useAtomValue(unifiedSelectionAtom);
 
-  // For workflows, use workflowId (the actual function name), not selectedNodeId (the node's lexical ID)
+  // For workflows, use workflowId (the actual function name), not selectedNodeId (the node's log_filter_key)
   const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.workflowId : null;
   const testName = selection.mode === 'function' || selection.mode === 'workflow' ? selection.testName : selection.mode === 'loading' ? selection.intent.testName ?? null : null;
 

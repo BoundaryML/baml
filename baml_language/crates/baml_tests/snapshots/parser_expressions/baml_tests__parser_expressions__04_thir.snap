@@ -7,11 +7,6 @@ expression: output
     Return: Void
   Function FieldAccess:
     Return: Void
-    Errors:
-      - Unknown type user::name
-      - Unknown type user::profile::bio
-      - Unknown type user::profile::settings::theme
-      - Unknown type user::tags
   Function IndexAccess:
     Return: Void
   Function TestPrecedence:

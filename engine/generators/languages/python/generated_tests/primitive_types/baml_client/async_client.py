@@ -78,157 +78,157 @@ class BamlAsyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     async def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.PrimitiveArrays:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestEmptyCollections(input=input,
+            __stream__ = self.stream.TestEmptyCollections(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestEmptyCollections", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestEmptyCollections", args={
                 "input": input,
             })
-            return typing.cast(types.PrimitiveArrays, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.PrimitiveArrays, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestMixedPrimitives(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.MixedPrimitives:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestMixedPrimitives(input=input,
+            __stream__ = self.stream.TestMixedPrimitives(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMixedPrimitives", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMixedPrimitives", args={
                 "input": input,
             })
-            return typing.cast(types.MixedPrimitives, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.MixedPrimitives, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestPrimitiveArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.PrimitiveArrays:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestPrimitiveArrays(input=input,
+            __stream__ = self.stream.TestPrimitiveArrays(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestPrimitiveArrays", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestPrimitiveArrays", args={
                 "input": input,
             })
-            return typing.cast(types.PrimitiveArrays, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.PrimitiveArrays, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestPrimitiveMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.PrimitiveMaps:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestPrimitiveMaps(input=input,
+            __stream__ = self.stream.TestPrimitiveMaps(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestPrimitiveMaps", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestPrimitiveMaps", args={
                 "input": input,
             })
-            return typing.cast(types.PrimitiveMaps, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.PrimitiveMaps, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestPrimitiveTypes(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.PrimitiveTypes:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestPrimitiveTypes(input=input,
+            __stream__ = self.stream.TestPrimitiveTypes(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestPrimitiveTypes", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestPrimitiveTypes", args={
                 "input": input,
             })
-            return typing.cast(types.PrimitiveTypes, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.PrimitiveTypes, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelBool(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestTopLevelBool(input=input,
+            __stream__ = self.stream.TestTopLevelBool(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelBool", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelBool", args={
                 "input": input,
             })
-            return typing.cast(bool, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(bool, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelFloat(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> float:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestTopLevelFloat(input=input,
+            __stream__ = self.stream.TestTopLevelFloat(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelFloat", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelFloat", args={
                 "input": input,
             })
-            return typing.cast(float, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(float, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelInt(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> int:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestTopLevelInt(input=input,
+            __stream__ = self.stream.TestTopLevelInt(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelInt", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelInt", args={
                 "input": input,
             })
-            return typing.cast(int, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelNull(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.Any:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestTopLevelNull(input=input,
+            __stream__ = self.stream.TestTopLevelNull(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelNull", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelNull", args={
                 "input": input,
             })
-            return typing.cast(typing.Any, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.Any, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestTopLevelString(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestTopLevelString(input=input,
+            __stream__ = self.stream.TestTopLevelString(input=input,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelString", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestTopLevelString", args={
                 "input": input,
             })
-            return typing.cast(str, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -241,122 +241,122 @@ class BamlStreamClient:
     def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.PrimitiveArrays, types.PrimitiveArrays]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestEmptyCollections", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestEmptyCollections", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.PrimitiveArrays, types.PrimitiveArrays](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.PrimitiveArrays, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.PrimitiveArrays, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestMixedPrimitives(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.MixedPrimitives, types.MixedPrimitives]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestMixedPrimitives", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestMixedPrimitives", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.MixedPrimitives, types.MixedPrimitives](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.MixedPrimitives, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.MixedPrimitives, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestPrimitiveArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.PrimitiveArrays, types.PrimitiveArrays]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestPrimitiveArrays", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestPrimitiveArrays", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.PrimitiveArrays, types.PrimitiveArrays](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.PrimitiveArrays, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.PrimitiveArrays, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestPrimitiveMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.PrimitiveMaps, types.PrimitiveMaps]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestPrimitiveMaps", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestPrimitiveMaps", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.PrimitiveMaps, types.PrimitiveMaps](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.PrimitiveMaps, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.PrimitiveMaps, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestPrimitiveTypes(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.PrimitiveTypes, types.PrimitiveTypes]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestPrimitiveTypes", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestPrimitiveTypes", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.PrimitiveTypes, types.PrimitiveTypes](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.PrimitiveTypes, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.PrimitiveTypes, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelBool(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[bool, bool]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTopLevelBool", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTopLevelBool", args={
             "input": input,
         })
         return baml_py.BamlStream[bool, bool](
-          result,
+          __result__,
           lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelFloat(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[float, float]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTopLevelFloat", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTopLevelFloat", args={
             "input": input,
         })
         return baml_py.BamlStream[float, float](
-          result,
+          __result__,
           lambda x: typing.cast(float, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(float, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelInt(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[int, int]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTopLevelInt", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTopLevelInt", args={
             "input": input,
         })
         return baml_py.BamlStream[int, int](
-          result,
+          __result__,
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelNull(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Any, typing.Any]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTopLevelNull", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTopLevelNull", args={
             "input": input,
         })
         return baml_py.BamlStream[typing.Any, typing.Any](
-          result,
+          __result__,
           lambda x: typing.cast(typing.Any, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Any, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelString(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTopLevelString", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestTopLevelString", args={
             "input": input,
         })
         return baml_py.BamlStream[str, str](
-          result,
+          __result__,
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     
 
@@ -369,73 +369,73 @@ class BamlHttpRequestClient:
     async def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestEmptyCollections", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestEmptyCollections", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestMixedPrimitives(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMixedPrimitives", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMixedPrimitives", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestPrimitiveArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveArrays", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveArrays", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestPrimitiveMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveMaps", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveMaps", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestPrimitiveTypes(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveTypes", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveTypes", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestTopLevelBool(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelBool", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelBool", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestTopLevelFloat(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelFloat", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelFloat", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestTopLevelInt(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelInt", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelInt", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestTopLevelNull(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelNull", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelNull", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     async def TestTopLevelString(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelString", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelString", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -447,73 +447,73 @@ class BamlHttpStreamRequestClient:
     async def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestEmptyCollections", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestEmptyCollections", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestMixedPrimitives(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMixedPrimitives", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMixedPrimitives", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestPrimitiveArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveArrays", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveArrays", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestPrimitiveMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveMaps", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveMaps", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestPrimitiveTypes(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveTypes", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestPrimitiveTypes", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestTopLevelBool(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelBool", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelBool", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestTopLevelFloat(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelFloat", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelFloat", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestTopLevelInt(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelInt", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelInt", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestTopLevelNull(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelNull", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelNull", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     async def TestTopLevelString(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelString", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestTopLevelString", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     
 
 b = BamlAsyncClient(DoNotUseDirectlyCallManager({}))

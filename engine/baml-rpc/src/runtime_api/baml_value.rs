@@ -6,20 +6,15 @@ use ts_rs::TS;
 
 use crate::ast::type_reference::TypeReference;
 
-#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TypeIndex {
+    #[default]
     NotUnion,
     Null,         // the type is a union but the value is null
     Index(usize), // the type is a union and this index points to the actual type
     NotFound,
-}
-
-impl Default for TypeIndex {
-    fn default() -> Self {
-        Self::NotUnion
-    }
 }
 
 fn is_default_type_index(t: &TypeIndex) -> bool {

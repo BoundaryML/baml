@@ -591,3 +591,30 @@ test_partial_deserializer_streaming!(
     TypeIR::class("Inspiration"),
     {"Description": "Test"}
 );
+
+// Regression test for nested AnyOf leaking into string output
+// This tests the scenario where a user sees "[json AnyOf[{,AnyOf[{,{},],]]i" in output
+const NESTED_ANYOF_BUG: &str = r#"
+class Response {
+  content string
+}
+"#;
+
+// Test that partial JSON with markdown doesn't leak AnyOf representations
+test_partial_deserializer_streaming!(
+    test_streaming_nested_anyof_no_leak,
+    NESTED_ANYOF_BUG,
+    r#"```json
+{"content": "[json"#,
+    TypeIR::class("Response"),
+    {"content": "[json"}
+);
+
+// Test with incomplete nested object that might create AnyOf
+test_partial_deserializer_streaming!(
+    test_streaming_anyof_with_nested_incomplete,
+    NESTED_ANYOF_BUG,
+    r#"{"content": "test value with {"#,
+    TypeIR::class("Response"),
+    {"content": "test value with {"}
+);

@@ -154,7 +154,7 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (105)
+# Generated classes (107)
 # #########################################################################
 
 class AddTodoItem(BaseModel):
@@ -164,6 +164,13 @@ class AddTodoItem(BaseModel):
     item: str
     time: str
     description: str
+
+class AddressWithMeta(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    street: str
+    city: str
+    zipcode: str
 
 class AnotherObject(BaseModel):
     class Config:
@@ -637,6 +644,14 @@ class Person(BaseModel):
         arbitrary_types_allowed = True
     name: typing.Optional[str] = None
     hair_color: typing.Optional[typing.Union[Color, str]] = None
+
+class PersonWithMeta(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    name: str
+    age: int
+    address: "AddressWithMeta"
+    tags: typing.List[str]
 
 class PhoneNumber(BaseModel):
     class Config:

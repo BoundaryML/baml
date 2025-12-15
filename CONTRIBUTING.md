@@ -12,7 +12,7 @@ First off, thanks for your interest in contributing to BAML! We appreciate all t
     - [Examples of Merged PRs:](#examples-of-merged-prs)
   - [Quick Start - Development Setup](#quick-start---development-setup)
   - [Setting up the BAML Compiler and Runtime](#setting-up-the-baml-compiler-and-runtime)
-    - [Compiler Architecture Overview](#compiler-architecture-overview)
+      - [Compiler Architecture Overview](#compiler-architecture-overview)
     - [Steps to Build and Test Locally](#steps-to-build-and-test-locally)
   - [Running Integration Tests](#running-integration-tests)
     - [Prerequisites for All Tests](#prerequisites-for-all-tests)
@@ -160,7 +160,7 @@ You can set up environment variables in two ways:
      # etc.
      ```
 
-2. **Using Infisical (BAML internal use only)**:
+2. **Using Infisical (BAML internal use only, use this if infisical is available)**:
    - Install [Infisical CLI](https://infisical.com/docs/cli/overview)
    - Use the `infisical run` commands shown in examples below
    - External contributors should replace `infisical run --env=test --` with `dotenv -e ../.env --` in all commands

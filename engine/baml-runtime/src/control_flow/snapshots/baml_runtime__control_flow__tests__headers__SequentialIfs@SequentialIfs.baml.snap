@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: SequentialIfs
-      lexical_id: "SequentialIfs|root:0"
+      log_filter_key: "SequentialIfs|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 514
     "1":
       label: Setup context
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0"
       node_type: header
       parent: "0"
       span:
@@ -26,7 +26,7 @@ expr:
         end: 53
     "10":
       label: else
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
       node_type: branch-arm
       parent: "4"
       span:
@@ -35,7 +35,7 @@ expr:
         end: 380
     "11":
       label: if (false)
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
       node_type: branch-group
       parent: "1"
       span:
@@ -44,7 +44,7 @@ expr:
         end: 473
     "12":
       label: if (false)
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0"
       node_type: branch-arm
       parent: "11"
       span:
@@ -53,7 +53,7 @@ expr:
         end: 447
     "13":
       label: listen to SQS
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
       node_type: header
       parent: "12"
       span:
@@ -62,7 +62,7 @@ expr:
         end: 417
     "14":
       label: else
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
       node_type: branch-arm
       parent: "11"
       span:
@@ -71,7 +71,7 @@ expr:
         end: 473
     "15":
       label: Done
-      lexical_id: "SequentialIfs|root:0|hdr:done:1"
+      log_filter_key: "SequentialIfs|root:0|hdr:done:1"
       node_type: header
       parent: "0"
       span:
@@ -80,7 +80,7 @@ expr:
         end: 484
     "2":
       label: ""
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0"
       node_type: other-scope
       parent: "1"
       span:
@@ -89,7 +89,7 @@ expr:
         end: 141
     "3":
       label: In-scope configuration
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
       node_type: header
       parent: "2"
       span:
@@ -98,7 +98,7 @@ expr:
         end: 112
     "4":
       label: if (false)
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
       node_type: branch-group
       parent: "1"
       span:
@@ -107,7 +107,7 @@ expr:
         end: 380
     "5":
       label: if (false)
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0"
       node_type: branch-arm
       parent: "4"
       span:
@@ -116,7 +116,7 @@ expr:
         end: 276
     "6":
       label: listen to SQS for S3
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
       node_type: header
       parent: "5"
       span:
@@ -125,7 +125,7 @@ expr:
         end: 184
     "7":
       label: listen to SQS for EC2
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
       node_type: header
       parent: "5"
       span:
@@ -134,7 +134,7 @@ expr:
         end: 240
     "8":
       label: else if (true)
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1"
       node_type: branch-arm
       parent: "4"
       span:
@@ -143,7 +143,7 @@ expr:
         end: 354
     "9":
       label: listen to Kinesis
-      lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
+      log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
       node_type: header
       parent: "8"
       span:
@@ -167,7 +167,7 @@ flattening:
       nodes:
         "0":
           label: SequentialIfs
-          lexical_id: "SequentialIfs|root:0"
+          log_filter_key: "SequentialIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -176,7 +176,7 @@ flattening:
             end: 514
         "1":
           label: Setup context
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0"
           node_type: header
           parent: "0"
           span:
@@ -185,7 +185,7 @@ flattening:
             end: 53
         "10":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
           node_type: branch-arm
           parent: "4"
           span:
@@ -194,7 +194,7 @@ flattening:
             end: 380
         "11":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
           node_type: branch-group
           parent: "1"
           span:
@@ -203,7 +203,7 @@ flattening:
             end: 473
         "12":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0"
           node_type: branch-arm
           parent: "11"
           span:
@@ -212,7 +212,7 @@ flattening:
             end: 447
         "13":
           label: listen to SQS
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
           node_type: header
           parent: "12"
           span:
@@ -221,7 +221,7 @@ flattening:
             end: 417
         "14":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
           node_type: branch-arm
           parent: "11"
           span:
@@ -230,7 +230,7 @@ flattening:
             end: 473
         "15":
           label: Done
-          lexical_id: "SequentialIfs|root:0|hdr:done:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:done:1"
           node_type: header
           parent: "0"
           span:
@@ -239,7 +239,7 @@ flattening:
             end: 484
         "2":
           label: ""
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0"
           node_type: other-scope
           parent: "1"
           span:
@@ -248,7 +248,7 @@ flattening:
             end: 141
         "3":
           label: In-scope configuration
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
           node_type: header
           parent: "2"
           span:
@@ -257,7 +257,7 @@ flattening:
             end: 112
         "4":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -266,7 +266,7 @@ flattening:
             end: 380
         "5":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0"
           node_type: branch-arm
           parent: "4"
           span:
@@ -275,7 +275,7 @@ flattening:
             end: 276
         "6":
           label: listen to SQS for S3
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
           node_type: header
           parent: "5"
           span:
@@ -284,7 +284,7 @@ flattening:
             end: 184
         "7":
           label: listen to SQS for EC2
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
           node_type: header
           parent: "5"
           span:
@@ -293,7 +293,7 @@ flattening:
             end: 240
         "8":
           label: else if (true)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1"
           node_type: branch-arm
           parent: "4"
           span:
@@ -302,7 +302,7 @@ flattening:
             end: 354
         "9":
           label: listen to Kinesis
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
           node_type: header
           parent: "8"
           span:
@@ -322,7 +322,7 @@ flattening:
       nodes:
         "0":
           label: SequentialIfs
-          lexical_id: "SequentialIfs|root:0"
+          log_filter_key: "SequentialIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -331,7 +331,7 @@ flattening:
             end: 514
         "1":
           label: Setup context
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0"
           node_type: header
           parent: "0"
           span:
@@ -340,7 +340,7 @@ flattening:
             end: 53
         "10":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
           node_type: branch-arm
           parent: "4"
           span:
@@ -349,7 +349,7 @@ flattening:
             end: 380
         "11":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
           node_type: branch-group
           parent: "1"
           span:
@@ -358,7 +358,7 @@ flattening:
             end: 473
         "12":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0"
           node_type: branch-arm
           parent: "11"
           span:
@@ -367,7 +367,7 @@ flattening:
             end: 447
         "13":
           label: listen to SQS
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
           node_type: header
           parent: "12"
           span:
@@ -376,7 +376,7 @@ flattening:
             end: 417
         "14":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
           node_type: branch-arm
           parent: "11"
           span:
@@ -385,7 +385,7 @@ flattening:
             end: 473
         "15":
           label: Done
-          lexical_id: "SequentialIfs|root:0|hdr:done:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:done:1"
           node_type: header
           parent: "0"
           span:
@@ -394,7 +394,7 @@ flattening:
             end: 484
         "2":
           label: ""
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0"
           node_type: other-scope
           parent: "1"
           span:
@@ -403,7 +403,7 @@ flattening:
             end: 141
         "3":
           label: In-scope configuration
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
           node_type: header
           parent: "2"
           span:
@@ -412,7 +412,7 @@ flattening:
             end: 112
         "4":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -421,7 +421,7 @@ flattening:
             end: 380
         "5":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0"
           node_type: branch-arm
           parent: "4"
           span:
@@ -430,7 +430,7 @@ flattening:
             end: 276
         "6":
           label: listen to SQS for S3
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
           node_type: header
           parent: "5"
           span:
@@ -439,7 +439,7 @@ flattening:
             end: 184
         "7":
           label: listen to SQS for EC2
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
           node_type: header
           parent: "5"
           span:
@@ -448,7 +448,7 @@ flattening:
             end: 240
         "8":
           label: else if (true)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1"
           node_type: branch-arm
           parent: "4"
           span:
@@ -457,7 +457,7 @@ flattening:
             end: 354
         "9":
           label: listen to Kinesis
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
           node_type: header
           parent: "8"
           span:
@@ -480,7 +480,7 @@ flattening:
       nodes:
         "0":
           label: SequentialIfs
-          lexical_id: "SequentialIfs|root:0"
+          log_filter_key: "SequentialIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -489,7 +489,7 @@ flattening:
             end: 514
         "1":
           label: Setup context
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0"
           node_type: header
           parent: "0"
           span:
@@ -498,7 +498,7 @@ flattening:
             end: 53
         "10":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
           node_type: branch-arm
           parent: "1"
           span:
@@ -507,7 +507,7 @@ flattening:
             end: 380
         "11":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
           node_type: branch-group
           parent: "1"
           span:
@@ -516,7 +516,7 @@ flattening:
             end: 473
         "12":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0"
           node_type: branch-arm
           parent: "1"
           span:
@@ -525,7 +525,7 @@ flattening:
             end: 447
         "13":
           label: listen to SQS
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
           node_type: header
           parent: "12"
           span:
@@ -534,7 +534,7 @@ flattening:
             end: 417
         "14":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -543,7 +543,7 @@ flattening:
             end: 473
         "15":
           label: Done
-          lexical_id: "SequentialIfs|root:0|hdr:done:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:done:1"
           node_type: header
           parent: "0"
           span:
@@ -552,7 +552,7 @@ flattening:
             end: 484
         "2":
           label: ""
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0"
           node_type: other-scope
           parent: "1"
           span:
@@ -561,7 +561,7 @@ flattening:
             end: 141
         "3":
           label: In-scope configuration
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
           node_type: header
           parent: "2"
           span:
@@ -570,7 +570,7 @@ flattening:
             end: 112
         "4":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -579,7 +579,7 @@ flattening:
             end: 380
         "5":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0"
           node_type: branch-arm
           parent: "1"
           span:
@@ -588,7 +588,7 @@ flattening:
             end: 276
         "6":
           label: listen to SQS for S3
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
           node_type: header
           parent: "5"
           span:
@@ -597,7 +597,7 @@ flattening:
             end: 184
         "7":
           label: listen to SQS for EC2
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
           node_type: header
           parent: "5"
           span:
@@ -606,7 +606,7 @@ flattening:
             end: 240
         "8":
           label: else if (true)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -615,7 +615,7 @@ flattening:
             end: 354
         "9":
           label: listen to Kinesis
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
           node_type: header
           parent: "8"
           span:
@@ -646,7 +646,7 @@ flattening:
       nodes:
         "0":
           label: SequentialIfs
-          lexical_id: "SequentialIfs|root:0"
+          log_filter_key: "SequentialIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -655,7 +655,7 @@ flattening:
             end: 514
         "1":
           label: Setup context
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0"
           node_type: header
           parent: "0"
           span:
@@ -664,7 +664,7 @@ flattening:
             end: 53
         "10":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
           node_type: branch-arm
           parent: "1"
           span:
@@ -673,7 +673,7 @@ flattening:
             end: 380
         "11":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
           node_type: branch-group
           parent: "1"
           span:
@@ -682,7 +682,7 @@ flattening:
             end: 473
         "12":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0"
           node_type: branch-arm
           parent: "1"
           span:
@@ -691,7 +691,7 @@ flattening:
             end: 447
         "13":
           label: listen to SQS
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
           node_type: header
           parent: "12"
           span:
@@ -700,7 +700,7 @@ flattening:
             end: 417
         "14":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -709,7 +709,7 @@ flattening:
             end: 473
         "15":
           label: Done
-          lexical_id: "SequentialIfs|root:0|hdr:done:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:done:1"
           node_type: header
           parent: "0"
           span:
@@ -718,7 +718,7 @@ flattening:
             end: 484
         "2":
           label: ""
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0"
           node_type: other-scope
           parent: "1"
           span:
@@ -727,7 +727,7 @@ flattening:
             end: 141
         "3":
           label: In-scope configuration
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
           node_type: header
           parent: "2"
           span:
@@ -736,7 +736,7 @@ flattening:
             end: 112
         "4":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -745,7 +745,7 @@ flattening:
             end: 380
         "5":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0"
           node_type: branch-arm
           parent: "1"
           span:
@@ -754,7 +754,7 @@ flattening:
             end: 276
         "6":
           label: listen to SQS for S3
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
           node_type: header
           parent: "5"
           span:
@@ -763,7 +763,7 @@ flattening:
             end: 184
         "7":
           label: listen to SQS for EC2
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
           node_type: header
           parent: "5"
           span:
@@ -772,7 +772,7 @@ flattening:
             end: 240
         "8":
           label: else if (true)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -781,7 +781,7 @@ flattening:
             end: 354
         "9":
           label: listen to Kinesis
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
           node_type: header
           parent: "8"
           span:
@@ -815,7 +815,7 @@ flattening:
       nodes:
         "0":
           label: SequentialIfs
-          lexical_id: "SequentialIfs|root:0"
+          log_filter_key: "SequentialIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -824,7 +824,7 @@ flattening:
             end: 514
         "1":
           label: Setup context
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0"
           node_type: header
           parent: "0"
           span:
@@ -833,7 +833,7 @@ flattening:
             end: 53
         "10":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
           node_type: branch-arm
           parent: "1"
           span:
@@ -842,7 +842,7 @@ flattening:
             end: 380
         "11":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
           node_type: branch-group
           parent: "1"
           span:
@@ -851,7 +851,7 @@ flattening:
             end: 473
         "13":
           label: listen to SQS
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
           node_type: header
           parent: "1"
           span:
@@ -860,7 +860,7 @@ flattening:
             end: 417
         "14":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -869,7 +869,7 @@ flattening:
             end: 473
         "15":
           label: Done
-          lexical_id: "SequentialIfs|root:0|hdr:done:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:done:1"
           node_type: header
           parent: "0"
           span:
@@ -878,7 +878,7 @@ flattening:
             end: 484
         "3":
           label: In-scope configuration
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
           node_type: header
           parent: "1"
           span:
@@ -887,7 +887,7 @@ flattening:
             end: 112
         "4":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -896,7 +896,7 @@ flattening:
             end: 380
         "6":
           label: listen to SQS for S3
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
           node_type: header
           parent: "1"
           span:
@@ -905,7 +905,7 @@ flattening:
             end: 184
         "7":
           label: listen to SQS for EC2
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
           node_type: header
           parent: "1"
           span:
@@ -914,7 +914,7 @@ flattening:
             end: 240
         "9":
           label: listen to Kinesis
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
           node_type: header
           parent: "1"
           span:
@@ -945,7 +945,7 @@ flattening:
       nodes:
         "0":
           label: SequentialIfs
-          lexical_id: "SequentialIfs|root:0"
+          log_filter_key: "SequentialIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -954,7 +954,7 @@ flattening:
             end: 514
         "1":
           label: Setup context
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0"
           node_type: header
           parent: "0"
           span:
@@ -963,7 +963,7 @@ flattening:
             end: 53
         "10":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else:2"
           node_type: branch-arm
           parent: "1"
           span:
@@ -972,7 +972,7 @@ flattening:
             end: 380
         "11":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1"
           node_type: branch-group
           parent: "1"
           span:
@@ -981,7 +981,7 @@ flattening:
             end: 473
         "13":
           label: listen to SQS
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:if-false:0|hdr:listen-to-sqs:0"
           node_type: header
           parent: "1"
           span:
@@ -990,7 +990,7 @@ flattening:
             end: 417
         "14":
           label: else
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:1|arm:else:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -999,7 +999,7 @@ flattening:
             end: 473
         "15":
           label: Done
-          lexical_id: "SequentialIfs|root:0|hdr:done:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:done:1"
           node_type: header
           parent: "0"
           span:
@@ -1008,7 +1008,7 @@ flattening:
             end: 484
         "3":
           label: In-scope configuration
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|scope:other-scope-0:0|hdr:in-scope-configuration:0"
           node_type: header
           parent: "1"
           span:
@@ -1017,7 +1017,7 @@ flattening:
             end: 112
         "4":
           label: if (false)
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1026,7 +1026,7 @@ flattening:
             end: 380
         "6":
           label: listen to SQS for S3
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-s3:0"
           node_type: header
           parent: "1"
           span:
@@ -1035,7 +1035,7 @@ flattening:
             end: 184
         "7":
           label: listen to SQS for EC2
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:if-false:0|hdr:listen-to-sqs-for-ec2:1"
           node_type: header
           parent: "1"
           span:
@@ -1044,7 +1044,7 @@ flattening:
             end: 240
         "9":
           label: listen to Kinesis
-          lexical_id: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
+          log_filter_key: "SequentialIfs|root:0|hdr:setup-context:0|bg:if-false:0|arm:else-if-true:1|hdr:listen-to-kinesis:0"
           node_type: header
           parent: "1"
           span:

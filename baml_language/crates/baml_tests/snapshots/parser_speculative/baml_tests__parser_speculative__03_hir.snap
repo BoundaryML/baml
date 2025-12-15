@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -23,25 +23,27 @@ function ProcessData {
   return: String
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Path("data::field1")
-      Idx::<Expr>(1): Path("data::field2")
-      Idx::<Expr>(2): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(1) }
-      Idx::<Expr>(3): Path("result")
-      Idx::<Expr>(4): Literal(Int(100))
-      Idx::<Expr>(5): Binary { op: Gt, lhs: Idx::<Expr>(3), rhs: Idx::<Expr>(4) }
-      Idx::<Expr>(6): Literal(String(" \"high\""))
-      Idx::<Expr>(7): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
-      Idx::<Expr>(8): If { condition: Idx::<Expr>(5), then_branch: Idx::<Expr>(7), else_branch: None }
-      Idx::<Expr>(9): Literal(String(" \"low\""))
-      Idx::<Expr>(10): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
+      Idx::<Expr>(0): Path("data")
+      Idx::<Expr>(1): FieldAccess { base: Idx::<Expr>(0), field: "field1" }
+      Idx::<Expr>(2): Path("data")
+      Idx::<Expr>(3): FieldAccess { base: Idx::<Expr>(2), field: "field2" }
+      Idx::<Expr>(4): Binary { op: Add, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(3) }
+      Idx::<Expr>(5): Path("result")
+      Idx::<Expr>(6): Literal(Int(100))
+      Idx::<Expr>(7): Binary { op: Gt, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(6) }
+      Idx::<Expr>(8): Literal(String(" \"high\""))
+      Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
+      Idx::<Expr>(10): If { condition: Idx::<Expr>(7), then_branch: Idx::<Expr>(9), else_branch: None }
+      Idx::<Expr>(11): Literal(String(" \"low\""))
+      Idx::<Expr>(12): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
-      Idx::<Stmt>(1): Return(Some(Idx::<Expr>(6)))
-      Idx::<Stmt>(2): Expr(Idx::<Expr>(8))
-      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(9)))
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(4)) }
+      Idx::<Stmt>(1): Return(Some(Idx::<Expr>(8)))
+      Idx::<Stmt>(2): Expr(Idx::<Expr>(10))
+      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(11)))
     ]
-    root: Idx::<Expr>(10)
+    root: Idx::<Expr>(12)
   }
 }
 class JsonData {
@@ -80,45 +82,50 @@ function ProcessAnalysis {
   return: String
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Path("analysis::score")
-      Idx::<Expr>(1): Path("score")
-      Idx::<Expr>(2): Literal(Float("0.8"))
-      Idx::<Expr>(3): Binary { op: Gt, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
-      Idx::<Expr>(4): Literal(String(" \"Very positive: \""))
-      Idx::<Expr>(5): Path("analysis::sentiment")
-      Idx::<Expr>(6): Binary { op: Add, lhs: Idx::<Expr>(4), rhs: Idx::<Expr>(5) }
-      Idx::<Expr>(7): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
-      Idx::<Expr>(8): Path("score")
-      Idx::<Expr>(9): Literal(Float("0.5"))
-      Idx::<Expr>(10): Binary { op: Gt, lhs: Idx::<Expr>(8), rhs: Idx::<Expr>(9) }
-      Idx::<Expr>(11): Literal(String(" \"Positive: \""))
-      Idx::<Expr>(12): Path("analysis::sentiment")
-      Idx::<Expr>(13): Binary { op: Add, lhs: Idx::<Expr>(11), rhs: Idx::<Expr>(12) }
-      Idx::<Expr>(14): Block { stmts: [Idx::<Stmt>(2)], tail_expr: None }
-      Idx::<Expr>(15): Path("score")
-      Idx::<Expr>(16): Literal(Float("0.2"))
-      Idx::<Expr>(17): Binary { op: Gt, lhs: Idx::<Expr>(15), rhs: Idx::<Expr>(16) }
-      Idx::<Expr>(18): Literal(String(" \"Neutral: \""))
-      Idx::<Expr>(19): Path("analysis::sentiment")
-      Idx::<Expr>(20): Binary { op: Add, lhs: Idx::<Expr>(18), rhs: Idx::<Expr>(19) }
-      Idx::<Expr>(21): Block { stmts: [Idx::<Stmt>(3)], tail_expr: None }
-      Idx::<Expr>(22): Literal(String(" \"Negative: \""))
-      Idx::<Expr>(23): Path("analysis::sentiment")
-      Idx::<Expr>(24): Binary { op: Add, lhs: Idx::<Expr>(22), rhs: Idx::<Expr>(23) }
-      Idx::<Expr>(25): Block { stmts: [Idx::<Stmt>(4)], tail_expr: None }
-      Idx::<Expr>(26): If { condition: Idx::<Expr>(17), then_branch: Idx::<Expr>(21), else_branch: Some(Idx::<Expr>(25)) }
-      Idx::<Expr>(27): If { condition: Idx::<Expr>(10), then_branch: Idx::<Expr>(14), else_branch: Some(Idx::<Expr>(26)) }
-      Idx::<Expr>(28): If { condition: Idx::<Expr>(3), then_branch: Idx::<Expr>(7), else_branch: Some(Idx::<Expr>(27)) }
-      Idx::<Expr>(29): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(28)) }
+      Idx::<Expr>(0): Path("analysis")
+      Idx::<Expr>(1): FieldAccess { base: Idx::<Expr>(0), field: "score" }
+      Idx::<Expr>(2): Path("score")
+      Idx::<Expr>(3): Literal(Float("0.8"))
+      Idx::<Expr>(4): Binary { op: Gt, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
+      Idx::<Expr>(5): Literal(String(" \"Very positive: \""))
+      Idx::<Expr>(6): Path("analysis")
+      Idx::<Expr>(7): FieldAccess { base: Idx::<Expr>(6), field: "sentiment" }
+      Idx::<Expr>(8): Binary { op: Add, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(7) }
+      Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
+      Idx::<Expr>(10): Path("score")
+      Idx::<Expr>(11): Literal(Float("0.5"))
+      Idx::<Expr>(12): Binary { op: Gt, lhs: Idx::<Expr>(10), rhs: Idx::<Expr>(11) }
+      Idx::<Expr>(13): Literal(String(" \"Positive: \""))
+      Idx::<Expr>(14): Path("analysis")
+      Idx::<Expr>(15): FieldAccess { base: Idx::<Expr>(14), field: "sentiment" }
+      Idx::<Expr>(16): Binary { op: Add, lhs: Idx::<Expr>(13), rhs: Idx::<Expr>(15) }
+      Idx::<Expr>(17): Block { stmts: [Idx::<Stmt>(2)], tail_expr: None }
+      Idx::<Expr>(18): Path("score")
+      Idx::<Expr>(19): Literal(Float("0.2"))
+      Idx::<Expr>(20): Binary { op: Gt, lhs: Idx::<Expr>(18), rhs: Idx::<Expr>(19) }
+      Idx::<Expr>(21): Literal(String(" \"Neutral: \""))
+      Idx::<Expr>(22): Path("analysis")
+      Idx::<Expr>(23): FieldAccess { base: Idx::<Expr>(22), field: "sentiment" }
+      Idx::<Expr>(24): Binary { op: Add, lhs: Idx::<Expr>(21), rhs: Idx::<Expr>(23) }
+      Idx::<Expr>(25): Block { stmts: [Idx::<Stmt>(3)], tail_expr: None }
+      Idx::<Expr>(26): Literal(String(" \"Negative: \""))
+      Idx::<Expr>(27): Path("analysis")
+      Idx::<Expr>(28): FieldAccess { base: Idx::<Expr>(27), field: "sentiment" }
+      Idx::<Expr>(29): Binary { op: Add, lhs: Idx::<Expr>(26), rhs: Idx::<Expr>(28) }
+      Idx::<Expr>(30): Block { stmts: [Idx::<Stmt>(4)], tail_expr: None }
+      Idx::<Expr>(31): If { condition: Idx::<Expr>(20), then_branch: Idx::<Expr>(25), else_branch: Some(Idx::<Expr>(30)) }
+      Idx::<Expr>(32): If { condition: Idx::<Expr>(12), then_branch: Idx::<Expr>(17), else_branch: Some(Idx::<Expr>(31)) }
+      Idx::<Expr>(33): If { condition: Idx::<Expr>(4), then_branch: Idx::<Expr>(9), else_branch: Some(Idx::<Expr>(32)) }
+      Idx::<Expr>(34): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(33)) }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Return(Some(Idx::<Expr>(6)))
-      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(13)))
-      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(20)))
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(24)))
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(1): Return(Some(Idx::<Expr>(8)))
+      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(16)))
+      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(24)))
+      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(29)))
     ]
-    root: Idx::<Expr>(29)
+    root: Idx::<Expr>(34)
   }
 }
 function LLMAnalyze {

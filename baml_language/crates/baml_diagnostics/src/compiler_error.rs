@@ -1,4 +1,5 @@
 pub mod error_format;
+pub mod name_error;
 pub mod parse_error;
 pub mod type_error;
 
@@ -6,6 +7,7 @@ use std::collections::HashMap;
 
 use ariadne::{Report, ReportKind};
 use baml_base::{FileId, Span};
+pub use name_error::NameError;
 pub use parse_error::ParseError;
 pub use type_error::TypeError;
 
@@ -16,6 +18,7 @@ pub use type_error::TypeError;
 pub enum CompilerError<Ty> {
     ParseError(ParseError),
     TypeError(TypeError<Ty>),
+    NameError(NameError),
 }
 
 pub struct ErrorCode(u32);
@@ -55,6 +58,7 @@ const NOT_INDEXABLE: ErrorCode = ErrorCode(8);
 
 const UNEXPECTED_EOF: ErrorCode = ErrorCode(9);
 const UNEXPECTED_TOKEN: ErrorCode = ErrorCode(10);
+const DUPLICATE_NAME: ErrorCode = ErrorCode(11);
 
 /// Render an ariadne Report to a String.
 ///
@@ -115,6 +119,26 @@ pub fn render_type_error<Ty: std::fmt::Display + Clone>(
         ColorMode::NoColor
     };
     let compiler_error: CompilerError<Ty> = CompilerError::TypeError(error.clone());
+    let report = render_error(&color_mode, compiler_error);
+    render_report_to_string(&report, sources)
+}
+
+/// Convenience function to render a `NameError` directly to a string.
+///
+/// This combines `render_error` and `render_report_to_string` for the common case
+/// of rendering name resolution errors.
+pub fn render_name_error(
+    error: &NameError,
+    sources: &HashMap<FileId, String>,
+    color: bool,
+) -> String {
+    let color_mode = if color {
+        ColorMode::Color
+    } else {
+        ColorMode::NoColor
+    };
+    // Use String as the type parameter since NameError doesn't use it
+    let compiler_error: CompilerError<String> = CompilerError::NameError(error.clone());
     let report = render_error(&color_mode, compiler_error);
     render_report_to_string(&report, sources)
 }

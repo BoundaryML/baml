@@ -1,0 +1,24 @@
+- [x] typos (promp)
+- [-] Consider better name than --reset-gepa-prompts (won't do)
+- [x] Needs a link to GEPA
+- [x] Link to DSPy
+- [x] Include (at least a snippet of) gepa.baml
+- [-] Future thing: bash autocomplete would be nice (won't do)
+- [x] Concrete example for --resume
+- [x] Make sure these commands work whether you're in user's baml_src or in .baml_optimize
+- [-] Add a cool visualization. Either a final image or a live TUI (won't do)
+- [x] Add limitations section (no type modifications, no template_strings)
+- [x] Inline examples into cli option help text
+- [x] Does --help show defaults?
+- [x] If there's custom gepa.baml changes, warn before erasing
+- [-] Future: baml.toml includes the optimization args
+- [-] gepa.baml versioning will be an issue in the future. No clear solution now (noted)
+- [x] Copy some of these notes into BEP for tracking
+- [x] follow_links - is it recursive? (It's just a builder method on a `WalkDir`. Only recursive if the user make a loop with symlinks.
+- [x] Use some crate for rendering diffs (we use the same lib)
+- [x] failure_location - see if we have an enum that gives us error
+- [x] limitations: 500 from LLM provider might unfairly penalize the prompt candidate.
+- [x] Write "ctx.output_format writes the schema, so you don't have to write the schema".
+- [x] We need to improve gepa.baml to teach it how to use jinja
+- [x] Give gepa.baml more info about the parameters of ctx.output_format
+- [x] Block on TODO extract descriptions and aliases

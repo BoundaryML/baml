@@ -373,9 +373,29 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                     self.render_expr(*cond, body, result, false);
                 }
                 if let Some(upd) = update {
-                    self.render_expr(*upd, body, result, false);
+                    self.render_stmt(*upd, body, result, false);
                 }
                 self.render_expr(*for_body, body, result, true);
+                self.pop_continuation();
+            }
+            Stmt::Break => {
+                writeln!(self.output, "{prefix}Break").ok();
+            }
+            Stmt::Continue => {
+                writeln!(self.output, "{prefix}Continue").ok();
+            }
+            Stmt::Assign { target, value } => {
+                writeln!(self.output, "{prefix}Assign").ok();
+                self.push_continuation(!is_last);
+                self.render_expr(*target, body, result, false);
+                self.render_expr(*value, body, result, true);
+                self.pop_continuation();
+            }
+            Stmt::AssignOp { target, op, value } => {
+                writeln!(self.output, "{prefix}AssignOp ({op:?})").ok();
+                self.push_continuation(!is_last);
+                self.render_expr(*target, body, result, false);
+                self.render_expr(*value, body, result, true);
                 self.pop_continuation();
             }
             Stmt::Missing => {

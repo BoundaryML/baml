@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 4
-Objects: 4
+Objects: 8
 Globals: 4
 
 Function Calculate (arity: 0, kind: Exec):
@@ -26,20 +26,25 @@ Function Calculate (arity: 0, kind: Exec):
      15   BIN_OP *       
      16   LOAD_VAR 4     (d)
      17   RETURN         
-     18   POP 4          
-     19   RETURN         
+     18   RETURN         
 
 Function FieldAccess (arity: 1, kind: Exec):
-     0   LOAD_GLOBAL 0        (<fn Calculate>)
-     1   LOAD_GLOBAL 0        (<fn Calculate>)
-     2   LOAD_GLOBAL 0        (<fn Calculate>)
-     3   LOAD_GLOBAL 0        (<fn Calculate>)
-     4   LOAD_CONST 0         (0)
-     5   LOAD_ARRAY_ELEMENT   
-     6   LOAD_VAR 4           (theme)
-     7   RETURN               
-     8   POP 4                
-     9   RETURN               
+     0    LOAD_VAR 1           (user)
+     1    LOAD_FIELD 0         
+     2    LOAD_VAR 1           (user)
+     3    LOAD_FIELD 0         
+     4    LOAD_FIELD 0         
+     5    LOAD_VAR 1           (user)
+     6    LOAD_FIELD 0         
+     7    LOAD_FIELD 0         
+     8    LOAD_FIELD 0         
+     9    LOAD_VAR 1           (user)
+     10   LOAD_FIELD 0         
+     11   LOAD_CONST 0         (0)
+     12   LOAD_ARRAY_ELEMENT   
+     13   LOAD_VAR 4           (theme)
+     14   RETURN               
+     15   RETURN               
 
 Function IndexAccess (arity: 1, kind: Exec):
      0    LOAD_VAR 1           (users)
@@ -61,8 +66,7 @@ Function IndexAccess (arity: 1, kind: Exec):
      16   LOAD_ARRAY_ELEMENT   
      17   LOAD_VAR 5           (firstName)
      18   RETURN               
-     19   POP 5                
-     20   RETURN               
+     19   RETURN               
 
 Function TestPrecedence (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (2)
@@ -90,5 +94,4 @@ Function TestPrecedence (arity: 0, kind: Exec):
      22   LOAD_CONST 5       (false)
      23   LOAD_VAR 4         (d)
      24   RETURN             
-     25   POP 4              
-     26   RETURN
+     25   RETURN

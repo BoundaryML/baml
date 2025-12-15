@@ -2,9 +2,9 @@ use ariadne::{Label, ReportBuilder};
 use baml_base::Span;
 
 use super::{
-    ARGUMENT_COUNT_MISMATCH, CompilerError, ErrorCode, INVALID_OPERATOR, NO_SUCH_FIELD,
-    NOT_CALLABLE, NOT_INDEXABLE, ParseError, Report, ReportKind, TYPE_MISMATCH, TypeError,
-    UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_TYPE, UNKNOWN_VARIABLE,
+    ARGUMENT_COUNT_MISMATCH, CompilerError, DUPLICATE_NAME, ErrorCode, INVALID_OPERATOR,
+    NO_SUCH_FIELD, NOT_CALLABLE, NOT_INDEXABLE, NameError, ParseError, Report, ReportKind,
+    TYPE_MISMATCH, TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_TYPE, UNKNOWN_VARIABLE,
 };
 
 /// The message format and id of each compiler error variant.
@@ -83,6 +83,28 @@ where
             TypeError::NotIndexable { ty, span } => {
                 simple_error(format!("Type {ty} is not indexable"), span, NOT_INDEXABLE)
             }
+        },
+        CompilerError::NameError(name_error) => match name_error {
+            NameError::DuplicateName {
+                name,
+                kind,
+                first,
+                first_path,
+                second,
+                second_path,
+            } => (
+                Report::build(ReportKind::Error, second)
+                    .with_message(format!("Duplicate {kind} '{name}'"))
+                    .with_label(
+                        Label::new(second)
+                            .with_message(format!("{kind} '{name}' defined in {second_path}")),
+                    )
+                    .with_label(
+                        Label::new(first)
+                            .with_message(format!("'{name}' previously defined in {first_path}")),
+                    ),
+                DUPLICATE_NAME,
+            ),
         },
     }
 }

@@ -1,4 +1,5 @@
 // 1: Uncontrolled Tree
+import type React from 'react';
 import { useRef, useState } from 'react';
 
 import { type NodeApi, Tree, type TreeApi } from 'react-arborist';
@@ -152,7 +153,7 @@ const FileViewer = () => {
         value={term}
         onChange={(e) => setTerm(e.target.value)}
       /> */}
-      <div ref={ref} className="flex flex-col h-full min-h-0">
+      <div ref={ref as React.RefCallback<HTMLDivElement>} className="flex flex-col h-full min-h-0">
         <Tree
           className="truncate"
           ref={treeRef}

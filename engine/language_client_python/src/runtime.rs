@@ -107,6 +107,7 @@ impl BamlLogEvent {
 struct NotificationCallbacks {
     var_handlers: HashMap<String, Vec<Arc<PyObject>>>,
     stream_handlers: HashMap<String, Vec<Arc<PyObject>>>,
+    #[allow(dead_code)]
     block_handlers: Vec<Arc<PyObject>>,
 }
 
@@ -364,30 +365,6 @@ impl BamlRuntime {
                 if let Some(ref callbacks) = notification_callbacks {
                     Python::with_gil(|py| {
                         match notification.value {
-                            baml_compiler::watch::WatchBamlValue::Header(header) => {
-                                // Fire header events to all registered block handlers
-                                for handler in &callbacks.block_handlers {
-                                    let block_event_dict = PyDict::new(py);
-                                    let _ = block_event_dict
-                                        .set_item("block_label", header.title.clone());
-                                    let _ = block_event_dict.set_item("header_level", header.level);
-                                    let _ = block_event_dict.set_item("event_type", "enter");
-                                    let _ = handler.call1(py, (block_event_dict,));
-                                }
-                            }
-                            // HACK: HeaderStopped is emitted synthetically when a new header
-                            // comes in at the same or shallower level
-                            baml_compiler::watch::WatchBamlValue::HeaderStopped(header) => {
-                                // Fire header exit events to all registered block handlers
-                                for handler in &callbacks.block_handlers {
-                                    let block_event_dict = PyDict::new(py);
-                                    let _ = block_event_dict
-                                        .set_item("block_label", header.title.clone());
-                                    let _ = block_event_dict.set_item("header_level", header.level);
-                                    let _ = block_event_dict.set_item("event_type", "exit");
-                                    let _ = handler.call1(py, (block_event_dict,));
-                                }
-                            }
                             baml_compiler::watch::WatchBamlValue::Value(value) => {
                                 if let Some(var_name) = &notification.variable_name {
                                     // Serialize BamlValue to JSON and convert to Python object
@@ -440,6 +417,7 @@ impl BamlRuntime {
                                     }
                                 }
                             }
+                            baml_compiler::watch::WatchBamlValue::VizExecState(_) => {}
                             baml_compiler::watch::WatchBamlValue::StreamStart(stream_id) => {
                                 if let Some(var_name) = &notification.variable_name {
                                     let channel =
@@ -588,30 +566,6 @@ impl BamlRuntime {
                 if let Some(ref callbacks) = notification_callbacks {
                     Python::with_gil(|py| {
                         match event.value {
-                            baml_compiler::watch::WatchBamlValue::Header(header) => {
-                                // Fire header events to all registered block handlers
-                                for handler in &callbacks.block_handlers {
-                                    let block_event_dict = PyDict::new(py);
-                                    let _ = block_event_dict
-                                        .set_item("block_label", header.title.clone());
-                                    let _ = block_event_dict.set_item("header_level", header.level);
-                                    let _ = block_event_dict.set_item("event_type", "enter");
-                                    let _ = handler.call1(py, (block_event_dict,));
-                                }
-                            }
-                            // HACK: HeaderStopped is emitted synthetically when a new header
-                            // comes in at the same or shallower level
-                            baml_compiler::watch::WatchBamlValue::HeaderStopped(header) => {
-                                // Fire header exit events to all registered block handlers
-                                for handler in &callbacks.block_handlers {
-                                    let block_event_dict = PyDict::new(py);
-                                    let _ = block_event_dict
-                                        .set_item("block_label", header.title.clone());
-                                    let _ = block_event_dict.set_item("header_level", header.level);
-                                    let _ = block_event_dict.set_item("event_type", "exit");
-                                    let _ = handler.call1(py, (block_event_dict,));
-                                }
-                            }
                             baml_compiler::watch::WatchBamlValue::Value(value) => {
                                 if let Some(var_name) = &event.variable_name {
                                     // Serialize BamlValue to JSON and convert to Python object
@@ -661,6 +615,7 @@ impl BamlRuntime {
                                     }
                                 }
                             }
+                            baml_compiler::watch::WatchBamlValue::VizExecState(_) => {}
                             baml_compiler::watch::WatchBamlValue::StreamStart(stream_id) => {
                                 if let Some(var_name) = &event.variable_name {
                                     let channel = event.channel_name.as_ref().unwrap_or(var_name);

@@ -131,7 +131,7 @@ class ClassBuilder extends ClassAst {
         return new ClassPropertyBuilder(this.bldr.property(name).setType(type));
     }
     listProperties() {
-        return this.bldr.listProperties();
+        return this.bldr.listProperties().map(([name, prop]) => [name, new ClassPropertyBuilder(prop)]);
     }
     removeProperty(name) {
         this.properties.delete(name);

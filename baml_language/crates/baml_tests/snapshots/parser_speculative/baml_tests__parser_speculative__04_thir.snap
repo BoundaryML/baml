@@ -9,27 +9,13 @@ expression: output
     Return: String
   Function ProcessData:
     Return: Void
-    Errors:
-      - Unknown type data::field1
-      - Unknown type data::field2
-      - Invalid op Add for unknown and unknown
   Function ExtractData:
-    Return: Unknown
+    Return: Named("JsonData")
   Function SimpleCalc:
     Return: Void
   Function ProcessAnalysis:
     Return: Void
-    Errors:
-      - Unknown type analysis::score
-      - Unknown type analysis::sentiment
-      - Invalid op Add for string and unknown
-      - Unknown type analysis::sentiment
-      - Invalid op Add for string and unknown
-      - Unknown type analysis::sentiment
-      - Invalid op Add for string and unknown
-      - Unknown type analysis::sentiment
-      - Invalid op Add for string and unknown
   Function LLMAnalyze:
-    Return: Unknown
+    Return: Named("Analysis")
   Function ChainedProcess:
     Return: String

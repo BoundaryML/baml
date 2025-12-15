@@ -9,6 +9,7 @@ packages:
   - engine/baml-runtime/src/control_flow/mermaid-sandbox/
   - engine/baml-schema-wasm/*
   - fern
+  - engine/baml-runtime/tests/viz-runtime/web
   - examples/internal/vaibhav/*
   - examples/internal/aaron/*
   - examples/internal/sam/*
@@ -21,4 +22,3 @@ packages:
   # - engine/language_client_typescript/npm/linux-x64-gnu
   # - engine/language_client_typescript/npm/linux-x64-musl
   # - engine/language_client_typescript/npm/win32-x64-msvc
-

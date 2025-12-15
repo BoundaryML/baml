@@ -178,6 +178,7 @@ impl BamlProject {
             &all_files,
             no_version_check.unwrap_or(false),
             GeneratorType::VSCode,
+            false, // strip_tests - not applicable for VSCode extension
         ) {
             Ok(gen) => {
                 let elapsed = start_time.elapsed();

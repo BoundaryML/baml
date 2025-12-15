@@ -544,16 +544,7 @@ where
         {
             Box::pin(async move {
                 match stmt {
-                    Statement::HeaderContextEnter(header) => {
-                        watch_handler
-                            .lock()
-                            .unwrap()
-                            .notify(WatchNotification::new_block(
-                                header.clone(),
-                                function_name.to_string(),
-                            ));
-                        return Ok(None);
-                    }
+                    Statement::HeaderContextEnter(_header) => return Ok(None),
                     Statement::Let {
                         name, value, watch, ..
                     } => {

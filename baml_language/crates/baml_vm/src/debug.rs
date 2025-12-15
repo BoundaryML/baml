@@ -1,11 +1,35 @@
 //! VM debugging utilities & helpers.
 //!
-//! This module provides functions to display bytecode in a human-readable format,
-//! similar to `CPython`'s bytecode disassembly. It can be used both at runtime
-//! for debugging and at compile time for snapshot testing.
+//! NOTE: Functions here should not take an entire reference to the
+//! [`crate::Vm`] because then it will be hard to circumvent the borrow checker
+//! in the [`crate::Vm::exec`] loop (which is where we want to use this).
+//!
+//! Instead, they take read only references to the parts of the [`crate::Vm`]
+//! that they need, that way inside the loop we can "destructure" the
+//! [`crate::Vm`] and let the compiler know exactly which properties we're
+//! using as mutable and which properties we're using as immutable.
+//!
+//! Reference structs can be created if needed:
+//!
+//! ```ignore
+//! struct InstructionContext<'vm> {
+//!     instruction_ptr: isize,
+//!     function: &'vm Function,
+//!     stack: &'vm [Value],
+//!     objects: &'vm [Object],
+//!     globals: &'vm [Value],
+//! }
+//!
+//! ```
+
+use std::io::IsTerminal;
+
+use colored::{Color, Colorize};
 
 use crate::{
+    ObjectIndex, ObjectPool, StackIndex,
     bytecode::Instruction,
+    indexable::{EvalStack, GlobalPool},
     types::{Function, Object, Value},
 };
 
@@ -23,74 +47,74 @@ use crate::{
 ///
 /// If there's no relevant metadata to attach to the instruction, then this
 /// function returns an empty string.
+#[allow(clippy::cast_sign_loss)] // instruction_ptr is always non-negative in valid bytecode
 pub fn display_instruction(
-    instruction_ptr: usize,
+    instruction_ptr: isize,
     function: &Function,
-    stack: &[Value],
-    objects: &[Object],
-    globals: &[Value],
+    stack: &EvalStack,
+    objects: &ObjectPool,
+    globals: &GlobalPool,
 ) -> (String, String) {
-    let instruction = &function.bytecode.instructions[instruction_ptr];
+    let instruction = &function.bytecode.instructions[instruction_ptr as usize];
 
     let metadata = match instruction {
         Instruction::NotifyBlock(block_index) => {
-            // Block notifications aren't stored in the simplified Function struct.
-            format!("(block {block_index})")
+            if let Some(notification) = function.block_notifications.get(*block_index) {
+                format!("({})", &notification.block_name)
+            } else {
+                format!("(invalid block index: {block_index})")
+            }
         }
         Instruction::LoadConst(index) => format!(
             "({})",
             display_value(&function.bytecode.constants[*index], objects)
         ),
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
-            if let Some(value) = globals.get(*index) {
-                format!("({})", display_value(value, objects))
-            } else {
-                format!("(global {index})")
-            }
+            format!("({})", display_value(&globals[*index], objects))
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
         | Instruction::Watch(index)
         | Instruction::Notify(index) => {
-            let scope_idx = function.bytecode.scopes.get(instruction_ptr).copied();
-            let name = scope_idx
-                .and_then(|s| function.locals_in_scope.get(s))
-                .and_then(|locals| locals.get(*index))
-                .map(std::string::String::as_str)
-                .unwrap_or("?");
-            format!("({name})")
+            format!(
+                "({})",
+                function
+                    .locals_in_scope
+                    .get(function.bytecode.scopes[instruction_ptr as usize])
+                    .and_then(|locals| locals.get(*index))
+                    .unwrap_or(&"?".to_string())
+            )
         }
         Instruction::LoadField(index) | Instruction::StoreField(index) => 'field: {
             // When the compiler calls this, there's no runtime stack so it's
             // not possible to get instruction parameters from the stack.
+            // TODO: Figure out a way to get this information without running
+            // the VM. When the compiler emits instructions, it could append
+            // some metadata to each one of them, simplifying this code a lot
+            // since the VM at runtime would only have to print the stack. All
+            // instructions with metadata would be provided by the compiler.
             if stack.is_empty() {
                 break 'field String::new();
             }
 
-            let Some(Value::Object(obj_idx)) = stack.get(stack.len().saturating_sub(2)) else {
+            // TODO: prevent panic here
+
+            let Value::Object(reference) = stack[StackIndex::from_raw(stack.len() - 2)] else {
                 break 'field String::from("(ERROR: value not an object)");
             };
 
-            let Some(Object::Instance { class_index, .. }) = objects.get(*obj_idx) else {
+            let Object::Instance(instance) = &objects[reference] else {
                 break 'field String::from("(ERROR: value not an instance)");
             };
 
-            let Some(Object::Class(class)) = objects.get(*class_index) else {
+            let Object::Class(class) = &objects[instance.class] else {
                 break 'field String::from("(ERROR: class not found)");
             };
 
-            format!(
-                "({})",
-                class
-                    .field_names
-                    .get(*index)
-                    .map(std::string::String::as_str)
-                    .unwrap_or("?")
-            )
+            format!("({})", class.field_names[*index])
         }
         Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
-            let target = instruction_ptr.wrapping_add_signed(*offset);
-            format!("(to {target})")
+            format!("(to {})", instruction_ptr + offset)
         }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
             format!("({})", display_object(objects, *index))
@@ -123,29 +147,30 @@ pub fn display_instruction(
 /// The default display for objects is just a reference number. If we want
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
-pub fn display_value(value: &Value, objects: &[Object]) -> String {
+pub fn display_value(value: &Value, objects: &ObjectPool) -> String {
     match value {
         Value::Object(index) => display_object(objects, *index),
+
         other => other.to_string(),
     }
 }
 
-fn display_object(objects: &[Object], index: usize) -> String {
-    match objects.get(index) {
-        Some(Object::Instance { class_index, .. }) => match objects.get(*class_index) {
-            Some(Object::Class(class)) => format!("<{} instance>", class.name),
-            Some(other) => format!("<{other} instance>"),
-            None => format!("<instance of class {class_index}>"),
+fn display_object(objects: &ObjectPool, index: ObjectIndex) -> String {
+    match &objects[index] {
+        // This one's a bit tricky to print.
+        Object::Instance(instance) => match &objects[instance.class] {
+            Object::Class(class) => format!("<{} instance>", class.name),
+            // This will most likely never happen, but we're trying not
+            // to panic.
+            other => format!("<{other} instance>"),
         },
 
-        Some(Object::Variant { enum_index, .. }) => match objects.get(*enum_index) {
-            Some(Object::Enum(enm)) => format!("<{} variant>", enm.name),
-            Some(other) => format!("<{other} variant>"),
-            None => format!("<variant of enum {enum_index}>"),
+        Object::Variant(variant) => match &objects[variant.enm] {
+            Object::Enum(enm) => format!("<{} variant>", enm.name),
+            other => format!("<{other} variant>"),
         },
 
-        Some(other) => other.to_string(),
-        None => format!("<invalid object {index}>"),
+        other => other.to_string(),
     }
 }
 
@@ -154,17 +179,60 @@ fn display_object(objects: &[Object], index: usize) -> String {
 /// See [`display_bytecode`] for more information.
 const COLUMN_MARGIN: usize = 3;
 
+/// Get color for instruction based on its type
+fn instruction_color(instruction: &Instruction) -> Color {
+    match instruction {
+        Instruction::NotifyBlock(_) => Color::BrightYellow,
+        Instruction::LoadConst(_)
+        | Instruction::LoadVar(_)
+        | Instruction::LoadGlobal(_)
+        | Instruction::LoadField(_)
+        | Instruction::LoadArrayElement
+        | Instruction::LoadMapElement => Color::Blue,
+        Instruction::StoreVar(_)
+        | Instruction::StoreGlobal(_)
+        | Instruction::StoreField(_)
+        | Instruction::StoreArrayElement
+        | Instruction::StoreMapElement => Color::Green,
+        Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
+            Color::BrightBlue
+        }
+        Instruction::Jump(_) | Instruction::JumpIfFalse(_) => Color::Yellow,
+        Instruction::Call(_) => Color::Magenta,
+        Instruction::Assert
+        | Instruction::Return
+        | Instruction::Pop(_)
+        | Instruction::Copy(_)
+        | Instruction::PopReplace(_) => Color::Red,
+        Instruction::AllocMap(_)
+        | Instruction::AllocInstance(_)
+        | Instruction::AllocVariant(_)
+        | Instruction::AllocArray(_) => Color::Cyan,
+        Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
+        Instruction::Watch(_) | Instruction::Notify(_) => Color::BrightRed,
+    }
+}
+
 struct Col {
     text: String,
     char_count: usize,
+    color: Color,
 }
 
 impl From<String> for Col {
     fn from(text: String) -> Self {
         Self {
             char_count: text.chars().count(),
+            color: Color::White,
             text,
         }
+    }
+}
+
+impl Col {
+    fn with_color(mut self, color: Color) -> Self {
+        self.color = color;
+        self
     }
 }
 
@@ -193,9 +261,10 @@ impl From<String> for Col {
 /// symmetric and returns the entire table.
 pub fn display_bytecode(
     function: &Function,
-    stack: &[Value],
-    objects: &[Object],
-    globals: &[Value],
+    stack: &EvalStack,
+    objects: &ObjectPool,
+    globals: &GlobalPool,
+    use_colors: bool,
 ) -> String {
     if function.bytecode.instructions.is_empty() {
         return String::new();
@@ -211,9 +280,10 @@ pub fn display_bytecode(
     let mut last_line: usize = 0;
 
     // Populate all the rows.
+    #[allow(clippy::cast_possible_wrap)] // instruction count is always small enough
     for instruction_ptr in 0..function.bytecode.instructions.len() {
         let (instruction, metadata) =
-            display_instruction(instruction_ptr, function, stack, objects, globals);
+            display_instruction(instruction_ptr as isize, function, stack, objects, globals);
 
         // decide whether to show the line number
         // since a single line could emit multiple instructions
@@ -225,11 +295,13 @@ pub fn display_bytecode(
             _ => String::new(),
         };
 
+        let instruction_color = instruction_color(&function.bytecode.instructions[instruction_ptr]);
+
         // Table format is [LINE, IP, INSTR, META].
         let row = [
             Col::from(source_line),
             Col::from(instruction_ptr.to_string()),
-            Col::from(instruction),
+            Col::from(instruction).with_color(instruction_color),
             Col::from(metadata),
         ];
 
@@ -247,6 +319,13 @@ pub fn display_bytecode(
 
     // Print the table.
     for (i, row) in rows.iter().enumerate() {
+        // Separate bytecode instructions by source line numbers. This checks
+        // that the source line has changed compared to the previous
+        // instruction.
+        if i > 0 && !rows[i][0].text.is_empty() && rows[i - 1][0].text != rows[i][0].text {
+            table.push('\n');
+        }
+
         // Build the row.
         for (j, col) in row.iter().enumerate() {
             let mut width = widths[j];
@@ -258,21 +337,45 @@ pub fn display_bytecode(
                 width = 0;
             }
 
-            table.push_str(&col.text);
+            let mut colored_text = col.text.normal();
+
+            // Apply color based on column, only if output is to a TTY
+            if use_colors {
+                colored_text = match j {
+                    0 => col.text.bright_black(),   // Line numbers in gray
+                    1 => col.text.white(),          // IP in white
+                    2 => col.text.color(col.color), // Instruction with type-based color
+                    3 => col.text.bright_cyan(),    // Metadata in cyan
+                    _ => col.text.normal(),
+                }
+            }
+
+            // For colored strings, we need to use the actual character count
+            // not the length with ANSI codes. Also, `to_string` has to be
+            // called here so that ANSI codes are inserted.
+            table.push_str(&colored_text.to_string());
             for _ in col.char_count..width {
                 table.push(' ');
             }
         }
 
         table.push('\n');
-
-        // Add blank line after each source line group (when source lines are tracked).
-        // Check if the next row starts a new source line (has a non-empty line number).
-        // When source lines are all 0 (not tracked), no blank lines are added.
-        if i + 1 < rows.len() && !rows[i + 1][0].text.is_empty() {
-            table.push('\n');
-        }
     }
 
     table
+}
+
+/// Prints the dissassembly of a function.
+#[allow(clippy::print_stderr)] // intentional debug output for disassembly
+pub fn disassemble(
+    function: &Function,
+    stack: &EvalStack,
+    objects: &ObjectPool,
+    globals: &GlobalPool,
+) {
+    let use_colors = std::io::stdout().is_terminal();
+
+    let disassembly = display_bytecode(function, stack, objects, globals, use_colors);
+
+    eprintln!("{disassembly}");
 }

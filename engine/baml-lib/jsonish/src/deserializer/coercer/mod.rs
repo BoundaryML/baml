@@ -25,6 +25,10 @@ pub struct ParsingContext<'a> {
     /// THIS IS A TEMPORARY HACK (ask vaibhav)
     pub do_not_use_mode: baml_types::StreamingMode,
     pub of: &'a OutputFormatContent,
+    /// Hint for union coercion: the variant index that succeeded on the previous
+    /// array element. Used to optimize arrays of unions by trying the likely
+    /// variant first.
+    pub union_variant_hint: Option<usize>,
 }
 
 impl ParsingContext<'_> {
@@ -45,6 +49,7 @@ impl ParsingContext<'_> {
             visited_during_try_cast: HashSet::new(),
             do_not_use_mode: mode,
             of,
+            union_variant_hint: None,
         }
     }
 
@@ -57,6 +62,27 @@ impl ParsingContext<'_> {
             visited_during_try_cast: self.visited_during_try_cast.clone(),
             of: self.of,
             do_not_use_mode: self.do_not_use_mode,
+            // Don't propagate hint to nested scopes by default
+            union_variant_hint: None,
+        }
+    }
+
+    /// Enter a scope with a union variant hint for optimizing arrays of unions.
+    /// The hint suggests which variant to try first based on previous successful coercions.
+    pub(crate) fn enter_scope_with_hint(
+        &self,
+        scope: &str,
+        hint: Option<usize>,
+    ) -> ParsingContext<'_> {
+        let mut new_scope = self.scope.clone();
+        new_scope.push(scope.to_string());
+        ParsingContext {
+            scope: new_scope,
+            visited_during_coerce: self.visited_during_coerce.clone(),
+            visited_during_try_cast: self.visited_during_try_cast.clone(),
+            of: self.of,
+            do_not_use_mode: self.do_not_use_mode,
+            union_variant_hint: hint,
         }
     }
 
@@ -81,6 +107,7 @@ impl ParsingContext<'_> {
             visited_during_try_cast: new_visited_try_cast,
             of: self.of,
             do_not_use_mode: self.do_not_use_mode,
+            union_variant_hint: None,
         }
     }
 

@@ -10,6 +10,7 @@ license-file.workspace = true
 anyhow = { workspace = true }
 baml-types = { path = "../baml-lib/baml-types" }
 baml-vm = { path = "../baml-vm" }
+baml-viz-events = { path = "../baml-viz-events" }
 internal-baml-ast = { path = "../baml-lib/ast" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 internal-baml-parser-database = { path = "../baml-lib/parser-database" }

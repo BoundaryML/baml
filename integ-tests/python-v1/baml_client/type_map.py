@@ -19,6 +19,9 @@ type_map = {
     "types.AddTodoItem": types.AddTodoItem,
     "stream_types.AddTodoItem": stream_types.AddTodoItem,
 
+    "types.AddressWithMeta": types.AddressWithMeta,
+    "stream_types.AddressWithMeta": stream_types.AddressWithMeta,
+
     "types.AnotherObject": types.AnotherObject,
     "stream_types.AnotherObject": stream_types.AnotherObject,
 
@@ -240,6 +243,9 @@ type_map = {
 
     "types.Person": types.Person,
     "stream_types.Person": stream_types.Person,
+
+    "types.PersonWithMeta": types.PersonWithMeta,
+    "stream_types.PersonWithMeta": stream_types.PersonWithMeta,
 
     "types.PhoneNumber": types.PhoneNumber,
     "stream_types.PhoneNumber": stream_types.PhoneNumber,
