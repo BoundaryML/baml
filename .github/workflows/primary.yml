@@ -300,8 +300,6 @@ jobs:
 
   # Sync Zed extension to separate repository
   sync-zed-repository:
-    environment:
-      name: ${{ github.ref == 'refs/heads/canary' && 'boundary-tools-prod' || 'boundary-tools-dev' }}
     runs-on: ubuntu-latest
     # Only run on pushes to canary branch or manual dispatch
     if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -315,7 +313,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: BoundaryML/zed-baml
-          token: ${{ secrets.ZED_BAML_SYNC_TOKEN }}
+          token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
           path: zed-baml-repo
 
       - name: Setup rsync
