@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -38,7 +38,7 @@ function ProcessData {
       Idx::<Expr>(12): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(4)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(4)) }
       Idx::<Stmt>(1): Return(Some(Idx::<Expr>(8)))
       Idx::<Stmt>(2): Expr(Idx::<Expr>(10))
       Idx::<Stmt>(3): Return(Some(Idx::<Expr>(11)))
@@ -119,7 +119,7 @@ function ProcessAnalysis {
       Idx::<Expr>(34): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(33)) }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
       Idx::<Stmt>(1): Return(Some(Idx::<Expr>(8)))
       Idx::<Stmt>(2): Return(Some(Idx::<Expr>(16)))
       Idx::<Stmt>(3): Return(Some(Idx::<Expr>(24)))

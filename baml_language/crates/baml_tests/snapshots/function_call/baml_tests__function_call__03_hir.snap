@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -30,7 +30,7 @@ function Bar {
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(3)) }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(2)) }
     ]
     root: Idx::<Expr>(4)
   }
@@ -61,7 +61,7 @@ function GreetBaz {
       Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(4)) }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
     ]
     root: Idx::<Expr>(5)
   }

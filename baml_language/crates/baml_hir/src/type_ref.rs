@@ -84,6 +84,10 @@ impl TypeRef {
     }
 
     /// Create a `TypeRef` from an AST `TypeExpr` node.
+    /// TODO: it seems that type parsing is occurring here!!
+    /// I believe that the parser should be what resolves types syntactically
+    /// this code is brittle (e.g, try the type int?? or int[][]). it will be resolved
+    /// as a type path when it should be either incorrect syntax, or something else.
     pub fn from_ast(type_expr: &baml_syntax::ast::TypeExpr) -> Self {
         use rowan::ast::AstNode;
 

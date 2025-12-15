@@ -12,10 +12,11 @@
 
 use std::collections::HashMap;
 
-use baml_base::{Name, SourceFile, Span};
+use baml_base::{FileId, Name, SourceFile, Span};
 use baml_diagnostics::compiler_error::TypeError;
 use baml_hir::{
-    ExprBody, ExprId, FunctionBody, FunctionSignature, Pattern, StmtId, project_class_fields,
+    ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId,
+    project_class_fields,
 };
 use baml_workspace::Project;
 
@@ -25,6 +26,7 @@ mod types;
 
 pub use lower::lower_type_ref;
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
+use text_size::TextRange;
 pub use types::*;
 
 //
@@ -190,6 +192,8 @@ pub struct TypeContext<'db> {
     expr_types: HashMap<ExprId, Ty<'db>>,
     /// Accumulated type errors.
     errors: Vec<TypeError<Ty<'db>>>,
+    /// The current file being typechecked
+    file_id: FileId,
 }
 
 impl<'db> TypeContext<'db> {
@@ -197,13 +201,14 @@ impl<'db> TypeContext<'db> {
     ///
     /// The initial scope typically contains top-level function types, allowing
     /// function calls to be properly typed. Pass an empty `HashMap` for no globals.
-    pub fn new(db: &'db dyn Db, globals: HashMap<Name, Ty<'db>>) -> Self {
+    pub fn new(db: &'db dyn Db, globals: HashMap<Name, Ty<'db>>, file_id: FileId) -> Self {
         TypeContext {
             db,
             scopes: vec![globals],
             class_fields: HashMap::new(),
             expr_types: HashMap::new(),
             errors: Vec::new(),
+            file_id,
         }
     }
 
@@ -212,6 +217,7 @@ impl<'db> TypeContext<'db> {
         db: &'db dyn Db,
         globals: HashMap<Name, Ty<'db>>,
         class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
+        file_id: FileId,
     ) -> Self {
         TypeContext {
             db,
@@ -219,6 +225,7 @@ impl<'db> TypeContext<'db> {
             class_fields,
             expr_types: HashMap::new(),
             errors: Vec::new(),
+            file_id,
         }
     }
 
@@ -278,6 +285,17 @@ impl<'db> TypeContext<'db> {
     pub fn db(&self) -> &'db dyn Db {
         self.db
     }
+
+    pub fn build_span(&self, range: TextRange) -> Span {
+        Span::new(self.file_id, range)
+    }
+
+    pub fn build_span_default(&self, range: &Option<TextRange>) -> Span {
+        range.map(|s| self.build_span(s)).unwrap_or_else(||
+        // todo: probably this should be an error? it should be an invariant that
+        // all exprs have valid spans
+        Span::default())
+    }
 }
 
 // ============================================================================
@@ -301,11 +319,14 @@ pub fn infer_function_body<'db>(
     expected_return: &Ty<'db>,
     globals: Option<HashMap<Name, Ty<'db>>>,
     class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
+    function_loc: FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
+    let file_id = function_loc.file(db).file_id(db);
     let mut ctx = TypeContext::with_class_fields(
         db,
         globals.unwrap_or_default(),
         class_fields.unwrap_or_default(),
+        file_id,
     );
 
     // Add parameters to the current scope (on top of globals)
@@ -334,8 +355,9 @@ pub fn infer_function_body<'db>(
         && !return_type.is_unknown()
         && !expected_return.is_unknown()
     {
-        // We'd need the span of the function body for this error
-        // For now, we skip this check
+        // TODO: we actually want the span of the last expression here.
+        let error = TypeError::TypeMismatch { expected: expected_return.clone(), found: return_type.clone(), span: Span::default() };
+        ctx.push_error(error);
     }
 
     InferenceResult {
@@ -360,6 +382,7 @@ pub fn infer_function<'db>(
     body: &FunctionBody,
     globals: Option<HashMap<Name, Ty<'db>>>,
     class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
+    function_loc: FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
     // Convert parameter TypeRefs to Tys
     let param_types: HashMap<Name, Ty<'db>> = signature
@@ -382,6 +405,7 @@ pub fn infer_function<'db>(
         &expected_return,
         globals,
         class_fields,
+        function_loc,
     )
 }
 
@@ -392,10 +416,9 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
     let expr = &body.exprs[expr_id];
 
     // Create a placeholder span for errors (ideally we'd track spans in ExprBody)
-    let span = Span::new(
-        baml_base::FileId::new(0),
-        text_size::TextRange::empty(0.into()),
-    );
+    let span = ctx.build_span_default(&body
+        .expr_span(expr_id));
+
 
     let ty = match expr {
         Expr::Literal(lit) => infer_literal(lit),
@@ -854,6 +877,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         Stmt::Let {
             pattern,
             type_annotation,
+            type_span,
             initializer,
         } => {
             let ty = if let Some(init) = initializer {
@@ -861,12 +885,12 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
 
                 // If there's a type annotation, check it matches
                 if let Some(annot) = type_annotation {
+                    // TODO: currently type_span and type_annotations are separate `Option`s
+                    // turn it into one tuple.
+                    // this unwrap is safe because if type_ann is populated, so is type_span
+                    let span = ctx.build_span_default(type_span);
                     let annot_ty = lower_type_ref(ctx.db(), annot);
                     if !init_ty.is_subtype_of(&annot_ty) {
-                        let span = Span::new(
-                            baml_base::FileId::new(0),
-                            text_size::TextRange::empty(0.into()),
-                        );
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: annot_ty.clone(),
                             found: init_ty,
@@ -909,10 +933,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         } => {
             let cond_ty = infer_expr(ctx, *condition, body);
             if !cond_ty.is_subtype_of(&Ty::Bool) {
-                let span = Span::new(
-                    baml_base::FileId::new(0),
-                    text_size::TextRange::empty(0.into()),
-                );
+                let span = ctx.build_span_default(&body.expr_span(*condition));
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: Ty::Bool,
                     found: cond_ty,
@@ -964,10 +985,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             if let Some(cond) = condition {
                 let cond_ty = infer_expr(ctx, *cond, body);
                 if !cond_ty.is_subtype_of(&Ty::Bool) {
-                    let span = Span::new(
-                        baml_base::FileId::new(0),
-                        text_size::TextRange::empty(0.into()),
-                    );
+                    let span = ctx.build_span_default(&body.expr_span(*cond));
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: Ty::Bool,
                         found: cond_ty,

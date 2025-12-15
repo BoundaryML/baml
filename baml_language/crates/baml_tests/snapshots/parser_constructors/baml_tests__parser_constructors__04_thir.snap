@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -19,9 +19,17 @@ expression: output
     Return: Named("Vec2D")
   Function boolValues:
     Return: Void
+    Errors:
+      - Expected map<string, bool>. Found void
   Function intValues:
     Return: Void
+    Errors:
+      - Expected map<string, int>. Found void
   Function stringValues:
     Return: Void
+    Errors:
+      - Expected map<string, string>. Found void
   Function floatValues:
     Return: Void
+    Errors:
+      - Expected map<string, float>. Found void

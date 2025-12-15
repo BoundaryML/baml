@@ -18,3 +18,43 @@ expression: output
    │ 
    │ Note: Error code: E0011
 ───╯
+
+  [type] Error: Expected map<string, bool>, found void
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class Point {
+   │ │ 
+   │ ╰─ Expected map<string, bool>, found void
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: Expected map<string, int>, found void
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class Point {
+   │ │ 
+   │ ╰─ Expected map<string, int>, found void
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: Expected map<string, string>, found void
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class Point {
+   │ │ 
+   │ ╰─ Expected map<string, string>, found void
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: Expected map<string, float>, found void
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class Point {
+   │ │ 
+   │ ╰─ Expected map<string, float>, found void
+   │ 
+   │ Note: Error code: E0001
+───╯

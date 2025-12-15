@@ -114,6 +114,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                     &body,
                     Some(typing_context.clone()),
                     None, // TODO: Pass class fields. Eventually remove this parameter.
+                    *func_loc,
                 );
 
                 // Compile to bytecode (objects are added directly to program.objects)

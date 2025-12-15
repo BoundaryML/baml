@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -14,7 +14,7 @@ function mul_assign {
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Mul, value: Idx::<Expr>(2) }
       Idx::<Stmt>(2): Return(Some(Idx::<Expr>(3)))
     ]
@@ -39,8 +39,8 @@ function assign_in_loop {
       Idx::<Expr>(11): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
       Idx::<Stmt>(2): AssignOp { target: Idx::<Expr>(5), op: Add, value: Idx::<Expr>(6) }
       Idx::<Stmt>(3): AssignOp { target: Idx::<Expr>(7), op: Add, value: Idx::<Expr>(8) }
       Idx::<Stmt>(4): While { condition: Idx::<Expr>(4), body: Idx::<Expr>(9) }
@@ -65,8 +65,8 @@ function multi_assign {
       Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
       Idx::<Stmt>(2): Assign { target: Idx::<Expr>(2), value: Idx::<Expr>(3) }
       Idx::<Stmt>(3): Assign { target: Idx::<Expr>(4), value: Idx::<Expr>(5) }
       Idx::<Stmt>(4): Return(Some(Idx::<Expr>(8)))
@@ -85,7 +85,7 @@ function sub_assign {
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Sub, value: Idx::<Expr>(2) }
       Idx::<Stmt>(2): Return(Some(Idx::<Expr>(3)))
     ]
@@ -103,7 +103,7 @@ function add_assign {
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Add, value: Idx::<Expr>(2) }
       Idx::<Stmt>(2): Return(Some(Idx::<Expr>(3)))
     ]
@@ -121,7 +121,7 @@ function simple_assign {
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): Assign { target: Idx::<Expr>(1), value: Idx::<Expr>(2) }
       Idx::<Stmt>(2): Return(Some(Idx::<Expr>(3)))
     ]
@@ -142,9 +142,9 @@ function block_with_tail {
       Idx::<Expr>(7): Block { stmts: [Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(5)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(2), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(5)) }
       Idx::<Stmt>(3): Return(Some(Idx::<Expr>(6)))
     ]
     root: Idx::<Expr>(7)
@@ -168,7 +168,7 @@ function break_in_for {
     ]
     stmts: [
       Idx::<Stmt>(0): Break
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
       Idx::<Stmt>(2): Assign { target: Idx::<Expr>(5), value: Idx::<Expr>(8) }
       Idx::<Stmt>(3): ForCStyle { initializer: Some(Idx::<Stmt>(1)), condition: Some(Idx::<Expr>(4)), update: Some(Idx::<Stmt>(2)), body: Idx::<Expr>(0) }
       Idx::<Stmt>(4): Return(Some(Idx::<Expr>(9)))
@@ -208,8 +208,8 @@ function continue_with_locals {
       Idx::<Expr>(8): Block { stmts: [Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(3)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(3)) }
       Idx::<Stmt>(2): Continue
       Idx::<Stmt>(3): While { condition: Idx::<Expr>(0), body: Idx::<Expr>(6) }
       Idx::<Stmt>(4): Return(Some(Idx::<Expr>(7)))
@@ -273,7 +273,7 @@ function continue_in_for {
     ]
     stmts: [
       Idx::<Stmt>(0): Continue
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
       Idx::<Stmt>(2): Assign { target: Idx::<Expr>(5), value: Idx::<Expr>(8) }
       Idx::<Stmt>(3): ForCStyle { initializer: Some(Idx::<Stmt>(1)), condition: Some(Idx::<Expr>(4)), update: Some(Idx::<Stmt>(2)), body: Idx::<Expr>(0) }
       Idx::<Stmt>(4): Return(Some(Idx::<Expr>(9)))
@@ -296,8 +296,8 @@ function break_with_locals {
       Idx::<Expr>(8): Block { stmts: [Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(3)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(3)) }
       Idx::<Stmt>(2): Break
       Idx::<Stmt>(3): While { condition: Idx::<Expr>(0), body: Idx::<Expr>(6) }
       Idx::<Stmt>(4): Return(Some(Idx::<Expr>(7)))
@@ -323,9 +323,9 @@ function c_style_for_loop {
       Idx::<Expr>(11): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Add, value: Idx::<Expr>(2) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(4)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(4)) }
       Idx::<Stmt>(3): AssignOp { target: Idx::<Expr>(8), op: Add, value: Idx::<Expr>(9) }
       Idx::<Stmt>(4): ForCStyle { initializer: Some(Idx::<Stmt>(2)), condition: Some(Idx::<Expr>(7)), update: Some(Idx::<Stmt>(3)), body: Idx::<Expr>(3) }
       Idx::<Stmt>(5): Return(Some(Idx::<Expr>(10)))
@@ -349,7 +349,7 @@ function iterator_style_for_loop {
       Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Add, value: Idx::<Expr>(2) }
       Idx::<Stmt>(2): ForIn { pattern: Idx::<Pattern>(1), iterator: Idx::<Expr>(7), body: Idx::<Expr>(3) }
       Idx::<Stmt>(3): Return(Some(Idx::<Expr>(8)))
@@ -380,7 +380,7 @@ function nested_for_loop {
       Idx::<Expr>(16): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Add, value: Idx::<Expr>(4) }
       Idx::<Stmt>(2): ForIn { pattern: Idx::<Pattern>(1), iterator: Idx::<Expr>(9), body: Idx::<Expr>(5) }
       Idx::<Stmt>(3): ForIn { pattern: Idx::<Pattern>(2), iterator: Idx::<Expr>(14), body: Idx::<Expr>(10) }
@@ -439,10 +439,10 @@ function let_statements {
       Idx::<Expr>(14): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: Some(Int), initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: Some(List(Int)), initializer: Some(Idx::<Expr>(5)) }
-      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: Some(Path(Path { segments: ["Point"], kind: Plain })), initializer: Some(Idx::<Expr>(8)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: Some(Int), type_span: Some(103..107), initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: Some(List(Int)), type_span: Some(147..153), initializer: Some(Idx::<Expr>(5)) }
+      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: Some(Path(Path { segments: ["Point"], kind: Plain })), type_span: Some(206..212), initializer: Some(Idx::<Expr>(8)) }
       Idx::<Stmt>(4): Return(Some(Idx::<Expr>(13)))
     ]
     root: Idx::<Expr>(14)
@@ -469,7 +469,7 @@ function simple_while_loop {
       Idx::<Expr>(10): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): Assign { target: Idx::<Expr>(4), value: Idx::<Expr>(7) }
       Idx::<Stmt>(2): While { condition: Idx::<Expr>(3), body: Idx::<Expr>(8) }
       Idx::<Stmt>(3): Return(Some(Idx::<Expr>(9)))
@@ -499,8 +499,8 @@ function nested_while_loop {
       Idx::<Expr>(15): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(4)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(4)) }
       Idx::<Stmt>(2): Assign { target: Idx::<Expr>(8), value: Idx::<Expr>(11) }
       Idx::<Stmt>(3): While { condition: Idx::<Expr>(7), body: Idx::<Expr>(12) }
       Idx::<Stmt>(4): While { condition: Idx::<Expr>(3), body: Idx::<Expr>(13) }

@@ -27,10 +27,10 @@ function Calculate {
       Idx::<Expr>(17): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(5)) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(10)) }
-      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, initializer: Some(Idx::<Expr>(15)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(2)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(5)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(10)) }
+      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(15)) }
       Idx::<Stmt>(4): Return(Some(Idx::<Expr>(16)))
     ]
     root: Idx::<Expr>(17)
@@ -58,10 +58,10 @@ function FieldAccess {
       Idx::<Expr>(14): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(4)) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(8)) }
-      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, initializer: Some(Idx::<Expr>(12)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(4)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(8)) }
+      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(12)) }
       Idx::<Stmt>(4): Return(Some(Idx::<Expr>(13)))
     ]
     root: Idx::<Expr>(14)
@@ -105,11 +105,11 @@ function IndexAccess {
       Idx::<Expr>(18): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(3)) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(6)) }
-      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, initializer: Some(Idx::<Expr>(10)) }
-      Idx::<Stmt>(4): Let { pattern: Idx::<Pattern>(4), type_annotation: None, initializer: Some(Idx::<Expr>(16)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(2)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(3)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(6)) }
+      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(10)) }
+      Idx::<Stmt>(4): Let { pattern: Idx::<Pattern>(4), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(16)) }
       Idx::<Stmt>(5): Return(Some(Idx::<Expr>(17)))
     ]
     root: Idx::<Expr>(18)
@@ -148,10 +148,10 @@ function TestPrecedence {
       Idx::<Expr>(21): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(4)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(9)) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(14)) }
-      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, initializer: Some(Idx::<Expr>(19)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(4)) }
+      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(9)) }
+      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(14)) }
+      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(19)) }
       Idx::<Stmt>(4): Return(Some(Idx::<Expr>(20)))
     ]
     root: Idx::<Expr>(21)

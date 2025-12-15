@@ -1,47 +1,89 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function mul_assign:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function assign_in_loop:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function multi_assign:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function sub_assign:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function add_assign:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function simple_assign:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function block_with_tail:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function break_in_for:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function simple_continue:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function continue_with_locals:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function simple_break:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function nested_break:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function continue_in_for:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function break_with_locals:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function c_style_for_loop:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function iterator_style_for_loop:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function nested_for_loop:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function ConditionalLogic:
     Return: Void
+    Errors:
+      - Expected string. Found void
   Function let_statements:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function simple_while_loop:
     Return: Void
+    Errors:
+      - Expected int. Found void
   Function nested_while_loop:
     Return: Void
+    Errors:
+      - Expected int. Found void

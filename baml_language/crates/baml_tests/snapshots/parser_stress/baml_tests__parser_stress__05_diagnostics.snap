@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -14035,12 +14035,34 @@ expression: output
    │ Note: Error code: E0011
 ───╯
 
-  [type] Error: Expected bool, found void
+  [type] Error: Expected int, found void
    ╭─[ 0:1:1 ]
    │
  1 │ class StringTorture {
    │ │ 
-   │ ╰─ Expected bool, found void
+   │ ╰─ Expected int, found void
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: Expected bool, found void
+    ╭─[ 4:8:11 ]
+    │
+  8 │ ╭─▶   while \ {
+    ┆ ┆   
+ 10 │ ├─▶   }
+    │ │         
+    │ ╰───────── Expected bool, found void
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: Expected int, found void
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ class StringTorture {
+   │ │ 
+   │ ╰─ Expected int, found void
    │ 
    │ Note: Error code: E0001
 ───╯

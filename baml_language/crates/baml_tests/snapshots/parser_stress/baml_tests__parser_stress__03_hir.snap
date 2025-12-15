@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -6295,7 +6295,7 @@ function BodyTorture {
       Idx::<Expr>(6): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(3)], tail_expr: None }
     ]
     stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: None }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: None }
       Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(0), op: Add, value: Idx::<Expr>(1) }
       Idx::<Stmt>(2): AssignOp { target: Idx::<Expr>(3), op: Add, value: Idx::<Expr>(4) }
       Idx::<Stmt>(3): While { condition: Idx::<Expr>(2), body: Idx::<Expr>(5) }
