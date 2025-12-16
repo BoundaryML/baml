@@ -61,7 +61,7 @@ pub fn hoist_branch_arms(viz: &ControlFlowVisualization) -> ControlFlowVisualiza
 
     for info in groups {
         // Step 2: move outgoing edges from the branch group onto each arm.
-        next.edges_by_src.remove(&info.node_id);
+        next.edges_by_src.shift_remove(&info.node_id);
         if !info.successors.is_empty() {
             for child in &info.branch_children {
                 let entry = next.edges_by_src.entry(*child).or_default();
@@ -106,8 +106,7 @@ mod tests {
 
     fn branch_group_viz() -> ControlFlowVisualization {
         let mut viz = ControlFlowVisualization::default();
-        let root =
-            Node::root(NodeId::new(0), "f|root:0".to_string(), Span::fake(), "root");
+        let root = Node::root(NodeId::new(0), "f|root:0".to_string(), Span::fake(), "root");
         let group = Node {
             id: NodeId::new(1),
             parent_node_id: Some(root.id),

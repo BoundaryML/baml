@@ -129,8 +129,7 @@ mod tests {
     #[test]
     fn drops_branch_group_without_headers() {
         let mut viz = ControlFlowVisualization::default();
-        let root =
-            Node::root(NodeId::new(0), "f|root:0".to_string(), Span::fake(), "root");
+        let root = Node::root(NodeId::new(0), "f|root:0".to_string(), Span::fake(), "root");
         let header = make_node(1, Some(0), "header", NodeType::HeaderContextEnter);
         let branch_group = make_node(2, Some(1), "if", NodeType::BranchGroup);
         let branch_arm = make_node(3, Some(2), "arm1", NodeType::BranchArm);
@@ -147,8 +146,7 @@ mod tests {
     #[test]
     fn keeps_all_branch_arms_when_one_has_header() {
         let mut viz = ControlFlowVisualization::default();
-        let root =
-            Node::root(NodeId::new(0), "f|root:0".to_string(), Span::fake(), "root");
+        let root = Node::root(NodeId::new(0), "f|root:0".to_string(), Span::fake(), "root");
         let header = make_node(1, Some(0), "header", NodeType::HeaderContextEnter);
         let branch_group = make_node(2, Some(1), "if", NodeType::BranchGroup);
         let arm_with_header = make_node(3, Some(2), "arm-with", NodeType::BranchArm);
