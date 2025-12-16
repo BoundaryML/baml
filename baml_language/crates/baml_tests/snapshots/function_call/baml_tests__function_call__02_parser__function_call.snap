@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -11,7 +11,7 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " int"
+    TYPE_EXPR "int"
       WORD "int"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
@@ -37,11 +37,11 @@ SOURCE_FILE
       PARAMETER
         WORD "x"
         COLON ":"
-        TYPE_EXPR " int"
+        TYPE_EXPR "int"
           WORD "int"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " int"
+    TYPE_EXPR "int"
       WORD "int"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
@@ -59,11 +59,11 @@ SOURCE_FILE
       PARAMETER
         WORD "n"
         COLON ":"
-        TYPE_EXPR " string"
+        TYPE_EXPR "string"
           WORD "string"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " string"
+    TYPE_EXPR "string"
       WORD "string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
@@ -75,15 +75,14 @@ SOURCE_FILE
           OBJECT_LITERAL
             WORD "Baz"
             L_BRACE "{"
-            OBJECT_FIELD " name: n"
+            OBJECT_FIELD "name: n"
               WORD "name"
               COLON ":"
               WORD "n"
             R_BRACE "}"
           SEMICOLON ";"
         CALL_EXPR
-          PATH_EXPR "
-  baz.Greeting"
+          PATH_EXPR "baz.Greeting"
             WORD "baz"
             DOT "."
             WORD "Greeting"
@@ -97,7 +96,7 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "name"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
     FUNCTION_DEF
       KW_FUNCTION "function"
@@ -108,26 +107,25 @@ SOURCE_FILE
           WORD "self"
         R_PAREN ")"
       ARROW "->"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       EXPR_FUNCTION_BODY
         BLOCK_EXPR
           L_BRACE "{"
           BINARY_EXPR
             BINARY_EXPR
-              STRING_LITERAL "
-    "Hello, ""
+              STRING_LITERAL "Hello, "
                 QUOTE """
                 WORD "Hello"
                 COMMA ","
                 QUOTE """
               PLUS "+"
-              PATH_EXPR " self.name"
+              PATH_EXPR "self.name"
                 WORD "self"
                 DOT "."
                 WORD "name"
             PLUS "+"
-            STRING_LITERAL " "!""
+            STRING_LITERAL "!"
               QUOTE """
               NOT "!"
               QUOTE """

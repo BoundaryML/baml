@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -16,13 +16,11 @@ SOURCE_FILE
     KW_ENUM "enum"
     WORD "Status"
     L_BRACE "{"
-    ENUM_VARIANT "
-  ACTIVE"
+    ENUM_VARIANT "ACTIVE"
       WORD "ACTIVE"
-    ENUM_VARIANT "
-  INACTIVE"
+    ENUM_VARIANT "INACTIVE"
       WORD "INACTIVE"
-    ENUM_VARIANT " PENDING"
+    ENUM_VARIANT "PENDING"
       WORD "PENDING"
     R_BRACE "}"
   FUNCTION_DEF
@@ -35,7 +33,7 @@ SOURCE_FILE
     TYPE_EXPR
     LLM_FUNCTION_BODY
       L_BRACE "{"
-      CLIENT_FIELD "  // Missing return type
+      CLIENT_FIELD "// Missing return type
   client GPT4"
         KW_CLIENT "client"
         WORD "GPT4"

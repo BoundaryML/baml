@@ -35,11 +35,16 @@ fn format_node_recursive(node: &baml_db::baml_syntax::SyntaxNode, depth: usize) 
 
     result.push_str(&format!("{}{:?}", indent, node.kind()));
 
-    // For leaf nodes (tokens), include the text
+    // For leaf nodes (no child nodes), include the text
     if node.first_child().is_none() {
-        let text = node.text().to_string();
-        if !text.trim().is_empty() {
-            result.push_str(&format!(" \"{}\"", text));
+        let text = node.text().to_string().trim().to_string();
+        if !text.is_empty() {
+            // If text already has quotes, show as-is; otherwise wrap in quotes
+            if text.starts_with('"') || text.starts_with("#\"") {
+                result.push_str(&format!(" {}", text));
+            } else {
+                result.push_str(&format!(" \"{}\"", text));
+            }
         }
     }
 

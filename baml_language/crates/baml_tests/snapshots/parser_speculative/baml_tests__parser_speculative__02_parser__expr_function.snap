@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -10,11 +10,11 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "field1"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     FIELD
       WORD "field2"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     R_BRACE "}"
   FUNCTION_DEF
@@ -24,11 +24,11 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "data"
-        TYPE_EXPR " JsonData"
+        TYPE_EXPR "JsonData"
           WORD "JsonData"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " string"
+    TYPE_EXPR "string"
       WORD "string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
@@ -38,12 +38,12 @@ SOURCE_FILE
           WORD "result"
           EQUALS "="
           BINARY_EXPR
-            PATH_EXPR " data.field1"
+            PATH_EXPR "data.field1"
               WORD "data"
               DOT "."
               WORD "field1"
             PLUS "+"
-            PATH_EXPR " data.field2"
+            PATH_EXPR "data.field2"
               WORD "data"
               DOT "."
               WORD "field2"
@@ -61,7 +61,7 @@ SOURCE_FILE
             L_BRACE "{"
             RETURN_STMT
               KW_RETURN "return"
-              STRING_LITERAL " "high""
+              STRING_LITERAL "high"
                 QUOTE """
                 WORD "high"
                 QUOTE """
@@ -69,7 +69,7 @@ SOURCE_FILE
             R_BRACE "}"
         RETURN_STMT
           KW_RETURN "return"
-          STRING_LITERAL " "low""
+          STRING_LITERAL "low"
             QUOTE """
             WORD "low"
             QUOTE """

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -10,17 +10,17 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "field1"
-      TYPE_EXPR " str"
+      TYPE_EXPR "str"
         WORD "str"
     FIELD
       WORD "field2"
-      TYPE_EXPR "  // Missing type entirely
+      TYPE_EXPR "// Missing type entirely
   field3"
         WORD "field3"
     FIELD
       WORD "string"
       TYPE_EXPR
-      ATTRIBUTE " @  // Incomplete attribute
+      ATTRIBUTE "@  // Incomplete attribute
   field4"
         AT "@"
         WORD "field4"
@@ -45,7 +45,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "param1"
-        TYPE_EXPR " string"
+        TYPE_EXPR "string"
           WORD "string"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -54,21 +54,19 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " string"
+    TYPE_EXPR "string"
       WORD "string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
         RETURN_STMT
           KW_RETURN "return"
-          STRING_LITERAL " "parsed""
+          STRING_LITERAL "parsed"
             QUOTE """
             WORD "parsed"
             QUOTE """
         R_BRACE "}"
-  ENUM_DEF "
-
-enum  // Missing enum name
+  ENUM_DEF "enum  // Missing enum name
   VALUE1"
     KW_ENUM "enum"
     WORD "VALUE1"
@@ -78,11 +76,10 @@ enum  // Missing enum name
     KW_ENUM "enum"
     WORD "ValidEnum"
     L_BRACE "{"
-    ENUM_VARIANT "  // Should parse this
+    ENUM_VARIANT "// Should parse this
   OPTION1"
       WORD "OPTION1"
-    ENUM_VARIANT "
-  OPTION2"
+    ENUM_VARIANT "OPTION2"
       WORD "OPTION2"
     R_BRACE "}"
 
