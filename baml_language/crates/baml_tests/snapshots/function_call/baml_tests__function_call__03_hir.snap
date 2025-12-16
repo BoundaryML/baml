@@ -9,24 +9,23 @@ function Greeting {
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(String("\n    \"Hello, \""))
-      Idx::<Expr>(1): Path("self")
-      Idx::<Expr>(2): FieldAccess { base: Idx::<Expr>(1), field: "name" }
-      Idx::<Expr>(3): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(2) }
-      Idx::<Expr>(4): Literal(String(" \"!\""))
-      Idx::<Expr>(5): Binary { op: Add, lhs: Idx::<Expr>(3), rhs: Idx::<Expr>(4) }
-      Idx::<Expr>(6): Block { stmts: [], tail_expr: Some(Idx::<Expr>(5)) }
+      Idx::<Expr>(1): Path(["self", "name"])
+      Idx::<Expr>(2): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(1) }
+      Idx::<Expr>(3): Literal(String(" \"!\""))
+      Idx::<Expr>(4): Binary { op: Add, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
+      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
     ]
-    root: Idx::<Expr>(6)
+    root: Idx::<Expr>(5)
   }
 }
 function Bar {
   return: Int
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Path("Foo")
+      Idx::<Expr>(0): Path(["Foo"])
       Idx::<Expr>(1): Literal(Int(1))
       Idx::<Expr>(2): Call { callee: Idx::<Expr>(0), args: [Idx::<Expr>(1)] }
-      Idx::<Expr>(3): Path("x")
+      Idx::<Expr>(3): Path(["x"])
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(3)) }
     ]
     stmts: [
@@ -40,7 +39,7 @@ function Foo {
   return: Int
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Path("x")
+      Idx::<Expr>(0): Path(["x"])
       Idx::<Expr>(1): Literal(Int(1))
       Idx::<Expr>(2): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(1) }
       Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
@@ -53,17 +52,16 @@ function GreetBaz {
   return: String
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Path("n")
+      Idx::<Expr>(0): Path(["n"])
       Idx::<Expr>(1): Object { type_name: Some("Baz"), fields: [("name", Idx::<Expr>(0))] }
-      Idx::<Expr>(2): Path("baz")
-      Idx::<Expr>(3): FieldAccess { base: Idx::<Expr>(2), field: "Greeting" }
-      Idx::<Expr>(4): Call { callee: Idx::<Expr>(3), args: [] }
-      Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(4)) }
+      Idx::<Expr>(2): Path(["baz", "Greeting"])
+      Idx::<Expr>(3): Call { callee: Idx::<Expr>(2), args: [] }
+      Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(3)) }
     ]
     stmts: [
       Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
     ]
-    root: Idx::<Expr>(5)
+    root: Idx::<Expr>(4)
   }
 }
 class Baz {

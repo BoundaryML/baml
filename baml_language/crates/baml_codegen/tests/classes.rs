@@ -199,7 +199,6 @@ fn nested_class_with_multiple_fields() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field access not yet properly resolved in HIR"]
 fn nested_field_read() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -550,7 +549,6 @@ fn field_assignment_compound_add() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field access not yet properly resolved in HIR"]
 fn nested_object_construction() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "

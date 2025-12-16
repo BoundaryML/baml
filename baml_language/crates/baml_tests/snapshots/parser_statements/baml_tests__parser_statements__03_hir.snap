@@ -8,9 +8,9 @@ function mul_assign {
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Int(3))
-      Idx::<Expr>(1): Path("x")
+      Idx::<Expr>(1): Path(["x"])
       Idx::<Expr>(2): Literal(Int(4))
-      Idx::<Expr>(3): Path("x")
+      Idx::<Expr>(3): Path(["x"])
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
     ]
     stmts: [
@@ -27,15 +27,15 @@ function assign_in_loop {
     exprs: [
       Idx::<Expr>(0): Literal(Int(0))
       Idx::<Expr>(1): Literal(Int(0))
-      Idx::<Expr>(2): Path("i")
+      Idx::<Expr>(2): Path(["i"])
       Idx::<Expr>(3): Literal(Int(5))
       Idx::<Expr>(4): Binary { op: Lt, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
-      Idx::<Expr>(5): Path("sum")
-      Idx::<Expr>(6): Path("i")
-      Idx::<Expr>(7): Path("i")
+      Idx::<Expr>(5): Path(["sum"])
+      Idx::<Expr>(6): Path(["i"])
+      Idx::<Expr>(7): Path(["i"])
       Idx::<Expr>(8): Literal(Int(1))
       Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
-      Idx::<Expr>(10): Path("sum")
+      Idx::<Expr>(10): Path(["sum"])
       Idx::<Expr>(11): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
     ]
     stmts: [
@@ -55,12 +55,12 @@ function multi_assign {
     exprs: [
       Idx::<Expr>(0): Literal(Int(1))
       Idx::<Expr>(1): Literal(Int(2))
-      Idx::<Expr>(2): Path("a")
+      Idx::<Expr>(2): Path(["a"])
       Idx::<Expr>(3): Literal(Int(10))
-      Idx::<Expr>(4): Path("b")
+      Idx::<Expr>(4): Path(["b"])
       Idx::<Expr>(5): Literal(Int(20))
-      Idx::<Expr>(6): Path("a")
-      Idx::<Expr>(7): Path("b")
+      Idx::<Expr>(6): Path(["a"])
+      Idx::<Expr>(7): Path(["b"])
       Idx::<Expr>(8): Binary { op: Add, lhs: Idx::<Expr>(6), rhs: Idx::<Expr>(7) }
       Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
@@ -79,9 +79,9 @@ function sub_assign {
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Int(10))
-      Idx::<Expr>(1): Path("x")
+      Idx::<Expr>(1): Path(["x"])
       Idx::<Expr>(2): Literal(Int(3))
-      Idx::<Expr>(3): Path("x")
+      Idx::<Expr>(3): Path(["x"])
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
     ]
     stmts: [
@@ -97,9 +97,9 @@ function add_assign {
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Int(10))
-      Idx::<Expr>(1): Path("x")
+      Idx::<Expr>(1): Path(["x"])
       Idx::<Expr>(2): Literal(Int(5))
-      Idx::<Expr>(3): Path("x")
+      Idx::<Expr>(3): Path(["x"])
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
     ]
     stmts: [
@@ -115,9 +115,9 @@ function simple_assign {
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Path("x")
+      Idx::<Expr>(1): Path(["x"])
       Idx::<Expr>(2): Literal(Int(5))
-      Idx::<Expr>(3): Path("x")
+      Idx::<Expr>(3): Path(["x"])
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
     ]
     stmts: [
@@ -134,11 +134,11 @@ function block_with_tail {
     exprs: [
       Idx::<Expr>(0): Literal(Int(1))
       Idx::<Expr>(1): Literal(Int(2))
-      Idx::<Expr>(2): Path("y")
-      Idx::<Expr>(3): Path("z")
+      Idx::<Expr>(2): Path(["y"])
+      Idx::<Expr>(3): Path(["z"])
       Idx::<Expr>(4): Binary { op: Add, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
       Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1)], tail_expr: Some(Idx::<Expr>(4)) }
-      Idx::<Expr>(6): Path("x")
+      Idx::<Expr>(6): Path(["x"])
       Idx::<Expr>(7): Block { stmts: [Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
     ]
     stmts: [
@@ -156,11 +156,11 @@ function break_in_for {
     exprs: [
       Idx::<Expr>(0): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
       Idx::<Expr>(1): Literal(Int(0))
-      Idx::<Expr>(2): Path("i")
+      Idx::<Expr>(2): Path(["i"])
       Idx::<Expr>(3): Literal(Int(10))
       Idx::<Expr>(4): Binary { op: Lt, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
-      Idx::<Expr>(5): Path("i")
-      Idx::<Expr>(6): Path("i")
+      Idx::<Expr>(5): Path(["i"])
+      Idx::<Expr>(6): Path(["i"])
       Idx::<Expr>(7): Literal(Int(1))
       Idx::<Expr>(8): Binary { op: Add, lhs: Idx::<Expr>(6), rhs: Idx::<Expr>(7) }
       Idx::<Expr>(9): Literal(Int(1))
@@ -261,11 +261,11 @@ function continue_in_for {
     exprs: [
       Idx::<Expr>(0): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
       Idx::<Expr>(1): Literal(Int(0))
-      Idx::<Expr>(2): Path("i")
+      Idx::<Expr>(2): Path(["i"])
       Idx::<Expr>(3): Literal(Int(10))
       Idx::<Expr>(4): Binary { op: Lt, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
-      Idx::<Expr>(5): Path("i")
-      Idx::<Expr>(6): Path("i")
+      Idx::<Expr>(5): Path(["i"])
+      Idx::<Expr>(6): Path(["i"])
       Idx::<Expr>(7): Literal(Int(1))
       Idx::<Expr>(8): Binary { op: Add, lhs: Idx::<Expr>(6), rhs: Idx::<Expr>(7) }
       Idx::<Expr>(9): Literal(Int(2))
@@ -310,16 +310,16 @@ function c_style_for_loop {
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Path("result")
-      Idx::<Expr>(2): Path("i")
+      Idx::<Expr>(1): Path(["result"])
+      Idx::<Expr>(2): Path(["i"])
       Idx::<Expr>(3): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
       Idx::<Expr>(4): Literal(Int(0))
-      Idx::<Expr>(5): Path("i")
+      Idx::<Expr>(5): Path(["i"])
       Idx::<Expr>(6): Literal(Int(10))
       Idx::<Expr>(7): Binary { op: Lt, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(6) }
-      Idx::<Expr>(8): Path("i")
+      Idx::<Expr>(8): Path(["i"])
       Idx::<Expr>(9): Literal(Int(1))
-      Idx::<Expr>(10): Path("result")
+      Idx::<Expr>(10): Path(["result"])
       Idx::<Expr>(11): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
     ]
     stmts: [
@@ -338,14 +338,14 @@ function iterator_style_for_loop {
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Path("result")
-      Idx::<Expr>(2): Path("i")
+      Idx::<Expr>(1): Path(["result"])
+      Idx::<Expr>(2): Path(["i"])
       Idx::<Expr>(3): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
       Idx::<Expr>(4): Literal(Int(1))
       Idx::<Expr>(5): Literal(Int(2))
       Idx::<Expr>(6): Literal(Int(3))
       Idx::<Expr>(7): Array { elements: [Idx::<Expr>(4), Idx::<Expr>(5), Idx::<Expr>(6)] }
-      Idx::<Expr>(8): Path("result")
+      Idx::<Expr>(8): Path(["result"])
       Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
     ]
     stmts: [
@@ -362,9 +362,9 @@ function nested_for_loop {
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Path("result")
-      Idx::<Expr>(2): Path("i")
-      Idx::<Expr>(3): Path("j")
+      Idx::<Expr>(1): Path(["result"])
+      Idx::<Expr>(2): Path(["i"])
+      Idx::<Expr>(3): Path(["j"])
       Idx::<Expr>(4): Binary { op: Mul, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
       Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
       Idx::<Expr>(6): Literal(Int(4))
@@ -376,7 +376,7 @@ function nested_for_loop {
       Idx::<Expr>(12): Literal(Int(2))
       Idx::<Expr>(13): Literal(Int(3))
       Idx::<Expr>(14): Array { elements: [Idx::<Expr>(11), Idx::<Expr>(12), Idx::<Expr>(13)] }
-      Idx::<Expr>(15): Path("result")
+      Idx::<Expr>(15): Path(["result"])
       Idx::<Expr>(16): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
@@ -394,12 +394,12 @@ function ConditionalLogic {
   return: String
   body: Expr {
     exprs: [
-      Idx::<Expr>(0): Path("age")
+      Idx::<Expr>(0): Path(["age"])
       Idx::<Expr>(1): Literal(Int(18))
       Idx::<Expr>(2): Binary { op: Lt, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(1) }
       Idx::<Expr>(3): Literal(String(" \"minor\""))
       Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-      Idx::<Expr>(5): Path("age")
+      Idx::<Expr>(5): Path(["age"])
       Idx::<Expr>(6): Literal(Int(65))
       Idx::<Expr>(7): Binary { op: Lt, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(6) }
       Idx::<Expr>(8): Literal(String(" \"adult\""))
@@ -431,21 +431,19 @@ function let_statements {
       Idx::<Expr>(6): Literal(Int(1))
       Idx::<Expr>(7): Literal(Int(2))
       Idx::<Expr>(8): Object { type_name: Some("Point"), fields: [("x", Idx::<Expr>(6)), ("y", Idx::<Expr>(7))] }
-      Idx::<Expr>(9): Path("point")
-      Idx::<Expr>(10): FieldAccess { base: Idx::<Expr>(9), field: "x" }
-      Idx::<Expr>(11): Path("point")
-      Idx::<Expr>(12): FieldAccess { base: Idx::<Expr>(11), field: "y" }
-      Idx::<Expr>(13): Binary { op: Add, lhs: Idx::<Expr>(10), rhs: Idx::<Expr>(12) }
-      Idx::<Expr>(14): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
+      Idx::<Expr>(9): Path(["point", "x"])
+      Idx::<Expr>(10): Path(["point", "y"])
+      Idx::<Expr>(11): Binary { op: Add, lhs: Idx::<Expr>(9), rhs: Idx::<Expr>(10) }
+      Idx::<Expr>(12): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
     ]
     stmts: [
       Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: Some(Int), initializer: Some(Idx::<Expr>(1)) }
       Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: Some(List(Int)), initializer: Some(Idx::<Expr>(5)) }
       Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: Some(Path(Path { segments: ["Point"], kind: Plain })), initializer: Some(Idx::<Expr>(8)) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(13)))
+      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(11)))
     ]
-    root: Idx::<Expr>(14)
+    root: Idx::<Expr>(12)
   }
 }
 class Point {
@@ -457,15 +455,15 @@ function simple_while_loop {
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Path("i")
+      Idx::<Expr>(1): Path(["i"])
       Idx::<Expr>(2): Literal(Int(10))
       Idx::<Expr>(3): Binary { op: Lt, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
-      Idx::<Expr>(4): Path("i")
-      Idx::<Expr>(5): Path("i")
+      Idx::<Expr>(4): Path(["i"])
+      Idx::<Expr>(5): Path(["i"])
       Idx::<Expr>(6): Literal(Int(1))
       Idx::<Expr>(7): Binary { op: Add, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(6) }
       Idx::<Expr>(8): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
-      Idx::<Expr>(9): Path("i")
+      Idx::<Expr>(9): Path(["i"])
       Idx::<Expr>(10): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
     ]
     stmts: [
@@ -482,20 +480,20 @@ function nested_while_loop {
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Path("i")
+      Idx::<Expr>(1): Path(["i"])
       Idx::<Expr>(2): Literal(Int(10))
       Idx::<Expr>(3): Binary { op: Lt, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
       Idx::<Expr>(4): Literal(Int(0))
-      Idx::<Expr>(5): Path("j")
+      Idx::<Expr>(5): Path(["j"])
       Idx::<Expr>(6): Literal(Int(10))
       Idx::<Expr>(7): Binary { op: Lt, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(6) }
-      Idx::<Expr>(8): Path("j")
-      Idx::<Expr>(9): Path("j")
+      Idx::<Expr>(8): Path(["j"])
+      Idx::<Expr>(9): Path(["j"])
       Idx::<Expr>(10): Literal(Int(1))
       Idx::<Expr>(11): Binary { op: Add, lhs: Idx::<Expr>(9), rhs: Idx::<Expr>(10) }
       Idx::<Expr>(12): Block { stmts: [Idx::<Stmt>(2)], tail_expr: None }
       Idx::<Expr>(13): Block { stmts: [Idx::<Stmt>(1), Idx::<Stmt>(3)], tail_expr: None }
-      Idx::<Expr>(14): Path("i")
+      Idx::<Expr>(14): Path(["i"])
       Idx::<Expr>(15): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
     ]
     stmts: [
