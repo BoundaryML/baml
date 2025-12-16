@@ -68,7 +68,9 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
     }
 
     // Build classes map (class name -> field name -> field index) and add Class objects to program
+    // Also build class_field_types for type inference (class name -> field name -> Ty)
     let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
+    let mut class_field_types: HashMap<Name, HashMap<Name, baml_thir::Ty>> = HashMap::new();
     let mut class_object_indices: HashMap<String, usize> = HashMap::new();
 
     for file in files {
@@ -80,10 +82,14 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                 let class_name = class.name.to_string();
 
                 let mut field_indices = HashMap::new();
+                let mut field_types = HashMap::new();
                 let mut field_names = Vec::new();
                 for (idx, field) in class.fields.iter().enumerate() {
                     field_indices.insert(field.name.to_string(), idx);
                     field_names.push(field.name.to_string());
+                    // Lower TypeRef to Ty for type inference
+                    let ty = baml_thir::lower_type_ref(db, &field.type_ref);
+                    field_types.insert(field.name.clone(), ty);
                 }
 
                 // Add Class object to program and record its index
@@ -95,6 +101,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                 class_object_indices.insert(class_name.clone(), class_obj_idx);
 
                 classes.insert(class_name, field_indices);
+                class_field_types.insert(class.name.clone(), field_types);
             }
         }
     }
@@ -113,7 +120,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                     &signature,
                     &body,
                     Some(typing_context.clone()),
-                    None, // TODO: Pass class fields. Eventually remove this parameter.
+                    Some(class_field_types.clone()),
                 );
 
                 // Compile to bytecode (objects are added directly to program.objects)

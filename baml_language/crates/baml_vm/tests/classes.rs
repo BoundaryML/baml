@@ -163,7 +163,6 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
 }
 
 #[test]
-#[ignore = "nested object construction with field access not yet working"]
 fn nested_object_construction() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -190,7 +189,6 @@ fn nested_object_construction() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "nested object construction with field access not yet working"]
 fn nested_object_construction_with_field_access() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -237,7 +235,6 @@ fn nested_field_read_with_nested_construction() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "nested field read with separate variable not yet working"]
 fn nested_field_read() -> anyhow::Result<()> {
     // Test nested field read without nested construction
     assert_vm_executes(Program {

@@ -225,7 +225,7 @@ Function let_statements (arity: 0, kind: Exec):
      13   LOAD_VAR 4         (point)
      14   LOAD_FIELD 0       
      15   LOAD_VAR 4         (point)
-     16   LOAD_FIELD 0       
+     16   LOAD_FIELD 1       
      17   BIN_OP +           
      18   RETURN             
      19   RETURN             

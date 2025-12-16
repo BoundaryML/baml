@@ -27,6 +27,47 @@ pub use lower::lower_type_ref;
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use types::*;
 
+// ============================================================================
+// Path Resolution
+// ============================================================================
+
+/// Resolved path categories after name resolution.
+///
+/// When we encounter a multi-segment path like `user.name.length` or `Status.Active`,
+/// we need to determine what it actually refers to. This enum captures the different
+/// possibilities.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedPath {
+    /// Local variable: `user` or `user.name.length`
+    /// The name is the local variable. Field access types are in `path_segment_types`.
+    Local { name: Name },
+
+    /// Enum variant: `Status.Active`
+    /// First segment is the enum type, second is the variant name.
+    EnumVariant { enum_name: Name, variant_name: Name },
+
+    /// Module item: `baml.HttpMethod.Get`
+    /// The path navigates through modules to reach an item.
+    ModuleItem {
+        module_path: Vec<Name>,
+        item_name: Name,
+    },
+
+    /// Function reference: `MyFunction`
+    /// A single-segment path that resolves to a function.
+    Function { name: Name },
+
+    /// Method call on a type: `image.from_url`
+    /// Used when the receiver is a type with associated methods.
+    Method {
+        receiver_type: Name,
+        method_name: Name,
+    },
+
+    /// Unknown/unresolved path
+    Unknown,
+}
+
 //
 // ──────────────────────────────────────────────────────────── DATABASE ─────
 //
@@ -171,6 +212,10 @@ pub struct InferenceResult<'db> {
     pub param_types: HashMap<Name, Ty<'db>>,
     /// Types inferred for each expression.
     pub expr_types: HashMap<ExprId, Ty<'db>>,
+    /// For multi-segment path expressions, the type of each segment.
+    /// For `o.inner.value` where `o: Outer`, stores `[Outer, Inner, int]`.
+    /// Used by codegen to look up field indices at each step.
+    pub path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
     /// Type checking errors.
     pub errors: Vec<TypeError<Ty<'db>>>,
 }
@@ -188,6 +233,8 @@ pub struct TypeContext<'db> {
     class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
     /// Inferred types for expressions.
     expr_types: HashMap<ExprId, Ty<'db>>,
+    /// For multi-segment paths, the type of each segment.
+    path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
     /// Accumulated type errors.
     errors: Vec<TypeError<Ty<'db>>>,
 }
@@ -203,6 +250,7 @@ impl<'db> TypeContext<'db> {
             scopes: vec![globals],
             class_fields: HashMap::new(),
             expr_types: HashMap::new(),
+            path_segment_types: HashMap::new(),
             errors: Vec::new(),
         }
     }
@@ -218,6 +266,7 @@ impl<'db> TypeContext<'db> {
             scopes: vec![globals],
             class_fields,
             expr_types: HashMap::new(),
+            path_segment_types: HashMap::new(),
             errors: Vec::new(),
         }
     }
@@ -277,6 +326,55 @@ impl<'db> TypeContext<'db> {
     /// Get the database reference.
     pub fn db(&self) -> &'db dyn Db {
         self.db
+    }
+
+    /// Resolve a path to determine what it refers to.
+    ///
+    /// This is the core path resolution logic that determines whether a path like
+    /// `user.name` is a local variable with field access, an enum variant, a module
+    /// item, etc.
+    ///
+    /// # Resolution Order
+    /// 1. Check if the first segment is a local variable -> Local with field accesses
+    /// 2. Check if it's a function name -> Function
+    /// 3. Check if first segment is a class name (for enum variants)
+    /// 4. Check if it's a module path (TODO: not yet implemented)
+    /// 5. Unknown
+    pub fn resolve_path(&self, segments: &[Name]) -> ResolvedPath {
+        if segments.is_empty() {
+            return ResolvedPath::Unknown;
+        }
+
+        let first = &segments[0];
+
+        // Check if first segment is a local variable
+        if self.lookup(first).is_some() {
+            return ResolvedPath::Local {
+                name: first.clone(),
+            };
+        }
+
+        // For single-segment paths, check if it's a function
+        if segments.len() == 1 {
+            // Check globals (which include functions)
+            if self.scopes.first().and_then(|s| s.get(first)).is_some() {
+                return ResolvedPath::Function {
+                    name: first.clone(),
+                };
+            }
+        }
+
+        // For two-segment paths, check if it could be an enum variant
+        // TODO: This needs access to the type registry to check if `first` is an enum
+        if segments.len() == 2 {
+            // For now, we can't distinguish enum variants without more context
+            // This will be populated when we have the Module infrastructure
+        }
+
+        // TODO: Check module paths when Module type is fully integrated
+
+        // Unknown path
+        ResolvedPath::Unknown
     }
 }
 
@@ -342,6 +440,7 @@ pub fn infer_function_body<'db>(
         return_type,
         param_types,
         expr_types: ctx.expr_types,
+        path_segment_types: ctx.path_segment_types,
         errors: ctx.errors,
     }
 }
@@ -400,15 +499,48 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
     let ty = match expr {
         Expr::Literal(lit) => infer_literal(lit),
 
-        Expr::Path(name) => {
-            if let Some(ty) = ctx.lookup(name) {
-                ty.clone()
-            } else {
-                ctx.push_error(TypeError::UnknownVariable {
-                    name: name.to_string(),
-                    span,
-                });
+        Expr::Path(segments) => {
+            if segments.is_empty() {
                 Ty::Unknown
+            } else if segments.len() == 1 {
+                // Single segment: simple variable lookup
+                let name = &segments[0];
+                if let Some(ty) = ctx.lookup(name) {
+                    ty.clone()
+                } else {
+                    ctx.push_error(TypeError::UnknownVariable {
+                        name: name.to_string(),
+                        span,
+                    });
+                    Ty::Unknown
+                }
+            } else {
+                // Multi-segment path: first segment is variable, rest are field accesses
+                // TODO: Add proper resolution for enum variants and module paths
+                let first = &segments[0];
+                let mut ty = if let Some(t) = ctx.lookup(first) {
+                    t.clone()
+                } else {
+                    ctx.push_error(TypeError::UnknownVariable {
+                        name: first.to_string(),
+                        span,
+                    });
+                    return Ty::Unknown;
+                };
+
+                // Record segment types for codegen (first segment type, then each field access result)
+                let mut segment_types = vec![ty.clone()];
+
+                // Apply field accesses for remaining segments
+                for field in &segments[1..] {
+                    ty = infer_field_access(ctx, &ty, field, span);
+                    segment_types.push(ty.clone());
+                }
+
+                // Store segment types for this path expression
+                ctx.path_segment_types.insert(expr_id, segment_types);
+
+                ty
             }
         }
 
@@ -424,11 +556,12 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
         }
 
         Expr::Call { callee, args } => {
-            // Check if this is a method call (callee is a FieldAccess)
+            // Check if this is a method call (callee is a FieldAccess or multi-segment Path)
             // If so, we need to pass the receiver as the first argument
             let (callee_ty, effective_args) = match &body.exprs[*callee] {
                 Expr::FieldAccess { base, field: _ } => {
                     // Method call: receiver.method(args) -> Type.method(receiver, args)
+                    // This handles complex expressions like `f().method()` or `arr[0].method()`
                     let receiver_ty = infer_expr(ctx, *base, body);
                     let callee_ty = infer_expr(ctx, *callee, body);
 
@@ -439,8 +572,42 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
                     }
                     (callee_ty, effective_args)
                 }
+                Expr::Path(segments) if segments.len() >= 2 => {
+                    // Method call via Path: `receiver.method(args)`
+                    // For multi-segment paths like `baz.Greeting()`, the first segment(s)
+                    // form the receiver and the last segment is the method name.
+                    //
+                    // We infer the receiver type from all segments except the last,
+                    // then look up the method on that type.
+                    let receiver_segments = &segments[..segments.len() - 1];
+
+                    // Infer receiver type (could be single var or nested field access)
+                    let receiver_ty = if receiver_segments.len() == 1 {
+                        // Simple receiver: `baz.method()`
+                        ctx.lookup(&receiver_segments[0])
+                            .cloned()
+                            .unwrap_or(Ty::Unknown)
+                    } else {
+                        // Nested receiver: `obj.field.method()`
+                        let first = &receiver_segments[0];
+                        let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
+                        for field in &receiver_segments[1..] {
+                            ty = infer_field_access(ctx, &ty, field, span);
+                        }
+                        ty
+                    };
+
+                    let callee_ty = infer_expr(ctx, *callee, body);
+
+                    // Build effective args: [receiver_type, ...explicit_args]
+                    let mut effective_args = vec![receiver_ty];
+                    for arg in args {
+                        effective_args.push(infer_expr(ctx, *arg, body));
+                    }
+                    (callee_ty, effective_args)
+                }
                 _ => {
-                    // Regular function call
+                    // Regular function call (single-segment Path or other expression)
                     let callee_ty = infer_expr(ctx, *callee, body);
                     let arg_types: Vec<Ty<'db>> =
                         args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();

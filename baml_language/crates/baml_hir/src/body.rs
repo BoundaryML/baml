@@ -80,8 +80,12 @@ pub enum Expr {
     /// Literal values
     Literal(Literal),
 
-    /// Variable/path reference (e.g., `x`, `GPT4`)
-    Path(Name),
+    /// Path expression with one or more segments.
+    /// Single segment: `x`, `GPT4`
+    /// Multi-segment: `user.name`, `baml.image.from_url`, `Status.Active`
+    /// Resolution to determine if this is a local variable, field access,
+    /// enum variant, or module item happens in THIR.
+    Path(Vec<Name>),
 
     /// If expression
     If {
@@ -118,7 +122,15 @@ pub enum Expr {
         tail_expr: Option<ExprId>,
     },
 
-    /// Field access: `user.name`, `obj.field.nested`
+    /// Field access on a complex expression: `f().field`, `arr[0].field`, `(a + b).x`
+    ///
+    /// Used when the base is a computed value (call result, index result, etc.),
+    /// NOT a simple identifier chain.
+    ///
+    /// For simple identifier chains like `user.name.length`, use `Path` instead.
+    /// The distinction is:
+    /// - `Path(vec!["user", "name"])` - might be variable + field, enum variant, or module path
+    /// - `FieldAccess { base, field }` - definitely a field access on a computed value
     FieldAccess { base: ExprId, field: Name },
 
     /// Index access: `array[0]`, `map[key]`
@@ -432,7 +444,7 @@ impl LoweringContext {
                                 "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
                                 "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
                                 "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(Name::new(text))),
+                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
                             }
                         }
                         SyntaxKind::INTEGER_LITERAL => {
@@ -585,7 +597,7 @@ impl LoweringContext {
                                 "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
                                 "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
                                 "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(Name::new(text))),
+                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
                             };
                             if lhs.is_none() {
                                 lhs = Some(expr_id);
@@ -673,7 +685,7 @@ impl LoweringContext {
                                 "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
                                 "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
                                 "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(Name::new(text))),
+                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
                             };
                             if lhs.is_none() {
                                 lhs = Some(expr_id);
@@ -774,7 +786,7 @@ impl LoweringContext {
 
             if let Some(token) = word_token {
                 let name = token.text().to_string();
-                self.exprs.alloc(Expr::Path(Name::new(&name)))
+                self.exprs.alloc(Expr::Path(vec![Name::new(&name)]))
             } else {
                 self.exprs.alloc(Expr::Missing)
             }
@@ -853,9 +865,9 @@ impl LoweringContext {
                                             "null" => {
                                                 Some(self.exprs.alloc(Expr::Literal(Literal::Null)))
                                             }
-                                            _ => {
-                                                Some(self.exprs.alloc(Expr::Path(Name::new(text))))
-                                            }
+                                            _ => Some(
+                                                self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
+                                            ),
                                         }
                                     }
                                     _ => None,
@@ -893,6 +905,22 @@ impl LoweringContext {
         self.exprs.alloc(Expr::Call { callee, args })
     }
 
+    /// Lower a `FIELD_ACCESS_EXPR` to `Expr::FieldAccess`.
+    ///
+    /// This handles field access on complex expressions where the base is NOT
+    /// a simple identifier chain:
+    /// - `f().field` -> `FieldAccess` { base: Call(...), field: "field" }
+    /// - `arr[0].field` -> `FieldAccess` { base: Index(...), field: "field" }
+    /// - `(a + b).field` -> `FieldAccess` { base: Binary(...), field: "field" }
+    ///
+    /// For simple identifier chains like `user.name.length`, the parser produces
+    /// `PATH_EXPR` instead, which is lowered by `lower_path_expr` to
+    /// `Expr::Path(vec!["user", "name", "length"])`. Resolution of whether that's
+    /// a variable + field accesses, enum variant, or module path happens in THIR.
+    ///
+    /// The key distinction:
+    /// - `Expr::Path` - all segments are identifiers, resolution deferred to THIR
+    /// - `Expr::FieldAccess` - base is a computed value, always a field access
     fn lower_field_access_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
         use baml_syntax::ast::FieldAccessExpr;
         use rowan::ast::AstNode;
@@ -970,7 +998,7 @@ impl LoweringContext {
                                 "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
                                 "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
                                 "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(Name::new(text))),
+                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
                             };
                             if !inside_brackets {
                                 base = Some(expr_id);
@@ -994,43 +1022,29 @@ impl LoweringContext {
         use baml_syntax::ast::PathExpr;
         use rowan::ast::AstNode;
 
-        // PATH_EXPR can be:
-        // 1. A simple identifier: `foo`
-        // 2. A qualified path with `.`: `mod.foo`
-        // 3. A field access chain with `.`: `obj.field.nested`
+        // PATH_EXPR contains one or more segments separated by dots.
+        // Examples:
+        // - Simple identifier: `foo` -> Path(vec!["foo"])
+        // - Qualified path: `mod.foo` -> Path(vec!["mod", "foo"])
+        // - Field access chain: `obj.field.nested` -> Path(vec!["obj", "field", "nested"])
+        //
+        // Resolution to determine the meaning (local var, field access, enum variant,
+        // module item) happens in THIR.
 
         let Some(path_expr) = PathExpr::cast(node.clone()) else {
             return self.exprs.alloc(Expr::Missing);
         };
 
-        let segments: Vec<String> = path_expr
+        let segments: Vec<Name> = path_expr
             .segments()
-            .map(|token| token.text().to_string())
+            .map(|token| Name::new(token.text()))
             .collect();
 
         if segments.is_empty() {
             return self.exprs.alloc(Expr::Missing);
         }
 
-        if path_expr.has_dots() {
-            // Field access chain: build nested FieldAccess expressions
-            // Start with the first segment as a Path
-            let mut current = self.exprs.alloc(Expr::Path(Name::new(&segments[0])));
-
-            // Chain the rest as FieldAccess
-            for segment in &segments[1..] {
-                current = self.exprs.alloc(Expr::FieldAccess {
-                    base: current,
-                    field: Name::new(segment),
-                });
-            }
-
-            current
-        } else {
-            // Module path with :: or simple identifier
-            let path_text = segments.join(".");
-            self.exprs.alloc(Expr::Path(Name::new(&path_text)))
-        }
+        self.exprs.alloc(Expr::Path(segments))
     }
 
     fn lower_string_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -1097,7 +1111,7 @@ impl LoweringContext {
                                 "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
                                 "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
                                 "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(Name::new(text))),
+                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
                             };
                             elements.push(expr);
                         }
@@ -1187,7 +1201,9 @@ impl LoweringContext {
                                             "null" => {
                                                 self.exprs.alloc(Expr::Literal(Literal::Null))
                                             }
-                                            _ => self.exprs.alloc(Expr::Path(Name::new(text))),
+                                            _ => {
+                                                self.exprs.alloc(Expr::Path(vec![Name::new(text)]))
+                                            }
                                         };
                                         Some(expr)
                                     }
@@ -1355,7 +1371,7 @@ impl LoweringContext {
                             "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
                             "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
                             "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                            _ => self.exprs.alloc(Expr::Path(Name::new(text))),
+                            _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
                         };
                         Some(expr_id)
                     }
