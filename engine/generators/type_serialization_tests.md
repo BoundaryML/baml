@@ -3072,7 +3072,6 @@ class T {
 - Non-streaming: `Inner`
 - Streaming: `*types.Inner`
 
-
 ## block_stream_done_field_access
 
 ```baml
@@ -3118,14 +3117,14 @@ class T {
 ### Python
 
 - Non-streaming: `int`
-- Streaming: `typing.Optional[int]`
+- Streaming: `int`
 
 ### TypeScript
 
 - Non-streaming: `number`
-- Streaming: `number | null`
+- Streaming: `number`
 
 ### Go
 
 - Non-streaming: `int64`
-- Streaming: `*int64`
+- Streaming: `int64`
