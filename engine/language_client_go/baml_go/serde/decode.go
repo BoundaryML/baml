@@ -81,7 +81,6 @@ func (d *DynamicUnion) Decode(holder *cffi.CFFIValueUnionVariant, typeMap TypeMa
 }
 
 func decodeListValue(valueList *cffi.CFFIValueList, typeMap TypeMap) (reflect.Value, reflect.Type) {
-	debugLog("decodeListValue: valueList=%+v\n", valueList)
 	if valueList == nil {
 		panic("decodeListValue: valueList is nil")
 	}
@@ -89,12 +88,8 @@ func decodeListValue(valueList *cffi.CFFIValueList, typeMap TypeMap) (reflect.Va
 	goElementType := convertFieldTypeToGoType(valueList.ItemType, typeMap)
 
 	length := len(valueList.Items)
-	debugLog("goElementType: %v\n", goElementType)
-	debugLog("length: %v\n", length)
 	sliceOf := reflect.SliceOf(goElementType)
-	debugLog("sliceOf: %v\n", sliceOf)
 	values := reflect.MakeSlice(sliceOf, length, length)
-	debugLog("values: %v\n", values)
 
 	for i, v := range valueList.Items {
 		decodedValue, _ := Decode(v, typeMap)
@@ -108,14 +103,10 @@ func decodeMapValue(valueMap *cffi.CFFIValueMap, typeMap TypeMap) (reflect.Value
 	if valueMap == nil {
 		panic("decodeMapValue: valueMap is nil")
 	}
-	debugLog("decodeMapValue: valueMap=%+v\n", valueMap)
 	keyType := valueMap.KeyType
 	valueType := valueMap.ValueType
 	goKeyType := convertFieldTypeToGoType(keyType, typeMap)
 	goValueType := convertFieldTypeToGoType(valueType, typeMap)
-
-	debugLog("goKeyType: %v\n", goKeyType)
-	debugLog("goValueType: %v\n", goValueType)
 
 	mapType := reflect.MapOf(goKeyType, goValueType)
 	values := reflect.MakeMap(mapType)
@@ -124,7 +115,6 @@ func decodeMapValue(valueMap *cffi.CFFIValueMap, typeMap TypeMap) (reflect.Value
 		key := entry.Key
 		value := entry.Value
 		decodedValue, _ := Decode(value, typeMap)
-		debugLog("key: %v, decodedValue: %v\n", key, decodedValue)
 		values.SetMapIndex(reflect.ValueOf(key), decodedValue)
 	}
 	return values, mapType
@@ -188,8 +178,6 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant, typeMap TypeMap) (
 		panic("decodeUnionValue: valueUnion is nil")
 	}
 
-	debugLog("decodeUnionValue: valueUnion=%+v\n", valueUnion)
-
 	value, goType := func() (reflect.Value, reflect.Type) {
 		if ok := valueUnion.Value.GetNullValue(); ok != nil {
 			// If the union value is null, return nil
@@ -223,7 +211,6 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant, typeMap TypeMap) (
 		}
 	}()
 
-	debugLog(" -> wrapped in optional (isOptional=%t), goType=%v, value=%v\n", valueUnion.IsOptional, goType, value)
 	if valueUnion.IsOptional {
 		if goType == nil {
 			debugLog(" -> got a nil goType, so returning nil\n")

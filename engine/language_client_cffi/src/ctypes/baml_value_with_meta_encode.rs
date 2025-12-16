@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use baml_types::{
     baml_value::TypeQuery, ir_type::TypeGeneric, type_meta, BamlValueWithMeta, HasType, ToUnionName,
 };
@@ -37,6 +39,13 @@ where
             mode,
             curr_type,
         } = self;
+
+        if (value.meta().field_type == curr_type) {
+            println!("value: {}", value.value_clone());
+            println!("curr_type: {}", curr_type);
+        } else {
+            println!("  -> type: {}", curr_type);
+        }
 
         if curr_type.meta().stream_with_state() {
             let mut inner_type = curr_type.clone();

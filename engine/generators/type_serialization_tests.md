@@ -2945,3 +2945,187 @@ enum Status {
 ### target: `Status`
 
 ### enum_values: `Active`, `Inactive`, `Pending`, `Archived`
+
+# Block Level Attributes
+
+## block_stream_done
+
+```baml
+class Inner {
+    x int
+    @@stream.done
+}
+class T { f Inner }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `Inner`
+- Streaming: `typing.Optional["types.Inner"]`
+
+### TypeScript
+
+- Non-streaming: `Inner`
+- Streaming: `types.Inner | null`
+
+### Go
+
+- Non-streaming: `Inner`
+- Streaming: `*types.Inner`
+
+---
+
+## block_stream_done_in_list
+
+```baml
+class Inner {
+    x int
+    @@stream.done
+}
+class T { list Inner[] }
+```
+
+### target: `T.list`
+
+### Python
+
+- Non-streaming: `typing.List["Inner"]`
+- Streaming: `typing.List["types.Inner"]`
+
+### TypeScript
+
+- Non-streaming: `Inner[]`
+- Streaming: `types.Inner[]`
+
+### Go
+
+- Non-streaming: `[]Inner`
+- Streaming: `[]types.Inner`
+
+---
+
+## nested_block_stream_done_outer
+
+```baml
+class Inner {
+    x int
+    @@stream.done
+}
+class Middle {
+    i Inner
+}
+class T {
+    m Middle
+}
+```
+
+### target: `T.m`
+
+### Python
+
+- Non-streaming: `Middle`
+- Streaming: `typing.Optional["Middle"]`
+
+### TypeScript
+
+- Non-streaming: `Middle`
+- Streaming: `Middle | null`
+
+### Go
+
+- Non-streaming: `Middle`
+- Streaming: `*Middle`
+
+---
+
+## nested_block_stream_done_inner
+
+```baml
+class Inner {
+    x int
+    @@stream.done
+}
+class Middle {
+    i Inner
+}
+class T {
+    m Middle
+}
+```
+
+### target: `Middle.i`
+
+### Python
+
+- Non-streaming: `Inner`
+- Streaming: `typing.Optional["types.Inner"]`
+
+### TypeScript
+
+- Non-streaming: `Inner`
+- Streaming: `types.Inner | null`
+
+### Go
+
+- Non-streaming: `Inner`
+- Streaming: `*types.Inner`
+
+
+## block_stream_done_field_access
+
+```baml
+class Inner {
+    x int
+    @@stream.done
+}
+class T {
+    i Inner
+}
+```
+
+### target: `Inner.x`
+
+### Python
+
+- Non-streaming: `int`
+- Streaming: `typing.Optional[int]`
+
+### TypeScript
+
+- Non-streaming: `number`
+- Streaming: `number | null`
+
+### Go
+
+- Non-streaming: `int64`
+- Streaming: `*int64`
+
+---
+
+## block_stream_done_on_top_level_field
+
+```baml
+class T {
+    x int
+    @@stream.done
+}
+```
+
+### target: `T.x`
+
+### Python
+
+- Non-streaming: `int`
+- Streaming: `typing.Optional[int]`
+
+### TypeScript
+
+- Non-streaming: `number`
+- Streaming: `number | null`
+
+### Go
+
+- Non-streaming: `int64`
+- Streaming: `*int64`

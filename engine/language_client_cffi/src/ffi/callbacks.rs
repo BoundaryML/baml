@@ -61,7 +61,10 @@ pub fn send_result_to_callback(
                 checks: &f.1,
             });
 
-            meta.encode_to_c_buffer(runtime.ir.as_ref(), baml_types::StreamingMode::NonStreaming)
+            let res = meta
+                .encode_to_c_buffer(runtime.ir.as_ref(), baml_types::StreamingMode::NonStreaming);
+            println!("--------- ");
+            res
         } else {
             // Top level types in streaming always have `not_null` set to true.
             let mut content = content.0.clone();
@@ -70,7 +73,10 @@ pub fn send_result_to_callback(
                 field_type: f.3.to_streaming_type(runtime.ir.as_ref()),
                 checks: &f.1,
             });
-            meta.encode_to_c_buffer(runtime.ir.as_ref(), baml_types::StreamingMode::Streaming)
+            let res =
+                meta.encode_to_c_buffer(runtime.ir.as_ref(), baml_types::StreamingMode::Streaming);
+            println!("--------- ");
+            res
         }
     }));
 
