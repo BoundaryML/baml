@@ -151,7 +151,7 @@ export function PreviewToolbar() {
     <div className="flex flex-col gap-1 overflow-hidden w-full">
       <div
         className={cn(
-          'flex flex-row gap-1 items-center min-w-0 w-full',
+          'flex flex-row gap-1 items-center min-w-0 w-full h-[20px]',
           !hasSelection ? 'justify-end' : 'justify-between',
         )}
       >

@@ -146,15 +146,15 @@ export const GraphView = () => {
 
 
       // pan if selected node id changes
-      const node = flowStore.value.getNode(selectedNodeId ?? '');
-      if (!node) {
-        console.error("Node not found. Can't pan to it:", selectedNodeId);
-        return;
-      }
-      console.log('Panning to node:', node.id);
       setTimeout(() => {
-        // TODO: do this on a new useAutolayout as well
-        // so that we only make graph visible post-panning. Except in that case we dont want to animate it out.
+        // Get the node INSIDE the timeout to ensure we have the latest position
+        // after React Flow has finished any layout updates
+        const node = flowStore.value.getNode(selectedNodeId ?? '');
+        if (!node) {
+          console.error("Node not found. Can't pan to it:", selectedNodeId);
+          return;
+        }
+        console.log('Panning to node:', node.id);
         panToNodeIfNeeded(node, flowStore.value);
       }, 10);
 
@@ -194,13 +194,14 @@ export const GraphView = () => {
       return;
     }
 
+    console.log('node clicked', node);
+
     const input: NavigationInput = {
       kind: 'node',
       source: 'graph',
       timestamp: Date.now(),
       workflowId: displayedWorkflowId,
       nodeId: node.id,
-      functionName: node.id, // May or may not be an actual function name
     };
     navigate(input);
 
@@ -254,6 +255,7 @@ export const GraphView = () => {
         onNodeDrag={handleNodeDrag}
         onNodeClick={handleNodeClick}
         panOnScroll
+        zoomOnDoubleClick={false}
         // by making this true note sometimes clicks wont register since it will think you are dragging.
         nodesDraggable={false}
         selectionOnDrag
