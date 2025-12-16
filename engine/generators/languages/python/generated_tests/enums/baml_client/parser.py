@@ -27,14 +27,14 @@ class LlmResponseParser:
     def ConsumeTestEnum(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="ConsumeTestEnum", llm_response=llm_response, mode="request")
-        return typing.cast(types.TestEnum, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ConsumeTestEnum", llm_response=llm_response, mode="request")
+        return typing.cast(types.TestEnum, __result__)
 
     def FnTestAliasedEnumOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="FnTestAliasedEnumOutput", llm_response=llm_response, mode="request")
-        return typing.cast(types.TestEnum, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnTestAliasedEnumOutput", llm_response=llm_response, mode="request")
+        return typing.cast(types.TestEnum, __result__)
 
     
 
@@ -47,13 +47,13 @@ class LlmStreamParser:
     def ConsumeTestEnum(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="ConsumeTestEnum", llm_response=llm_response, mode="stream")
-        return typing.cast(types.TestEnum, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ConsumeTestEnum", llm_response=llm_response, mode="stream")
+        return typing.cast(types.TestEnum, __result__)
 
     def FnTestAliasedEnumOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="FnTestAliasedEnumOutput", llm_response=llm_response, mode="stream")
-        return typing.cast(types.TestEnum, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnTestAliasedEnumOutput", llm_response=llm_response, mode="stream")
+        return typing.cast(types.TestEnum, __result__)
 
     

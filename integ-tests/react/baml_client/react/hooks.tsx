@@ -2562,6 +2562,56 @@ export function useExtractPeople(
   }
 }
 /**
+ * A specialized hook for the ExtractPersonWithMeta BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** types.PersonWithMeta
+ * - **Streaming Partial:** PersonWithMeta
+ * - **Streaming Final:** types.PersonWithMeta
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useExtractPersonWithMeta({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useExtractPersonWithMeta({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useExtractPersonWithMeta(props: HookInput<'ExtractPersonWithMeta', { stream: false }>): HookOutput<'ExtractPersonWithMeta', { stream: false }>
+export function useExtractPersonWithMeta(props?: HookInput<'ExtractPersonWithMeta', { stream?: true }>): HookOutput<'ExtractPersonWithMeta', { stream: true }>
+export function useExtractPersonWithMeta(
+  props: HookInput<'ExtractPersonWithMeta', { stream?: boolean }> = {},
+): HookOutput<'ExtractPersonWithMeta', { stream: true }> | HookOutput<'ExtractPersonWithMeta', { stream: false }> {
+  let action: ServerAction = Actions.ExtractPersonWithMeta;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ExtractPersonWithMeta;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'ExtractPersonWithMeta', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the ExtractReceiptInfo BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

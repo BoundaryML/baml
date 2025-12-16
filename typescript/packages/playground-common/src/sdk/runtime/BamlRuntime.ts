@@ -212,7 +212,10 @@ export function buildControlFlowArtifacts(
   const childrenByParent = new Map<string, WasmControlFlowNode[]>();
 
   for (const node of nodes) {
-    nodeById.set(node.node_id, node);
+    nodeById.set(node.id, node);
+    // Use the wasm node id (stringified) as the canonical graph node id
+    const key = node.id.toString();
+    nodeKeyById.set(node.id, key);
     if (node.parent_id !== undefined) {
       const siblings = childrenByParent.get(node.parent_id) ?? [];
       siblings.push(node);
@@ -251,7 +254,7 @@ export function buildControlFlowArtifacts(
       lastModified: options.timestamp,
       llmClient: node.node_type === WasmControlFlowNodeType.FunctionRoot ? options.llmClient : undefined,
       metadata: {
-        wasmNodeId: node.node_id,
+        wasmNodeId: node.id,
         logFilterKey: node.log_filter_key,
         controlFlowType: WasmControlFlowNodeType[node.node_type] ?? 'Unknown',
       },

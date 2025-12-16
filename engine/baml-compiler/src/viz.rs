@@ -23,6 +23,10 @@ impl VizNodes {
         Self { nodes: Vec::new() }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
     pub fn len(&self) -> usize {
         self.nodes.len()
     }

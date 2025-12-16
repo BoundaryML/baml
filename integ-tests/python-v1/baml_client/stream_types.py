@@ -24,7 +24,7 @@ class StreamState(GenericModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (105)
+# Generated classes (107)
 # #########################################################################
 
 class AddTodoItem(BaseModel):
@@ -34,6 +34,13 @@ class AddTodoItem(BaseModel):
     item: typing.Optional[str] = None
     time: typing.Optional[str] = None
     description: typing.Optional[str] = None
+
+class AddressWithMeta(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    street: typing.Optional[str] = None
+    city: typing.Optional[str] = None
+    zipcode: typing.Optional[str] = None
 
 class AnotherObject(BaseModel):
     class Config:
@@ -507,6 +514,14 @@ class Person(BaseModel):
         arbitrary_types_allowed = True
     name: typing.Optional[str] = None
     hair_color: typing.Optional[typing.Union[types.Color, str]] = None
+
+class PersonWithMeta(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    name: typing.Optional[str] = None
+    age: typing.Optional[int] = None
+    address: typing.Optional["AddressWithMeta"] = None
+    tags: typing.List[str]
 
 class PhoneNumber(BaseModel):
     class Config:

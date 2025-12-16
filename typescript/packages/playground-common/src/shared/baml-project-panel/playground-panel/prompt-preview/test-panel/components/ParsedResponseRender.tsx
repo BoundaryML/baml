@@ -71,7 +71,7 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
           style={theme === 'dark' ? darkTheme : lightTheme}
         >
           <JsonView.String
-            render={({ children, ...reset }, { type, value, keyName }) => {
+            render={({ children, style: _style, ...reset }, { type, value, keyName }) => {
               if (type === 'type') {
                 return <span />
               }
@@ -85,7 +85,7 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
             }}
           />
           <JsonView.Colon
-            render={(props, { parentValue, value, keyName }) => {
+            render={({ style: _style, ...props }, { parentValue, value, keyName }) => {
               if (Array.isArray(parentValue) && props.children == ':') {
                 return <span />
               }
@@ -94,21 +94,21 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
           />
 
           <JsonView.Null
-            render={({ children, ...reset }) => (
+            render={({ children, style: _style, ...reset }) => (
               <span {...reset} className='whitespace-pre-wrap break-words'>
                 null
               </span>
             )}
           />
           <JsonView.Undefined
-            render={({ children, ...reset }) => (
+            render={({ children, style: _style, ...reset }) => (
               <span {...reset} className='whitespace-pre-wrap break-words'>
                 undefined
               </span>
             )}
           />
           <JsonView.KeyName
-            render={({ ...props }, { parentValue, value, keyName }) => {
+            render={({ style: _style, ...props }, { parentValue, value, keyName }) => {
               if (Array.isArray(parentValue) && Number.isFinite(props.children)) {
                 return <span className='' />
               }

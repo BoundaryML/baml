@@ -6,6 +6,18 @@ use baml_types::CompletionState;
 use super::json_collection::JsonCollection;
 use crate::jsonish::{value::Fixes, Value};
 
+/// Tracks quote and backslash state incrementally for quoted strings
+/// to avoid O(n²) rescanning when determining if a quote closes a string.
+#[derive(Debug, Default, Clone)]
+struct StringQuoteTracking {
+    /// Number of consecutive backslashes at the end of the current string content.
+    /// Used to determine if a quote is escaped.
+    trailing_backslashes: usize,
+    /// Count of unescaped quotes (quotes preceded by an even number of backslashes).
+    /// Used in should_close_string to decide whether to close.
+    unescaped_quote_count: usize,
+}
+
 #[derive(Debug)]
 pub struct JsonParseState {
     /// The stack of Json collection values being assembled.
@@ -17,6 +29,10 @@ pub struct JsonParseState {
     /// collection stack.
     /// Technically we may find multiple values in a single string
     pub completed_values: Vec<(&'static str, Value, Vec<Fixes>)>,
+
+    /// Incremental tracking state for the current quoted string being parsed.
+    /// Reset when a new string is started, used to avoid O(n²) quote counting.
+    string_quote_tracking: StringQuoteTracking,
 }
 
 #[derive(Clone, Debug)]
@@ -33,6 +49,28 @@ impl JsonParseState {
         JsonParseState {
             collection_stack: vec![],
             completed_values: vec![],
+            string_quote_tracking: StringQuoteTracking::default(),
+        }
+    }
+
+    /// Reset the quote tracking state when starting a new quoted string
+    fn reset_quote_tracking(&mut self) {
+        self.string_quote_tracking = StringQuoteTracking::default();
+    }
+
+    /// Update quote tracking when consuming a character into a quoted string.
+    /// Must be called BEFORE the character is added to the string.
+    fn update_quote_tracking(&mut self, token: char) {
+        if token == '\\' {
+            self.string_quote_tracking.trailing_backslashes += 1;
+        } else {
+            if token == '"' {
+                // A quote is "unescaped" if preceded by an even number of backslashes
+                if self.string_quote_tracking.trailing_backslashes % 2 == 0 {
+                    self.string_quote_tracking.unescaped_quote_count += 1;
+                }
+            }
+            self.string_quote_tracking.trailing_backslashes = 0;
         }
     }
 
@@ -85,6 +123,18 @@ impl JsonParseState {
     }
 
     fn consume(&mut self, token: char) -> Result<usize> {
+        // First check if we're in a QuotedString and need to update tracking
+        // (done before getting mutable borrow to avoid borrow checker conflict)
+        let is_quoted_string = matches!(
+            self.collection_stack.last(),
+            Some((JsonCollection::QuotedString(..), _))
+        );
+        if is_quoted_string {
+            // Track quote/backslash state incrementally for O(1) quote counting
+            self.update_quote_tracking(token);
+        }
+
+        // Now get mutable access to push the token
         let Some((last, _)) = self.collection_stack.last_mut() else {
             return Err(anyhow::anyhow!(
                 "No collection to consume token: {:?}",
@@ -344,33 +394,12 @@ impl JsonParseState {
             } else {
                 (false, false, false, false)
             };
+        // Use pre-computed quote count from incremental tracking (O(1) instead of O(n²))
         let closing_char_count = if closing_char == '"' {
-            // count the number of quotes in the string
             let (last, _) = self.collection_stack.last().unwrap();
             match last {
-                JsonCollection::QuotedString(s, ..) => {
-                    let mut count = 0;
-                    // Iterate with indices so we can look backwards
-                    for (i, c) in s.char_indices() {
-                        if c == '"' {
-                            // Count consecutive backslashes immediately preceding this quote
-                            let mut backslash_count = 0;
-                            let mut j = i;
-                            while j > 0 {
-                                j -= 1;
-                                if s.as_bytes()[j] == b'\\' {
-                                    backslash_count += 1;
-                                } else {
-                                    break;
-                                }
-                            }
-                            // Only count this quote if the number of backslashes is even
-                            if backslash_count % 2 == 0 {
-                                count += 1;
-                            }
-                        }
-                    }
-                    count
+                JsonCollection::QuotedString(..) => {
+                    self.string_quote_tracking.unescaped_quote_count
                 }
                 _ => 0,
             }
@@ -590,19 +619,14 @@ impl JsonParseState {
                     // - A closing backtick
                     // - A character
                     if token == '`' {
-                        // TODO: this logic is busted. peekable.peek() does not
-                        // advance the iterator (this is easily verified with
-                        // a unit test), but to fix this we need to do a bit of
-                        // refactoring, so for now we'll live with it.
-                        let is_triple_quoted = match next.peek() {
-                            Some((_, '`')) => matches!(next.peek(), Some((_, '`')) | None),
-                            None => true,
-                            _ => false,
-                        };
+                        let is_triple_quoted = next
+                            .next_if(|&(_, c)| c == '`')
+                            .and_then(|_| next.next_if(|&(_, c)| c == '`'))
+                            .is_some();
 
                         if is_triple_quoted {
                             self.complete_collection(CompletionState::Complete);
-                            Ok(3)
+                            Ok(2)
                         } else {
                             self.consume(token)
                         }
@@ -739,6 +763,8 @@ impl JsonParseState {
                     ));
                     return Ok(2);
                 } else {
+                    // Reset quote tracking for the new string
+                    self.reset_quote_tracking();
                     self.collection_stack.push((
                         JsonCollection::QuotedString(String::new(), CompletionState::Incomplete),
                         Default::default(),

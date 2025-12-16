@@ -1,7 +1,10 @@
 #[cfg(not(target_arch = "wasm32"))]
 use baml_types::TypeIR;
 #[cfg(not(target_arch = "wasm32"))]
-use jsonish::{from_str, helpers::common::UNION_SCHEMA};
+use jsonish::{
+    from_str,
+    helpers::common::{ARRAY_UNION_SCHEMA, UNION_SCHEMA},
+};
 #[cfg(not(target_arch = "wasm32"))]
 use peak_alloc::PeakAlloc;
 
@@ -121,4 +124,16 @@ test_memory_usage!(
     jsonish::helpers::common::JSON_STRING_STORY,
     UNION_SCHEMA,
     TypeIR::class("Story4")
+);
+
+// Test for array union hint optimization.
+// This test uses an array of (TextBlock | ImageBlock | CodeBlock) unions
+// where most elements are TextBlock. The hint optimization should help
+// by trying the previously successful variant first.
+#[cfg(not(target_arch = "wasm32"))]
+test_memory_usage!(
+    test_array_union_hint,
+    jsonish::helpers::common::JSON_STRING_ARRAY_UNION,
+    ARRAY_UNION_SCHEMA,
+    TypeIR::class("Document")
 );

@@ -1212,66 +1212,10 @@ export class BAMLSDK {
             const _parsedValue = this.parseWatchValue(notification.value);
 
             if (notification.stateUpdate) {
-              const nodeId = String(notification.stateUpdate.nodeId);
               const mapped = this.mapReducerStateToNodeState(notification.stateUpdate.newState);
               if (mapped) {
-                this.storage.setNodeState(nodeId, mapped);
+                this.storage.setNodeState(notification.stateUpdate.nodeId.toString(), mapped);
               }
-
-              // Generate header events for execution log
-              const now = Date.now();
-              const functionName = notification.functionName ?? 'unknown';
-              const executionId = `test-${functionName}`;
-
-              // Extract a clean label from log_filter_key
-              // Format: "FunctionName|root:0|hdr:some-label:1" -> "some-label"
-              const logFilterKey = notification.stateUpdate.logFilterKey ?? '';
-              const segments = logFilterKey.split('|');
-              const lastSegment = segments[segments.length - 1] ?? '';
-              // Parse segment like "hdr:some-label:1" or "root:0"
-              const segmentParts = lastSegment.split(':');
-              const segmentType = segmentParts[0]; // e.g., 'hdr', 'bg', 'arm', 'root'
-              const label = segmentParts.length >= 2 ? segmentParts[1] : lastSegment;
-              const ordinal = segmentParts.length >= 3 ? parseInt(segmentParts[segmentParts.length - 1] ?? '0', 10) : 0;
-
-              // Track loop iterations: detect when a loop's ordinal increases
-              // This indicates a new iteration of the loop
-              if (notification.stateUpdate.newState === 'running' && segmentParts.length >= 3) {
-                // Build the loop path (everything except the ordinal)
-                const loopPath = segments.slice(0, -1).join('|') + '|' + segmentParts.slice(0, -1).join(':');
-                const prevOrdinal = this.storage.getLoopOrdinals().get(loopPath) ?? -1;
-
-                if (ordinal > prevOrdinal) {
-                  // New iteration detected
-                  this.storage.setLoopOrdinal(loopPath, ordinal);
-
-                  if (ordinal > 0) {
-                    // This is iteration 2+ - increment the node's iteration counter
-                    const iteration = this.storage.incrementNodeIteration(nodeId);
-                    console.log(`[SDK] Loop iteration ${iteration} for node ${nodeId} (path: ${loopPath})`);
-                  }
-                }
-              }
-
-              // Skip: root node (label '0'), arm segments (bg already covers the conditional)
-              const shouldSkip = label === '0' || segmentType === 'arm';
-
-              // Get current iteration for this node
-              const currentIteration = this.storage.getNodeIteration(nodeId);
-
-              // Only emit for running state and non-skipped segments
-              if (notification.stateUpdate.newState === 'running' && !shouldSkip) {
-                this.storage.appendExecutionLog({
-                  type: 'header.enter',
-                  nodeId,
-                  timestamp: now,
-                  iteration: currentIteration,
-                  executionId,
-                  label: label || nodeId,
-                  level: segments.length - 2, // Nesting level based on path depth, flattened by 1
-                });
-              }
-              // Don't emit header.exit - we only show enter events
             }
 
             this.storage.addWatchNotification(notification);
@@ -1280,8 +1224,6 @@ export class BAMLSDK {
             const functionName = notification.functionName ?? 'unknown';
 
             if (notification.variableName) {
-              console.log('[SDK] Variable notification:', notification.variableName, notification.value);
-
               let parsedVarValue: unknown;
               if (notification.value !== undefined) {
                 try {

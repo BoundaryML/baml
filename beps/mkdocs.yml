@@ -9,7 +9,7 @@ theme:
     - navigation.tracking
     - navigation.tabs
     - navigation.sections
-    - navigation.expand
+    # - navigation.expand
     - toc.follow
     - navigation.top
     - search.suggest

@@ -9,14 +9,18 @@ use std::{
 
 use anyhow::Result;
 use baml_db::{
-    RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
-    baml_thir, baml_workspace, function_body, function_signature,
+    FileId, RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
+    baml_thir, baml_workspace,
 };
-use baml_hir::ItemId;
+use baml_diagnostics::compiler_error::{
+    CompilerError, ParseError, TypeError, render_parse_error, render_type_error,
+};
+use baml_hir::{ItemId, function_body, function_signature};
 use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
+use baml_thir::{build_class_fields_from_files, build_typing_context_from_files};
 use regex::Regex;
 use rowan::{GreenNode, NodeCache, ast::AstNode};
 use salsa::{Event, EventKind, Setter};
@@ -30,6 +34,7 @@ pub(crate) enum CompilerPhase {
     Thir,
     Diagnostics,
     Codegen,
+    VmRunner,
     Metrics,
 }
 
@@ -42,6 +47,7 @@ impl CompilerPhase {
         CompilerPhase::Thir,
         CompilerPhase::Diagnostics,
         CompilerPhase::Codegen,
+        CompilerPhase::VmRunner,
         CompilerPhase::Metrics,
     ];
 
@@ -54,6 +60,7 @@ impl CompilerPhase {
             CompilerPhase::Thir => "THIR (Typed IR)",
             CompilerPhase::Diagnostics => "Diagnostics",
             CompilerPhase::Codegen => "Codegen (Bytecode)",
+            CompilerPhase::VmRunner => "VM Runner",
             CompilerPhase::Metrics => "Metrics (Incremental)",
         }
     }
@@ -66,7 +73,8 @@ impl CompilerPhase {
             CompilerPhase::Hir => CompilerPhase::Thir,
             CompilerPhase::Thir => CompilerPhase::Diagnostics,
             CompilerPhase::Diagnostics => CompilerPhase::Codegen,
-            CompilerPhase::Codegen => CompilerPhase::Metrics,
+            CompilerPhase::Codegen => CompilerPhase::VmRunner,
+            CompilerPhase::VmRunner => CompilerPhase::Metrics,
             CompilerPhase::Metrics => CompilerPhase::Lexer,
         }
     }
@@ -80,14 +88,18 @@ impl CompilerPhase {
             CompilerPhase::Thir => CompilerPhase::Hir,
             CompilerPhase::Diagnostics => CompilerPhase::Thir,
             CompilerPhase::Codegen => CompilerPhase::Diagnostics,
-            CompilerPhase::Metrics => CompilerPhase::Codegen,
+            CompilerPhase::VmRunner => CompilerPhase::Codegen,
+            CompilerPhase::Metrics => CompilerPhase::VmRunner,
         }
     }
 }
 
+/// Stored compiler error with types converted to strings
+pub(crate) type StoredCompilerError = CompilerError<String>;
+
 pub(crate) struct CompilerRunner {
     db: RootDatabase,
-    project_root: baml_workspace::ProjectRoot,
+    project_root: baml_workspace::Project,
     is_directory: bool,
     /// Source files currently in the database (path -> `SourceFile`)
     source_files: HashMap<PathBuf, SourceFile>,
@@ -104,6 +116,10 @@ pub(crate) struct CompilerRunner {
     thir_display_mode: ThirDisplayMode,
     // THIR interactive state
     thir_interactive_state: ThirInteractiveState,
+    // Errors collected during compilation
+    diagnostic_errors: Vec<StoredCompilerError>,
+    // VM Runner state
+    vm_runner_state: VmRunnerState,
 }
 
 /// State for the interactive THIR cursor mode
@@ -119,6 +135,28 @@ pub(crate) struct ThirInteractiveState {
     pub line_info: Vec<ThirLineInfo>,
     /// The source text for display
     pub source_lines: Vec<String>,
+}
+
+/// State for the VM Runner tab
+#[derive(Debug, Clone, Default)]
+pub(crate) struct VmRunnerState {
+    /// Available function names (sorted alphabetically)
+    pub available_functions: Vec<String>,
+    /// Currently selected function index
+    pub selected_function: usize,
+    /// Result of the last execution
+    pub execution_result: Option<VmExecutionResult>,
+}
+
+/// Result of a VM execution
+#[derive(Debug, Clone)]
+pub(crate) enum VmExecutionResult {
+    /// Execution completed successfully
+    Success(String),
+    /// Execution failed with an error
+    Error(String),
+    /// Function requires arguments (we can't run it without args)
+    RequiresArgs { arity: usize },
 }
 
 #[derive(Debug, Clone)]
@@ -195,7 +233,7 @@ impl CompilerRunner {
             }));
 
         Self {
-            project_root: baml_workspace::ProjectRoot::new(&db, PathBuf::new()),
+            project_root: baml_workspace::Project::new(&db, PathBuf::new(), vec![]),
             db,
             is_directory,
             source_files: HashMap::new(),
@@ -208,6 +246,8 @@ impl CompilerRunner {
             parser_cached_elements: HashMap::new(),
             thir_display_mode: ThirDisplayMode::default(),
             thir_interactive_state: ThirInteractiveState::default(),
+            diagnostic_errors: Vec::new(),
+            vm_runner_state: VmRunnerState::default(),
         }
     }
 
@@ -310,6 +350,10 @@ impl CompilerRunner {
             }
         }
 
+        // Update project root with the list of files for proper Salsa tracking
+        let file_list: Vec<_> = self.source_files.values().copied().collect();
+        self.project_root.set_files(&mut self.db).to(file_list);
+
         // Run all compiler phases
         self.run_all_phases();
     }
@@ -317,6 +361,7 @@ impl CompilerRunner {
     fn run_all_phases(&mut self) {
         self.phase_outputs.clear();
         self.phase_outputs_annotated.clear();
+        self.diagnostic_errors.clear();
 
         for &phase in &[
             CompilerPhase::Lexer,
@@ -326,6 +371,7 @@ impl CompilerRunner {
             CompilerPhase::Thir,
             CompilerPhase::Diagnostics,
             CompilerPhase::Codegen,
+            CompilerPhase::VmRunner,
         ] {
             self.run_single_phase(phase);
         }
@@ -333,7 +379,7 @@ impl CompilerRunner {
         self.run_single_phase(CompilerPhase::Metrics);
     }
 
-    fn run_single_phase(&mut self, phase: CompilerPhase) {
+    pub(crate) fn run_single_phase(&mut self, phase: CompilerPhase) {
         match phase {
             CompilerPhase::Lexer => self.run_lexer(),
             CompilerPhase::Parser => self.run_parser(),
@@ -342,6 +388,7 @@ impl CompilerRunner {
             CompilerPhase::Thir => self.run_thir(),
             CompilerPhase::Diagnostics => self.run_diagnostics(),
             CompilerPhase::Codegen => self.run_codegen(),
+            CompilerPhase::VmRunner => self.run_vm_runner(),
             CompilerPhase::Metrics => self.run_metrics(),
         }
     }
@@ -418,6 +465,13 @@ impl CompilerRunner {
             let (green, _errors) =
                 baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
             let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());
+
+            // Collect parse errors for this file
+            let parse_errors = baml_parser::parse_errors(&self.db, *source_file);
+            for error in parse_errors {
+                self.diagnostic_errors
+                    .push(CompilerError::ParseError(error.clone()));
+            }
 
             let (formatted_lines, cached_ids) =
                 format_syntax_tree_with_cache(&syntax_tree, self.parser_cached_elements.get(path));
@@ -568,7 +622,8 @@ impl CompilerRunner {
 
         // Build initial typing context with all function types
         let file_list: Vec<_> = self.source_files.values().copied().collect();
-        let globals = baml_db::build_typing_context_from_files(&self.db, &file_list);
+        let globals = build_typing_context_from_files(&self.db, &file_list);
+        let class_fields = build_class_fields_from_files(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -595,9 +650,9 @@ impl CompilerRunner {
 
             for item in items {
                 if let ItemId::Function(func_id) = item {
-                    let signature = function_signature(&self.db, *source_file, *func_id);
+                    let signature = function_signature(&self.db, *func_id);
                     let func_name = signature.name.to_string();
-                    let body = function_body(&self.db, *source_file, *func_id);
+                    let body = function_body(&self.db, *func_id);
 
                     // Run type inference with global function types
                     let inference_result = baml_thir::infer_function(
@@ -605,7 +660,15 @@ impl CompilerRunner {
                         &signature,
                         &body,
                         Some(globals.clone()),
+                        Some(class_fields.clone()),
                     );
+
+                    // Collect type errors from inference
+                    for error in &inference_result.errors {
+                        let stored_error = convert_type_error_to_string(error);
+                        self.diagnostic_errors
+                            .push(CompilerError::TypeError(stored_error));
+                    }
 
                     // Use tree view for both modes - interactive mode parses this afterward
                     let tree_output = baml_thir::render_function_tree(
@@ -650,13 +713,147 @@ impl CompilerRunner {
     }
 
     fn run_diagnostics(&mut self) {
-        // Diagnostics not yet implemented as a tracked function
-        let output = "Diagnostics not yet implemented".to_string();
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
 
-        let output_annotated: Vec<_> = output
-            .lines()
-            .map(|line| (line.to_string(), LineStatus::Unknown))
-            .collect();
+        // Build a source map for error rendering (FileId -> source text)
+        let mut sources: HashMap<FileId, String> = HashMap::new();
+        for source_file in self.source_files.values() {
+            let file_id = source_file.file_id(&self.db);
+            let text = source_file.text(&self.db).clone();
+            sources.insert(file_id, text);
+        }
+
+        // Group errors by file_id and error type (parse vs type)
+        let mut parse_errors_by_file: HashMap<FileId, Vec<&ParseError>> = HashMap::new();
+        let mut type_errors_by_file: HashMap<FileId, Vec<&TypeError<String>>> = HashMap::new();
+
+        for error in &self.diagnostic_errors {
+            let file_id = get_error_file_id(error);
+            match error {
+                CompilerError::ParseError(e) => {
+                    parse_errors_by_file.entry(file_id).or_default().push(e);
+                }
+                CompilerError::TypeError(e) => {
+                    type_errors_by_file.entry(file_id).or_default().push(e);
+                }
+                CompilerError::NameError(_) => {
+                    // TODO: Handle name errors in diagnostics display
+                }
+            }
+        }
+
+        // Sort files alphabetically by path
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        let mut total_parse_errors = 0;
+        let mut total_type_errors = 0;
+
+        // Render parse errors grouped by file
+        for (path, source_file) in &sorted_files {
+            let file_id = source_file.file_id(&self.db);
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(*path);
+
+            if let Some(errors) = parse_errors_by_file.get(&file_id) {
+                writeln!(output, "── Parse Errors: {file_path} ──").ok();
+                output_annotated.push((
+                    format!("── Parse Errors: {file_path} ──"),
+                    if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Unknown
+                    },
+                ));
+
+                for error in errors {
+                    total_parse_errors += 1;
+                    let rendered = render_parse_error(error, &sources, false);
+                    for line in rendered.lines() {
+                        writeln!(output, "{}", line).ok();
+                        output_annotated.push((
+                            line.to_string(),
+                            if file_recomputed {
+                                LineStatus::Recomputed
+                            } else {
+                                LineStatus::Cached
+                            },
+                        ));
+                    }
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+            }
+        }
+
+        // Render type errors grouped by file
+        for (path, source_file) in &sorted_files {
+            let file_id = source_file.file_id(&self.db);
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(*path);
+
+            if let Some(errors) = type_errors_by_file.get(&file_id) {
+                writeln!(output, "── Type Errors: {file_path} ──").ok();
+                output_annotated.push((
+                    format!("── Type Errors: {file_path} ──"),
+                    if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Unknown
+                    },
+                ));
+
+                for error in errors {
+                    total_type_errors += 1;
+                    let rendered = render_type_error(error, &sources, false);
+                    for line in rendered.lines() {
+                        writeln!(output, "{}", line).ok();
+                        output_annotated.push((
+                            line.to_string(),
+                            if file_recomputed {
+                                LineStatus::Recomputed
+                            } else {
+                                LineStatus::Cached
+                            },
+                        ));
+                    }
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+            }
+        }
+
+        let total_errors = total_parse_errors + total_type_errors;
+
+        if total_errors == 0 {
+            let no_errors = "✓ No errors found".to_string();
+            writeln!(output, "{}", no_errors).ok();
+            output_annotated.push((no_errors, LineStatus::Cached));
+        } else {
+            let summary = "─────────────────────────────────────────".to_string();
+            writeln!(output, "{}", summary).ok();
+            output_annotated.push((summary, LineStatus::Unknown));
+
+            let mut parts = Vec::new();
+            if total_parse_errors > 0 {
+                parts.push(format!(
+                    "{} parse error{}",
+                    total_parse_errors,
+                    if total_parse_errors == 1 { "" } else { "s" }
+                ));
+            }
+            if total_type_errors > 0 {
+                parts.push(format!(
+                    "{} type error{}",
+                    total_type_errors,
+                    if total_type_errors == 1 { "" } else { "s" }
+                ));
+            }
+            let total = format!("Total: {}", parts.join(", "));
+            writeln!(output, "{}", total).ok();
+            output_annotated.push((total, LineStatus::Unknown));
+        }
 
         self.phase_outputs
             .insert(CompilerPhase::Diagnostics, output);
@@ -665,27 +862,293 @@ impl CompilerRunner {
     }
 
     fn run_codegen(&mut self) {
-        let bytecode = baml_codegen::generate_project_bytecode(&self.db, self.project_root);
-        let output = format!("{bytecode:#?}");
+        // Use compile_files directly with our source files instead of generate_project_bytecode,
+        // because project_files(db, root) returns an empty vector (not yet implemented).
+        let files: Vec<_> = self.source_files.values().copied().collect();
+        let program = baml_codegen::compile_files(&self.db, &files);
+        let file_recomputed = !self.modified_files.is_empty();
 
-        let file_recomputed = self.was_query_recomputed("generate_project_bytecode(");
-        let output_annotated: Vec<_> = output
-            .lines()
-            .map(|line| {
-                (
-                    line.to_string(),
-                    if file_recomputed {
-                        LineStatus::Recomputed
-                    } else {
-                        LineStatus::Cached
-                    },
-                )
-            })
-            .collect();
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Summary header
+        writeln!(output, "=== BYTECODE ===").ok();
+        output_annotated.push(("=== BYTECODE ===".to_string(), LineStatus::Unknown));
+
+        writeln!(output, "Functions: {}", program.function_indices.len()).ok();
+        output_annotated.push((
+            format!("Functions: {}", program.function_indices.len()),
+            LineStatus::Unknown,
+        ));
+
+        writeln!(output, "Objects: {}", program.objects.len()).ok();
+        output_annotated.push((
+            format!("Objects: {}", program.objects.len()),
+            LineStatus::Unknown,
+        ));
+
+        writeln!(output, "Globals: {}", program.globals.len()).ok();
+        output_annotated.push((
+            format!("Globals: {}", program.globals.len()),
+            LineStatus::Unknown,
+        ));
+
+        // Show functions and their bytecode using debug formatting (same as baml_test)
+        let mut func_names: Vec<_> = program.function_indices.keys().collect();
+        func_names.sort();
+        for func_name in func_names {
+            if let Some(&idx) = program.function_indices.get(func_name)
+                && let Some(baml_codegen::Object::Function(func)) = program.objects.get(idx)
+            {
+                let func_header = format!(
+                    "\nFunction {} (arity: {}, kind: {:?}):",
+                    func_name, func.arity, func.kind
+                );
+                writeln!(output, "{}", func_header).ok();
+                output_annotated.push((func_header, LineStatus::Unknown));
+
+                let bytecode_table = baml_vm::debug::display_bytecode(
+                    func,
+                    &baml_vm::EvalStack::new(),
+                    &program.objects,
+                    &program.globals,
+                    false, // no colors for static display
+                );
+
+                if bytecode_table.is_empty() {
+                    writeln!(output, "  (no bytecode)").ok();
+                    output_annotated.push((
+                        "  (no bytecode)".to_string(),
+                        if file_recomputed {
+                            LineStatus::Recomputed
+                        } else {
+                            LineStatus::Cached
+                        },
+                    ));
+                } else {
+                    for line in bytecode_table.lines() {
+                        let formatted_line = format!("  {}", line);
+                        writeln!(output, "{}", formatted_line).ok();
+                        output_annotated.push((
+                            formatted_line,
+                            if file_recomputed {
+                                LineStatus::Recomputed
+                            } else {
+                                LineStatus::Cached
+                            },
+                        ));
+                    }
+                }
+            }
+        }
 
         self.phase_outputs.insert(CompilerPhase::Codegen, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Codegen, output_annotated);
+    }
+
+    fn run_vm_runner(&mut self) {
+        use baml_vm::{FunctionKind, Object};
+
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Compile the program
+        let files: Vec<_> = self.source_files.values().copied().collect();
+        let program = baml_codegen::compile_files(&self.db, &files);
+
+        // Extract available executable functions (exclude LLM functions)
+        let mut exec_functions: Vec<(String, usize)> = Vec::new();
+        for (name, &idx) in &program.function_indices {
+            if let Some(Object::Function(func)) = program.objects.get(idx)
+                && matches!(func.kind, FunctionKind::Exec)
+            {
+                exec_functions.push((name.clone(), func.arity));
+            }
+        }
+        exec_functions.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        // Update available functions in state
+        self.vm_runner_state.available_functions =
+            exec_functions.iter().map(|(n, _)| n.clone()).collect();
+
+        // Ensure selected function index is valid
+        if self.vm_runner_state.selected_function >= self.vm_runner_state.available_functions.len()
+        {
+            self.vm_runner_state.selected_function = 0;
+        }
+
+        // Header
+        writeln!(output, "=== VM RUNNER ===").ok();
+        output_annotated.push(("=== VM RUNNER ===".to_string(), LineStatus::Unknown));
+        writeln!(output).ok();
+        output_annotated.push((String::new(), LineStatus::Unknown));
+
+        // Show available functions
+        writeln!(output, "Available Functions (Exec only):").ok();
+        output_annotated.push((
+            "Available Functions (Exec only):".to_string(),
+            LineStatus::Unknown,
+        ));
+
+        if exec_functions.is_empty() {
+            writeln!(output, "  (no executable functions found)").ok();
+            output_annotated.push((
+                "  (no executable functions found)".to_string(),
+                LineStatus::Unknown,
+            ));
+        } else {
+            for (i, (name, arity)) in exec_functions.iter().enumerate() {
+                let selected = if i == self.vm_runner_state.selected_function {
+                    ">"
+                } else {
+                    " "
+                };
+                let line = format!("{} [{}] {}() - arity: {}", selected, i, name, arity);
+                writeln!(output, "{}", line).ok();
+                output_annotated.push((
+                    line,
+                    if i == self.vm_runner_state.selected_function {
+                        LineStatus::Recomputed // Highlight selected
+                    } else {
+                        LineStatus::Unknown
+                    },
+                ));
+            }
+        }
+
+        writeln!(output).ok();
+        output_annotated.push((String::new(), LineStatus::Unknown));
+
+        // Show execution result if any
+        writeln!(output, "Execution Result:").ok();
+        output_annotated.push(("Execution Result:".to_string(), LineStatus::Unknown));
+
+        match &self.vm_runner_state.execution_result {
+            None => {
+                writeln!(output, "  Press [Enter] to run selected function").ok();
+                output_annotated.push((
+                    "  Press [Enter] to run selected function".to_string(),
+                    LineStatus::Unknown,
+                ));
+            }
+            Some(VmExecutionResult::Success(result)) => {
+                writeln!(output, "  Result: {}", result).ok();
+                output_annotated.push((format!("  Result: {}", result), LineStatus::Cached));
+            }
+            Some(VmExecutionResult::Error(err)) => {
+                writeln!(output, "  Error: {}", err).ok();
+                output_annotated.push((format!("  Error: {}", err), LineStatus::Recomputed));
+            }
+            Some(VmExecutionResult::RequiresArgs { arity }) => {
+                writeln!(
+                    output,
+                    "  Function requires {} argument(s) - cannot run without args",
+                    arity
+                )
+                .ok();
+                output_annotated.push((
+                    format!(
+                        "  Function requires {} argument(s) - cannot run without args",
+                        arity
+                    ),
+                    LineStatus::Unknown,
+                ));
+            }
+        }
+
+        writeln!(output).ok();
+        output_annotated.push((String::new(), LineStatus::Unknown));
+        writeln!(output, "Controls:").ok();
+        output_annotated.push(("Controls:".to_string(), LineStatus::Unknown));
+        writeln!(output, "  [j/k or Up/Down] - Select function").ok();
+        output_annotated.push((
+            "  [j/k or Up/Down] - Select function".to_string(),
+            LineStatus::Unknown,
+        ));
+        writeln!(output, "  [Enter] - Run selected function (if arity = 0)").ok();
+        output_annotated.push((
+            "  [Enter] - Run selected function (if arity = 0)".to_string(),
+            LineStatus::Unknown,
+        ));
+
+        self.phase_outputs.insert(CompilerPhase::VmRunner, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::VmRunner, output_annotated);
+    }
+
+    /// Execute the selected function in the VM
+    pub(crate) fn execute_selected_function(&mut self) {
+        use baml_vm::{Object, Vm, VmExecState};
+
+        let files: Vec<_> = self.source_files.values().copied().collect();
+        let program = baml_codegen::compile_files(&self.db, &files);
+
+        let Some(func_name) = self
+            .vm_runner_state
+            .available_functions
+            .get(self.vm_runner_state.selected_function)
+        else {
+            self.vm_runner_state.execution_result =
+                Some(VmExecutionResult::Error("No function selected".to_string()));
+            return;
+        };
+
+        let Some(func_index) = program.function_index(func_name) else {
+            self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(format!(
+                "Function '{}' not found",
+                func_name
+            )));
+            return;
+        };
+
+        // Check function arity
+        if let Some(Object::Function(func)) = program.objects.get(func_index.raw())
+            && func.arity > 0
+        {
+            self.vm_runner_state.execution_result =
+                Some(VmExecutionResult::RequiresArgs { arity: func.arity });
+            return;
+        }
+
+        // Create VM and run
+        let mut vm = Vm::from_program(program);
+        vm.set_entry_point(func_index, &[]);
+
+        match vm.exec() {
+            Ok(VmExecState::Complete(value)) => {
+                let result_str = format_vm_value(&value, &vm.objects);
+                self.vm_runner_state.execution_result =
+                    Some(VmExecutionResult::Success(result_str));
+            }
+            Ok(VmExecState::Await(_)) => {
+                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                    "Function awaits a future (not supported in VM Runner)".to_string(),
+                ));
+            }
+            Ok(VmExecState::ScheduleFuture(_)) => {
+                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                    "Function schedules a future (not supported in VM Runner)".to_string(),
+                ));
+            }
+            Ok(VmExecState::Notify(_)) => {
+                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                    "Function sent a watch notification (not supported in VM Runner)".to_string(),
+                ));
+            }
+            Err(e) => {
+                self.vm_runner_state.execution_result =
+                    Some(VmExecutionResult::Error(format!("{:?}", e)));
+            }
+        }
+
+        // Regenerate output to show the result
+        self.run_vm_runner();
+    }
+
+    /// Get mutable VM runner state for UI
+    pub(crate) fn vm_runner_state_mut(&mut self) -> &mut VmRunnerState {
+        &mut self.vm_runner_state
     }
 
     fn run_metrics(&mut self) {
@@ -721,14 +1184,6 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Metrics, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Metrics, output_annotated);
-    }
-
-    fn was_query_recomputed(&self, query_pattern: &str) -> bool {
-        self.recomputed_queries
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|q| q.contains(query_pattern))
     }
 
     pub(crate) fn get_phase_output(&self, phase: CompilerPhase) -> Option<&str> {
@@ -1349,6 +1804,39 @@ impl GreenElementId {
     }
 }
 
+/// Get the FileId from a StoredCompilerError
+fn get_error_file_id(error: &StoredCompilerError) -> FileId {
+    match error {
+        CompilerError::ParseError(e) => match e {
+            baml_diagnostics::compiler_error::ParseError::UnexpectedToken { span, .. } => {
+                span.file_id
+            }
+            baml_diagnostics::compiler_error::ParseError::UnexpectedEof { span, .. } => {
+                span.file_id
+            }
+        },
+        CompilerError::TypeError(e) => match e {
+            TypeError::TypeMismatch { span, .. } => span.file_id,
+            TypeError::UnknownType { span, .. } => span.file_id,
+            TypeError::UnknownVariable { span, .. } => span.file_id,
+            TypeError::InvalidBinaryOp { span, .. } => span.file_id,
+            TypeError::InvalidUnaryOp { span, .. } => span.file_id,
+            TypeError::ArgumentCountMismatch { span, .. } => span.file_id,
+            TypeError::NotCallable { span, .. } => span.file_id,
+            TypeError::NoSuchField { span, .. } => span.file_id,
+            TypeError::NotIndexable { span, .. } => span.file_id,
+        },
+        CompilerError::NameError(e) => match e {
+            baml_diagnostics::NameError::DuplicateName { second, .. } => second.file_id,
+        },
+    }
+}
+
+/// Convert a `TypeError<Ty<'db>>` to `TypeError<String>` for storage without lifetime dependency
+fn convert_type_error_to_string<T: std::fmt::Display>(error: &TypeError<T>) -> TypeError<String> {
+    error.fmap(|ty| ty.to_string())
+}
+
 /// Helper to remove span ranges like @0..69 from CST output
 fn remove_span_ranges(text: &str) -> String {
     use std::sync::OnceLock;
@@ -1406,4 +1894,67 @@ pub(crate) fn normalize_files_to_virtual_root(
             (virtual_root.join(relative), contents)
         })
         .collect()
+}
+
+/// Format a VM value for display
+fn format_vm_value(value: &baml_vm::Value, objects: &baml_vm::indexable::ObjectPool) -> String {
+    use baml_vm::{Object, Value};
+
+    match value {
+        Value::Null => "null".to_string(),
+        Value::Int(i) => i.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Object(idx) => {
+            if let Some(obj) = objects.get(idx.raw()) {
+                match obj {
+                    Object::String(s) => format!("\"{}\"", s),
+                    Object::Array(arr) => {
+                        let items: Vec<String> =
+                            arr.iter().map(|v| format_vm_value(v, objects)).collect();
+                        format!("[{}]", items.join(", "))
+                    }
+                    Object::Map(map) => {
+                        let items: Vec<String> = map
+                            .iter()
+                            .map(|(k, v)| format!("\"{}\": {}", k, format_vm_value(v, objects)))
+                            .collect();
+                        format!("{{{}}}", items.join(", "))
+                    }
+                    Object::Instance(inst) => {
+                        if let Some(Object::Class(class)) = objects.get(inst.class.raw()) {
+                            let fields: Vec<String> = class
+                                .field_names
+                                .iter()
+                                .zip(inst.fields.iter())
+                                .map(|(name, val)| {
+                                    format!("{}: {}", name, format_vm_value(val, objects))
+                                })
+                                .collect();
+                            format!("{}{{ {} }}", class.name, fields.join(", "))
+                        } else {
+                            "<instance>".to_string()
+                        }
+                    }
+                    Object::Variant(var) => {
+                        if let Some(Object::Enum(enm)) = objects.get(var.enm.raw()) {
+                            if let Some(name) = enm.variant_names.get(var.index) {
+                                format!("{}::{}", enm.name, name)
+                            } else {
+                                format!("{}::variant_{}", enm.name, var.index)
+                            }
+                        } else {
+                            "<variant>".to_string()
+                        }
+                    }
+                    Object::Function(f) => format!("<fn {}>", f.name),
+                    Object::Class(c) => format!("<class {}>", c.name),
+                    Object::Enum(e) => format!("<enum {}>", e.name),
+                    Object::Future(_) => "<future>".to_string(),
+                }
+            } else {
+                format!("<object@{}>", idx.raw())
+            }
+        }
+    }
 }

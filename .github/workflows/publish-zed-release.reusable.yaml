@@ -10,7 +10,6 @@ permissions: {}
 
 jobs:
   publish-zed-release:
-    environment: release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout upstream zed extensions
@@ -35,17 +34,17 @@ jobs:
           set -euxo pipefail
 
           curl -sSf \
-          -H "Authorization: Bearer $GH_TOKEN" \
-          -H "Accept: application/vnd.github+json" \
-          https://api.github.com/repos/BoundaryML/zed-extensions \
-          | jq '.permissions'
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/BoundaryML/zed-extensions \
+            | jq '.permissions'
 
           # add fork remote
           git remote rename origin upstream
           git remote add boundaryml-fork "https://github.com/BoundaryML/zed-extensions"
           git fetch upstream main
           git fetch boundaryml-fork main
-          git push boundaryml-fork upstream/main
+          git push boundaryml-fork upstream/main:main
 
           # Update baml submodule
           git submodule update --init --recursive extensions/baml

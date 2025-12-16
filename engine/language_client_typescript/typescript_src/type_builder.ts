@@ -143,7 +143,7 @@ export class ClassAst<ClassName extends string, Properties extends string = stri
     this.bldr = tb.getClass(name)
   }
 
-  listProperties(): Record<string, FieldType | null> {
+  listProperties(): unknown[] {
     return this.bldr.listProperties()
   }
 
@@ -189,7 +189,9 @@ export class ClassBuilder<ClassName extends string, Properties extends string = 
   }
 
   listProperties(): Array<[string, ClassPropertyBuilder]> {
-    return this.bldr.listProperties()
+    return (this.bldr.listProperties() as Array<[string, _ClassPropertyBuilder]>).map(
+      ([name, prop]) => [name, new ClassPropertyBuilder(prop)],
+    )
   }
 
   removeProperty(name: string): void {

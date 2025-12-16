@@ -107,6 +107,7 @@ impl BamlLogEvent {
 struct NotificationCallbacks {
     var_handlers: HashMap<String, Vec<Arc<PyObject>>>,
     stream_handlers: HashMap<String, Vec<Arc<PyObject>>>,
+    #[allow(dead_code)]
     block_handlers: Vec<Arc<PyObject>>,
 }
 

@@ -43,6 +43,8 @@ Error: Expected expression, found Error
  6 │   let x = ¿;
    │           ─┬  
    │            ╰── Expected expression, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected expression, found Error
@@ -51,4 +53,6 @@ Error: Expected expression, found Error
  8 │   while \ {
    │          ┬  
    │          ╰── Expected expression, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯

@@ -27,104 +27,104 @@ class LlmResponseParser:
     def TestEmptyArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.SimpleArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyArrays", llm_response=llm_response, mode="request")
-        return typing.cast(types.SimpleArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyArrays", llm_response=llm_response, mode="request")
+        return typing.cast(types.SimpleArrays, __result__)
 
     def TestLargeArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.SimpleArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeArrays", llm_response=llm_response, mode="request")
-        return typing.cast(types.SimpleArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeArrays", llm_response=llm_response, mode="request")
+        return typing.cast(types.SimpleArrays, __result__)
 
     def TestMixedArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.MixedArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedArrays", llm_response=llm_response, mode="request")
-        return typing.cast(types.MixedArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedArrays", llm_response=llm_response, mode="request")
+        return typing.cast(types.MixedArrays, __result__)
 
     def TestNestedArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.NestedArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestNestedArrays", llm_response=llm_response, mode="request")
-        return typing.cast(types.NestedArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestNestedArrays", llm_response=llm_response, mode="request")
+        return typing.cast(types.NestedArrays, __result__)
 
     def TestObjectArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ObjectArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestObjectArrays", llm_response=llm_response, mode="request")
-        return typing.cast(types.ObjectArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestObjectArrays", llm_response=llm_response, mode="request")
+        return typing.cast(types.ObjectArrays, __result__)
 
     def TestSimpleArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.SimpleArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleArrays", llm_response=llm_response, mode="request")
-        return typing.cast(types.SimpleArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleArrays", llm_response=llm_response, mode="request")
+        return typing.cast(types.SimpleArrays, __result__)
 
     def TestTopLevel3DArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.List[typing.List[str]]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevel3DArray", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[typing.List[typing.List[str]]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevel3DArray", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[typing.List[typing.List[str]]], __result__)
 
     def TestTopLevelArrayOfMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Dict[str, int]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelArrayOfMaps", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[typing.Dict[str, int]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelArrayOfMaps", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[typing.Dict[str, int]], __result__)
 
     def TestTopLevelBoolArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[bool]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBoolArray", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[bool], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBoolArray", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[bool], __result__)
 
     def TestTopLevelEmptyArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelEmptyArray", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[str], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelEmptyArray", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[str], __result__)
 
     def TestTopLevelFloatArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[float]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloatArray", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[float], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloatArray", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[float], __result__)
 
     def TestTopLevelIntArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelIntArray", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[int], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelIntArray", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[int], __result__)
 
     def TestTopLevelMixedArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Union[str, int, bool]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMixedArray", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[typing.Union[str, int, bool]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMixedArray", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[typing.Union[str, int, bool]], __result__)
 
     def TestTopLevelNestedArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.List[int]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNestedArray", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[typing.List[int]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNestedArray", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[typing.List[int]], __result__)
 
     def TestTopLevelNullableArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Optional[str]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNullableArray", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[typing.Optional[str]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNullableArray", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[typing.Optional[str]], __result__)
 
     def TestTopLevelObjectArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List["types.User"]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelObjectArray", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List["types.User"], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelObjectArray", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List["types.User"], __result__)
 
     def TestTopLevelStringArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelStringArray", llm_response=llm_response, mode="request")
-        return typing.cast(typing.List[str], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelStringArray", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[str], __result__)
 
     
 
@@ -137,103 +137,103 @@ class LlmStreamParser:
     def TestEmptyArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.SimpleArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyArrays", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.SimpleArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyArrays", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SimpleArrays, __result__)
 
     def TestLargeArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.SimpleArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeArrays", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.SimpleArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeArrays", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SimpleArrays, __result__)
 
     def TestMixedArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.MixedArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedArrays", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.MixedArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedArrays", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.MixedArrays, __result__)
 
     def TestNestedArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.NestedArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestNestedArrays", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.NestedArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestNestedArrays", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.NestedArrays, __result__)
 
     def TestObjectArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.ObjectArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestObjectArrays", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.ObjectArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestObjectArrays", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.ObjectArrays, __result__)
 
     def TestSimpleArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.SimpleArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleArrays", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.SimpleArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleArrays", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SimpleArrays, __result__)
 
     def TestTopLevel3DArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.List[typing.List[str]]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevel3DArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[typing.List[typing.List[str]]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevel3DArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[typing.List[typing.List[str]]], __result__)
 
     def TestTopLevelArrayOfMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Dict[str, int]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelArrayOfMaps", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[typing.Dict[str, int]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelArrayOfMaps", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[typing.Dict[str, int]], __result__)
 
     def TestTopLevelBoolArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[bool]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBoolArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[bool], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBoolArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[bool], __result__)
 
     def TestTopLevelEmptyArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelEmptyArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[str], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelEmptyArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[str], __result__)
 
     def TestTopLevelFloatArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[float]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloatArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[float], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloatArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[float], __result__)
 
     def TestTopLevelIntArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelIntArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[int], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelIntArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[int], __result__)
 
     def TestTopLevelMixedArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Union[str, int, bool]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMixedArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[typing.Union[str, int, bool]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMixedArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[typing.Union[str, int, bool]], __result__)
 
     def TestTopLevelNestedArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.List[int]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNestedArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[typing.List[int]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNestedArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[typing.List[int]], __result__)
 
     def TestTopLevelNullableArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Optional[str]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNullableArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[typing.Optional[str]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNullableArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[typing.Optional[str]], __result__)
 
     def TestTopLevelObjectArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List["stream_types.User"]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelObjectArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List["stream_types.User"], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelObjectArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List["stream_types.User"], __result__)
 
     def TestTopLevelStringArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelStringArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.List[str], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelStringArray", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[str], __result__)
 
     

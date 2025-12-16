@@ -1,9 +1,9 @@
 import { CopyButton } from '@baml/ui/custom/copy-button';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
 import { useTheme } from 'next-themes';
-import { useEffect, useState, memo } from 'react';
+import { useEffect, useState, memo, useRef, useCallback } from 'react';
 import type React from 'react';
 import { useMemo } from 'react';
 import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
@@ -14,6 +14,14 @@ import { Loader } from './components';
 import { vscode } from '../../vscode';
 import { EnhancedErrorRenderer } from './test-panel/components/EnhancedErrorRenderer';
 import { runtimeInstanceAtom } from '../../../../sdk/atoms/core.atoms';
+import {
+  promptSearchQueryAtom,
+  promptSearchCurrentMatchAtom,
+  registerMatchCountAtom,
+  unregisterMatchCountAtom,
+  matchOffsetsAtom,
+} from './search-atoms';
+import { cn } from '@baml/ui/lib/utils';
 
 type CurlResult =
   | {
@@ -90,11 +98,95 @@ const baseCurlAtom = atom<Promise<CurlResult>>(async (get) => {
 
 export const curlAtom = loadable(baseCurlAtom);
 
+// Helper function to escape HTML entities
+const escapeHtml = (text: string): string => {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
+// Helper function to apply search highlighting to HTML content
+const applySearchHighlightToHtml = (
+  html: string,
+  searchQuery: string,
+  currentMatch: number
+): { html: string; matchCount: number } => {
+  if (!searchQuery || searchQuery.trim() === '') {
+    return { html, matchCount: 0 };
+  }
+
+  // We need to find and highlight text content while preserving HTML tags
+  // Strategy: Extract text nodes, find matches, and wrap them with highlight spans
+
+  const searchLower = searchQuery.toLowerCase();
+  let matchCount = 0;
+  let currentMatchIndex = 0;
+
+  // Split HTML into tags and text content
+  const parts = html.split(/(<[^>]+>)/g);
+
+  const processedParts = parts.map((part) => {
+    // If it's an HTML tag, keep it as is
+    if (part.startsWith('<')) {
+      return part;
+    }
+
+    // It's text content - apply search highlighting
+    const textLower = part.toLowerCase();
+    let result = '';
+    let lastIndex = 0;
+    let searchIndex = textLower.indexOf(searchLower, lastIndex);
+
+    while (searchIndex !== -1) {
+      // Add text before the match
+      if (searchIndex > lastIndex) {
+        result += part.slice(lastIndex, searchIndex);
+      }
+
+      // Add the search match with highlight
+      const matchText = part.slice(searchIndex, searchIndex + searchQuery.length);
+      const isCurrentMatch = currentMatchIndex === currentMatch;
+      const highlightClass = isCurrentMatch
+        ? 'search-match search-match-current'
+        : 'search-match';
+
+      result += `<mark class="${highlightClass}" data-match-index="${currentMatchIndex}">${matchText}</mark>`;
+
+      matchCount++;
+      currentMatchIndex++;
+      lastIndex = searchIndex + searchQuery.length;
+      searchIndex = textLower.indexOf(searchLower, lastIndex);
+    }
+
+    // Add remaining text
+    if (lastIndex < part.length) {
+      result += part.slice(lastIndex);
+    }
+
+    return result || part;
+  });
+
+  return { html: processedParts.join(''), matchCount };
+};
+
 // Syntax highlighting component for curl commands
 const SyntaxHighlightedCurl = memo(({ text }: { text: string }) => {
   const [highlightedHtml, setHighlightedHtml] = useState<string>('');
   const [highlighter, setHighlighter] = useState<any | undefined>(undefined);
   const { theme } = useTheme();
+  const searchQuery = useAtomValue(promptSearchQueryAtom);
+  const currentSearchMatch = useAtomValue(promptSearchCurrentMatchAtom);
+  const matchOffsets = useAtomValue(matchOffsetsAtom);
+  const registerMatchCount = useSetAtom(registerMatchCountAtom);
+  const unregisterMatchCount = useSetAtom(unregisterMatchCountAtom);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const componentId = 'curl-highlight';
+
+  // Get the global offset for this component's matches
+  const globalOffset = matchOffsets.get(componentId) ?? 0;
 
   useEffect(() => {
     if (highlighter) return;
@@ -135,6 +227,47 @@ const SyntaxHighlightedCurl = memo(({ text }: { text: string }) => {
     })();
   }, [highlighter, text, theme]);
 
+  // Compute the local match index (which match within this component is current)
+  const currentLocalMatch = currentSearchMatch - globalOffset;
+
+  // Apply search highlighting on top of syntax highlighting
+  const { finalHtml, matchCount } = useMemo(() => {
+    if (!highlightedHtml) {
+      return { finalHtml: '', matchCount: 0 };
+    }
+    // Pass local match index instead of global
+    const { html, matchCount } = applySearchHighlightToHtml(
+      highlightedHtml,
+      searchQuery,
+      currentLocalMatch
+    );
+    return { finalHtml: html, matchCount };
+  }, [highlightedHtml, searchQuery, currentLocalMatch]);
+
+  // Register match count with global registry
+  useEffect(() => {
+    registerMatchCount({ id: componentId, count: matchCount });
+  }, [matchCount, registerMatchCount]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      unregisterMatchCount(componentId);
+    };
+  }, [unregisterMatchCount]);
+
+  // Scroll current match into view (only if current match is within this component)
+  useEffect(() => {
+    if (containerRef.current && searchQuery && currentLocalMatch >= 0 && currentLocalMatch < matchCount) {
+      const currentMatchElement = containerRef.current.querySelector(
+        '.search-match-current'
+      );
+      if (currentMatchElement) {
+        currentMatchElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [currentLocalMatch, searchQuery, finalHtml, matchCount]);
+
   if (!highlightedHtml) {
     return (
       <div className="w-full rounded-lg border bg-accent p-4 font-mono">
@@ -151,6 +284,7 @@ const SyntaxHighlightedCurl = memo(({ text }: { text: string }) => {
 
   return (
     <div
+      ref={containerRef}
       className="w-full rounded-lg border bg-accent p-4 font-mono overflow-auto text-xs"
       style={
         {
@@ -216,7 +350,7 @@ const SyntaxHighlightedCurl = memo(({ text }: { text: string }) => {
         .curl-highlight .shiki * {
           background: transparent !important;
         }
-        .curl-highlight .shiki span {
+        .curl-highlight .shiki span:not(.search-match) {
           background: transparent !important;
         }
         .curl-highlight .shiki .line {
@@ -225,11 +359,23 @@ const SyntaxHighlightedCurl = memo(({ text }: { text: string }) => {
           word-wrap: break-word !important;
           overflow-wrap: break-word !important;
         }
+        .curl-highlight .search-match {
+          background-color: rgba(250, 204, 21, 0.7) !important;
+          color: black !important;
+          border-radius: 2px;
+          padding: 0 2px;
+        }
+        .curl-highlight .search-match-current {
+          background-color: rgb(250, 204, 21) !important;
+          color: black !important;
+          outline: 2px solid rgb(202, 138, 4);
+          outline-offset: -1px;
+        }
       `}</style>
       <div
         className="curl-highlight"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: <explanation>
-        dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+        dangerouslySetInnerHTML={{ __html: finalHtml }}
       />
     </div>
   );

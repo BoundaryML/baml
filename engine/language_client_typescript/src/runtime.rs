@@ -108,6 +108,7 @@ struct EmitCallbacks {
             false,
         >,
     >,
+    #[allow(dead_code)]
     block_handlers: Vec<
         napi::threadsafe_function::ThreadsafeFunction<
             BlockEvent,

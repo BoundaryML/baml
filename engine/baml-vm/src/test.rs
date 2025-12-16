@@ -299,6 +299,8 @@ pub enum Instruction {
     Await,
     Watch(usize),
     Notify(usize),
+    VizEnter(usize),
+    VizExit(usize),
     Call(usize),
     Return,
     Assert,

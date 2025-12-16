@@ -347,7 +347,7 @@ fn build_llm_function_graph(func: &hir::LlmFunction) -> ControlFlowVisualization
     let mut builder = ControlFlowVizBuilder::default();
     let root_id = builder.allocate_id();
     let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
-    let root_log_filter_key = encode_segments(&func.name, &[root_segment.clone()]);
+    let root_log_filter_key = encode_segments(&func.name, std::slice::from_ref(&root_segment));
     builder.add_node(Node::root(
         root_id,
         root_log_filter_key,
@@ -357,7 +357,7 @@ fn build_llm_function_graph(func: &hir::LlmFunction) -> ControlFlowVisualization
 
     let slug = slug_or_default("llm", "llm");
     let segment = PathSegment::OtherScope { slug, ordinal: 0 };
-    let log_filter_key = encode_segments(&func.name, &[root_segment, segment.clone()]);
+    let log_filter_key = encode_segments(&func.name, &[root_segment, segment]);
     let loop_id = builder.allocate_id();
     let node = Node::new(
         loop_id,

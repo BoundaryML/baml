@@ -55,7 +55,7 @@ echo -e "${GREEN}Running pre-commit checks in baml_language...${NC}"
 
 # Run cargo fmt to auto-fix formatting
 echo -e "${YELLOW}Running cargo fmt to auto-fix formatting...${NC}"
-cargo fmt --all
+cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate
 echo -e "${GREEN}✓ Formatting applied${NC}"
 
 # Add any formatted files to the commit

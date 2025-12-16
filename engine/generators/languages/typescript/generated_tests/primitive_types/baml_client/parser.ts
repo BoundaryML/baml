@@ -35,9 +35,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): types.PrimitiveArrays {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestEmptyCollections",
@@ -46,7 +46,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as types.PrimitiveArrays
     } catch (error) {
       throw toBamlError(error);
@@ -58,9 +58,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): types.MixedPrimitives {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestMixedPrimitives",
@@ -69,7 +69,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as types.MixedPrimitives
     } catch (error) {
       throw toBamlError(error);
@@ -81,9 +81,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): types.PrimitiveArrays {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestPrimitiveArrays",
@@ -92,7 +92,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as types.PrimitiveArrays
     } catch (error) {
       throw toBamlError(error);
@@ -104,9 +104,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): types.PrimitiveMaps {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestPrimitiveMaps",
@@ -115,7 +115,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as types.PrimitiveMaps
     } catch (error) {
       throw toBamlError(error);
@@ -127,9 +127,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): types.PrimitiveTypes {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestPrimitiveTypes",
@@ -138,7 +138,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as types.PrimitiveTypes
     } catch (error) {
       throw toBamlError(error);
@@ -150,9 +150,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): boolean {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestTopLevelBool",
@@ -161,7 +161,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as boolean
     } catch (error) {
       throw toBamlError(error);
@@ -173,9 +173,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestTopLevelFloat",
@@ -184,7 +184,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as number
     } catch (error) {
       throw toBamlError(error);
@@ -196,9 +196,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestTopLevelInt",
@@ -207,7 +207,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as number
     } catch (error) {
       throw toBamlError(error);
@@ -219,9 +219,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): undefined {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestTopLevelNull",
@@ -230,7 +230,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as undefined
     } catch (error) {
       throw toBamlError(error);
@@ -242,9 +242,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): string {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestTopLevelString",
@@ -253,7 +253,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as string
     } catch (error) {
       throw toBamlError(error);
@@ -271,9 +271,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): partial_types.PrimitiveArrays {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestEmptyCollections",
@@ -282,7 +282,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as partial_types.PrimitiveArrays
     } catch (error) {
       throw toBamlError(error);
@@ -294,9 +294,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): partial_types.MixedPrimitives {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestMixedPrimitives",
@@ -305,7 +305,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as partial_types.MixedPrimitives
     } catch (error) {
       throw toBamlError(error);
@@ -317,9 +317,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): partial_types.PrimitiveArrays {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestPrimitiveArrays",
@@ -328,7 +328,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as partial_types.PrimitiveArrays
     } catch (error) {
       throw toBamlError(error);
@@ -340,9 +340,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): partial_types.PrimitiveMaps {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestPrimitiveMaps",
@@ -351,7 +351,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as partial_types.PrimitiveMaps
     } catch (error) {
       throw toBamlError(error);
@@ -363,9 +363,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): partial_types.PrimitiveTypes {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestPrimitiveTypes",
@@ -374,7 +374,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as partial_types.PrimitiveTypes
     } catch (error) {
       throw toBamlError(error);
@@ -386,9 +386,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): boolean {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestTopLevelBool",
@@ -397,7 +397,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as boolean
     } catch (error) {
       throw toBamlError(error);
@@ -409,9 +409,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestTopLevelFloat",
@@ -420,7 +420,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as number
     } catch (error) {
       throw toBamlError(error);
@@ -432,9 +432,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): number {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestTopLevelInt",
@@ -443,7 +443,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as number
     } catch (error) {
       throw toBamlError(error);
@@ -455,9 +455,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): undefined {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestTopLevelNull",
@@ -466,7 +466,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as undefined
     } catch (error) {
       throw toBamlError(error);
@@ -478,9 +478,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): string {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestTopLevelString",
@@ -489,7 +489,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as string
     } catch (error) {
       throw toBamlError(error);

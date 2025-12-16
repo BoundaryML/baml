@@ -27,8 +27,8 @@ class LlmResponseParser:
     def PersonTest(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.Person:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="PersonTest", llm_response=llm_response, mode="request")
-        return typing.cast(types.Person, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="PersonTest", llm_response=llm_response, mode="request")
+        return typing.cast(types.Person, __result__)
 
     
 
@@ -41,7 +41,7 @@ class LlmStreamParser:
     def PersonTest(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.Person:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="PersonTest", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.Person, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="PersonTest", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.Person, __result__)
 
     

@@ -1,0 +1,95 @@
+// ============================================================================
+// Type Errors
+// ============================================================================
+//
+use baml_base::Span;
+
+/// Type errors that can occur during type checking.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypeError<T> {
+    /// Type mismatch between expected and found types.
+    TypeMismatch { expected: T, found: T, span: Span },
+    /// Reference to an unknown type name.
+    UnknownType { name: String, span: Span },
+    /// Reference to an unknown variable.
+    UnknownVariable { name: String, span: Span },
+    /// Invalid binary operation.
+    InvalidBinaryOp {
+        op: String,
+        lhs: T,
+        rhs: T,
+        span: Span,
+    },
+    /// Invalid unary operation.
+    InvalidUnaryOp { op: String, operand: T, span: Span },
+    /// Wrong number of arguments in function call.
+    ArgumentCountMismatch {
+        expected: usize,
+        found: usize,
+        span: Span,
+    },
+    /// Calling a non-callable type.
+    NotCallable { ty: T, span: Span },
+    /// Field access on non-class type.
+    NoSuchField { ty: T, field: String, span: Span },
+    /// Index access on non-indexable type.
+    NotIndexable { ty: T, span: Span },
+}
+
+impl<T> TypeError<T> {
+    /// Map a function over the type parameter, transforming `TypeError<T>` to `TypeError<U>`.
+    pub fn fmap<U, F: Fn(&T) -> U>(&self, f: F) -> TypeError<U> {
+        match self {
+            TypeError::TypeMismatch {
+                expected,
+                found,
+                span,
+            } => TypeError::TypeMismatch {
+                expected: f(expected),
+                found: f(found),
+                span: *span,
+            },
+            TypeError::UnknownType { name, span } => TypeError::UnknownType {
+                name: name.clone(),
+                span: *span,
+            },
+            TypeError::UnknownVariable { name, span } => TypeError::UnknownVariable {
+                name: name.clone(),
+                span: *span,
+            },
+            TypeError::InvalidBinaryOp { op, lhs, rhs, span } => TypeError::InvalidBinaryOp {
+                op: op.clone(),
+                lhs: f(lhs),
+                rhs: f(rhs),
+                span: *span,
+            },
+            TypeError::InvalidUnaryOp { op, operand, span } => TypeError::InvalidUnaryOp {
+                op: op.clone(),
+                operand: f(operand),
+                span: *span,
+            },
+            TypeError::ArgumentCountMismatch {
+                expected,
+                found,
+                span,
+            } => TypeError::ArgumentCountMismatch {
+                expected: *expected,
+                found: *found,
+                span: *span,
+            },
+            TypeError::NotCallable { ty, span } => TypeError::NotCallable {
+                ty: f(ty),
+                span: *span,
+            },
+            TypeError::NoSuchField { ty, field, span } => TypeError::NoSuchField {
+                ty: f(ty),
+                field: field.clone(),
+                span: *span,
+            },
+            TypeError::NotIndexable { ty, span } => TypeError::NotIndexable {
+                ty: f(ty),
+                span: *span,
+            },
+        }
+    }
+}

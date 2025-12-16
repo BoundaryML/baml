@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -48,6 +48,8 @@ Error: Expected class name, found IntegerLiteral
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
    │        ╰─── Expected class name, found IntegerLiteral
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected LBrace, found IntegerLiteral
@@ -56,6 +58,8 @@ Error: Expected LBrace, found IntegerLiteral
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
    │        ╰─── Expected LBrace, found IntegerLiteral
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected top-level declaration, found IntegerLiteral
@@ -64,6 +68,8 @@ Error: Expected top-level declaration, found IntegerLiteral
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
    │        ╰─── Expected top-level declaration, found IntegerLiteral
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected top-level declaration, found Word
@@ -72,6 +78,8 @@ Error: Expected top-level declaration, found Word
  1 │ class 123Invalid {  // Invalid class name
    │          ───┬───  
    │             ╰───── Expected top-level declaration, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected top-level declaration, found LBrace
@@ -80,6 +88,8 @@ Error: Expected top-level declaration, found LBrace
  1 │ class 123Invalid {  // Invalid class name
    │                  ┬  
    │                  ╰── Expected top-level declaration, found LBrace
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected top-level declaration, found Word
@@ -88,6 +98,8 @@ Error: Expected top-level declaration, found Word
  2 │   field string
    │   ──┬──  
    │     ╰──── Expected top-level declaration, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected top-level declaration, found Word
@@ -96,6 +108,8 @@ Error: Expected top-level declaration, found Word
  2 │   field string
    │         ───┬──  
    │            ╰──── Expected top-level declaration, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected top-level declaration, found RBrace
@@ -104,6 +118,8 @@ Error: Expected top-level declaration, found RBrace
  3 │ }
    │ ┬  
    │ ╰── Expected top-level declaration, found RBrace
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
 Error: Expected type, found LBrace
@@ -112,6 +128,8 @@ Error: Expected type, found LBrace
  10 │ function Foo() -> {  // Missing return type
     │                   ┬  
     │                   ╰── Expected type, found LBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
 Error: Expected LLM function missing 'prompt' field, found RBrace
@@ -120,4 +138,6 @@ Error: Expected LLM function missing 'prompt' field, found RBrace
  12 │ }
     │ ┬  
     │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯

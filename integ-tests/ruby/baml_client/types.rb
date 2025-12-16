@@ -207,7 +207,7 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated classes (105)
+  # Generated classes (107)
   # #########################################################################
 
 
@@ -217,6 +217,14 @@ module BamlClient
       const :item, String
       const :time, String
       const :description, String
+  end
+
+
+  class AddressWithMeta < T::Struct
+      include Baml::Sorbet::Struct
+      const :street, String
+      const :city, String
+      const :zipcode, String
   end
 
 
@@ -756,6 +764,15 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :name, T.nilable(String)
       const :hair_color, T.nilable(T.any(Color, String))
+  end
+
+
+  class PersonWithMeta < T::Struct
+      include Baml::Sorbet::Struct
+      const :name, String
+      const :age, Integer
+      const :address, AddressWithMeta
+      const :tags, T::Array[String]
   end
 
 

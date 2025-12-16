@@ -39,7 +39,7 @@ export declare class ClassAst<ClassName extends string, Properties extends strin
     protected properties: Set<Properties | string>;
     protected bldr: _ClassBuilder;
     constructor(tb: _TypeBuilder, name: ClassName, properties?: Set<Properties | string>);
-    listProperties(): Record<string, FieldType | null>;
+    listProperties(): unknown[];
     type(): FieldType;
 }
 export declare class ClassViewer<ClassName extends string, Properties extends string = string> extends ClassAst<ClassName, Properties> {

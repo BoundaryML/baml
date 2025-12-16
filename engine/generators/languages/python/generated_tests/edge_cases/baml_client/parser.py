@@ -27,38 +27,38 @@ class LlmResponseParser:
     def TestCircularReference(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.CircularReference:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestCircularReference", llm_response=llm_response, mode="request")
-        return typing.cast(types.CircularReference, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestCircularReference", llm_response=llm_response, mode="request")
+        return typing.cast(types.CircularReference, __result__)
 
     def TestDeepRecursion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.DeepRecursion:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestDeepRecursion", llm_response=llm_response, mode="request")
-        return typing.cast(types.DeepRecursion, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestDeepRecursion", llm_response=llm_response, mode="request")
+        return typing.cast(types.DeepRecursion, __result__)
 
     def TestEmptyCollections(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.EmptyCollections:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyCollections", llm_response=llm_response, mode="request")
-        return typing.cast(types.EmptyCollections, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyCollections", llm_response=llm_response, mode="request")
+        return typing.cast(types.EmptyCollections, __result__)
 
     def TestLargeStructure(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.LargeStructure:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeStructure", llm_response=llm_response, mode="request")
-        return typing.cast(types.LargeStructure, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeStructure", llm_response=llm_response, mode="request")
+        return typing.cast(types.LargeStructure, __result__)
 
     def TestNumberEdgeCases(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.NumberEdgeCases:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestNumberEdgeCases", llm_response=llm_response, mode="request")
-        return typing.cast(types.NumberEdgeCases, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestNumberEdgeCases", llm_response=llm_response, mode="request")
+        return typing.cast(types.NumberEdgeCases, __result__)
 
     def TestSpecialCharacters(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.SpecialCharacters:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestSpecialCharacters", llm_response=llm_response, mode="request")
-        return typing.cast(types.SpecialCharacters, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSpecialCharacters", llm_response=llm_response, mode="request")
+        return typing.cast(types.SpecialCharacters, __result__)
 
     
 
@@ -71,37 +71,37 @@ class LlmStreamParser:
     def TestCircularReference(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.CircularReference:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestCircularReference", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.CircularReference, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestCircularReference", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.CircularReference, __result__)
 
     def TestDeepRecursion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.DeepRecursion:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestDeepRecursion", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.DeepRecursion, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestDeepRecursion", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.DeepRecursion, __result__)
 
     def TestEmptyCollections(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.EmptyCollections:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyCollections", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.EmptyCollections, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyCollections", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.EmptyCollections, __result__)
 
     def TestLargeStructure(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.LargeStructure:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeStructure", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.LargeStructure, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeStructure", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.LargeStructure, __result__)
 
     def TestNumberEdgeCases(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.NumberEdgeCases:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestNumberEdgeCases", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.NumberEdgeCases, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestNumberEdgeCases", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.NumberEdgeCases, __result__)
 
     def TestSpecialCharacters(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.SpecialCharacters:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestSpecialCharacters", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.SpecialCharacters, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSpecialCharacters", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SpecialCharacters, __result__)
 
     

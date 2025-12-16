@@ -10,6 +10,7 @@ import {
   Connection,
 } from '@xyflow/react'
 import { useAtomValue } from 'jotai'
+import type React from 'react'
 import { useMemo } from 'react'
 import { currentClientsAtom, orchestrationNodesAtom, orchIndexAtom } from '../../../atoms-orch-graph'
 import { useEffect } from 'react'
@@ -111,11 +112,11 @@ export const ClientGraphView: React.FC = () => {
     }
   }
 
-  const styles: React.CSSProperties = {
+  const styles = {
     whiteSpace: 'normal',
     wordWrap: 'break-word',
     overflowWrap: 'break-word',
-  }
+  } as const
 
   return (
     <div className='flex flex-col w-full h-[400px]'>

@@ -27,14 +27,14 @@ class LlmResponseParser:
     def TestMediaArrayInputs(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.MediaArrayAnalysisResult:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMediaArrayInputs", llm_response=llm_response, mode="request")
-        return typing.cast(types.MediaArrayAnalysisResult, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMediaArrayInputs", llm_response=llm_response, mode="request")
+        return typing.cast(types.MediaArrayAnalysisResult, __result__)
 
     def TestMediaInput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.MediaAnalysisResult:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMediaInput", llm_response=llm_response, mode="request")
-        return typing.cast(types.MediaAnalysisResult, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMediaInput", llm_response=llm_response, mode="request")
+        return typing.cast(types.MediaAnalysisResult, __result__)
 
     
 
@@ -47,13 +47,13 @@ class LlmStreamParser:
     def TestMediaArrayInputs(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.MediaArrayAnalysisResult:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMediaArrayInputs", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.MediaArrayAnalysisResult, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMediaArrayInputs", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.MediaArrayAnalysisResult, __result__)
 
     def TestMediaInput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.MediaAnalysisResult:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMediaInput", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.MediaAnalysisResult, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMediaInput", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.MediaAnalysisResult, __result__)
 
     

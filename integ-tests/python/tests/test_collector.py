@@ -1300,7 +1300,7 @@ async def test_collector_anthropic_caching():
     assert second_log.usage.cached_input_tokens is not None
     assert second_log.calls[0].usage.cached_input_tokens is not None
 
-    # Third call to really ensure caching is working
+    # Third call (streaming) to really ensure caching is working
     stream = b.stream.TestCaching(
         large_content,
         "How did Sir Galahad become a knight?",
@@ -1312,8 +1312,34 @@ async def test_collector_anthropic_caching():
 
     third_log = collector.logs[2]
     assert third_log is not None
+    assert third_log.log_type == "stream"
     assert third_log.usage.cached_input_tokens is not None
     assert third_log.calls[0].usage.cached_input_tokens is not None
+
+    # Verify SSE responses are captured for streaming call
+    stream_call = third_log.calls[0]
+    assert isinstance(
+        stream_call, LLMStreamCall
+    ), "Expected streaming call to be LLMStreamCall"
+    sse_responses = stream_call.sse_responses()
+    assert sse_responses is not None, "Expected SSE responses to be captured"
+    assert len(sse_responses) > 0, "Expected at least one SSE response"
+
+    # Verify SSE responses have valid content
+    for sse in sse_responses:
+        assert sse.text is not None, "SSE response text should not be None"
+        # Try to parse as JSON - Anthropic sends JSON in SSE data
+        parsed = sse.json()
+        print(f"SSE chunk: {parsed}")
+        if parsed is not None:
+            print(f"SSE chunk type: {parsed.get('type', 'unknown')}")
+
+    print(f"Total SSE responses captured: {len(sse_responses)}")
+
+    # Streaming call should have cached_input_tokens > 0 (this is the bug we fixed)
+    assert (
+        third_log.usage.cached_input_tokens or 0
+    ) > 0, f"Expected streaming call to have cached_input_tokens > 0, got {third_log.usage.cached_input_tokens}"
 
     # At least one of the later calls should have cached tokens > 0
     has_cached_tokens = (second_log.usage.cached_input_tokens or 0) > 0 or (
@@ -1332,7 +1358,9 @@ async def test_collector_anthropic_caching():
 
     print(f"Cached tokens - First call: {first_log.usage.cached_input_tokens}")
     print(f"Cached tokens - Second call: {second_log.usage.cached_input_tokens}")
-    print(f"Cached tokens - Third call: {third_log.usage.cached_input_tokens}")
+    print(
+        f"Cached tokens - Third call (streaming): {third_log.usage.cached_input_tokens}"
+    )
     print(f"Total cached tokens: {collector.usage.cached_input_tokens}")
     print(f"Large content length: {len(large_content)} characters")
 

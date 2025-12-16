@@ -26,11 +26,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          fetch-depth: 0
 
-      - name: Fetch base branch history
-        run: |
-          git fetch --depth=500 origin canary
+      - name: Fetch canary ref
+        run: git fetch origin canary
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -56,9 +54,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Fetch base branch history
-        run: |
-          git fetch --depth=500 origin canary
+      - name: Fetch canary ref
+        run: git fetch origin canary
 
       - name: Start deployment
         uses: bobheadxi/deployments@v1
@@ -67,6 +64,9 @@ jobs:
           step: start
           token: ${{ secrets.GITHUB_TOKEN }}
           env: beps-canary
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -95,6 +95,30 @@ jobs:
         run: |
           aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/canary/*"
 
+      - name: Generate Slack notification
+        id: slack-payload
+        run: |
+          PAYLOAD=$(./beps/scripts/summarize_changes.py \
+            --base-url "https://${{ secrets.BEPS_DOMAIN }}/canary" \
+            --env "canary" \
+            --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --format slack)
+          # Check if there are any blocks (non-draft BEPs)
+          BLOCK_COUNT=$(echo "$PAYLOAD" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('blocks',[])))")
+          echo "block_count=$BLOCK_COUNT" >> $GITHUB_OUTPUT
+          echo "payload<<EOF" >> $GITHUB_OUTPUT
+          echo "$PAYLOAD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Slack notification
+        if: ${{ steps.slack-payload.outputs.block_count != '0' }}
+        env:
+          SLACK_PAYLOAD: ${{ steps.slack-payload.outputs.payload }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "$SLACK_PAYLOAD" \
+            "${{ secrets.BEPS_SLACK_WEBHOOK_URL }}"
+
       - name: Update deployment status
         uses: bobheadxi/deployments@v1
         if: always()
@@ -122,10 +146,6 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Fetch base branch history
-        run: |
-          git fetch --depth=500 origin canary
-
       - name: Get branch name
         id: branch
         run: |
@@ -148,9 +168,11 @@ jobs:
             🏗️ **Building BEPs preview...** (run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))
           comment-tag: beps-preview
 
-      - name: Fetch canary branch for diff
-        run: |
-          git fetch origin canary:canary || true
+      - name: Fetch canary ref
+        run: git fetch origin canary
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -195,6 +217,30 @@ jobs:
             **Preview URL**: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
 
             <sub>Commit: `${{ github.event.pull_request.head.sha }}` • [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
+
+      - name: Generate Slack notification
+        id: slack-payload
+        run: |
+          PAYLOAD=$(./beps/scripts/summarize_changes.py \
+            --base-url "https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}" \
+            --env "${{ steps.branch.outputs.name }}" \
+            --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --format slack)
+          # Check if there are any blocks (non-draft BEPs)
+          BLOCK_COUNT=$(echo "$PAYLOAD" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('blocks',[])))")
+          echo "block_count=$BLOCK_COUNT" >> $GITHUB_OUTPUT
+          echo "payload<<EOF" >> $GITHUB_OUTPUT
+          echo "$PAYLOAD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Slack notification
+        if: ${{ steps.slack-payload.outputs.block_count != '0' }}
+        env:
+          SLACK_PAYLOAD: ${{ steps.slack-payload.outputs.payload }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "$SLACK_PAYLOAD" \
+            "${{ secrets.BEPS_SLACK_WEBHOOK_URL }}"
 
       - name: Update deployment status
         uses: bobheadxi/deployments@v1

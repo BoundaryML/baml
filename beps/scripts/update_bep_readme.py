@@ -22,6 +22,41 @@ README_PATH = DOCS_DIR / "README.md"
 TABLE_START = "<!-- BEP-TABLE-START -->"
 TABLE_END = "<!-- BEP-TABLE-END -->"
 
+# Cache for canary ref detection
+_CANARY_REF = None
+
+def get_canary_ref() -> str:
+    """Get the canary branch reference, trying local first then remote."""
+    global _CANARY_REF
+    if _CANARY_REF is not None:
+        return _CANARY_REF
+    
+    # Try local 'canary' branch first
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "canary"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=False
+    )
+    if result.returncode == 0:
+        _CANARY_REF = "canary"
+        return _CANARY_REF
+    
+    # Try 'origin/canary' (common in CI/CD)
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "origin/canary"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=False
+    )
+    if result.returncode == 0:
+        _CANARY_REF = "origin/canary"
+        return _CANARY_REF
+    
+    # Fallback - return canary and let it fail gracefully
+    _CANARY_REF = "canary"
+    return _CANARY_REF
+
 
 def parse_bep_file(path: Path):
     text = path.read_text(encoding="utf-8")
@@ -54,7 +89,7 @@ def parse_bep_file(path: Path):
                 title = get_meta("title", "Untitled")
                 status = get_meta("status", "Unknown")
                 shepherds = get_meta("shepherds", "TBD")
-                created = get_meta("created", "Unknown")
+                created = get_meta("created", "TBD")
 
                 # Validate Shepherds
                 if shepherds == "TBD" or not shepherds:
@@ -62,30 +97,48 @@ def parse_bep_file(path: Path):
                     pass # Actually, let's just ensure it exists for now
 
                 # Validate dates
-                if created != "Unknown":
+                if created != "TBD":
                     try:
                         datetime.strptime(created, "%Y-%m-%d")
                     except ValueError:
                          raise ValueError(f"Invalid created date '{created}' in {path}. Must be YYYY-MM-DD.")
 
-                # Get last modified time from git (more reliable in CI than fs mtime)
+                # Check if file exists in canary branch
                 try:
-                    # Get the last commit date for the file
-                    git_date = subprocess.check_output(
-                        ["git", "log", "-1", "--format=%cd", "--date=format:%Y-%m-%d", str(path)],
-                        text=True,
-                        stderr=subprocess.DEVNULL
-                    ).strip()
-                    if git_date:
-                        last_modified = git_date
-                    else:
-                        # File might be new and not yet committed
-                        mtime = os.path.getmtime(path)
-                        last_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
-                except (subprocess.CalledProcessError, FileNotFoundError):
-                     # Fallback to file system time if git fails
-                    mtime = os.path.getmtime(path)
-                    last_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+                    # Get path relative to repo root for git command
+                    rel_path = path.relative_to(REPO_ROOT)
+                    canary_ref = get_canary_ref()
+                    file_in_canary = subprocess.run(
+                        ["git", "cat-file", "-e", f"{canary_ref}:{rel_path}"],
+                        cwd=REPO_ROOT,
+                        capture_output=True,
+                        check=False
+                    ).returncode == 0
+                except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+                    file_in_canary = False
+
+                # If file doesn't exist in canary, both dates should be TBD
+                if not file_in_canary:
+                    created = "TBD"
+                    last_modified = "TBD"
+                else:
+                    # Get last modified time from git relative to canary branch
+                    try:
+                        # Get the last commit date for the file between canary and HEAD
+                        canary_ref = get_canary_ref()
+                        git_date = subprocess.check_output(
+                            ["git", "log", f"{canary_ref}..HEAD", "-1", "--format=%cd", "--date=format:%Y-%m-%d", "--", str(path)],
+                            text=True,
+                            stderr=subprocess.DEVNULL
+                        ).strip()
+                        if git_date:
+                            last_modified = git_date
+                        else:
+                            # File has no changes relative to canary
+                            last_modified = "TBD"
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                         # Fallback to TBD if git fails
+                        last_modified = "TBD"
                 
                 # Summary extraction (still heuristic based on markdown structure, or could be metadata)
                 # Let's keep summary as first section after frontmatter for richness, 
@@ -109,8 +162,10 @@ def parse_bep_file(path: Path):
                     summary = " ".join(line.strip() for line in summary.splitlines())
                 
                 # Calculate relative link path
+                # For directory-based BEPs (BEP-XXX/README.md), use just the directory name
+                # MkDocs automatically resolves README.md from directories
                 if path.name == "README.md":
-                    link_path = f"{path.parent.name}/README.md"
+                    link_path = f"{path.parent.name}/"
                 else:
                     link_path = path.name
 
@@ -224,8 +279,6 @@ def generate_table(entries):
         desc = e["summary"] or ""
         status = e["status"]
         shepherds = e.get("shepherds", "TBD")
-        created = e.get("created", "Unknown")
-        last_modified = e.get("last_modified", "Unknown")
         
         if shepherds == "TBD" and status not in ["Superseded", "Rejected"]:
              raise ValueError(f"BEP {e['id']} ({status}) must have a shepherd assigned (currently 'TBD').")
@@ -242,7 +295,7 @@ def generate_table(entries):
         shepherd_display = ", ".join(shepherd_list)
         
         lines.append("    <tr>")
-        lines.append(f"      <td>{link} &nbsp; {status_badge}<br><br>{desc}<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): {shepherd_display} | Created: {created} | Updated: {last_modified}</span></td>")
+        lines.append(f"      <td>{link} &nbsp; {status_badge}<br><br>{desc}<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): {shepherd_display}</span></td>")
         lines.append("    </tr>")
 
     lines.append("  </tbody>")

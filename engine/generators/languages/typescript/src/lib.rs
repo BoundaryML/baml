@@ -534,4 +534,50 @@ mod tests {
             "console.log('hello');\nimport { a } from './a.js';\nimport { b } from './b.js';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.js';\nconsole.log('world');"
         );
     }
+
+    #[test]
+    fn templates_do_not_shadow_common_user_arg_names() {
+        // These templates render functions that take user-defined argument names.
+        // If we introduce locals like `options`, `env`, or `stream`, a BAML arg with the same
+        // name can cause TS compile errors (duplicate identifier) or incorrect payload binding.
+
+        let async_client = include_str!("./_templates/async_client.ts.j2");
+        assert!(!async_client.contains("const options ="));
+        assert!(!async_client.contains("const signal = options.signal"));
+        assert!(!async_client.contains("const collector = options.collector"));
+        assert!(!async_client.contains("let collector = options.collector"));
+        assert!(!async_client.contains("const rawEnv ="));
+        assert!(!async_client.contains("const env: Record<string, string> ="));
+        assert!(!async_client.contains("const raw = await this.runtime.callFunction"));
+        assert!(!async_client.contains("const raw = this.runtime.streamFunction"));
+        assert!(!async_client.contains("const stream = this.stream."));
+        assert!(async_client.contains("const __options__ ="));
+
+        let sync_client = include_str!("./_templates/sync_client.ts.j2");
+        assert!(!sync_client.contains("const options ="));
+        assert!(!sync_client.contains("const signal = options.signal"));
+        assert!(!sync_client.contains("const collector = options.collector"));
+        assert!(!sync_client.contains("const rawEnv ="));
+        assert!(!sync_client.contains("const env: Record<string, string> ="));
+        assert!(!sync_client.contains("const raw = this.runtime.callFunctionSync"));
+        assert!(sync_client.contains("const __options__ ="));
+
+        let async_request = include_str!("./_templates/async_request.ts.j2");
+        assert!(!async_request.contains("const rawEnv ="));
+        assert!(!async_request.contains("const env: Record<string, string> ="));
+
+        let sync_request = include_str!("./_templates/sync_request.ts.j2");
+        assert!(!sync_request.contains("const rawEnv ="));
+        assert!(!sync_request.contains("const env: Record<string, string> ="));
+
+        let react_server_streaming = include_str!("./_templates/react/server_streaming.ts.j2");
+        assert!(!react_server_streaming.contains("const stream ="));
+        assert!(react_server_streaming.contains("const __stream__ ="));
+
+        let parser = include_str!("./_templates/parser.ts.j2");
+        assert!(!parser.contains("const rawEnv ="));
+        assert!(!parser.contains("const env: Record<string, string> ="));
+        assert!(parser.contains("const __rawEnv__ ="));
+        assert!(parser.contains("const __env__: Record<string, string> ="));
+    }
 }

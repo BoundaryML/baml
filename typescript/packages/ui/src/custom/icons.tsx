@@ -1,3 +1,4 @@
+import type React from 'react';
 import {
   SiClerk,
   SiDiscord,
@@ -206,10 +207,9 @@ export const Icons = {
     'variant',
   ])<IconProps>(({ size, variant }) => iconVariants({ size, variant })),
 
-  AngelList: ({ size, ...props }: IconProps) => (
+  AngelList: ({ size, className }: IconProps) => (
     <svg
-      className={iconVariants({ size })}
-      {...props}
+      className={cn(iconVariants({ size }), className)}
       viewBox="0 0 256 369"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -305,10 +305,9 @@ export const Icons = {
     'size',
     'variant',
   ])<IconProps>(({ size, variant }) => iconVariants({ size, variant })),
-  CrunchBase: ({ size, ...props }: IconProps) => (
+  CrunchBase: ({ size, className }: IconProps) => (
     <svg
-      className={iconVariants({ size })}
-      {...props}
+      className={cn(iconVariants({ size }), className)}
       viewBox="0 0 24 24"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -345,10 +344,9 @@ export const Icons = {
     'size',
     'variant',
   ])<IconProps>(({ size, variant }) => iconVariants({ size, variant })),
-  Google: ({ size, ...props }: IconProps) => (
+  Google: ({ size, className }: IconProps) => (
     <svg
-      className={iconVariants({ size })}
-      {...props}
+      className={cn(iconVariants({ size }), className)}
       viewBox="0 0 24 24"
       xmlns="http://www.w3.org/2000/svg"
     >

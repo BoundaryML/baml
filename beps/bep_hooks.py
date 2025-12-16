@@ -11,6 +11,42 @@ DOCS_DIR = Path(__file__).resolve().parent / "docs"
 _DIFF_CACHE = {}
 
 
+def _generate_toc(markdown: str) -> str:
+    """
+    Replace <!-- TOC_PLACEHOLDER --> placeholder with auto-generated table of contents.
+    Extracts ## sections and ### questions to build a linked TOC.
+    """
+    if "<!-- TOC_PLACEHOLDER -->" not in markdown:
+        return markdown
+    
+    toc_lines = []
+    current_section = None
+    
+    for line in markdown.splitlines():
+        # Match ## Section headers (but skip ## Contents if present)
+        if line.startswith("## ") and "Contents" not in line:
+            current_section = line[3:].strip()
+            toc_lines.append(f"\n**{current_section}**\n")
+        # Match ### Question headers
+        elif line.startswith("### "):
+            title = line[4:].strip()
+            # Generate anchor: lowercase, spaces to dashes, remove backticks and special chars
+            anchor = title.lower()
+            anchor = anchor.replace(" ", "-")
+            anchor = anchor.replace("`", "")
+            anchor = anchor.replace("?", "")
+            anchor = anchor.replace("(", "")
+            anchor = anchor.replace(")", "")
+            anchor = anchor.replace("/", "")
+            anchor = anchor.replace("'", "")
+            anchor = re.sub(r"-+", "-", anchor)  # Collapse multiple dashes
+            anchor = anchor.strip("-")
+            toc_lines.append(f"- [{title}](#{anchor})")
+    
+    toc = "\n".join(toc_lines)
+    return markdown.replace("<!-- TOC_PLACEHOLDER -->", toc)
+
+
 def _run_git(args: list[str]) -> str:
     """Run git in the repo root and return stdout (or empty on error)."""
     try:
@@ -63,37 +99,57 @@ def _diff_vs_previous_commit(rel_path: str) -> str:
     return _run_git(["diff", prev, head, "--", file_path])
 
 
-def _parse_unified_diff(diff_text: str) -> dict:
+def _parse_unified_diff(diff_text: str) -> set[int]:
     """
-    Parse unified diff and extract line changes.
-    Returns dict with 'added' and 'removed' line contents.
+    Parse unified diff and return a set of 1-based line numbers 
+    in the NEW file that are added or modified.
     """
+    changed_lines = set()
     if not diff_text.strip():
-        return {"added": [], "removed": [], "modified": []}
+        return changed_lines
     
-    added = []
-    removed = []
-    
+    # Initialize for tracking line numbers in the new file
+    current_new_line = 0
+
     for line in diff_text.splitlines():
         # Skip diff metadata lines
+        if line.startswith("@@"):
+            # Parse header: @@ -1,5 +1,5 @@
+            # We care about the +part
+            # +1,5 means starts at line 1, 5 lines
+            try:
+                # Extract the + part
+                parts = line.split(" ")
+                new_hunk = parts[2] # +1,5
+                if "," in new_hunk:
+                    start = int(new_hunk[1:].split(",")[0])
+                else:
+                    start = int(new_hunk[1:])
+                current_new_line = start
+                # print(f"DEBUG: Hunk start {start}")
+            except Exception:
+                # print(f"DEBUG: Hunk parse error {e}")
+                pass
+            continue
+        
         if line.startswith("+++") or line.startswith("---") or \
-           line.startswith("@@") or line.startswith("diff ") or \
-           line.startswith("index ") or line.startswith("new file") or \
-           line.startswith("old file"):
+           line.startswith("diff ") or line.startswith("index ") or \
+           line.startswith("new file") or line.startswith("old file"):
             continue
         
         if line.startswith("+"):
-            # Added line (strip the + prefix)
-            content = line[1:].strip()
-            if content:  # Skip empty additions
-                added.append(content)
+            # Added line
+            changed_lines.add(current_new_line)
+            current_new_line += 1
         elif line.startswith("-"):
-            # Removed line (strip the - prefix)
-            content = line[1:].strip()
-            if content:  # Skip empty removals
-                removed.append(content)
+            # Removed line - doesn't exist in new file, so doesn't advance current_new_line
+            pass
+        else:
+            # Context line (starts with space)
+            current_new_line += 1
     
-    return {"added": added, "removed": removed}
+    # print(f"DEBUG: Total changed lines: {len(changed_lines)}")
+    return changed_lines
 
 
 def _get_file_history(rel_path: str, base_branch: str = "canary") -> list:
@@ -128,71 +184,201 @@ def _get_file_history(rel_path: str, base_branch: str = "canary") -> list:
 def _highlight_inline_changes_multi(markdown: str, diffs_by_ref: dict) -> str:
     """
     Add visual indicators for changed lines.
-    Wraps lines in divs with data attributes for EACH ref that sees a change.
-    diffs_by_ref: {'canary': {'added': [...]}, 'abc1234': {'added': [...]}, ...}
+    Wraps lines in Admonitions for EACH ref that sees a change.
+    diffs_by_ref: {'canary': set([1, 2, 5]), 'abc1234': set([1]), ...}
     """
     # If no diffs anywhere, return original
-    if all(not d["added"] for d in diffs_by_ref.values()):
+    if all(not d for d in diffs_by_ref.values()):
         return markdown
     
     lines = markdown.splitlines()
     result_lines = []
     i = 0
     
+    # 1-based line index
+    current_line_num = 1
+    
+    # Track if we're inside a code fence
+    in_code_fence = False
+    code_fence_marker = None
+    
     while i < len(lines):
         line = lines[i]
+        stripped = line.strip()
         
-        # Determine which refs consider this line "added"
-        # Filter refs where this line is present in their 'added' list
+        # 1. Track Code Fences
+        if stripped.startswith('```') or stripped.startswith('~~~'):
+            if not in_code_fence:
+                in_code_fence = True
+                code_fence_marker = '```' if stripped.startswith('```') else '~~~'
+            elif (code_fence_marker == '```' and stripped.startswith('```')) or \
+                 (code_fence_marker == '~~~' and stripped.startswith('~~~')):
+                in_code_fence = False
+                code_fence_marker = None
+        
+        # 2. Determine active refs for this line
         active_refs = []
-        for ref, d in diffs_by_ref.items():
-            # Fuzzy match (len > 3)
-            if any(added in line and len(added) > 3 for added in d["added"]):
+        for ref, changed_lines_set in diffs_by_ref.items():
+            if current_line_num in changed_lines_set:
                 active_refs.append(ref)
         
-        if active_refs:
+        # 3. Check if line is safe to highlight (Root-level content only)
+        # Skip:
+        # - Inside code fences
+        # - Indented lines (start with space/tab) -> likely blockquotes, lists, or code
+        # - List items (start with -, *, +, 1.)
+        # - Tables (start with |)
+        # - Empty lines (don't wrap empty lines alone)
+        
+        is_safe = True
+        if in_code_fence:
+            is_safe = False
+        elif stripped.startswith('```') or stripped.startswith('~~~'): # Fence markers themselves (opening or closing)
+            is_safe = False
+        elif not line: # Empty line
+            is_safe = False
+        elif line.startswith(' ') or line.startswith('\t'): # Indented
+            is_safe = False
+        elif line.startswith('|'): # Table
+            is_safe = False
+        elif stripped.startswith('- ') or stripped.startswith('* ') or stripped.startswith('+ '): # Unordered list
+            is_safe = False
+        elif stripped[0].isdigit() and '. ' in stripped[:5]: # Ordered list (heuristic)
+            is_safe = False
+            
+        # 4. Wrap if active and safe
+        if active_refs and is_safe:
             # This line is changed in at least one view
             changed_block = [line]
             i += 1
+            current_line_num += 1
             
             # Collect consecutive lines that share the EXACT SAME set of active refs
+            # AND are also safe to highlight
             while i < len(lines):
                 next_line = lines[i]
+                next_stripped = next_line.strip()
                 
+                # Check fence state for next line
+                next_in_fence = in_code_fence
+                if next_stripped.startswith('```') or next_stripped.startswith('~~~'):
+                    if not in_code_fence:
+                        next_in_fence = True
+                    elif (code_fence_marker == '```' and next_stripped.startswith('```')) or \
+                         (code_fence_marker == '~~~' and next_stripped.startswith('~~~')):
+                        next_in_fence = False
+                
+                # Check safety for next line
+                next_is_safe = True
+                if next_in_fence:
+                    next_is_safe = False
+                elif not next_line:
+                    next_is_safe = False
+                elif next_line.startswith(' ') or next_line.startswith('\t'):
+                    next_is_safe = False
+                elif next_line.startswith('|'):
+                    next_is_safe = False
+                elif next_stripped.startswith('- ') or next_stripped.startswith('* ') or next_stripped.startswith('+ '):
+                    next_is_safe = False
+                elif next_stripped and next_stripped[0].isdigit() and '. ' in next_stripped[:5]:
+                    next_is_safe = False
+
                 # Calculate active refs for next line
                 next_active_refs = []
-                for ref, d in diffs_by_ref.items():
-                    if any(added in next_line and len(added) > 3 for added in d["added"]):
+                for ref, changed_lines_set in diffs_by_ref.items():
+                    if current_line_num in changed_lines_set:
                         next_active_refs.append(ref)
                 
-                # Empty lines inherit the previous block's status for visual continuity
-                is_empty = (next_line.strip() == "")
-                
-                if is_empty:
+                # Group if refs match AND next line is safe
+                if set(next_active_refs) == set(active_refs) and next_is_safe:
                     changed_block.append(next_line)
                     i += 1
-                    continue
-
-                # If the set of refs is exactly the same, group it
-                if set(next_active_refs) == set(active_refs):
-                    changed_block.append(next_line)
-                    i += 1
+                    current_line_num += 1
+                    
+                    # Update fence state
+                    if next_stripped.startswith('```') or next_stripped.startswith('~~~'):
+                        if not in_code_fence:
+                            in_code_fence = True
+                            code_fence_marker = '```' if next_stripped.startswith('```') else '~~~'
+                        elif (code_fence_marker == '```' and next_stripped.startswith('```')) or \
+                             (code_fence_marker == '~~~' and next_stripped.startswith('~~~')):
+                            in_code_fence = False
+                            code_fence_marker = None
                 else:
                     break
             
-            # Build data attributes
-            # data-diff-canary="true" data-diff-abc123="true"
+            # Use Admonition syntax!
+            # We use distinct classes for each ref to avoid attribute issues
+            # !!! diff-canary ""
+            # !!! diff-abc1234 ""
+            
+            # If multiple refs active, we just pick the first one for the class name
+            # The CSS handles showing/hiding based on body class
+            # But wait, if we have multiple refs, we need a class that matches the CURRENTLY VIEWED ref.
+            # Since we can't easily put multiple classes on an admonition without attributes (which failed),
+            # we will generate a GENERIC class `diff-block` and add specific classes if possible,
+            # OR we generate `!!! diff-canary` if canary is active, etc.
+            # But what if both canary and commit X are active?
+            # We need the block to be visible if EITHER is selected.
+            
+            # Solution: Generate a generic `!!! diff-block ""`
+            # And inject a `<div style="display:none" data-diff-refs="canary,abc1234"></div>` inside? No.
+            
+            # Let's go back to the attribute attempt but fix the syntax.
+            # `!!! note "" {: .diff-block .diff-canary .diff-abc1234 }`
+            # This requires `attr_list` extension.
+            # If that failed, we can try the standard class syntax:
+            # `!!! note "Title" class="diff-block"` -> No that's not standard.
+            
+            # Alternative: Just wrap in a raw div again but use `markdown="1"` properly?
+            # We tried that and it failed (horizontal layout).
+            
+            # Let's try the distinct admonition type again.
+            # If we have multiple refs, we can nest them? No.
+            # We can output multiple admonitions? No, duplicates content.
+            
+            # Best bet: Use `!!! diff-block` and rely on the fact that we only care about
+            # the currently selected mode.
+            # But we need to know WHICH refs are active for this block to show/hide it.
+            
+            # Actually, the previous CSS logic was:
+            # body[data-diff-mode="canary"] .diff-wrapper[data-diff-canary="true"]
+            
+            # If we can't use attributes, we can't selectively show/hide blocks that are ONLY changed in canary vs ONLY changed in commit X.
+            # Wait, if a block is changed in BOTH, it should show in BOTH.
+            
+            # Let's try the attribute syntax one more time but simpler.
+            # `!!! diff-block ""` 
+            # `    {: .diff-canary .diff-abc1234 }`
+            # putting the attribute list on the content? No.
+            
+            # Let's try to fix the attribute list syntax.
+            # The screenshot showed `!!! note "" {: data-diff-canary="true" }` literally.
+            # This means `attr_list` is NOT processing it on the admonition line.
+            # `attr_list` usually works on headers, images, lists.
+            # For admonitions, it might not be supported directly on the opening line in all versions.
+            
+            # WORKAROUND:
+            # Use a raw `<div>` wrapper AROUND the admonition?
+            # <div class="diff-container" data-diff-canary="true">
+            # !!! diff-block ""
+            #     Content
+            # </div>
+            # This requires `md_in_html` which we have.
+            
             attrs = ' '.join([f'data-diff-{ref}="true"' for ref in active_refs])
             
-            # Wrap block
-            result_lines.append(f'<div markdown="1" class="diff-wrapper" {attrs}>')
             result_lines.append("")
-            result_lines.extend(changed_block)
+            result_lines.append(f'<div class="diff-container" {attrs} markdown="1">')
+            result_lines.append(f'!!! diff-block ""')
+            for block_line in changed_block:
+                result_lines.append(f'    {block_line}')
+            result_lines.append(f'</div>')
             result_lines.append("")
-            result_lines.append('</div>')
         else:
             result_lines.append(line)
             i += 1
+            current_line_num += 1
     
     return "\n".join(result_lines)
 
@@ -203,15 +389,54 @@ def _get_diff_ui_assets() -> str:
     """
     return """
 <style>
-    /* Base wrapper style */
-    .diff-wrapper {
-        margin: 8px 0;
-        border-left: 4px solid transparent;
-        transition: border-color 0.2s, background-color 0.2s, padding-left 0.2s;
+    /* Container style - handles visibility */
+    .diff-container {
+        /* Default: transparent/visible? No, we need to hide if not active in current mode */
+        /* Actually, we can't easily hide the container based on body class if we don't have the attribute.
+           But we DO have the attribute on the container now! */
     }
 
-    /* Active Diff State - Logic injected via dynamic styles per page */
-    /* Pattern: body[data-diff-mode="REF"] .diff-wrapper[data-diff-REF="true"] { ... } */
+    /* Admonition style */
+    /* Admonition style */
+    .md-typeset .admonition.diff-block {
+        margin: 0; /* Let container handle margin */
+        border: none; /* Remove all borders */
+        border-left: 4px solid transparent; /* We'll add back left border for highlighting */
+        border-radius: 0;
+        box-shadow: none;
+        padding: 0; /* No padding by default */
+        background: transparent;
+        font-size: inherit;
+        overflow: visible;
+        display: block; /* Override flow-root to allow margin collapsing */
+    }
+    
+    .md-typeset .admonition.diff-block > .admonition-title {
+        display: none;
+    }
+    
+    .md-typeset .admonition.diff-block > .md-typeset {
+        padding: 0;
+    }
+
+    /* Active Diff State */
+    
+    /* None mode - no highlighting */
+    body[data-diff-mode="none"] .diff-container .admonition.diff-block {
+        border-left-color: transparent;
+        background-color: transparent;
+        padding-left: 0; /* Explicitly no padding */
+        border: none !important; /* Remove border to allow margin collapsing */
+    }
+    
+    /* Canary */
+    body[data-diff-mode="canary"] .diff-container[data-diff-canary="true"] .admonition.diff-block {
+        border-left-color: #acf2bd;
+        background-color: rgba(172, 242, 189, 0.1);
+        padding-left: 12px; /* Add padding when highlighting */
+    }
+    
+    /* Commits - Dynamic rules injected below */
 
     /* UI Controls */
     .diff-controls {
@@ -347,42 +572,7 @@ def _run_diff(ref: str, file_path: str) -> str:
 
 
 
-def _add_diff_summary(markdown: str, rel_path: str) -> str:
-    """
-    Add diff summary and controls.
-    """
-    diff_canary = _diff_vs_branch(rel_path, base_branch="canary")
-    diff_prev = _diff_vs_previous_commit(rel_path)
-    
-    # Count changes
-    c_canary = len([l for l in diff_canary.splitlines() if l.startswith("+") or l.startswith("-")])
-    c_prev = len([l for l in diff_prev.splitlines() if l.startswith("+") or l.startswith("-")])
-    
-    # Build Controls HTML
-    controls = f"""
-<div class="diff-controls">
-    <label for="diff-mode"><strong>Compare against:</strong></label>
-    <select id="diff-mode" class="diff-select" onchange="updateDiffMode(this)">
-        <option value="canary">Canary Branch (Main)</option>
-        <option value="prev">Previous Commit</option>
-        <option value="none">None (Clean View)</option>
-    </select>
-</div>
-"""
-    
-    # Summaries
-    summary_html = ""
-    if c_canary > 0:
-        summary_html += f'<div id="summary-canary" style="display:none" markdown="1">\n\n!!! info "Diff vs Canary"\n    {c_canary} lines changed\n</div>\n'
-    else:
-         summary_html += f'<div id="summary-canary" style="display:none" markdown="1">\n\n!!! success "Diff vs Canary"\n    No changes vs canary\n</div>\n'
 
-    if c_prev > 0:
-        summary_html += f'<div id="summary-prev" style="display:none" markdown="1">\n\n!!! info "Diff vs Previous"\n    {c_prev} lines changed\n</div>\n'
-    else:
-         summary_html += f'<div id="summary-prev" style="display:none" markdown="1">\n\n!!! success "Diff vs Previous"\n    No changes vs previous commit\n</div>\n'
-
-    return _get_diff_ui_assets() + controls + "\n" + summary_html + "\n" + markdown
 
 
 
@@ -461,9 +651,19 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
 
     rel_path = page.file.src_path  # relative to docs/, e.g. 'proposals/.../go.md'
 
+    # EMERGENCY FIX: Disable hook entirely to fix empty pages
+    # return markdown
+
     # Optional: only show diffs for proposals
     if not rel_path.startswith("proposals/"):
         return markdown
+    
+    # Generate TOC from <!-- TOC_PLACEHOLDER --> placeholder
+    markdown = _generate_toc(markdown)
+    
+    # DEBUG: Skip go.md to see if it renders
+    # if "go.md" in rel_path:
+    #    return markdown
 
     # 1. Get History
     commits = _get_file_history(rel_path, base_branch="canary")
@@ -491,7 +691,7 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     
     # If no diffs anywhere, just return (but we might want to show the dropdown saying "No changes"?)
     # Actually if there are changes vs SOMETHING we should show UI.
-    has_any_change = any(bool(d["added"] or d["removed"]) for d in diffs.values())
+    has_any_change = any(bool(d) for d in diffs.values())
 
     if not has_any_change:
         return markdown
@@ -501,10 +701,10 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     # CSS for Canary
     css_rules = []
     css_rules.append("""
-    body[data-diff-mode="canary"] .diff-wrapper[data-diff-canary="true"] {
-        padding-left: 16px;
+    body[data-diff-mode="canary"] .diff-container[data-diff-canary="true"] .admonition.diff-block {
         border-left-color: #acf2bd; /* Green */
         background-color: rgba(172, 242, 189, 0.1);
+        padding-left: 12px; /* Add padding when highlighting */
     }
     """)
     
@@ -512,10 +712,10 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     for c in commits:
         h = c["hash"]
         css_rules.append(f"""
-    body[data-diff-mode="{h}"] .diff-wrapper[data-diff-{h}="true"] {{
-        padding-left: 16px;
+    body[data-diff-mode="{h}"] .diff-container[data-diff-{h}="true"] .admonition.diff-block {{
         border-left-color: #a5d6ff; /* Blue */
         background-color: rgba(165, 214, 255, 0.1);
+        padding-left: 12px; /* Add padding when highlighting */
     }}
     body[data-diff-mode="{h}"] .nav-diff-commit[data-commit="{h}"] {{
         display: inline-block !important;
@@ -548,7 +748,7 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     # Summaries
     summaries = []
     # Canary Summary
-    c_canary = len(parsed_canary["added"]) + len(parsed_canary["removed"])
+    c_canary = len(parsed_canary)
     if c_canary > 0:
         summaries.append(f'<div id="summary-canary" class="diff-summary" style="display:none" markdown="1">\n\n!!! info "Diff vs Canary"\n    {c_canary} lines changed\n</div>')
     else:
@@ -558,7 +758,7 @@ def on_page_markdown(markdown: str, page, **kwargs) -> str:
     for c in commits:
         h = c["hash"]
         p = diffs[h]
-        count = len(p["added"]) + len(p["removed"])
+        count = len(p)
         if count > 0:
              summaries.append(f'<div id="summary-{h}" class="diff-summary" style="display:none" markdown="1">\n\n!!! info "Diff vs {c["short"]}"\n    {count} lines changed\n</div>')
         else:

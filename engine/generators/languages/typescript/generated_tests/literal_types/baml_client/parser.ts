@@ -35,9 +35,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): types.BooleanLiterals {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestBooleanLiterals",
@@ -46,7 +46,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as types.BooleanLiterals
     } catch (error) {
       throw toBamlError(error);
@@ -58,9 +58,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): types.ComplexLiterals {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestComplexLiterals",
@@ -69,7 +69,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as types.ComplexLiterals
     } catch (error) {
       throw toBamlError(error);
@@ -81,9 +81,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): types.IntegerLiterals {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestIntegerLiterals",
@@ -92,7 +92,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as types.IntegerLiterals
     } catch (error) {
       throw toBamlError(error);
@@ -104,9 +104,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): types.MixedLiterals {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestMixedLiterals",
@@ -115,7 +115,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as types.MixedLiterals
     } catch (error) {
       throw toBamlError(error);
@@ -127,9 +127,9 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): types.StringLiterals {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestStringLiterals",
@@ -138,7 +138,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as types.StringLiterals
     } catch (error) {
       throw toBamlError(error);
@@ -156,9 +156,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): partial_types.BooleanLiterals {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestBooleanLiterals",
@@ -167,7 +167,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as partial_types.BooleanLiterals
     } catch (error) {
       throw toBamlError(error);
@@ -179,9 +179,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): partial_types.ComplexLiterals {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestComplexLiterals",
@@ -190,7 +190,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as partial_types.ComplexLiterals
     } catch (error) {
       throw toBamlError(error);
@@ -202,9 +202,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): partial_types.IntegerLiterals {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestIntegerLiterals",
@@ -213,7 +213,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as partial_types.IntegerLiterals
     } catch (error) {
       throw toBamlError(error);
@@ -225,9 +225,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): partial_types.MixedLiterals {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestMixedLiterals",
@@ -236,7 +236,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as partial_types.MixedLiterals
     } catch (error) {
       throw toBamlError(error);
@@ -248,9 +248,9 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): partial_types.StringLiterals {
     try {
-      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const env: Record<string, string> = Object.fromEntries(
-        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
         "TestStringLiterals",
@@ -259,7 +259,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        env,
+        __env__,
       ) as partial_types.StringLiterals
     } catch (error) {
       throw toBamlError(error);

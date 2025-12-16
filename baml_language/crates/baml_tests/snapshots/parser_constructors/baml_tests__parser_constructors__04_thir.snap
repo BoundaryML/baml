@@ -8,15 +8,15 @@ expression: output
   Function stringArray:
     Return: List(String)
   Function pointArray:
-    Return: List(Unknown)
+    Return: List(Named("Point"))
   Function boolArray:
     Return: List(Bool)
   Function intArray:
     Return: List(Int)
   Function point:
-    Return: Unknown
+    Return: Named("Point")
   Function vec2d:
-    Return: Unknown
+    Return: Named("Vec2D")
   Function boolValues:
     Return: Void
   Function intValues:

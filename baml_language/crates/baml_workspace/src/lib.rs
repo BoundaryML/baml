@@ -9,28 +9,28 @@ use baml_base::{FileId, SourceFile};
 mod discovery;
 pub use discovery::discover_baml_files;
 
-/// A BAML project (collection of files that compile together)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Project {
-    pub root_path: PathBuf,
-}
-
 /// Input: the project root configuration
+///
+/// This tracks both the root path and the list of source files in the project.
+/// By storing files as an input field, Salsa can properly track changes to the
+/// file list (files added/removed) as well as changes to individual files.
 #[salsa::input]
-pub struct ProjectRoot {
-    pub path: PathBuf,
+pub struct Project {
+    pub root: PathBuf,
+
+    /// The list of source files in this project.
+    /// This should be updated whenever files are added or removed.
+    #[returns(ref)]
+    pub files: Vec<SourceFile>,
 }
 
-/// Tracked: discover all BAML files in the project
-#[salsa::tracked]
-pub fn project_files(db: &dyn salsa::Database, root: ProjectRoot) -> Vec<SourceFile> {
-    #[allow(unused_variables)]
-    let paths = discovery::discover_baml_files(&root.path(db));
-
-    // Create SourceFile inputs for each discovered file
-    // For now, return empty vec as we need database context to create inputs
-    // In real implementation, this would read files and create SourceFile inputs
-    vec![]
+/// Get all BAML files in the project.
+///
+/// This simply returns the files stored in the `ProjectRoot` input.
+/// The files list should be maintained by the caller (e.g., the language server
+/// or test harness) as files are added/removed from the project.
+pub fn project_files(db: &dyn salsa::Database, root: Project) -> Vec<SourceFile> {
+    root.files(db).clone()
 }
 
 /// Helper to create a source file in the database

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -9,6 +9,8 @@ expression: output
  4 │   double_in_single string @alias('She said "hello"')
    │                                  ┬  
    │                                  ╰── Expected attribute argument, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected RParen, found Error
@@ -17,6 +19,8 @@ expression: output
  4 │   double_in_single string @alias('She said "hello"')
    │                                  ┬  
    │                                  ╰── Expected RParen, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Error
@@ -25,6 +29,8 @@ expression: output
  4 │   double_in_single string @alias('She said "hello"')
    │                                  ┬  
    │                                  ╰── Expected Unexpected token in class body, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -33,6 +39,8 @@ expression: output
  4 │   double_in_single string @alias('She said "hello"')
    │                                            ┬  
    │                                            ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found Error
@@ -41,6 +49,8 @@ expression: output
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                         ┬  
    │                                         ╰── Expected type, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Error
@@ -49,6 +59,8 @@ expression: output
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                         ┬  
    │                                         ╰── Expected Unexpected token in class body, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -57,6 +69,8 @@ expression: output
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                          ┬  
    │                                          ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found Error
@@ -65,6 +79,8 @@ expression: output
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                ┬  
    │                                                ╰── Expected type, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Error
@@ -73,6 +89,8 @@ expression: output
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                ┬  
    │                                                ╰── Expected Unexpected token in class body, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -81,6 +99,8 @@ expression: output
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                 ┬  
    │                                                 ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -89,6 +109,8 @@ expression: output
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                          ┬  
    │                                                          ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found RParen
@@ -97,6 +119,8 @@ expression: output
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                           ┬  
    │                                                           ╰── Expected Unexpected token in class body, found RParen
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected RParen, found Word
@@ -105,6 +129,8 @@ expression: output
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                               ───┬──  
    │                                                  ╰──── Expected RParen, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found Error
@@ -113,6 +139,8 @@ expression: output
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                     ┬  
    │                                                     ╰── Expected type, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Error
@@ -121,6 +149,8 @@ expression: output
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                     ┬  
    │                                                     ╰── Expected Unexpected token in class body, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -129,6 +159,8 @@ expression: output
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                      ┬  
    │                                                      ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Error
@@ -137,6 +169,8 @@ expression: output
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                        ┬  
    │                                                        ╰── Expected Unexpected token in class body, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found Error
@@ -145,6 +179,8 @@ expression: output
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                ┬  
    │                                                                ╰── Expected type, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Error
@@ -153,6 +189,8 @@ expression: output
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                ┬  
    │                                                                ╰── Expected Unexpected token in class body, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -161,6 +199,8 @@ expression: output
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                 ┬  
    │                                                                 ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found RParen
@@ -169,6 +209,8 @@ expression: output
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                  ┬  
    │                                                                  ╰── Expected Unexpected token in class body, found RParen
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected RParen, found Word
@@ -177,6 +219,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                               ─┬─  
    │                                ╰─── Expected RParen, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found Error
@@ -185,6 +229,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                  ┬  
    │                                  ╰── Expected type, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Error
@@ -193,6 +239,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                  ┬  
    │                                  ╰── Expected Unexpected token in class body, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -201,6 +249,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                   ┬  
    │                                   ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Colon
@@ -209,6 +259,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                    ┬  
    │                                    ╰── Expected Unexpected token in class body, found Colon
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Error
@@ -217,6 +269,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                      ┬  
    │                                      ╰── Expected Unexpected token in class body, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -225,6 +279,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                       ┬  
    │                                       ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found Error
@@ -233,6 +289,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                             ┬  
    │                                             ╰── Expected type, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Error
@@ -241,6 +299,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                             ┬  
    │                                             ╰── Expected Unexpected token in class body, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -249,6 +309,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                              ┬  
    │                                              ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected top-level declaration, found Quote
@@ -257,6 +319,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                                ┬  
    │                                                ╰── Expected top-level declaration, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected top-level declaration, found RParen
@@ -265,6 +329,8 @@ expression: output
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                                 ┬  
    │                                                 ╰── Expected top-level declaration, found RParen
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected top-level declaration, found RBrace
@@ -273,6 +339,8 @@ expression: output
  8 │ }
    │ ┬  
    │ ╰── Expected top-level declaration, found RBrace
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected RParen, found Word
@@ -281,6 +349,8 @@ expression: output
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                         ──┬──  
    │                                           ╰──── Expected RParen, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found Error
@@ -289,6 +359,8 @@ expression: output
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                              ┬  
    │                                              ╰── Expected type, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Error
@@ -297,6 +369,8 @@ expression: output
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                              ┬  
    │                                              ╰── Expected Unexpected token in class body, found Error
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -305,6 +379,8 @@ expression: output
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                               ┬  
    │                                               ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found Quote
@@ -313,6 +389,8 @@ expression: output
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                                ┬  
    │                                                ╰── Expected Unexpected token in class body, found Quote
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found RParen
@@ -321,6 +399,8 @@ expression: output
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                                 ┬  
    │                                                 ╰── Expected Unexpected token in class body, found RParen
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected function name, found Error
@@ -329,6 +409,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │ ─┬─  
     │  ╰─── Expected function name, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected parameter name, found Error
@@ -337,6 +419,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected parameter name, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected type annotation, found Error
@@ -345,6 +429,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected type annotation, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected RParen, found Error
@@ -353,6 +439,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected RParen, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected return type (->), found Error
@@ -361,6 +449,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected return type (->), found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected function body, found Error
@@ -369,6 +459,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected function body, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected top-level declaration, found Error
@@ -377,6 +469,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
     │               ╰─── Expected top-level declaration, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected top-level declaration, found Error
@@ -385,6 +479,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │                 ─┬─  
     │                  ╰─── Expected top-level declaration, found Error
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected top-level declaration, found Word
@@ -393,6 +489,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │                     ───┬──  
     │                        ╰──── Expected top-level declaration, found Word
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected top-level declaration, found RParen
@@ -401,6 +499,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │                           ┬  
     │                           ╰── Expected top-level declaration, found RParen
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected top-level declaration, found Arrow
@@ -409,6 +509,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │                             ─┬   
     │                              ╰─── Expected top-level declaration, found Arrow
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected top-level declaration, found Word
@@ -417,6 +519,8 @@ expression: output
  29 │     Return result with emojis: ✅ or ❌
     │                                ────┬───  
     │                                    ╰───── Expected top-level declaration, found Word
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected top-level declaration, found LBrace
@@ -425,6 +529,8 @@ expression: output
  30 │   "#
     │ ┬  
     │ ╰── Expected top-level declaration, found LBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected config block, found Word

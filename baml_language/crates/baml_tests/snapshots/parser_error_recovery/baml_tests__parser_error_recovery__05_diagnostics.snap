@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -9,6 +9,8 @@ expression: output
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
    │        ╰─── Expected class name, found IntegerLiteral
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected LBrace, found IntegerLiteral
@@ -17,6 +19,8 @@ expression: output
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
    │        ╰─── Expected LBrace, found IntegerLiteral
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected top-level declaration, found IntegerLiteral
@@ -25,6 +29,8 @@ expression: output
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
    │        ╰─── Expected top-level declaration, found IntegerLiteral
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected top-level declaration, found Word
@@ -33,6 +39,8 @@ expression: output
  1 │ class 123Invalid {  // Invalid class name
    │          ───┬───  
    │             ╰───── Expected top-level declaration, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected top-level declaration, found LBrace
@@ -41,6 +49,8 @@ expression: output
  1 │ class 123Invalid {  // Invalid class name
    │                  ┬  
    │                  ╰── Expected top-level declaration, found LBrace
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected top-level declaration, found Word
@@ -49,6 +59,8 @@ expression: output
  2 │   field string
    │   ──┬──  
    │     ╰──── Expected top-level declaration, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected top-level declaration, found Word
@@ -57,6 +69,8 @@ expression: output
  2 │   field string
    │         ───┬──  
    │            ╰──── Expected top-level declaration, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected top-level declaration, found RBrace
@@ -65,6 +79,8 @@ expression: output
  3 │ }
    │ ┬  
    │ ╰── Expected top-level declaration, found RBrace
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found LBrace
@@ -73,6 +89,8 @@ expression: output
  10 │ function Foo() -> {  // Missing return type
     │                   ┬  
     │                   ╰── Expected type, found LBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected LLM function missing 'prompt' field, found RBrace
@@ -81,6 +99,8 @@ expression: output
  12 │ }
     │ ┬  
     │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected RBrace, found Class
@@ -89,6 +109,8 @@ expression: output
  5 │ class Another {  // Should still parse this class
    │ ──┬──  
    │   ╰──── Expected RBrace, found Class
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found At
@@ -97,6 +119,8 @@ expression: output
  5 │   field3 string @  // Incomplete attribute
    │                 ┬  
    │                 ╰── Expected type, found At
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found At
@@ -105,6 +129,8 @@ expression: output
  6 │   field4 string @alias(  // Unclosed attribute
    │                 ┬  
    │                 ╰── Expected type, found At
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected RParen, found Word
@@ -113,6 +139,8 @@ expression: output
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
    │             ╰──── Expected RParen, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected type, found RBrace
@@ -121,6 +149,8 @@ expression: output
  8 │ }
    │ ┬  
    │ ╰── Expected type, found RBrace
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected RParen, found Function
@@ -129,6 +159,8 @@ expression: output
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
     │     ╰───── Expected RParen, found Function
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected return type (->), found Function
@@ -137,6 +169,8 @@ expression: output
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
     │     ╰───── Expected return type (->), found Function
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected function body, found Function
@@ -145,6 +179,8 @@ expression: output
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
     │     ╰───── Expected function body, found Function
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected LBrace, found Word
@@ -153,6 +189,8 @@ expression: output
  19 │   VALUE2
     │   ───┬──  
     │      ╰──── Expected LBrace, found Word
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected top-level declaration, found Word
@@ -161,6 +199,8 @@ expression: output
  19 │   VALUE2
     │   ───┬──  
     │      ╰──── Expected top-level declaration, found Word
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected top-level declaration, found RBrace
@@ -169,6 +209,8 @@ expression: output
  20 │ }
     │ ┬  
     │ ╰── Expected top-level declaration, found RBrace
+    │ 
+    │ Note: Error code: E0010
 ────╯
 
   [parse] Error: Expected RParen, found Word
@@ -177,6 +219,8 @@ expression: output
  4 │   field3 string @alias("another closed string")  // Should still parse this
    │                         ───┬───  
    │                            ╰───── Expected RParen, found Word
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected Unclosed string literal, found EOF
@@ -185,6 +229,8 @@ expression: output
  5 │ }
    │  ┬  
    │  ╰── Expected Unclosed string literal, found EOF
+   │ 
+   │ Note: Error code: E0010
 ───╯
 
   [parse] Error: Expected RBrace, found EOF
@@ -193,4 +239,6 @@ expression: output
  5 │ }
    │  ┬  
    │  ╰── Expected RBrace, found EOF
+   │ 
+   │ Note: Error code: E0010
 ───╯
