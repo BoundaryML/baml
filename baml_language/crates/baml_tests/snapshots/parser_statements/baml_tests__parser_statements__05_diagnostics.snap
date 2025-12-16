@@ -1,6 +1,34 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [type] Error: Unknown variable baml.Array.length
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Simple assignment
+   │ │ 
+   │ ╰─ Unknown variable baml.Array.length
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Unknown variable baml.Array.length
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Simple assignment
+   │ │ 
+   │ ╰─ Unknown variable baml.Array.length
+   │ 
+   │ Note: Error code: E0003
+───╯
+
+  [type] Error: Unknown variable baml.Array.length
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Simple assignment
+   │ │ 
+   │ ╰─ Unknown variable baml.Array.length
+   │ 
+   │ Note: Error code: E0003
+───╯

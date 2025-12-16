@@ -35,8 +35,13 @@ expression: output
     Return: Void
   Function iterator_style_for_loop:
     Return: Void
+    Errors:
+      - Unknown type baml.Array.length
   Function nested_for_loop:
     Return: Void
+    Errors:
+      - Unknown type baml.Array.length
+      - Unknown type baml.Array.length
   Function ConditionalLogic:
     Return: Void
   Function let_statements:

@@ -1073,6 +1073,8 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         Stmt::While {
             condition,
             body: while_body,
+            after,
+            origin: _, // origin is used for diagnostics, not type checking
         } => {
             let cond_ty = infer_expr(ctx, *condition, body);
             if !cond_ty.is_subtype_of(&Ty::Bool) {
@@ -1087,68 +1089,10 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
                 });
             }
             infer_expr(ctx, *while_body, body);
-        }
-
-        Stmt::ForIn {
-            pattern,
-            iterator,
-            body: for_body,
-        } => {
-            let iter_ty = infer_expr(ctx, *iterator, body);
-
-            // Extract element type from iterator
-            let elem_ty = match &iter_ty {
-                Ty::List(elem) => (**elem).clone(),
-                _ => Ty::Unknown,
-            };
-
-            ctx.push_scope();
-
-            // Bind the loop variable
-            let pat = &body.patterns[*pattern];
-            match pat {
-                Pattern::Binding(name) => {
-                    ctx.define(name.clone(), elem_ty);
-                }
+            // Type-check the after statement (for desugared C-style for loops)
+            if let Some(after_stmt) = after {
+                check_stmt(ctx, *after_stmt, body);
             }
-
-            infer_expr(ctx, *for_body, body);
-            ctx.pop_scope();
-        }
-
-        Stmt::ForCStyle {
-            initializer,
-            condition,
-            update,
-            body: for_body,
-        } => {
-            ctx.push_scope();
-
-            if let Some(init_stmt) = initializer {
-                check_stmt(ctx, *init_stmt, body);
-            }
-
-            if let Some(cond) = condition {
-                let cond_ty = infer_expr(ctx, *cond, body);
-                if !cond_ty.is_subtype_of(&Ty::Bool) {
-                    let span = Span::new(
-                        baml_base::FileId::new(0),
-                        text_size::TextRange::empty(0.into()),
-                    );
-                    ctx.push_error(TypeError::TypeMismatch {
-                        expected: Ty::Bool,
-                        found: cond_ty,
-                        span,
-                    });
-                }
-            }
-
-            if let Some(upd) = update {
-                check_stmt(ctx, *upd, body);
-            }
-
-            infer_expr(ctx, *for_body, body);
-            ctx.pop_scope();
         }
 
         Stmt::Break | Stmt::Continue => {

@@ -3,7 +3,7 @@
 use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
+#[ignore = "requires baml.Array.length to be registered as a built-in"]
 fn for_loop_sum() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -27,7 +27,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
+#[ignore = "requires baml.Array.length to be registered as a built-in"]
 fn for_loop_with_break() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -54,7 +54,7 @@ fn for_loop_with_break() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
+#[ignore = "requires baml.Array.length to be registered as a built-in"]
 fn for_loop_with_continue() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -81,7 +81,7 @@ fn for_loop_with_continue() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
+#[ignore = "requires baml.Array.length to be registered as a built-in"]
 fn for_loop_nested() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

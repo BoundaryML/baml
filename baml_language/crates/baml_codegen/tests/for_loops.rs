@@ -11,7 +11,7 @@ use baml_vm::{BinOp, CmpOp};
 // ============================================================================
 
 #[test]
-#[ignore = "for-in loops with function params not yet working"]
+#[ignore = "requires baml.Array.length to be registered as a built-in"]
 fn for_loop_sum() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -62,7 +62,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "for-in loops with function params not yet working"]
+#[ignore = "requires baml.Array.length to be registered as a built-in"]
 fn for_with_break() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -125,7 +125,7 @@ fn for_with_break() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "for-in loops with function params not yet working"]
+#[ignore = "requires baml.Array.length to be registered as a built-in"]
 fn for_with_continue() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -188,7 +188,7 @@ fn for_with_continue() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "for-in loops with function params not yet working"]
+#[ignore = "requires baml.Array.length to be registered as a built-in"]
 fn for_nested() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"

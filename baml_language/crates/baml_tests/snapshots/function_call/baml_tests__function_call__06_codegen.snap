@@ -31,11 +31,10 @@ Function GreetBaz (arity: 1, kind: Exec):
      7   RETURN             
 
 Function Greeting (arity: 1, kind: Exec):
-     0   LOAD_CONST 0   (
-      "Hello, ")
+     0   LOAD_CONST 0   (Hello, )
      1   LOAD_VAR 1     (self)
      2   LOAD_FIELD 0   
      3   BIN_OP +       
-     4   LOAD_CONST 1   ( "!")
+     4   LOAD_CONST 1   (!)
      5   BIN_OP +       
      6   RETURN
