@@ -36,6 +36,8 @@ cargo run --bin baml_onionskin -- --from path/to/your/directory
 | `Mouse Wheel` | Scroll output |
 | `s` | Create/update snapshot (onion skin) |
 | `S` (Shift+S) | Delete snapshot |
+| `c` / `y` | Copy current output to clipboard |
+| `p` | Paste/show clipboard contents |
 | `q` | Quit |
 | `Ctrl+C` | Exit |
 
