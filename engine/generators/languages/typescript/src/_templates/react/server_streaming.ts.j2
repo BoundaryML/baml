@@ -30,11 +30,11 @@ export const {{ func.name }} = async (
   {{ name }}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
   {%- endfor %}
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.{{ func.name }}(
+  const __stream__ = b.stream.{{ func.name }}(
     {%- for (name, _) in func.args %}
     {{ name }},
     {%- endfor %}
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 {%- endfor %}

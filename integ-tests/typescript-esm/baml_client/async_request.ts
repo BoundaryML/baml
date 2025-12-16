@@ -46,9 +46,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AaaSamOutputFormat",
@@ -59,7 +59,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -71,9 +71,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AliasThatPointsToRecursiveType",
@@ -84,7 +84,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -96,9 +96,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AliasWithMultipleAttrs",
@@ -109,7 +109,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -121,9 +121,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AliasedInputClass",
@@ -134,7 +134,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -146,9 +146,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AliasedInputClass2",
@@ -159,7 +159,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -171,9 +171,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AliasedInputClassNested",
@@ -184,7 +184,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -196,9 +196,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AliasedInputEnum",
@@ -209,7 +209,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -221,9 +221,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AliasedInputList",
@@ -234,7 +234,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -246,9 +246,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AllowedOptionals",
@@ -259,7 +259,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -271,9 +271,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AssertFn",
@@ -284,7 +284,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -296,9 +296,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AudioInput",
@@ -309,7 +309,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -321,9 +321,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AudioInputOpenai",
@@ -334,7 +334,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -346,9 +346,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "BuildLinkedList",
@@ -359,7 +359,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -371,9 +371,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "BuildTree",
@@ -384,7 +384,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -396,9 +396,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "CheckWordEquality",
@@ -409,7 +409,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -421,9 +421,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ChooseTodoTools",
@@ -434,7 +434,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -446,9 +446,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ClassThatPointsToRecursiveClassThroughAlias",
@@ -459,7 +459,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -471,9 +471,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ClassifyDynEnumTwo",
@@ -484,7 +484,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -496,9 +496,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ClassifyDynamicStatus",
@@ -509,7 +509,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -521,9 +521,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ClassifyMessage",
@@ -534,7 +534,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -546,9 +546,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ClassifyMessage2",
@@ -559,7 +559,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -571,9 +571,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ClassifyMessage3",
@@ -584,7 +584,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -596,9 +596,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "Completion",
@@ -609,7 +609,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -621,9 +621,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "CustomTask",
@@ -634,7 +634,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -646,9 +646,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DescribeAudio",
@@ -659,7 +659,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -671,9 +671,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DescribeAudio2",
@@ -684,7 +684,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -696,9 +696,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DescribeImage",
@@ -709,7 +709,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -721,9 +721,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DescribeImage2",
@@ -734,7 +734,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -746,9 +746,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DescribeImage3",
@@ -759,7 +759,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -771,9 +771,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DescribeImage4",
@@ -784,7 +784,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -796,9 +796,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DescribeMedia1599",
@@ -809,7 +809,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -821,9 +821,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DifferentiateUnions",
@@ -834,7 +834,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -846,9 +846,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DummyOutputFunction",
@@ -859,7 +859,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -871,9 +871,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DynamicFunc",
@@ -884,7 +884,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -896,9 +896,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DynamicInputOutput",
@@ -909,7 +909,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -921,9 +921,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "DynamicListInputOutput",
@@ -934,7 +934,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -946,9 +946,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExpectFailure",
@@ -959,7 +959,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -971,9 +971,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractContactInfo",
@@ -984,7 +984,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -996,9 +996,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractDynamicCategories",
@@ -1009,7 +1009,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1021,9 +1021,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractEntities",
@@ -1034,7 +1034,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1046,9 +1046,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractHobby",
@@ -1059,7 +1059,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1071,9 +1071,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractName",
@@ -1084,7 +1084,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1096,9 +1096,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractNames",
@@ -1109,7 +1109,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1121,9 +1121,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractPeople",
@@ -1134,7 +1134,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1146,9 +1146,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractPersonWithMeta",
@@ -1159,7 +1159,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1171,9 +1171,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractReceiptInfo",
@@ -1184,7 +1184,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1196,9 +1196,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractResume",
@@ -1209,7 +1209,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1221,9 +1221,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExtractResume2",
@@ -1234,7 +1234,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1246,9 +1246,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnAlwaysFails",
@@ -1259,7 +1259,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1271,9 +1271,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnClassOptionalOutput",
@@ -1284,7 +1284,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1296,9 +1296,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnClassOptionalOutput2",
@@ -1309,7 +1309,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1321,9 +1321,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnEnumListOutput",
@@ -1334,7 +1334,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1346,9 +1346,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnEnumOutput",
@@ -1359,7 +1359,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1371,9 +1371,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnFailRetryConstantDelay",
@@ -1384,7 +1384,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1396,9 +1396,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnFailRetryExponentialDelay",
@@ -1409,7 +1409,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1421,9 +1421,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnFallbackAlwaysFails",
@@ -1434,7 +1434,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1446,9 +1446,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnLiteralClassInputOutput",
@@ -1459,7 +1459,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1471,9 +1471,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnLiteralUnionClassInputOutput",
@@ -1484,7 +1484,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1496,9 +1496,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnNamedArgsSingleStringOptional",
@@ -1509,7 +1509,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1521,9 +1521,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnOutputBool",
@@ -1534,7 +1534,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1546,9 +1546,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnOutputClass",
@@ -1559,7 +1559,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1571,9 +1571,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnOutputClassList",
@@ -1584,7 +1584,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1596,9 +1596,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnOutputClassNested",
@@ -1609,7 +1609,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1621,9 +1621,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnOutputClassWithEnum",
@@ -1634,7 +1634,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1646,9 +1646,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnOutputInt",
@@ -1659,7 +1659,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1671,9 +1671,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnOutputLiteralBool",
@@ -1684,7 +1684,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1696,9 +1696,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnOutputLiteralInt",
@@ -1709,7 +1709,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1721,9 +1721,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnOutputLiteralString",
@@ -1734,7 +1734,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1746,9 +1746,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnOutputStringList",
@@ -1759,7 +1759,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1771,9 +1771,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnTestAliasedEnumOutput",
@@ -1784,7 +1784,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1796,9 +1796,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnTestClassAlias",
@@ -1809,7 +1809,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1821,9 +1821,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "FnTestNamedArgsSingleEnum",
@@ -1834,7 +1834,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1846,9 +1846,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "GetDataType",
@@ -1859,7 +1859,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1871,9 +1871,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "GetOrderInfo",
@@ -1884,7 +1884,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1896,9 +1896,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "GetQuery",
@@ -1909,7 +1909,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1921,9 +1921,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "InOutEnumMapKey",
@@ -1934,7 +1934,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1946,9 +1946,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "InOutLiteralStringUnionMapKey",
@@ -1959,7 +1959,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1971,9 +1971,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "InOutSingleLiteralStringMapKey",
@@ -1984,7 +1984,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -1996,9 +1996,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "JsonTypeAliasCycle",
@@ -2009,7 +2009,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2021,9 +2021,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "LLMEcho",
@@ -2034,7 +2034,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2046,9 +2046,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "LiteralUnionsTest",
@@ -2059,7 +2059,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2071,9 +2071,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "LlmReturnNumber",
@@ -2084,7 +2084,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2096,9 +2096,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "MakeBlockConstraint",
@@ -2109,7 +2109,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2121,9 +2121,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "MakeClassWithBlockDone",
@@ -2134,7 +2134,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2146,9 +2146,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "MakeClassWithExternalDone",
@@ -2159,7 +2159,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2171,9 +2171,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "MakeNestedBlockConstraint",
@@ -2184,7 +2184,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2196,9 +2196,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "MakeSemanticContainer",
@@ -2209,7 +2209,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2221,9 +2221,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "MapAlias",
@@ -2234,7 +2234,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2246,9 +2246,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "MergeAliasAttributes",
@@ -2259,7 +2259,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2271,9 +2271,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "MyFunc",
@@ -2284,7 +2284,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2296,9 +2296,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "NestedAlias",
@@ -2309,7 +2309,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2321,9 +2321,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "NullLiteralClassHello",
@@ -2334,7 +2334,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2346,9 +2346,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "OpenAIGPT4oMissingBaseUrlEnvVar",
@@ -2359,7 +2359,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2371,9 +2371,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "OpenAIWithAnthropicResponseHello",
@@ -2384,7 +2384,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2396,9 +2396,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "OptionalTest_Function",
@@ -2409,7 +2409,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2421,9 +2421,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PdfInput",
@@ -2434,7 +2434,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2446,9 +2446,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PdfInputAnthropic",
@@ -2459,7 +2459,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2471,9 +2471,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PdfInputOpenai",
@@ -2484,7 +2484,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2496,9 +2496,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PdfInputVertex",
@@ -2509,7 +2509,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2521,9 +2521,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PredictAge",
@@ -2534,7 +2534,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2546,9 +2546,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PredictAgeBare",
@@ -2559,7 +2559,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2571,9 +2571,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PrimitiveAlias",
@@ -2584,7 +2584,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2596,9 +2596,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PromptTestClaude",
@@ -2609,7 +2609,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2621,9 +2621,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PromptTestClaudeChat",
@@ -2634,7 +2634,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2646,9 +2646,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PromptTestClaudeChatNoSystem",
@@ -2659,7 +2659,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2671,9 +2671,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PromptTestOpenAI",
@@ -2684,7 +2684,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2696,9 +2696,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PromptTestOpenAIChat",
@@ -2709,7 +2709,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2721,9 +2721,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PromptTestOpenAIChatNoSystem",
@@ -2734,7 +2734,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2746,9 +2746,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "PromptTestStreaming",
@@ -2759,7 +2759,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2771,9 +2771,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "RecursiveAliasCycle",
@@ -2784,7 +2784,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2796,9 +2796,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "RecursiveClassWithAliasIndirection",
@@ -2809,7 +2809,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2821,9 +2821,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "RecursiveUnionTest",
@@ -2834,7 +2834,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2846,9 +2846,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "RenderDynamicClass",
@@ -2859,7 +2859,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2871,9 +2871,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "RenderDynamicEnum",
@@ -2884,7 +2884,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2896,9 +2896,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ReturnAliasWithMergedAttributes",
@@ -2909,7 +2909,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2921,9 +2921,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ReturnFailingAssert",
@@ -2934,7 +2934,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2946,9 +2946,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ReturnJsonEntry",
@@ -2959,7 +2959,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2971,9 +2971,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ReturnMalformedConstraints",
@@ -2984,7 +2984,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -2996,9 +2996,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "SchemaDescriptions",
@@ -3009,7 +3009,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3021,9 +3021,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "SimpleRecursiveListAlias",
@@ -3034,7 +3034,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3046,9 +3046,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "SimpleRecursiveMapAlias",
@@ -3059,7 +3059,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3071,9 +3071,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "StreamBigNumbers",
@@ -3084,7 +3084,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3096,9 +3096,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "StreamFailingAssertion",
@@ -3109,7 +3109,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3121,9 +3121,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "StreamFailingCheck",
@@ -3134,7 +3134,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3146,9 +3146,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "StreamOneBigNumber",
@@ -3159,7 +3159,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3171,9 +3171,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "StreamUnionIntegers",
@@ -3184,7 +3184,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3196,9 +3196,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "StreamingCompoundNumbers",
@@ -3209,7 +3209,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3221,9 +3221,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "StructureDocument1559",
@@ -3234,7 +3234,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3246,9 +3246,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TakeRecAliasDep",
@@ -3259,7 +3259,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3271,9 +3271,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TellStory",
@@ -3284,7 +3284,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3296,9 +3296,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAbortFallbackChain",
@@ -3309,7 +3309,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3321,9 +3321,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAnthropic",
@@ -3334,7 +3334,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3346,9 +3346,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAnthropicShorthand",
@@ -3359,7 +3359,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3371,9 +3371,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAws",
@@ -3384,7 +3384,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3396,9 +3396,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAwsClaude37",
@@ -3409,7 +3409,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3421,9 +3421,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAwsInferenceProfile",
@@ -3434,7 +3434,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3446,9 +3446,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAwsInvalidAccessKey",
@@ -3459,7 +3459,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3471,9 +3471,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAwsInvalidEndpoint",
@@ -3484,7 +3484,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3496,9 +3496,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAwsInvalidProfile",
@@ -3509,7 +3509,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3521,9 +3521,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAwsInvalidRegion",
@@ -3534,7 +3534,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3546,9 +3546,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAwsInvalidSessionToken",
@@ -3559,7 +3559,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3571,9 +3571,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAwsVideoDescribe",
@@ -3584,7 +3584,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3596,9 +3596,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAzure",
@@ -3609,7 +3609,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3621,9 +3621,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAzureFailure",
@@ -3634,7 +3634,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3646,9 +3646,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAzureO1NoMaxTokens",
@@ -3659,7 +3659,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3671,9 +3671,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAzureO1WithMaxCompletionTokens",
@@ -3684,7 +3684,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3696,9 +3696,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAzureO1WithMaxTokens",
@@ -3709,7 +3709,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3721,9 +3721,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAzureO3NoMaxTokens",
@@ -3734,7 +3734,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3746,9 +3746,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAzureO3WithMaxCompletionTokens",
@@ -3759,7 +3759,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3771,9 +3771,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestAzureWithMaxTokens",
@@ -3784,7 +3784,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3796,9 +3796,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestCaching",
@@ -3809,7 +3809,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3821,9 +3821,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestDefaultStreamingTimeout",
@@ -3834,7 +3834,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3846,9 +3846,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFallbackClient",
@@ -3859,7 +3859,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3871,9 +3871,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFallbackStrategy",
@@ -3884,7 +3884,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3896,9 +3896,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFallbackToShorthand",
@@ -3909,7 +3909,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3921,9 +3921,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleBool",
@@ -3934,7 +3934,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3946,9 +3946,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleClass",
@@ -3959,7 +3959,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3971,9 +3971,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleEnumList",
@@ -3984,7 +3984,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -3996,9 +3996,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleFloat",
@@ -4009,7 +4009,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4021,9 +4021,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleInt",
@@ -4034,7 +4034,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4046,9 +4046,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleMapStringToClass",
@@ -4059,7 +4059,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4071,9 +4071,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleMapStringToMap",
@@ -4084,7 +4084,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4096,9 +4096,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleMapStringToString",
@@ -4109,7 +4109,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4121,9 +4121,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleString",
@@ -4134,7 +4134,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4146,9 +4146,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleStringArray",
@@ -4159,7 +4159,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4171,9 +4171,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestFnNamedArgsSingleStringList",
@@ -4184,7 +4184,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4196,9 +4196,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestGemini",
@@ -4209,7 +4209,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4221,9 +4221,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestGeminiOpenAiGeneric",
@@ -4234,7 +4234,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4246,9 +4246,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestGeminiSystem",
@@ -4259,7 +4259,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4271,9 +4271,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestGeminiSystemAsChat",
@@ -4284,7 +4284,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4296,9 +4296,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestGeminiThinking",
@@ -4309,7 +4309,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4321,9 +4321,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestGroq",
@@ -4334,7 +4334,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4346,9 +4346,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestImageInput",
@@ -4359,7 +4359,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4371,9 +4371,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestImageInputAnthropic",
@@ -4384,7 +4384,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4396,9 +4396,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestImageListInput",
@@ -4409,7 +4409,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4421,9 +4421,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestMemory",
@@ -4434,7 +4434,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4446,9 +4446,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestMulticlassNamedArgs",
@@ -4459,7 +4459,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4471,9 +4471,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestNamedArgsLiteralBool",
@@ -4484,7 +4484,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4496,9 +4496,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestNamedArgsLiteralInt",
@@ -4509,7 +4509,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4521,9 +4521,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestNamedArgsLiteralString",
@@ -4534,7 +4534,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4546,9 +4546,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOllama",
@@ -4559,7 +4559,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4571,9 +4571,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOllamaHaiku",
@@ -4584,7 +4584,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4596,9 +4596,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAI",
@@ -4609,7 +4609,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4621,9 +4621,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIDummyClient",
@@ -4634,7 +4634,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4646,9 +4646,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIGPT4oMini",
@@ -4659,7 +4659,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4671,9 +4671,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIGPT4oMini2",
@@ -4684,7 +4684,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4696,9 +4696,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIGPT4oMini3",
@@ -4709,7 +4709,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4721,9 +4721,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAILegacyProvider",
@@ -4734,7 +4734,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4746,9 +4746,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIO1NoMaxTokens",
@@ -4759,7 +4759,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4771,9 +4771,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIO1WithMaxCompletionTokens",
@@ -4784,7 +4784,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4796,9 +4796,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIO1WithMaxTokens",
@@ -4809,7 +4809,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4821,9 +4821,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIProviderWithResponsesType",
@@ -4834,7 +4834,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4846,9 +4846,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponses",
@@ -4859,7 +4859,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4871,9 +4871,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesAllRoles",
@@ -4884,7 +4884,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4896,9 +4896,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesAutoType",
@@ -4909,7 +4909,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4921,9 +4921,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesConversation",
@@ -4934,7 +4934,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4946,9 +4946,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesCustomURL",
@@ -4959,7 +4959,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4971,9 +4971,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesDifferentModel",
@@ -4984,7 +4984,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -4996,9 +4996,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesEndpoint",
@@ -5009,7 +5009,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5021,9 +5021,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesExplicit",
@@ -5034,7 +5034,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5046,9 +5046,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesFunctionCall",
@@ -5059,7 +5059,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5071,9 +5071,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesImageInput",
@@ -5084,7 +5084,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5096,9 +5096,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesReasoning",
@@ -5109,7 +5109,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5121,9 +5121,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesShorthand",
@@ -5134,7 +5134,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5146,9 +5146,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesWebSearch",
@@ -5159,7 +5159,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5171,9 +5171,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIResponsesWithOpenAIResponseType",
@@ -5184,7 +5184,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5196,9 +5196,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIShorthand",
@@ -5209,7 +5209,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5221,9 +5221,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIWithFinishReasonError",
@@ -5234,7 +5234,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5246,9 +5246,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIWithMaxTokens",
@@ -5259,7 +5259,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5271,9 +5271,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenAIWithNullMaxTokens",
@@ -5284,7 +5284,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5296,9 +5296,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenRouterMistralSmall3_1_24b",
@@ -5309,7 +5309,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5321,9 +5321,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestOpenaiResponsesPdfs",
@@ -5334,7 +5334,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5346,9 +5346,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestRequestTimeout",
@@ -5359,7 +5359,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5371,9 +5371,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestRetryConstant",
@@ -5384,7 +5384,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5396,9 +5396,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestRetryExponential",
@@ -5409,7 +5409,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5421,9 +5421,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestRoundRobinStrategy",
@@ -5434,7 +5434,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5446,9 +5446,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestSingleFallbackClient",
@@ -5459,7 +5459,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5471,9 +5471,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestStreamingTimeout",
@@ -5484,7 +5484,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5496,9 +5496,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestThinking",
@@ -5509,7 +5509,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5521,9 +5521,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestTimeoutError",
@@ -5534,7 +5534,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5546,9 +5546,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestTimeoutFallback",
@@ -5559,7 +5559,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5571,9 +5571,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestUniverseQuestion",
@@ -5584,7 +5584,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5596,9 +5596,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestVertex",
@@ -5609,7 +5609,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5621,9 +5621,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestVertexClaude",
@@ -5634,7 +5634,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5646,9 +5646,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestVertexWithSystemInstructions",
@@ -5659,7 +5659,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5671,9 +5671,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "TestZeroTimeout",
@@ -5684,7 +5684,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5696,9 +5696,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "UnionTest_Function",
@@ -5709,7 +5709,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5721,9 +5721,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "UseBlockConstraint",
@@ -5734,7 +5734,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5746,9 +5746,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "UseMaintainFieldOrder",
@@ -5759,7 +5759,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5771,9 +5771,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "UseMalformedConstraints",
@@ -5784,7 +5784,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5796,9 +5796,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "UseNestedBlockConstraint",
@@ -5809,7 +5809,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5821,9 +5821,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ValidateBasicResponses",
@@ -5834,7 +5834,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5846,9 +5846,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ValidateResponseTypes",
@@ -5859,7 +5859,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5871,9 +5871,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "VideoInputGemini",
@@ -5884,7 +5884,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5896,9 +5896,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<never>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "VideoInputVertex",
@@ -5909,7 +5909,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5921,9 +5921,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.AnotherTakedownEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AnotherTakedown",
@@ -5934,7 +5934,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5946,9 +5946,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.AssignElseIfExprEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "AssignElseIfExpr",
@@ -5959,7 +5959,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5971,9 +5971,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.BoolToIntWithIfElseEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "BoolToIntWithIfElse",
@@ -5984,7 +5984,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -5996,9 +5996,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.BoolToIntWithIfElseCallingLlmEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "BoolToIntWithIfElseCallingLlm",
@@ -6009,7 +6009,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6021,9 +6021,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.CallLlmDescribeImageEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "CallLlmDescribeImage",
@@ -6034,7 +6034,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6046,9 +6046,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.CallReturnOneEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "CallReturnOne",
@@ -6059,7 +6059,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6071,9 +6071,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.ChainedCallsEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ChainedCalls",
@@ -6084,7 +6084,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6096,9 +6096,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "EchoWorkflow",
@@ -6109,7 +6109,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6121,9 +6121,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.ExecFetchAsEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExecFetchAs",
@@ -6134,7 +6134,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6146,9 +6146,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPostRequestEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExecFetchAsWithHttpPostRequest",
@@ -6159,7 +6159,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6171,9 +6171,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ExecFetchAsWithHttpPutRequestAndClassJson",
@@ -6184,7 +6184,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6196,9 +6196,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.HomeEnvVarIsEmptyEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "HomeEnvVarIsEmpty",
@@ -6209,7 +6209,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6221,9 +6221,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "IsTargetWord",
@@ -6234,7 +6234,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6246,9 +6246,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "IsTargetWord2",
@@ -6259,7 +6259,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6271,9 +6271,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.IterativeFibonacciEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "IterativeFibonacci",
@@ -6284,7 +6284,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6296,9 +6296,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.NormalElseIfStmtEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "NormalElseIfStmt",
@@ -6309,7 +6309,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6321,9 +6321,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "NotEmpty",
@@ -6334,7 +6334,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6346,9 +6346,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.ReturnCategoryEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ReturnCategory",
@@ -6359,7 +6359,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6371,9 +6371,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.ReturnElseIfExprEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ReturnElseIfExpr",
@@ -6384,7 +6384,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6396,9 +6396,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.ReturnImageFromUrlEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ReturnImageFromUrl",
@@ -6409,7 +6409,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6421,9 +6421,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.ReturnNumberEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ReturnNumber",
@@ -6434,7 +6434,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6446,9 +6446,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.ReturnNumberCallingLlmEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ReturnNumberCallingLlm",
@@ -6459,7 +6459,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6471,9 +6471,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.ReturnOneEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "ReturnOne",
@@ -6484,7 +6484,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6496,9 +6496,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "SimpleWatchWithFilter",
@@ -6509,7 +6509,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6521,9 +6521,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.StoreFnCallInLocalVarEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "StoreFnCallInLocalVar",
@@ -6534,7 +6534,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6546,9 +6546,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.StoreLlmCallInLocalVarEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "StoreLlmCallInLocalVar",
@@ -6559,7 +6559,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6571,9 +6571,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.SumArrayEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "SumArray",
@@ -6584,7 +6584,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6596,9 +6596,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.SumFromToEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "SumFromTo",
@@ -6609,7 +6609,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6621,9 +6621,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "WorkflowWatch",
@@ -6634,7 +6634,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6646,9 +6646,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.WorkflowWatchChildEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "WorkflowWatchChild",
@@ -6659,7 +6659,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6671,9 +6671,9 @@ env?: Record<string, string | undefined>
   __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
   ): Promise<HTTPRequest> {
     try {
-    const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-    const env: Record<string, string> = Object.fromEntries(
-      Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return await this.runtime.buildRequest(
       "WorkflowWatchWithFilter",
@@ -6684,7 +6684,7 @@ env?: Record<string, string | undefined>
       __baml_options__?.tb?.__tb(),
       __baml_options__?.clientRegistry,
       false,
-      env
+      __env__
       )
       } catch (error) {
       throw toBamlError(error);
@@ -6702,9 +6702,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AaaSamOutputFormat",
@@ -6715,7 +6715,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6727,9 +6727,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AliasThatPointsToRecursiveType",
@@ -6740,7 +6740,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6752,9 +6752,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AliasWithMultipleAttrs",
@@ -6765,7 +6765,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6777,9 +6777,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AliasedInputClass",
@@ -6790,7 +6790,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6802,9 +6802,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AliasedInputClass2",
@@ -6815,7 +6815,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6827,9 +6827,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AliasedInputClassNested",
@@ -6840,7 +6840,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6852,9 +6852,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AliasedInputEnum",
@@ -6865,7 +6865,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6877,9 +6877,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AliasedInputList",
@@ -6890,7 +6890,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6902,9 +6902,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AllowedOptionals",
@@ -6915,7 +6915,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6927,9 +6927,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AssertFn",
@@ -6940,7 +6940,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6952,9 +6952,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AudioInput",
@@ -6965,7 +6965,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -6977,9 +6977,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AudioInputOpenai",
@@ -6990,7 +6990,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7002,9 +7002,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "BuildLinkedList",
@@ -7015,7 +7015,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7027,9 +7027,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "BuildTree",
@@ -7040,7 +7040,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7052,9 +7052,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "CheckWordEquality",
@@ -7065,7 +7065,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7077,9 +7077,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ChooseTodoTools",
@@ -7090,7 +7090,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7102,9 +7102,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ClassThatPointsToRecursiveClassThroughAlias",
@@ -7115,7 +7115,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7127,9 +7127,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ClassifyDynEnumTwo",
@@ -7140,7 +7140,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7152,9 +7152,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ClassifyDynamicStatus",
@@ -7165,7 +7165,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7177,9 +7177,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ClassifyMessage",
@@ -7190,7 +7190,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7202,9 +7202,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ClassifyMessage2",
@@ -7215,7 +7215,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7227,9 +7227,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ClassifyMessage3",
@@ -7240,7 +7240,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7252,9 +7252,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "Completion",
@@ -7265,7 +7265,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7277,9 +7277,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "CustomTask",
@@ -7290,7 +7290,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7302,9 +7302,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DescribeAudio",
@@ -7315,7 +7315,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7327,9 +7327,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DescribeAudio2",
@@ -7340,7 +7340,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7352,9 +7352,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DescribeImage",
@@ -7365,7 +7365,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7377,9 +7377,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DescribeImage2",
@@ -7390,7 +7390,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7402,9 +7402,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DescribeImage3",
@@ -7415,7 +7415,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7427,9 +7427,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DescribeImage4",
@@ -7440,7 +7440,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7452,9 +7452,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DescribeMedia1599",
@@ -7465,7 +7465,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7477,9 +7477,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DifferentiateUnions",
@@ -7490,7 +7490,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7502,9 +7502,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DummyOutputFunction",
@@ -7515,7 +7515,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7527,9 +7527,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DynamicFunc",
@@ -7540,7 +7540,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7552,9 +7552,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DynamicInputOutput",
@@ -7565,7 +7565,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7577,9 +7577,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "DynamicListInputOutput",
@@ -7590,7 +7590,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7602,9 +7602,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExpectFailure",
@@ -7615,7 +7615,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7627,9 +7627,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractContactInfo",
@@ -7640,7 +7640,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7652,9 +7652,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractDynamicCategories",
@@ -7665,7 +7665,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7677,9 +7677,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractEntities",
@@ -7690,7 +7690,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7702,9 +7702,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractHobby",
@@ -7715,7 +7715,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7727,9 +7727,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractName",
@@ -7740,7 +7740,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7752,9 +7752,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractNames",
@@ -7765,7 +7765,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7777,9 +7777,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractPeople",
@@ -7790,7 +7790,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7802,9 +7802,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractPersonWithMeta",
@@ -7815,7 +7815,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7827,9 +7827,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractReceiptInfo",
@@ -7840,7 +7840,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7852,9 +7852,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractResume",
@@ -7865,7 +7865,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7877,9 +7877,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExtractResume2",
@@ -7890,7 +7890,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7902,9 +7902,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnAlwaysFails",
@@ -7915,7 +7915,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7927,9 +7927,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnClassOptionalOutput",
@@ -7940,7 +7940,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7952,9 +7952,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnClassOptionalOutput2",
@@ -7965,7 +7965,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -7977,9 +7977,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnEnumListOutput",
@@ -7990,7 +7990,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8002,9 +8002,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnEnumOutput",
@@ -8015,7 +8015,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8027,9 +8027,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnFailRetryConstantDelay",
@@ -8040,7 +8040,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8052,9 +8052,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnFailRetryExponentialDelay",
@@ -8065,7 +8065,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8077,9 +8077,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnFallbackAlwaysFails",
@@ -8090,7 +8090,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8102,9 +8102,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnLiteralClassInputOutput",
@@ -8115,7 +8115,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8127,9 +8127,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnLiteralUnionClassInputOutput",
@@ -8140,7 +8140,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8152,9 +8152,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnNamedArgsSingleStringOptional",
@@ -8165,7 +8165,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8177,9 +8177,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnOutputBool",
@@ -8190,7 +8190,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8202,9 +8202,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnOutputClass",
@@ -8215,7 +8215,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8227,9 +8227,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnOutputClassList",
@@ -8240,7 +8240,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8252,9 +8252,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnOutputClassNested",
@@ -8265,7 +8265,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8277,9 +8277,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnOutputClassWithEnum",
@@ -8290,7 +8290,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8302,9 +8302,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnOutputInt",
@@ -8315,7 +8315,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8327,9 +8327,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnOutputLiteralBool",
@@ -8340,7 +8340,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8352,9 +8352,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnOutputLiteralInt",
@@ -8365,7 +8365,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8377,9 +8377,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnOutputLiteralString",
@@ -8390,7 +8390,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8402,9 +8402,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnOutputStringList",
@@ -8415,7 +8415,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8427,9 +8427,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnTestAliasedEnumOutput",
@@ -8440,7 +8440,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8452,9 +8452,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnTestClassAlias",
@@ -8465,7 +8465,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8477,9 +8477,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "FnTestNamedArgsSingleEnum",
@@ -8490,7 +8490,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8502,9 +8502,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "GetDataType",
@@ -8515,7 +8515,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8527,9 +8527,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "GetOrderInfo",
@@ -8540,7 +8540,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8552,9 +8552,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "GetQuery",
@@ -8565,7 +8565,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8577,9 +8577,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "InOutEnumMapKey",
@@ -8590,7 +8590,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8602,9 +8602,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "InOutLiteralStringUnionMapKey",
@@ -8615,7 +8615,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8627,9 +8627,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "InOutSingleLiteralStringMapKey",
@@ -8640,7 +8640,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8652,9 +8652,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "JsonTypeAliasCycle",
@@ -8665,7 +8665,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8677,9 +8677,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "LLMEcho",
@@ -8690,7 +8690,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8702,9 +8702,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "LiteralUnionsTest",
@@ -8715,7 +8715,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8727,9 +8727,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "LlmReturnNumber",
@@ -8740,7 +8740,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8752,9 +8752,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "MakeBlockConstraint",
@@ -8765,7 +8765,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8777,9 +8777,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "MakeClassWithBlockDone",
@@ -8790,7 +8790,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8802,9 +8802,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "MakeClassWithExternalDone",
@@ -8815,7 +8815,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8827,9 +8827,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "MakeNestedBlockConstraint",
@@ -8840,7 +8840,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8852,9 +8852,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "MakeSemanticContainer",
@@ -8865,7 +8865,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8877,9 +8877,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "MapAlias",
@@ -8890,7 +8890,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8902,9 +8902,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "MergeAliasAttributes",
@@ -8915,7 +8915,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8927,9 +8927,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "MyFunc",
@@ -8940,7 +8940,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8952,9 +8952,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "NestedAlias",
@@ -8965,7 +8965,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -8977,9 +8977,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "NullLiteralClassHello",
@@ -8990,7 +8990,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9002,9 +9002,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "OpenAIGPT4oMissingBaseUrlEnvVar",
@@ -9015,7 +9015,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9027,9 +9027,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "OpenAIWithAnthropicResponseHello",
@@ -9040,7 +9040,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9052,9 +9052,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "OptionalTest_Function",
@@ -9065,7 +9065,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9077,9 +9077,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PdfInput",
@@ -9090,7 +9090,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9102,9 +9102,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PdfInputAnthropic",
@@ -9115,7 +9115,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9127,9 +9127,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PdfInputOpenai",
@@ -9140,7 +9140,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9152,9 +9152,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PdfInputVertex",
@@ -9165,7 +9165,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9177,9 +9177,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PredictAge",
@@ -9190,7 +9190,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9202,9 +9202,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PredictAgeBare",
@@ -9215,7 +9215,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9227,9 +9227,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PrimitiveAlias",
@@ -9240,7 +9240,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9252,9 +9252,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PromptTestClaude",
@@ -9265,7 +9265,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9277,9 +9277,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PromptTestClaudeChat",
@@ -9290,7 +9290,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9302,9 +9302,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PromptTestClaudeChatNoSystem",
@@ -9315,7 +9315,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9327,9 +9327,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PromptTestOpenAI",
@@ -9340,7 +9340,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9352,9 +9352,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PromptTestOpenAIChat",
@@ -9365,7 +9365,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9377,9 +9377,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PromptTestOpenAIChatNoSystem",
@@ -9390,7 +9390,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9402,9 +9402,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "PromptTestStreaming",
@@ -9415,7 +9415,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9427,9 +9427,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "RecursiveAliasCycle",
@@ -9440,7 +9440,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9452,9 +9452,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "RecursiveClassWithAliasIndirection",
@@ -9465,7 +9465,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9477,9 +9477,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "RecursiveUnionTest",
@@ -9490,7 +9490,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9502,9 +9502,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "RenderDynamicClass",
@@ -9515,7 +9515,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9527,9 +9527,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "RenderDynamicEnum",
@@ -9540,7 +9540,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9552,9 +9552,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ReturnAliasWithMergedAttributes",
@@ -9565,7 +9565,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9577,9 +9577,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ReturnFailingAssert",
@@ -9590,7 +9590,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9602,9 +9602,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ReturnJsonEntry",
@@ -9615,7 +9615,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9627,9 +9627,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ReturnMalformedConstraints",
@@ -9640,7 +9640,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9652,9 +9652,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "SchemaDescriptions",
@@ -9665,7 +9665,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9677,9 +9677,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "SimpleRecursiveListAlias",
@@ -9690,7 +9690,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9702,9 +9702,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "SimpleRecursiveMapAlias",
@@ -9715,7 +9715,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9727,9 +9727,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "StreamBigNumbers",
@@ -9740,7 +9740,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9752,9 +9752,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "StreamFailingAssertion",
@@ -9765,7 +9765,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9777,9 +9777,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "StreamFailingCheck",
@@ -9790,7 +9790,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9802,9 +9802,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "StreamOneBigNumber",
@@ -9815,7 +9815,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9827,9 +9827,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "StreamUnionIntegers",
@@ -9840,7 +9840,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9852,9 +9852,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "StreamingCompoundNumbers",
@@ -9865,7 +9865,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9877,9 +9877,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "StructureDocument1559",
@@ -9890,7 +9890,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9902,9 +9902,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TakeRecAliasDep",
@@ -9915,7 +9915,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9927,9 +9927,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TellStory",
@@ -9940,7 +9940,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9952,9 +9952,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAbortFallbackChain",
@@ -9965,7 +9965,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -9977,9 +9977,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAnthropic",
@@ -9990,7 +9990,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10002,9 +10002,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAnthropicShorthand",
@@ -10015,7 +10015,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10027,9 +10027,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAws",
@@ -10040,7 +10040,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10052,9 +10052,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAwsClaude37",
@@ -10065,7 +10065,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10077,9 +10077,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAwsInferenceProfile",
@@ -10090,7 +10090,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10102,9 +10102,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAwsInvalidAccessKey",
@@ -10115,7 +10115,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10127,9 +10127,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAwsInvalidEndpoint",
@@ -10140,7 +10140,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10152,9 +10152,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAwsInvalidProfile",
@@ -10165,7 +10165,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10177,9 +10177,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAwsInvalidRegion",
@@ -10190,7 +10190,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10202,9 +10202,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAwsInvalidSessionToken",
@@ -10215,7 +10215,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10227,9 +10227,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAwsVideoDescribe",
@@ -10240,7 +10240,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10252,9 +10252,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAzure",
@@ -10265,7 +10265,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10277,9 +10277,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAzureFailure",
@@ -10290,7 +10290,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10302,9 +10302,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAzureO1NoMaxTokens",
@@ -10315,7 +10315,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10327,9 +10327,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAzureO1WithMaxCompletionTokens",
@@ -10340,7 +10340,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10352,9 +10352,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAzureO1WithMaxTokens",
@@ -10365,7 +10365,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10377,9 +10377,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAzureO3NoMaxTokens",
@@ -10390,7 +10390,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10402,9 +10402,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAzureO3WithMaxCompletionTokens",
@@ -10415,7 +10415,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10427,9 +10427,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestAzureWithMaxTokens",
@@ -10440,7 +10440,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10452,9 +10452,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestCaching",
@@ -10465,7 +10465,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10477,9 +10477,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestDefaultStreamingTimeout",
@@ -10490,7 +10490,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10502,9 +10502,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFallbackClient",
@@ -10515,7 +10515,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10527,9 +10527,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFallbackStrategy",
@@ -10540,7 +10540,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10552,9 +10552,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFallbackToShorthand",
@@ -10565,7 +10565,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10577,9 +10577,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleBool",
@@ -10590,7 +10590,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10602,9 +10602,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleClass",
@@ -10615,7 +10615,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10627,9 +10627,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleEnumList",
@@ -10640,7 +10640,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10652,9 +10652,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleFloat",
@@ -10665,7 +10665,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10677,9 +10677,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleInt",
@@ -10690,7 +10690,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10702,9 +10702,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleMapStringToClass",
@@ -10715,7 +10715,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10727,9 +10727,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleMapStringToMap",
@@ -10740,7 +10740,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10752,9 +10752,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleMapStringToString",
@@ -10765,7 +10765,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10777,9 +10777,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleString",
@@ -10790,7 +10790,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10802,9 +10802,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleStringArray",
@@ -10815,7 +10815,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10827,9 +10827,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestFnNamedArgsSingleStringList",
@@ -10840,7 +10840,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10852,9 +10852,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestGemini",
@@ -10865,7 +10865,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10877,9 +10877,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestGeminiOpenAiGeneric",
@@ -10890,7 +10890,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10902,9 +10902,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestGeminiSystem",
@@ -10915,7 +10915,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10927,9 +10927,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestGeminiSystemAsChat",
@@ -10940,7 +10940,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10952,9 +10952,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestGeminiThinking",
@@ -10965,7 +10965,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -10977,9 +10977,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestGroq",
@@ -10990,7 +10990,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11002,9 +11002,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestImageInput",
@@ -11015,7 +11015,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11027,9 +11027,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestImageInputAnthropic",
@@ -11040,7 +11040,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11052,9 +11052,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestImageListInput",
@@ -11065,7 +11065,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11077,9 +11077,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestMemory",
@@ -11090,7 +11090,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11102,9 +11102,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestMulticlassNamedArgs",
@@ -11115,7 +11115,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11127,9 +11127,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestNamedArgsLiteralBool",
@@ -11140,7 +11140,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11152,9 +11152,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestNamedArgsLiteralInt",
@@ -11165,7 +11165,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11177,9 +11177,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestNamedArgsLiteralString",
@@ -11190,7 +11190,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11202,9 +11202,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOllama",
@@ -11215,7 +11215,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11227,9 +11227,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOllamaHaiku",
@@ -11240,7 +11240,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11252,9 +11252,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAI",
@@ -11265,7 +11265,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11277,9 +11277,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIDummyClient",
@@ -11290,7 +11290,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11302,9 +11302,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIGPT4oMini",
@@ -11315,7 +11315,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11327,9 +11327,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIGPT4oMini2",
@@ -11340,7 +11340,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11352,9 +11352,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIGPT4oMini3",
@@ -11365,7 +11365,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11377,9 +11377,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAILegacyProvider",
@@ -11390,7 +11390,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11402,9 +11402,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIO1NoMaxTokens",
@@ -11415,7 +11415,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11427,9 +11427,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIO1WithMaxCompletionTokens",
@@ -11440,7 +11440,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11452,9 +11452,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIO1WithMaxTokens",
@@ -11465,7 +11465,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11477,9 +11477,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIProviderWithResponsesType",
@@ -11490,7 +11490,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11502,9 +11502,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponses",
@@ -11515,7 +11515,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11527,9 +11527,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesAllRoles",
@@ -11540,7 +11540,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11552,9 +11552,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesAutoType",
@@ -11565,7 +11565,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11577,9 +11577,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesConversation",
@@ -11590,7 +11590,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11602,9 +11602,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesCustomURL",
@@ -11615,7 +11615,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11627,9 +11627,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesDifferentModel",
@@ -11640,7 +11640,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11652,9 +11652,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesEndpoint",
@@ -11665,7 +11665,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11677,9 +11677,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesExplicit",
@@ -11690,7 +11690,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11702,9 +11702,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesFunctionCall",
@@ -11715,7 +11715,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11727,9 +11727,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesImageInput",
@@ -11740,7 +11740,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11752,9 +11752,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesReasoning",
@@ -11765,7 +11765,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11777,9 +11777,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesShorthand",
@@ -11790,7 +11790,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11802,9 +11802,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesWebSearch",
@@ -11815,7 +11815,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11827,9 +11827,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIResponsesWithOpenAIResponseType",
@@ -11840,7 +11840,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11852,9 +11852,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIShorthand",
@@ -11865,7 +11865,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11877,9 +11877,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIWithFinishReasonError",
@@ -11890,7 +11890,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11902,9 +11902,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIWithMaxTokens",
@@ -11915,7 +11915,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11927,9 +11927,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenAIWithNullMaxTokens",
@@ -11940,7 +11940,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11952,9 +11952,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenRouterMistralSmall3_1_24b",
@@ -11965,7 +11965,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -11977,9 +11977,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestOpenaiResponsesPdfs",
@@ -11990,7 +11990,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12002,9 +12002,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestRequestTimeout",
@@ -12015,7 +12015,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12027,9 +12027,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestRetryConstant",
@@ -12040,7 +12040,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12052,9 +12052,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestRetryExponential",
@@ -12065,7 +12065,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12077,9 +12077,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestRoundRobinStrategy",
@@ -12090,7 +12090,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12102,9 +12102,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestSingleFallbackClient",
@@ -12115,7 +12115,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12127,9 +12127,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestStreamingTimeout",
@@ -12140,7 +12140,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12152,9 +12152,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestThinking",
@@ -12165,7 +12165,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12177,9 +12177,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestTimeoutError",
@@ -12190,7 +12190,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12202,9 +12202,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestTimeoutFallback",
@@ -12215,7 +12215,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12227,9 +12227,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestUniverseQuestion",
@@ -12240,7 +12240,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12252,9 +12252,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestVertex",
@@ -12265,7 +12265,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12277,9 +12277,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestVertexClaude",
@@ -12290,7 +12290,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12302,9 +12302,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestVertexWithSystemInstructions",
@@ -12315,7 +12315,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12327,9 +12327,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "TestZeroTimeout",
@@ -12340,7 +12340,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12352,9 +12352,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "UnionTest_Function",
@@ -12365,7 +12365,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12377,9 +12377,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "UseBlockConstraint",
@@ -12390,7 +12390,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12402,9 +12402,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "UseMaintainFieldOrder",
@@ -12415,7 +12415,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12427,9 +12427,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "UseMalformedConstraints",
@@ -12440,7 +12440,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12452,9 +12452,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "UseNestedBlockConstraint",
@@ -12465,7 +12465,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12477,9 +12477,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ValidateBasicResponses",
@@ -12490,7 +12490,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12502,9 +12502,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ValidateResponseTypes",
@@ -12515,7 +12515,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12527,9 +12527,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "VideoInputGemini",
@@ -12540,7 +12540,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12552,9 +12552,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<never>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "VideoInputVertex",
@@ -12565,7 +12565,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12577,9 +12577,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.AnotherTakedownEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AnotherTakedown",
@@ -12590,7 +12590,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12602,9 +12602,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.AssignElseIfExprEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "AssignElseIfExpr",
@@ -12615,7 +12615,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12627,9 +12627,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.BoolToIntWithIfElseEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "BoolToIntWithIfElse",
@@ -12640,7 +12640,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12652,9 +12652,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.BoolToIntWithIfElseCallingLlmEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "BoolToIntWithIfElseCallingLlm",
@@ -12665,7 +12665,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12677,9 +12677,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.CallLlmDescribeImageEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "CallLlmDescribeImage",
@@ -12690,7 +12690,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12702,9 +12702,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.CallReturnOneEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "CallReturnOne",
@@ -12715,7 +12715,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12727,9 +12727,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.ChainedCallsEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ChainedCalls",
@@ -12740,7 +12740,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12752,9 +12752,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.EchoWorkflowEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "EchoWorkflow",
@@ -12765,7 +12765,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12777,9 +12777,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.ExecFetchAsEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExecFetchAs",
@@ -12790,7 +12790,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12802,9 +12802,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPostRequestEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExecFetchAsWithHttpPostRequest",
@@ -12815,7 +12815,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12827,9 +12827,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ExecFetchAsWithHttpPutRequestAndClassJson",
@@ -12840,7 +12840,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12852,9 +12852,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.HomeEnvVarIsEmptyEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "HomeEnvVarIsEmpty",
@@ -12865,7 +12865,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12877,9 +12877,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.IsTargetWordEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "IsTargetWord",
@@ -12890,7 +12890,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12902,9 +12902,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.IsTargetWord2EventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "IsTargetWord2",
@@ -12915,7 +12915,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12927,9 +12927,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.IterativeFibonacciEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "IterativeFibonacci",
@@ -12940,7 +12940,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12952,9 +12952,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.NormalElseIfStmtEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "NormalElseIfStmt",
@@ -12965,7 +12965,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -12977,9 +12977,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.NotEmptyEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "NotEmpty",
@@ -12990,7 +12990,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13002,9 +13002,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.ReturnCategoryEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ReturnCategory",
@@ -13015,7 +13015,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13027,9 +13027,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.ReturnElseIfExprEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ReturnElseIfExpr",
@@ -13040,7 +13040,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13052,9 +13052,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.ReturnImageFromUrlEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ReturnImageFromUrl",
@@ -13065,7 +13065,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13077,9 +13077,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.ReturnNumberEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ReturnNumber",
@@ -13090,7 +13090,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13102,9 +13102,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.ReturnNumberCallingLlmEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ReturnNumberCallingLlm",
@@ -13115,7 +13115,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13127,9 +13127,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.ReturnOneEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "ReturnOne",
@@ -13140,7 +13140,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13152,9 +13152,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "SimpleWatchWithFilter",
@@ -13165,7 +13165,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13177,9 +13177,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.StoreFnCallInLocalVarEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "StoreFnCallInLocalVar",
@@ -13190,7 +13190,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13202,9 +13202,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.StoreLlmCallInLocalVarEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "StoreLlmCallInLocalVar",
@@ -13215,7 +13215,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13227,9 +13227,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.SumArrayEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "SumArray",
@@ -13240,7 +13240,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13252,9 +13252,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.SumFromToEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "SumFromTo",
@@ -13265,7 +13265,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13277,9 +13277,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "WorkflowWatch",
@@ -13290,7 +13290,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13302,9 +13302,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.WorkflowWatchChildEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "WorkflowWatchChild",
@@ -13315,7 +13315,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);
@@ -13327,9 +13327,9 @@ env?: Record<string, string | undefined>
       __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
       ): Promise<HTTPRequest> {
         try {
-        const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-        const env: Record<string, string> = Object.fromEntries(
-          Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
           );
           return await this.runtime.buildRequest(
           "WorkflowWatchWithFilter",
@@ -13340,7 +13340,7 @@ env?: Record<string, string | undefined>
           __baml_options__?.tb?.__tb(),
           __baml_options__?.clientRegistry,
           true,
-          env
+          __env__
           )
           } catch (error) {
           throw toBamlError(error);

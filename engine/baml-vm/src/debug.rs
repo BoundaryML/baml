@@ -29,7 +29,7 @@ use colored::{Color, Colorize};
 use crate::{
     bytecode::Instruction,
     indexable::{EvalStack, GlobalPool},
-    types::{Function, Object, Value},
+    types::{Function, Object, Value, VizNodeMeta},
     ObjectIndex, ObjectPool, StackIndex,
 };
 
@@ -57,13 +57,6 @@ pub fn display_instruction(
     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
 
     let metadata = match instruction {
-        Instruction::NotifyBlock(block_index) => {
-            if let Some(notification) = function.block_notifications.get(*block_index) {
-                format!("({})", &notification.block_name)
-            } else {
-                format!("(invalid block index: {})", block_index)
-            }
-        }
         Instruction::LoadConst(index) => format!(
             "({})",
             display_value(&function.bytecode.constants[*index], objects)
@@ -114,6 +107,9 @@ pub fn display_instruction(
         }
         Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr + offset)
+        }
+        Instruction::VizEnter(index) | Instruction::VizExit(index) => {
+            viz_metadata(*index, &function.viz_nodes)
         }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
             format!("({})", display_object(objects, *index))
@@ -181,7 +177,6 @@ const COLUMN_MARGIN: usize = 3;
 /// Get color for instruction based on its type
 fn instruction_color(instruction: &Instruction) -> Color {
     match instruction {
-        Instruction::NotifyBlock(_) => Color::BrightYellow,
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadGlobal(_)
@@ -208,6 +203,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
+        Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::White,
         Instruction::Watch(_) | Instruction::Notify(_) => Color::BrightRed,
     }
 }
@@ -361,6 +357,29 @@ pub fn display_bytecode(
     }
 
     table
+}
+
+fn viz_metadata(index: usize, nodes: &[VizNodeMeta]) -> String {
+    match nodes.get(index) {
+        Some(node) => {
+            let mut metadata = vec![
+                format!("node_id={}", node.node_id),
+                format!("log_filter_key={}", node.log_filter_key),
+                format!("type={:?}", node.node_type),
+            ];
+            if let Some(parent) = &node.parent_log_filter_key {
+                metadata.push(format!("parent_log_filter_key={parent}"));
+            }
+            if !node.label.is_empty() {
+                metadata.push(format!("label=\"{}\"", node.label));
+            }
+            if let Some(level) = node.header_level {
+                metadata.push(format!("level={level}"));
+            }
+            format!("({})", metadata.join(", "))
+        }
+        None => format!("(invalid viz index: {index})"),
+    }
 }
 
 /// Prints the dissassembly of a function.

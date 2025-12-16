@@ -24,7 +24,7 @@ Function LLMAnalyze (arity: 1, kind: Llm):
 
 Function ProcessAnalysis (arity: 1, kind: Exec):
      0    LOAD_VAR 1         (analysis)
-     1    LOAD_FIELD 0       
+     1    LOAD_FIELD 2       
      2    LOAD_VAR 2         (score)
      3    LOAD_CONST 0       (0.8)
      4    CMP_OP >           
@@ -72,7 +72,7 @@ Function ProcessData (arity: 1, kind: Exec):
      0    LOAD_VAR 1         (data)
      1    LOAD_FIELD 0       
      2    LOAD_VAR 1         (data)
-     3    LOAD_FIELD 0       
+     3    LOAD_FIELD 1       
      4    BIN_OP +           
      5    LOAD_VAR 2         (result)
      6    LOAD_CONST 0       (100)

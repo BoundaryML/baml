@@ -27,86 +27,86 @@ class LlmResponseParser:
     def TestComplexMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ComplexMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexMaps", llm_response=llm_response, mode="request")
-        return typing.cast(types.ComplexMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexMaps", llm_response=llm_response, mode="request")
+        return typing.cast(types.ComplexMaps, __result__)
 
     def TestEdgeCaseMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.EdgeCaseMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestEdgeCaseMaps", llm_response=llm_response, mode="request")
-        return typing.cast(types.EdgeCaseMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestEdgeCaseMaps", llm_response=llm_response, mode="request")
+        return typing.cast(types.EdgeCaseMaps, __result__)
 
     def TestLargeMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.SimpleMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeMaps", llm_response=llm_response, mode="request")
-        return typing.cast(types.SimpleMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeMaps", llm_response=llm_response, mode="request")
+        return typing.cast(types.SimpleMaps, __result__)
 
     def TestNestedMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.NestedMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestNestedMaps", llm_response=llm_response, mode="request")
-        return typing.cast(types.NestedMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestNestedMaps", llm_response=llm_response, mode="request")
+        return typing.cast(types.NestedMaps, __result__)
 
     def TestSimpleMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.SimpleMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleMaps", llm_response=llm_response, mode="request")
-        return typing.cast(types.SimpleMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleMaps", llm_response=llm_response, mode="request")
+        return typing.cast(types.SimpleMaps, __result__)
 
     def TestTopLevelBoolMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, bool]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBoolMap", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Dict[str, bool], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBoolMap", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, bool], __result__)
 
     def TestTopLevelEmptyMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelEmptyMap", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Dict[str, str], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelEmptyMap", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, str], __result__)
 
     def TestTopLevelFloatMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, float]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloatMap", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Dict[str, float], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloatMap", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, float], __result__)
 
     def TestTopLevelIntMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelIntMap", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Dict[str, int], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelIntMap", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, int], __result__)
 
     def TestTopLevelMapOfArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.List[int]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapOfArrays", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Dict[str, typing.List[int]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapOfArrays", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, typing.List[int]], __result__)
 
     def TestTopLevelMapOfObjects(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, "types.User"]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapOfObjects", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Dict[str, "types.User"], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapOfObjects", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, "types.User"], __result__)
 
     def TestTopLevelMapWithNullable(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.Optional[str]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapWithNullable", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Dict[str, typing.Optional[str]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapWithNullable", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, typing.Optional[str]], __result__)
 
     def TestTopLevelNestedMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.Dict[str, str]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNestedMap", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Dict[str, typing.Dict[str, str]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNestedMap", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, typing.Dict[str, str]], __result__)
 
     def TestTopLevelStringMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelStringMap", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Dict[str, str], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelStringMap", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, str], __result__)
 
     
 
@@ -119,85 +119,85 @@ class LlmStreamParser:
     def TestComplexMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.ComplexMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexMaps", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.ComplexMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexMaps", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.ComplexMaps, __result__)
 
     def TestEdgeCaseMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.EdgeCaseMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestEdgeCaseMaps", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.EdgeCaseMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestEdgeCaseMaps", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.EdgeCaseMaps, __result__)
 
     def TestLargeMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.SimpleMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeMaps", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.SimpleMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestLargeMaps", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SimpleMaps, __result__)
 
     def TestNestedMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.NestedMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestNestedMaps", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.NestedMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestNestedMaps", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.NestedMaps, __result__)
 
     def TestSimpleMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.SimpleMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleMaps", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.SimpleMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleMaps", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SimpleMaps, __result__)
 
     def TestTopLevelBoolMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, bool]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBoolMap", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[str, bool], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBoolMap", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, bool], __result__)
 
     def TestTopLevelEmptyMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelEmptyMap", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[str, str], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelEmptyMap", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, str], __result__)
 
     def TestTopLevelFloatMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, float]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloatMap", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[str, float], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloatMap", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, float], __result__)
 
     def TestTopLevelIntMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, int]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelIntMap", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[str, int], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelIntMap", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, int], __result__)
 
     def TestTopLevelMapOfArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.List[int]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapOfArrays", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[str, typing.List[int]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapOfArrays", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, typing.List[int]], __result__)
 
     def TestTopLevelMapOfObjects(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, "stream_types.User"]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapOfObjects", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[str, "stream_types.User"], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapOfObjects", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, "stream_types.User"], __result__)
 
     def TestTopLevelMapWithNullable(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.Optional[str]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapWithNullable", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[str, typing.Optional[str]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelMapWithNullable", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, typing.Optional[str]], __result__)
 
     def TestTopLevelNestedMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, typing.Dict[str, str]]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNestedMap", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[str, typing.Dict[str, str]], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNestedMap", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, typing.Dict[str, str]], __result__)
 
     def TestTopLevelStringMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Dict[str, str]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelStringMap", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[str, str], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelStringMap", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, str], __result__)
 
     

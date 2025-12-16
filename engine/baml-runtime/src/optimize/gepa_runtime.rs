@@ -15,7 +15,10 @@ use baml_types::BamlValue;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    candidate::{ImprovedFunction, OptimizableFunction, ReflectiveExample},
+    candidate::{
+        CurrentMetrics, ImprovedFunction, OptimizableFunction, OptimizationObjectives,
+        ReflectiveExample,
+    },
     gepa_defaults,
 };
 use crate::{BamlRuntime, TripWire};
@@ -196,6 +199,8 @@ impl GEPARuntime {
         current: &OptimizableFunction,
         failures: &[ReflectiveExample],
         successes: Option<&[ReflectiveExample]>,
+        objectives: Option<&OptimizationObjectives>,
+        metrics: Option<&CurrentMetrics>,
     ) -> Result<ImprovedFunction> {
         // Convert inputs to BamlValue
         let current_val = serde_json::to_value(current)?;
@@ -212,11 +217,29 @@ impl GEPARuntime {
             None => BamlValue::Null,
         };
 
+        let objectives_baml = match objectives {
+            Some(o) => {
+                let val = serde_json::to_value(o)?;
+                json_to_baml_value(val)?
+            }
+            None => BamlValue::Null,
+        };
+
+        let metrics_baml = match metrics {
+            Some(m) => {
+                let val = serde_json::to_value(m)?;
+                json_to_baml_value(val)?
+            }
+            None => BamlValue::Null,
+        };
+
         // Build arguments
         let args: baml_types::BamlMap<String, BamlValue> = [
             ("current_function".to_string(), current_baml),
             ("failed_examples".to_string(), failures_baml),
             ("successful_examples".to_string(), successes_baml),
+            ("optimization_objectives".to_string(), objectives_baml),
+            ("current_metrics".to_string(), metrics_baml),
         ]
         .into_iter()
         .collect();

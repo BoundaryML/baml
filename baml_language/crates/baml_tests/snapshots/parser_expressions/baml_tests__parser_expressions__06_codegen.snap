@@ -32,14 +32,14 @@ Function FieldAccess (arity: 1, kind: Exec):
      0    LOAD_VAR 1           (user)
      1    LOAD_FIELD 0         
      2    LOAD_VAR 1           (user)
-     3    LOAD_FIELD 0         
+     3    LOAD_FIELD 1         
      4    LOAD_FIELD 0         
      5    LOAD_VAR 1           (user)
-     6    LOAD_FIELD 0         
-     7    LOAD_FIELD 0         
+     6    LOAD_FIELD 1         
+     7    LOAD_FIELD 1         
      8    LOAD_FIELD 0         
      9    LOAD_VAR 1           (user)
-     10   LOAD_FIELD 0         
+     10   LOAD_FIELD 2         
      11   LOAD_CONST 0         (0)
      12   LOAD_ARRAY_ELEMENT   
      13   LOAD_VAR 4           (theme)

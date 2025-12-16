@@ -4,7 +4,43 @@ title: Creating a Classification Function with Symbol Tuning
 
 Aliasing field names to abstract symbols like "k1", "k2", etc. can improve classification results. This technique, known as symbol tuning, helps the LLM focus on your descriptions rather than being biased by the enum or property names themselves.
 
-See the paper [Symbol Tuning Improves In-Context Learning in Language Models](https://arxiv.org/abs/2305.08298) for more details.
+## Why does this help in prompt engineering?
+
+You might wonder: if I'm providing descriptions anyway, why would hiding the variable name matter? The key insight is that **LLMs have preconceived notions about what words like "Refund" or "CancelOrder" mean** based on their training data.
+
+When you use meaningful names like:
+```
+Refund: <your custom description>
+CancelOrder: <your custom description>
+```
+
+The model must reconcile its existing understanding of these terms with your custom descriptions. This can cause conflicts—especially when your definitions differ from common usage.
+
+With symbol tuning:
+```
+k1: <your custom description>
+k2: <your custom description>
+```
+
+The model's attention is spent **100% on understanding your descriptions** rather than trying to forget or override its biases about what the category names mean. The abstract symbols have no semantic weight, so your descriptions become the sole source of meaning.
+
+<Note>
+The original [Symbol Tuning paper](https://arxiv.org/abs/2305.08298) demonstrated this technique in fine-tuning, but the same principle applies to prompt engineering: removing semantic bias from labels helps the model focus on what you actually want it to learn from context.
+</Note>
+
+## Related: Using IDs in prompts
+
+A similar principle applies when dealing with entity identifiers. Using long UUIDs like `550e8400-e29b-41d4-a716-446655440000` in prompts is inefficient—they consume many tokens and carry no semantic meaning. Instead, alias them to simple integers (1, 2, 3) within your prompt. See our blog post [Using UUIDs in prompts is bad](https://boundaryml.com/blog/uuid-swap) for detailed guidance.
+
+The general principle: **use the best representation for the model**, which may differ from the best representation in your code.
+
+## Try it yourself
+
+As with all prompt engineering techniques, results vary by model and use case. We recommend testing with and without symbol tuning to see what works best for your specific task.
+
+## Example
+
+Here's a complete classification function using symbol tuning:
 
 ```baml
 enum MyClass {

@@ -22,23 +22,20 @@ describe('WASM graph generation', () => {
     expect(simpleWorkflow).toBeTruthy();
     expect(simpleWorkflow?.type).toBe('workflow');
 
-    const nodeIds = new Set(simpleWorkflow?.nodes.map((node) => node.id));
-    // Root node should have lexical_id format with |root:0
-    expect(nodeIds.has('SimpleWorkflow|root:0')).toBe(true);
-    expect(
-      nodeIds.has('SimpleWorkflow|root:0|hdr:gather-applicant-context:0')
-    ).toBe(true);
-    expect(
-      nodeIds.has('SimpleWorkflow|root:0|hdr:normalize-profile-signals:1')
-    ).toBe(true);
+    const idByLogFilter = new Map(
+      (simpleWorkflow?.nodes ?? []).map((node) => [node.metadata?.logFilterKey, node.id])
+    );
+    // IDs are numeric strings, logFilterKey kept as metadata
+    expect([...idByLogFilter.values()].every((id) => /^\d+$/.test(id ?? ''))).toBe(true);
+    expect(idByLogFilter.get('SimpleWorkflow|root:0')).toBeDefined();
+    expect(idByLogFilter.get('SimpleWorkflow|root:0|hdr:gather-applicant-context:0')).toBeDefined();
+    expect(idByLogFilter.get('SimpleWorkflow|root:0|hdr:normalize-profile-signals:1')).toBeDefined();
 
     const edgeTargets = new Set(simpleWorkflow?.edges.map((edge) => edge.target));
-    expect(
-      edgeTargets.has('SimpleWorkflow|root:0|hdr:normalize-profile-signals:1')
-    ).toBe(true);
-    expect(
-      edgeTargets.has('SimpleWorkflow|root:0|hdr:persist-summarized-profile:2')
-    ).toBe(true);
+    const normalizeId = idByLogFilter.get('SimpleWorkflow|root:0|hdr:normalize-profile-signals:1');
+    const persistId = idByLogFilter.get('SimpleWorkflow|root:0|hdr:persist-summarized-profile:2');
+    expect(normalizeId && edgeTargets.has(normalizeId)).toBe(true);
+    expect(persistId && edgeTargets.has(persistId)).toBe(true);
   });
 
   it('produces branch structure for ConditionalWorkflow', () => {
@@ -48,21 +45,19 @@ describe('WASM graph generation', () => {
     expect(conditionalWorkflow).toBeTruthy();
     expect(conditionalWorkflow?.type).toBe('workflow');
 
-    const nodeIds = new Set(conditionalWorkflow?.nodes.map((node) => node.id));
-    // Root node should have lexical_id format with |root:0
-    expect(nodeIds.has('ConditionalWorkflow|root:0')).toBe(true);
-    expect(
-      nodeIds.has('ConditionalWorkflow|root:0|hdr:check-summary-confidence:1')
-    ).toBe(true);
-    expect(
-      nodeIds.has(
-        'ConditionalWorkflow|root:0|hdr:check-summary-confidence:1|bg:if-checkcondition-validation-summary:0'
-      )
-    ).toBe(true);
+    const idByLogFilter = new Map(
+      (conditionalWorkflow?.nodes ?? []).map((node) => [node.metadata?.logFilterKey, node.id])
+    );
+    expect(idByLogFilter.get('ConditionalWorkflow|root:0')).toBeDefined();
+    const checkSummaryId = idByLogFilter.get('ConditionalWorkflow|root:0|hdr:check-summary-confidence:1');
+    const branchGroupId = idByLogFilter.get(
+      'ConditionalWorkflow|root:0|hdr:check-summary-confidence:1|bg:if-checkcondition-validation-summary:0'
+    );
+    expect(checkSummaryId).toBeDefined();
+    expect(branchGroupId).toBeDefined();
 
     const branchChildren = conditionalWorkflow?.nodes.filter(
-      (node) =>
-        node.parent === 'ConditionalWorkflow|root:0|hdr:check-summary-confidence:1'
+      (node) => node.parent === checkSummaryId
     );
     expect(branchChildren && branchChildren.length).toBeGreaterThan(0);
   });

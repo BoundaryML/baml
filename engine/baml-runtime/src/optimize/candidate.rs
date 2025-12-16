@@ -58,6 +58,55 @@ pub struct ReflectiveExample {
     /// The name of the test
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_name: Option<String>,
+    /// Prompt tokens used for this example
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_tokens: Option<f64>,
+    /// Completion tokens used for this example
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion_tokens: Option<f64>,
+    /// Latency in milliseconds for this example
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<f64>,
+}
+
+/// Optimization objectives passed to the reflection function
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OptimizationObjectives {
+    /// List of objectives with their weights and current values
+    pub objectives: Vec<ObjectiveStatus>,
+}
+
+/// Status of a single optimization objective
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ObjectiveStatus {
+    /// Name of the objective (e.g., "accuracy", "tokens", "latency")
+    pub name: String,
+    /// Weight of this objective (0.0 to 1.0, higher = more important)
+    pub weight: f64,
+    /// Direction: "maximize" or "minimize"
+    pub direction: String,
+    /// Current value of this objective
+    pub current_value: f64,
+    /// Human-readable description of current status
+    pub status: String,
+}
+
+/// Current metrics for the candidate being improved
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CurrentMetrics {
+    /// Test pass rate (0.0 to 1.0)
+    pub test_pass_rate: f64,
+    /// Tests passed / total
+    pub tests_passed: usize,
+    pub tests_total: usize,
+    /// Average prompt tokens
+    pub avg_prompt_tokens: f64,
+    /// Average completion tokens
+    pub avg_completion_tokens: f64,
+    /// Total average tokens (prompt + completion)
+    pub avg_total_tokens: f64,
+    /// Average latency in milliseconds
+    pub avg_latency_ms: f64,
 }
 
 /// The result of reflection: improved prompt and schema
@@ -163,6 +212,9 @@ pub struct Candidate {
     pub function: OptimizableFunction,
     /// Scores from evaluation (None if not yet evaluated)
     pub scores: Option<CandidateScores>,
+    /// Rationale from the reflection/merge that created this candidate
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rationale: Option<String>,
 }
 
 impl Candidate {
@@ -175,6 +227,7 @@ impl Candidate {
             method: CandidateMethod::Initial,
             function,
             scores: None,
+            rationale: None,
         }
     }
 
@@ -189,7 +242,7 @@ impl Candidate {
         // Merge the improved function with the base
         let function = OptimizableFunction {
             function_name: base_function.function_name.clone(),
-            prompt_text: improved.prompt_text,
+            prompt_text: improved.prompt_text.clone(),
             classes: merge_classes(&base_function.classes, &improved.classes),
             enums: merge_enums(&base_function.enums, &improved.enums),
             function_source: base_function.function_source.clone(),
@@ -202,6 +255,7 @@ impl Candidate {
             method: CandidateMethod::Reflection,
             function,
             scores: None,
+            rationale: Some(improved.rationale),
         }
     }
 
@@ -216,7 +270,7 @@ impl Candidate {
     ) -> Self {
         let function = OptimizableFunction {
             function_name: base_function.function_name.clone(),
-            prompt_text: improved.prompt_text,
+            prompt_text: improved.prompt_text.clone(),
             classes: merge_classes(&base_function.classes, &improved.classes),
             enums: merge_enums(&base_function.enums, &improved.enums),
             function_source: base_function.function_source.clone(),
@@ -229,6 +283,7 @@ impl Candidate {
             method: CandidateMethod::Merge,
             function,
             scores: None,
+            rationale: Some(improved.rationale),
         }
     }
 

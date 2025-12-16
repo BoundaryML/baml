@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "baml-compiler",
+  "baml-viz-events",
   "baml-lib/*",
   "baml-lsp-types",
   "baml-rpc",
@@ -30,6 +31,7 @@ default-members = [
   "baml-lsp-types",
   "baml-lib/*",
   "baml-rpc",
+  "baml-viz-events",
   "baml-ids",
   "baml-runtime",
   # Disabled by default: --features no_wasm and --features wasm are mutually exclusive
@@ -58,6 +60,7 @@ baml-ids = { path = "baml-ids" }
 baml-rpc = { path = "baml-rpc" }
 baml-types = { path = "baml-lib/baml-types" }
 baml-log = { path = "baml-lib/baml-log" }
+baml-viz-events = { path = "baml-viz-events" }
 base64 = "0.22.1"
 bstd = { path = "bstd" }
 bytes = "1.6.0"

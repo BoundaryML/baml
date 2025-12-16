@@ -47,18 +47,18 @@ class BamlSyncClient
             raise ArgumentError.new("{{func.name}} may only be called with keyword arguments")
         end
 
-        options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
-        
-        result = options.call_function_sync(function_name: "{{func.name}}", args: {
+        __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+        __result__ = __options__.call_function_sync(function_name: "{{func.name}}", args: {
             {% for arg in func.args -%}
             {{arg.name}}: {{arg.name}},
             {%- endfor %}
         })
 
-        parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+        __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
         # for sorbet we need to cast to the return type since parsed is now the right value
         # We just need to tell sorbet that the return type is the right type
-        parsed.cast_to({{ func.return_type.serialize_type(pkg) }})
+        __parsed__.cast_to({{ func.return_type.serialize_type(pkg) }})
     end
     {% endfor %}
 end
@@ -90,17 +90,17 @@ class BamlStreamClient
             raise ArgumentError.new("{{func.name}} may only be called with keyword arguments")
         end
 
-        options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
-        
-        ctx, result = options.create_sync_stream(function_name: "{{func.name}}", args: {
+        __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+        __ctx__, __result__ = __options__.create_sync_stream(function_name: "{{func.name}}", args: {
             {% for arg in func.args -%}
             {{arg.name}}: {{arg.name}},
             {%- endfor %}
         })
 
         Baml::BamlStream[{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}].new(
-            ffi_stream: result,
-            ctx_manager: ctx
+            ffi_stream: __result__,
+            ctx_manager: __ctx__
         )
     end
     {% endfor %}

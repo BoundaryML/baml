@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: NestedIfs
-      lexical_id: "NestedIfs|root:0"
+      log_filter_key: "NestedIfs|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 1213
     "1":
       label: If statement 1
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0"
       node_type: header
       parent: "0"
       span:
@@ -26,7 +26,7 @@ expr:
         end: 71
     "10":
       label: "True"
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
       node_type: header
       parent: "9"
       span:
@@ -35,7 +35,7 @@ expr:
         end: 249
     "11":
       label: else
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1"
       node_type: branch-arm
       parent: "8"
       span:
@@ -44,7 +44,7 @@ expr:
         end: 356
     "12":
       label: Third False
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
       node_type: header
       parent: "11"
       span:
@@ -53,7 +53,7 @@ expr:
         end: 323
     "13":
       label: else
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1"
       node_type: branch-arm
       parent: "5"
       span:
@@ -62,7 +62,7 @@ expr:
         end: 618
     "14":
       label: If statement 3.2
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
       node_type: header
       parent: "13"
       span:
@@ -71,7 +71,7 @@ expr:
         end: 426
     "15":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
       node_type: branch-group
       parent: "14"
       span:
@@ -80,7 +80,7 @@ expr:
         end: 592
     "16":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "15"
       span:
@@ -89,7 +89,7 @@ expr:
         end: 518
     "17":
       label: "True"
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
       node_type: header
       parent: "16"
       span:
@@ -98,7 +98,7 @@ expr:
         end: 485
     "18":
       label: else
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1"
       node_type: branch-arm
       parent: "15"
       span:
@@ -107,7 +107,7 @@ expr:
         end: 592
     "19":
       label: Third False
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
       node_type: header
       parent: "18"
       span:
@@ -116,7 +116,7 @@ expr:
         end: 559
     "2":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
       node_type: branch-group
       parent: "1"
       span:
@@ -125,7 +125,7 @@ expr:
         end: 1203
     "20":
       label: else
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1"
       node_type: branch-arm
       parent: "2"
       span:
@@ -134,7 +134,7 @@ expr:
         end: 1203
     "21":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
       node_type: branch-group
       parent: "20"
       span:
@@ -143,7 +143,7 @@ expr:
         end: 1185
     "22":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "21"
       span:
@@ -152,7 +152,7 @@ expr:
         end: 890
     "23":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
       node_type: branch-group
       parent: "22"
       span:
@@ -161,7 +161,7 @@ expr:
         end: 862
     "24":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "23"
       span:
@@ -170,7 +170,7 @@ expr:
         end: 736
     "25":
       label: else if (false)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1"
       node_type: branch-arm
       parent: "23"
       span:
@@ -179,7 +179,7 @@ expr:
         end: 822
     "26":
       label: Second False
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
       node_type: header
       parent: "25"
       span:
@@ -188,7 +188,7 @@ expr:
         end: 789
     "27":
       label: else
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
       node_type: branch-arm
       parent: "23"
       span:
@@ -197,7 +197,7 @@ expr:
         end: 862
     "28":
       label: else if (false)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1"
       node_type: branch-arm
       parent: "21"
       span:
@@ -206,7 +206,7 @@ expr:
         end: 1048
     "29":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
       node_type: branch-group
       parent: "28"
       span:
@@ -215,7 +215,7 @@ expr:
         end: 1023
     "3":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "2"
       span:
@@ -224,7 +224,7 @@ expr:
         end: 636
     "30":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "29"
       span:
@@ -233,7 +233,7 @@ expr:
         end: 1023
     "31":
       label: standalone then
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
       node_type: header
       parent: "30"
       span:
@@ -242,7 +242,7 @@ expr:
         end: 968
     "32":
       label: else
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
       node_type: branch-arm
       parent: "29"
       span:
@@ -251,7 +251,7 @@ expr:
         end: 1023
     "33":
       label: else
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
       node_type: branch-arm
       parent: "21"
       span:
@@ -260,7 +260,7 @@ expr:
         end: 1185
     "34":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2|bg:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2|bg:if-true:0"
       node_type: branch-group
       parent: "33"
       span:
@@ -269,7 +269,7 @@ expr:
         end: 1159
     "35":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "34"
       span:
@@ -278,7 +278,7 @@ expr:
         end: 1119
     "36":
       label: else
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2|bg:if-true:0|arm:else:1"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2|bg:if-true:0|arm:else:1"
       node_type: branch-arm
       parent: "34"
       span:
@@ -287,7 +287,7 @@ expr:
         end: 1159
     "4":
       label: If statement 2.1
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
       node_type: header
       parent: "3"
       span:
@@ -296,7 +296,7 @@ expr:
         end: 127
     "5":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
       node_type: branch-group
       parent: "4"
       span:
@@ -305,7 +305,7 @@ expr:
         end: 618
     "6":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "5"
       span:
@@ -314,7 +314,7 @@ expr:
         end: 384
     "7":
       label: If statement 3.1
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
       node_type: header
       parent: "6"
       span:
@@ -323,7 +323,7 @@ expr:
         end: 190
     "8":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
       node_type: branch-group
       parent: "7"
       span:
@@ -332,7 +332,7 @@ expr:
         end: 356
     "9":
       label: if (true)
-      lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0"
+      log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0"
       node_type: branch-arm
       parent: "8"
       span:
@@ -348,7 +348,7 @@ flattening:
       nodes:
         "0":
           label: NestedIfs
-          lexical_id: "NestedIfs|root:0"
+          log_filter_key: "NestedIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -357,7 +357,7 @@ flattening:
             end: 1213
         "1":
           label: If statement 1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0"
           node_type: header
           parent: "0"
           span:
@@ -366,7 +366,7 @@ flattening:
             end: 71
         "10":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "9"
           span:
@@ -375,7 +375,7 @@ flattening:
             end: 249
         "11":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "8"
           span:
@@ -384,7 +384,7 @@ flattening:
             end: 356
         "12":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "11"
           span:
@@ -393,7 +393,7 @@ flattening:
             end: 323
         "13":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "5"
           span:
@@ -402,7 +402,7 @@ flattening:
             end: 618
         "14":
           label: If statement 3.2
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
           node_type: header
           parent: "13"
           span:
@@ -411,7 +411,7 @@ flattening:
             end: 426
         "15":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
           node_type: branch-group
           parent: "14"
           span:
@@ -420,7 +420,7 @@ flattening:
             end: 592
         "16":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "15"
           span:
@@ -429,7 +429,7 @@ flattening:
             end: 518
         "17":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "16"
           span:
@@ -438,7 +438,7 @@ flattening:
             end: 485
         "18":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "15"
           span:
@@ -447,7 +447,7 @@ flattening:
             end: 592
         "19":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "18"
           span:
@@ -456,7 +456,7 @@ flattening:
             end: 559
         "2":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -465,7 +465,7 @@ flattening:
             end: 1203
         "20":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "2"
           span:
@@ -474,7 +474,7 @@ flattening:
             end: 1203
         "21":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
           node_type: branch-group
           parent: "20"
           span:
@@ -483,7 +483,7 @@ flattening:
             end: 1185
         "22":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "21"
           span:
@@ -492,7 +492,7 @@ flattening:
             end: 890
         "23":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
           node_type: branch-group
           parent: "22"
           span:
@@ -501,7 +501,7 @@ flattening:
             end: 862
         "24":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "23"
           span:
@@ -510,7 +510,7 @@ flattening:
             end: 736
         "25":
           label: else if (false)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1"
           node_type: branch-arm
           parent: "23"
           span:
@@ -519,7 +519,7 @@ flattening:
             end: 822
         "26":
           label: Second False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
           node_type: header
           parent: "25"
           span:
@@ -528,7 +528,7 @@ flattening:
             end: 789
         "27":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "23"
           span:
@@ -537,7 +537,7 @@ flattening:
             end: 862
         "28":
           label: else if (false)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1"
           node_type: branch-arm
           parent: "21"
           span:
@@ -546,7 +546,7 @@ flattening:
             end: 1048
         "29":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
           node_type: branch-group
           parent: "28"
           span:
@@ -555,7 +555,7 @@ flattening:
             end: 1023
         "3":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "2"
           span:
@@ -564,7 +564,7 @@ flattening:
             end: 636
         "30":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "29"
           span:
@@ -573,7 +573,7 @@ flattening:
             end: 1023
         "31":
           label: standalone then
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "30"
           span:
@@ -582,7 +582,7 @@ flattening:
             end: 968
         "32":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "29"
           span:
@@ -591,7 +591,7 @@ flattening:
             end: 1023
         "33":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "21"
           span:
@@ -600,7 +600,7 @@ flattening:
             end: 1185
         "4":
           label: If statement 2.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
           node_type: header
           parent: "3"
           span:
@@ -609,7 +609,7 @@ flattening:
             end: 127
         "5":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "4"
           span:
@@ -618,7 +618,7 @@ flattening:
             end: 618
         "6":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "5"
           span:
@@ -627,7 +627,7 @@ flattening:
             end: 384
         "7":
           label: If statement 3.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
           node_type: header
           parent: "6"
           span:
@@ -636,7 +636,7 @@ flattening:
             end: 190
         "8":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "7"
           span:
@@ -645,7 +645,7 @@ flattening:
             end: 356
         "9":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "8"
           span:
@@ -657,7 +657,7 @@ flattening:
       nodes:
         "0":
           label: NestedIfs
-          lexical_id: "NestedIfs|root:0"
+          log_filter_key: "NestedIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -666,7 +666,7 @@ flattening:
             end: 1213
         "1":
           label: If statement 1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0"
           node_type: header
           parent: "0"
           span:
@@ -675,7 +675,7 @@ flattening:
             end: 71
         "10":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "9"
           span:
@@ -684,7 +684,7 @@ flattening:
             end: 249
         "11":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "8"
           span:
@@ -693,7 +693,7 @@ flattening:
             end: 356
         "12":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "11"
           span:
@@ -702,7 +702,7 @@ flattening:
             end: 323
         "13":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "5"
           span:
@@ -711,7 +711,7 @@ flattening:
             end: 618
         "14":
           label: If statement 3.2
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
           node_type: header
           parent: "13"
           span:
@@ -720,7 +720,7 @@ flattening:
             end: 426
         "15":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
           node_type: branch-group
           parent: "14"
           span:
@@ -729,7 +729,7 @@ flattening:
             end: 592
         "16":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "15"
           span:
@@ -738,7 +738,7 @@ flattening:
             end: 518
         "17":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "16"
           span:
@@ -747,7 +747,7 @@ flattening:
             end: 485
         "18":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "15"
           span:
@@ -756,7 +756,7 @@ flattening:
             end: 592
         "19":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "18"
           span:
@@ -765,7 +765,7 @@ flattening:
             end: 559
         "2":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -774,7 +774,7 @@ flattening:
             end: 1203
         "20":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "2"
           span:
@@ -783,7 +783,7 @@ flattening:
             end: 1203
         "21":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
           node_type: branch-group
           parent: "20"
           span:
@@ -792,7 +792,7 @@ flattening:
             end: 1185
         "22":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "21"
           span:
@@ -801,7 +801,7 @@ flattening:
             end: 890
         "23":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
           node_type: branch-group
           parent: "22"
           span:
@@ -810,7 +810,7 @@ flattening:
             end: 862
         "24":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "23"
           span:
@@ -819,7 +819,7 @@ flattening:
             end: 736
         "25":
           label: else if (false)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1"
           node_type: branch-arm
           parent: "23"
           span:
@@ -828,7 +828,7 @@ flattening:
             end: 822
         "26":
           label: Second False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
           node_type: header
           parent: "25"
           span:
@@ -837,7 +837,7 @@ flattening:
             end: 789
         "27":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "23"
           span:
@@ -846,7 +846,7 @@ flattening:
             end: 862
         "28":
           label: else if (false)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1"
           node_type: branch-arm
           parent: "21"
           span:
@@ -855,7 +855,7 @@ flattening:
             end: 1048
         "29":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
           node_type: branch-group
           parent: "28"
           span:
@@ -864,7 +864,7 @@ flattening:
             end: 1023
         "3":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "2"
           span:
@@ -873,7 +873,7 @@ flattening:
             end: 636
         "30":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "29"
           span:
@@ -882,7 +882,7 @@ flattening:
             end: 1023
         "31":
           label: standalone then
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "30"
           span:
@@ -891,7 +891,7 @@ flattening:
             end: 968
         "32":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "29"
           span:
@@ -900,7 +900,7 @@ flattening:
             end: 1023
         "33":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "21"
           span:
@@ -909,7 +909,7 @@ flattening:
             end: 1185
         "4":
           label: If statement 2.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
           node_type: header
           parent: "3"
           span:
@@ -918,7 +918,7 @@ flattening:
             end: 127
         "5":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "4"
           span:
@@ -927,7 +927,7 @@ flattening:
             end: 618
         "6":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "5"
           span:
@@ -936,7 +936,7 @@ flattening:
             end: 384
         "7":
           label: If statement 3.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
           node_type: header
           parent: "6"
           span:
@@ -945,7 +945,7 @@ flattening:
             end: 190
         "8":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "7"
           span:
@@ -954,7 +954,7 @@ flattening:
             end: 356
         "9":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "8"
           span:
@@ -969,7 +969,7 @@ flattening:
       nodes:
         "0":
           label: NestedIfs
-          lexical_id: "NestedIfs|root:0"
+          log_filter_key: "NestedIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -978,7 +978,7 @@ flattening:
             end: 1213
         "1":
           label: If statement 1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0"
           node_type: header
           parent: "0"
           span:
@@ -987,7 +987,7 @@ flattening:
             end: 71
         "10":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "9"
           span:
@@ -996,7 +996,7 @@ flattening:
             end: 249
         "11":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "7"
           span:
@@ -1005,7 +1005,7 @@ flattening:
             end: 356
         "12":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "11"
           span:
@@ -1014,7 +1014,7 @@ flattening:
             end: 323
         "13":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "4"
           span:
@@ -1023,7 +1023,7 @@ flattening:
             end: 618
         "14":
           label: If statement 3.2
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
           node_type: header
           parent: "13"
           span:
@@ -1032,7 +1032,7 @@ flattening:
             end: 426
         "15":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
           node_type: branch-group
           parent: "14"
           span:
@@ -1041,7 +1041,7 @@ flattening:
             end: 592
         "16":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "14"
           span:
@@ -1050,7 +1050,7 @@ flattening:
             end: 518
         "17":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "16"
           span:
@@ -1059,7 +1059,7 @@ flattening:
             end: 485
         "18":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "14"
           span:
@@ -1068,7 +1068,7 @@ flattening:
             end: 592
         "19":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "18"
           span:
@@ -1077,7 +1077,7 @@ flattening:
             end: 559
         "2":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1086,7 +1086,7 @@ flattening:
             end: 1203
         "20":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -1095,7 +1095,7 @@ flattening:
             end: 1203
         "21":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
           node_type: branch-group
           parent: "20"
           span:
@@ -1104,7 +1104,7 @@ flattening:
             end: 1185
         "22":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "20"
           span:
@@ -1113,7 +1113,7 @@ flattening:
             end: 890
         "23":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
           node_type: branch-group
           parent: "22"
           span:
@@ -1122,7 +1122,7 @@ flattening:
             end: 862
         "24":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "22"
           span:
@@ -1131,7 +1131,7 @@ flattening:
             end: 736
         "25":
           label: else if (false)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1"
           node_type: branch-arm
           parent: "22"
           span:
@@ -1140,7 +1140,7 @@ flattening:
             end: 822
         "26":
           label: Second False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
           node_type: header
           parent: "25"
           span:
@@ -1149,7 +1149,7 @@ flattening:
             end: 789
         "27":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "22"
           span:
@@ -1158,7 +1158,7 @@ flattening:
             end: 862
         "28":
           label: else if (false)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1"
           node_type: branch-arm
           parent: "20"
           span:
@@ -1167,7 +1167,7 @@ flattening:
             end: 1048
         "29":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
           node_type: branch-group
           parent: "28"
           span:
@@ -1176,7 +1176,7 @@ flattening:
             end: 1023
         "3":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "1"
           span:
@@ -1185,7 +1185,7 @@ flattening:
             end: 636
         "30":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "28"
           span:
@@ -1194,7 +1194,7 @@ flattening:
             end: 1023
         "31":
           label: standalone then
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "30"
           span:
@@ -1203,7 +1203,7 @@ flattening:
             end: 968
         "32":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "28"
           span:
@@ -1212,7 +1212,7 @@ flattening:
             end: 1023
         "33":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "20"
           span:
@@ -1221,7 +1221,7 @@ flattening:
             end: 1185
         "4":
           label: If statement 2.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
           node_type: header
           parent: "3"
           span:
@@ -1230,7 +1230,7 @@ flattening:
             end: 127
         "5":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "4"
           span:
@@ -1239,7 +1239,7 @@ flattening:
             end: 618
         "6":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "4"
           span:
@@ -1248,7 +1248,7 @@ flattening:
             end: 384
         "7":
           label: If statement 3.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
           node_type: header
           parent: "6"
           span:
@@ -1257,7 +1257,7 @@ flattening:
             end: 190
         "8":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "7"
           span:
@@ -1266,7 +1266,7 @@ flattening:
             end: 356
         "9":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "7"
           span:
@@ -1301,7 +1301,7 @@ flattening:
       nodes:
         "0":
           label: NestedIfs
-          lexical_id: "NestedIfs|root:0"
+          log_filter_key: "NestedIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -1310,7 +1310,7 @@ flattening:
             end: 1213
         "1":
           label: If statement 1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0"
           node_type: header
           parent: "0"
           span:
@@ -1319,7 +1319,7 @@ flattening:
             end: 71
         "10":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "9"
           span:
@@ -1328,7 +1328,7 @@ flattening:
             end: 249
         "11":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "7"
           span:
@@ -1337,7 +1337,7 @@ flattening:
             end: 356
         "12":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "11"
           span:
@@ -1346,7 +1346,7 @@ flattening:
             end: 323
         "13":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "4"
           span:
@@ -1355,7 +1355,7 @@ flattening:
             end: 618
         "14":
           label: If statement 3.2
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
           node_type: header
           parent: "13"
           span:
@@ -1364,7 +1364,7 @@ flattening:
             end: 426
         "15":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
           node_type: branch-group
           parent: "14"
           span:
@@ -1373,7 +1373,7 @@ flattening:
             end: 592
         "16":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "14"
           span:
@@ -1382,7 +1382,7 @@ flattening:
             end: 518
         "17":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "16"
           span:
@@ -1391,7 +1391,7 @@ flattening:
             end: 485
         "18":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "14"
           span:
@@ -1400,7 +1400,7 @@ flattening:
             end: 592
         "19":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "18"
           span:
@@ -1409,7 +1409,7 @@ flattening:
             end: 559
         "2":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1418,7 +1418,7 @@ flattening:
             end: 1203
         "20":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -1427,7 +1427,7 @@ flattening:
             end: 1203
         "21":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
           node_type: branch-group
           parent: "20"
           span:
@@ -1436,7 +1436,7 @@ flattening:
             end: 1185
         "22":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "20"
           span:
@@ -1445,7 +1445,7 @@ flattening:
             end: 890
         "23":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
           node_type: branch-group
           parent: "22"
           span:
@@ -1454,7 +1454,7 @@ flattening:
             end: 862
         "24":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "22"
           span:
@@ -1463,7 +1463,7 @@ flattening:
             end: 736
         "25":
           label: else if (false)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1"
           node_type: branch-arm
           parent: "22"
           span:
@@ -1472,7 +1472,7 @@ flattening:
             end: 822
         "26":
           label: Second False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
           node_type: header
           parent: "25"
           span:
@@ -1481,7 +1481,7 @@ flattening:
             end: 789
         "27":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "22"
           span:
@@ -1490,7 +1490,7 @@ flattening:
             end: 862
         "28":
           label: else if (false)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1"
           node_type: branch-arm
           parent: "20"
           span:
@@ -1499,7 +1499,7 @@ flattening:
             end: 1048
         "29":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
           node_type: branch-group
           parent: "28"
           span:
@@ -1508,7 +1508,7 @@ flattening:
             end: 1023
         "3":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "1"
           span:
@@ -1517,7 +1517,7 @@ flattening:
             end: 636
         "30":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "28"
           span:
@@ -1526,7 +1526,7 @@ flattening:
             end: 1023
         "31":
           label: standalone then
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "30"
           span:
@@ -1535,7 +1535,7 @@ flattening:
             end: 968
         "32":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "28"
           span:
@@ -1544,7 +1544,7 @@ flattening:
             end: 1023
         "33":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "20"
           span:
@@ -1553,7 +1553,7 @@ flattening:
             end: 1185
         "4":
           label: If statement 2.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
           node_type: header
           parent: "3"
           span:
@@ -1562,7 +1562,7 @@ flattening:
             end: 127
         "5":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "4"
           span:
@@ -1571,7 +1571,7 @@ flattening:
             end: 618
         "6":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "4"
           span:
@@ -1580,7 +1580,7 @@ flattening:
             end: 384
         "7":
           label: If statement 3.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
           node_type: header
           parent: "6"
           span:
@@ -1589,7 +1589,7 @@ flattening:
             end: 190
         "8":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "7"
           span:
@@ -1598,7 +1598,7 @@ flattening:
             end: 356
         "9":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "7"
           span:
@@ -1636,7 +1636,7 @@ flattening:
       nodes:
         "0":
           label: NestedIfs
-          lexical_id: "NestedIfs|root:0"
+          log_filter_key: "NestedIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -1645,7 +1645,7 @@ flattening:
             end: 1213
         "1":
           label: If statement 1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0"
           node_type: header
           parent: "0"
           span:
@@ -1654,7 +1654,7 @@ flattening:
             end: 71
         "10":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "7"
           span:
@@ -1663,7 +1663,7 @@ flattening:
             end: 249
         "12":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "7"
           span:
@@ -1672,7 +1672,7 @@ flattening:
             end: 323
         "14":
           label: If statement 3.2
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
           node_type: header
           parent: "4"
           span:
@@ -1681,7 +1681,7 @@ flattening:
             end: 426
         "15":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
           node_type: branch-group
           parent: "14"
           span:
@@ -1690,7 +1690,7 @@ flattening:
             end: 592
         "17":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "14"
           span:
@@ -1699,7 +1699,7 @@ flattening:
             end: 485
         "19":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "14"
           span:
@@ -1708,7 +1708,7 @@ flattening:
             end: 559
         "2":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1717,7 +1717,7 @@ flattening:
             end: 1203
         "21":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1726,7 +1726,7 @@ flattening:
             end: 1185
         "23":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1735,7 +1735,7 @@ flattening:
             end: 862
         "24":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "1"
           span:
@@ -1744,7 +1744,7 @@ flattening:
             end: 736
         "26":
           label: Second False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
           node_type: header
           parent: "1"
           span:
@@ -1753,7 +1753,7 @@ flattening:
             end: 789
         "27":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "1"
           span:
@@ -1762,7 +1762,7 @@ flattening:
             end: 862
         "29":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1771,7 +1771,7 @@ flattening:
             end: 1023
         "31":
           label: standalone then
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "1"
           span:
@@ -1780,7 +1780,7 @@ flattening:
             end: 968
         "32":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -1789,7 +1789,7 @@ flattening:
             end: 1023
         "33":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "1"
           span:
@@ -1798,7 +1798,7 @@ flattening:
             end: 1185
         "4":
           label: If statement 2.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
           node_type: header
           parent: "1"
           span:
@@ -1807,7 +1807,7 @@ flattening:
             end: 127
         "5":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "4"
           span:
@@ -1816,7 +1816,7 @@ flattening:
             end: 618
         "7":
           label: If statement 3.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
           node_type: header
           parent: "4"
           span:
@@ -1825,7 +1825,7 @@ flattening:
             end: 190
         "8":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "7"
           span:
@@ -1860,7 +1860,7 @@ flattening:
       nodes:
         "0":
           label: NestedIfs
-          lexical_id: "NestedIfs|root:0"
+          log_filter_key: "NestedIfs|root:0"
           node_type: function
           parent: ~
           span:
@@ -1869,7 +1869,7 @@ flattening:
             end: 1213
         "1":
           label: If statement 1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0"
           node_type: header
           parent: "0"
           span:
@@ -1878,7 +1878,7 @@ flattening:
             end: 71
         "10":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "7"
           span:
@@ -1887,7 +1887,7 @@ flattening:
             end: 249
         "12":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "7"
           span:
@@ -1896,7 +1896,7 @@ flattening:
             end: 323
         "14":
           label: If statement 3.2
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0"
           node_type: header
           parent: "4"
           span:
@@ -1905,7 +1905,7 @@ flattening:
             end: 426
         "15":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0"
           node_type: branch-group
           parent: "14"
           span:
@@ -1914,7 +1914,7 @@ flattening:
             end: 592
         "17":
           label: "True"
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:if-true:0|hdr:true:0"
           node_type: header
           parent: "14"
           span:
@@ -1923,7 +1923,7 @@ flattening:
             end: 485
         "19":
           label: Third False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:else:1|hdr:if-statement-3-2:0|bg:if-true:0|arm:else:1|hdr:third-false:0"
           node_type: header
           parent: "14"
           span:
@@ -1932,7 +1932,7 @@ flattening:
             end: 559
         "2":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1941,7 +1941,7 @@ flattening:
             end: 1203
         "21":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1950,7 +1950,7 @@ flattening:
             end: 1185
         "23":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1959,7 +1959,7 @@ flattening:
             end: 862
         "24":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:if-true:0"
           node_type: branch-arm
           parent: "1"
           span:
@@ -1968,7 +1968,7 @@ flattening:
             end: 736
         "26":
           label: Second False
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else-if-false:1|hdr:second-false:0"
           node_type: header
           parent: "1"
           span:
@@ -1977,7 +1977,7 @@ flattening:
             end: 789
         "27":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:if-true:0|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "1"
           span:
@@ -1986,7 +1986,7 @@ flattening:
             end: 862
         "29":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0"
           node_type: branch-group
           parent: "1"
           span:
@@ -1995,7 +1995,7 @@ flattening:
             end: 1023
         "31":
           label: standalone then
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
           node_type: header
           parent: "1"
           span:
@@ -2004,7 +2004,7 @@ flattening:
             end: 968
         "32":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else-if-false:1|bg:if-true:0|arm:else:1"
           node_type: branch-arm
           parent: "1"
           span:
@@ -2013,7 +2013,7 @@ flattening:
             end: 1023
         "33":
           label: else
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:else:1|bg:if-true:0|arm:else:2"
           node_type: branch-arm
           parent: "1"
           span:
@@ -2022,7 +2022,7 @@ flattening:
             end: 1185
         "4":
           label: If statement 2.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0"
           node_type: header
           parent: "1"
           span:
@@ -2031,7 +2031,7 @@ flattening:
             end: 127
         "5":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "4"
           span:
@@ -2040,7 +2040,7 @@ flattening:
             end: 618
         "7":
           label: If statement 3.1
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0"
           node_type: header
           parent: "4"
           span:
@@ -2049,7 +2049,7 @@ flattening:
             end: 190
         "8":
           label: if (true)
-          lexical_id: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
+          log_filter_key: "NestedIfs|root:0|hdr:if-statement-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-2-1:0|bg:if-true:0|arm:if-true:0|hdr:if-statement-3-1:0|bg:if-true:0"
           node_type: branch-group
           parent: "7"
           span:

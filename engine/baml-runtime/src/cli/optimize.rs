@@ -92,6 +92,36 @@ pub struct OptimizeArgs {
     #[arg(long, default_value_t = false, help = "Enable verbose output")]
     pub verbose: bool,
 
+    #[arg(
+        long,
+        short = 'v',
+        default_value_t = false,
+        help = "View optimization results in TUI"
+    )]
+    /// Open an interactive TUI to browse optimization results.
+    /// Use with --run-dir to view a specific run, or without to view the most recent run.
+    ///
+    /// Examples:
+    ///   baml-cli optimize --view
+    ///   baml-cli optimize --view --run-dir .baml_optimize/run_20250106_143022
+    pub view: bool,
+
+    #[arg(long, default_value_t = false, help = "Disable the live TUI viewer")]
+    /// Disable the TUI viewer that normally launches during optimization.
+    /// Use this for CI/CD pipelines or when you prefer text-only output.
+    ///
+    /// Example:
+    ///   baml-cli optimize --beta -f MyFunction --no-ui
+    pub no_ui: bool,
+
+    #[arg(long, help = "Path to optimization run directory to view")]
+    /// Specify a specific optimization run directory to view.
+    /// Only used with --view flag.
+    ///
+    /// Example:
+    ///   --run-dir .baml_optimize/run_20250106_143022
+    pub run_dir: Option<PathBuf>,
+
     #[command(flatten)]
     pub dotenv: dotenv::DotenvArgs,
 }
@@ -128,6 +158,8 @@ pub enum OptimizeRunResult {
     Failed,
     /// GEPA prompts were reset (no optimization run)
     GepaPromptsReset,
+    /// TUI viewer was opened and closed successfully
+    ViewCompleted,
 }
 
 impl OptimizeArgs {
@@ -135,7 +167,12 @@ impl OptimizeArgs {
         &self,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<OptimizeRunResult> {
-        if !(feature_flags.is_beta_enabled()) {
+        // Handle --view mode first (doesn't require beta flag)
+        if self.view {
+            return self.run_view_mode();
+        }
+
+        if !(self.beta) {
             println!(
                 "`baml-cli optimize` is still in beta. Please use --beta flag and proceed with caution."
             );
@@ -228,6 +265,14 @@ impl OptimizeArgs {
         }
 
         self.dotenv.load()?;
+
+        // Suppress BAML logging and tracing when TUI is active
+        if !self.no_ui {
+            // Set BAML_LOG=off to disable all logging output
+            std::env::set_var("BAML_LOG", "off");
+            // Remove BAML_TRACE_FILE to prevent trace output during TUI
+            std::env::remove_var("BAML_TRACE_FILE");
+        }
 
         let env_vars = std::env::vars().collect::<HashMap<String, String>>();
         let runtime = BamlRuntime::from_directory(&from, env_vars.clone(), feature_flags.clone())?;
@@ -331,20 +376,81 @@ impl OptimizeArgs {
                 parallel: self.parallel,
                 objectives,
                 verbose: self.verbose,
+                quiet: !self.no_ui, // Suppress output when TUI is active
                 env_vars,
                 baml_src_path: from.clone(),
                 feature_flags,
             },
         )?;
 
+        // Launch live TUI in a separate thread (default behavior, unless --no-ui)
+        let tui_handle = if !self.no_ui {
+            let run_dir_clone = run_dir.clone();
+            println!("Launching live TUI viewer...");
+            println!("(Press 'q' to close TUI, 'Enter' to stop optimization and apply selected candidate)\n");
+
+            // Give a moment for the storage directory to be fully created
+            std::thread::sleep(std::time::Duration::from_millis(100));
+
+            Some(std::thread::spawn(move || {
+                if let Err(e) = crate::optimize::tui::run_tui_live(&run_dir_clone) {
+                    eprintln!("TUI error: {}", e);
+                }
+            }))
+        } else {
+            None
+        };
+
         // Run optimization
         match orchestrator.run().await {
             Ok(result) => {
+                // If TUI was launched in live mode, wait for it to close and get the selected candidate
+                if let Some(handle) = tui_handle {
+                    // Wait for TUI to close - user can press Enter to apply a candidate
+                    let tui_result = handle.join();
+
+                    // Check if user selected a candidate to apply via TUI
+                    if let Ok(()) = tui_result {
+                        // Read back the apply request from storage
+                        if let Some(candidate_id) =
+                            crate::optimize::tui::read_apply_request(&run_dir)
+                        {
+                            println!(
+                                "\nApplying candidate #{} from TUI selection...",
+                                candidate_id
+                            );
+                            self.apply_candidate(&from, &runtime, &result, candidate_id)?;
+                        } else {
+                            println!("\nNo candidate selected for application.");
+                            println!("Results saved to: {}", run_dir.display());
+                        }
+                    }
+
+                    return Ok(OptimizeRunResult::Success);
+                }
+
+                // Non-live mode: show completion message and Pareto selection
                 println!("\n{}", "=".repeat(60));
                 println!("Optimization Complete!");
                 println!("{}", "=".repeat(60));
 
-                if let Some(best) = result.best_candidate() {
+                // Load objectives for display
+                let objectives = result
+                    .storage
+                    .load_config()
+                    .map(|c| c.objectives)
+                    .unwrap_or_default();
+
+                // Display Pareto frontier and let user select
+                let selected_id = if result.pareto_frontier_size() > 0 {
+                    crate::optimize::tui::display_pareto_and_select(
+                        &result.candidates,
+                        &result.pareto_frontier,
+                        &objectives,
+                        &result.function_name,
+                    )
+                } else if let Some(best) = result.best_candidate() {
+                    // Fallback to best candidate if no Pareto frontier
                     println!("\nBest candidate: #{}", best.id);
                     println!(
                         "  Test pass rate: {:.1}%",
@@ -353,55 +459,64 @@ impl OptimizeArgs {
                             .map(|s| s.test_pass_rate * 100.0)
                             .unwrap_or(0.0)
                     );
+                    Some(best.id)
+                } else {
+                    None
+                };
+
+                // Apply the selected candidate
+                if let Some(candidate_id) = selected_id {
                     println!(
-                        "\nCandidate saved to: {}",
-                        result.best_candidate_path().display()
+                        "\nCandidate #{} saved to: {}",
+                        candidate_id,
+                        result.candidate_path(candidate_id).display()
                     );
 
-                    // Apply changes to source files if --apply was specified
                     if self.apply {
-                        self.apply_best_candidate(&from, &runtime, &result)?;
+                        self.apply_candidate(&from, &runtime, &result, candidate_id)?;
                     } else {
                         println!("\nTo apply this optimization, either:");
                         println!("  1. Re-run with --apply flag to write changes directly");
                         println!("  2. Manually copy changes from the candidate file above");
                     }
-                }
-
-                if result.pareto_frontier_size() > 1 {
-                    println!(
-                        "\nPareto frontier contains {} candidates with different trade-offs.",
-                        result.pareto_frontier_size()
-                    );
-                    println!(
-                        "See {} for details.",
-                        run_dir.join("pareto_frontier.json").display()
-                    );
+                } else {
+                    println!("\nNo candidate selected for application.");
+                    println!("Results saved to: {}", run_dir.display());
                 }
 
                 Ok(OptimizeRunResult::Success)
             }
             Err(e) => {
+                // If TUI was launched, wait for it to close even on error
+                if let Some(handle) = tui_handle {
+                    let _ = handle.join();
+                }
+
                 eprintln!("\nOptimization failed: {e}");
                 Ok(OptimizeRunResult::Failed)
             }
         }
     }
 
-    /// Apply the best candidate's changes to source files
-    fn apply_best_candidate(
+    /// Apply a candidate's changes to source files
+    fn apply_candidate(
         &self,
         baml_src_path: &std::path::Path,
         runtime: &std::sync::Arc<BamlRuntime>,
         result: &crate::optimize::orchestrator::OptimizationRunResult,
+        candidate_id: usize,
     ) -> Result<()> {
-        let best = result.best_candidate().context("No best candidate found")?;
+        let candidate = result
+            .candidates
+            .iter()
+            .find(|c| c.id == candidate_id)
+            .context(format!("Candidate #{} not found", candidate_id))?;
 
-        // Create an ImprovedFunction from the best candidate
+        // Create an ImprovedFunction from the candidate
         let improved = crate::optimize::candidate::ImprovedFunction {
-            prompt_text: best.function.prompt_text.clone(),
-            classes: best.function.classes.clone(),
-            enums: best.function.enums.clone(),
+            prompt_text: candidate.function.prompt_text.clone(),
+            classes: candidate.function.classes.clone(),
+            enums: candidate.function.enums.clone(),
             rationale: String::new(),
         };
 
@@ -409,7 +524,7 @@ impl OptimizeArgs {
         let changes = crate::optimize::applier::apply_to_source_files(
             baml_src_path,
             runtime,
-            &best.function.function_name,
+            &candidate.function.function_name,
             &improved,
         )?;
 
@@ -438,5 +553,65 @@ impl OptimizeArgs {
         println!("Use 'git diff' to review changes, or 'git checkout .' to revert.");
 
         Ok(())
+    }
+
+    /// Run the TUI viewer mode
+    fn run_view_mode(&self) -> Result<OptimizeRunResult> {
+        let run_dir = if let Some(ref dir) = self.run_dir {
+            // Use explicitly specified run directory
+            if !dir.exists() {
+                anyhow::bail!("Specified run directory does not exist: {}", dir.display());
+            }
+            dir.clone()
+        } else {
+            // Find the most recent run in .baml_optimize/
+            let from = BamlRuntime::parse_baml_src_path(&self.from)?;
+            let optimize_base_dir = from
+                .parent()
+                .map(|p| p.join(".baml_optimize"))
+                .unwrap_or_else(|| PathBuf::from(".baml_optimize"));
+
+            if !optimize_base_dir.exists() {
+                anyhow::bail!(
+                    "No optimization runs found. Run 'baml-cli optimize' first.\n\
+                     Expected directory: {}",
+                    optimize_base_dir.display()
+                );
+            }
+
+            // Find the most recent run_* directory
+            let mut runs: Vec<_> = std::fs::read_dir(&optimize_base_dir)?
+                .filter_map(|entry| {
+                    let entry = entry.ok()?;
+                    let path = entry.path();
+                    if path.is_dir() {
+                        let name = path.file_name()?.to_string_lossy().to_string();
+                        if name.starts_with("run_") {
+                            return Some(path);
+                        }
+                    }
+                    None
+                })
+                .collect();
+
+            if runs.is_empty() {
+                anyhow::bail!(
+                    "No optimization runs found in {}.\n\
+                     Run 'baml-cli optimize' first to create an optimization run.",
+                    optimize_base_dir.display()
+                );
+            }
+
+            // Sort by name (which includes timestamp) and take the most recent
+            runs.sort();
+            runs.pop().unwrap()
+        };
+
+        println!("Opening optimization viewer for: {}", run_dir.display());
+
+        // Launch the TUI
+        crate::optimize::tui::run_tui(&run_dir)?;
+
+        Ok(OptimizeRunResult::ViewCompleted)
     }
 }

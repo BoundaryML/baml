@@ -1,0 +1,127 @@
+---
+source: baml-runtime/tests/viz-runtime.rs
+expression: "&snapshot"
+input_file: baml-runtime/tests/viz-runtime/testdata/straight_line_with_headers.baml
+---
+fixture: straight_line_with_headers.baml
+snapshots:
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: Main
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "Main|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: MyFunction1
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "MyFunction1|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 1
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: start
+          ordinal: 0
+        label: Start
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:start:0"
+    emitted_events:
+      - node_id: 1
+        log_filter_key: "MyFunction1|root:0|hdr:start:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 2
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: finish
+          ordinal: 1
+        label: Finish
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction1|root:0"
+      - "MyFunction1|root:0|hdr:finish:1"
+    emitted_events:
+      - node_id: 1
+        log_filter_key: "MyFunction1|root:0|hdr:start:0"
+        new_state: completed
+      - node_id: 2
+        log_filter_key: "MyFunction1|root:0|hdr:finish:1"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: MyFunction1
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction1|root:0|hdr:finish:1"
+        new_state: completed
+      - node_id: 0
+        log_filter_key: "MyFunction1|root:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: Main
+        header_level: ~
+    stack_after: []
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "Main|root:0"
+        new_state: completed

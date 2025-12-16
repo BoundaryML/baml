@@ -1,6 +1,7 @@
 import { cn } from '@baml/ui/lib/utils';
 import { useSetAtom } from 'jotai';
 import { ChevronDown, ChevronRight, File } from 'lucide-react';
+import type React from 'react';
 import { useEffect } from 'react';
 import type { NodeRendererProps } from 'react-arborist';
 import { SiJinja } from 'react-icons/si';
@@ -44,7 +45,7 @@ const Node = ({ node, style, dragHandle }: NodeRendererProps<any>) => {
           ? 'bg-zinc-600 text-white'
           : 'text-muted-foreground',
       )}
-      style={style}
+      style={style as React.CSSProperties}
       ref={dragHandle}
     >
       <div

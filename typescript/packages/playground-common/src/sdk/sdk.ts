@@ -12,7 +12,6 @@ import type {
   TestResponseData,
   WatchNotification,
   TestCaseMetadata,
-  RichWatchNotification,
   WatchNotificationValue,
   WatchHeaderValue,
   WatchHeaderStoppedValue,
@@ -20,12 +19,15 @@ import type {
   WatchStreamUpdateValue,
   WatchStreamEndValue,
   WatchEventSpan,
+  VizStateUpdate,
+  VizStateUpdateState,
 } from './interface';
 import type {
   ExecutionSnapshot,
   CacheEntry,
   TestCaseInput,
   BAMLFile,
+  NodeExecutionState,
 } from './types';
 
 // Import all atoms to expose via sdk.atoms
@@ -939,7 +941,8 @@ export class BAMLSDK {
   /**
    * Parse the watch notification value JSON into a typed structure
    */
-  private parseWatchValue(value: string): WatchNotificationValue | undefined {
+  private parseWatchValue(value?: string): WatchNotificationValue | undefined {
+    if (!value) return undefined;
     try {
       const parsed = JSON.parse(value) as Record<string, unknown>;
       if (parsed && typeof parsed === 'object' && 'type' in parsed) {
@@ -1015,70 +1018,17 @@ export class BAMLSDK {
     }
   }
 
-  /**
-   * Find graph node ID by matching label (header title) to control flow graph nodes
-   * Returns the node id (which is the lexical_id) of the matching node
-   */
-  private findNodeIdByLabel(
-    functionName: string,
-    label: string
-  ): string | undefined {
-    // Get the function's control flow graph
-    const functions = this.storage.getFunctions();
-    const func = functions.find((f) => f.name === functionName);
-    if (!func || !func.nodes) {
-      return undefined;
+  private mapReducerStateToNodeState(newState: VizStateUpdateState): NodeExecutionState | null {
+    switch (newState) {
+      case 'running':
+        return 'running';
+      case 'completed':
+        return 'success';
+      case 'not_running':
+        return 'not-started';
+      default:
+        return null;
     }
-
-    // Find a node whose label matches the header title
-    // Node labels are set from the header title during control flow graph building
-    for (const node of func.nodes) {
-      if (node.label === label) {
-        return node.id;
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Enrich watch notification with parsed value and blockName
-   * Also updates node state when header events are received
-   */
-  private enrichNotificationWithContext(
-    notification: WatchNotification,
-    functionName: string
-  ): RichWatchNotification {
-    const enriched: RichWatchNotification = { ...notification };
-    const parsedValue = this.parseWatchValue(notification.value);
-    enriched.parsedValue = parsedValue;
-
-    // Handle header events - update lexicalNodeId and node state
-    if (parsedValue?.type === 'header') {
-      enriched.lexicalNodeId = parsedValue.label;
-
-      // Find the matching node by label and update its state to 'running'
-      const nodeId = this.findNodeIdByLabel(functionName, parsedValue.label);
-      if (nodeId) {
-        console.log(`[SDK] Header event: setting node ${nodeId} to 'running'`);
-        this.storage.setNodeState(nodeId, 'running');
-      }
-    }
-
-    // HACK: Handle header_stopped events - set node state to 'success'
-    // This is emitted synthetically when a new header comes in at the same or shallower level
-    if (parsedValue?.type === 'header_stopped') {
-      enriched.lexicalNodeId = parsedValue.label;
-
-      // Find the matching node by label and update its state to 'success'
-      const nodeId = this.findNodeIdByLabel(functionName, parsedValue.label);
-      if (nodeId) {
-        console.log(`[SDK] Header stopped event: setting node ${nodeId} to 'success'`);
-        this.storage.setNodeState(nodeId, 'success');
-      }
-    }
-
-    return enriched;
   }
 
   tests = {
@@ -1257,74 +1207,42 @@ export class BAMLSDK {
           // Called when a watch notification is received
           onWatchNotification: (notification) => {
             console.log('[SDK] onWatchNotification:', notification);
-            // Use the function name from the notification to update node states
-            // If functionName is missing, use empty string (won't match any nodes for state updates)
-            const enriched = this.enrichNotificationWithContext(
-              notification,
-              notification.functionName ?? ''
-            );
-            this.storage.addWatchNotification(enriched);
-            if (enriched.lexicalNodeId) {
-              this.storage.addHighlightedBlock(enriched.lexicalNodeId);
+            const _parsedValue = this.parseWatchValue(notification.value);
+
+            if (notification.stateUpdate) {
+              const mapped = this.mapReducerStateToNodeState(notification.stateUpdate.newState);
+              if (mapped) {
+                this.storage.setNodeState(notification.stateUpdate.nodeId.toString(), mapped);
+              }
             }
 
-            // Emit proper event types based on notification content
+            this.storage.addWatchNotification(notification);
+
             const now = Date.now();
             const functionName = notification.functionName ?? 'unknown';
 
-            if (enriched.parsedValue?.type === 'header') {
-              // Header enter event
-              const nodeId = this.findNodeIdByLabel(functionName, enriched.parsedValue.label) || enriched.parsedValue.label;
-              this.storage.appendExecutionLog({
-                type: 'header.enter',
-                nodeId,
-                timestamp: now,
-                iteration: 0,
-                executionId: `test-${functionName}`,
-                label: enriched.parsedValue.label,
-                level: enriched.parsedValue.level,
-                span: enriched.parsedValue.span ? {
-                  filePath: enriched.parsedValue.span.filePath,
-                  startLine: enriched.parsedValue.span.startLine,
-                  startColumn: enriched.parsedValue.span.startColumn,
-                  start: enriched.parsedValue.span.startColumn,
-                  endLine: enriched.parsedValue.span.endLine,
-                  endColumn: enriched.parsedValue.span.endColumn,
-                  end: enriched.parsedValue.span.endColumn,
-                } : undefined,
-              });
-            } else if (enriched.parsedValue?.type === 'header_stopped') {
-              // Header exit event
-              const nodeId = this.findNodeIdByLabel(functionName, enriched.parsedValue.label) || enriched.parsedValue.label;
-              this.storage.appendExecutionLog({
-                type: 'header.exit',
-                nodeId,
-                timestamp: now,
-                iteration: 0,
-                executionId: `test-${functionName}`,
-                label: enriched.parsedValue.label,
-                level: enriched.parsedValue.level,
-              });
-            } else if (notification.variableName) {
-              // Variable update event
-              let parsedValue: unknown;
-              try {
-                parsedValue = JSON.parse(notification.value);
-              } catch {
-                parsedValue = notification.value;
+            if (notification.variableName) {
+              let parsedVarValue: unknown;
+              if (notification.value !== undefined) {
+                try {
+                  parsedVarValue = JSON.parse(notification.value);
+                } catch {
+                  parsedVarValue = notification.value;
+                }
               }
 
               this.storage.appendExecutionLog({
                 type: 'variable.update',
-                nodeId: enriched.lexicalNodeId || functionName,
+                nodeId: '00-placeholder-should-delete',
                 timestamp: now,
                 iteration: 0,
                 executionId: `test-${functionName}`,
                 name: notification.variableName,
-                value: parsedValue,
-                parentHeaderId: enriched.lexicalNodeId,
+                value: parsedVarValue,
+                parentHeaderId: '00-placeholder-should-delete',
               });
             }
+
           },
 
           // Called when code should be highlighted

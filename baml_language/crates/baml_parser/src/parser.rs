@@ -1609,7 +1609,19 @@ impl<'a> Parser<'a> {
                 self.expect(TokenKind::RBracket);
                 self.finish_node();
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
-                // Field access (including special .$field syntax for watch variables)
+                // Field access on a complex expression.
+                //
+                // This branch handles `.field` when the base is already a complete
+                // expression (call, index, binary, etc.):
+                // - `f().field` -> FIELD_ACCESS_EXPR wrapping CALL_EXPR
+                // - `arr[0].field` -> FIELD_ACCESS_EXPR wrapping INDEX_EXPR
+                // - `(a + b).field` -> FIELD_ACCESS_EXPR wrapping PAREN_EXPR
+                //
+                // For simple identifier chains like `user.name.length`, the parser
+                // uses PATH_EXPR instead (see `parse_path_or_ident`). PATH_EXPR is
+                // created during primary expression parsing when we see `WORD.WORD`.
+                //
+                // Also handles special `.$field` syntax for watch variables.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::FIELD_ACCESS_EXPR);
                 self.bump(); // . or $
@@ -2002,9 +2014,30 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse a path or simple identifier
-    /// Paths: baml.HttpMethod.Get
-    /// Identifiers: foo
+    /// Parse a path or simple identifier.
+    ///
+    /// This creates a `PATH_EXPR` for dot-separated identifier chains:
+    /// - `user.name.length` -> `PATH_EXPR` with segments `[user, name, length]`
+    /// - `baml.HttpMethod.Get` -> `PATH_EXPR` with segments `[baml, HttpMethod, Get]`
+    /// - `Status.Active` -> `PATH_EXPR` with segments `[Status, Active]`
+    ///
+    /// For a simple identifier without dots, no wrapper node is created.
+    ///
+    /// # `PATH_EXPR` vs `FIELD_ACCESS_EXPR`
+    ///
+    /// `PATH_EXPR` is used when ALL segments are identifiers (parsed at the start
+    /// of an expression). Resolution of what the path refers to happens later in THIR:
+    /// - Local variable + field accesses: `user.name`
+    /// - Enum variant: `Status.Active`
+    /// - Module path: `baml.HttpMethod`
+    ///
+    /// `FIELD_ACCESS_EXPR` is used when the base is a complex expression that's
+    /// already been parsed (call, index, parenthesized, etc.):
+    /// - `f().field` -> `FIELD_ACCESS_EXPR` (base is `CALL_EXPR`)
+    /// - `arr[0].field` -> `FIELD_ACCESS_EXPR` (base is `INDEX_EXPR`)
+    ///
+    /// This distinction is made at parse time because we can determine syntactically
+    /// whether the base is a simple identifier chain or a complex expression.
     fn parse_path_or_ident(&mut self) {
         if !self.at(TokenKind::Word) {
             return;
@@ -2020,7 +2053,7 @@ impl<'a> Parser<'a> {
                 .map(|t| t.kind == TokenKind::Word)
                 .unwrap_or(false)
         {
-            // It's a path
+            // It's a path - all segments are identifiers
             self.with_node(SyntaxKind::PATH_EXPR, |p| {
                 p.bump(); // First segment
 
@@ -2035,7 +2068,7 @@ impl<'a> Parser<'a> {
                 }
             });
         } else {
-            // Simple identifier
+            // Simple identifier (no dots)
             self.bump();
         }
     }

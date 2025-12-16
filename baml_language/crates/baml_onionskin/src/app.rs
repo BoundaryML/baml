@@ -112,6 +112,9 @@ impl App {
             && self.compiler.thir_display_mode() == ThirDisplayMode::Interactive
             && self.thir_interactive_active;
 
+        // Check if we're on the VM Runner tab
+        let in_vm_runner = self.current_phase == CompilerPhase::VmRunner;
+
         match (key.code, key.modifiers) {
             // Quit on Ctrl+C or 'q'
             (KeyCode::Char('c'), KeyModifiers::CONTROL)
@@ -156,10 +159,12 @@ impl App {
                     self.thir_interactive_active = false;
                 }
             }
-            // Up/Down: scroll normally, or move cursor in THIR interactive mode
+            // Up/Down: scroll normally, or move cursor in THIR interactive mode, or select function in VM Runner
             (KeyCode::Up, _) => {
                 if in_thir_interactive {
                     self.thir_cursor_up();
+                } else if in_vm_runner {
+                    self.vm_runner_select_prev();
                 } else {
                     self.scroll_offset = self.scroll_offset.saturating_sub(1);
                 }
@@ -167,6 +172,8 @@ impl App {
             (KeyCode::Down, _) => {
                 if in_thir_interactive {
                     self.thir_cursor_down();
+                } else if in_vm_runner {
+                    self.vm_runner_select_next();
                 } else {
                     self.scroll_offset = self.scroll_offset.saturating_add(1);
                 }
@@ -198,15 +205,19 @@ impl App {
                     }
                 }
             }
-            // Vim-style cursor navigation in THIR interactive mode
+            // Vim-style cursor navigation in THIR interactive mode and VM Runner
             (KeyCode::Char('j'), KeyModifiers::NONE) => {
                 if in_thir_interactive {
                     self.thir_cursor_down();
+                } else if in_vm_runner {
+                    self.vm_runner_select_next();
                 }
             }
             (KeyCode::Char('k'), KeyModifiers::NONE) => {
                 if in_thir_interactive {
                     self.thir_cursor_up();
+                } else if in_vm_runner {
+                    self.vm_runner_select_prev();
                 }
             }
             (KeyCode::Char('h'), KeyModifiers::NONE) => {
@@ -217,6 +228,12 @@ impl App {
             (KeyCode::Char('l'), KeyModifiers::NONE) => {
                 if in_thir_interactive {
                     self.thir_cursor_right();
+                }
+            }
+            // Execute function on Enter when on VM Runner tab
+            (KeyCode::Enter, KeyModifiers::NONE) => {
+                if in_vm_runner {
+                    self.vm_runner_execute();
                 }
             }
             _ => {}
@@ -389,6 +406,36 @@ impl App {
         if state.cursor_col + 1 < max_col {
             state.cursor_col += 1;
         }
+    }
+
+    /// VM Runner: select previous function
+    fn vm_runner_select_prev(&mut self) {
+        let state = self.compiler.vm_runner_state_mut();
+        if state.selected_function > 0 {
+            state.selected_function -= 1;
+            // Clear execution result when changing selection
+            state.execution_result = None;
+        }
+        // Regenerate output to show updated selection
+        self.compiler.run_single_phase(CompilerPhase::VmRunner);
+    }
+
+    /// VM Runner: select next function
+    fn vm_runner_select_next(&mut self) {
+        let state = self.compiler.vm_runner_state_mut();
+        let max = state.available_functions.len().saturating_sub(1);
+        if state.selected_function < max {
+            state.selected_function += 1;
+            // Clear execution result when changing selection
+            state.execution_result = None;
+        }
+        // Regenerate output to show updated selection
+        self.compiler.run_single_phase(CompilerPhase::VmRunner);
+    }
+
+    /// VM Runner: execute selected function
+    fn vm_runner_execute(&mut self) {
+        self.compiler.execute_selected_function();
     }
 
     fn compile_current_state(&mut self) {

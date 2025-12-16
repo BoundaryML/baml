@@ -305,6 +305,9 @@ impl RuntimeCli {
                     Ok(baml_runtime::cli::optimize::OptimizeRunResult::GepaPromptsReset) => {
                         Ok(crate::ExitCode::Success)
                     }
+                    Ok(baml_runtime::cli::optimize::OptimizeRunResult::ViewCompleted) => {
+                        Ok(crate::ExitCode::Success)
+                    }
                     Err(e) => {
                         eprintln!("Error: {e}");
                         Ok(crate::ExitCode::Other)

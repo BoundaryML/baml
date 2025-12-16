@@ -180,7 +180,7 @@ fn viz_snapshot(viz: &ControlFlowVisualization) -> Value {
             node.id.encode(),
             json!({
                 "label": node.label,
-                "lexical_id": node.lexical_id,
+                "log_filter_key": node.log_filter_key,
                 "node_type": describe_node_type(&node.node_type),
                 "parent": node.parent_node_id.as_ref().map(|id| id.encode()),
                 "span": {

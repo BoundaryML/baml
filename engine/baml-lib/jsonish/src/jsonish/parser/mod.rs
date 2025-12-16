@@ -37,10 +37,12 @@ impl ParseOptions {
         let mut new = *self;
         match curr_mode {
             ParsingMode::JsonMarkdownString => {
+                new.all_finding_all_json_objects = false;
                 new.allow_markdown_json = false;
                 new.allow_as_string = true;
             }
             ParsingMode::JsonMarkdown => {
+                new.all_finding_all_json_objects = false;
                 new.allow_markdown_json = false;
                 new.allow_as_string = false;
             }

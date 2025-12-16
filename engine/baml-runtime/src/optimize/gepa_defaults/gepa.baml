@@ -49,6 +49,34 @@ class ReflectiveExample {
     failure_location string?  // "prompt" | "parsing" | "assertion" | "unknown"
     test_source string?  // The BAML source code of the test (including assertions)
     test_name string?
+    prompt_tokens float?  // Tokens used in the prompt for this example
+    completion_tokens float?  // Tokens in the LLM's response
+    latency_ms float?  // Latency in milliseconds
+}
+
+/// Optimization objectives and their current status
+class OptimizationObjectives {
+    objectives ObjectiveStatus[]
+}
+
+/// Status of a single optimization objective
+class ObjectiveStatus {
+    name string  // "accuracy", "tokens", "latency", etc.
+    weight float  // Importance weight (0.0 to 1.0)
+    direction string  // "maximize" or "minimize"
+    current_value float  // Current value of this objective
+    status string  // Human-readable status description
+}
+
+/// Current metrics for the candidate being improved
+class CurrentMetrics {
+    test_pass_rate float  // 0.0 to 1.0
+    tests_passed int
+    tests_total int
+    avg_prompt_tokens float
+    avg_completion_tokens float
+    avg_total_tokens float
+    avg_latency_ms float
 }
 
 /// The result of reflection: improved prompt and schema
@@ -65,13 +93,11 @@ class ImprovedFunction {
 
 
 /// Analyze test failures and propose improvements to prompt and schema
-// TODO: Include additional instructions about optimizing
-//       for latency and token counts if the user requests it with --weight
-function ProposeImprovements(current_function: OptimizableFunction, failed_examples: ReflectiveExample[], successful_examples: ReflectiveExample[]?) -> ImprovedFunction {
+function ProposeImprovements(current_function: OptimizableFunction, failed_examples: ReflectiveExample[], successful_examples: ReflectiveExample[]?, optimization_objectives: OptimizationObjectives?, current_metrics: CurrentMetrics?) -> ImprovedFunction {
     client ReflectionModel
     prompt ##"
         You are an expert at optimizing BAML functions. Your task is to improve
-        both the prompt and the schema annotations to make the tests pass.
+        both the prompt and the schema annotations based on the optimization objectives.
 
         ## Current Implementation
 
@@ -109,6 +135,48 @@ function ProposeImprovements(current_function: OptimizableFunction, failed_examp
         }
         {% endfor %}
 
+        {% if current_metrics %}
+        ## Current Performance Metrics
+
+        | Metric | Value |
+        |--------|-------|
+        | Test Pass Rate | {{ current_metrics.test_pass_rate * 100 }}% ({{ current_metrics.tests_passed }}/{{ current_metrics.tests_total }}) |
+        | Avg Prompt Tokens | {{ current_metrics.avg_prompt_tokens }} |
+        | Avg Completion Tokens | {{ current_metrics.avg_completion_tokens }} |
+        | Avg Total Tokens | {{ current_metrics.avg_total_tokens }} |
+        | Avg Latency | {{ current_metrics.avg_latency_ms }}ms |
+        {% endif %}
+
+        {% if optimization_objectives and optimization_objectives.objectives | length > 0 %}
+        ## Optimization Objectives
+
+        You are optimizing for MULTIPLE objectives. Balance these based on their weights:
+
+        | Objective | Weight | Direction | Current | Status |
+        |-----------|--------|-----------|---------|--------|
+        {% for obj in optimization_objectives.objectives %}
+        | {{ obj.name }} | {{ obj.weight * 100 }}% | {{ obj.direction }} | {{ obj.current_value }} | {{ obj.status }} |
+        {% endfor %}
+
+        **Important:** Consider ALL objectives when making improvements:
+        {% for obj in optimization_objectives.objectives %}
+        {% if obj.name == "accuracy" %}
+        - **Accuracy ({{ obj.weight * 100 }}% weight):** Fix test failures to improve pass rate
+        {% elif obj.name == "tokens" %}
+        - **Token Usage ({{ obj.weight * 100 }}% weight):** Make prompts more concise, use shorter field aliases, reduce verbosity
+        {% elif obj.name == "prompt_tokens" %}
+        - **Prompt Tokens ({{ obj.weight * 100 }}% weight):** Shorten the prompt text, remove unnecessary instructions
+        {% elif obj.name == "completion_tokens" %}
+        - **Completion Tokens ({{ obj.weight * 100 }}% weight):** Design schemas that encourage shorter LLM responses
+        {% elif obj.name == "latency" %}
+        - **Latency ({{ obj.weight * 100 }}% weight):** Simpler prompts may reduce processing time
+        {% else %}
+        - **{{ obj.name }} ({{ obj.weight * 100 }}% weight):** {{ obj.status }}
+        {% endif %}
+        {% endfor %}
+
+        {% endif %}
+
         ## Test Failures ({{ failed_examples | length }} examples)
 
         {% for ex in failed_examples %}
@@ -125,6 +193,10 @@ function ProposeImprovements(current_function: OptimizableFunction, failed_examp
         **LLM Generated Output:** {{ ex.generated_outputs | tojson }}
         **Error:** {{ ex.feedback }}
         {% if ex.failure_location %}**Failure Type:** {{ ex.failure_location }}{% endif %}
+        {% if ex.prompt_tokens or ex.completion_tokens or ex.latency_ms %}
+        **Metrics:** {% if ex.prompt_tokens %}Prompt: {{ ex.prompt_tokens }} tokens{% endif %}{% if ex.completion_tokens %}, Completion: {{ ex.completion_tokens }} tokens{% endif %}{% if ex.latency_ms %}, Latency: {{ ex.latency_ms }}ms{% endif %}
+
+        {% endif %}
 
         {% endfor %}
 
@@ -132,7 +204,8 @@ function ProposeImprovements(current_function: OptimizableFunction, failed_examp
         ## Successful Examples (for reference)
 
         {% for ex in successful_examples %}
-        - Inputs: {{ ex.inputs | tojson }} -> {{ ex.generated_outputs | tojson }}
+        - Inputs: {{ ex.inputs | tojson }} -> {{ ex.generated_outputs | tojson }}{% if ex.prompt_tokens or ex.completion_tokens %} ({{ ex.prompt_tokens }}+{{ ex.completion_tokens }} tokens){% endif %}
+
         {% endfor %}
         {% endif %}
 
@@ -183,6 +256,14 @@ function ProposeImprovements(current_function: OptimizableFunction, failed_examp
            - Should field @description annotations be added or improved?
            - Would @alias annotations help catch output variations?
 
+        {% if optimization_objectives and optimization_objectives.objectives | length > 1 %}
+        6. **Efficiency improvements** (if optimizing for tokens/latency):
+           - Can the prompt be made more concise without losing clarity?
+           - Are there redundant instructions that can be removed?
+           - Would shorter @alias names reduce token usage?
+           - Can verbose descriptions be shortened?
+        {% endif %}
+
         General tips:
 
           - Strongly prefer \{\{ctx.output_format\}\} (in double curly-brackets) over
@@ -219,6 +300,9 @@ function ProposeImprovements(current_function: OptimizableFunction, failed_examp
         ctx.output_format).
 
         Return your improvements. Fix any bugs in the prompt that cause test failures.
+        {% if optimization_objectives and optimization_objectives.objectives | length > 1 %}
+        Balance accuracy improvements with efficiency based on the objective weights.
+        {% endif %}
         Explain your reasoning in the rationale field.
 
 

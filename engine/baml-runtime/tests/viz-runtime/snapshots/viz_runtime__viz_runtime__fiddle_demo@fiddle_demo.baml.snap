@@ -1,0 +1,779 @@
+---
+source: baml-runtime/tests/viz-runtime.rs
+expression: "&snapshot"
+input_file: baml-runtime/tests/viz-runtime/testdata/fiddle_demo.baml
+---
+fixture: fiddle_demo.baml
+snapshots:
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: Main
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "Main|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: MyFunction4
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "MyFunction4|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 1
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: check
+          ordinal: 0
+        label: Check
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+    emitted_events:
+      - node_id: 1
+        log_filter_key: "MyFunction4|root:0|hdr:check:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 2
+        node_type: branch_group
+        path_segment:
+          kind: branch_group
+          slug: if-flag
+          ordinal: 0
+        label: if (flag)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|bg:if-flag:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|bg:if-flag:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 3
+        node_type: branch_arm
+        path_segment:
+          kind: branch_arm
+          slug: if-flag
+          ordinal: 0
+        label: if (flag)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|bg:if-flag:0"
+      - "MyFunction4|root:0|hdr:check:0|bg:if-flag:0|arm:if-flag:0"
+    emitted_events:
+      - node_id: 3
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|bg:if-flag:0|arm:if-flag:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 3
+        node_type: branch_arm
+        path_segment:
+          kind: branch_arm
+          slug: if-flag
+          ordinal: 0
+        label: if (flag)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|bg:if-flag:0"
+    emitted_events:
+      - node_id: 3
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|bg:if-flag:0|arm:if-flag:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 2
+        node_type: branch_group
+        path_segment:
+          kind: branch_group
+          slug: if-flag
+          ordinal: 0
+        label: if (flag)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|bg:if-flag:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 5
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-string-lorem-string-ipsum-string-dolor
+          ordinal: 0
+        label: "for (item in [String(\"lorem\"), String(\"ipsum\"), String(\"dolor\")])"
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+    emitted_events:
+      - node_id: 5
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 6
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: extract1
+          ordinal: 0
+        label: Extract1
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+    emitted_events:
+      - node_id: 6
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+      - "LlmEcho|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: completed
+  - watch_event:
+      kind: other
+      header: ~
+      viz_event: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+    emitted_events: []
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 7
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: extract2
+          ordinal: 1
+        label: Extract2
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+    emitted_events:
+      - node_id: 6
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+        new_state: completed
+      - node_id: 7
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+      - "LlmEcho|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 5
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-string-lorem-string-ipsum-string-dolor
+          ordinal: 0
+        label: "for (item in [String(\"lorem\"), String(\"ipsum\"), String(\"dolor\")])"
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+    emitted_events:
+      - node_id: 7
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+        new_state: completed
+      - node_id: 5
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 5
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-string-lorem-string-ipsum-string-dolor
+          ordinal: 0
+        label: "for (item in [String(\"lorem\"), String(\"ipsum\"), String(\"dolor\")])"
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+    emitted_events:
+      - node_id: 5
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 6
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: extract1
+          ordinal: 0
+        label: Extract1
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+    emitted_events:
+      - node_id: 6
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+      - "LlmEcho|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: completed
+  - watch_event:
+      kind: other
+      header: ~
+      viz_event: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+    emitted_events: []
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 7
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: extract2
+          ordinal: 1
+        label: Extract2
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+    emitted_events:
+      - node_id: 6
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+        new_state: completed
+      - node_id: 7
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+      - "LlmEcho|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 5
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-string-lorem-string-ipsum-string-dolor
+          ordinal: 0
+        label: "for (item in [String(\"lorem\"), String(\"ipsum\"), String(\"dolor\")])"
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+    emitted_events:
+      - node_id: 7
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+        new_state: completed
+      - node_id: 5
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 5
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-string-lorem-string-ipsum-string-dolor
+          ordinal: 0
+        label: "for (item in [String(\"lorem\"), String(\"ipsum\"), String(\"dolor\")])"
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+    emitted_events:
+      - node_id: 5
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 6
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: extract1
+          ordinal: 0
+        label: Extract1
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+    emitted_events:
+      - node_id: 6
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+      - "LlmEcho|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: completed
+  - watch_event:
+      kind: other
+      header: ~
+      viz_event: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+    emitted_events: []
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 7
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: extract2
+          ordinal: 1
+        label: Extract2
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+    emitted_events:
+      - node_id: 6
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract1:0"
+        new_state: completed
+      - node_id: 7
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+      - "LlmEcho|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: LlmEcho
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+      - "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "LlmEcho|root:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 5
+        node_type: loop
+        path_segment:
+          kind: loop
+          slug: for-item-in-string-lorem-string-ipsum-string-dolor
+          ordinal: 0
+        label: "for (item in [String(\"lorem\"), String(\"ipsum\"), String(\"dolor\")])"
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+    emitted_events:
+      - node_id: 7
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0|hdr:extract2:1"
+        new_state: completed
+      - node_id: 5
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|loop:for-item-in-string-lorem-string-ipsum-string-dolor:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: MyFunction4
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+    emitted_events:
+      - node_id: 1
+        log_filter_key: "MyFunction4|root:0|hdr:check:0"
+        new_state: completed
+      - node_id: 0
+        log_filter_key: "MyFunction4|root:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: Main
+        header_level: ~
+    stack_after: []
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "Main|root:0"
+        new_state: completed

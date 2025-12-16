@@ -10,8 +10,9 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 use crate::thir::{self, typecheck::TypeCompatibility, ClassConstructorField, ExprMetadata, THir};
 pub use crate::watch::{
     watch_event::{
-        shared_handler, shared_noop_handler, SharedWatchHandler, WatchBamlValue, WatchHandler,
-        WatchNotification, WatchValueMetadata,
+        shared_handler, shared_noop_handler, ReducedWatchBamlValue, RuntimeNodeType,
+        SharedWatchHandler, VizExecDelta, VizExecEvent, WatchBamlValue, WatchEventReducer,
+        WatchHandler, WatchNotification, WatchValueMetadata,
     },
     watch_options::{WatchSpec, WatchWhen},
 };

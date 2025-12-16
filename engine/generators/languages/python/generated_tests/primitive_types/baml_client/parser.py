@@ -27,62 +27,62 @@ class LlmResponseParser:
     def TestEmptyCollections(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.PrimitiveArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyCollections", llm_response=llm_response, mode="request")
-        return typing.cast(types.PrimitiveArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyCollections", llm_response=llm_response, mode="request")
+        return typing.cast(types.PrimitiveArrays, __result__)
 
     def TestMixedPrimitives(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.MixedPrimitives:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedPrimitives", llm_response=llm_response, mode="request")
-        return typing.cast(types.MixedPrimitives, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedPrimitives", llm_response=llm_response, mode="request")
+        return typing.cast(types.MixedPrimitives, __result__)
 
     def TestPrimitiveArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.PrimitiveArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveArrays", llm_response=llm_response, mode="request")
-        return typing.cast(types.PrimitiveArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveArrays", llm_response=llm_response, mode="request")
+        return typing.cast(types.PrimitiveArrays, __result__)
 
     def TestPrimitiveMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.PrimitiveMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveMaps", llm_response=llm_response, mode="request")
-        return typing.cast(types.PrimitiveMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveMaps", llm_response=llm_response, mode="request")
+        return typing.cast(types.PrimitiveMaps, __result__)
 
     def TestPrimitiveTypes(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.PrimitiveTypes:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveTypes", llm_response=llm_response, mode="request")
-        return typing.cast(types.PrimitiveTypes, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveTypes", llm_response=llm_response, mode="request")
+        return typing.cast(types.PrimitiveTypes, __result__)
 
     def TestTopLevelBool(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> bool:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBool", llm_response=llm_response, mode="request")
-        return typing.cast(bool, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBool", llm_response=llm_response, mode="request")
+        return typing.cast(bool, __result__)
 
     def TestTopLevelFloat(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> float:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloat", llm_response=llm_response, mode="request")
-        return typing.cast(float, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloat", llm_response=llm_response, mode="request")
+        return typing.cast(float, __result__)
 
     def TestTopLevelInt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelInt", llm_response=llm_response, mode="request")
-        return typing.cast(int, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelInt", llm_response=llm_response, mode="request")
+        return typing.cast(int, __result__)
 
     def TestTopLevelNull(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Any:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNull", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Any, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNull", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Any, __result__)
 
     def TestTopLevelString(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelString", llm_response=llm_response, mode="request")
-        return typing.cast(str, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelString", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
 
     
 
@@ -95,61 +95,61 @@ class LlmStreamParser:
     def TestEmptyCollections(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.PrimitiveArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyCollections", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.PrimitiveArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestEmptyCollections", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.PrimitiveArrays, __result__)
 
     def TestMixedPrimitives(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.MixedPrimitives:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedPrimitives", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.MixedPrimitives, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedPrimitives", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.MixedPrimitives, __result__)
 
     def TestPrimitiveArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.PrimitiveArrays:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveArrays", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.PrimitiveArrays, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveArrays", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.PrimitiveArrays, __result__)
 
     def TestPrimitiveMaps(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.PrimitiveMaps:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveMaps", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.PrimitiveMaps, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveMaps", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.PrimitiveMaps, __result__)
 
     def TestPrimitiveTypes(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.PrimitiveTypes:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveTypes", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.PrimitiveTypes, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveTypes", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.PrimitiveTypes, __result__)
 
     def TestTopLevelBool(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> bool:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBool", llm_response=llm_response, mode="stream")
-        return typing.cast(bool, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelBool", llm_response=llm_response, mode="stream")
+        return typing.cast(bool, __result__)
 
     def TestTopLevelFloat(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> float:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloat", llm_response=llm_response, mode="stream")
-        return typing.cast(float, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelFloat", llm_response=llm_response, mode="stream")
+        return typing.cast(float, __result__)
 
     def TestTopLevelInt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelInt", llm_response=llm_response, mode="stream")
-        return typing.cast(int, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelInt", llm_response=llm_response, mode="stream")
+        return typing.cast(int, __result__)
 
     def TestTopLevelNull(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Any:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNull", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Any, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelNull", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Any, __result__)
 
     def TestTopLevelString(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelString", llm_response=llm_response, mode="stream")
-        return typing.cast(str, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestTopLevelString", llm_response=llm_response, mode="stream")
+        return typing.cast(str, __result__)
 
     

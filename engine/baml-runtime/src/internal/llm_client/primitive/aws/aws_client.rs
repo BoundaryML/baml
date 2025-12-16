@@ -773,6 +773,26 @@ fn try_to_json<
     Ok(out)
 }
 
+/// Get the event type name for a Bedrock ConverseStreamOutput message.
+fn bedrock_stream_event_type(message: &bedrock::types::ConverseStreamOutput) -> &'static str {
+    match message {
+        bedrock::types::ConverseStreamOutput::ContentBlockDelta(_) => "content_block_delta",
+        bedrock::types::ConverseStreamOutput::ContentBlockStart(_) => "content_block_start",
+        bedrock::types::ConverseStreamOutput::ContentBlockStop(_) => "content_block_stop",
+        bedrock::types::ConverseStreamOutput::MessageStart(_) => "message_start",
+        bedrock::types::ConverseStreamOutput::MessageStop(_) => "message_stop",
+        bedrock::types::ConverseStreamOutput::Metadata(_) => "metadata",
+        _ => "unknown",
+    }
+}
+
+/// Serialize an AWS SDK struct to JSON using Debug format.
+/// AWS SDK types don't implement Serialize, so we wrap Debug output in valid JSON.
+/// See: https://github.com/awslabs/aws-sdk-rust/issues/645
+fn serialize_aws_struct<T: std::fmt::Debug>(value: &T) -> String {
+    json!({"debug": format!("{:?}", value)}).to_string()
+}
+
 impl WithRenderRawCurl for AwsClient {
     async fn render_raw_curl(
         &self,
@@ -987,11 +1007,13 @@ impl WithStreamChat for AwsClient {
                         Ok(Some(message)) => {
                             log::trace!("Received message: {message:#?}");
                             {
+                                let event_type = bedrock_stream_event_type(&message);
+                                let event_data = serialize_aws_struct(&message);
                                 let trace_event = TraceEvent::new_raw_llm_response_stream(
                                     call_id_stack.deref().clone(),
                                     std::sync::Arc::new(HTTPResponseStream::new(
                                         http_request_id.deref().clone(),
-                                        SSEEvent::new("".into(), "{}".into(), "".into()),
+                                        SSEEvent::new(event_type.into(), event_data, "".into()),
                                     )),
                                 );
                                 BAML_TRACER

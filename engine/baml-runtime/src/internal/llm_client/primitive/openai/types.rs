@@ -40,7 +40,7 @@ pub struct ResponseOutput {
     pub id: Option<String>,
     pub status: Option<String>,
     pub role: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_maybe_list_to_vec")]
     pub content: Vec<ResponseContent>,
     // For web search calls
     pub action: Option<WebSearchAction>,
@@ -221,6 +221,17 @@ pub struct ChatCompletionGeneric<C> {
     /// The object type, which is `chat.completion` for non-streaming chat completion, `chat.completion.chunk` for streaming chat completion.
     pub object: Option<String>,
     pub usage: Option<CompletionUsage>,
+}
+
+fn deserialize_maybe_list_to_vec<'de, D, I>(deserializer: D) -> Result<Vec<I>, D::Error>
+where
+    D: Deserializer<'de>,
+    I: Deserialize<'de>,
+{
+    match Option::<Vec<I>>::deserialize(deserializer)? {
+        Some(inner) => Ok(inner),
+        None => Ok(vec![]),
+    }
 }
 
 fn deserialize_float_to_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
