@@ -1116,6 +1116,21 @@ impl IntermediateRepr {
         // Now for every type every used in the IR, inject block level attributes
         // from the types that have them.
 
+        // Special handling for classes with @@stream.done:
+        // Fields within such classes should get both @done and @not_null
+        for c in self.classes.iter_mut() {
+            let class_streaming_behavior = c.attributes.streaming_behavior();
+
+            // Only process if the class has @stream.done
+            if class_streaming_behavior.done {
+                for f in c.elem.static_fields.iter_mut() {
+                    let field_type = &mut f.elem.r#type.elem;
+                    field_type.meta_mut().streaming_behavior.done = true;
+                    field_type.meta_mut().streaming_behavior.needed = true;
+                }
+            }
+        }
+
         // finding types used in classes
         let class_fields = self.classes.iter_mut().flat_map(|c| {
             c.elem

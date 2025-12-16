@@ -3089,34 +3089,6 @@ class T {
 ### Python
 
 - Non-streaming: `int`
-- Streaming: `typing.Optional[int]`
-
-### TypeScript
-
-- Non-streaming: `number`
-- Streaming: `number | null`
-
-### Go
-
-- Non-streaming: `int64`
-- Streaming: `*int64`
-
----
-
-## block_stream_done_on_top_level_field
-
-```baml
-class T {
-    x int
-    @@stream.done
-}
-```
-
-### target: `T.x`
-
-### Python
-
-- Non-streaming: `int`
 - Streaming: `int`
 
 ### TypeScript
@@ -3128,3 +3100,5 @@ class T {
 
 - Non-streaming: `int64`
 - Streaming: `int64`
+
+---
