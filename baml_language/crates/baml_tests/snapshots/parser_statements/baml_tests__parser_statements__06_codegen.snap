@@ -186,21 +186,21 @@ Function iterator_style_for_loop (arity: 0, kind: Exec):
      2    LOAD_CONST 2         (2)
      3    LOAD_CONST 3         (3)
      4    ALLOC_ARRAY 3        
-     5    LOAD_VAR 2           (_arr_0)
+     5    LOAD_VAR 2           (_iter)
      6    CALL 1               
      7    LOAD_CONST 0         (0)
-     8    LOAD_VAR 4           (_i_2)
-     9    LOAD_VAR 3           (_len_1)
+     8    LOAD_VAR 4           (_i)
+     9    LOAD_VAR 3           (_len)
      10   CMP_OP <             
      11   JUMP_IF_FALSE +15    (to 26)
      12   POP 1                
-     13   LOAD_VAR 2           (_arr_0)
-     14   LOAD_VAR 4           (_i_2)
+     13   LOAD_VAR 2           (_iter)
+     14   LOAD_VAR 4           (_i)
      15   LOAD_ARRAY_ELEMENT   
-     16   LOAD_VAR 4           (_i_2)
+     16   LOAD_VAR 4           (_i)
      17   LOAD_CONST 1         (1)
      18   BIN_OP +             
-     19   STORE_VAR 4          (_i_2)
+     19   STORE_VAR 4          (_i)
      20   LOAD_VAR 1           (result)
      21   LOAD_VAR 5           (i)
      22   BIN_OP +             
@@ -281,40 +281,40 @@ Function nested_for_loop (arity: 0, kind: Exec):
      2    LOAD_CONST 2         (2)
      3    LOAD_CONST 3         (3)
      4    ALLOC_ARRAY 3        
-     5    LOAD_VAR 2           (_arr_3)
+     5    LOAD_VAR 2           (_iter)
      6    CALL 1               
      7    LOAD_CONST 0         (0)
-     8    LOAD_VAR 4           (_i_5)
-     9    LOAD_VAR 3           (_len_4)
+     8    LOAD_VAR 4           (_i)
+     9    LOAD_VAR 3           (_len)
      10   CMP_OP <             
      11   JUMP_IF_FALSE +40    (to 51)
      12   POP 1                
-     13   LOAD_VAR 2           (_arr_3)
-     14   LOAD_VAR 4           (_i_5)
+     13   LOAD_VAR 2           (_iter)
+     14   LOAD_VAR 4           (_i)
      15   LOAD_ARRAY_ELEMENT   
-     16   LOAD_VAR 4           (_i_5)
+     16   LOAD_VAR 4           (_i)
      17   LOAD_CONST 1         (1)
      18   BIN_OP +             
-     19   STORE_VAR 4          (_i_5)
+     19   STORE_VAR 4          (_i)
      20   LOAD_CONST 4         (4)
      21   LOAD_CONST 5         (5)
      22   LOAD_CONST 6         (6)
      23   ALLOC_ARRAY 3        
-     24   LOAD_VAR 6           (_arr_0)
+     24   LOAD_VAR 6           (_iter1)
      25   CALL 1               
      26   LOAD_CONST 0         (0)
-     27   LOAD_VAR 8           (_i_2)
-     28   LOAD_VAR 7           (_len_1)
+     27   LOAD_VAR 8           (_i1)
+     28   LOAD_VAR 7           (_len1)
      29   CMP_OP <             
      30   JUMP_IF_FALSE +17    (to 47)
      31   POP 1                
-     32   LOAD_VAR 6           (_arr_0)
-     33   LOAD_VAR 8           (_i_2)
+     32   LOAD_VAR 6           (_iter1)
+     33   LOAD_VAR 8           (_i1)
      34   LOAD_ARRAY_ELEMENT   
-     35   LOAD_VAR 8           (_i_2)
+     35   LOAD_VAR 8           (_i1)
      36   LOAD_CONST 1         (1)
      37   BIN_OP +             
-     38   STORE_VAR 8          (_i_2)
+     38   STORE_VAR 8          (_i1)
      39   LOAD_VAR 1           (result)
      40   LOAD_VAR 5           (i)
      41   LOAD_VAR 9           (j)

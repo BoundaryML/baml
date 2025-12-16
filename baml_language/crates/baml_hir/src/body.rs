@@ -277,11 +277,24 @@ impl FunctionBody {
     ///
     /// The CST already tells us if it's LLM or Expr via node type!
     pub fn lower(func_node: &baml_syntax::ast::FunctionDef) -> Arc<FunctionBody> {
+        // Collect parameter names to add to scope
+        let param_names: Vec<String> = func_node
+            .param_list()
+            .map(|pl| {
+                pl.params()
+                    .filter_map(|p| p.name().map(|n| n.text().to_string()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
         // Check which body type we have
         if let Some(llm_body) = func_node.llm_body() {
             Arc::new(FunctionBody::Llm(Self::lower_llm_body(&llm_body)))
         } else if let Some(expr_body) = func_node.expr_body() {
-            Arc::new(FunctionBody::Expr(Self::lower_expr_body(&expr_body)))
+            Arc::new(FunctionBody::Expr(Self::lower_expr_body(
+                &expr_body,
+                &param_names,
+            )))
         } else {
             Arc::new(FunctionBody::Missing)
         }
@@ -364,8 +377,16 @@ impl FunctionBody {
         interpolations
     }
 
-    fn lower_expr_body(expr_body: &baml_syntax::ast::ExprFunctionBody) -> ExprBody {
+    fn lower_expr_body(
+        expr_body: &baml_syntax::ast::ExprFunctionBody,
+        param_names: &[String],
+    ) -> ExprBody {
         let mut ctx = LoweringContext::new();
+
+        // Add function parameters to scope so gensym avoids them
+        for name in param_names {
+            ctx.add_name_to_scope(name);
+        }
 
         // The EXPR_FUNCTION_BODY contains a BLOCK_EXPR as its child
         // which contains all the statements and expressions
@@ -388,8 +409,8 @@ struct LoweringContext {
     exprs: Arena<Expr>,
     stmts: Arena<Stmt>,
     patterns: Arena<Pattern>,
-    /// Counter for generating unique synthetic variable names.
-    gensym_counter: usize,
+    /// All names used in this function, for generating unique synthetic variable names.
+    names_in_scope: std::collections::HashSet<String>,
 }
 
 impl LoweringContext {
@@ -398,20 +419,40 @@ impl LoweringContext {
             exprs: Arena::new(),
             stmts: Arena::new(),
             patterns: Arena::new(),
-            gensym_counter: 0,
+            names_in_scope: std::collections::HashSet::new(),
         }
     }
 
     /// Generate a unique variable name for desugaring.
     ///
-    /// Uses readable prefixes with numeric suffixes:
-    /// - `_arr_0`, `_arr_1`, ...
-    /// - `_len_0`, `_len_1`, ...
-    /// - `_i_0`, `_i_1`, ...
+    /// Tries readable names first, then adds numeric suffixes if needed:
+    /// - First tries `_iter`, then `_iter1`, `_iter2`, ...
+    /// - First tries `_len`, then `_len1`, `_len2`, ...
+    /// - First tries `_i`, then `_i1`, `_i2`, ...
     fn gensym(&mut self, prefix: &str) -> Name {
-        let name = format!("_{prefix}_{}", self.gensym_counter);
-        self.gensym_counter += 1;
-        Name::new(&name)
+        let base = format!("_{prefix}");
+
+        // First try without a number
+        if !self.names_in_scope.contains(&base) {
+            self.names_in_scope.insert(base.clone());
+            return Name::new(&base);
+        }
+
+        // Then try with incrementing numbers
+        let mut counter = 1;
+        loop {
+            let name = format!("{base}{counter}");
+            if !self.names_in_scope.contains(&name) {
+                self.names_in_scope.insert(name.clone());
+                return Name::new(&name);
+            }
+            counter += 1;
+        }
+    }
+
+    /// Add a user-defined name to the set of known names.
+    fn add_name_to_scope(&mut self, name: &str) {
+        self.names_in_scope.insert(name.to_string());
     }
 
     fn lower_block_expr(&mut self, block: &baml_syntax::ast::BlockExpr) -> ExprId {
@@ -1316,7 +1357,9 @@ impl LoweringContext {
             .as_ref()
             .and_then(baml_syntax::LetStmt::name)
             .map(|token| {
-                let name = Name::new(token.text());
+                let name_str = token.text();
+                self.add_name_to_scope(name_str);
+                let name = Name::new(name_str);
                 self.patterns.alloc(Pattern::Binding(name))
             })
             .unwrap_or_else(|| {
@@ -1469,20 +1512,18 @@ impl LoweringContext {
             return self.stmts.alloc(Stmt::Missing);
         };
 
-        // Get the body (common to both styles)
-        let body = for_expr
-            .body()
-            .map(|block| self.lower_block_expr(&block))
-            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
-
+        // Note: We pass the body AST node to desugar functions, which will:
+        // 1. Generate their synthetic names FIRST (claiming _iter, _len, _i)
+        // 2. THEN lower the body (inner loops will get _iter1, etc.)
+        // This ensures outer loops get simpler names than inner loops.
         if for_expr.is_iterator_style() {
             // Iterator-style: for (let i in items) { ... }
             // Desugar into a while loop
-            self.desugar_for_in(&for_expr, body)
+            self.desugar_for_in(&for_expr)
         } else {
             // C-style: for (let i = 0; i < 10; i += 1) { ... }
             // Desugar into a while loop
-            self.desugar_c_style_for(&for_expr, body)
+            self.desugar_c_style_for(&for_expr)
         }
     }
 
@@ -1504,11 +1545,7 @@ impl LoweringContext {
     /// ```
     ///
     /// If there's no condition, it becomes `while (true)` (infinite loop).
-    fn desugar_c_style_for(
-        &mut self,
-        for_expr: &baml_syntax::ast::ForExpr,
-        user_body: ExprId,
-    ) -> StmtId {
+    fn desugar_c_style_for(&mut self, for_expr: &baml_syntax::ast::ForExpr) -> StmtId {
         // 1. Lower the initializer (if present)
         let initializer = for_expr
             .let_stmt()
@@ -1528,7 +1565,14 @@ impl LoweringContext {
         // 3. Get the update AST node (we'll lower it multiple times as needed)
         let update_ast = for_expr.update();
 
-        // 4. Create the while loop body
+        // 4. Lower the body AFTER processing init/condition/update
+        // This ensures outer loops' synthetic names are claimed before inner loops
+        let user_body = for_expr
+            .body()
+            .map(|block| self.lower_block_expr(&block))
+            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+
+        // 5. Create the while loop body
         // If there's an update, we need to:
         // a) Transform all `continue` in the body to `{ update; continue; }`
         // b) Add the update at the end of the body
@@ -1688,20 +1732,23 @@ impl LoweringContext {
     ///     let _i_N = 0;
     ///     while (_i_N < _len_N) {
     ///         let x = _arr_N[_i_N];
-    ///         _i_N = _i_N + 1;
+    ///         _i_N += 1;
     ///         body
     ///     }
     /// }
     /// ```
-    fn desugar_for_in(
-        &mut self,
-        for_expr: &baml_syntax::ast::ForExpr,
-        user_body: ExprId,
-    ) -> StmtId {
-        // Generate unique names for synthetic variables
-        let arr_name = self.gensym("arr");
+    fn desugar_for_in(&mut self, for_expr: &baml_syntax::ast::ForExpr) -> StmtId {
+        // Generate unique names for synthetic variables FIRST
+        // This ensures outer loops claim _iter, _len, _i before inner loops
+        let arr_name = self.gensym("iter");
         let len_name = self.gensym("len");
         let idx_name = self.gensym("i");
+
+        // Now lower the body - inner for-loops will get _iter1, _len1, _i1, etc.
+        let user_body = for_expr
+            .body()
+            .map(|block| self.lower_block_expr(&block))
+            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
         // 1. let _arr_N = <iterator>
         let iterator_expr = for_expr
@@ -1756,11 +1803,15 @@ impl LoweringContext {
         let user_pattern = for_expr
             .let_stmt()
             .and_then(|ls| ls.name())
-            .map(|n| self.patterns.alloc(Pattern::Binding(Name::new(n.text()))))
+            .map(|n| {
+                self.add_name_to_scope(n.text());
+                self.patterns.alloc(Pattern::Binding(Name::new(n.text())))
+            })
             .or_else(|| {
-                for_expr
-                    .loop_var()
-                    .map(|n| self.patterns.alloc(Pattern::Binding(Name::new(n.text()))))
+                for_expr.loop_var().map(|n| {
+                    self.add_name_to_scope(n.text());
+                    self.patterns.alloc(Pattern::Binding(Name::new(n.text())))
+                })
             })
             .unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(Name::new("_"))));
 
@@ -1776,18 +1827,13 @@ impl LoweringContext {
             initializer: Some(element_access),
         });
 
-        // 6. Increment: _i_N = _i_N + 1
-        let idx_ref3 = self.exprs.alloc(Expr::Path(vec![idx_name.clone()]));
-        let one = self.exprs.alloc(Expr::Literal(Literal::Int(1)));
-        let increment = self.exprs.alloc(Expr::Binary {
-            op: BinaryOp::Add,
-            lhs: idx_ref3,
-            rhs: one,
-        });
+        // 6. Increment: _i_N += 1
         let idx_target = self.exprs.alloc(Expr::Path(vec![idx_name]));
-        let idx_assign = self.stmts.alloc(Stmt::Assign {
+        let one = self.exprs.alloc(Expr::Literal(Literal::Int(1)));
+        let idx_assign = self.stmts.alloc(Stmt::AssignOp {
             target: idx_target,
-            value: increment,
+            op: AssignOp::Add,
+            value: one,
         });
 
         // 7. Assemble while body: [elem_let, idx_assign, ...user_body_stmts]

@@ -140,12 +140,12 @@ function c_style_for_loop() -> int {
 function iterator_style_for_loop() -> int {
       let result = 0;
       {
-          let _arr_0 = [1, 2, 3];
-          let _len_1 = baml.Array.length(_arr_0);
-          let _i_2 = 0;
-          while (_i_2 < _len_1) {
-              let i = _arr_0[_i_2];
-              _i_2 = _i_2 + 1;
+          let _iter = [1, 2, 3];
+          let _len = baml.Array.length(_iter);
+          let _i = 0;
+          while (_i < _len) {
+              let i = _iter[_i];
+              _i += 1;
               result += i;
           }
       };
@@ -155,19 +155,19 @@ function iterator_style_for_loop() -> int {
 function nested_for_loop() -> int {
       let result = 0;
       {
-          let _arr_3 = [1, 2, 3];
-          let _len_4 = baml.Array.length(_arr_3);
-          let _i_5 = 0;
-          while (_i_5 < _len_4) {
-              let i = _arr_3[_i_5];
-              _i_5 = _i_5 + 1;
+          let _iter = [1, 2, 3];
+          let _len = baml.Array.length(_iter);
+          let _i = 0;
+          while (_i < _len) {
+              let i = _iter[_i];
+              _i += 1;
               {
-                  let _arr_0 = [4, 5, 6];
-                  let _len_1 = baml.Array.length(_arr_0);
-                  let _i_2 = 0;
-                  while (_i_2 < _len_1) {
-                      let j = _arr_0[_i_2];
-                      _i_2 = _i_2 + 1;
+                  let _iter1 = [4, 5, 6];
+                  let _len1 = baml.Array.length(_iter1);
+                  let _i1 = 0;
+                  while (_i1 < _len1) {
+                      let j = _iter1[_i1];
+                      _i1 += 1;
                       result += i * j;
                   }
               };
