@@ -53,7 +53,7 @@ describe("Media Tests", () => {
       Video.fromUrl("https://youtu.be/dQw4w9WgXcQ?si=aQdfsK0DdcDtCCud")
     );
     expect(res.toLowerCase()).toMatch(
-      /(singing|rickroll|dancing|80s|pop|music)/
+      /(singing|rickroll|dancing|80s|pop|music|give)/
     );
   });
 

@@ -128,7 +128,7 @@ client<llm> AzureO1 {
   options {
     resource_name "west-us-azure-baml"
     deployment_id "o1-mini"
-    api_version "2024-08-01-preview"
+    api_version "2024-12-01-preview"
     api_key env.AZURE_OPENAI_API_KEY
     max_tokens null
   }
@@ -140,7 +140,7 @@ client<llm> AzureO1WithMaxTokens {
   options {
     resource_name "west-us-azure-baml"
     deployment_id "o1-mini"
-    api_version "2024-08-01-preview"
+    api_version "2024-12-01-preview"
     api_key env.AZURE_OPENAI_API_KEY
     max_tokens 1000
   }
@@ -151,7 +151,7 @@ client<llm> AzureO1WithMaxCompletionTokens {
   options {
     resource_name "west-us-azure-baml"
     deployment_id "o1-mini"
-    api_version "2024-08-01-preview"
+    api_version "2024-12-01-preview"
     api_key env.AZURE_OPENAI_API_KEY
     max_completion_tokens 1000
   }
@@ -466,7 +466,7 @@ client<llm> AzureO3 {
   options {
     resource_name "west-us-azure-baml"
     deployment_id "o3-mini"
-    api_version "2024-08-01-preview"
+    api_version "2024-12-01-preview"
     api_key env.AZURE_OPENAI_API_KEY
     max_tokens null
   }
@@ -478,7 +478,7 @@ client<llm> AzureO3WithMaxCompletionTokens {
   options {
     resource_name "west-us-azure-baml"
     deployment_id "o3-mini"
-    api_version "2024-08-01-preview"
+    api_version "2024-12-01-preview"
     api_key env.AZURE_OPENAI_API_KEY
     max_completion_tokens 1000
   }
