@@ -340,10 +340,9 @@ impl<'db> TypeContext<'db> {
     }
 
     pub fn build_span_default(&self, range: &Option<TextRange>) -> Span {
-        range.map(|s| self.build_span(s)).unwrap_or_else(||
         // todo: probably this should be an error? it should be an invariant that
         // all exprs have valid spans
-        Span::default())
+        range.map(|s| self.build_span(s)).unwrap_or_default()
     }
     /// Resolve a path to determine what it refers to.
     ///
@@ -453,7 +452,11 @@ pub fn infer_function_body<'db>(
         && !expected_return.is_unknown()
     {
         // TODO: we actually want the span of the last expression here.
-        let error = TypeError::TypeMismatch { expected: expected_return.clone(), found: return_type.clone(), span: Span::default() };
+        let error = TypeError::TypeMismatch {
+            expected: expected_return.clone(),
+            found: return_type.clone(),
+            span: Span::default(),
+        };
         ctx.push_error(error);
     }
 
@@ -514,9 +517,7 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
     let expr = &body.exprs[expr_id];
 
     // Create a placeholder span for errors (ideally we'd track spans in ExprBody)
-    let span = ctx.build_span_default(&body
-        .expr_span(expr_id));
-
+    let span = ctx.build_span_default(&body.expr_span(expr_id));
 
     let ty = match expr {
         Expr::Literal(lit) => infer_literal(lit),

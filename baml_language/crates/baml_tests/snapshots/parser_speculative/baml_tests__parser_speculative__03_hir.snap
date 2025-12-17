@@ -1,9 +1,5 @@
 ---
-<<<<<<< HEAD
 source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
-=======
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
->>>>>>> upstream/canary
 expression: output
 ---
 === HIR ITEMS ===
@@ -40,17 +36,10 @@ function ProcessData {
       Idx::<Expr>(10): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
     ]
     stmts: [
-<<<<<<< HEAD
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(4)) }
-      Idx::<Stmt>(1): Return(Some(Idx::<Expr>(8)))
-      Idx::<Stmt>(2): Expr(Idx::<Expr>(10))
-      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(11)))
-=======
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(2)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(2)) }
       Idx::<Stmt>(1): Return(Some(Idx::<Expr>(6)))
       Idx::<Stmt>(2): Expr(Idx::<Expr>(8))
       Idx::<Stmt>(3): Return(Some(Idx::<Expr>(9)))
->>>>>>> upstream/canary
     ]
     root: Idx::<Expr>(10)
   }
@@ -123,19 +112,11 @@ function ProcessAnalysis {
       Idx::<Expr>(29): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(28)) }
     ]
     stmts: [
-<<<<<<< HEAD
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(1): Return(Some(Idx::<Expr>(8)))
-      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(16)))
-      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(24)))
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(29)))
-=======
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
+      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, type_span: None, initializer: Some(Idx::<Expr>(0)) }
       Idx::<Stmt>(1): Return(Some(Idx::<Expr>(6)))
       Idx::<Stmt>(2): Return(Some(Idx::<Expr>(13)))
       Idx::<Stmt>(3): Return(Some(Idx::<Expr>(20)))
       Idx::<Stmt>(4): Return(Some(Idx::<Expr>(24)))
->>>>>>> upstream/canary
     ]
     root: Idx::<Expr>(29)
   }
