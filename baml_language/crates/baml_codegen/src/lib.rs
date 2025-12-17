@@ -145,6 +145,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                     &body,
                     Some(typing_context.clone()),
                     Some(class_field_types.clone()),
+                    *func_loc,
                 );
 
                 // Compile to bytecode (objects are added directly to program.objects)

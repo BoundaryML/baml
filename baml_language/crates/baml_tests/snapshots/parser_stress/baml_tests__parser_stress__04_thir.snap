@@ -211,3 +211,4 @@ expression: output
     Return: Void
     Errors:
       - Expected bool. Found void
+      - Expected int. Found void

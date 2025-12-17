@@ -541,6 +541,7 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                 pattern,
                 type_annotation: _,
                 initializer,
+                ..
             } => {
                 if let Some(init) = initializer {
                     self.compile_expr(*init, body);

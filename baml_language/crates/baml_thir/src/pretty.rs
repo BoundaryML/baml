@@ -299,6 +299,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 pattern,
                 type_annotation,
                 initializer,
+                ..
             } => {
                 let pat = &body.patterns[*pattern];
                 let var_name = match pat {

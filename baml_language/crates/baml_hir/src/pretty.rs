@@ -174,6 +174,7 @@ impl<'a> CodePrinter<'a> {
                 pattern,
                 type_annotation,
                 initializer,
+                ..
             } => {
                 self.output.push_str("let ");
                 self.print_pattern(*pattern);
