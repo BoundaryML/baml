@@ -127,7 +127,7 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                 });
 
                 let meta_needs_wrapping =
-                    meta.constraints.len() > 0 || meta.streaming_behavior.done;
+                    !meta.constraints.is_empty() || meta.streaming_behavior.done;
 
                 let variants = if is_optional || (!meta_needs_wrapping && !needed) {
                     variants

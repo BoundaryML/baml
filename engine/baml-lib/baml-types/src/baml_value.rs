@@ -1016,7 +1016,7 @@ impl<T> BamlValueWithMeta<T> {
                     .collect(),
             ),
             BamlValueWithMeta::List(v, _) => {
-                BamlValue::List(v.into_iter().map(|v| v.value_clone()).collect())
+                BamlValue::List(v.iter().map(|v| v.value_clone()).collect())
             }
             BamlValueWithMeta::Media(v, _) => BamlValue::Media(v.clone()),
             BamlValueWithMeta::Enum(v, w, _) => BamlValue::Enum(v.clone(), w.clone()),

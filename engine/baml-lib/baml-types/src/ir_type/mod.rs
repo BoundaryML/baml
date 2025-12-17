@@ -740,10 +740,7 @@ impl<T> TypeGeneric<T> {
     }
 
     pub fn is_literal(&self) -> bool {
-        match self {
-            TypeGeneric::Literal(_, _) => true,
-            _ => false,
-        }
+        matches!(self, TypeGeneric::Literal(_, _))
     }
 
     pub fn is_optional(&self) -> bool {
@@ -1004,7 +1001,7 @@ impl<Meta: std::hash::Hash + std::cmp::Eq + MayHaveMeta> ToUnionName<Meta> for T
             T::Arrow(_, _) => "function".to_string(),
         };
 
-        let result = if include_metadata {
+        if include_metadata {
             let result = if self.meta().has_stream_state() {
                 format!("StreamState__{}", result)
             } else {
@@ -1020,9 +1017,7 @@ impl<Meta: std::hash::Hash + std::cmp::Eq + MayHaveMeta> ToUnionName<Meta> for T
             result
         } else {
             result
-        };
-
-        return result;
+        }
     }
 }
 
