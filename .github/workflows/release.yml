@@ -146,6 +146,9 @@ jobs:
     needs: [all-builds]
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Setup Tools
@@ -154,17 +157,14 @@ jobs:
         uses: ./.github/actions/setup-node
         with:
           node-action-version: 'v6'
-          registry-url: "https://registry.npmjs.org"
-          npm-token: ${{ secrets.NPM_TOKEN }}
       - uses: actions/download-artifact@v4
         with:
           pattern: bindings-*
           path: engine/language_client_typescript/artifacts
 
       - name: Publish to NPM
-        # This reads the credential from .npmrc, which is written by the setup-node step.
-        # It does not use the NODE_AUTH_TOKEN environment variable.
-        run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
+        # Uses OIDC authentication via provenance instead of npm token
+        run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks --provenance
 
   # publish-to-rubygems:
   #   environment: release
