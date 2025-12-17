@@ -196,9 +196,7 @@ func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOption
 			return types.Checked[int64]{}, result.Error
 		}
 
-		casted := baml.CastChecked(result.Data, func(inner any) int64 {
-			return (inner).(int64)
-		})
+		casted := (result.Data).(types.Checked[int64])
 
 		return casted, nil
 	} else {
@@ -5412,9 +5410,7 @@ func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.Che
 			return types.Checked[types.BlockConstraint]{}, result.Error
 		}
 
-		casted := baml.CastChecked(result.Data, func(inner any) types.BlockConstraint {
-			return (inner).(types.BlockConstraint)
-		})
+		casted := (result.Data).(types.Checked[types.BlockConstraint])
 
 		return casted, nil
 	} else {
@@ -6602,9 +6598,7 @@ func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (ty
 			return types.Checked[int64]{}, result.Error
 		}
 
-		casted := baml.CastChecked(result.Data, func(inner any) int64 {
-			return (inner).(int64)
-		})
+		casted := (result.Data).(types.Checked[int64])
 
 		return casted, nil
 	} else {
@@ -7528,9 +7522,7 @@ func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...C
 			return types.Checked[int64]{}, result.Error
 		}
 
-		casted := baml.CastChecked(result.Data, func(inner any) int64 {
-			return (inner).(int64)
-		})
+		casted := (result.Data).(types.Checked[int64])
 
 		return casted, nil
 	} else {

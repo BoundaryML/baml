@@ -4580,37 +4580,37 @@ class BamlStreamClient:
         )
     def FnOutputLiteralBool(self, input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[bool, typing_extensions.Literal[False]]:
+    ) -> baml_py.BamlSyncStream[typing_extensions.Literal[False], typing_extensions.Literal[False]]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="FnOutputLiteralBool", args={
             "input": input,
         })
-        return baml_py.BamlSyncStream[bool, typing_extensions.Literal[False]](
+        return baml_py.BamlSyncStream[typing_extensions.Literal[False], typing_extensions.Literal[False]](
           result,
-          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing_extensions.Literal[False], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing_extensions.Literal[False], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputLiteralInt(self, input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[int, typing_extensions.Literal[5]]:
+    ) -> baml_py.BamlSyncStream[typing_extensions.Literal[5], typing_extensions.Literal[5]]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="FnOutputLiteralInt", args={
             "input": input,
         })
-        return baml_py.BamlSyncStream[int, typing_extensions.Literal[5]](
+        return baml_py.BamlSyncStream[typing_extensions.Literal[5], typing_extensions.Literal[5]](
           result,
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing_extensions.Literal[5], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing_extensions.Literal[5], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def FnOutputLiteralString(self, input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[str, typing_extensions.Literal['example output']]:
+    ) -> baml_py.BamlSyncStream[typing_extensions.Literal['example output'], typing_extensions.Literal['example output']]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="FnOutputLiteralString", args={
             "input": input,
         })
-        return baml_py.BamlSyncStream[str, typing_extensions.Literal['example output']](
+        return baml_py.BamlSyncStream[typing_extensions.Literal['example output'], typing_extensions.Literal['example output']](
           result,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing_extensions.Literal['example output'], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing_extensions.Literal['example output'], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
@@ -4712,25 +4712,25 @@ class BamlStreamClient:
         )
     def InOutLiteralStringUnionMapKey(self, i1: typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str],i2: typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[typing.Dict[typing.Union[str, str, str, str], str], typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]]:
+    ) -> baml_py.BamlSyncStream[typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="InOutLiteralStringUnionMapKey", args={
             "i1": i1,"i2": i2,
         })
-        return baml_py.BamlSyncStream[typing.Dict[typing.Union[str, str, str, str], str], typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]](
+        return baml_py.BamlSyncStream[typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]](
           result,
-          lambda x: typing.cast(typing.Dict[typing.Union[str, str, str, str], str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
     def InOutSingleLiteralStringMapKey(self, m: typing.Dict[typing_extensions.Literal['key'], str],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[typing.Dict[str, str], typing.Dict[typing_extensions.Literal['key'], str]]:
+    ) -> baml_py.BamlSyncStream[typing.Dict[typing_extensions.Literal['key'], str], typing.Dict[typing_extensions.Literal['key'], str]]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="InOutSingleLiteralStringMapKey", args={
             "m": m,
         })
-        return baml_py.BamlSyncStream[typing.Dict[str, str], typing.Dict[typing_extensions.Literal['key'], str]](
+        return baml_py.BamlSyncStream[typing.Dict[typing_extensions.Literal['key'], str], typing.Dict[typing_extensions.Literal['key'], str]](
           result,
-          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[typing_extensions.Literal['key'], str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Dict[typing_extensions.Literal['key'], str], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
@@ -4760,13 +4760,13 @@ class BamlStreamClient:
         )
     def LiteralUnionsTest(self, input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[typing.Union[int, bool, str], typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]]:
+    ) -> baml_py.BamlSyncStream[typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]]:
         ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="LiteralUnionsTest", args={
             "input": input,
         })
-        return baml_py.BamlSyncStream[typing.Union[int, bool, str], typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]](
+        return baml_py.BamlSyncStream[typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]](
           result,
-          lambda x: typing.cast(typing.Union[int, bool, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
