@@ -91,30 +91,26 @@ pub fn stream_type_to_py(field: &TypeStreaming, _lookup: &impl TypeLookups) -> T
         T::Union(union_type_generic, _union_meta) => {
             // Checks for Union are handled inside the match to support OneOfOptional ordering
             match union_type_generic.view() {
-                baml_types::ir_type::UnionTypeViewGeneric::Null => {
-                    let t = TypePy::Any {
-                        reason: "Null types are not supported in Py".to_string(),
-                    };
-                    t
-                }
+                baml_types::ir_type::UnionTypeViewGeneric::Null => TypePy::Any {
+                    reason: "Null types are not supported in Py".to_string(),
+                },
                 baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                     // T | Null
                     // For single optional, we prefer Checked[Optional[T]]
                     let type_py = recursive_fn(type_generic);
-                    type_py.as_optional()
+                    type_py.make_optional()
                 }
                 baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => {
                     // T1 | T2
                     let options: Vec<_> = type_generics.into_iter().map(&recursive_fn).collect();
-                    let t = TypePy::Union { variants: options };
-                    t
+                    TypePy::Union { variants: options }
                 }
                 baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
                     // T1 | T2 | Null (Streaming Union)
                     // We prefer Optional[Checked[Union[T1, T2]]]
                     let options: Vec<_> = type_generics.into_iter().map(recursive_fn).collect();
                     let t = TypePy::Union { variants: options };
-                    t.as_optional()
+                    t.make_optional()
                 }
             }
         }
@@ -125,12 +121,12 @@ pub fn stream_type_to_py(field: &TypeStreaming, _lookup: &impl TypeLookups) -> T
     };
 
     if !checks.is_empty() {
-        type_py = type_py.as_checked(checks);
+        type_py = type_py.make_checked(checks);
     }
 
     // Wrap in StreamState if needed
     if should_wrap_stream_state {
-        type_py.as_stream_state()
+        type_py.make_stream_state()
     } else {
         type_py
     }
@@ -185,7 +181,7 @@ pub fn type_to_py(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -> TypeP
             }
             baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                 let type_py = recursive_fn(type_generic);
-                type_py.as_optional()
+                type_py.make_optional()
             }
             baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => {
                 let options: Vec<_> = type_generics.into_iter().map(&recursive_fn).collect();
@@ -193,7 +189,7 @@ pub fn type_to_py(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -> TypeP
             }
             baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
                 let options: Vec<_> = type_generics.into_iter().map(recursive_fn).collect();
-                TypePy::Union { variants: options }.as_optional()
+                TypePy::Union { variants: options }.make_optional()
             }
         },
         T::Top(_) => panic!(
@@ -217,7 +213,7 @@ pub fn type_to_py(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -> TypeP
         .collect();
 
     if !checks.is_empty() {
-        type_py = type_py.as_checked(checks);
+        type_py = type_py.make_checked(checks);
     }
 
     type_py

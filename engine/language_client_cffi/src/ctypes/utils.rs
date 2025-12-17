@@ -20,7 +20,7 @@ impl IsChecked for baml_types::type_meta::base::TypeMeta {
             .iter()
             .filter_map(|c| {
                 if c.level == baml_types::ConstraintLevel::Check {
-                    c.label.as_ref().map(|l| l.as_str())
+                    c.label.as_deref()
                 } else {
                     None
                 }
@@ -54,7 +54,7 @@ impl IsChecked for baml_types::type_meta::NonStreaming {
             .iter()
             .filter_map(|c| {
                 if c.level == baml_types::ConstraintLevel::Check {
-                    c.label.as_ref().map(|l| l.as_str())
+                    c.label.as_deref()
                 } else {
                     None
                 }
@@ -85,7 +85,7 @@ impl IsChecked for baml_types::type_meta::Streaming {
             .iter()
             .filter_map(|c| {
                 if c.level == baml_types::ConstraintLevel::Check {
-                    c.label.as_ref().map(|l| l.as_str())
+                    c.label.as_deref()
                 } else {
                     None
                 }

@@ -2,7 +2,7 @@
 ///
 /// These macros make it easy to write tests that verify BAML types
 /// convert correctly to Go streaming and non-streaming type strings.
-
+///
 /// Test Go type serialization with auto-generated test names.
 ///
 /// # Examples

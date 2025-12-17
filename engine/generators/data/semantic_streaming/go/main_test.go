@@ -4,48 +4,49 @@ import (
 	"context"
 	"fmt"
 	b "semantic_streaming/baml_client"
+	"strings"
 	"testing"
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
-// func TestParseStream(t *testing.T) {
-// 	t.Parallel()
+func TestParseStream(t *testing.T) {
+	t.Parallel()
 
-// 	raw_text := `
-// {
-// 	"sixteen_digit_number": 1234567890,
-// 	"string_with_twenty_words": "Hello, world!",
-// 	"class_1": {
-// 	"i_16_digits": 1234567890,
-// 	"s_20_words": "Hello, world!",
-// 	},
-// 	"class_2": {
-// 	"i_16_digits": 1234567890,
-// 	"s_20_words": "Hello, world!",
-// 	},
-// 	"class_done_needed": {
-// 	"i_16_digits": 1234567890,
-// 	"s_20_words": "Hello, world!",
-// 	},
-// 	"class_needed": {
-// 	"i_16_digits": 1234567890,
-// 	"s_20_words": "Hello, world!",
-// 	},
-// 	`
-// 	// parse every raw_text[:i]
-// 	for i := 0; i < len(raw_text); i++ {
-// 		result, err := b.ParseStream.MakeSemanticContainer(raw_text[:i])
-// 		if err != nil {
-// 			msg := err.Error()
-// 			if !(strings.Contains(msg, "Missing required field: class_done_needed") || strings.Contains(msg, "Missing required field: class_needed")) {
-// 				t.Fatalf("Error in ParseStream: %v", msg)
-// 			}
-// 		} else {
-// 			fmt.Printf("-> result: %+v\n", result)
-// 		}
-// 	}
-// }
+	raw_text := `
+{
+	"sixteen_digit_number": 1234567890,
+	"string_with_twenty_words": "Hello, world!",
+	"class_1": {
+	"i_16_digits": 1234567890,
+	"s_20_words": "Hello, world!",
+	},
+	"class_2": {
+	"i_16_digits": 1234567890,
+	"s_20_words": "Hello, world!",
+	},
+	"class_done_needed": {
+	"i_16_digits": 1234567890,
+	"s_20_words": "Hello, world!",
+	},
+	"class_needed": {
+	"i_16_digits": 1234567890,
+	"s_20_words": "Hello, world!",
+	},
+	`
+	// parse every raw_text[:i]
+	for i := 0; i < len(raw_text); i++ {
+		result, err := b.ParseStream.MakeSemanticContainer(raw_text[:i])
+		if err != nil {
+			msg := err.Error()
+			if !(strings.Contains(msg, "Missing required field: class_done_needed") || strings.Contains(msg, "Missing required field: class_needed")) {
+				t.Fatalf("Error in ParseStream: %v", msg)
+			}
+		} else {
+			fmt.Printf("-> result: %+v\n", result)
+		}
+	}
+}
 
 func TestMakeSemanticContainerStream(t *testing.T) {
 	t.Parallel()
@@ -128,20 +129,20 @@ func TestMakeSemanticContainerStream(t *testing.T) {
 	}
 }
 
-// func TestMakeSemanticContainer(t *testing.T) {
-// 	t.Parallel()
-// 	ctx := context.Background()
+func TestMakeSemanticContainer(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
 
-// 	result, err := b.MakeSemanticContainer(ctx)
-// 	if err != nil {
-// 		t.Fatalf("Error in MakeSemanticContainer: %v", err)
-// 	}
+	result, err := b.MakeSemanticContainer(ctx)
+	if err != nil {
+		t.Fatalf("Error in MakeSemanticContainer: %v", err)
+	}
 
-// 	// Basic validation - check if struct has valid data
-// 	if result.BamlTypeName() == "" {
-// 		t.Errorf("Expected valid result from MakeSemanticContainer")
-// 	}
-// }
+	// Basic validation - check if struct has valid data
+	if result.BamlTypeName() == "" {
+		t.Errorf("Expected valid result from MakeSemanticContainer")
+	}
+}
 
 func splitWords(s string) []string {
 	// Simple split on spaces, ignoring multiple spaces

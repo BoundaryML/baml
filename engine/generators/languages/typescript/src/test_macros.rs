@@ -2,7 +2,7 @@
 ///
 /// These macros make it easy to write tests that verify BAML types
 /// convert correctly to TypeScript streaming and non-streaming type strings.
-
+///
 /// Test TypeScript type serialization with auto-generated test names.
 ///
 /// # Examples

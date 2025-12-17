@@ -369,8 +369,8 @@ fn main() -> std::io::Result<()> {
         let mut protoc = protoc_lang_out::ProtocLangOut::new();
         protoc
             .lang(lang)
-            .inputs(&protos)
-            .includes(&["types"])
+            .inputs(protos)
+            .includes(["types"])
             .out_dir(lang_dir);
 
         // Allow overriding the protoc-gen-go plugin path

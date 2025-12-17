@@ -88,11 +88,11 @@ pub enum TypePy {
 }
 
 impl TypePy {
-    pub fn as_optional(self) -> Self {
+    pub fn make_optional(self) -> Self {
         TypePy::Optional(Box::new(self))
     }
 
-    pub fn as_checked<T: AsRef<str>>(self, names: Vec<T>) -> Self {
+    pub fn make_checked<T: AsRef<str>>(self, names: Vec<T>) -> Self {
         TypePy::Checked {
             inner: Box::new(self),
             names: names
@@ -102,7 +102,7 @@ impl TypePy {
         }
     }
 
-    pub fn as_stream_state(self) -> Self {
+    pub fn make_stream_state(self) -> Self {
         TypePy::StreamState(Box::new(self))
     }
 

@@ -79,7 +79,7 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
             },
             baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                 let mut type_ts = recursive_fn(type_generic);
-                type_ts = type_ts.as_optional();
+                type_ts = type_ts.make_optional();
                 // Note: stream state wrapping is now handled at the end of the function
                 // based on the top-level meta's streaming_behavior.state
                 type_ts
@@ -91,7 +91,7 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
                 let union = TypeTS::Union {
                     variants: type_generics.into_iter().map(&recursive_fn).collect(),
                 };
-                union.as_optional()
+                union.make_optional()
             }
         },
         T::Top(_) => panic!(
@@ -102,14 +102,14 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
 
     // Apply checked wrapper if there are checks on this type
     let type_ts = if let Some(names) = check_names {
-        type_ts.as_checked(names)
+        type_ts.make_checked(names)
     } else {
         type_ts
     };
 
     // Apply stream state wrapper if needed
     if wrap_stream_state {
-        type_ts.as_stream_state()
+        type_ts.make_stream_state()
     } else {
         type_ts
     }
@@ -169,7 +169,7 @@ pub(crate) fn type_to_ts(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
             },
             baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                 let mut type_ts = recursive_fn(type_generic);
-                type_ts = type_ts.as_optional();
+                type_ts = type_ts.make_optional();
                 type_ts
             }
             baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => TypeTS::Union {
@@ -179,7 +179,7 @@ pub(crate) fn type_to_ts(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
                 let union = TypeTS::Union {
                     variants: type_generics.into_iter().map(&recursive_fn).collect(),
                 };
-                union.as_optional()
+                union.make_optional()
             }
         },
         T::Top(_) => panic!(
@@ -190,7 +190,7 @@ pub(crate) fn type_to_ts(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
 
     // Apply checked wrapper if there are checks on this type
     if let Some(names) = check_names {
-        type_ts.as_checked(names)
+        type_ts.make_checked(names)
     } else {
         type_ts
     }

@@ -60,15 +60,15 @@ fn safe_name(name: &str) -> String {
 }
 
 impl TypeGo {
-    pub fn as_optional(self) -> Self {
+    pub fn make_optional(self) -> Self {
         TypeGo::Optional(Box::new(self))
     }
 
-    pub fn as_checked(self) -> Self {
+    pub fn make_checked(self) -> Self {
         TypeGo::Checked(Box::new(self))
     }
 
-    pub fn as_stream_state(self) -> Self {
+    pub fn make_stream_state(self) -> Self {
         TypeGo::StreamState(Box::new(self))
     }
 
@@ -212,9 +212,7 @@ impl TypeGo {
     }
 
     pub fn cast_from_function(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
-        match self {
-            _ => format!("({param}).({})", self.serialize_type(pkg)),
-        }
+        format!("({param}).({})", self.serialize_type(pkg))
     }
 
     pub fn decode_from_any(&self, param: &str, pkg: &CurrentRenderPackage) -> String {

@@ -102,12 +102,12 @@ where
         }
 
         let curr_type = match curr_type {
-            TypeGeneric::RecursiveTypeAlias { name, mode, meta } => {
+            TypeGeneric::RecursiveTypeAlias { name, .. } => {
                 let expanded_type =
                     baml_types::baml_value::TypeLookupsMeta::<T>::expand_recursive_type(
                         lookup, &name,
                     )
-                    .expect(&format!("Failed to expand recursive type alias {name}"));
+                    .unwrap_or_else(|_| panic!("Failed to expand recursive type alias {name}"));
                 expanded_type
             }
             other => other,
@@ -127,9 +127,11 @@ where
             let baml_types::ir_type::SelectedTypeIndexResult {
                 index: value_type_index,
                 options,
-            } = u.selected_type_index(&real_type, lookup).expect(&format!(
-                "Failed to find target_type in options: {real_type} -> {curr_type}"
-            ));
+            } = u
+                .selected_type_index(&real_type, lookup)
+                .unwrap_or_else(|_| {
+                    panic!("Failed to find target_type in options: {real_type} -> {curr_type}")
+                });
 
             if options.len() == 1 {
                 if !real_type.is_null() {
@@ -352,9 +354,9 @@ where
             }
         };
 
-        return CffiValueHolder {
+        CffiValueHolder {
             value: Some(encoded_value),
-        };
+        }
     }
 }
 

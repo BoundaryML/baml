@@ -716,7 +716,7 @@ impl IntermediateRepr {
 
         let all_types = class_fields.chain(type_alias_fields).chain(function_fields);
 
-        all_types.flat_map(|t| filter(t)).collect::<Vec<_>>()
+        all_types.flat_map(filter).collect::<Vec<_>>()
     }
 
     fn walk_all_non_streaming_types_with_filter<F>(&self, filter: F) -> Vec<TypeNonStreaming>

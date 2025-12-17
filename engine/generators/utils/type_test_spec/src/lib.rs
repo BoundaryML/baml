@@ -149,7 +149,7 @@ pub fn parse_test_spec(content: &str) -> Vec<TestCase> {
         }
 
         // H3: Target or language section
-        if line.starts_with("### ") {
+        if let Some(section) = line.strip_prefix("### ") {
             // Save pending values before switching sections
             if let Some(ref mut test) = current_test {
                 if pending_non_streaming.is_some() || pending_streaming.is_some() {
@@ -166,8 +166,6 @@ pub fn parse_test_spec(content: &str) -> Vec<TestCase> {
                 }
             }
 
-            let section = line[4..].trim();
-
             if section.starts_with("target:") {
                 if let Some(ref mut test) = current_test {
                     // Extract path from backticks
@@ -177,10 +175,9 @@ pub fn parse_test_spec(content: &str) -> Vec<TestCase> {
                 }
                 current_language = None;
                 parse_mode = ParseMode::None;
-            } else if section.starts_with("enum_values:") {
+            } else if let Some(values_part) = section.strip_prefix("enum_values:") {
                 if let Some(ref mut test) = current_test {
                     // Parse comma-separated values from backticks
-                    let values_part = &section["enum_values:".len()..];
                     let values: Vec<String> = values_part
                         .split(',')
                         .filter_map(|s| extract_backtick_content(s.trim()))
@@ -390,7 +387,7 @@ pub fn generate_test_code(language: &str) -> String {
         }
 
         // Generate test function
-        code.push_str(&format!("\n    #[test]\n"));
+        code.push_str("\n    #[test]\n");
         code.push_str(&format!("    fn {}() {{\n", test.name));
 
         // Escape the BAML source for use in a raw string

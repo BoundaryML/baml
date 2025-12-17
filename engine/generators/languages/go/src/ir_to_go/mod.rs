@@ -99,12 +99,12 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
                 baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                     let mut type_go = recursive_fn(type_generic);
                     // Order: inner type -> Optional -> Checked -> StreamState
-                    type_go = type_go.as_optional();
+                    type_go = type_go.make_optional();
                     if has_union_checks {
-                        type_go = type_go.as_checked();
+                        type_go = type_go.make_checked();
                     }
                     if has_union_stream_state {
-                        type_go = type_go.as_stream_state();
+                        type_go = type_go.make_stream_state();
                     }
                     type_go
                 }
@@ -132,10 +132,10 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
                     };
                     // Order: Union -> Checked -> StreamState
                     if has_union_checks {
-                        union_type = union_type.as_checked();
+                        union_type = union_type.make_checked();
                     }
                     if has_union_stream_state {
-                        union_type = union_type.as_stream_state();
+                        union_type = union_type.make_stream_state();
                     }
                     union_type
                 }
@@ -163,11 +163,11 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
                     };
                     // Order: Union -> Checked -> Optional -> StreamState
                     if has_union_checks {
-                        union_type = union_type.as_checked();
+                        union_type = union_type.make_checked();
                     }
-                    union_type = union_type.as_optional();
+                    union_type = union_type.make_optional();
                     if has_union_stream_state {
-                        union_type = union_type.as_stream_state();
+                        union_type = union_type.make_stream_state();
                     }
                     union_type
                 }
@@ -187,18 +187,16 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, lookup: &impl TypeLookups
 
     // Order: base type -> Checked -> StreamState
     let type_go = if field_has_checks {
-        type_go.as_checked()
+        type_go.make_checked()
     } else {
         type_go
     };
 
-    let type_go = if field_has_stream_state {
-        type_go.as_stream_state()
+    if field_has_stream_state {
+        type_go.make_stream_state()
     } else {
         type_go
-    };
-
-    type_go
+    }
 }
 
 pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -> TypeGo {
@@ -265,9 +263,9 @@ pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
                 baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                     let mut type_go = recursive_fn(type_generic);
                     // Order: inner type -> Optional -> Checked
-                    type_go = type_go.as_optional();
+                    type_go = type_go.make_optional();
                     if has_union_checks {
-                        type_go = type_go.as_checked();
+                        type_go = type_go.make_checked();
                     }
                     type_go
                 }
@@ -285,7 +283,7 @@ pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
                         name: format!("Union{num_options}{name}"),
                     };
                     if has_union_checks {
-                        union_type = union_type.as_checked();
+                        union_type = union_type.make_checked();
                     }
                     union_type
                 }
@@ -304,9 +302,9 @@ pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
                     };
                     // Order: Union -> Checked -> Optional
                     if has_union_checks {
-                        union_type = union_type.as_checked();
+                        union_type = union_type.make_checked();
                     }
-                    union_type = union_type.as_optional();
+                    union_type = union_type.make_optional();
                     union_type
                 }
             }
@@ -320,7 +318,7 @@ pub(crate) fn type_to_go(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
     // For non-union types, wrap with Checked if the field has check constraints
     // Union types handle their own check wrapping in their match arms
     if field_has_checks && !matches!(field, T::Union(..)) {
-        type_go.as_checked()
+        type_go.make_checked()
     } else {
         type_go
     }

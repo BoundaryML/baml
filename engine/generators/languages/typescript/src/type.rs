@@ -72,11 +72,11 @@ pub enum TypeTS {
 }
 
 impl TypeTS {
-    pub fn as_optional(self) -> Self {
+    pub fn make_optional(self) -> Self {
         TypeTS::Optional(Box::new(self))
     }
 
-    pub fn as_checked(self, names: Vec<Option<String>>) -> Self {
+    pub fn make_checked(self, names: Vec<Option<String>>) -> Self {
         TypeTS::Checked {
             inner: Box::new(self),
             names,
@@ -87,11 +87,7 @@ impl TypeTS {
         matches!(self, TypeTS::Optional(..))
     }
 
-    pub fn is_stream_state(&self) -> bool {
-        matches!(self, TypeTS::StreamState(..))
-    }
-
-    pub fn as_stream_state(self) -> Self {
+    pub fn make_stream_state(self) -> Self {
         TypeTS::StreamState(Box::new(self))
     }
 
