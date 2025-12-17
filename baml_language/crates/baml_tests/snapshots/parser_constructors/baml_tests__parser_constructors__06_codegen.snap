@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 11
-Objects: 17
-Globals: 11
+Objects: 35
+Globals: 29
 
 Function boolArray (arity: 0, kind: Exec):
      0   LOAD_CONST 0    (true)

@@ -878,6 +878,7 @@ impl LoweringContext {
                             | SyntaxKind::IF_EXPR
                             | SyntaxKind::BLOCK_EXPR
                             | SyntaxKind::PAREN_EXPR
+                            | SyntaxKind::ARRAY_LITERAL
                     ) {
                         args.push(self.lower_expr(&child));
                     }
@@ -955,6 +956,7 @@ impl LoweringContext {
                                         | SyntaxKind::IF_EXPR
                                         | SyntaxKind::BLOCK_EXPR
                                         | SyntaxKind::PAREN_EXPR
+                                        | SyntaxKind::ARRAY_LITERAL
                                 ) {
                                     args.push(self.lower_expr(&node));
                                 }
@@ -1751,9 +1753,33 @@ impl LoweringContext {
             .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
         // 1. let _arr_N = <iterator>
+        // First try to get iterator as a child node (for complex expressions like arrays, calls, etc.)
+        // If not found, look for a bare WORD token (simple identifier like `xs`)
         let iterator_expr = for_expr
             .iterator()
             .map(|n| self.lower_expr(&n))
+            .or_else(|| {
+                // Look for a bare WORD token after 'in' keyword
+                // The iterator could be a simple identifier that wasn't wrapped in a node
+                use baml_syntax::SyntaxKind;
+                let mut seen_in = false;
+                for element in for_expr.syntax().children_with_tokens() {
+                    match element {
+                        baml_syntax::NodeOrToken::Token(token) => {
+                            if token.kind() == SyntaxKind::KW_IN {
+                                seen_in = true;
+                            } else if seen_in && token.kind() == SyntaxKind::WORD {
+                                // Found the iterator identifier
+                                return Some(
+                                    self.exprs.alloc(Expr::Path(vec![Name::new(token.text())])),
+                                );
+                            }
+                        }
+                        baml_syntax::NodeOrToken::Node(_) => {}
+                    }
+                }
+                None
+            })
             .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
         let arr_pat = self.patterns.alloc(Pattern::Binding(arr_name.clone()));

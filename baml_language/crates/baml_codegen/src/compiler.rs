@@ -289,8 +289,12 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                     } else if let Some(&index) = self.globals.get(&first_name) {
                         self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(index)));
                     } else {
-                        // TODO: Error case - unknown variable should be caught by type checker,
-                        // codegen should not run on code with type errors
+                        panic!(
+                            "unknown variable or function: '{}' (not in locals {:?} or globals {:?})",
+                            first_name,
+                            self.locals.keys().collect::<Vec<_>>(),
+                            self.globals.keys().collect::<Vec<_>>()
+                        );
                     }
 
                     // Apply field accesses for remaining segments using segment types from THIR

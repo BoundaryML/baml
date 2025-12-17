@@ -53,9 +53,18 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
     let typing_context = build_typing_context(db, files);
 
     // Build globals map (function name -> global index)
+    // Register builtins first for stable indices, then user functions
     let mut globals: HashMap<String, usize> = HashMap::new();
     let mut global_idx = 0;
 
+    // First, add builtin functions (stable indices 0, 1, 2, ...)
+    let builtins = baml_vm::functions();
+    for path in builtins.keys() {
+        globals.insert(path.clone(), global_idx);
+        global_idx += 1;
+    }
+
+    // Then, add user-defined functions
     for file in files {
         let items_struct = baml_hir::file_items(db, *file);
         for item in items_struct.items(db) {
@@ -106,7 +115,22 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
         }
     }
 
-    // Compile each function
+    // Add builtin functions to globals FIRST (stable indices)
+    for (path, (native_fn, arity)) in &builtins {
+        let builtin_fn = Function {
+            name: path.clone(),
+            arity: *arity,
+            bytecode: Bytecode::default(),
+            kind: FunctionKind::Native(*native_fn),
+            locals_in_scope: Vec::new(),
+            span: baml_base::Span::fake(),
+            block_notifications: Vec::new(),
+        };
+        let fn_obj_idx = program.add_object(Object::Function(builtin_fn));
+        program.add_global(Value::Object(ObjectIndex::from_raw(fn_obj_idx)));
+    }
+
+    // Compile each user function
     for file in files {
         let items_struct = baml_hir::file_items(db, *file);
         for item in items_struct.items(db) {

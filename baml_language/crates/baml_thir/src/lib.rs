@@ -19,10 +19,15 @@ use baml_hir::{
 };
 use baml_workspace::Project;
 
+pub mod builtins;
 mod lower;
 pub mod pretty;
 mod types;
 
+pub use builtins::{
+    Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
+    method_return_type, substitute,
+};
 pub use lower::lower_type_ref;
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use types::*;
@@ -909,30 +914,15 @@ fn infer_unary_op<'db>(
 /// Infer the type of a field access.
 ///
 /// For class types, this handles both field access and method access.
-/// Methods are desugared to top-level functions with simple names (not namespaced),
-/// so we look them up directly in the global context.
+/// For primitive types (arrays, strings, maps), this handles builtin methods.
 fn infer_field_access<'db>(
     ctx: &mut TypeContext<'db>,
     base: &Ty<'db>,
     field: &Name,
     span: Span,
 ) -> Ty<'db> {
+    // First, try class field lookup for named types
     let found_field = match base {
-        // Ty::Named(class_name) => {
-        //     // Try to look up as a method (methods are top-level functions with simple names)
-        //     if let Some(method_ty) = ctx.lookup(field) {
-        //         return method_ty.clone();
-        //     }
-
-        //     // Try to look up as a field in the class
-        //     if let Some(field_ty) = ctx.lookup_class_field(class_name, field) {
-        //         return field_ty.clone();
-        //     }
-
-        //     // Field/method not found
-        //     Some(Ty::Unknown)
-        // }
-        // Ty::Named(class_name) => ctx.lookup_class_field(class_name, field).cloned(),
         Ty::Named(class_name) => ctx
             .lookup(field)
             .or(ctx.lookup_class_field(class_name, field))
@@ -945,18 +935,37 @@ fn infer_field_access<'db>(
                 .find(|(name, _)| name == field)
                 .map(|(_, type_ref)| lower_type_ref(ctx.db(), type_ref))
         }
-        Ty::Unknown => None,
+        Ty::Unknown => return Ty::Unknown,
         _ => None,
     };
 
-    found_field.unwrap_or_else(|| {
-        ctx.push_error(TypeError::NoSuchField {
-            ty: base.clone(),
-            field: field.to_string(),
-            span,
-        });
-        Ty::Unknown
-    })
+    if let Some(ty) = found_field {
+        return ty;
+    }
+
+    // Try builtin method lookup
+    if let Some((def, bindings)) = builtins::lookup_method(base, field.as_str()) {
+        // Build the function type from the builtin definition
+        let param_types: Vec<Ty<'db>> = def
+            .params
+            .iter()
+            .map(|(_, pattern)| builtins::substitute(pattern, &bindings))
+            .collect();
+        let return_type = builtins::substitute(&def.returns, &bindings);
+
+        return Ty::Function {
+            params: param_types,
+            ret: Box::new(return_type),
+        };
+    }
+
+    // Field/method not found
+    ctx.push_error(TypeError::NoSuchField {
+        ty: base.clone(),
+        field: field.to_string(),
+        span,
+    });
+    Ty::Unknown
 }
 
 /// Infer the type of an index access.
