@@ -134,6 +134,26 @@ pub fn substitute<'db>(pattern: &TypePattern, bindings: &Bindings<'db>) -> Ty<'d
     }
 }
 
+/// Substitute type patterns to types, using `Ty::Unknown` for unbound type variables.
+///
+/// This is useful for builtin function calls where we don't have concrete type bindings
+/// (e.g., `baml.Array.length(arr)` where we don't know the element type yet).
+pub fn substitute_unknown<'db>(pattern: &TypePattern) -> Ty<'db> {
+    match pattern {
+        TypePattern::Var(_) => Ty::Unknown,
+        TypePattern::Int => Ty::Int,
+        TypePattern::Float => Ty::Float,
+        TypePattern::String => Ty::String,
+        TypePattern::Bool => Ty::Bool,
+        TypePattern::Null => Ty::Null,
+        TypePattern::Array(elem) => Ty::List(Box::new(substitute_unknown(elem))),
+        TypePattern::Map { key, value } => Ty::Map {
+            key: Box::new(substitute_unknown(key)),
+            value: Box::new(substitute_unknown(value)),
+        },
+    }
+}
+
 /// Find a matching built-in method for a receiver type and method name.
 ///
 /// Returns the `FunctionDef` and type variable bindings if found.
@@ -160,11 +180,18 @@ pub fn lookup_method<'db>(
     None
 }
 
-/// Look up a built-in free function by path.
+/// Look up a built-in free function by path (functions without a receiver).
 ///
 /// Returns the `FunctionDef` if found.
 pub fn lookup_function(path: &str) -> Option<&'static FunctionDef> {
     baml_vm::find_function(path)
+}
+
+/// Look up any built-in by path (including methods).
+///
+/// This is useful for direct builtin calls like `baml.Array.length(arr)`.
+pub fn lookup_builtin_by_path(path: &str) -> Option<&'static FunctionDef> {
+    baml_vm::find_builtin_by_path(path)
 }
 
 /// Get the return type of a built-in method for a specific receiver type.

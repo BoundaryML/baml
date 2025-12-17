@@ -1,0 +1,49 @@
+---
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "array_length"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "array"
+          EQUALS "="
+          ARRAY_LITERAL "[1, 2, 3]"
+            L_BRACKET "["
+            INTEGER_LITERAL "1"
+            COMMA ","
+            INTEGER_LITERAL "2"
+            COMMA ","
+            INTEGER_LITERAL "3"
+            R_BRACKET "]"
+          SEMICOLON ";"
+        RETURN_STMT
+          KW_RETURN "return"
+          CALL_EXPR
+            PATH_EXPR "baml.Array.length"
+              WORD "baml"
+              DOT "."
+              WORD "Array"
+              DOT "."
+              WORD "length"
+            CALL_ARGS "(array)"
+              L_PAREN "("
+              WORD "array"
+              R_PAREN ")"
+          SEMICOLON ";"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

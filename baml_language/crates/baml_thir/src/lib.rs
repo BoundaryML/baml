@@ -240,6 +240,9 @@ pub struct TypeContext<'db> {
     expr_types: HashMap<ExprId, Ty<'db>>,
     /// For multi-segment paths, the type of each segment.
     path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
+    /// Types of all return statements encountered during inference.
+    /// Used to validate that all return paths match the declared return type.
+    return_types: Vec<(Ty<'db>, Span)>,
     /// Accumulated type errors.
     errors: Vec<TypeError<Ty<'db>>>,
 }
@@ -256,6 +259,7 @@ impl<'db> TypeContext<'db> {
             class_fields: HashMap::new(),
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
+            return_types: Vec::new(),
             errors: Vec::new(),
         }
     }
@@ -272,8 +276,14 @@ impl<'db> TypeContext<'db> {
             class_fields,
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
+            return_types: Vec::new(),
             errors: Vec::new(),
         }
+    }
+
+    /// Record a return type encountered during inference.
+    pub fn record_return(&mut self, ty: Ty<'db>, span: Span) {
+        self.return_types.push((ty, span));
     }
 
     /// Look up a field in a class.
@@ -416,8 +426,8 @@ pub fn infer_function_body<'db>(
         ctx.define(name.clone(), ty.clone());
     }
 
-    // Type check the body
-    let return_type = match body {
+    // Type check the body and get the trailing expression type
+    let trailing_expr_type = match body {
         FunctionBody::Expr(expr_body) => {
             if let Some(root_expr) = expr_body.root_expr {
                 infer_expr(&mut ctx, root_expr, expr_body)
@@ -432,14 +442,51 @@ pub fn infer_function_body<'db>(
         FunctionBody::Missing => Ty::Unknown,
     };
 
-    // Check return type matches (if we have span info, we'd report errors here)
-    if !return_type.is_subtype_of(expected_return)
-        && !return_type.is_unknown()
+    // Check all return statement types against expected return type
+    for (return_ty, span) in &ctx.return_types {
+        if !return_ty.is_subtype_of(expected_return)
+            && !return_ty.is_unknown()
+            && !expected_return.is_unknown()
+        {
+            ctx.errors.push(TypeError::TypeMismatch {
+                expected: expected_return.clone(),
+                found: return_ty.clone(),
+                span: *span,
+            });
+        }
+    }
+
+    // Check trailing expression type against expected return type (if not Void)
+    // A trailing expression is an implicit return, so it must match
+    if !trailing_expr_type.is_void()
+        && !trailing_expr_type.is_subtype_of(expected_return)
+        && !trailing_expr_type.is_unknown()
         && !expected_return.is_unknown()
     {
-        // We'd need the span of the function body for this error
-        // For now, we skip this check
+        let span = Span::new(
+            baml_base::FileId::new(0),
+            text_size::TextRange::empty(0.into()),
+        );
+        ctx.errors.push(TypeError::TypeMismatch {
+            expected: expected_return.clone(),
+            found: trailing_expr_type.clone(),
+            span,
+        });
     }
+
+    // Determine the inferred return type:
+    // - If there are explicit return statements, use the expected type (we already validated them)
+    // - If there's a trailing expression (not Void), use its type
+    // - Otherwise, use Void
+    let return_type = if !ctx.return_types.is_empty() {
+        // If there are return statements, the function returns what they return
+        // (we've already checked they match expected_return)
+        expected_return.clone()
+    } else if !trailing_expr_type.is_void() {
+        trailing_expr_type
+    } else {
+        Ty::Void
+    };
 
     InferenceResult {
         return_type,
@@ -520,8 +567,33 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
                     Ty::Unknown
                 }
             } else {
-                // Multi-segment path: first segment is variable, rest are field accesses
-                // TODO: Add proper resolution for enum variants and module paths
+                // Multi-segment path: could be:
+                // 1. A builtin function (e.g., baml.Array.length)
+                // 2. A variable followed by field accesses (e.g., obj.field)
+
+                // First, check if this is a builtin function path
+                let full_path = segments
+                    .iter()
+                    .map(smol_str::SmolStr::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                if let Some(def) = builtins::lookup_builtin_by_path(&full_path) {
+                    // It's a builtin function - return its function type
+                    let mut param_types: Vec<Ty<'db>> = Vec::new();
+                    if let Some(ref receiver_pattern) = def.receiver {
+                        param_types.push(builtins::substitute_unknown(receiver_pattern));
+                    }
+                    for (_, pattern) in &def.params {
+                        param_types.push(builtins::substitute_unknown(pattern));
+                    }
+                    let return_type = builtins::substitute_unknown(&def.returns);
+                    return Ty::Function {
+                        params: param_types,
+                        ret: Box::new(return_type),
+                    };
+                }
+
+                // Otherwise, treat as variable + field accesses
                 let first = &segments[0];
                 let mut ty = if let Some(t) = ctx.lookup(first) {
                     t.clone()
@@ -578,38 +650,66 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
                     (callee_ty, effective_args)
                 }
                 Expr::Path(segments) if segments.len() >= 2 => {
-                    // Method call via Path: `receiver.method(args)`
-                    // For multi-segment paths like `baz.Greeting()`, the first segment(s)
-                    // form the receiver and the last segment is the method name.
-                    //
-                    // We infer the receiver type from all segments except the last,
-                    // then look up the method on that type.
-                    let receiver_segments = &segments[..segments.len() - 1];
-
-                    // Infer receiver type (could be single var or nested field access)
-                    let receiver_ty = if receiver_segments.len() == 1 {
-                        // Simple receiver: `baz.method()`
-                        ctx.lookup(&receiver_segments[0])
-                            .cloned()
-                            .unwrap_or(Ty::Unknown)
-                    } else {
-                        // Nested receiver: `obj.field.method()`
-                        let first = &receiver_segments[0];
-                        let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
-                        for field in &receiver_segments[1..] {
-                            ty = infer_field_access(ctx, &ty, field, span);
+                    // First, check if this is a direct builtin function call
+                    // (e.g., baml.Array.length(arr))
+                    let full_path = segments
+                        .iter()
+                        .map(smol_str::SmolStr::as_str)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    if let Some(def) = builtins::lookup_builtin_by_path(&full_path) {
+                        // It's a builtin function - build function type from definition
+                        // For methods called as functions, receiver is the first argument
+                        let mut param_types: Vec<Ty<'db>> = Vec::new();
+                        if let Some(ref receiver_pattern) = def.receiver {
+                            param_types.push(builtins::substitute_unknown(receiver_pattern));
                         }
-                        ty
-                    };
+                        for (_, pattern) in &def.params {
+                            param_types.push(builtins::substitute_unknown(pattern));
+                        }
+                        let return_type = builtins::substitute_unknown(&def.returns);
 
-                    let callee_ty = infer_expr(ctx, *callee, body);
+                        let callee_ty = Ty::Function {
+                            params: param_types,
+                            ret: Box::new(return_type),
+                        };
+                        let arg_types: Vec<Ty<'db>> =
+                            args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
+                        (callee_ty, arg_types)
+                    } else {
+                        // Method call via Path: `receiver.method(args)`
+                        // For multi-segment paths like `baz.Greeting()`, the first segment(s)
+                        // form the receiver and the last segment is the method name.
+                        //
+                        // We infer the receiver type from all segments except the last,
+                        // then look up the method on that type.
+                        let receiver_segments = &segments[..segments.len() - 1];
 
-                    // Build effective args: [receiver_type, ...explicit_args]
-                    let mut effective_args = vec![receiver_ty];
-                    for arg in args {
-                        effective_args.push(infer_expr(ctx, *arg, body));
+                        // Infer receiver type (could be single var or nested field access)
+                        let receiver_ty = if receiver_segments.len() == 1 {
+                            // Simple receiver: `baz.method()`
+                            ctx.lookup(&receiver_segments[0])
+                                .cloned()
+                                .unwrap_or(Ty::Unknown)
+                        } else {
+                            // Nested receiver: `obj.field.method()`
+                            let first = &receiver_segments[0];
+                            let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
+                            for field in &receiver_segments[1..] {
+                                ty = infer_field_access(ctx, &ty, field, span);
+                            }
+                            ty
+                        };
+
+                        let callee_ty = infer_expr(ctx, *callee, body);
+
+                        // Build effective args: [receiver_type, ...explicit_args]
+                        let mut effective_args = vec![receiver_ty];
+                        for arg in args {
+                            effective_args.push(infer_expr(ctx, *arg, body));
+                        }
+                        (callee_ty, effective_args)
                     }
-                    (callee_ty, effective_args)
                 }
                 _ => {
                     // Regular function call (single-segment Path or other expression)
@@ -1077,10 +1177,16 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         }
 
         Stmt::Return(expr) => {
-            if let Some(e) = expr {
-                infer_expr(ctx, *e, body);
-            }
-            // TODO: Check return type matches function signature
+            let span = Span::new(
+                baml_base::FileId::new(0),
+                text_size::TextRange::empty(0.into()),
+            );
+            let return_ty = if let Some(e) = expr {
+                infer_expr(ctx, *e, body)
+            } else {
+                Ty::Void
+            };
+            ctx.record_return(return_ty, span);
         }
 
         Stmt::While {

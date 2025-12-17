@@ -228,11 +228,18 @@ pub fn find_method(method_name: &str) -> impl Iterator<Item = &'static FunctionD
         .filter(move |def| def.method_name() == Some(method_name))
 }
 
-/// Find a free function by path.
+/// Find a free function by path (functions without a receiver).
 pub fn find_function(path: &str) -> Option<&'static FunctionDef> {
     builtins()
         .iter()
         .find(|def| def.receiver.is_none() && def.path == path)
+}
+
+/// Find any builtin by path (including methods).
+///
+/// This is useful for direct builtin calls like `baml.Array.length(arr)`.
+pub fn find_builtin_by_path(path: &str) -> Option<&'static FunctionDef> {
+    builtins().iter().find(|def| def.path == path)
 }
 
 /// Generate the functions map for VM registration.

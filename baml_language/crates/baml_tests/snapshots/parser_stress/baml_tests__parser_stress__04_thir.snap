@@ -6,7 +6,7 @@ expression: output
   Function ComplexType:
     Return: Unknown
   Function DeepExpression:
-    Return: Void
+    Return: Int
   Function Process22:
     Return: String
   Function Process54:

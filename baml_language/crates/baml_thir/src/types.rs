@@ -61,6 +61,11 @@ impl Ty<'_> {
         matches!(self, Ty::Unknown)
     }
 
+    /// Check if this type is void.
+    pub fn is_void(&self) -> bool {
+        matches!(self, Ty::Void)
+    }
+
     /// Check if this type is a primitive type.
     pub fn is_primitive(&self) -> bool {
         matches!(self, Ty::Int | Ty::Float | Ty::String | Ty::Bool | Ty::Null)

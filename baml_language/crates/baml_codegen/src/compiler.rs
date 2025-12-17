@@ -281,8 +281,53 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                 if segments.is_empty() {
                     // TODO: Error case - empty path should not reach codegen,
                     // should be caught during parsing or type checking
+                } else if segments.len() >= 2 {
+                    // Multi-segment path: could be a builtin function or variable + fields
+                    // First, check if the full path is a global (e.g., "baml.Array.length")
+                    let full_path = segments
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    if let Some(&index) = self.globals.get(&full_path) {
+                        // It's a builtin function - load it directly
+                        self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(index)));
+                    } else {
+                        // Treat as variable + field accesses
+                        let first_name = segments[0].to_string();
+                        if let Some(&index) = self.locals.get(&first_name) {
+                            self.emit(Instruction::LoadVar(index));
+                        } else if let Some(&index) = self.globals.get(&first_name) {
+                            self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(index)));
+                        } else {
+                            panic!(
+                                "unknown variable or function: '{}' (not in locals {:?} or globals {:?})",
+                                first_name,
+                                self.locals.keys().collect::<Vec<_>>(),
+                                self.globals.keys().collect::<Vec<_>>()
+                            );
+                        }
+
+                        // Get segment types computed during type inference
+                        let segment_types = self.inference.path_segment_types.get(&expr_id);
+
+                        for (i, field) in segments[1..].iter().enumerate() {
+                            let field_name = field.to_string();
+
+                            // Get the type of the object we're accessing the field on
+                            let field_index = segment_types
+                                .and_then(|types| types.get(i))
+                                .and_then(Self::class_name_from_ty)
+                                .and_then(|class_name| self.classes.get(&class_name))
+                                .and_then(|fields| fields.get(&field_name))
+                                .copied()
+                                .unwrap_or(0); // Default to 0 if not found (error case)
+
+                            self.emit(Instruction::LoadField(field_index));
+                        }
+                    }
                 } else {
-                    // Load the first segment
+                    // Single segment: simple variable or function lookup
                     let first_name = segments[0].to_string();
                     if let Some(&index) = self.locals.get(&first_name) {
                         self.emit(Instruction::LoadVar(index));
@@ -295,28 +340,6 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                             self.locals.keys().collect::<Vec<_>>(),
                             self.globals.keys().collect::<Vec<_>>()
                         );
-                    }
-
-                    // Apply field accesses for remaining segments using segment types from THIR
-                    if segments.len() > 1 {
-                        // Get segment types computed during type inference
-                        let segment_types = self.inference.path_segment_types.get(&expr_id);
-
-                        for (i, field) in segments[1..].iter().enumerate() {
-                            let field_name = field.to_string();
-
-                            // Get the type of the object we're accessing the field on
-                            // segment_types[i] is the type of the i-th segment (0 = first var, 1 = after first field, etc.)
-                            let field_index = segment_types
-                                .and_then(|types| types.get(i))
-                                .and_then(Self::class_name_from_ty)
-                                .and_then(|class_name| self.classes.get(&class_name))
-                                .and_then(|fields| fields.get(&field_name))
-                                .copied()
-                                .unwrap_or(0); // Default to 0 if not found (error case)
-
-                            self.emit(Instruction::LoadField(field_index));
-                        }
                     }
                 }
             }
