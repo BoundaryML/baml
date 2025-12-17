@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -11,13 +11,12 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " int"
+    TYPE_EXPR "int"
       WORD "int"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "
-  let result = 0;"
+        LET_STMT "let result = 0;"
           KW_LET "let"
           WORD "result"
           EQUALS "="
@@ -50,8 +49,7 @@ SOURCE_FILE
               WORD "i"
             SEMICOLON ";"
             R_BRACE "}"
-        RETURN_STMT "
-  return result;"
+        RETURN_STMT "return result;"
           KW_RETURN "return"
           WORD "result"
           SEMICOLON ";"
@@ -63,13 +61,12 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " int"
+    TYPE_EXPR "int"
       WORD "int"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "
-  let result = 0;"
+        LET_STMT "let result = 0;"
           KW_LET "let"
           WORD "result"
           EQUALS "="
@@ -82,7 +79,7 @@ SOURCE_FILE
             KW_LET "let"
             WORD "i"
           KW_IN "in"
-          ARRAY_LITERAL " [1, 2, 3]"
+          ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
             INTEGER_LITERAL "1"
             COMMA ","
@@ -99,8 +96,7 @@ SOURCE_FILE
               WORD "i"
             SEMICOLON ";"
             R_BRACE "}"
-        RETURN_STMT "
-  return result;"
+        RETURN_STMT "return result;"
           KW_RETURN "return"
           WORD "result"
           SEMICOLON ";"
@@ -112,13 +108,12 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " int"
+    TYPE_EXPR "int"
       WORD "int"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "
-  let result = 0;"
+        LET_STMT "let result = 0;"
           KW_LET "let"
           WORD "result"
           EQUALS "="
@@ -131,7 +126,7 @@ SOURCE_FILE
             KW_LET "let"
             WORD "i"
           KW_IN "in"
-          ARRAY_LITERAL " [1, 2, 3]"
+          ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
             INTEGER_LITERAL "1"
             COMMA ","
@@ -149,7 +144,7 @@ SOURCE_FILE
                 KW_LET "let"
                 WORD "j"
               KW_IN "in"
-              ARRAY_LITERAL " [4, 5, 6]"
+              ARRAY_LITERAL "[4, 5, 6]"
                 L_BRACKET "["
                 INTEGER_LITERAL "4"
                 COMMA ","
@@ -170,8 +165,7 @@ SOURCE_FILE
                 SEMICOLON ";"
                 R_BRACE "}"
             R_BRACE "}"
-        RETURN_STMT "
-  return result;"
+        RETURN_STMT "return result;"
           KW_RETURN "return"
           WORD "result"
           SEMICOLON ";"

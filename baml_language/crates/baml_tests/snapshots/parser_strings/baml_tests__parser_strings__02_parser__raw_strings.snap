@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -10,14 +10,14 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "simple"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       ATTRIBUTE
         AT "@"
         WORD "description"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          RAW_STRING_LITERAL "#"raw string"#"
+          RAW_STRING_LITERAL #"raw string"#
             HASH "#"
             QUOTE """
             WORD "raw"
@@ -27,14 +27,14 @@ SOURCE_FILE
           R_PAREN ")"
     FIELD
       WORD "with_quotes"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       ATTRIBUTE
         AT "@"
         WORD "description"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          RAW_STRING_LITERAL "#"contains "quotes" easily"#"
+          RAW_STRING_LITERAL #"contains "quotes" easily"#
             HASH "#"
             QUOTE """
             WORD "contains"
@@ -47,7 +47,7 @@ SOURCE_FILE
           R_PAREN ")"
     FIELD
       WORD "multi_hash"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       ATTRIBUTE
         AT "@"
@@ -71,7 +71,7 @@ SOURCE_FILE
           R_PAREN ")"
     FIELD
       WORD "multiline"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       ATTRIBUTE
         AT "@"
@@ -114,26 +114,25 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "input"
-        TYPE_EXPR " string"
+        TYPE_EXPR "string"
           WORD "string"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " string"
+    TYPE_EXPR "string"
       WORD "string"
     LLM_FUNCTION_BODY
       L_BRACE "{"
-      CLIENT_FIELD "
-  client GPT4"
+      CLIENT_FIELD "client GPT4"
         KW_CLIENT "client"
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL " #"
+        RAW_STRING_LITERAL #"
     Process the following text:
     {{ input }}
     
     Return the processed result.
-  "#"
+  "#
           HASH "#"
           QUOTE """
           WORD "Process"

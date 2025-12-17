@@ -7,11 +7,10 @@ use baml_tests::{
 use baml_vm::{BinOp, CmpOp};
 
 // ============================================================================
-// For-in loops (require function parameters, currently ignored)
+// For-in loops
 // ============================================================================
 
 #[test]
-#[ignore = "for-in loops with function params not yet working"]
 fn for_loop_sum() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -31,21 +30,21 @@ fn for_loop_sum() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::LoadVar("xs".to_string()),
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
+                Instruction::LoadVar("_iter".to_string()),
                 Instruction::Call(1),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
-                Instruction::LoadVar("__baml for loop array length 0".to_string()),
+                Instruction::LoadVar("_i".to_string()),
+                Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(15),
                 Instruction::Pop(1),
-                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("_iter".to_string()),
+                Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("__baml for loop index 0".to_string()),
+                Instruction::StoreVar("_i".to_string()),
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::BinOp(BinOp::Add),
@@ -62,7 +61,6 @@ fn for_loop_sum() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "for-in loops with function params not yet working"]
 fn for_with_break() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -85,21 +83,21 @@ fn for_with_break() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::LoadVar("xs".to_string()),
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
+                Instruction::LoadVar("_iter".to_string()),
                 Instruction::Call(1),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
-                Instruction::LoadVar("__baml for loop array length 0".to_string()),
+                Instruction::LoadVar("_i".to_string()),
+                Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(24),
                 Instruction::Pop(1),
-                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("_iter".to_string()),
+                Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("__baml for loop index 0".to_string()),
+                Instruction::StoreVar("_i".to_string()),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Gt),
@@ -125,7 +123,6 @@ fn for_with_break() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "for-in loops with function params not yet working"]
 fn for_with_continue() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -148,21 +145,21 @@ fn for_with_continue() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::LoadVar("xs".to_string()),
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
+                Instruction::LoadVar("_iter".to_string()),
                 Instruction::Call(1),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
-                Instruction::LoadVar("__baml for loop array length 0".to_string()),
+                Instruction::LoadVar("_i".to_string()),
+                Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(24),
                 Instruction::Pop(1),
-                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("_iter".to_string()),
+                Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("__baml for loop index 0".to_string()),
+                Instruction::StoreVar("_i".to_string()),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Gt),
@@ -188,7 +185,6 @@ fn for_with_continue() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "for-in loops with function params not yet working"]
 fn for_nested() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -211,38 +207,38 @@ fn for_nested() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::LoadVar("as".to_string()),
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
+                Instruction::LoadVar("_iter".to_string()),
                 Instruction::Call(1),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
-                Instruction::LoadVar("__baml for loop array length 0".to_string()),
+                Instruction::LoadVar("_i".to_string()),
+                Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(38),
                 Instruction::Pop(1),
-                Instruction::LoadVar("__baml for loop iterated array 0".to_string()),
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("_iter".to_string()),
+                Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
-                Instruction::LoadVar("__baml for loop index 0".to_string()),
+                Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("__baml for loop index 0".to_string()),
+                Instruction::StoreVar("_i".to_string()),
                 Instruction::LoadVar("bs".to_string()),
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("__baml for loop iterated array 1".to_string()),
+                Instruction::LoadVar("_iter1".to_string()),
                 Instruction::Call(1),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::LoadVar("__baml for loop index 1".to_string()),
-                Instruction::LoadVar("__baml for loop array length 1".to_string()),
+                Instruction::LoadVar("_i1".to_string()),
+                Instruction::LoadVar("_len1".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::JumpIfFalse(17),
                 Instruction::Pop(1),
-                Instruction::LoadVar("__baml for loop iterated array 1".to_string()),
-                Instruction::LoadVar("__baml for loop index 1".to_string()),
+                Instruction::LoadVar("_iter1".to_string()),
+                Instruction::LoadVar("_i1".to_string()),
                 Instruction::LoadArrayElement,
-                Instruction::LoadVar("__baml for loop index 1".to_string()),
+                Instruction::LoadVar("_i1".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("__baml for loop index 1".to_string()),
+                Instruction::StoreVar("_i1".to_string()),
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadVar("b".to_string()),

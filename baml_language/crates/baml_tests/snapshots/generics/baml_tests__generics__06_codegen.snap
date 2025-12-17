@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 1
-Objects: 2
-Globals: 1
+Objects: 20
+Globals: 19
 
 Function GetTodo (arity: 0, kind: Exec):
      0   CALL 0   

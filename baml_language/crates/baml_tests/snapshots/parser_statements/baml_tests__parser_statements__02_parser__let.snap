@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -11,13 +11,12 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " int"
+    TYPE_EXPR "int"
       WORD "int"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        LET_STMT "
-    // Inferred type let
+        LET_STMT "// Inferred type let
     let x = 1;"
           KW_LET "let"
           WORD "x"
@@ -28,7 +27,7 @@ SOURCE_FILE
           KW_LET "let"
           WORD "y"
           COLON ":"
-          TYPE_EXPR " int"
+          TYPE_EXPR "int"
             WORD "int"
           EQUALS "="
           INTEGER_LITERAL "2"
@@ -37,12 +36,12 @@ SOURCE_FILE
           KW_LET "let"
           WORD "z"
           COLON ":"
-          TYPE_EXPR " int[]"
+          TYPE_EXPR "int[]"
             WORD "int"
             L_BRACKET "["
             R_BRACKET "]"
           EQUALS "="
-          ARRAY_LITERAL " [1, 2, 3]"
+          ARRAY_LITERAL "[1, 2, 3]"
             L_BRACKET "["
             INTEGER_LITERAL "1"
             COMMA ","
@@ -55,20 +54,18 @@ SOURCE_FILE
           KW_LET "let"
           WORD "point"
           COLON ":"
-          TYPE_EXPR " Point"
+          TYPE_EXPR "Point"
             WORD "Point"
           EQUALS "="
           OBJECT_LITERAL
             WORD "Point"
             L_BRACE "{"
-            OBJECT_FIELD "
-        x: 1"
+            OBJECT_FIELD "x: 1"
               WORD "x"
               COLON ":"
               INTEGER_LITERAL "1"
             COMMA ","
-            OBJECT_FIELD "
-        y: 2"
+            OBJECT_FIELD "y: 2"
               WORD "y"
               COLON ":"
               INTEGER_LITERAL "2"
@@ -78,12 +75,12 @@ SOURCE_FILE
         RETURN_STMT
           KW_RETURN "return"
           BINARY_EXPR
-            PATH_EXPR " point.x"
+            PATH_EXPR "point.x"
               WORD "point"
               DOT "."
               WORD "x"
             PLUS "+"
-            PATH_EXPR " point.y"
+            PATH_EXPR "point.y"
               WORD "point"
               DOT "."
               WORD "y"
@@ -95,11 +92,11 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "x"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     FIELD
       WORD "y"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     R_BRACE "}"
 

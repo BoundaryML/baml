@@ -418,7 +418,7 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()));
+                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), *func_id);
 
                         writeln!(output, "  Function {}:", signature.name).unwrap();
                         writeln!(output, "    Return: {:?}", result.return_type).unwrap();
@@ -497,7 +497,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()));
+                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), *func_id);
                         for error in &result.errors {
                             all_errors.push(("type".to_string(), render_type_error(error, &sources, false)));
                         }

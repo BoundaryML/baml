@@ -90,11 +90,6 @@ pub struct Compiler<'db, 'ctx, 'obj> {
     /// Shared objects pool (for strings, etc. - NOT classes, those are pre-allocated).
     objects: &'obj mut ObjectPool,
 
-    /// Counter for generating unique compiler-internal variable names.
-    /// Used to avoid collisions when the same internal variable name
-    /// (like the iterator temp) appears in nested scopes.
-    gensym_counter: usize,
-
     /// Current loop info for break/continue handling.
     current_loop: Option<LoopInfo>,
 }
@@ -115,7 +110,6 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             current_source_line: 0,
             bytecode: Bytecode::new(),
             objects: ctx.objects,
-            gensym_counter: 0,
             current_loop: None,
         }
     }
@@ -136,14 +130,6 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             }
             _ => None,
         }
-    }
-
-    /// Generate a unique compiler-internal variable name.
-    /// Uses `@` prefix which is not valid in user code, ensuring no collisions.
-    fn gensym(&mut self, prefix: &str) -> String {
-        let name = format!("@{prefix}_{}", self.gensym_counter);
-        self.gensym_counter += 1;
-        name
     }
 
     /// Compile a function from its THIR-typed body.
@@ -295,20 +281,33 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                 if segments.is_empty() {
                     // TODO: Error case - empty path should not reach codegen,
                     // should be caught during parsing or type checking
-                } else {
-                    // Load the first segment
-                    let first_name = segments[0].to_string();
-                    if let Some(&index) = self.locals.get(&first_name) {
-                        self.emit(Instruction::LoadVar(index));
-                    } else if let Some(&index) = self.globals.get(&first_name) {
+                } else if segments.len() >= 2 {
+                    // Multi-segment path: could be a builtin function or variable + fields
+                    // First, check if the full path is a global (e.g., "baml.Array.length")
+                    let full_path = segments
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    if let Some(&index) = self.globals.get(&full_path) {
+                        // It's a builtin function - load it directly
                         self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(index)));
                     } else {
-                        // TODO: Error case - unknown variable should be caught by type checker,
-                        // codegen should not run on code with type errors
-                    }
+                        // Treat as variable + field accesses
+                        let first_name = segments[0].to_string();
+                        if let Some(&index) = self.locals.get(&first_name) {
+                            self.emit(Instruction::LoadVar(index));
+                        } else if let Some(&index) = self.globals.get(&first_name) {
+                            self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(index)));
+                        } else {
+                            panic!(
+                                "unknown variable or function: '{}' (not in locals {:?} or globals {:?})",
+                                first_name,
+                                self.locals.keys().collect::<Vec<_>>(),
+                                self.globals.keys().collect::<Vec<_>>()
+                            );
+                        }
 
-                    // Apply field accesses for remaining segments using segment types from THIR
-                    if segments.len() > 1 {
                         // Get segment types computed during type inference
                         let segment_types = self.inference.path_segment_types.get(&expr_id);
 
@@ -316,7 +315,6 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                             let field_name = field.to_string();
 
                             // Get the type of the object we're accessing the field on
-                            // segment_types[i] is the type of the i-th segment (0 = first var, 1 = after first field, etc.)
                             let field_index = segment_types
                                 .and_then(|types| types.get(i))
                                 .and_then(Self::class_name_from_ty)
@@ -327,6 +325,21 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
 
                             self.emit(Instruction::LoadField(field_index));
                         }
+                    }
+                } else {
+                    // Single segment: simple variable or function lookup
+                    let first_name = segments[0].to_string();
+                    if let Some(&index) = self.locals.get(&first_name) {
+                        self.emit(Instruction::LoadVar(index));
+                    } else if let Some(&index) = self.globals.get(&first_name) {
+                        self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(index)));
+                    } else {
+                        panic!(
+                            "unknown variable or function: '{}' (not in locals {:?} or globals {:?})",
+                            first_name,
+                            self.locals.keys().collect::<Vec<_>>(),
+                            self.globals.keys().collect::<Vec<_>>()
+                        );
                     }
                 }
             }
@@ -364,9 +377,36 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             }
 
             Expr::Call { callee, args } => {
-                // Push function
+                // Check if this is a method call (callee is FieldAccess)
+                if let Expr::FieldAccess { base, field } = &body.exprs[*callee] {
+                    // Method call: receiver.method(args) -> builtin(receiver, args)
+                    // Get the type of the receiver to look up the builtin method
+                    if let Some(receiver_ty) = self.expr_type(*base) {
+                        if let Some((def, _)) =
+                            baml_thir::builtins::lookup_method(receiver_ty, field.as_str())
+                        {
+                            // Found a builtin method - compile as function call
+                            if let Some(&global_idx) = self.globals.get(def.path) {
+                                // Emit: LOAD_GLOBAL method
+                                self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(
+                                    global_idx,
+                                )));
+                                // Emit: compile receiver (first argument)
+                                self.compile_expr(*base, body);
+                                // Emit: compile explicit arguments
+                                for arg in args {
+                                    self.compile_expr(*arg, body);
+                                }
+                                // Emit: CALL with receiver + explicit args
+                                self.emit(Instruction::Call(args.len() + 1));
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Regular function call (not a method call)
                 self.compile_expr(*callee, body);
-                // Push arguments
                 for arg in args {
                     self.compile_expr(*arg, body);
                 }
@@ -501,6 +541,7 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                 pattern,
                 type_annotation: _,
                 initializer,
+                ..
             } => {
                 if let Some(init) = initializer {
                     self.compile_expr(*init, body);
@@ -542,6 +583,8 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             Stmt::While {
                 condition,
                 body: while_body,
+                after,
+                origin: _, // Not needed for bytecode generation
             } => {
                 self.compile_while_loop(
                     |ctx| ctx.compile_expr(*condition, body),
@@ -550,143 +593,14 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
                         // The body result is not used, but if it's a block expression
                         // it will handle its own stack through exit_scope
                     },
-                    |_| {}, // No after code for simple while
-                );
-            }
-
-            Stmt::ForIn {
-                pattern,
-                iterator,
-                body: for_body,
-            } => {
-                // For-in loop compilation:
-                // let @array = (iterator);
-                // let @array_len = baml.Array.length(@array);
-                // let @loop_i = 0;
-                // while (@loop_i < @array_len) {
-                //     let <pattern> = @array[@loop_i];
-                //     @loop_i = @loop_i + 1;
-                //     (body)
-                // }
-
-                // Compile iterator expression - this puts the array on the stack
-                self.compile_expr(*iterator, body);
-
-                self.enter_scope();
-
-                // Store array in temp variable
-                let array_var = self.gensym("for_array");
-                let array_location = self.track_local(&array_var);
-
-                // Get array length: baml.Array.length(@array)
-                let length_var = self.gensym("for_len");
-                if let Some(&len_fn_idx) = self.globals.get("baml.Array.length") {
-                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(len_fn_idx)));
-                    self.emit(Instruction::LoadVar(array_location));
-                    self.emit(Instruction::Call(1));
-                } else {
-                    // Fallback: push 0 for length (loop won't execute)
-                    let zero = self.add_constant(Value::Int(0));
-                    self.emit(Instruction::LoadConst(zero));
-                }
-                let length_location = self.track_local(&length_var);
-
-                // Initialize loop index to 0
-                let idx_var = self.gensym("for_idx");
-                let zero = self.add_constant(Value::Int(0));
-                self.emit(Instruction::LoadConst(zero));
-                let idx_location = self.track_local(&idx_var);
-
-                // Now compile the while loop
-                self.compile_while_loop(
                     |ctx| {
-                        // Condition: @loop_i < @array_len
-                        ctx.emit(Instruction::LoadVar(idx_location));
-                        ctx.emit(Instruction::LoadVar(length_location));
-                        ctx.emit(Instruction::CmpOp(CmpOp::Lt));
-                    },
-                    |ctx| {
-                        ctx.enter_scope();
-
-                        // Extract variable name from pattern and track it
-                        let pat = &body.patterns[*pattern];
-                        match pat {
-                            Pattern::Binding(name) => {
-                                ctx.track_local(name.as_ref());
-                            }
+                        // Compile the after statement (e.g., update in C-style for loops)
+                        // This runs after each iteration, including on `continue`
+                        if let Some(after_stmt) = after {
+                            ctx.compile_stmt(*after_stmt, body);
                         }
-
-                        // let <pattern> = @array[@loop_i]
-                        ctx.emit(Instruction::LoadVar(array_location));
-                        ctx.emit(Instruction::LoadVar(idx_location));
-                        ctx.emit(Instruction::LoadArrayElement);
-
-                        // Increment index: @loop_i = @loop_i + 1
-                        ctx.emit(Instruction::LoadVar(idx_location));
-                        let one = ctx.add_constant(Value::Int(1));
-                        ctx.emit(Instruction::LoadConst(one));
-                        ctx.emit(Instruction::BinOp(BinOp::Add));
-                        ctx.emit(Instruction::StoreVar(idx_location));
-
-                        // Compile body
-                        ctx.compile_expr(*for_body, body);
-
-                        ctx.exit_scope(false);
                     },
-                    |_| {}, // No after code
                 );
-
-                self.exit_scope(false);
-            }
-
-            Stmt::ForCStyle {
-                initializer,
-                condition,
-                update,
-                body: for_body,
-            } => {
-                self.enter_scope();
-
-                // Compile initializer
-                if let Some(init_stmt) = initializer {
-                    self.compile_stmt(*init_stmt, body);
-                }
-
-                match condition {
-                    Some(cond) => {
-                        // Loop with condition
-                        self.compile_while_loop(
-                            |ctx| ctx.compile_expr(*cond, body),
-                            |ctx| ctx.compile_expr(*for_body, body),
-                            |ctx| {
-                                if let Some(upd) = update {
-                                    ctx.compile_stmt(*upd, body);
-                                }
-                            },
-                        );
-                    }
-                    None => {
-                        // Infinite loop
-                        let loop_start = self.next_insn_index();
-
-                        let break_locs = self.wrap_loop_body(|ctx| {
-                            ctx.compile_expr(*for_body, body);
-                        });
-
-                        if let Some(upd) = update {
-                            self.compile_stmt(*upd, body);
-                        }
-
-                        self.emit(Instruction::Jump(loop_start - self.next_insn_index()));
-
-                        // Patch break locations
-                        for loc in break_locs {
-                            self.patch_jump(loc);
-                        }
-                    }
-                }
-
-                self.exit_scope(false);
             }
 
             Stmt::Break => {

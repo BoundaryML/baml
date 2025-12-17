@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 845
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -11,11 +10,11 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "x"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     FIELD
       WORD "y"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     R_BRACE "}"
   CLASS_DEF
@@ -24,11 +23,11 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "p"
-      TYPE_EXPR " Point"
+      TYPE_EXPR "Point"
         WORD "Point"
     FIELD
       WORD "q"
-      TYPE_EXPR " Point"
+      TYPE_EXPR "Point"
         WORD "Point"
     R_BRACE "}"
   FUNCTION_DEF
@@ -38,7 +37,7 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " Point"
+    TYPE_EXPR "Point"
       WORD "Point"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
@@ -46,12 +45,12 @@ SOURCE_FILE
         OBJECT_LITERAL
           WORD "Point"
           L_BRACE "{"
-          OBJECT_FIELD " x: 1"
+          OBJECT_FIELD "x: 1"
             WORD "x"
             COLON ":"
             INTEGER_LITERAL "1"
           COMMA ","
-          OBJECT_FIELD " y: 2"
+          OBJECT_FIELD "y: 2"
             WORD "y"
             COLON ":"
             INTEGER_LITERAL "2"
@@ -64,7 +63,7 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " Vec2D"
+    TYPE_EXPR "Vec2D"
       WORD "Vec2D"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
@@ -78,12 +77,12 @@ SOURCE_FILE
             OBJECT_LITERAL
               WORD "Point"
               L_BRACE "{"
-              OBJECT_FIELD " x: 1"
+              OBJECT_FIELD "x: 1"
                 WORD "x"
                 COLON ":"
                 INTEGER_LITERAL "1"
               COMMA ","
-              OBJECT_FIELD " y: 2"
+              OBJECT_FIELD "y: 2"
                 WORD "y"
                 COLON ":"
                 INTEGER_LITERAL "2"
@@ -95,12 +94,12 @@ SOURCE_FILE
             OBJECT_LITERAL
               WORD "Point"
               L_BRACE "{"
-              OBJECT_FIELD " x: 3"
+              OBJECT_FIELD "x: 3"
                 WORD "x"
                 COLON ":"
                 INTEGER_LITERAL "3"
               COMMA ","
-              OBJECT_FIELD " y: 4"
+              OBJECT_FIELD "y: 4"
                 WORD "y"
                 COLON ":"
                 INTEGER_LITERAL "4"

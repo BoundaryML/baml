@@ -253,6 +253,7 @@ dependencies = [
  "baml_base",
  "baml_diagnostics",
  "baml_hir",
+ "baml_vm",
  "baml_workspace",
  "salsa",
  "smol_str",

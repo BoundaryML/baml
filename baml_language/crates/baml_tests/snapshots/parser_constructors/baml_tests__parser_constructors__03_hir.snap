@@ -1,152 +1,59 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function floatArray {
-  return: List(Path(Path { segments: ["float"], kind: Plain }))
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Float("1.0"))
-      Idx::<Expr>(1): Literal(Float("2.0"))
-      Idx::<Expr>(2): Literal(Float("3.0"))
-      Idx::<Expr>(3): Array { elements: [Idx::<Expr>(0), Idx::<Expr>(1), Idx::<Expr>(2)] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
+function floatArray() -> float[] {
+      [1.0, 2.0, 3.0]
 }
-function stringArray {
-  return: List(Path(Path { segments: ["string"], kind: Plain }))
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(String("hello"))
-      Idx::<Expr>(1): Literal(String(" \"world\""))
-      Idx::<Expr>(2): Literal(String(" \"test\""))
-      Idx::<Expr>(3): Array { elements: [Idx::<Expr>(0), Idx::<Expr>(1), Idx::<Expr>(2)] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
+
+function stringArray() -> string[] {
+      ["hello", "world", "test"]
 }
-function pointArray {
-  return: List(Path(Path { segments: ["Point"], kind: Plain }))
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Literal(Int(2))
-      Idx::<Expr>(2): Object { type_name: Some("Point"), fields: [("x", Idx::<Expr>(0)), ("y", Idx::<Expr>(1))] }
-      Idx::<Expr>(3): Literal(Int(3))
-      Idx::<Expr>(4): Literal(Int(4))
-      Idx::<Expr>(5): Object { type_name: Some("Point"), fields: [("x", Idx::<Expr>(3)), ("y", Idx::<Expr>(4))] }
-      Idx::<Expr>(6): Literal(Int(5))
-      Idx::<Expr>(7): Literal(Int(6))
-      Idx::<Expr>(8): Object { type_name: Some("Point"), fields: [("x", Idx::<Expr>(6)), ("y", Idx::<Expr>(7))] }
-      Idx::<Expr>(9): Array { elements: [Idx::<Expr>(2), Idx::<Expr>(5), Idx::<Expr>(8)] }
-      Idx::<Expr>(10): Block { stmts: [], tail_expr: Some(Idx::<Expr>(9)) }
-    ]
-    root: Idx::<Expr>(10)
-  }
+
+function pointArray() -> Point[] {
+      [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }]
 }
-function boolArray {
-  return: List(Path(Path { segments: ["bool"], kind: Plain }))
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Bool(true))
-      Idx::<Expr>(1): Literal(Bool(false))
-      Idx::<Expr>(2): Literal(Bool(true))
-      Idx::<Expr>(3): Array { elements: [Idx::<Expr>(0), Idx::<Expr>(1), Idx::<Expr>(2)] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
+
+function boolArray() -> bool[] {
+      [true, false, true]
 }
-function intArray {
-  return: List(Path(Path { segments: ["int"], kind: Plain }))
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Literal(Int(2))
-      Idx::<Expr>(2): Literal(Int(3))
-      Idx::<Expr>(3): Array { elements: [Idx::<Expr>(0), Idx::<Expr>(1), Idx::<Expr>(2)] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
+
+function intArray() -> int[] {
+      [1, 2, 3]
 }
+
 class Point {
-  x: Int
-  y: Int
+  x: int
+  y: int
 }
-function point {
-  return: Path(Path { segments: ["Point"], kind: Plain })
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Literal(Int(2))
-      Idx::<Expr>(2): Object { type_name: Some("Point"), fields: [("x", Idx::<Expr>(0)), ("y", Idx::<Expr>(1))] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
+
+function point() -> Point {
+      Point { x: 1, y: 2 }
 }
-function vec2d {
-  return: Path(Path { segments: ["Vec2D"], kind: Plain })
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Literal(Int(2))
-      Idx::<Expr>(2): Object { type_name: Some("Point"), fields: [("x", Idx::<Expr>(0)), ("y", Idx::<Expr>(1))] }
-      Idx::<Expr>(3): Literal(Int(3))
-      Idx::<Expr>(4): Literal(Int(4))
-      Idx::<Expr>(5): Object { type_name: Some("Point"), fields: [("x", Idx::<Expr>(3)), ("y", Idx::<Expr>(4))] }
-      Idx::<Expr>(6): Object { type_name: Some("Vec2D"), fields: [("p", Idx::<Expr>(2)), ("q", Idx::<Expr>(5))] }
-      Idx::<Expr>(7): Block { stmts: [], tail_expr: Some(Idx::<Expr>(6)) }
-    ]
-    root: Idx::<Expr>(7)
-  }
+
+function vec2d() -> Vec2D {
+      Vec2D { p: Point { x: 1, y: 2 }, q: Point { x: 3, y: 4 } }
 }
+
 class Vec2D {
-  p: Path(Path { segments: ["Point"], kind: Plain })
-  q: Path(Path { segments: ["Point"], kind: Plain })
+  p: Point
+  q: Point
 }
+
 class Point {
-  x: Int
-  y: Int
+  x: int
+  y: int
 }
-function boolValues {
-  return: Path(Path { segments: ["map<string, bool>"], kind: Plain })
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
-  }
+
+function boolValues() -> map<string, bool> {
 }
-function intValues {
-  return: Path(Path { segments: ["map<string, int>"], kind: Plain })
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
-  }
+
+function intValues() -> map<string, int> {
 }
-function stringValues {
-  return: Path(Path { segments: ["map<string, string>"], kind: Plain })
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
-  }
+
+function stringValues() -> map<string, string> {
 }
-function floatValues {
-  return: Path(Path { segments: ["map<string, float>"], kind: Plain })
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
-  }
+
+function floatValues() -> map<string, float> {
 }

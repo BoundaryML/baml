@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 3
-Objects: 8
-Globals: 3
+Objects: 26
+Globals: 21
 
 Function Foo (arity: 0, kind: Llm):
   (no bytecode)
@@ -14,6 +14,6 @@ Function Incomplete (arity: 1, kind: Exec):
   (no bytecode)
 
 Function NextFunction (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   ( "parsed")
+     0   LOAD_CONST 0   (parsed)
      1   RETURN         
      2   RETURN

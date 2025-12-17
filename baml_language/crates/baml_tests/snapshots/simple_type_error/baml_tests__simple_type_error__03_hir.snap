@@ -3,15 +3,6 @@ source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function Foo {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Literal(String(" \"foo\""))
-      Idx::<Expr>(2): Binary { op: Add, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(1) }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
+function Foo() -> int {
+      1 + "foo"
 }

@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 21
-Objects: 25
-Globals: 21
+Objects: 43
+Globals: 39
 
 Function ConditionalLogic (arity: 1, kind: Exec):
      0    LOAD_VAR 1         (age)
@@ -13,7 +13,7 @@ Function ConditionalLogic (arity: 1, kind: Exec):
      2    CMP_OP <           
      3    JUMP_IF_FALSE +5   (to 8)
      4    POP 1              
-     5    LOAD_CONST 1       ( "minor")
+     5    LOAD_CONST 1       (minor)
      6    RETURN             
      7    JUMP +13           (to 20)
      8    POP 1              
@@ -22,11 +22,11 @@ Function ConditionalLogic (arity: 1, kind: Exec):
      11   CMP_OP <           
      12   JUMP_IF_FALSE +5   (to 17)
      13   POP 1              
-     14   LOAD_CONST 3       ( "adult")
+     14   LOAD_CONST 3       (adult)
      15   RETURN             
      16   JUMP +4            (to 20)
      17   POP 1              
-     18   LOAD_CONST 4       ( "senior")
+     18   LOAD_CONST 4       (senior)
      19   RETURN             
      20   RETURN             
 
@@ -137,23 +137,27 @@ Function c_style_for_loop (arity: 0, kind: Exec):
      20   RETURN              
 
 Function continue_in_for (arity: 0, kind: Exec):
-     0    LOAD_CONST 0       (0)
-     1    LOAD_VAR 1         (i)
-     2    LOAD_CONST 1       (10)
-     3    CMP_OP <           
-     4    JUMP_IF_FALSE +8   (to 12)
-     5    POP 1              
-     6    JUMP +1            (to 7)
-     7    LOAD_VAR 1         (i)
-     8    LOAD_CONST 2       (1)
-     9    BIN_OP +           
-     10   STORE_VAR 1        (i)
-     11   JUMP -10           (to 1)
-     12   POP 1              
-     13   POP 1              
-     14   LOAD_CONST 3       (2)
-     15   RETURN             
-     16   RETURN             
+     0    LOAD_CONST 0        (0)
+     1    LOAD_VAR 1          (i)
+     2    LOAD_CONST 1        (10)
+     3    CMP_OP <            
+     4    JUMP_IF_FALSE +12   (to 16)
+     5    POP 1               
+     6    LOAD_VAR 1          (i)
+     7    LOAD_CONST 2        (1)
+     8    BIN_OP +            
+     9    STORE_VAR 1         (i)
+     10   JUMP +5             (to 15)
+     11   LOAD_VAR 1          (i)
+     12   LOAD_CONST 2        (1)
+     13   BIN_OP +            
+     14   STORE_VAR 1         (i)
+     15   JUMP -14            (to 1)
+     16   POP 1               
+     17   POP 1               
+     18   LOAD_CONST 3        (2)
+     19   RETURN              
+     20   RETURN              
 
 Function continue_with_locals (arity: 0, kind: Exec):
      0    LOAD_CONST 0        (true)
@@ -182,31 +186,33 @@ Function iterator_style_for_loop (arity: 0, kind: Exec):
      2    LOAD_CONST 2         (2)
      3    LOAD_CONST 3         (3)
      4    ALLOC_ARRAY 3        
-     5    LOAD_CONST 0         (0)
-     6    LOAD_CONST 0         (0)
-     7    LOAD_VAR 4           (@for_idx_2)
-     8    LOAD_VAR 3           (@for_len_1)
-     9    CMP_OP <             
-     10   JUMP_IF_FALSE +15    (to 25)
-     11   POP 1                
-     12   LOAD_VAR 2           (@for_array_0)
-     13   LOAD_VAR 4           (@for_idx_2)
-     14   LOAD_ARRAY_ELEMENT   
-     15   LOAD_VAR 4           (@for_idx_2)
-     16   LOAD_CONST 1         (1)
-     17   BIN_OP +             
-     18   STORE_VAR 4          (@for_idx_2)
-     19   LOAD_VAR 1           (result)
-     20   LOAD_VAR 5           (i)
-     21   BIN_OP +             
-     22   STORE_VAR 1          (result)
-     23   POP 1                
-     24   JUMP -17             (to 7)
+     5    LOAD_GLOBAL 0        (<fn baml.Array.length>)
+     6    LOAD_VAR 2           (_iter)
+     7    CALL 1               
+     8    LOAD_CONST 0         (0)
+     9    LOAD_VAR 4           (_i)
+     10   LOAD_VAR 3           (_len)
+     11   CMP_OP <             
+     12   JUMP_IF_FALSE +15    (to 27)
+     13   POP 1                
+     14   LOAD_VAR 2           (_iter)
+     15   LOAD_VAR 4           (_i)
+     16   LOAD_ARRAY_ELEMENT   
+     17   LOAD_VAR 4           (_i)
+     18   LOAD_CONST 1         (1)
+     19   BIN_OP +             
+     20   STORE_VAR 4          (_i)
+     21   LOAD_VAR 1           (result)
+     22   LOAD_VAR 5           (i)
+     23   BIN_OP +             
+     24   STORE_VAR 1          (result)
      25   POP 1                
-     26   POP 3                
-     27   LOAD_VAR 1           (result)
-     28   RETURN               
-     29   RETURN               
+     26   JUMP -17             (to 9)
+     27   POP 1                
+     28   POP 3                
+     29   LOAD_VAR 1           (result)
+     30   RETURN               
+     31   RETURN               
 
 Function let_statements (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (1)
@@ -276,55 +282,59 @@ Function nested_for_loop (arity: 0, kind: Exec):
      2    LOAD_CONST 2         (2)
      3    LOAD_CONST 3         (3)
      4    ALLOC_ARRAY 3        
-     5    LOAD_CONST 0         (0)
-     6    LOAD_CONST 0         (0)
-     7    LOAD_VAR 4           (@for_idx_2)
-     8    LOAD_VAR 3           (@for_len_1)
-     9    CMP_OP <             
-     10   JUMP_IF_FALSE +39    (to 49)
-     11   POP 1                
-     12   LOAD_VAR 2           (@for_array_0)
-     13   LOAD_VAR 4           (@for_idx_2)
-     14   LOAD_ARRAY_ELEMENT   
-     15   LOAD_VAR 4           (@for_idx_2)
-     16   LOAD_CONST 1         (1)
-     17   BIN_OP +             
-     18   STORE_VAR 4          (@for_idx_2)
-     19   LOAD_CONST 4         (4)
-     20   LOAD_CONST 5         (5)
-     21   LOAD_CONST 6         (6)
-     22   ALLOC_ARRAY 3        
-     23   LOAD_CONST 0         (0)
-     24   LOAD_CONST 0         (0)
-     25   LOAD_VAR 8           (@for_idx_5)
-     26   LOAD_VAR 7           (@for_len_4)
-     27   CMP_OP <             
-     28   JUMP_IF_FALSE +17    (to 45)
-     29   POP 1                
-     30   LOAD_VAR 6           (@for_array_3)
-     31   LOAD_VAR 8           (@for_idx_5)
-     32   LOAD_ARRAY_ELEMENT   
-     33   LOAD_VAR 8           (@for_idx_5)
-     34   LOAD_CONST 1         (1)
-     35   BIN_OP +             
-     36   STORE_VAR 8          (@for_idx_5)
-     37   LOAD_VAR 1           (result)
-     38   LOAD_VAR 5           (i)
-     39   LOAD_VAR 9           (j)
-     40   BIN_OP *             
-     41   BIN_OP +             
-     42   STORE_VAR 1          (result)
-     43   POP 1                
-     44   JUMP -19             (to 25)
-     45   POP 1                
-     46   POP 3                
+     5    LOAD_GLOBAL 0        (<fn baml.Array.length>)
+     6    LOAD_VAR 2           (_iter)
+     7    CALL 1               
+     8    LOAD_CONST 0         (0)
+     9    LOAD_VAR 4           (_i)
+     10   LOAD_VAR 3           (_len)
+     11   CMP_OP <             
+     12   JUMP_IF_FALSE +41    (to 53)
+     13   POP 1                
+     14   LOAD_VAR 2           (_iter)
+     15   LOAD_VAR 4           (_i)
+     16   LOAD_ARRAY_ELEMENT   
+     17   LOAD_VAR 4           (_i)
+     18   LOAD_CONST 1         (1)
+     19   BIN_OP +             
+     20   STORE_VAR 4          (_i)
+     21   LOAD_CONST 4         (4)
+     22   LOAD_CONST 5         (5)
+     23   LOAD_CONST 6         (6)
+     24   ALLOC_ARRAY 3        
+     25   LOAD_GLOBAL 0        (<fn baml.Array.length>)
+     26   LOAD_VAR 6           (_iter1)
+     27   CALL 1               
+     28   LOAD_CONST 0         (0)
+     29   LOAD_VAR 8           (_i1)
+     30   LOAD_VAR 7           (_len1)
+     31   CMP_OP <             
+     32   JUMP_IF_FALSE +17    (to 49)
+     33   POP 1                
+     34   LOAD_VAR 6           (_iter1)
+     35   LOAD_VAR 8           (_i1)
+     36   LOAD_ARRAY_ELEMENT   
+     37   LOAD_VAR 8           (_i1)
+     38   LOAD_CONST 1         (1)
+     39   BIN_OP +             
+     40   STORE_VAR 8          (_i1)
+     41   LOAD_VAR 1           (result)
+     42   LOAD_VAR 5           (i)
+     43   LOAD_VAR 9           (j)
+     44   BIN_OP *             
+     45   BIN_OP +             
+     46   STORE_VAR 1          (result)
      47   POP 1                
-     48   JUMP -41             (to 7)
+     48   JUMP -19             (to 29)
      49   POP 1                
      50   POP 3                
-     51   LOAD_VAR 1           (result)
-     52   RETURN               
-     53   RETURN               
+     51   POP 1                
+     52   JUMP -43             (to 9)
+     53   POP 1                
+     54   POP 3                
+     55   LOAD_VAR 1           (result)
+     56   RETURN               
+     57   RETURN               
 
 Function nested_while_loop (arity: 0, kind: Exec):
      0    LOAD_CONST 0        (0)

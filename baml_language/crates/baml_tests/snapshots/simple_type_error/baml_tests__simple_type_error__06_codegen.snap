@@ -4,11 +4,11 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 1
-Objects: 2
-Globals: 1
+Objects: 20
+Globals: 19
 
 Function Foo (arity: 0, kind: Exec):
      0   LOAD_CONST 0   (1)
-     1   LOAD_CONST 1   ( "foo")
+     1   LOAD_CONST 1   (foo)
      2   BIN_OP +       
      3   RETURN

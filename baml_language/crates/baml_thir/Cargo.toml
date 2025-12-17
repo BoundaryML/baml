@@ -20,6 +20,7 @@ workspace = true
 baml_base = { workspace = true }
 baml_diagnostics = { workspace = true }
 baml_hir = { workspace = true }
+baml_vm = { workspace = true }
 baml_workspace = { workspace = true }
 salsa = { workspace = true }
 smol_str = { workspace = true }
