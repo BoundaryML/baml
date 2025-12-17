@@ -945,12 +945,16 @@ fn infer_field_access<'db>(
 
     // Try builtin method lookup
     if let Some((def, bindings)) = builtins::lookup_method(base, field.as_str()) {
-        // Build the function type from the builtin definition
-        let param_types: Vec<Ty<'db>> = def
-            .params
-            .iter()
-            .map(|(_, pattern)| builtins::substitute(pattern, &bindings))
-            .collect();
+        // Build the function type from the builtin definition.
+        // If this is a method (has a receiver), include the receiver type as the first param
+        // since the Call handler will pass the receiver as the first argument.
+        let mut param_types: Vec<Ty<'db>> = Vec::new();
+        if def.receiver.is_some() {
+            param_types.push(base.clone());
+        }
+        for (_, pattern) in &def.params {
+            param_types.push(builtins::substitute(pattern, &bindings));
+        }
         let return_type = builtins::substitute(&def.returns, &bindings);
 
         return Ty::Function {

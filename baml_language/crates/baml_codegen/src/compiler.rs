@@ -354,9 +354,36 @@ impl<'db, 'ctx, 'obj> Compiler<'db, 'ctx, 'obj> {
             }
 
             Expr::Call { callee, args } => {
-                // Push function
+                // Check if this is a method call (callee is FieldAccess)
+                if let Expr::FieldAccess { base, field } = &body.exprs[*callee] {
+                    // Method call: receiver.method(args) -> builtin(receiver, args)
+                    // Get the type of the receiver to look up the builtin method
+                    if let Some(receiver_ty) = self.expr_type(*base) {
+                        if let Some((def, _)) =
+                            baml_thir::builtins::lookup_method(receiver_ty, field.as_str())
+                        {
+                            // Found a builtin method - compile as function call
+                            if let Some(&global_idx) = self.globals.get(def.path) {
+                                // Emit: LOAD_GLOBAL method
+                                self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(
+                                    global_idx,
+                                )));
+                                // Emit: compile receiver (first argument)
+                                self.compile_expr(*base, body);
+                                // Emit: compile explicit arguments
+                                for arg in args {
+                                    self.compile_expr(*arg, body);
+                                }
+                                // Emit: CALL with receiver + explicit args
+                                self.emit(Instruction::Call(args.len() + 1));
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Regular function call (not a method call)
                 self.compile_expr(*callee, body);
-                // Push arguments
                 for arg in args {
                     self.compile_expr(*arg, body);
                 }

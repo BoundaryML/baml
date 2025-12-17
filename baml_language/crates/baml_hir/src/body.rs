@@ -1730,7 +1730,7 @@ impl LoweringContext {
     /// ```text
     /// {
     ///     let _arr_N = arr;
-    ///     let _len_N = baml.Array.length(_arr_N);
+    ///     let _len_N = _arr_N.length();
     ///     let _i_N = 0;
     ///     while (_i_N < _len_N) {
     ///         let x = _arr_N[_i_N];
@@ -1789,16 +1789,17 @@ impl LoweringContext {
             initializer: Some(iterator_expr),
         });
 
-        // 2. let _len_N = baml.Array.length(_arr_N)
-        // Note: The global function is registered as "baml.Array.length" (single key),
-        // not as nested segments, so we use a single-segment path.
+        // 2. let _len_N = _arr_N.length()
+        // This is a method call: FieldAccess followed by Call with no arguments.
+        // The typechecker will resolve `length` as a method on arrays.
         let arr_ref = self.exprs.alloc(Expr::Path(vec![arr_name.clone()]));
-        let length_fn = self
-            .exprs
-            .alloc(Expr::Path(vec![Name::new("baml.Array.length")]));
+        let length_method = self.exprs.alloc(Expr::FieldAccess {
+            base: arr_ref,
+            field: Name::new("length"),
+        });
         let length_call = self.exprs.alloc(Expr::Call {
-            callee: length_fn,
-            args: vec![arr_ref],
+            callee: length_method,
+            args: vec![],
         });
         let len_pat = self.patterns.alloc(Pattern::Binding(len_name.clone()));
         let len_let = self.stmts.alloc(Stmt::Let {

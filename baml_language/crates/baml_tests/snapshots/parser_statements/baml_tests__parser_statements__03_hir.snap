@@ -141,7 +141,7 @@ function iterator_style_for_loop() -> int {
       let result = 0;
       {
           let _iter = [1, 2, 3];
-          let _len = baml.Array.length(_iter);
+          let _len = _iter.length();
           let _i = 0;
           while (_i < _len) {
               let i = _iter[_i];
@@ -156,14 +156,14 @@ function nested_for_loop() -> int {
       let result = 0;
       {
           let _iter = [1, 2, 3];
-          let _len = baml.Array.length(_iter);
+          let _len = _iter.length();
           let _i = 0;
           while (_i < _len) {
               let i = _iter[_i];
               _i += 1;
               {
                   let _iter1 = [4, 5, 6];
-                  let _len1 = baml.Array.length(_iter1);
+                  let _len1 = _iter1.length();
                   let _i1 = 0;
                   while (_i1 < _len1) {
                       let j = _iter1[_i1];
