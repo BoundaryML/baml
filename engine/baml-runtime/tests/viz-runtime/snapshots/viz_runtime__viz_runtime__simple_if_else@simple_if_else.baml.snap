@@ -1,0 +1,191 @@
+---
+source: baml-runtime/tests/viz-runtime.rs
+expression: "&snapshot"
+input_file: baml-runtime/tests/viz-runtime/testdata/simple_if_else.baml
+---
+fixture: simple_if_else.baml
+snapshots:
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: Main
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "Main|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: MyFunction4
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "MyFunction4|root:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 1
+        node_type: header_context_enter
+        path_segment:
+          kind: header
+          slug: check
+          ordinal: 0
+        label: Check
+        header_level: 1
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+    emitted_events:
+      - node_id: 1
+        log_filter_key: "MyFunction4|root:0|hdr:check:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 2
+        node_type: branch_group
+        path_segment:
+          kind: branch_group
+          slug: if-flag
+          ordinal: 0
+        label: if (flag)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|bg:if-flag:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|bg:if-flag:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: enter
+        node_id: 3
+        node_type: branch_arm
+        path_segment:
+          kind: branch_arm
+          slug: if-flag
+          ordinal: 0
+        label: if (flag)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|bg:if-flag:0"
+      - "MyFunction4|root:0|hdr:check:0|bg:if-flag:0|arm:if-flag:0"
+    emitted_events:
+      - node_id: 3
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|bg:if-flag:0|arm:if-flag:0"
+        new_state: running
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 3
+        node_type: branch_arm
+        path_segment:
+          kind: branch_arm
+          slug: if-flag
+          ordinal: 0
+        label: if (flag)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+      - "MyFunction4|root:0|hdr:check:0|bg:if-flag:0"
+    emitted_events:
+      - node_id: 3
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|bg:if-flag:0|arm:if-flag:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 2
+        node_type: branch_group
+        path_segment:
+          kind: branch_group
+          slug: if-flag
+          ordinal: 0
+        label: if (flag)
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+      - "MyFunction4|root:0"
+      - "MyFunction4|root:0|hdr:check:0"
+    emitted_events:
+      - node_id: 2
+        log_filter_key: "MyFunction4|root:0|hdr:check:0|bg:if-flag:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: MyFunction4
+        header_level: ~
+    stack_after:
+      - "Main|root:0"
+    emitted_events:
+      - node_id: 1
+        log_filter_key: "MyFunction4|root:0|hdr:check:0"
+        new_state: completed
+      - node_id: 0
+        log_filter_key: "MyFunction4|root:0"
+        new_state: completed
+  - watch_event:
+      kind: viz_exec_state
+      header: ~
+      viz_event:
+        event: exit
+        node_id: 0
+        node_type: function_root
+        path_segment:
+          kind: function_root
+          ordinal: 0
+        label: Main
+        header_level: ~
+    stack_after: []
+    emitted_events:
+      - node_id: 0
+        log_filter_key: "Main|root:0"
+        new_state: completed

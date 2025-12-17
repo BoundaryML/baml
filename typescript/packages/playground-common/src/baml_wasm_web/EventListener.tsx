@@ -108,6 +108,10 @@ export const EventListener: React.FC = () => {
       if (!source) {
         return;
       }
+      if (source === ('react-devtools-bridge' as string)) {
+        // Ignore noisy React DevTools bridge chatter
+        return;
+      }
 
       console.debug('[EventListener] Handling command:', { source, payload });
 

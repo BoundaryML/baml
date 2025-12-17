@@ -42,6 +42,19 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Ensure rustup exists on Windows ARM64 runners
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "${RUNNER_OS:-}" == "Windows" && "${RUNNER_ARCH:-}" =~ [Aa][Rr][Mm]64 ]]; then
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl -LO "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe"
+            ./rustup-init.exe --default-toolchain stable -y
+            rm rustup-init.exe
+            echo "$USERPROFILE/.cargo/bin" >> "$GITHUB_PATH"
+          fi
+        fi
+
     # - name: Check for mise Rust installation
     #   id: check-rust
     #   run: |

@@ -2,6 +2,7 @@
 
 use std::fmt;
 
+use baml_base::Name;
 use baml_hir::{ClassId, EnumId};
 
 /// A resolved type in BAML.
@@ -20,9 +21,13 @@ pub enum Ty<'db> {
     Video,
     Pdf,
 
-    // User-defined types
+    // User-defined types (fully resolved with IDs)
     Class(ClassId<'db>),
     Enum(EnumId<'db>),
+
+    /// Named type (unresolved class/enum by name).
+    /// Used when we know the type name but haven't resolved it to an ID yet.
+    Named(Name),
 
     // Type constructors
     Optional(Box<Ty<'db>>),
@@ -176,6 +181,7 @@ impl fmt::Display for Ty<'_> {
             Ty::Pdf => write!(f, "pdf"),
             Ty::Class(_) => write!(f, "<class>"),
             Ty::Enum(_) => write!(f, "<enum>"),
+            Ty::Named(name) => write!(f, "{name}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),
             Ty::Map { key, value } => write!(f, "map<{key}, {value}>"),

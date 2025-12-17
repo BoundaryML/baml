@@ -4,6 +4,8 @@ use std::{
 };
 
 use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeIR};
+pub use baml_viz_events::{RuntimeNodeType, VizExecDelta, VizExecEvent};
+use baml_viz_events::{StateUpdate, VizStateReducer};
 
 use crate::hir::HeaderContext;
 
@@ -88,14 +90,61 @@ pub fn shared_noop_handler() -> SharedWatchHandler {
 #[derive(Debug, Clone)]
 pub enum WatchBamlValue {
     Value(BamlValueWithMeta<WatchValueMetadata>),
-    Header(HeaderContext),
-    /// HACK: Emitted synthetically when a new header comes in at the same or shallower level.
-    /// This signals that the previous header's scope has ended. This is a workaround until
-    /// proper exit events are emitted from the interpreter.
-    HeaderStopped(HeaderContext),
+    VizExecState(VizExecEvent),
     StreamStart(StreamId),
     StreamUpdate(StreamId, BamlValueWithMeta<WatchValueMetadata>),
     StreamEnd(StreamId),
+}
+
+#[derive(Debug, Clone)]
+pub enum ReducedWatchBamlValue {
+    Value(BamlValueWithMeta<WatchValueMetadata>),
+    VizStateUpdate(StateUpdate),
+    StreamStart(StreamId),
+    StreamUpdate(StreamId, BamlValueWithMeta<WatchValueMetadata>),
+    StreamEnd(StreamId),
+}
+
+pub struct WatchEventReducer(pub VizStateReducer);
+
+impl Default for WatchEventReducer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WatchEventReducer {
+    pub fn new() -> Self {
+        Self(VizStateReducer::default())
+    }
+
+    pub fn apply(
+        &mut self,
+        function_name: &str,
+        watch_event: WatchBamlValue,
+    ) -> Vec<ReducedWatchBamlValue> {
+        match watch_event {
+            WatchBamlValue::VizExecState(event) => self
+                .0
+                .apply(function_name, &event)
+                .into_iter()
+                .map(ReducedWatchBamlValue::VizStateUpdate)
+                .collect(),
+            WatchBamlValue::Value(value) => vec![ReducedWatchBamlValue::Value(value.clone())],
+            WatchBamlValue::StreamStart(stream_id) => {
+                vec![ReducedWatchBamlValue::StreamStart(stream_id.clone())]
+            }
+            WatchBamlValue::StreamUpdate(stream_id, value) => {
+                vec![ReducedWatchBamlValue::StreamUpdate(
+                    stream_id.clone(),
+                    value.clone(),
+                )]
+            }
+            WatchBamlValue::StreamEnd(stream_id) => {
+                vec![ReducedWatchBamlValue::StreamEnd(stream_id.clone())]
+            }
+        }
+    }
 }
 
 /// The BamlValueWithMeta metadata for a
@@ -140,22 +189,16 @@ impl fmt::Display for WatchNotification {
                     write!(f, "{}", value.clone().value())
                 }
             },
-            WatchBamlValue::Header(header) => {
+            WatchBamlValue::VizExecState(event) => {
+                let delta = match event.event {
+                    VizExecDelta::Enter => "enter",
+                    VizExecDelta::Exit => "exit",
+                };
                 write!(
                     f,
-                    "(header L{level}) {function}.{title}",
-                    level = header.level,
-                    function = self.function_name,
-                    title = header.title
-                )
-            }
-            WatchBamlValue::HeaderStopped(header) => {
-                write!(
-                    f,
-                    "(header stopped L{level}) {function}.{title}",
-                    level = header.level,
-                    function = self.function_name,
-                    title = header.title
+                    "(context {delta}) n{node_id} {segment}",
+                    node_id = event.node_id,
+                    segment = event.path_segment.encode()
                 )
             }
             WatchBamlValue::StreamStart(stream_id) => {
@@ -206,28 +249,6 @@ impl WatchNotification {
         }
     }
 
-    pub fn new_block(header: HeaderContext, function_name: String) -> Self {
-        Self {
-            value: WatchBamlValue::Header(header),
-            variable_name: None,
-            channel_name: None,
-            function_name,
-            is_stream: false,
-        }
-    }
-
-    /// HACK: Create a synthetic "stopped" notification for a header block.
-    /// Used when a new header at the same or shallower level comes in.
-    pub fn new_block_stopped(header: HeaderContext, function_name: String) -> Self {
-        Self {
-            value: WatchBamlValue::HeaderStopped(header),
-            variable_name: None,
-            channel_name: None,
-            function_name,
-            is_stream: false,
-        }
-    }
-
     pub fn new_stream_start(
         variable_name: String,
         stream_id: StreamId,
@@ -268,6 +289,16 @@ impl WatchNotification {
             channel_name: Some(variable_name),
             function_name,
             is_stream: true,
+        }
+    }
+
+    pub fn new_viz_exec_state(event: VizExecEvent, function_name: String) -> Self {
+        Self {
+            value: WatchBamlValue::VizExecState(event),
+            variable_name: None,
+            channel_name: None,
+            function_name,
+            is_stream: false,
         }
     }
 }

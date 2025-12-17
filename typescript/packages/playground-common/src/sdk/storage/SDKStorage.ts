@@ -204,7 +204,7 @@ export interface SDKStorage {
 
   setHighlightedBlocks(blocks: Set<string>): void;
   getHighlightedBlocks(): Set<string>;
-  addHighlightedBlock(lexicalNodeId: string): void;
+  addHighlightedBlock(logFilterKey: string): void;
   clearHighlightedBlocks(): void;
 
   setFlashRanges(ranges: FlashRange[]): void;

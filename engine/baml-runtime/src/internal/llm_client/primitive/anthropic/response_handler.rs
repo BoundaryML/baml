@@ -155,7 +155,11 @@ pub fn scan_anthropic_response_stream(
             inner.finish_reason = body.delta.stop_reason.clone();
             inner.output_tokens = Some(body.usage.output_tokens);
             inner.total_tokens = Some(inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens);
-            inner.cached_input_tokens = body.usage.cache_read_input_tokens;
+            // Only update cached_input_tokens if the new value is Some, as message_delta
+            // events often have null for cache tokens (the correct value is in message_start)
+            if body.usage.cache_read_input_tokens.is_some() {
+                inner.cached_input_tokens = body.usage.cache_read_input_tokens;
+            }
         }
         MessageChunk::MessageStop => (),
         MessageChunk::Error { error } => {

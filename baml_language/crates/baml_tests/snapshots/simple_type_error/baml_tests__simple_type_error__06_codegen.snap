@@ -9,6 +9,6 @@ Globals: 1
 
 Function Foo (arity: 0, kind: Exec):
      0   LOAD_CONST 0   (1)
-     1   LOAD_CONST 1   (" "foo"")
+     1   LOAD_CONST 1   ( "foo")
      2   BIN_OP +       
      3   RETURN

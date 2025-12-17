@@ -78,7 +78,7 @@ class BamlSyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     {% for func in functions -%}
     def {{ func.name }}(self, {% for arg in func.args -%}
         {{arg.name}}: {{arg.type_.serialize_type(pkg)}}{% if let Some(default_value) = arg.default_value %} = {{default_value}}{% endif %},
@@ -91,19 +91,19 @@ class BamlSyncClient:
 
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.{{ func.name }}({% for arg in func.args -%}
+            __stream__ = self.stream.{{ func.name }}({% for arg in func.args -%}
                 {{arg.name}}={{arg.name}},
                 {%- endfor %}
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="{{ func.name }}", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="{{ func.name }}", args={
                 {% for arg in func.args -%}
                 "{{arg.name}}": {{arg.name}},
                 {%- endfor %}
             })
-            return typing.cast({{func.return_type.serialize_type(pkg)}}, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast({{func.return_type.serialize_type(pkg)}}, __result__.cast_to(types, types, stream_types, False, __runtime__))
     {% endfor %}
 
 
@@ -122,16 +122,17 @@ class BamlStreamClient:
         {% if let Some(docstring) = func.documentation -%}
         {{crate::utils::prefix_lines(docstring, "# ")}}
         {% endif -%}
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="{{ func.name }}", args={
+
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="{{ func.name }}", args={
             {% for arg in func.args -%}
             "{{arg.name}}": {{arg.name}},
             {%- endfor %}
         })
         return baml_py.BamlSyncStream[{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}](
-          result,
+          __result__,
           lambda x: typing.cast({{func.stream_return_type.serialize_type(pkg)}}, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast({{func.return_type.serialize_type(pkg)}}, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     {% endfor %}
 
@@ -151,12 +152,12 @@ class BamlHttpRequestClient:
         {{crate::utils::prefix_lines(docstring, "# ")}}
         {% endif -%}
 
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="{{ func.name }}", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="{{ func.name }}", args={
             {% for arg in func.args -%}
             "{{arg.name}}": {{arg.name}},
             {%- endfor %}
         }, mode="request")
-        return result
+        return __result__
     {% endfor %}
 
 class BamlHttpStreamRequestClient:
@@ -175,12 +176,12 @@ class BamlHttpStreamRequestClient:
         {{crate::utils::prefix_lines(docstring, "# ")}}
         {% endif -%}
 
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="{{ func.name }}", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="{{ func.name }}", args={
             {% for arg in func.args -%}
             "{{arg.name}}": {{arg.name}},
             {%- endfor %}
         }, mode="stream")
-        return result
+        return __result__
     {% endfor %}
 
 b = BamlSyncClient(DoNotUseDirectlyCallManager({}))

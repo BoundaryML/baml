@@ -8,6 +8,5 @@ Objects: 2
 Globals: 1
 
 Function GetTodo (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (null)
-     1   CALL 0         
-     2   RETURN
+     0   CALL 0   
+     1   RETURN

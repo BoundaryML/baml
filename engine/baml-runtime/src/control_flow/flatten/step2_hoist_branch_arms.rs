@@ -110,7 +110,7 @@ mod tests {
         let group = Node {
             id: NodeId::new(1),
             parent_node_id: Some(root.id),
-            lexical_id: "f|bg".to_string(),
+            log_filter_key: "f|bg".to_string(),
             label: "if".to_string(),
             span: Span::fake(),
             node_type: NodeType::BranchGroup,
@@ -118,7 +118,7 @@ mod tests {
         let arm1 = Node {
             id: NodeId::new(2),
             parent_node_id: Some(group.id),
-            lexical_id: "f|arm1".to_string(),
+            log_filter_key: "f|arm1".to_string(),
             label: "arm1".to_string(),
             span: Span::fake(),
             node_type: NodeType::BranchArm,
@@ -126,7 +126,7 @@ mod tests {
         let arm2 = Node {
             id: NodeId::new(3),
             parent_node_id: Some(group.id),
-            lexical_id: "f|arm2".to_string(),
+            log_filter_key: "f|arm2".to_string(),
             label: "arm2".to_string(),
             span: Span::fake(),
             node_type: NodeType::BranchArm,
@@ -134,7 +134,7 @@ mod tests {
         let after = Node {
             id: NodeId::new(4),
             parent_node_id: Some(root.id),
-            lexical_id: "f|after".to_string(),
+            log_filter_key: "f|after".to_string(),
             label: "after".to_string(),
             span: Span::fake(),
             node_type: NodeType::HeaderContextEnter,

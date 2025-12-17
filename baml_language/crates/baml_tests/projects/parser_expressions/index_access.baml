@@ -1,12 +1,12 @@
 // Test index access expressions
 
-class User {
+class IndexUser {
   name string
   age int
   tags string[]
 }
 
-function IndexAccess(users User[]) -> string {
+function IndexAccess(users IndexUser[]) -> string {
   // Array indexing with literal
   let first = users[0];
 

@@ -153,6 +153,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
+          node-action-version: 'v6'
           registry-url: "https://registry.npmjs.org"
           npm-token: ${{ secrets.NPM_TOKEN }}
       - uses: actions/download-artifact@v4
@@ -206,6 +207,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
+          node-action-version: 'v6'
           install_dependencies: false
           npm-token: ${{ secrets.NPM_TOKEN }}
       - name: Download VSIX artifacts
@@ -233,6 +235,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
+          node-action-version: 'v6'
           install_dependencies: false
           npm-token: ${{ secrets.NPM_TOKEN }}
       - name: Download VSIX artifacts

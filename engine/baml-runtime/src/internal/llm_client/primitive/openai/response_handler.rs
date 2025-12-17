@@ -858,4 +858,126 @@ mod responses_tests {
             panic!("Expected LLMResponse::Success, got {result:?}");
         }
     }
+
+    const RESPONSES_API_RESPONSE_NULL_REASONING: &str = r#"{
+  "id": "resp_0zcvUwjYtvOrllY9du6zPhINkdB0vdIjoT6WWeGBoXgGrdxRoKtv0I",
+  "created_at": 1758599948,
+  "error": null,
+  "incomplete_details": null,
+  "instructions": null,
+  "metadata": {},
+  "model": "gpt-5-mini-2025-08-07",
+  "object": "response",
+  "output": [
+    {
+      "id": "rs_03aaf9cb8f23bd5400693c50176178819ab5f740d33a036887",
+      "summary": [],
+      "type": "reasoning",
+      "content": null,
+      "encrypted_content": null,
+      "status": null
+    },
+    {
+      "id": "msg_03aaf9cb8f23bd5400693c502ff2ec819ab1095b20e53a5287",
+      "content": [
+        {
+          "annotations": [],
+          "text": "You rolled 5.",
+          "type": "output_text",
+          "logprobs": []
+        }
+      ],
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "temperature": 1,
+  "tool_choice": "auto",
+  "tools": [],
+  "top_p": 1,
+  "max_output_tokens": null,
+  "previous_response_id": null,
+  "reasoning": {
+    "effort": "medium",
+    "summary": null
+  },
+  "status": "completed",
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 480,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 100,
+    "output_tokens_details": {
+      "reasoning_tokens": 64
+    },
+    "total_tokens": 580
+  },
+  "user": null,
+  "store": true,
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "max_tool_calls": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "safety_identifier": null,
+  "service_tier": "default",
+  "top_logprobs": 0
+}
+"#;
+
+    #[test]
+    fn test_parse_openai_responses_with_null_reasoning() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body =
+            serde_json::from_str(RESPONSES_API_RESPONSE_NULL_REASONING.trim()).unwrap();
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+
+        let result = parse_openai_responses_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            system_now,
+            instant_now,
+            Some("gpt-5-mini-2025-08-07".to_string()),
+        );
+
+        let expected = LLMCompleteResponse {
+            client: "mock".to_string(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+            content: "You rolled 5.".to_string(),
+            start_time: system_now,
+            latency: std::time::Duration::ZERO,
+            model: "gpt-5-mini-2025-08-07".to_string(),
+            request_options: client.request_options().clone(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("completed".to_string()),
+                prompt_tokens: Some(480),
+                output_tokens: Some(100),
+                total_tokens: Some(580),
+                cached_input_tokens: Some(0),
+            },
+        };
+
+        if let LLMResponse::Success(mut actual_result) = result {
+            actual_result.latency = std::time::Duration::ZERO;
+            assert_eq!(actual_result, expected);
+        } else {
+            panic!("Expected LLMResponse::Success, got {result:?}");
+        }
+    }
 }

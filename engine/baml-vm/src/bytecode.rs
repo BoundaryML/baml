@@ -217,6 +217,18 @@ pub enum Instruction {
     /// Manually triggers notifications for a watched variable.
     Notify(usize),
 
+    /// Enter a visualization node.
+    ///
+    /// Format: `VIZ_ENTER i` where `i` is the index into the current
+    /// function's `viz_nodes` array.
+    VizEnter(usize),
+
+    /// Exit a visualization node.
+    ///
+    /// Format: `VIZ_EXIT i` where `i` is the index into the current
+    /// function's `viz_nodes` array.
+    VizExit(usize),
+
     /// Call a function.
     ///
     /// Format: `CALL n` where `n` is the number of arguments passed to the
@@ -237,33 +249,6 @@ pub enum Instruction {
     ///
     /// Format: `ASSERT`
     Assert,
-
-    /// Notifies about entering or exiting a block.
-    ///
-    /// Format: `NOTIFY_BLOCK block_index` where `block_index` is the index
-    /// into the current function's block_notifications array.
-    NotifyBlock(usize),
-}
-
-/// Block notification metadata stored in the Function struct.
-/// The function_name field is populated at runtime from the Function containing this notification.
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct BlockNotification {
-    pub function_name: String, // Populated at runtime from Function::name
-    pub block_name: String,
-    pub level: usize,
-    pub block_type: BlockNotificationType,
-    pub is_enter: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum BlockNotificationType {
-    Statement,
-    If,
-    While,
-    For,
-    Function,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -369,10 +354,9 @@ impl std::fmt::Display for Instruction {
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
             Instruction::Watch(i) => write!(f, "WATCH {i}"),
-            Instruction::NotifyBlock(block_index) => {
-                write!(f, "NOTIFY_BLOCK {block_index}")
-            }
             Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
+            Instruction::VizEnter(i) => write!(f, "VIZ_ENTER {i}"),
+            Instruction::VizExit(i) => write!(f, "VIZ_EXIT {i}"),
         }
     }
 }

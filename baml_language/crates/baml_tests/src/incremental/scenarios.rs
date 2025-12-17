@@ -3,7 +3,8 @@
 //! These tests verify that editing BAML files only recomputes the necessary
 //! queries, demonstrating Salsa's "early cutoff" optimization.
 
-use baml_db::{SourceFile, baml_hir, function_body, function_signature};
+use baml_db::{SourceFile, baml_hir};
+use baml_hir::{function_body, function_signature};
 use salsa::Setter;
 
 use super::IncrementalTestDb;
@@ -14,7 +15,7 @@ fn query_all_function_bodies(db: &baml_db::RootDatabase, file: SourceFile) {
     let items = baml_hir::file_items(db, file);
     for item in items.items(db) {
         if let baml_hir::ItemId::Function(func_id) = item {
-            let _ = function_body(db, file, *func_id);
+            let _ = function_body(db, *func_id);
         }
     }
 }
@@ -24,7 +25,7 @@ fn query_all_function_signatures(db: &baml_db::RootDatabase, file: SourceFile) {
     let items = baml_hir::file_items(db, file);
     for item in items.items(db) {
         if let baml_hir::ItemId::Function(func_id) = item {
-            let _ = function_signature(db, file, *func_id);
+            let _ = function_signature(db, *func_id);
         }
     }
 }

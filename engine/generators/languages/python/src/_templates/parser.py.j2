@@ -19,8 +19,8 @@ class LlmResponseParser:
         {% if let Some(docstring) = func.documentation -%}
         {{crate::utils::prefix_lines(docstring, "# ")}}
         {% endif -%}
-        result = self.__options.merge_options(baml_options).parse_response(function_name="{{ func.name }}", llm_response=llm_response, mode="request")
-        return typing.cast({{func.return_type.serialize_type(pkg)}}, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="{{ func.name }}", llm_response=llm_response, mode="request")
+        return typing.cast({{func.return_type.serialize_type(pkg)}}, __result__)
 
     {% endfor %}
 
@@ -37,7 +37,7 @@ class LlmStreamParser:
         {% if let Some(docstring) = func.documentation -%}
         {{crate::utils::prefix_lines(docstring, "# ")}}
         {% endif -%}
-        result = self.__options.merge_options(baml_options).parse_response(function_name="{{ func.name }}", llm_response=llm_response, mode="stream")
-        return typing.cast({{func.stream_return_type.serialize_type(pkg)}}, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="{{ func.name }}", llm_response=llm_response, mode="stream")
+        return typing.cast({{func.stream_return_type.serialize_type(pkg)}}, __result__)
 
     {% endfor %}

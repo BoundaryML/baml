@@ -3,7 +3,7 @@ import { Badge } from '@baml/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@baml/ui/collapsible'
 import { ChevronDown, Eye, Layers, Zap, Variable } from 'lucide-react'
 import type { WatchNotification } from '../types'
-import { getNotificationLabel, getNotificationType } from '../utils/notifications'
+import { getNotificationLabel, getNotificationType, getNotificationLogFilterKey } from '../utils/notifications'
 
 interface WatchNotificationsViewProps {
   notifications?: WatchNotification[]
@@ -68,6 +68,7 @@ function NotificationItem({ notification, index }: { notification: WatchNotifica
   }
 
   const { icon: Icon, variant, color } = getTypeConfig()
+  const blockKey = getNotificationLogFilterKey(notification)
 
   return (
     <div className="border rounded p-2 text-xs bg-muted/30 hover:bg-muted/50 transition-colors">
@@ -101,7 +102,8 @@ function NotificationItem({ notification, index }: { notification: WatchNotifica
           <div className="flex items-start gap-2">
             <span className="text-muted-foreground text-xs">Value:</span>
             <pre className="text-xs text-muted-foreground overflow-x-auto flex-1">
-              {(() => {
+             {(() => {
+                if (notification.value === undefined) return ''
                 try {
                   // Try to parse as JSON and format it nicely
                   const parsed = JSON.parse(notification.value)
@@ -113,9 +115,9 @@ function NotificationItem({ notification, index }: { notification: WatchNotifica
               })()}
             </pre>
           </div>
-          {notification.lexicalNodeId && (
+          {blockKey && (
             <div className="mt-1">
-              <span className="text-muted-foreground text-xs">Block: {notification.lexicalNodeId}</span>
+              <span className="text-muted-foreground text-xs">Block: {blockKey}</span>
             </div>
           )}
         </div>

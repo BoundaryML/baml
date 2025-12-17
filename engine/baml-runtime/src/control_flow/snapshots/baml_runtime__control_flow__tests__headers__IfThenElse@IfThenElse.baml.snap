@@ -8,7 +8,7 @@ expr:
   nodes:
     "0":
       label: IfThenElse
-      lexical_id: "IfThenElse|root:0"
+      log_filter_key: "IfThenElse|root:0"
       node_type: function
       parent: ~
       span:
@@ -17,7 +17,7 @@ expr:
         end: 257
     "1":
       label: Before
-      lexical_id: "IfThenElse|root:0|hdr:before:0"
+      log_filter_key: "IfThenElse|root:0|hdr:before:0"
       node_type: header
       parent: "0"
       span:
@@ -26,7 +26,7 @@ expr:
         end: 73
     "2":
       label: If should always do else
-      lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
       node_type: header
       parent: "0"
       span:
@@ -35,7 +35,7 @@ expr:
         end: 107
     "3":
       label: if (false)
-      lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
       node_type: branch-group
       parent: "2"
       span:
@@ -44,7 +44,7 @@ expr:
         end: 230
     "4":
       label: if (false)
-      lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
       node_type: branch-arm
       parent: "3"
       span:
@@ -53,7 +53,7 @@ expr:
         end: 175
     "5":
       label: "impossible: return 1"
-      lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
       node_type: header
       parent: "4"
       span:
@@ -62,7 +62,7 @@ expr:
         end: 159
     "6":
       label: else
-      lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
       node_type: branch-arm
       parent: "3"
       span:
@@ -71,7 +71,7 @@ expr:
         end: 230
     "7":
       label: should always be 5
-      lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
       node_type: header
       parent: "6"
       span:
@@ -80,7 +80,7 @@ expr:
         end: 214
     "8":
       label: After
-      lexical_id: "IfThenElse|root:0|hdr:after:2"
+      log_filter_key: "IfThenElse|root:0|hdr:after:2"
       node_type: header
       parent: "0"
       span:
@@ -100,7 +100,7 @@ flattening:
       nodes:
         "0":
           label: IfThenElse
-          lexical_id: "IfThenElse|root:0"
+          log_filter_key: "IfThenElse|root:0"
           node_type: function
           parent: ~
           span:
@@ -109,7 +109,7 @@ flattening:
             end: 257
         "1":
           label: Before
-          lexical_id: "IfThenElse|root:0|hdr:before:0"
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
           node_type: header
           parent: "0"
           span:
@@ -118,7 +118,7 @@ flattening:
             end: 73
         "2":
           label: If should always do else
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
           node_type: header
           parent: "0"
           span:
@@ -127,7 +127,7 @@ flattening:
             end: 107
         "3":
           label: if (false)
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -136,7 +136,7 @@ flattening:
             end: 230
         "4":
           label: if (false)
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
           node_type: branch-arm
           parent: "3"
           span:
@@ -145,7 +145,7 @@ flattening:
             end: 175
         "5":
           label: "impossible: return 1"
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
           node_type: header
           parent: "4"
           span:
@@ -154,7 +154,7 @@ flattening:
             end: 159
         "6":
           label: else
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
           node_type: branch-arm
           parent: "3"
           span:
@@ -163,7 +163,7 @@ flattening:
             end: 230
         "7":
           label: should always be 5
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
           node_type: header
           parent: "6"
           span:
@@ -172,7 +172,7 @@ flattening:
             end: 214
         "8":
           label: After
-          lexical_id: "IfThenElse|root:0|hdr:after:2"
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
           node_type: header
           parent: "0"
           span:
@@ -188,7 +188,7 @@ flattening:
       nodes:
         "0":
           label: IfThenElse
-          lexical_id: "IfThenElse|root:0"
+          log_filter_key: "IfThenElse|root:0"
           node_type: function
           parent: ~
           span:
@@ -197,7 +197,7 @@ flattening:
             end: 257
         "1":
           label: Before
-          lexical_id: "IfThenElse|root:0|hdr:before:0"
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
           node_type: header
           parent: "0"
           span:
@@ -206,7 +206,7 @@ flattening:
             end: 73
         "2":
           label: If should always do else
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
           node_type: header
           parent: "0"
           span:
@@ -215,7 +215,7 @@ flattening:
             end: 107
         "3":
           label: if (false)
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -224,7 +224,7 @@ flattening:
             end: 230
         "4":
           label: if (false)
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
           node_type: branch-arm
           parent: "3"
           span:
@@ -233,7 +233,7 @@ flattening:
             end: 175
         "5":
           label: "impossible: return 1"
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
           node_type: header
           parent: "4"
           span:
@@ -242,7 +242,7 @@ flattening:
             end: 159
         "6":
           label: else
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
           node_type: branch-arm
           parent: "3"
           span:
@@ -251,7 +251,7 @@ flattening:
             end: 230
         "7":
           label: should always be 5
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
           node_type: header
           parent: "6"
           span:
@@ -260,7 +260,7 @@ flattening:
             end: 214
         "8":
           label: After
-          lexical_id: "IfThenElse|root:0|hdr:after:2"
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
           node_type: header
           parent: "0"
           span:
@@ -279,7 +279,7 @@ flattening:
       nodes:
         "0":
           label: IfThenElse
-          lexical_id: "IfThenElse|root:0"
+          log_filter_key: "IfThenElse|root:0"
           node_type: function
           parent: ~
           span:
@@ -288,7 +288,7 @@ flattening:
             end: 257
         "1":
           label: Before
-          lexical_id: "IfThenElse|root:0|hdr:before:0"
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
           node_type: header
           parent: "0"
           span:
@@ -297,7 +297,7 @@ flattening:
             end: 73
         "2":
           label: If should always do else
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
           node_type: header
           parent: "0"
           span:
@@ -306,7 +306,7 @@ flattening:
             end: 107
         "3":
           label: if (false)
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -315,7 +315,7 @@ flattening:
             end: 230
         "4":
           label: if (false)
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
           node_type: branch-arm
           parent: "2"
           span:
@@ -324,7 +324,7 @@ flattening:
             end: 175
         "5":
           label: "impossible: return 1"
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
           node_type: header
           parent: "4"
           span:
@@ -333,7 +333,7 @@ flattening:
             end: 159
         "6":
           label: else
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
           node_type: branch-arm
           parent: "2"
           span:
@@ -342,7 +342,7 @@ flattening:
             end: 230
         "7":
           label: should always be 5
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
           node_type: header
           parent: "6"
           span:
@@ -351,7 +351,7 @@ flattening:
             end: 214
         "8":
           label: After
-          lexical_id: "IfThenElse|root:0|hdr:after:2"
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
           node_type: header
           parent: "0"
           span:
@@ -370,7 +370,7 @@ flattening:
       nodes:
         "0":
           label: IfThenElse
-          lexical_id: "IfThenElse|root:0"
+          log_filter_key: "IfThenElse|root:0"
           node_type: function
           parent: ~
           span:
@@ -379,7 +379,7 @@ flattening:
             end: 257
         "1":
           label: Before
-          lexical_id: "IfThenElse|root:0|hdr:before:0"
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
           node_type: header
           parent: "0"
           span:
@@ -388,7 +388,7 @@ flattening:
             end: 73
         "2":
           label: If should always do else
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
           node_type: header
           parent: "0"
           span:
@@ -397,7 +397,7 @@ flattening:
             end: 107
         "3":
           label: if (false)
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -406,7 +406,7 @@ flattening:
             end: 230
         "4":
           label: if (false)
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
           node_type: branch-arm
           parent: "2"
           span:
@@ -415,7 +415,7 @@ flattening:
             end: 175
         "5":
           label: "impossible: return 1"
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
           node_type: header
           parent: "4"
           span:
@@ -424,7 +424,7 @@ flattening:
             end: 159
         "6":
           label: else
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
           node_type: branch-arm
           parent: "2"
           span:
@@ -433,7 +433,7 @@ flattening:
             end: 230
         "7":
           label: should always be 5
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
           node_type: header
           parent: "6"
           span:
@@ -442,7 +442,7 @@ flattening:
             end: 214
         "8":
           label: After
-          lexical_id: "IfThenElse|root:0|hdr:after:2"
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
           node_type: header
           parent: "0"
           span:
@@ -464,7 +464,7 @@ flattening:
       nodes:
         "0":
           label: IfThenElse
-          lexical_id: "IfThenElse|root:0"
+          log_filter_key: "IfThenElse|root:0"
           node_type: function
           parent: ~
           span:
@@ -473,7 +473,7 @@ flattening:
             end: 257
         "1":
           label: Before
-          lexical_id: "IfThenElse|root:0|hdr:before:0"
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
           node_type: header
           parent: "0"
           span:
@@ -482,7 +482,7 @@ flattening:
             end: 73
         "2":
           label: If should always do else
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
           node_type: header
           parent: "0"
           span:
@@ -491,7 +491,7 @@ flattening:
             end: 107
         "3":
           label: if (false)
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -500,7 +500,7 @@ flattening:
             end: 230
         "5":
           label: "impossible: return 1"
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
           node_type: header
           parent: "2"
           span:
@@ -509,7 +509,7 @@ flattening:
             end: 159
         "7":
           label: should always be 5
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
           node_type: header
           parent: "2"
           span:
@@ -518,7 +518,7 @@ flattening:
             end: 214
         "8":
           label: After
-          lexical_id: "IfThenElse|root:0|hdr:after:2"
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
           node_type: header
           parent: "0"
           span:
@@ -537,7 +537,7 @@ flattening:
       nodes:
         "0":
           label: IfThenElse
-          lexical_id: "IfThenElse|root:0"
+          log_filter_key: "IfThenElse|root:0"
           node_type: function
           parent: ~
           span:
@@ -546,7 +546,7 @@ flattening:
             end: 257
         "1":
           label: Before
-          lexical_id: "IfThenElse|root:0|hdr:before:0"
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
           node_type: header
           parent: "0"
           span:
@@ -555,7 +555,7 @@ flattening:
             end: 73
         "2":
           label: If should always do else
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
           node_type: header
           parent: "0"
           span:
@@ -564,7 +564,7 @@ flattening:
             end: 107
         "3":
           label: if (false)
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
           node_type: branch-group
           parent: "2"
           span:
@@ -573,7 +573,7 @@ flattening:
             end: 230
         "5":
           label: "impossible: return 1"
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
           node_type: header
           parent: "2"
           span:
@@ -582,7 +582,7 @@ flattening:
             end: 159
         "7":
           label: should always be 5
-          lexical_id: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
           node_type: header
           parent: "2"
           span:
@@ -591,7 +591,7 @@ flattening:
             end: 214
         "8":
           label: After
-          lexical_id: "IfThenElse|root:0|hdr:after:2"
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
           node_type: header
           parent: "0"
           span:

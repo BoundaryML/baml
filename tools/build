@@ -97,10 +97,30 @@ case "$_path" in
     fi
     ;;
 
+  /engine/baml-runtime | /engine/baml-runtime/* )
+    command="INSTA_UPDATE=always cargo test -p baml-runtime --test viz-runtime"
+
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext rs,ts,json,j2,hb,hbs,toml,baml,rb \
+        --watch "${_repo_root}/engine" \
+        --ignore 'target' \
+        --ignore 'index.d.ts' \
+        --ignore 'index.js' \
+        --ignore 'dist' \
+        --ignore 'tmp' \
+        --exec "${command}"
+    else
+      eval "${command}"
+    fi
+    ;;
+
   /engine/language_client_typescript | /engine/language_client_typescript/* )
     command="pnpm build:debug; date"
-    command="${command} && BAML_LOG=debug node cli.js generate --from ../../integ-tests/baml_src --to integ-tests-ts-v2"
-    command="${command} && BAML_LOG=debug infisical run -- pnpm ts-node test.ts"
+    command="${command} && BAML_LOG=debug node cli.js generate --from ../../integ-tests/baml_src"
+    if [ "$_test_mode" -eq 1 ]; then
+      command="${command} && BAML_LOG=debug infisical run -- pnpm ts-node test.ts"
+    fi
 
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

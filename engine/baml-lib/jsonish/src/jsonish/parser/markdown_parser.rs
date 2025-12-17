@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use anyhow::Result;
 
 use super::ParseOptions;
@@ -12,16 +14,25 @@ pub enum MarkdownResult {
     String(String),
 }
 
+// Cache compiled regexes for markdown parsing - these are compiled once and reused
+static MD_TAG_START: LazyLock<regex::Regex> = LazyLock::new(|| {
+    // Anchor fences to the start of a line (optionally indented) to avoid
+    // confusing content like ```json that appears inside strings/code.
+    regex::Regex::new(r"(?m)^[ \t]*```([a-zA-Z0-9 ]+)(?:\n|$)")
+        .expect("Failed to compile md-tag-start regex")
+});
+
+static MD_TAG_END: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?m)^[ \t]*```(?:\n|$)").expect("Failed to compile md-tag-end regex")
+});
+
 pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
     let mut values: Vec<MarkdownResult> = vec![];
 
     let mut remaining = str;
-    // Find regex for markdown blocks (```<tag><EOF|newline>)
 
-    let md_tag_start = regex::Regex::new(r"```([a-zA-Z0-9 ]+)(?:\n|$)")
-        .map_err(|e| anyhow::Error::from(e).context("Failed to build regex for md-tag-start"))?;
-    let md_tag_end = regex::Regex::new(r"```(?:\n|$)")
-        .map_err(|e| anyhow::Error::from(e).context("Failed to build regex for md-tag-end"))?;
+    let md_tag_start = &*MD_TAG_START;
+    let md_tag_end = &*MD_TAG_END;
 
     let mut should_loop = true;
 
@@ -29,31 +40,62 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
         let tag = cap.as_str();
         log::trace!("Found tag: {cap:#?}");
 
-        let md_content = if let Some(end) = md_tag_end.find(&remaining[cap.end()..]) {
-            let next = remaining[cap.end()..cap.end() + end.start()].trim();
-            remaining = &remaining[cap.end() + end.end()..];
-            next
-        } else {
+        let after_start = &remaining[cap.end()..];
+
+        // Heuristic: the first "```" after an opening fence might appear inside the fenced content
+        // (e.g. within a JSON string). Prefer the last closing fence that yields a successful parse.
+        let mut parsed_value: Option<Value> = None;
+
+        let ends: Vec<_> = md_tag_end.find_iter(after_start).collect();
+        let md_content = if ends.is_empty() {
             should_loop = false;
-            remaining[cap.end()..].trim()
+            after_start.trim()
+        } else {
+            // Prefer the first closing fence that yields a successful parse; this prevents us from
+            // accidentally consuming subsequent fenced code blocks.
+            let mut chosen_end = ends[0];
+            let mut md_content = after_start[..chosen_end.start()].trim();
+
+            for end in ends.iter() {
+                let candidate = after_start[..end.start()].trim();
+                if let Ok(v) = super::entry::parse_func(
+                    candidate,
+                    options.next_from_mode(ParsingMode::JsonMarkdown),
+                    false,
+                ) {
+                    parsed_value = Some(v);
+                    chosen_end = *end;
+                    md_content = candidate;
+                    break;
+                }
+            }
+
+            remaining = &remaining[cap.end() + chosen_end.end()..];
+            md_content
         };
 
         log::trace!("Content:\n-----\n{md_content}\n-----\n");
 
-        let res = super::entry::parse_func(
-            md_content,
-            options.next_from_mode(ParsingMode::JsonMarkdown),
-            false,
-        );
+        let res = match parsed_value {
+            Some(v) => Ok(v),
+            None => super::entry::parse_func(
+                md_content,
+                options.next_from_mode(ParsingMode::JsonMarkdown),
+                false,
+            ),
+        };
 
         match res {
             Ok(v) => {
                 // TODO: Add any more additional strings here.
                 values.push(MarkdownResult::CodeBlock(
-                    if tag.len() > 3 {
-                        tag[3..].trim()
-                    } else {
-                        "<unspecified>"
+                    {
+                        let tag = tag.trim_start();
+                        if tag.len() > 3 {
+                            tag[3..].trim()
+                        } else {
+                            "<unspecified>"
+                        }
                     }
                     .to_string(),
                     v,
@@ -85,6 +127,7 @@ mod test {
     use test_log::test;
 
     use super::*;
+    use crate::jsonish::Value;
 
     #[test]
     fn basic_parse() -> Result<()> {
@@ -210,6 +253,85 @@ dolor sit amet
             _ => panic!("Expected String, got {:#?}", res[2]),
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn fence_like_sequence_inside_triple_backtick_string_does_not_split_markdown_blocks(
+    ) -> Result<()> {
+        let res = parse(
+            r#"
+```json
+{
+  "type": "code",
+  "code": ```
+  inside
+  ```json
+  not a markdown block
+  ```,
+}
+```
+"#,
+            &ParseOptions::default(),
+        )?;
+
+        assert_eq!(res.len(), 1);
+        let (tag, value) = match &res[0] {
+            MarkdownResult::CodeBlock(tag, value) => (tag, value),
+            _ => panic!("Expected CodeBlock, got {:#?}", res[0]),
+        };
+        assert_eq!(tag, "json");
+
+        fn contains_substring(v: &Value, needle: &str) -> bool {
+            match v {
+                Value::String(s, _) => s.contains(needle),
+                Value::Object(kvs, _) => kvs.iter().any(|(_, v)| contains_substring(v, needle)),
+                Value::Array(items, _) => items.iter().any(|v| contains_substring(v, needle)),
+                Value::Markdown(_, v, _) => contains_substring(v, needle),
+                Value::FixedJson(v, _) => contains_substring(v, needle),
+                Value::AnyOf(choices, original) => {
+                    original.contains(needle)
+                        || choices.iter().any(|v| contains_substring(v, needle))
+                }
+                Value::Number(_, _) | Value::Boolean(_) | Value::Null => false,
+            }
+        }
+
+        // If markdown parsing were confused by the inner ```json line, we'd typically end up with
+        // multiple markdown results or a malformed parsed value missing this substring.
+        assert!(
+            contains_substring(value, "```json\n  not a markdown block"),
+            "Expected inner fence-like text preserved, got {value:#?}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn multiple_codeblocks_not_merged_when_fence_like_text_present() -> Result<()> {
+        let res = parse(
+            r#"
+```json
+{
+  "type": "code",
+  "code": ```
+  first block
+  ```json
+  still content
+  ```,
+}
+```
+
+```json
+{"type": "code", "code": "second block"}
+```
+"#,
+            &ParseOptions::default(),
+        )?;
+
+        assert_eq!(res.len(), 2);
+        assert!(matches!(&res[0], MarkdownResult::CodeBlock(tag, _) if tag == "json"));
+        assert!(matches!(&res[1], MarkdownResult::CodeBlock(tag, _) if tag == "json"));
         Ok(())
     }
 }

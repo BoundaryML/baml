@@ -170,7 +170,14 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
     fn describe_expr(expr: &Expr, ty: &str) -> String {
         match expr {
             Expr::Literal(lit) => format!("Literal({lit:?}): {ty}"),
-            Expr::Path(name) => format!("Path({name}): {ty}"),
+            Expr::Path(segments) => {
+                let path = segments
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                format!("Path({path}): {ty}")
+            }
             Expr::Binary { op, .. } => format!("Binary({op:?}): {ty}"),
             Expr::Unary { op, .. } => format!("Unary({op:?}): {ty}"),
             Expr::Call { .. } => format!("Call: {ty}"),
@@ -373,9 +380,29 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                     self.render_expr(*cond, body, result, false);
                 }
                 if let Some(upd) = update {
-                    self.render_expr(*upd, body, result, false);
+                    self.render_stmt(*upd, body, result, false);
                 }
                 self.render_expr(*for_body, body, result, true);
+                self.pop_continuation();
+            }
+            Stmt::Break => {
+                writeln!(self.output, "{prefix}Break").ok();
+            }
+            Stmt::Continue => {
+                writeln!(self.output, "{prefix}Continue").ok();
+            }
+            Stmt::Assign { target, value } => {
+                writeln!(self.output, "{prefix}Assign").ok();
+                self.push_continuation(!is_last);
+                self.render_expr(*target, body, result, false);
+                self.render_expr(*value, body, result, true);
+                self.pop_continuation();
+            }
+            Stmt::AssignOp { target, op, value } => {
+                writeln!(self.output, "{prefix}AssignOp ({op:?})").ok();
+                self.push_continuation(!is_last);
+                self.render_expr(*target, body, result, false);
+                self.render_expr(*value, body, result, true);
                 self.pop_continuation();
             }
             Stmt::Missing => {
@@ -421,7 +448,11 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
             Literal::Bool(b) => b.to_string(),
             Literal::Null => "null".to_string(),
         },
-        Expr::Path(name) => name.to_string(),
+        Expr::Path(segments) => segments
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("."),
         Expr::Binary { op, lhs, rhs } => {
             let lhs_str = expr_to_string(*lhs, body);
             let rhs_str = expr_to_string(*rhs, body);

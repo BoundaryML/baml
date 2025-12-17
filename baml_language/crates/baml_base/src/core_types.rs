@@ -44,6 +44,14 @@ impl Span {
             range: TextRange::empty(offset),
         }
     }
+
+    /// Create a fake span for testing or when no real span is available.
+    pub fn fake() -> Self {
+        Span {
+            file_id: FileId::new(0),
+            range: TextRange::empty(TextSize::new(0)),
+        }
+    }
 }
 
 impl ariadne::Span for Span {

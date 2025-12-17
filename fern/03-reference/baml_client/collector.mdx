@@ -432,6 +432,78 @@ end
 </Tab>
 </Tabs>
 
+### Accessing SSE Responses (Streaming)
+
+When using streaming, you can access the raw Server-Sent Events (SSE) responses received from the LLM provider. This is useful for debugging, logging, or accessing provider-specific data not exposed in the standard response.
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import Collector
+
+async def run():
+    collector = Collector(name="stream-collector")
+
+    # Use streaming
+    stream = b.stream.ExtractResume("...", baml_options={"collector": collector})
+    async for chunk in stream:
+        print(chunk)  # Process streamed chunks
+
+    # After streaming completes, access the raw SSE responses
+    log = collector.last
+    if log and log.selected_call:
+        sse_responses = log.selected_call.sse_responses()
+        if sse_responses:
+            for sse in sse_responses:
+                # Raw text of the SSE data field
+                print(f"Raw: {sse.text}")
+                # Parse as JSON if valid (returns None if not valid JSON)
+                parsed = sse.json()
+                if parsed:
+                    print(f"JSON: {parsed}")
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from 'baml_client'
+import { Collector } from '@boundaryml/baml'
+
+async function run() {
+    const collector = new Collector("stream-collector")
+
+    // Use streaming
+    const stream = b.stream.ExtractResume("...", { collector })
+    for await (const chunk of stream) {
+        console.log(chunk)  // Process streamed chunks
+    }
+
+    // After streaming completes, access the raw SSE responses
+    const log = collector.last
+    if (log?.selectedCall) {
+        const sseResponses = log.selectedCall.sseResponses()
+        if (sseResponses) {
+            for (const sse of sseResponses) {
+                // Raw text of the SSE data field
+                console.log(`Raw: ${sse.text}`)
+                // Parse as JSON if valid (returns null if not valid JSON)
+                const parsed = sse.json()
+                if (parsed) {
+                    console.log(`JSON: ${JSON.stringify(parsed)}`)
+                }
+            }
+        }
+    }
+}
+```
+</Tab>
+</Tabs>
+
+<Info>
+SSE responses capture the raw streaming data from the provider. For HTTP-based providers (OpenAI, Anthropic, Google, etc.), this is the actual SSE event data. For AWS Bedrock, which uses a binary protocol, the responses contain a JSON wrapper with the Debug representation of the SDK types (see [AWS SDK serialization issue](https://github.com/awslabs/aws-sdk-rust/issues/645)).
+</Info>
+
 ## API Reference
 
 ### Collector Class
@@ -491,9 +563,10 @@ The `Usage` class has the following properties:
 |----------|------|-------------|
 | `input_tokens` | `int \| null` | The cumulative number of tokens used in the inputs. |
 | `output_tokens` | `int \| null` | The cumulative number of tokens used in the outputs. |
+| `cached_input_tokens` | `int \| null` | The number of cached input tokens (e.g., Anthropic's `cache_read_input_tokens`). |
 
 <Info>
-Note: Usage may not include all things like "thinking_tokens" or "cached_tokens". For that you may need to look at the raw HTTP response and build your own adapters.
+Note: Usage may not include all provider-specific token types like "thinking_tokens" or "cache_creation_input_tokens". For those, you may need to look at the raw HTTP response and build your own adapters.
 </Info>
 
 ### LLMCall Class
@@ -515,9 +588,9 @@ The `LLMCall` class has the following properties:
 The `LLMStreamCall` includes the same properties as `LLMCall` plus the following:
 
 | Property | Type | Description |
-|----------|------|-------------|  
+|----------|------|-------------|
 | `timing` | `StreamTiming` | The timing of the request. |
-| `sse_chunks()` | `SSEResponse[]` | The sse chunks of the response. |
+| `sse_responses()` | `SSEResponse[] \| null` | The raw SSE responses received during streaming. Returns null if not available. |
 
 
 ### HttpRequest Class
@@ -552,12 +625,16 @@ The `HTTPBody` class has the following properties:
 
 ### SSEResponse Class
 
-The `SSEResponse` class has the following properties:
+The `SSEResponse` class represents a single Server-Sent Event received during streaming.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `text` | `string` | The body as a string. |
-| `json` | `object \| null` | The body as a JSON object if it is valid JSON, otherwise null. |
+| Property/Method | Type | Description |
+|-----------------|------|-------------|
+| `text` | `string` | The raw text content of the SSE `data` field. |
+| `json()` | `object \| null` | Parses and returns the text as JSON. Returns null if the text is not valid JSON. |
+
+<Note>
+The SSE event type (e.g., "message_delta", "content_block_delta") and event ID are not currently exposed. Only the data payload is available via `text` and `json()`.
+</Note>
 
 ## Related Topics
 - [Using with_options](/ref/baml_client/with-options) - Learn how to configure logging globally

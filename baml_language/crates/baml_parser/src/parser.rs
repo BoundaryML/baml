@@ -1024,16 +1024,19 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            // Parse fields and attributes
+            // Parse fields, methods, and attributes
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword() {
+                // Error recovery: if we see a top-level keyword (except function), assume we missed a closing brace
+                if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
 
                 if p.at(TokenKind::AtAt) {
                     // Block attribute: @@dynamic
                     p.parse_block_attribute();
+                } else if p.at(TokenKind::Function) {
+                    // Method definition
+                    p.parse_function();
                 } else if p.at(TokenKind::Word) {
                     // Field declaration
                     p.parse_field();
@@ -1127,6 +1130,9 @@ impl<'a> Parser<'a> {
 
     fn parse_parameter(&mut self) {
         self.with_node(SyntaxKind::PARAMETER, |p| {
+            // Check if this is a 'self' parameter (no type annotation allowed)
+            let is_self = p.current().map(|t| t.text == "self").unwrap_or(false);
+
             // Parameter name
             if p.at(TokenKind::Word) {
                 p.bump();
@@ -1135,7 +1141,10 @@ impl<'a> Parser<'a> {
             }
 
             // Type annotation - supports both "name: type" and "name type" syntax
-            if p.eat(TokenKind::Colon) {
+            // 'self' parameter does not have a type annotation
+            if is_self {
+                // No type annotation for self
+            } else if p.eat(TokenKind::Colon) {
                 // With colon: "name: type"
                 p.parse_type();
             } else if p.at(TokenKind::Word) {
@@ -1447,16 +1456,24 @@ impl<'a> Parser<'a> {
                         }
                     }
                 } else if p.at(TokenKind::Word) {
-                    // Simple iterator-style without let: for (i in expr)
-                    p.bump(); // variable name
-                    if p.at(TokenKind::In) {
+                    // Could be iterator-style: for (i in expr)
+                    // Or could be C-style starting with expression: for (i = 0; ...)
+                    // Look ahead to determine
+                    if p.peek(1).map(|t| t.kind == TokenKind::In).unwrap_or(false) {
+                        // Simple iterator-style without let: for (i in expr)
+                        p.bump(); // variable name
                         p.bump(); // in
                         p.parse_expr(); // iterator expression
                     } else {
-                        p.error("'in' keyword after loop variable".to_string());
+                        // C-style without initializer starting with expression
+                        // Just parse as expression-based C-style
+                        p.parse_c_style_for_body();
                     }
+                } else if p.at(TokenKind::Semicolon) {
+                    // C-style with empty initializer: for (; cond; update)
+                    p.parse_c_style_for_body();
                 } else {
-                    p.error("loop variable or 'let'".to_string());
+                    p.error("loop variable, 'let', or ';'".to_string());
                 }
 
                 p.expect(TokenKind::RParen);
@@ -1488,6 +1505,26 @@ impl<'a> Parser<'a> {
         self.peek(2)
             .map(|t| t.kind == TokenKind::In)
             .unwrap_or(false)
+    }
+
+    /// Parse C-style for loop body (condition and update parts): ; cond; update
+    /// Called when we've already consumed any initializer or are at the first semicolon.
+    fn parse_c_style_for_body(&mut self) {
+        // Consume first semicolon (separates initializer from condition)
+        self.eat(TokenKind::Semicolon);
+
+        // Parse condition expression (if present)
+        if !self.at(TokenKind::Semicolon) && !self.at(TokenKind::RParen) {
+            self.parse_expr();
+        }
+
+        // Consume second semicolon (separates condition from update)
+        self.eat(TokenKind::Semicolon);
+
+        // Parse update expression (if present)
+        if !self.at(TokenKind::RParen) {
+            self.parse_expr();
+        }
     }
 
     /// Parse a for-in loop pattern: let var (without initializer)
@@ -1572,7 +1609,19 @@ impl<'a> Parser<'a> {
                 self.expect(TokenKind::RBracket);
                 self.finish_node();
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
-                // Field access (including special .$field syntax for watch variables)
+                // Field access on a complex expression.
+                //
+                // This branch handles `.field` when the base is already a complete
+                // expression (call, index, binary, etc.):
+                // - `f().field` -> FIELD_ACCESS_EXPR wrapping CALL_EXPR
+                // - `arr[0].field` -> FIELD_ACCESS_EXPR wrapping INDEX_EXPR
+                // - `(a + b).field` -> FIELD_ACCESS_EXPR wrapping PAREN_EXPR
+                //
+                // For simple identifier chains like `user.name.length`, the parser
+                // uses PATH_EXPR instead (see `parse_path_or_ident`). PATH_EXPR is
+                // created during primary expression parsing when we see `WORD.WORD`.
+                //
+                // Also handles special `.$field` syntax for watch variables.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::FIELD_ACCESS_EXPR);
                 self.bump(); // . or $
@@ -1965,9 +2014,30 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse a path or simple identifier
-    /// Paths: baml.HttpMethod.Get
-    /// Identifiers: foo
+    /// Parse a path or simple identifier.
+    ///
+    /// This creates a `PATH_EXPR` for dot-separated identifier chains:
+    /// - `user.name.length` -> `PATH_EXPR` with segments `[user, name, length]`
+    /// - `baml.HttpMethod.Get` -> `PATH_EXPR` with segments `[baml, HttpMethod, Get]`
+    /// - `Status.Active` -> `PATH_EXPR` with segments `[Status, Active]`
+    ///
+    /// For a simple identifier without dots, no wrapper node is created.
+    ///
+    /// # `PATH_EXPR` vs `FIELD_ACCESS_EXPR`
+    ///
+    /// `PATH_EXPR` is used when ALL segments are identifiers (parsed at the start
+    /// of an expression). Resolution of what the path refers to happens later in THIR:
+    /// - Local variable + field accesses: `user.name`
+    /// - Enum variant: `Status.Active`
+    /// - Module path: `baml.HttpMethod`
+    ///
+    /// `FIELD_ACCESS_EXPR` is used when the base is a complex expression that's
+    /// already been parsed (call, index, parenthesized, etc.):
+    /// - `f().field` -> `FIELD_ACCESS_EXPR` (base is `CALL_EXPR`)
+    /// - `arr[0].field` -> `FIELD_ACCESS_EXPR` (base is `INDEX_EXPR`)
+    ///
+    /// This distinction is made at parse time because we can determine syntactically
+    /// whether the base is a simple identifier chain or a complex expression.
     fn parse_path_or_ident(&mut self) {
         if !self.at(TokenKind::Word) {
             return;
@@ -1983,7 +2053,7 @@ impl<'a> Parser<'a> {
                 .map(|t| t.kind == TokenKind::Word)
                 .unwrap_or(false)
         {
-            // It's a path
+            // It's a path - all segments are identifiers
             self.with_node(SyntaxKind::PATH_EXPR, |p| {
                 p.bump(); // First segment
 
@@ -1998,7 +2068,7 @@ impl<'a> Parser<'a> {
                 }
             });
         } else {
-            // Simple identifier
+            // Simple identifier (no dots)
             self.bump();
         }
     }

@@ -4,7 +4,7 @@ expression: output
 ---
 === TYPE INFERENCE ===
   Function Foo:
-    Return: Unknown
+    Return: Named("")
   Function Incomplete:
     Return: Unknown
   Function NextFunction:

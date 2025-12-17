@@ -37,7 +37,7 @@ const workflowGraph = {
     {
       id: 0,
       parent_id: undefined,
-      lexical_id: 'SimpleWorkflow|root:0',
+      log_filter_key: 'SimpleWorkflow|root:0',
       label: 'SimpleWorkflow',
       span: span(0, 293),
       node_type: WasmControlFlowNodeType.FunctionRoot,
@@ -45,7 +45,7 @@ const workflowGraph = {
     {
       id: 1,
       parent_id: 0,
-      lexical_id: 'SimpleWorkflow|root:0|hdr:gather-applicant-context:0',
+      log_filter_key: 'SimpleWorkflow|root:0|hdr:gather-applicant-context:0',
       label: 'gather applicant context',
       span: span(55, 83),
       node_type: WasmControlFlowNodeType.HeaderContextEnter,
@@ -53,7 +53,7 @@ const workflowGraph = {
     {
       id: 2,
       parent_id: 0,
-      lexical_id: 'SimpleWorkflow|root:0|hdr:normalize-profile-signals:1',
+      log_filter_key: 'SimpleWorkflow|root:0|hdr:normalize-profile-signals:1',
       label: 'normalize profile signals',
       span: span(123, 152),
       node_type: WasmControlFlowNodeType.HeaderContextEnter,
@@ -76,7 +76,7 @@ const conditionalGraph = {
     {
       id: 0,
       parent_id: undefined,
-      lexical_id: 'ConditionalWorkflow|root:0',
+      log_filter_key: 'ConditionalWorkflow|root:0',
       label: 'ConditionalWorkflow',
       span: span(0, 500),
       node_type: WasmControlFlowNodeType.FunctionRoot,
@@ -84,7 +84,7 @@ const conditionalGraph = {
     {
       id: 1,
       parent_id: 0,
-      lexical_id: 'ConditionalWorkflow|root:0|hdr:check-summary-confidence:0',
+      log_filter_key: 'ConditionalWorkflow|root:0|hdr:check-summary-confidence:0',
       label: 'check summary confidence',
       span: span(100, 150),
       node_type: WasmControlFlowNodeType.HeaderContextEnter,
@@ -92,7 +92,7 @@ const conditionalGraph = {
     {
       id: 2,
       parent_id: 1,
-      lexical_id: 'ConditionalWorkflow|root:0|hdr:check-summary-confidence:0|bg:if-guard:0',
+      log_filter_key: 'ConditionalWorkflow|root:0|hdr:check-summary-confidence:0|bg:if-guard:0',
       label: 'if (guard)',
       span: span(160, 400),
       node_type: WasmControlFlowNodeType.BranchGroup,
@@ -100,7 +100,7 @@ const conditionalGraph = {
     {
       id: 3,
       parent_id: 2,
-      lexical_id:
+      log_filter_key:
         'ConditionalWorkflow|root:0|hdr:check-summary-confidence:0|bg:if-guard:0|arm:true:0|hdr:run-enrichment:0',
       label: 'run enrichment',
       span: span(200, 250),
@@ -109,7 +109,7 @@ const conditionalGraph = {
     {
       id: 4,
       parent_id: 2,
-      lexical_id:
+      log_filter_key:
         'ConditionalWorkflow|root:0|hdr:check-summary-confidence:0|bg:if-guard:0|arm:false:1|hdr:return-guidance:0',
       label: 'return guidance',
       span: span(300, 350),
@@ -132,20 +132,22 @@ describe('buildControlFlowArtifacts', () => {
     );
 
     expect(result).toBeTruthy();
-    // Root node now uses lexical_id format with |root:0
-    expect(result?.callGraph.id).toBe('SimpleWorkflow|root:0');
+    // Root node now uses numeric wasm id, logFilterKey is metadata
+    expect(result?.callGraph.id).toBe('0');
     expect(result?.callGraph.type).toBe('block');
 
     const rootNode = result?.nodes[0];
-    expect(rootNode?.id).toBe('SimpleWorkflow|root:0');
+    expect(rootNode?.id).toBe('0');
     expect(rootNode?.type).toBe('group');
+    expect(rootNode?.metadata?.logFilterKey).toBe('SimpleWorkflow|root:0');
 
-    const child = result?.nodes.find((n) => n.id.includes('gather-applicant-context'));
-    expect(child?.parent).toBe('SimpleWorkflow|root:0');
+    const child = result?.nodes.find((n) => n.label === 'gather applicant context');
+    expect(child?.parent).toBe('0');
+    expect(child?.metadata?.logFilterKey).toBe('SimpleWorkflow|root:0|hdr:gather-applicant-context:0');
 
     expect(result?.edges[0]).toMatchObject({
-      source: 'SimpleWorkflow|root:0|hdr:gather-applicant-context:0',
-      target: 'SimpleWorkflow|root:0|hdr:normalize-profile-signals:1',
+      source: '1',
+      target: '2',
     });
   });
 
@@ -180,16 +182,12 @@ describe('buildControlFlowArtifacts', () => {
     expect(result).toBeTruthy();
     const edgeSources = result?.edges.map((edge) => edge.source) ?? [];
     // Edge from header (id:1) to branch group (id:2) remains
-    expect(edgeSources).toContain(
-      'ConditionalWorkflow|root:0|hdr:check-summary-confidence:0',
-    );
+    expect(edgeSources).toContain('1');
     // Edges from branch group to its arm headers should be removed because parent already conveys nesting
-    expect(
-      edgeSources.some((src) => src.includes('|bg:if-guard:0')),
-    ).toBe(false);
+    expect(edgeSources).not.toContain('2');
     const runEnrichmentNode = result?.nodes.find((n) => n.label === 'run enrichment');
     expect(runEnrichmentNode?.parent).toBe(
-      'ConditionalWorkflow|root:0|hdr:check-summary-confidence:0|bg:if-guard:0',
+      '2',
     );
   });
 });

@@ -32,6 +32,7 @@ baml_vm = { path = "crates/baml_vm" }
 baml_workspace = { path = "crates/baml_workspace" }
 
 # external dependencies
+anyhow = { version = "1" }
 ariadne = { version = "0.6" }
 divan = { package = "codspeed-divan-compat", version = "*" }
 glob = { version = "0.3" }

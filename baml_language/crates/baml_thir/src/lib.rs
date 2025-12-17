@@ -12,9 +12,12 @@
 
 use std::collections::HashMap;
 
-use baml_base::{Name, Span};
+use baml_base::{Name, SourceFile, Span};
 use baml_diagnostics::compiler_error::TypeError;
-use baml_hir::{ExprBody, ExprId, FunctionBody, FunctionSignature, Pattern, StmtId};
+use baml_hir::{
+    ExprBody, ExprId, FunctionBody, FunctionSignature, Pattern, StmtId, project_class_fields,
+};
+use baml_workspace::Project;
 
 mod lower;
 pub mod pretty;
@@ -23,6 +26,47 @@ mod types;
 pub use lower::lower_type_ref;
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use types::*;
+
+// ============================================================================
+// Path Resolution
+// ============================================================================
+
+/// Resolved path categories after name resolution.
+///
+/// When we encounter a multi-segment path like `user.name.length` or `Status.Active`,
+/// we need to determine what it actually refers to. This enum captures the different
+/// possibilities.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedPath {
+    /// Local variable: `user` or `user.name.length`
+    /// The name is the local variable. Field access types are in `path_segment_types`.
+    Local { name: Name },
+
+    /// Enum variant: `Status.Active`
+    /// First segment is the enum type, second is the variant name.
+    EnumVariant { enum_name: Name, variant_name: Name },
+
+    /// Module item: `baml.HttpMethod.Get`
+    /// The path navigates through modules to reach an item.
+    ModuleItem {
+        module_path: Vec<Name>,
+        item_name: Name,
+    },
+
+    /// Function reference: `MyFunction`
+    /// A single-segment path that resolves to a function.
+    Function { name: Name },
+
+    /// Method call on a type: `image.from_url`
+    /// Used when the receiver is a type with associated methods.
+    Method {
+        receiver_type: Name,
+        method_name: Name,
+    },
+
+    /// Unknown/unresolved path
+    Unknown,
+}
 
 //
 // ──────────────────────────────────────────────────────────── DATABASE ─────
@@ -34,6 +78,126 @@ pub use types::*;
 /// Salsa queries, including type inference and the initial typing context.
 #[salsa::db]
 pub trait Db: baml_hir::Db {}
+
+// ============================================================================
+// Typing Context Construction
+// ============================================================================
+
+/// Build typing context from a list of source files.
+///
+/// This maps function names to their arrow types, e.g.:
+/// `Foo` -> `(int) -> int` for `function Foo(x: int) -> int`
+///
+/// This is used as the starting scope when type-checking function bodies,
+/// allowing function calls to be properly typed.
+///
+/// Note: This is not a Salsa query because it returns `Ty<'db>` which contains
+/// lifetime-parameterized data. Callers should cache the result if needed.
+pub fn build_typing_context_from_files<'db>(
+    db: &'db dyn Db,
+    files: &[SourceFile],
+) -> HashMap<Name, Ty<'db>> {
+    let mut context = HashMap::new();
+
+    for file in files {
+        let items_struct = baml_hir::file_items(db, *file);
+        let items = items_struct.items(db);
+
+        for item in items {
+            if let baml_hir::ItemId::Function(func_loc) = item {
+                let signature = baml_hir::function_signature(db, *func_loc);
+
+                // Build the arrow type: (param_types) -> return_type
+                let param_types: Vec<Ty<'db>> = signature
+                    .params
+                    .iter()
+                    .map(|p| lower_type_ref(db, &p.type_ref))
+                    .collect();
+
+                let return_type = lower_type_ref(db, &signature.return_type);
+
+                let func_type = Ty::Function {
+                    params: param_types,
+                    ret: Box::new(return_type),
+                };
+
+                context.insert(signature.name.clone(), func_type);
+            }
+        }
+    }
+
+    context
+}
+
+/// Build class fields map from source files.
+///
+/// This maps class names to their field types, e.g.:
+/// `Baz` -> { `name` -> `String` }
+///
+/// Used for field access type checking.
+///
+/// This function lowers HIR `TypeRefs` to THIR `Ty`s. It iterates through
+/// the provided files and uses the Salsa-tracked `baml_hir::class_fields` query
+/// for each class, providing better incrementality than the old implementation.
+///
+/// Note: Once `baml_workspace::project_files` is implemented, this can be
+/// replaced with a simpler version that uses `baml_hir::project_class_fields`.
+pub fn build_class_fields_from_files(
+    db: &dyn Db,
+    project: Project,
+) -> HashMap<Name, HashMap<Name, Ty<'_>>> {
+    let class_fields = project_class_fields(db, project);
+
+    class_fields
+        .classes(db)
+        .iter()
+        .map(|(class_name, class_fields)| {
+            (
+                class_name.clone(),
+                class_fields
+                    .iter()
+                    .map(|(field_name, field_type)| {
+                        (field_name.clone(), lower_type_ref(db, field_type))
+                    })
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
+/// Build class fields map for a project using Salsa queries.
+///
+/// This maps class names to their field types, e.g.:
+/// `Baz` -> { `name` -> `String` }
+///
+/// Used for field access type checking.
+///
+/// This function uses the Salsa-tracked `baml_hir::project_class_fields` query
+/// for maximum incrementality, then lowers HIR `TypeRefs` to THIR `Ty`s.
+///
+/// This is the preferred API - it properly uses the Salsa query system.
+///
+/// TODO: How do we make this incremental/cached? It seems like the
+/// `ClassId` and `EnumId` inside `Ty`, which are salsa references, make it
+/// impossible to track `Ty`.
+pub fn lower_project_class_fields(
+    db: &dyn Db,
+    root: baml_workspace::Project,
+) -> HashMap<Name, HashMap<Name, Ty<'_>>> {
+    let hir_fields = baml_hir::project_class_fields(db, root);
+
+    hir_fields
+        .classes(db)
+        .iter()
+        .map(|(class_name, fields)| {
+            let lowered_fields = fields
+                .iter()
+                .map(|(field_name, type_ref)| (field_name.clone(), lower_type_ref(db, type_ref)))
+                .collect();
+            (class_name.clone(), lowered_fields)
+        })
+        .collect()
+}
 
 // ============================================================================
 // Type Inference Results
@@ -48,6 +212,10 @@ pub struct InferenceResult<'db> {
     pub param_types: HashMap<Name, Ty<'db>>,
     /// Types inferred for each expression.
     pub expr_types: HashMap<ExprId, Ty<'db>>,
+    /// For multi-segment path expressions, the type of each segment.
+    /// For `o.inner.value` where `o: Outer`, stores `[Outer, Inner, int]`.
+    /// Used by codegen to look up field indices at each step.
+    pub path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
     /// Type checking errors.
     pub errors: Vec<TypeError<Ty<'db>>>,
 }
@@ -61,8 +229,12 @@ pub struct TypeContext<'db> {
     db: &'db dyn Db,
     /// Stack of variable scopes (innermost last).
     scopes: Vec<HashMap<Name, Ty<'db>>>,
+    /// Class field types: `class_name` -> (`field_name` -> `field_type`)
+    class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
     /// Inferred types for expressions.
     expr_types: HashMap<ExprId, Ty<'db>>,
+    /// For multi-segment paths, the type of each segment.
+    path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
     /// Accumulated type errors.
     errors: Vec<TypeError<Ty<'db>>>,
 }
@@ -76,9 +248,34 @@ impl<'db> TypeContext<'db> {
         TypeContext {
             db,
             scopes: vec![globals],
+            class_fields: HashMap::new(),
             expr_types: HashMap::new(),
+            path_segment_types: HashMap::new(),
             errors: Vec::new(),
         }
+    }
+
+    /// Create a new type context with global bindings and class field information.
+    pub fn with_class_fields(
+        db: &'db dyn Db,
+        globals: HashMap<Name, Ty<'db>>,
+        class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
+    ) -> Self {
+        TypeContext {
+            db,
+            scopes: vec![globals],
+            class_fields,
+            expr_types: HashMap::new(),
+            path_segment_types: HashMap::new(),
+            errors: Vec::new(),
+        }
+    }
+
+    /// Look up a field in a class.
+    pub fn lookup_class_field(&self, class_name: &Name, field_name: &Name) -> Option<&Ty<'db>> {
+        self.class_fields
+            .get(class_name)
+            .and_then(|fields| fields.get(field_name))
     }
 
     /// Push a new scope.
@@ -130,6 +327,55 @@ impl<'db> TypeContext<'db> {
     pub fn db(&self) -> &'db dyn Db {
         self.db
     }
+
+    /// Resolve a path to determine what it refers to.
+    ///
+    /// This is the core path resolution logic that determines whether a path like
+    /// `user.name` is a local variable with field access, an enum variant, a module
+    /// item, etc.
+    ///
+    /// # Resolution Order
+    /// 1. Check if the first segment is a local variable -> Local with field accesses
+    /// 2. Check if it's a function name -> Function
+    /// 3. Check if first segment is a class name (for enum variants)
+    /// 4. Check if it's a module path (TODO: not yet implemented)
+    /// 5. Unknown
+    pub fn resolve_path(&self, segments: &[Name]) -> ResolvedPath {
+        if segments.is_empty() {
+            return ResolvedPath::Unknown;
+        }
+
+        let first = &segments[0];
+
+        // Check if first segment is a local variable
+        if self.lookup(first).is_some() {
+            return ResolvedPath::Local {
+                name: first.clone(),
+            };
+        }
+
+        // For single-segment paths, check if it's a function
+        if segments.len() == 1 {
+            // Check globals (which include functions)
+            if self.scopes.first().and_then(|s| s.get(first)).is_some() {
+                return ResolvedPath::Function {
+                    name: first.clone(),
+                };
+            }
+        }
+
+        // For two-segment paths, check if it could be an enum variant
+        // TODO: This needs access to the type registry to check if `first` is an enum
+        if segments.len() == 2 {
+            // For now, we can't distinguish enum variants without more context
+            // This will be populated when we have the Module infrastructure
+        }
+
+        // TODO: Check module paths when Module type is fully integrated
+
+        // Unknown path
+        ResolvedPath::Unknown
+    }
 }
 
 // ============================================================================
@@ -152,8 +398,13 @@ pub fn infer_function_body<'db>(
     param_types: HashMap<Name, Ty<'db>>,
     expected_return: &Ty<'db>,
     globals: Option<HashMap<Name, Ty<'db>>>,
+    class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
 ) -> InferenceResult<'db> {
-    let mut ctx = TypeContext::new(db, globals.unwrap_or_default());
+    let mut ctx = TypeContext::with_class_fields(
+        db,
+        globals.unwrap_or_default(),
+        class_fields.unwrap_or_default(),
+    );
 
     // Add parameters to the current scope (on top of globals)
     for (name, ty) in &param_types {
@@ -189,6 +440,7 @@ pub fn infer_function_body<'db>(
         return_type,
         param_types,
         expr_types: ctx.expr_types,
+        path_segment_types: ctx.path_segment_types,
         errors: ctx.errors,
     }
 }
@@ -206,6 +458,7 @@ pub fn infer_function<'db>(
     signature: &FunctionSignature,
     body: &FunctionBody,
     globals: Option<HashMap<Name, Ty<'db>>>,
+    class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
 ) -> InferenceResult<'db> {
     // Convert parameter TypeRefs to Tys
     let param_types: HashMap<Name, Ty<'db>> = signature
@@ -221,7 +474,14 @@ pub fn infer_function<'db>(
     let expected_return = lower_type_ref(db, &signature.return_type);
 
     // Delegate to the body inference function
-    infer_function_body(db, body, param_types, &expected_return, globals)
+    infer_function_body(
+        db,
+        body,
+        param_types,
+        &expected_return,
+        globals,
+        class_fields,
+    )
 }
 
 /// Infer the type of an expression (synthesize mode).
@@ -239,15 +499,48 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
     let ty = match expr {
         Expr::Literal(lit) => infer_literal(lit),
 
-        Expr::Path(name) => {
-            if let Some(ty) = ctx.lookup(name) {
-                ty.clone()
-            } else {
-                ctx.push_error(TypeError::UnknownVariable {
-                    name: name.to_string(),
-                    span,
-                });
+        Expr::Path(segments) => {
+            if segments.is_empty() {
                 Ty::Unknown
+            } else if segments.len() == 1 {
+                // Single segment: simple variable lookup
+                let name = &segments[0];
+                if let Some(ty) = ctx.lookup(name) {
+                    ty.clone()
+                } else {
+                    ctx.push_error(TypeError::UnknownVariable {
+                        name: name.to_string(),
+                        span,
+                    });
+                    Ty::Unknown
+                }
+            } else {
+                // Multi-segment path: first segment is variable, rest are field accesses
+                // TODO: Add proper resolution for enum variants and module paths
+                let first = &segments[0];
+                let mut ty = if let Some(t) = ctx.lookup(first) {
+                    t.clone()
+                } else {
+                    ctx.push_error(TypeError::UnknownVariable {
+                        name: first.to_string(),
+                        span,
+                    });
+                    return Ty::Unknown;
+                };
+
+                // Record segment types for codegen (first segment type, then each field access result)
+                let mut segment_types = vec![ty.clone()];
+
+                // Apply field accesses for remaining segments
+                for field in &segments[1..] {
+                    ty = infer_field_access(ctx, &ty, field, span);
+                    segment_types.push(ty.clone());
+                }
+
+                // Store segment types for this path expression
+                ctx.path_segment_types.insert(expr_id, segment_types);
+
+                ty
             }
         }
 
@@ -263,26 +556,79 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
         }
 
         Expr::Call { callee, args } => {
-            let callee_ty = infer_expr(ctx, *callee, body);
+            // Check if this is a method call (callee is a FieldAccess or multi-segment Path)
+            // If so, we need to pass the receiver as the first argument
+            let (callee_ty, effective_args) = match &body.exprs[*callee] {
+                Expr::FieldAccess { base, field: _ } => {
+                    // Method call: receiver.method(args) -> Type.method(receiver, args)
+                    // This handles complex expressions like `f().method()` or `arr[0].method()`
+                    let receiver_ty = infer_expr(ctx, *base, body);
+                    let callee_ty = infer_expr(ctx, *callee, body);
 
-            // Infer argument types
-            let arg_types: Vec<Ty<'db>> =
-                args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
+                    // Build effective args: [receiver_type, ...explicit_args]
+                    let mut effective_args = vec![receiver_ty];
+                    for arg in args {
+                        effective_args.push(infer_expr(ctx, *arg, body));
+                    }
+                    (callee_ty, effective_args)
+                }
+                Expr::Path(segments) if segments.len() >= 2 => {
+                    // Method call via Path: `receiver.method(args)`
+                    // For multi-segment paths like `baz.Greeting()`, the first segment(s)
+                    // form the receiver and the last segment is the method name.
+                    //
+                    // We infer the receiver type from all segments except the last,
+                    // then look up the method on that type.
+                    let receiver_segments = &segments[..segments.len() - 1];
+
+                    // Infer receiver type (could be single var or nested field access)
+                    let receiver_ty = if receiver_segments.len() == 1 {
+                        // Simple receiver: `baz.method()`
+                        ctx.lookup(&receiver_segments[0])
+                            .cloned()
+                            .unwrap_or(Ty::Unknown)
+                    } else {
+                        // Nested receiver: `obj.field.method()`
+                        let first = &receiver_segments[0];
+                        let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
+                        for field in &receiver_segments[1..] {
+                            ty = infer_field_access(ctx, &ty, field, span);
+                        }
+                        ty
+                    };
+
+                    let callee_ty = infer_expr(ctx, *callee, body);
+
+                    // Build effective args: [receiver_type, ...explicit_args]
+                    let mut effective_args = vec![receiver_ty];
+                    for arg in args {
+                        effective_args.push(infer_expr(ctx, *arg, body));
+                    }
+                    (callee_ty, effective_args)
+                }
+                _ => {
+                    // Regular function call (single-segment Path or other expression)
+                    let callee_ty = infer_expr(ctx, *callee, body);
+                    let arg_types: Vec<Ty<'db>> =
+                        args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
+                    (callee_ty, arg_types)
+                }
+            };
 
             // If the callee is a function type, check arguments and return the return type
             match &callee_ty {
                 Ty::Function { params, ret } => {
                     // Check argument count
-                    if arg_types.len() != params.len() {
+                    if effective_args.len() != params.len() {
                         ctx.push_error(TypeError::ArgumentCountMismatch {
                             expected: params.len(),
-                            found: arg_types.len(),
+                            found: effective_args.len(),
                             span,
                         });
                     }
 
                     // Check argument types
-                    for (arg_ty, param_ty) in arg_types.iter().zip(params.iter()) {
+                    for (arg_ty, param_ty) in effective_args.iter().zip(params.iter()) {
                         if !arg_ty.is_subtype_of(param_ty) {
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: param_ty.clone(),
@@ -338,16 +684,18 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
             }
         }
 
-        Expr::Object {
-            type_name: _,
-            fields,
-        } => {
+        Expr::Object { type_name, fields } => {
             // Infer field types
             for (_, value_expr) in fields {
                 infer_expr(ctx, *value_expr, body);
             }
-            // For now, return Unknown since we don't have class resolution
-            Ty::Unknown
+            // Return the named type if type_name is provided
+            if let Some(name) = type_name {
+                Ty::Named(name.clone())
+            } else {
+                // Anonymous object - return Unknown for now
+                Ty::Unknown
+            }
         }
 
         Expr::Block { stmts, tail_expr } => {
@@ -434,8 +782,25 @@ fn infer_binary_op<'db>(
     };
 
     match op {
-        // Arithmetic operations
-        Add | Sub | Mul | Div | Mod => match (lhs, rhs) {
+        // Arithmetic operations (and string concatenation for Add)
+        Add => match (lhs, rhs) {
+            (Ty::Int, Ty::Int) => Ty::Int,
+            (Ty::Float, Ty::Float) => Ty::Float,
+            (Ty::Int, Ty::Float) => Ty::Float,
+            (Ty::Float, Ty::Int) => Ty::Float,
+            // String concatenation
+            (Ty::String, Ty::String) => Ty::String,
+            _ => {
+                ctx.push_error(TypeError::InvalidBinaryOp {
+                    op: format!("{op:?}"),
+                    lhs: lhs.clone(),
+                    rhs: rhs.clone(),
+                    span,
+                });
+                Ty::Error
+            }
+        },
+        Sub | Mul | Div | Mod => match (lhs, rhs) {
             (Ty::Int, Ty::Int) => Ty::Int,
             (Ty::Float, Ty::Float) => Ty::Float,
             (Ty::Int, Ty::Float) => Ty::Float,
@@ -542,28 +907,56 @@ fn infer_unary_op<'db>(
 }
 
 /// Infer the type of a field access.
+///
+/// For class types, this handles both field access and method access.
+/// Methods are desugared to top-level functions with simple names (not namespaced),
+/// so we look them up directly in the global context.
 fn infer_field_access<'db>(
     ctx: &mut TypeContext<'db>,
     base: &Ty<'db>,
     field: &Name,
     span: Span,
 ) -> Ty<'db> {
-    match base {
-        Ty::Class(_class_id) => {
-            // TODO: Look up field in class using ItemTree
-            // For now, return Unknown
-            Ty::Unknown
+    let found_field = match base {
+        // Ty::Named(class_name) => {
+        //     // Try to look up as a method (methods are top-level functions with simple names)
+        //     if let Some(method_ty) = ctx.lookup(field) {
+        //         return method_ty.clone();
+        //     }
+
+        //     // Try to look up as a field in the class
+        //     if let Some(field_ty) = ctx.lookup_class_field(class_name, field) {
+        //         return field_ty.clone();
+        //     }
+
+        //     // Field/method not found
+        //     Some(Ty::Unknown)
+        // }
+        // Ty::Named(class_name) => ctx.lookup_class_field(class_name, field).cloned(),
+        Ty::Named(class_name) => ctx
+            .lookup(field)
+            .or(ctx.lookup_class_field(class_name, field))
+            .cloned(),
+        Ty::Class(class_id) => {
+            let class_fields_data = baml_hir::class_fields(ctx.db(), *class_id);
+            let fields = class_fields_data.fields(ctx.db());
+            fields
+                .iter()
+                .find(|(name, _)| name == field)
+                .map(|(_, type_ref)| lower_type_ref(ctx.db(), type_ref))
         }
-        Ty::Unknown => Ty::Unknown,
-        _ => {
-            ctx.push_error(TypeError::NoSuchField {
-                ty: base.clone(),
-                field: field.to_string(),
-                span,
-            });
-            Ty::Unknown
-        }
-    }
+        Ty::Unknown => None,
+        _ => None,
+    };
+
+    found_field.unwrap_or_else(|| {
+        ctx.push_error(TypeError::NoSuchField {
+            ty: base.clone(),
+            field: field.to_string(),
+            span,
+        });
+        Ty::Unknown
+    })
 }
 
 /// Infer the type of an index access.
@@ -751,11 +1144,36 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             }
 
             if let Some(upd) = update {
-                infer_expr(ctx, *upd, body);
+                check_stmt(ctx, *upd, body);
             }
 
             infer_expr(ctx, *for_body, body);
             ctx.pop_scope();
+        }
+
+        Stmt::Break | Stmt::Continue => {
+            // These are control flow statements with no expressions to type-check.
+            // Loop context validation could be added here in the future.
+        }
+
+        Stmt::Assign { target, value } => {
+            // Type-check both the target and value expressions
+            infer_expr(ctx, *target, body);
+            infer_expr(ctx, *value, body);
+            // TODO: Check that target is assignable (variable or field access)
+            // TODO: Check that value type is compatible with target type
+        }
+
+        Stmt::AssignOp {
+            target,
+            op: _,
+            value,
+        } => {
+            // Type-check both the target and value expressions
+            infer_expr(ctx, *target, body);
+            infer_expr(ctx, *value, body);
+            // TODO: Check that target is assignable
+            // TODO: Check that the operation is valid for the types
         }
 
         Stmt::Missing => {}

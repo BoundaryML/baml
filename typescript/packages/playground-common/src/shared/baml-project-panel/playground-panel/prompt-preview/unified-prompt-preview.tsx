@@ -16,6 +16,7 @@ import { renderedPromptAtom } from './prompt-preview-content';
 import { PromptPreviewCurl, curlAtom } from './prompt-preview-curl';
 import { GraphView } from './graph-view';
 import { ReactFlowProvider } from '@xyflow/react';
+import { PromptSearchBar } from './prompt-search-bar';
 
 const GraphHost = () => (
   <div className="h-full">
@@ -199,6 +200,9 @@ export const UnifiedPromptPreview = () => {
               )}
             </div>
             <div className="flex items-center gap-2">
+              {(activeTab === 'preview' || activeTab === 'curl') && (
+                <PromptSearchBar />
+              )}
               {activeTab === 'preview' && (
                 <Button
                   variant="ghost"

@@ -33,6 +33,7 @@ baml-ids.workspace = true
 internal-baml-ast = { path = "../baml-lib/ast" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 baml-log.workspace = true
+baml-viz-events = { path = "../baml-viz-events" }
 baml-types.workspace = true
 baml-rpc.workspace = true
 baml-vm = { path = "../baml-vm" }
@@ -127,6 +128,7 @@ tempfile = "3.19.0"
 sha2 = "0.10.9"
 blake3 = "1.8.2"
 flate2 = "1.1.5"
+similar = "2.6"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -138,7 +140,6 @@ aws-config = { version = "=1.5.3", default-features = false, features = [] }
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
 aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, features = [
-
 ] }
 colored = { version = "2.1.0", default-features = false, features = [
   "no-color",

@@ -108,6 +108,7 @@ struct EmitCallbacks {
             false,
         >,
     >,
+    #[allow(dead_code)]
     block_handlers: Vec<
         napi::threadsafe_function::ThreadsafeFunction<
             BlockEvent,
@@ -394,30 +395,6 @@ impl BamlRuntime {
             let watch_handler = shared_handler(move |notification| {
                 if let Some(ref callbacks) = emit_callbacks {
                     match notification.value {
-                        baml_compiler::watch::WatchBamlValue::Header(header) => {
-                            // Fire block events to all registered block handlers
-                            for handler in &callbacks.block_handlers {
-                                let block_event = BlockEvent {
-                                    block_label: header.title.clone(),
-                                    event_type: "enter".to_string(),
-                                };
-                                let _ = handler
-                                    .call(block_event, ThreadsafeFunctionCallMode::NonBlocking);
-                            }
-                        }
-                        // HACK: HeaderStopped is emitted synthetically when a new header
-                        // comes in at the same or shallower level
-                        baml_compiler::watch::WatchBamlValue::HeaderStopped(header) => {
-                            // Fire block exit events to all registered block handlers
-                            for handler in &callbacks.block_handlers {
-                                let block_event = BlockEvent {
-                                    block_label: header.title.clone(),
-                                    event_type: "exit".to_string(),
-                                };
-                                let _ = handler
-                                    .call(block_event, ThreadsafeFunctionCallMode::NonBlocking);
-                            }
-                        }
                         baml_compiler::watch::WatchBamlValue::Value(value) => {
                             if let Some(var_name) = &notification.variable_name {
                                 // Serialize BamlValue to JSON
@@ -447,6 +424,7 @@ impl BamlRuntime {
                                 }
                             }
                         }
+                        baml_compiler::watch::WatchBamlValue::VizExecState(_) => {}
                         baml_compiler::watch::WatchBamlValue::StreamStart(stream_id) => {
                             log::info!(
                                 "[RUST] StreamStart notification for var: {:?}, stream_id: {}",
@@ -597,34 +575,6 @@ impl BamlRuntime {
             let watch_handler = shared_handler(move |notification| {
                 if let Some(ref callbacks) = emit_callbacks {
                     match notification.value {
-                        baml_compiler::watch::WatchBamlValue::Header(header) => {
-                            // Fire block events to all registered block handlers
-                            for handler in &callbacks.block_handlers {
-                                let block_event = BlockEvent {
-                                    block_label: header.title.clone(),
-                                    event_type: "enter".to_string(),
-                                };
-                                let _ = handler.call(
-                                    block_event,
-                                    napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
-                                );
-                            }
-                        }
-                        // HACK: HeaderStopped is emitted synthetically when a new header
-                        // comes in at the same or shallower level
-                        baml_compiler::watch::WatchBamlValue::HeaderStopped(header) => {
-                            // Fire block exit events to all registered block handlers
-                            for handler in &callbacks.block_handlers {
-                                let block_event = BlockEvent {
-                                    block_label: header.title.clone(),
-                                    event_type: "exit".to_string(),
-                                };
-                                let _ = handler.call(
-                                    block_event,
-                                    napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
-                                );
-                            }
-                        }
                         baml_compiler::watch::WatchBamlValue::Value(value) => {
                             if let Some(var_name) = &notification.variable_name {
                                 let channel =
@@ -652,6 +602,7 @@ impl BamlRuntime {
                                 }
                             }
                         }
+                        baml_compiler::watch::WatchBamlValue::VizExecState(_) => {}
                         baml_compiler::watch::WatchBamlValue::StreamStart(stream_id) => {
                             if let Some(var_name) = &notification.variable_name {
                                 let channel =

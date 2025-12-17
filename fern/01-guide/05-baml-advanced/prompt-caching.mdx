@@ -7,9 +7,9 @@ Recall that an LLM request usually looks like this, where it sometimes has metad
 ```curl {3,11} Anthropic Request
 curl https://api.anthropic.com/v1/messages \
   -H "content-type: application/json" \
-  -H "anthropic-beta: prompt-caching-2024-07-31" \
+  -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-3-5-sonnet-20241022",
+    "model": "claude-sonnet-4-5-20250929",
     "max_tokens": 1024,
     "messages": [
        {
@@ -38,11 +38,8 @@ There's just 2 steps:
 client<llm> AnthropicClient {
   provider "anthropic"
   options {
-    model "claude-3-5-sonnet-20241022"
+    model "claude-sonnet-4-5-20250929"
     allowed_role_metadata ["cache_control"]
-    headers {
-      "anthropic-beta" "prompt-caching-2024-07-31"
-    }
   }
 }
 ```
