@@ -37,8 +37,8 @@ export interface StreamState<T> {
 
 export namespace partial_types {
     export interface ClassWithBlockDone {
-      i_16_digits?: number | null
-      s_20_words?: string | null
+      i_16_digits: number
+      s_20_words: string
     }
     export interface ClassWithoutDone {
       i_16_digits?: number | null

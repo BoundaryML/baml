@@ -93,9 +93,8 @@ fn ir_field_to_go_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> Fi
 mod tests {
     use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
 
-    use crate::r#type::TypeGo;
-
     use super::*;
+    use crate::r#type::TypeGo;
 
     #[test]
     fn test_ir_class_to_go() {

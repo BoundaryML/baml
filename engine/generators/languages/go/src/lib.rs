@@ -97,27 +97,12 @@ impl LanguageFeatures for GoLanguageFeatures {
         let unions = {
             let mut unions = ir
                 .walk_all_non_streaming_unions()
-                .flat_map(|t| {
-                    println!("Make Union: {}", t.to_string());
-                    let unions = ir_to_go::unions::ir_union_to_go(&t, &pkg).collect::<Vec<_>>();
-                    for union in &unions {
-                        println!(
-                            "\tname: {}\n\tcffi_name: {}\n\tvariants: {}\n\n",
-                            union.name,
-                            union.cffi_name,
-                            union.variants.len(),
-                        )
-                    }
-                    println!("--------------------------------");
-                    unions.into_iter()
-                })
+                .flat_map(|t| ir_to_go::unions::ir_union_to_go(&t, &pkg))
                 .collect::<Vec<_>>();
 
             // dedup by name!
-            println!("Unions: {}", unions.len());
             unions.sort_by_key(|u| u.name.clone());
             unions.dedup_by_key(|u| u.name.clone());
-            println!("Unions after dedup: {}", unions.len());
             unions
         };
         let type_aliases = ir.walk_type_aliases().collect::<Vec<_>>();
