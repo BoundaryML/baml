@@ -6,7 +6,7 @@ describe("Media Tests", () => {
   it("should work with image from url", async () => {
     let res = await b.TestImageInput(
       Image.fromUrl(
-        "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+        "https://i.imgur.com/93fWs5R.png"
       )
     );
     expect(res.toLowerCase()).toMatch(/(green|yellow|ogre|shrek)/);

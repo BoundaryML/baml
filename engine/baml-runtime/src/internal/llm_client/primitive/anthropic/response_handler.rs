@@ -46,7 +46,7 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::UnsupportedResponse(2),
         }) {
         Ok(response) => response,
         Err(e) => return LLMResponse::LLMFailure(e),
@@ -125,7 +125,7 @@ pub fn scan_anthropic_response_stream(
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::UnsupportedResponse(2),
         })?;
 
     match event {

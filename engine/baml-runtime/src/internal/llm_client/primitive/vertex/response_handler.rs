@@ -39,7 +39,7 @@ pub fn parse_vertex_response<C: WithClient + RequestBuilder>(
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::UnsupportedResponse(2),
         }) {
         Ok(response) => response,
         Err(e) => return LLMResponse::LLMFailure(e),
@@ -144,7 +144,7 @@ pub fn scan_vertex_response_stream(
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::UnsupportedResponse(2),
         })?;
 
     if let Some(choice) = event.candidates.first() {
