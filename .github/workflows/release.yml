@@ -163,8 +163,8 @@ jobs:
           path: engine/language_client_typescript/artifacts
 
       - name: Publish to NPM
-        # Uses OIDC authentication via provenance instead of npm token
-        run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks --provenance
+        # Uses OIDC authentication via trusted publishers
+        run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
 
   # publish-to-rubygems:
   #   environment: release
