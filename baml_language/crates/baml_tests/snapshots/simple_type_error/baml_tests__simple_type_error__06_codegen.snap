@@ -8,7 +8,17 @@ Objects: 20
 Globals: 19
 
 Function Foo (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (1)
-     1   LOAD_CONST 1   (foo)
-     2   BIN_OP +       
-     3   RETURN
+     0    LOAD_CONST 0   (null)
+     1    LOAD_CONST 0   (null)
+     2    LOAD_CONST 0   (null)
+     3    LOAD_CONST 1   (1)
+     4    STORE_VAR 2    (_1)
+     5    LOAD_CONST 2   (foo)
+     6    STORE_VAR 3    (_2)
+     7    LOAD_VAR 2     (_1)
+     8    LOAD_VAR 3     (_2)
+     9    BIN_OP +       
+     10   STORE_VAR 1    (_0)
+     11   JUMP +1        (to 12)
+     12   LOAD_VAR 1     (_0)
+     13   RETURN

@@ -26,15 +26,20 @@ use crate::{
 };
 
 /// Lower a function to MIR.
+///
+/// The `class_fields` parameter maps class names to their field name -> index mappings.
+/// This is used to resolve field access expressions like `obj.field` to the correct field index.
 pub fn lower_function<'db>(
     signature: &FunctionSignature,
     body: &FunctionBody,
     inference: &InferenceResult<'db>,
     db: &'db dyn crate::Db,
+    class_fields: &HashMap<String, HashMap<String, usize>>,
 ) -> MirFunction<'db> {
     match body {
         FunctionBody::Expr(expr_body) => {
-            let mut ctx = LoweringContext::new(db, &signature.name, signature.params.len());
+            let mut ctx =
+                LoweringContext::new(db, &signature.name, signature.params.len(), class_fields);
             ctx.lower_expr_body(signature, expr_body, inference);
             ctx.finish()
         }
@@ -122,7 +127,7 @@ fn lower_llm_function<'db>(
 }
 
 /// Context for lowering HIR/THIR to MIR.
-struct LoweringContext<'db> {
+struct LoweringContext<'db, 'ctx> {
     #[allow(dead_code)]
     db: &'db dyn crate::Db,
     builder: MirBuilder<'db>,
@@ -130,6 +135,8 @@ struct LoweringContext<'db> {
     locals: HashMap<Name, Local>,
     /// Current loop context for break/continue.
     loop_context: Option<LoopContext>,
+    /// Class field mappings (class name -> field name -> field index).
+    class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
 }
 
 /// Context for the current loop (for break/continue).
@@ -141,13 +148,19 @@ struct LoopContext {
     continue_target: BlockId,
 }
 
-impl<'db> LoweringContext<'db> {
-    fn new(db: &'db dyn crate::Db, name: &str, arity: usize) -> Self {
+impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
+    fn new(
+        db: &'db dyn crate::Db,
+        name: &str,
+        arity: usize,
+        class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
+    ) -> Self {
         Self {
             db,
             builder: MirBuilder::new(name, arity),
             locals: HashMap::new(),
             loop_context: None,
+            class_fields,
         }
     }
 
@@ -245,15 +258,13 @@ impl<'db> LoweringContext<'db> {
                         // Build chain of field accesses
                         let mut current_place = Place::local(base_local);
 
-                        for (i, _field) in segments[1..].iter().enumerate() {
-                            // Look up field index based on type
-                            // For now, use position as field index (simplified)
-                            // TODO: Use segment_types to look up proper field index
+                        for (i, field) in segments[1..].iter().enumerate() {
+                            // Look up field index based on the base type and field name
                             let field_idx = if let Some(types) = segment_types {
-                                // The segment_types includes the base type, so types[i] is the type
-                                // of the receiver at this step
-                                self.field_index_for_type(&types[i], i)
+                                // types[i] is the type of the receiver at this step
+                                self.field_index_for_type_and_name(&types[i], field)
                             } else {
+                                // Fallback to position if no type info (error case)
                                 i
                             };
                             current_place = Place::field(current_place, field_idx);
@@ -670,6 +681,53 @@ impl<'db> LoweringContext<'db> {
         body: &ExprBody,
         inference: &InferenceResult<'db>,
     ) {
+        use baml_hir::Expr;
+
+        // Check if this is a method call (callee is FieldAccess)
+        let callee_expr = &body.exprs[callee];
+        if let Expr::FieldAccess { base, field } = callee_expr {
+            // Check if this is a builtin method call
+            if let Some(receiver_ty) = inference.expr_types.get(base) {
+                if let Some((def, _)) =
+                    baml_thir::builtins::lookup_method(receiver_ty, field.as_str())
+                {
+                    // Found a builtin method - emit as function call with receiver as first arg
+                    // Lower receiver
+                    let receiver_local = self.builder.temp(receiver_ty.clone());
+                    self.lower_expr_to_place(*base, Place::local(receiver_local), body, inference);
+
+                    // Lower explicit arguments
+                    let mut all_args = vec![Operand::copy_local(receiver_local)];
+                    for &arg in args {
+                        let arg_ty = inference
+                            .expr_types
+                            .get(&arg)
+                            .cloned()
+                            .unwrap_or(Ty::Unknown);
+                        let arg_local = self.builder.temp(arg_ty);
+                        self.lower_expr_to_place(arg, Place::local(arg_local), body, inference);
+                        all_args.push(Operand::copy_local(arg_local));
+                    }
+
+                    // Create continuation block
+                    let continue_block = self.builder.create_block();
+
+                    // Emit call with function name as constant
+                    self.builder.call(
+                        Operand::Constant(Constant::Function(Name::new(def.path))),
+                        all_args,
+                        dest,
+                        continue_block,
+                        None,
+                    );
+
+                    self.builder.set_current_block(continue_block);
+                    return;
+                }
+            }
+        }
+
+        // Regular function call
         // Lower callee
         let callee_ty = inference
             .expr_types
@@ -899,9 +957,9 @@ impl<'db> LoweringContext<'db> {
                 if let Some(&base_local) = self.locals.get(first) {
                     let segment_types = inference.path_segment_types.get(&expr_id);
                     let mut place = Place::local(base_local);
-                    for (i, _) in segments[1..].iter().enumerate() {
+                    for (i, field) in segments[1..].iter().enumerate() {
                         let field_idx = if let Some(types) = segment_types {
-                            self.field_index_for_type(&types[i], i)
+                            self.field_index_for_type_and_name(&types[i], field)
                         } else {
                             i
                         };
@@ -1013,15 +1071,35 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(bb_exit);
     }
 
-    /// Get field index for a type (simplified - just returns position for now).
-    fn field_index_for_type(&self, _ty: &Ty<'db>, position: usize) -> usize {
-        // TODO: Look up actual field index from class definition
-        position
+    /// Get field index for a type and field name.
+    fn field_index_for_type_and_name(&self, ty: &Ty<'db>, field: &Name) -> usize {
+        // Extract class name from type and look up field index
+        let class_name = self.class_name_from_ty(ty);
+
+        if let Some(class_name) = class_name {
+            if let Some(fields) = self.class_fields.get(&class_name) {
+                if let Some(&idx) = fields.get(&field.to_string()) {
+                    return idx;
+                }
+            }
+        }
+
+        // Default to 0 if we can't resolve (error case)
+        0
     }
 
-    /// Get field index for a type and field name.
-    fn field_index_for_type_and_name(&self, _ty: &Ty<'db>, _field: &Name) -> usize {
-        // TODO: Look up actual field index from class definition
-        0
+    /// Extract class name from a Ty.
+    fn class_name_from_ty(&self, ty: &Ty<'db>) -> Option<String> {
+        match ty {
+            Ty::Named(name) => Some(name.to_string()),
+            Ty::Class(class_id) => {
+                // Look up the class name from the database
+                let file = class_id.file(self.db);
+                let item_tree = baml_hir::file_item_tree(self.db, file);
+                let class_data = &item_tree[class_id.id(self.db)];
+                Some(class_data.name.to_string())
+            }
+            _ => None,
+        }
     }
 }

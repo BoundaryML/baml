@@ -23,75 +23,183 @@ Function LLMAnalyze (arity: 1, kind: Llm):
   (no bytecode)
 
 Function ProcessAnalysis (arity: 1, kind: Exec):
-     0    LOAD_VAR 1         (analysis)
-     1    LOAD_FIELD 2       
-     2    LOAD_VAR 2         (score)
-     3    LOAD_CONST 0       (0.8)
-     4    CMP_OP >           
-     5    JUMP_IF_FALSE +8   (to 13)
-     6    POP 1              
-     7    LOAD_CONST 1       (Very positive: )
-     8    LOAD_VAR 1         (analysis)
-     9    LOAD_FIELD 0       
-     10   BIN_OP +           
-     11   RETURN             
-     12   JUMP +31           (to 43)
-     13   POP 1              
-     14   LOAD_VAR 2         (score)
-     15   LOAD_CONST 2       (0.5)
-     16   CMP_OP >           
-     17   JUMP_IF_FALSE +8   (to 25)
-     18   POP 1              
-     19   LOAD_CONST 3       (Positive: )
-     20   LOAD_VAR 1         (analysis)
-     21   LOAD_FIELD 0       
-     22   BIN_OP +           
-     23   RETURN             
-     24   JUMP +19           (to 43)
-     25   POP 1              
-     26   LOAD_VAR 2         (score)
-     27   LOAD_CONST 4       (0.2)
-     28   CMP_OP >           
-     29   JUMP_IF_FALSE +8   (to 37)
-     30   POP 1              
-     31   LOAD_CONST 5       (Neutral: )
-     32   LOAD_VAR 1         (analysis)
-     33   LOAD_FIELD 0       
-     34   BIN_OP +           
-     35   RETURN             
-     36   JUMP +7            (to 43)
-     37   POP 1              
-     38   LOAD_CONST 6       (Negative: )
-     39   LOAD_VAR 1         (analysis)
-     40   LOAD_FIELD 0       
-     41   BIN_OP +           
-     42   RETURN             
-     43   RETURN             
+     0     LOAD_CONST 0        (null)
+     1     LOAD_CONST 0        (null)
+     2     LOAD_CONST 0        (null)
+     3     LOAD_CONST 0        (null)
+     4     LOAD_CONST 0        (null)
+     5     LOAD_CONST 0        (null)
+     6     LOAD_CONST 0        (null)
+     7     LOAD_CONST 0        (null)
+     8     LOAD_CONST 0        (null)
+     9     LOAD_CONST 0        (null)
+     10    LOAD_CONST 0        (null)
+     11    LOAD_CONST 0        (null)
+     12    LOAD_CONST 0        (null)
+     13    LOAD_CONST 0        (null)
+     14    LOAD_CONST 0        (null)
+     15    LOAD_CONST 0        (null)
+     16    LOAD_CONST 0        (null)
+     17    LOAD_CONST 0        (null)
+     18    LOAD_CONST 0        (null)
+     19    LOAD_VAR 1          (_0)
+     20    LOAD_FIELD 2        
+     21    STORE_VAR 3         (score)
+     22    LOAD_VAR 3          (score)
+     23    STORE_VAR 5         (_4)
+     24    LOAD_CONST 1        (0.8)
+     25    STORE_VAR 6         (_5)
+     26    LOAD_VAR 5          (_4)
+     27    LOAD_VAR 6          (_5)
+     28    CMP_OP >            
+     29    STORE_VAR 4         (_3)
+     30    LOAD_VAR 4          (_3)
+     31    JUMP_IF_FALSE +14   (to 45)
+     32    JUMP +3             (to 35)
+     33    LOAD_VAR 2          (analysis)
+     34    RETURN              
+     35    LOAD_CONST 2        (Very positive: )
+     36    STORE_VAR 7         (_6)
+     37    LOAD_VAR 1          (_0)
+     38    LOAD_FIELD 0        
+     39    STORE_VAR 8         (_7)
+     40    LOAD_VAR 7          (_6)
+     41    LOAD_VAR 8          (_7)
+     42    BIN_OP +            
+     43    STORE_VAR 2         (analysis)
+     44    JUMP +13            (to 57)
+     45    LOAD_VAR 3          (score)
+     46    STORE_VAR 10        (_9)
+     47    LOAD_CONST 3        (0.5)
+     48    STORE_VAR 11        (_10)
+     49    LOAD_VAR 10         (_9)
+     50    LOAD_VAR 11         (_10)
+     51    CMP_OP >            
+     52    STORE_VAR 9         (_8)
+     53    LOAD_VAR 9          (_8)
+     54    JUMP_IF_FALSE +15   (to 69)
+     55    JUMP +4             (to 59)
+     56    JUMP -23            (to 33)
+     57    LOAD_VAR 2          (analysis)
+     58    RETURN              
+     59    LOAD_CONST 4        (Positive: )
+     60    STORE_VAR 12        (_11)
+     61    LOAD_VAR 1          (_0)
+     62    LOAD_FIELD 0        
+     63    STORE_VAR 13        (_12)
+     64    LOAD_VAR 12         (_11)
+     65    LOAD_VAR 13         (_12)
+     66    BIN_OP +            
+     67    STORE_VAR 2         (analysis)
+     68    JUMP +13            (to 81)
+     69    LOAD_VAR 3          (score)
+     70    STORE_VAR 15        (_14)
+     71    LOAD_CONST 5        (0.2)
+     72    STORE_VAR 16        (_15)
+     73    LOAD_VAR 15         (_14)
+     74    LOAD_VAR 16         (_15)
+     75    CMP_OP >            
+     76    STORE_VAR 14        (_13)
+     77    LOAD_VAR 14         (_13)
+     78    JUMP_IF_FALSE +15   (to 93)
+     79    JUMP +4             (to 83)
+     80    JUMP -24            (to 56)
+     81    LOAD_VAR 2          (analysis)
+     82    RETURN              
+     83    LOAD_CONST 6        (Neutral: )
+     84    STORE_VAR 17        (_16)
+     85    LOAD_VAR 1          (_0)
+     86    LOAD_FIELD 0        
+     87    STORE_VAR 18        (_17)
+     88    LOAD_VAR 17         (_16)
+     89    LOAD_VAR 18         (_17)
+     90    BIN_OP +            
+     91    STORE_VAR 2         (analysis)
+     92    JUMP +12            (to 104)
+     93    LOAD_CONST 7        (Negative: )
+     94    STORE_VAR 19        (_18)
+     95    LOAD_VAR 1          (_0)
+     96    LOAD_FIELD 0        
+     97    STORE_VAR 20        (_19)
+     98    LOAD_VAR 19         (_18)
+     99    LOAD_VAR 20         (_19)
+     100   BIN_OP +            
+     101   STORE_VAR 2         (analysis)
+     102   JUMP +4             (to 106)
+     103   JUMP -23            (to 80)
+     104   LOAD_VAR 2          (analysis)
+     105   RETURN              
+     106   LOAD_VAR 2          (analysis)
+     107   RETURN              
 
 Function ProcessData (arity: 1, kind: Exec):
-     0    LOAD_VAR 1         (data)
-     1    LOAD_FIELD 0       
-     2    LOAD_VAR 1         (data)
-     3    LOAD_FIELD 1       
-     4    BIN_OP +           
-     5    LOAD_VAR 2         (result)
-     6    LOAD_CONST 0       (100)
-     7    CMP_OP >           
-     8    JUMP_IF_FALSE +5   (to 13)
-     9    POP 1              
-     10   LOAD_CONST 1       (high)
-     11   RETURN             
-     12   JUMP +2            (to 14)
-     13   POP 1              
-     14   LOAD_CONST 2       (low)
-     15   RETURN             
-     16   RETURN             
+     0    LOAD_CONST 0       (null)
+     1    LOAD_CONST 0       (null)
+     2    LOAD_CONST 0       (null)
+     3    LOAD_CONST 0       (null)
+     4    LOAD_CONST 0       (null)
+     5    LOAD_CONST 0       (null)
+     6    LOAD_CONST 0       (null)
+     7    LOAD_CONST 0       (null)
+     8    LOAD_VAR 1         (_0)
+     9    LOAD_FIELD 0       
+     10   STORE_VAR 4        (_3)
+     11   LOAD_VAR 1         (_0)
+     12   LOAD_FIELD 1       
+     13   STORE_VAR 5        (_4)
+     14   LOAD_VAR 4         (_3)
+     15   LOAD_VAR 5         (_4)
+     16   BIN_OP +           
+     17   STORE_VAR 3        (result)
+     18   LOAD_VAR 3         (result)
+     19   STORE_VAR 8        (_7)
+     20   LOAD_CONST 1       (100)
+     21   STORE_VAR 9        (_8)
+     22   LOAD_VAR 8         (_7)
+     23   LOAD_VAR 9         (_8)
+     24   CMP_OP >           
+     25   STORE_VAR 7        (_6)
+     26   LOAD_VAR 7         (_6)
+     27   JUMP_IF_FALSE +7   (to 34)
+     28   JUMP +3            (to 31)
+     29   LOAD_VAR 2         (data)
+     30   RETURN             
+     31   LOAD_CONST 2       (high)
+     32   STORE_VAR 2        (data)
+     33   JUMP +7            (to 40)
+     34   LOAD_CONST 0       (null)
+     35   STORE_VAR 6        (_5)
+     36   JUMP +1            (to 37)
+     37   LOAD_CONST 3       (low)
+     38   STORE_VAR 2        (data)
+     39   JUMP +3            (to 42)
+     40   LOAD_VAR 2         (data)
+     41   RETURN             
+     42   LOAD_VAR 2         (data)
+     43   RETURN             
 
 Function SimpleCalc (arity: 2, kind: Exec):
-     0   LOAD_VAR 1     (a)
-     1   LOAD_VAR 2     (b)
-     2   LOAD_CONST 0   (2)
-     3   BIN_OP *       
-     4   BIN_OP +       
-     5   RETURN         
-     6   RETURN
+     0    LOAD_CONST 0   (null)
+     1    LOAD_CONST 0   (null)
+     2    LOAD_CONST 0   (null)
+     3    LOAD_CONST 0   (null)
+     4    LOAD_CONST 0   (null)
+     5    LOAD_VAR 1     (_0)
+     6    STORE_VAR 4    (_3)
+     7    LOAD_VAR 2     (a)
+     8    STORE_VAR 6    (_5)
+     9    LOAD_CONST 1   (2)
+     10   STORE_VAR 7    (_6)
+     11   LOAD_VAR 6     (_5)
+     12   LOAD_VAR 7     (_6)
+     13   BIN_OP *       
+     14   STORE_VAR 5    (_4)
+     15   LOAD_VAR 4     (_3)
+     16   LOAD_VAR 5     (_4)
+     17   BIN_OP +       
+     18   STORE_VAR 3    (b)
+     19   JUMP +3        (to 22)
+     20   LOAD_VAR 3     (b)
+     21   RETURN         
+     22   LOAD_VAR 3     (b)
+     23   RETURN

@@ -8,90 +8,271 @@ Objects: 26
 Globals: 22
 
 Function Calculate (arity: 0, kind: Exec):
-     0    LOAD_CONST 0   (1)
-     1    LOAD_CONST 1   (2)
-     2    BIN_OP +       
-     3    LOAD_VAR 1     (a)
-     4    LOAD_CONST 2   (3)
-     5    BIN_OP *       
-     6    LOAD_VAR 2     (b)
-     7    LOAD_CONST 1   (2)
-     8    BIN_OP /       
-     9    LOAD_CONST 0   (1)
-     10   BIN_OP -       
-     11   LOAD_VAR 1     (a)
-     12   LOAD_VAR 2     (b)
-     13   BIN_OP +       
-     14   LOAD_VAR 3     (c)
-     15   BIN_OP *       
-     16   LOAD_VAR 4     (d)
-     17   RETURN         
-     18   RETURN         
+     0    LOAD_CONST 0   (null)
+     1    LOAD_CONST 0   (null)
+     2    LOAD_CONST 0   (null)
+     3    LOAD_CONST 0   (null)
+     4    LOAD_CONST 0   (null)
+     5    LOAD_CONST 0   (null)
+     6    LOAD_CONST 0   (null)
+     7    LOAD_CONST 0   (null)
+     8    LOAD_CONST 0   (null)
+     9    LOAD_CONST 0   (null)
+     10   LOAD_CONST 0   (null)
+     11   LOAD_CONST 0   (null)
+     12   LOAD_CONST 0   (null)
+     13   LOAD_CONST 0   (null)
+     14   LOAD_CONST 0   (null)
+     15   LOAD_CONST 0   (null)
+     16   LOAD_CONST 0   (null)
+     17   LOAD_CONST 1   (1)
+     18   STORE_VAR 3    (_2)
+     19   LOAD_CONST 2   (2)
+     20   STORE_VAR 4    (_3)
+     21   LOAD_VAR 3     (_2)
+     22   LOAD_VAR 4     (_3)
+     23   BIN_OP +       
+     24   STORE_VAR 2    (a)
+     25   LOAD_VAR 2     (a)
+     26   STORE_VAR 6    (_5)
+     27   LOAD_CONST 3   (3)
+     28   STORE_VAR 7    (_6)
+     29   LOAD_VAR 6     (_5)
+     30   LOAD_VAR 7     (_6)
+     31   BIN_OP *       
+     32   STORE_VAR 5    (b)
+     33   LOAD_VAR 5     (b)
+     34   STORE_VAR 10   (_9)
+     35   LOAD_CONST 2   (2)
+     36   STORE_VAR 11   (_10)
+     37   LOAD_VAR 10    (_9)
+     38   LOAD_VAR 11    (_10)
+     39   BIN_OP /       
+     40   STORE_VAR 9    (_8)
+     41   LOAD_CONST 1   (1)
+     42   STORE_VAR 12   (_11)
+     43   LOAD_VAR 9     (_8)
+     44   LOAD_VAR 12    (_11)
+     45   BIN_OP -       
+     46   STORE_VAR 8    (c)
+     47   LOAD_VAR 2     (a)
+     48   STORE_VAR 15   (_14)
+     49   LOAD_VAR 5     (b)
+     50   STORE_VAR 16   (_15)
+     51   LOAD_VAR 15    (_14)
+     52   LOAD_VAR 16    (_15)
+     53   BIN_OP +       
+     54   STORE_VAR 14   (_13)
+     55   LOAD_VAR 8     (c)
+     56   STORE_VAR 17   (_16)
+     57   LOAD_VAR 14    (_13)
+     58   LOAD_VAR 17    (_16)
+     59   BIN_OP *       
+     60   STORE_VAR 13   (d)
+     61   LOAD_VAR 13    (d)
+     62   STORE_VAR 1    (_0)
+     63   JUMP +3        (to 66)
+     64   LOAD_VAR 1     (_0)
+     65   RETURN         
+     66   LOAD_VAR 1     (_0)
+     67   RETURN         
 
 Function FieldAccess (arity: 1, kind: Exec):
-     0    LOAD_VAR 1           (user)
-     1    LOAD_FIELD 0         
-     2    LOAD_VAR 1           (user)
-     3    LOAD_FIELD 1         
-     4    LOAD_FIELD 0         
-     5    LOAD_VAR 1           (user)
-     6    LOAD_FIELD 1         
-     7    LOAD_FIELD 1         
+     0    LOAD_CONST 0         (null)
+     1    LOAD_CONST 0         (null)
+     2    LOAD_CONST 0         (null)
+     3    LOAD_CONST 0         (null)
+     4    LOAD_CONST 0         (null)
+     5    LOAD_CONST 0         (null)
+     6    LOAD_CONST 0         (null)
+     7    LOAD_VAR 1           (_0)
      8    LOAD_FIELD 0         
-     9    LOAD_VAR 1           (user)
-     10   LOAD_FIELD 2         
-     11   LOAD_CONST 0         (0)
-     12   LOAD_ARRAY_ELEMENT   
-     13   LOAD_VAR 4           (theme)
-     14   RETURN               
-     15   RETURN               
+     9    STORE_VAR 3          (name)
+     10   LOAD_VAR 1           (_0)
+     11   LOAD_FIELD 1         
+     12   LOAD_FIELD 0         
+     13   STORE_VAR 4          (bio)
+     14   LOAD_VAR 1           (_0)
+     15   LOAD_FIELD 1         
+     16   LOAD_FIELD 1         
+     17   LOAD_FIELD 0         
+     18   STORE_VAR 5          (theme)
+     19   LOAD_VAR 1           (_0)
+     20   LOAD_FIELD 2         
+     21   STORE_VAR 7          (_6)
+     22   LOAD_CONST 1         (0)
+     23   STORE_VAR 8          (_7)
+     24   LOAD_VAR 7           (_6)
+     25   LOAD_VAR 8           (_7)
+     26   LOAD_ARRAY_ELEMENT   
+     27   STORE_VAR 6          (firstTag)
+     28   LOAD_VAR 5           (theme)
+     29   STORE_VAR 2          (user)
+     30   JUMP +3              (to 33)
+     31   LOAD_VAR 2           (user)
+     32   RETURN               
+     33   LOAD_VAR 2           (user)
+     34   RETURN               
 
 Function IndexAccess (arity: 1, kind: Exec):
-     0    LOAD_VAR 1           (users)
-     1    LOAD_CONST 0         (0)
-     2    LOAD_ARRAY_ELEMENT   
-     3    LOAD_CONST 1         (1)
-     4    LOAD_VAR 1           (users)
-     5    LOAD_VAR 3           (idx)
-     6    LOAD_ARRAY_ELEMENT   
-     7    LOAD_VAR 1           (users)
-     8    LOAD_CONST 0         (0)
-     9    LOAD_ARRAY_ELEMENT   
-     10   LOAD_FIELD 0         
-     11   LOAD_VAR 1           (users)
-     12   LOAD_CONST 0         (0)
-     13   LOAD_ARRAY_ELEMENT   
-     14   LOAD_FIELD 0         
-     15   LOAD_CONST 0         (0)
-     16   LOAD_ARRAY_ELEMENT   
-     17   LOAD_VAR 5           (firstName)
-     18   RETURN               
-     19   RETURN               
+     0    LOAD_CONST 0         (null)
+     1    LOAD_CONST 0         (null)
+     2    LOAD_CONST 0         (null)
+     3    LOAD_CONST 0         (null)
+     4    LOAD_CONST 0         (null)
+     5    LOAD_CONST 0         (null)
+     6    LOAD_CONST 0         (null)
+     7    LOAD_CONST 0         (null)
+     8    LOAD_CONST 0         (null)
+     9    LOAD_CONST 0         (null)
+     10   LOAD_CONST 0         (null)
+     11   LOAD_CONST 0         (null)
+     12   LOAD_CONST 0         (null)
+     13   LOAD_CONST 0         (null)
+     14   LOAD_CONST 0         (null)
+     15   LOAD_CONST 0         (null)
+     16   LOAD_CONST 0         (null)
+     17   LOAD_CONST 0         (null)
+     18   LOAD_VAR 1           (_0)
+     19   STORE_VAR 4          (_3)
+     20   LOAD_CONST 1         (0)
+     21   STORE_VAR 5          (_4)
+     22   LOAD_VAR 4           (_3)
+     23   LOAD_VAR 5           (_4)
+     24   LOAD_ARRAY_ELEMENT   
+     25   STORE_VAR 3          (first)
+     26   LOAD_CONST 2         (1)
+     27   STORE_VAR 6          (idx)
+     28   LOAD_VAR 1           (_0)
+     29   STORE_VAR 8          (_7)
+     30   LOAD_VAR 6           (idx)
+     31   STORE_VAR 9          (_8)
+     32   LOAD_VAR 8           (_7)
+     33   LOAD_VAR 9           (_8)
+     34   LOAD_ARRAY_ELEMENT   
+     35   STORE_VAR 7          (second)
+     36   LOAD_VAR 1           (_0)
+     37   STORE_VAR 12         (_11)
+     38   LOAD_CONST 1         (0)
+     39   STORE_VAR 13         (_12)
+     40   LOAD_VAR 12          (_11)
+     41   LOAD_VAR 13          (_12)
+     42   LOAD_ARRAY_ELEMENT   
+     43   STORE_VAR 11         (_10)
+     44   LOAD_VAR 11          (_10)
+     45   LOAD_FIELD 0         
+     46   STORE_VAR 10         (firstName)
+     47   LOAD_VAR 1           (_0)
+     48   STORE_VAR 17         (_16)
+     49   LOAD_CONST 1         (0)
+     50   STORE_VAR 18         (_17)
+     51   LOAD_VAR 17          (_16)
+     52   LOAD_VAR 18          (_17)
+     53   LOAD_ARRAY_ELEMENT   
+     54   STORE_VAR 16         (_15)
+     55   LOAD_VAR 16          (_15)
+     56   LOAD_FIELD 2         
+     57   STORE_VAR 15         (_14)
+     58   LOAD_CONST 1         (0)
+     59   STORE_VAR 19         (_18)
+     60   LOAD_VAR 15          (_14)
+     61   LOAD_VAR 19          (_18)
+     62   LOAD_ARRAY_ELEMENT   
+     63   STORE_VAR 14         (tag)
+     64   LOAD_VAR 10          (firstName)
+     65   STORE_VAR 2          (users)
+     66   JUMP +3              (to 69)
+     67   LOAD_VAR 2           (users)
+     68   RETURN               
+     69   LOAD_VAR 2           (users)
+     70   RETURN               
 
 Function TestPrecedence (arity: 0, kind: Exec):
-     0    LOAD_CONST 0       (2)
-     1    LOAD_CONST 1       (3)
-     2    LOAD_CONST 2       (4)
-     3    BIN_OP *           
-     4    BIN_OP +           
-     5    LOAD_CONST 0       (2)
-     6    LOAD_CONST 1       (3)
-     7    BIN_OP *           
-     8    LOAD_CONST 2       (4)
-     9    BIN_OP +           
-     10   LOAD_VAR 1         (a)
-     11   LOAD_CONST 3       (10)
-     12   LOAD_CONST 0       (2)
-     13   BIN_OP +           
-     14   CMP_OP >           
-     15   LOAD_CONST 4       (true)
-     16   JUMP_IF_FALSE +2   (to 18)
-     17   JUMP +6            (to 23)
-     18   POP 1              
-     19   LOAD_CONST 5       (false)
-     20   JUMP_IF_FALSE +3   (to 23)
-     21   POP 1              
-     22   LOAD_CONST 5       (false)
-     23   LOAD_VAR 4         (d)
-     24   RETURN             
-     25   RETURN
+     0    LOAD_CONST 0       (null)
+     1    LOAD_CONST 0       (null)
+     2    LOAD_CONST 0       (null)
+     3    LOAD_CONST 0       (null)
+     4    LOAD_CONST 0       (null)
+     5    LOAD_CONST 0       (null)
+     6    LOAD_CONST 0       (null)
+     7    LOAD_CONST 0       (null)
+     8    LOAD_CONST 0       (null)
+     9    LOAD_CONST 0       (null)
+     10   LOAD_CONST 0       (null)
+     11   LOAD_CONST 0       (null)
+     12   LOAD_CONST 0       (null)
+     13   LOAD_CONST 0       (null)
+     14   LOAD_CONST 0       (null)
+     15   LOAD_CONST 0       (null)
+     16   LOAD_CONST 0       (null)
+     17   LOAD_CONST 0       (null)
+     18   LOAD_CONST 0       (null)
+     19   LOAD_CONST 1       (2)
+     20   STORE_VAR 3        (_2)
+     21   LOAD_CONST 2       (3)
+     22   STORE_VAR 5        (_4)
+     23   LOAD_CONST 3       (4)
+     24   STORE_VAR 6        (_5)
+     25   LOAD_VAR 5         (_4)
+     26   LOAD_VAR 6         (_5)
+     27   BIN_OP *           
+     28   STORE_VAR 4        (_3)
+     29   LOAD_VAR 3         (_2)
+     30   LOAD_VAR 4         (_3)
+     31   BIN_OP +           
+     32   STORE_VAR 2        (a)
+     33   LOAD_CONST 1       (2)
+     34   STORE_VAR 9        (_8)
+     35   LOAD_CONST 2       (3)
+     36   STORE_VAR 10       (_9)
+     37   LOAD_VAR 9         (_8)
+     38   LOAD_VAR 10        (_9)
+     39   BIN_OP *           
+     40   STORE_VAR 8        (_7)
+     41   LOAD_CONST 3       (4)
+     42   STORE_VAR 11       (_10)
+     43   LOAD_VAR 8         (_7)
+     44   LOAD_VAR 11        (_10)
+     45   BIN_OP +           
+     46   STORE_VAR 7        (c)
+     47   LOAD_VAR 2         (a)
+     48   STORE_VAR 13       (_12)
+     49   LOAD_CONST 4       (10)
+     50   STORE_VAR 15       (_14)
+     51   LOAD_CONST 1       (2)
+     52   STORE_VAR 16       (_15)
+     53   LOAD_VAR 15        (_14)
+     54   LOAD_VAR 16        (_15)
+     55   BIN_OP +           
+     56   STORE_VAR 14       (_13)
+     57   LOAD_VAR 13        (_12)
+     58   LOAD_VAR 14        (_13)
+     59   CMP_OP >           
+     60   STORE_VAR 12       (b)
+     61   LOAD_CONST 5       (true)
+     62   STORE_VAR 18       (_17)
+     63   LOAD_VAR 18        (_17)
+     64   JUMP_IF_FALSE +7   (to 71)
+     65   JUMP +3            (to 68)
+     66   LOAD_VAR 1         (_0)
+     67   RETURN             
+     68   LOAD_CONST 5       (true)
+     69   STORE_VAR 17       (d)
+     70   JUMP +6            (to 76)
+     71   LOAD_CONST 6       (false)
+     72   STORE_VAR 19       (_18)
+     73   LOAD_VAR 19        (_18)
+     74   JUMP_IF_FALSE +8   (to 82)
+     75   JUMP +4            (to 79)
+     76   LOAD_VAR 17        (d)
+     77   STORE_VAR 1        (_0)
+     78   JUMP +8            (to 86)
+     79   LOAD_CONST 6       (false)
+     80   STORE_VAR 17       (d)
+     81   JUMP +4            (to 85)
+     82   LOAD_CONST 6       (false)
+     83   STORE_VAR 17       (d)
+     84   JUMP +1            (to 85)
+     85   JUMP -9            (to 76)
+     86   LOAD_VAR 1         (_0)
+     87   RETURN

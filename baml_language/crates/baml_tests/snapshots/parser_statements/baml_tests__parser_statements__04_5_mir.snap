@@ -614,22 +614,21 @@ fn iterator_style_for_loop() -> Int {
     let _5: Int
     let _6: Int
     let _7: Int // _len
-    let _8: Function { params: [List(Int)], ret: Int }
-    let _9: List(Int)
-    let _10: Int // _i
-    let _11: Bool
+    let _8: List(Int)
+    let _9: Int // _i
+    let _10: Bool
+    let _11: Int
     let _12: Int
-    let _13: Int
-    let _14: Void
-    let _15: Int // i
-    let _16: List(Int)
+    let _13: Void
+    let _14: Int // i
+    let _15: List(Int)
+    let _16: Int
     let _17: Int
     let _18: Int
     let _19: Int
     let _20: Int
     let _21: Int
     let _22: Int
-    let _23: Int
 
     bb0: {
         _1 = const 0_i64;
@@ -637,9 +636,8 @@ fn iterator_style_for_loop() -> Int {
         _5 = const 2_i64;
         _6 = const 3_i64;
         _3 = [copy _4, copy _5, copy _6];
-        _9 = copy _3;
-        _8 = copy _9.0;
-        _7 = call copy _8() -> [bb2];
+        _8 = copy _3;
+        _7 = call const fn baml.Array.length(copy _8) -> [bb2];
     }
 
     bb1: {
@@ -647,30 +645,30 @@ fn iterator_style_for_loop() -> Int {
     }
 
     bb2: {
-        _10 = const 0_i64;
+        _9 = const 0_i64;
         goto -> bb3;
     }
 
     bb3: {
-        _12 = copy _10;
-        _13 = copy _7;
-        _11 = copy _12 < copy _13;
-        branch copy _11 -> [bb4, bb5];
+        _11 = copy _9;
+        _12 = copy _7;
+        _10 = copy _11 < copy _12;
+        branch copy _10 -> [bb4, bb5];
     }
 
     bb4: {
-        _16 = copy _3;
-        _17 = copy _10;
-        _15 = copy _16[_17];
-        _18 = copy _10;
-        _19 = const 1_i64;
-        _20 = copy _18 + copy _19;
-        _10 = copy _20;
-        _21 = copy _1;
-        _22 = copy _15;
-        _23 = copy _21 + copy _22;
-        _1 = copy _23;
-        _14 = const null;
+        _15 = copy _3;
+        _16 = copy _9;
+        _14 = copy _15[_16];
+        _17 = copy _9;
+        _18 = const 1_i64;
+        _19 = copy _17 + copy _18;
+        _9 = copy _19;
+        _20 = copy _1;
+        _21 = copy _14;
+        _22 = copy _20 + copy _21;
+        _1 = copy _22;
+        _13 = const null;
         goto -> bb3;
     }
 
@@ -696,34 +694,34 @@ fn nested_for_loop() -> Int {
     let _5: Int
     let _6: Int
     let _7: Int // _len
-    let _8: Function { params: [List(Int)], ret: Int }
-    let _9: List(Int)
-    let _10: Int // _i
-    let _11: Bool
+    let _8: List(Int)
+    let _9: Int // _i
+    let _10: Bool
+    let _11: Int
     let _12: Int
-    let _13: Int
-    let _14: Void
-    let _15: Int // i
-    let _16: List(Int)
+    let _13: Void
+    let _14: Int // i
+    let _15: List(Int)
+    let _16: Int
     let _17: Int
     let _18: Int
     let _19: Int
-    let _20: Int
-    let _21: Void
-    let _22: List(Int) // _iter1
+    let _20: Void
+    let _21: List(Int) // _iter1
+    let _22: Int
     let _23: Int
     let _24: Int
-    let _25: Int
-    let _26: Int // _len1
-    let _27: Function { params: [List(Int)], ret: Int }
-    let _28: List(Int)
-    let _29: Int // _i1
-    let _30: Bool
-    let _31: Int
-    let _32: Int
-    let _33: Void
-    let _34: Int // j
-    let _35: List(Int)
+    let _25: Int // _len1
+    let _26: List(Int)
+    let _27: Int // _i1
+    let _28: Bool
+    let _29: Int
+    let _30: Int
+    let _31: Void
+    let _32: Int // j
+    let _33: List(Int)
+    let _34: Int
+    let _35: Int
     let _36: Int
     let _37: Int
     let _38: Int
@@ -731,8 +729,6 @@ fn nested_for_loop() -> Int {
     let _40: Int
     let _41: Int
     let _42: Int
-    let _43: Int
-    let _44: Int
 
     bb0: {
         _1 = const 0_i64;
@@ -740,9 +736,8 @@ fn nested_for_loop() -> Int {
         _5 = const 2_i64;
         _6 = const 3_i64;
         _3 = [copy _4, copy _5, copy _6];
-        _9 = copy _3;
-        _8 = copy _9.0;
-        _7 = call copy _8() -> [bb2];
+        _8 = copy _3;
+        _7 = call const fn baml.Array.length(copy _8) -> [bb2];
     }
 
     bb1: {
@@ -750,32 +745,31 @@ fn nested_for_loop() -> Int {
     }
 
     bb2: {
-        _10 = const 0_i64;
+        _9 = const 0_i64;
         goto -> bb3;
     }
 
     bb3: {
-        _12 = copy _10;
-        _13 = copy _7;
-        _11 = copy _12 < copy _13;
-        branch copy _11 -> [bb4, bb5];
+        _11 = copy _9;
+        _12 = copy _7;
+        _10 = copy _11 < copy _12;
+        branch copy _10 -> [bb4, bb5];
     }
 
     bb4: {
-        _16 = copy _3;
-        _17 = copy _10;
-        _15 = copy _16[_17];
-        _18 = copy _10;
-        _19 = const 1_i64;
-        _20 = copy _18 + copy _19;
-        _10 = copy _20;
-        _23 = const 4_i64;
-        _24 = const 5_i64;
-        _25 = const 6_i64;
-        _22 = [copy _23, copy _24, copy _25];
-        _28 = copy _22;
-        _27 = copy _28.0;
-        _26 = call copy _27() -> [bb6];
+        _15 = copy _3;
+        _16 = copy _9;
+        _14 = copy _15[_16];
+        _17 = copy _9;
+        _18 = const 1_i64;
+        _19 = copy _17 + copy _18;
+        _9 = copy _19;
+        _22 = const 4_i64;
+        _23 = const 5_i64;
+        _24 = const 6_i64;
+        _21 = [copy _22, copy _23, copy _24];
+        _26 = copy _21;
+        _25 = call const fn baml.Array.length(copy _26) -> [bb6];
     }
 
     bb5: {
@@ -785,38 +779,38 @@ fn nested_for_loop() -> Int {
     }
 
     bb6: {
-        _29 = const 0_i64;
+        _27 = const 0_i64;
         goto -> bb7;
     }
 
     bb7: {
-        _31 = copy _29;
-        _32 = copy _26;
-        _30 = copy _31 < copy _32;
-        branch copy _30 -> [bb8, bb9];
+        _29 = copy _27;
+        _30 = copy _25;
+        _28 = copy _29 < copy _30;
+        branch copy _28 -> [bb8, bb9];
     }
 
     bb8: {
-        _35 = copy _22;
-        _36 = copy _29;
-        _34 = copy _35[_36];
-        _37 = copy _29;
-        _38 = const 1_i64;
-        _39 = copy _37 + copy _38;
-        _29 = copy _39;
-        _40 = copy _1;
-        _42 = copy _15;
-        _43 = copy _34;
-        _41 = copy _42 * copy _43;
-        _44 = copy _40 + copy _41;
-        _1 = copy _44;
-        _33 = const null;
+        _33 = copy _21;
+        _34 = copy _27;
+        _32 = copy _33[_34];
+        _35 = copy _27;
+        _36 = const 1_i64;
+        _37 = copy _35 + copy _36;
+        _27 = copy _37;
+        _38 = copy _1;
+        _40 = copy _14;
+        _41 = copy _32;
+        _39 = copy _40 * copy _41;
+        _42 = copy _38 + copy _39;
+        _1 = copy _42;
+        _31 = const null;
         goto -> bb7;
     }
 
     bb9: {
-        _21 = const null;
-        _14 = const null;
+        _20 = const null;
+        _13 = const null;
         goto -> bb3;
     }
 
@@ -918,7 +912,7 @@ fn let_statements() -> Int {
         _9 = const 2_i64;
         _7 = Point { copy _8, copy _9 };
         _10 = copy _7.0;
-        _11 = copy _7.0;
+        _11 = copy _7.1;
         _0 = copy _10 + copy _11;
         goto -> bb2;
     }

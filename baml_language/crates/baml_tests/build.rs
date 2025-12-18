@@ -482,7 +482,25 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
 
             // Build initial typing context with all function types
             let globals = build_typing_context_from_files(&db, &source_files);
-            let class_fields = baml_thir::lower_project_class_fields(&db, root);
+            let class_field_types = baml_thir::lower_project_class_fields(&db, root);
+
+            // Build class field indices map (class name -> field name -> field index)
+            let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
+            for source_file in &source_files {
+                let item_tree = baml_hir::file_item_tree(&db, *source_file);
+                let items_struct = baml_hir::file_items(&db, *source_file);
+                for item in items_struct.items(&db) {
+                    if let baml_hir::ItemId::Class(class_loc) = item {
+                        let class = &item_tree[class_loc.id(&db)];
+                        let class_name = class.name.to_string();
+                        let mut field_indices = HashMap::new();
+                        for (idx, field) in class.fields.iter().enumerate() {
+                            field_indices.insert(field.name.to_string(), idx);
+                        }
+                        classes.insert(class_name, field_indices);
+                    }
+                }
+            }
 
             // Iterate over files and their functions
             for source_file in &source_files {
@@ -492,10 +510,10 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let inference = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), *func_id);
+                        let inference = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types.clone()), *func_id);
 
                         // Lower to MIR
-                        let mir = baml_mir::lower_function(&signature, &body, &inference, &db);
+                        let mir = baml_mir::lower_function(&signature, &body, &inference, &db, &classes);
 
                         // Pretty print the MIR
                         writeln!(output, "{}", baml_mir::pretty::display_function(&mir)).unwrap();
