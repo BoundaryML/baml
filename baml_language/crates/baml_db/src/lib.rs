@@ -13,6 +13,7 @@ pub use baml_codegen;
 pub use baml_diagnostics;
 pub use baml_hir;
 pub use baml_lexer;
+pub use baml_mir;
 pub use baml_parser;
 pub use baml_syntax;
 pub use baml_thir;
@@ -39,6 +40,9 @@ impl baml_hir::Db for RootDatabase {}
 
 #[salsa::db]
 impl baml_thir::Db for RootDatabase {}
+
+#[salsa::db]
+impl baml_mir::Db for RootDatabase {}
 
 impl RootDatabase {
     /// Create a new empty database.

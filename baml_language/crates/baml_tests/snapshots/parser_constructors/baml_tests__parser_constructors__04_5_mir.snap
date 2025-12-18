@@ -1,0 +1,227 @@
+---
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn floatArray() -> List(Float) {
+    // Locals:
+    let _0: List(Float) // return
+    let _1: Float
+    let _2: Float
+    let _3: Float
+
+    bb0: {
+        _1 = const 1_f64;
+        _2 = const 2_f64;
+        _3 = const 3_f64;
+        _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn stringArray() -> List(String) {
+    // Locals:
+    let _0: List(String) // return
+    let _1: String
+    let _2: String
+    let _3: String
+
+    bb0: {
+        _1 = const "hello";
+        _2 = const "world";
+        _3 = const "test";
+        _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn pointArray() -> List(Named("Point")) {
+    // Locals:
+    let _0: List(Named("Point")) // return
+    let _1: Named("Point")
+    let _2: Int
+    let _3: Int
+    let _4: Named("Point")
+    let _5: Int
+    let _6: Int
+    let _7: Named("Point")
+    let _8: Int
+    let _9: Int
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _1 = Point { copy _2, copy _3 };
+        _5 = const 3_i64;
+        _6 = const 4_i64;
+        _4 = Point { copy _5, copy _6 };
+        _8 = const 5_i64;
+        _9 = const 6_i64;
+        _7 = Point { copy _8, copy _9 };
+        _0 = [copy _1, copy _4, copy _7];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn boolArray() -> List(Bool) {
+    // Locals:
+    let _0: List(Bool) // return
+    let _1: Bool
+    let _2: Bool
+    let _3: Bool
+
+    bb0: {
+        _1 = const true;
+        _2 = const false;
+        _3 = const true;
+        _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn intArray() -> List(Int) {
+    // Locals:
+    let _0: List(Int) // return
+    let _1: Int
+    let _2: Int
+    let _3: Int
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const 2_i64;
+        _3 = const 3_i64;
+        _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn point() -> Named("Point") {
+    // Locals:
+    let _0: Named("Point") // return
+    let _1: Int
+    let _2: Int
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const 2_i64;
+        _0 = Point { copy _1, copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn vec2d() -> Named("Vec2D") {
+    // Locals:
+    let _0: Named("Vec2D") // return
+    let _1: Named("Point")
+    let _2: Int
+    let _3: Int
+    let _4: Named("Point")
+    let _5: Int
+    let _6: Int
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _1 = Point { copy _2, copy _3 };
+        _5 = const 3_i64;
+        _6 = const 4_i64;
+        _4 = Point { copy _5, copy _6 };
+        _0 = Vec2D { copy _1, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn boolValues() -> Void {
+    // Locals:
+    let _0: Void // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn intValues() -> Void {
+    // Locals:
+    let _0: Void // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn stringValues() -> Void {
+    // Locals:
+    let _0: Void // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn floatValues() -> Void {
+    // Locals:
+    let _0: Void // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}

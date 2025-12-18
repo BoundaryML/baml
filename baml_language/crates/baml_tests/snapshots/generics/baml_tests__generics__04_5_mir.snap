@@ -1,0 +1,24 @@
+---
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn GetTodo() -> Unknown {
+    // Locals:
+    let _0: Unknown // return
+    let _1: Unknown
+
+    bb0: {
+        _1 = const null;
+        _0 = call copy _1() -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}

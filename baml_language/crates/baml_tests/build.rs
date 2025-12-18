@@ -190,6 +190,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
 
     let hir_test = generate_hir_test(project);
     let thir_test = generate_thir_test(project);
+    let mir_test = generate_mir_test(project);
     let diagnostics_test = generate_diagnostics_test(project);
     let codegen_test = generate_codegen_test(project);
 
@@ -222,6 +223,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_parser;
             use baml_db::baml_hir;
             use baml_db::baml_thir;
+            use baml_db::baml_mir;
             use baml_db::baml_codegen;
             use baml_hir::{function_body, function_signature};
             use baml_thir::{build_typing_context_from_files};
@@ -239,6 +241,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             #parser_tests
             #hir_test
             #thir_test
+            #mir_test
             #diagnostics_test
             #codegen_test
             #parser_specific_tests
@@ -434,6 +437,74 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
 
             with_settings!({snapshot_path => SNAPSHOT_PATH}, {
                 assert_snapshot!("04_thir", output);
+            });
+        }
+    }
+}
+
+fn generate_mir_test(project: &TestProject) -> TokenStream {
+    let file_loaders: TokenStream = project
+        .files
+        .iter()
+        .map(|baml_file| {
+            let full_path = baml_file.full_path.display().to_string();
+            let relative_path = baml_file.relative_path.display().to_string();
+            let include_content = make_include_str(&full_path);
+
+            quote! {
+                {
+                    let content = #include_content;
+                    let content = content.replace("\r\n", "\n");
+                    let sf = db.add_file(
+                        #relative_path,
+                        &content,
+                    );
+                    source_files.push(sf);
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[test]
+        fn test_04_5_mir() {
+            let mut db = RootDatabase::new();
+            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let mut source_files = Vec::new();
+
+            #file_loaders
+
+            // Update project root with the list of files for proper Salsa tracking
+            root.set_files(&mut db).to(source_files.clone());
+
+            let mut output = String::new();
+            writeln!(output, "=== MIR ===").unwrap();
+
+            // Build initial typing context with all function types
+            let globals = build_typing_context_from_files(&db, &source_files);
+            let class_fields = baml_thir::lower_project_class_fields(&db, root);
+
+            // Iterate over files and their functions
+            for source_file in &source_files {
+                let items_struct = baml_hir::file_items(&db, *source_file);
+                let items = items_struct.items(&db);
+                for item in items.iter() {
+                    if let baml_hir::ItemId::Function(func_id) = item {
+                        let signature = function_signature(&db, *func_id);
+                        let body = function_body(&db, *func_id);
+                        let inference = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), *func_id);
+
+                        // Lower to MIR
+                        let mir = baml_mir::lower_function(&signature, &body, &inference, &db);
+
+                        // Pretty print the MIR
+                        writeln!(output, "{}", baml_mir::pretty::display_function(&mir)).unwrap();
+                    }
+                }
+            }
+
+            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+                assert_snapshot!("04_5_mir", output);
             });
         }
     }
