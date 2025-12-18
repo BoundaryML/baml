@@ -1,0 +1,16 @@
+# Ignore target directory (cargo's output)
+target/
+
+# Ignore node_modules
+node_modules/
+
+# Ignore other non-Rust files
+*.json
+*.md
+*.yml
+*.yaml
+.git/
+.gitignore
+
+# Ignore the embedded playground dist
+../../typescript/apps/playground/dist/

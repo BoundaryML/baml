@@ -15,6 +15,7 @@ packages:
   - examples/internal/sam/*
   - examples/internal/greg/*
   - examples/internal/antonio/*
+  - baml_language/crates/language_server
   # - engine/language_client_typescript/npm/darwin-arm64
   # - engine/language_client_typescript/npm/darwin-x64
   # - engine/language_client_typescript/npm/linux-arm64-gmu
