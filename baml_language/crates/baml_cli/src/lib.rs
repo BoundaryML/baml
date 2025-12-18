@@ -1,5 +1,13 @@
 // TODO: This CLI has been simplified to only support the LSP command for now.
 // Other commands that depend on baml_runtime are commented out.
+#![allow(
+    dead_code,
+    unreachable_pub,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::empty_structs_with_brackets,
+    clippy::exit
+)]
 
 pub(crate) mod commands;
 pub(crate) mod lsp;

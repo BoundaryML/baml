@@ -12,25 +12,13 @@ pub enum FunctionFlavor {
     Prompt,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct BamlSpan {
     pub file_path: String,
     pub start: usize,
     pub end: usize,
     pub start_line: usize,
     pub end_line: usize,
-}
-
-impl Default for BamlSpan {
-    fn default() -> Self {
-        BamlSpan {
-            file_path: "".to_string(),
-            start: 0,
-            end: 0,
-            start_line: 0,
-            end_line: 0,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

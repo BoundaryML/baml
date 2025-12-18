@@ -1,4 +1,15 @@
 #![deny(clippy::print_stdout)]
+// TODO: Remove these allows once the LSP is fully implemented
+#![allow(
+    unused_imports,
+    unused_variables,
+    dead_code,
+    unreachable_pub,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::empty_structs_with_brackets,
+    clippy::let_and_return
+)]
 use std::num::NonZeroUsize;
 
 use anyhow::Context;
