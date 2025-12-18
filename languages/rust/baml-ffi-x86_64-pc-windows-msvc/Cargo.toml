@@ -1,0 +1,19 @@
+[package]
+name = "baml-ffi-x86_64-pc-windows-msvc"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "BAML FFI library for x86_64-pc-windows-msvc"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+# No dependencies - this is a pure artifact crate

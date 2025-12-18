@@ -1,0 +1,19 @@
+fn main() {
+    println!("cargo:rerun-if-changed=../../../engine/language_client_cffi/types/");
+
+    let proto_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../engine/language_client_cffi/types");
+
+    // Generate proto files into OUT_DIR (standard prost pattern)
+    prost_build::Config::new()
+        .compile_protos(
+            &[
+                proto_root.join("baml/cffi/v1/baml_inbound.proto"),
+                proto_root.join("baml/cffi/v1/baml_outbound.proto"),
+                proto_root.join("baml/cffi/v1/baml_object.proto"),
+                proto_root.join("baml/cffi/v1/baml_object_methods.proto"),
+            ],
+            &[&proto_root],
+        )
+        .expect("Failed to compile protos");
+}
