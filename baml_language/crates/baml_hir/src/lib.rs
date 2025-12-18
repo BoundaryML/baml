@@ -727,6 +727,8 @@ pub fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
     lower_type_text(text)
 }
 
+/// Lower a single type text (not a union) to a TypeRef.
+fn lower_type_text(text: &str) -> TypeRef {
     // Handle primitives
     match text {
         "int" => TypeRef::Int,
@@ -739,15 +741,34 @@ pub fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
         "video" => TypeRef::Video,
         "pdf" => TypeRef::Pdf,
         _ => {
+            // Check for string literal types
+            if (text.starts_with('"') && text.ends_with('"'))
+                || (text.starts_with('\'') && text.ends_with('\''))
+            {
+                // String literal type; extract the value
+                let inner = &text[1..text.len() - 1];
+                return TypeRef::StringLiteral(inner.to_string());
+            }
+
             // Check if it ends with '?' (optional)
             if let Some(inner_text) = text.strip_suffix('?') {
-                let inner = TypeRef::named(inner_text.into());
+                let inner = lower_type_text(inner_text);
                 TypeRef::optional(inner)
             }
             // Check if it ends with '[]' (list)
             else if let Some(inner_text) = text.strip_suffix("[]") {
-                let inner = TypeRef::named(inner_text.into());
+                let inner = lower_type_text(inner_text);
                 TypeRef::list(inner)
+            }
+            // Check for boolean literal types
+            else if text == "true" {
+                TypeRef::BoolLiteral(true)
+            } else if text == "false" {
+                TypeRef::BoolLiteral(false)
+            }
+            // Check for integer literal types (for exhaustiveness)
+            else if let Ok(int_val) = text.parse::<i64>() {
+                TypeRef::IntLiteral(int_val)
             }
             // Otherwise treat as named type
             else {
