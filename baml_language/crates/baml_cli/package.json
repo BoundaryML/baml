@@ -1,5 +1,5 @@
 {
-  "name": "@baml/cli",
+  "name": "@baml/cliv2",
   "version": "0.1.0",
   "private": true,
   "files": ["dist"],
