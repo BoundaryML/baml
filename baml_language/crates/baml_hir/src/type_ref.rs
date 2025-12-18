@@ -41,7 +41,7 @@ pub enum TypeRef {
     /// From a type-theoretic perspective, singleton types require decidable
     /// equality to support pattern matching and exhaustiveness checking. Floats are
     /// intentionally excluded because floating-point equality is not decidable
-    /// (NaN ≠ NaN, precision issues like 0.1 + 0.2 ≠ 0.3, etc.).
+    /// (NaN != NaN, precision issues like 0.1 + 0.2 != 0.3, etc.).
     StringLiteral(String),
     IntLiteral(i64),
     BoolLiteral(bool),
