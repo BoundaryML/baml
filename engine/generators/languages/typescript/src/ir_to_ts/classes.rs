@@ -76,9 +76,8 @@ fn ir_field_to_ts_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> Fi
 mod tests {
     use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
 
-    use crate::r#type::TypeTS;
-
     use super::*;
+    use crate::r#type::TypeTS;
 
     #[test]
     fn test_ir_class_to_ts() {
