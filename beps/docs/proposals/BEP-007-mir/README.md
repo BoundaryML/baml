@@ -365,7 +365,18 @@ pub enum Terminator {
     },
     /// Unreachable code (for exhaustive match).
     Unreachable,
-    /// Await an async operation.
+    /// Dispatch an async operation (LLM call) without blocking.
+    /// This is a suspend point - control returns to the embedder.
+    DispatchFuture {
+        callee: Operand,
+        args: Vec<Operand>,
+        /// Where to store the future handle.
+        future: Place,
+        /// Block to resume at after dispatch.
+        resume: BlockId,
+    },
+    /// Await a future - suspend until result is ready.
+    /// This is a suspend point - control returns to the embedder.
     Await {
         future: Place,
         destination: Place,
@@ -901,6 +912,218 @@ struct ExceptionTableEntry {
 }
 ```
 
+## MIR and Async/Await
+
+### Current LLM Function Model
+
+In BAML, the only truly "async" functions are LLM functions:
+
+```baml
+function ClassifyText(text: string) -> string {
+    client "openai/gpt-4o-mini"
+    prompt #"
+        Classify the following text as positive, negative, or neutral:
+        {{ text }}
+
+        Return just the classification.
+    "#
+}
+```
+
+These are called from regular expression functions like any other function:
+
+```baml
+function process_text(text: string) -> string {
+    let classification = ClassifyText(text);
+    classification
+}
+```
+
+### How LLM Calls Work Today
+
+Under the hood, LLM function calls compile differently from regular calls:
+
+1. **`DISPATCH_FUTURE`** instead of `CALL`: When the VM executes this instruction, it returns control to the embedder (the runtime driving the VM). The embedder schedules the LLM request in the background.
+
+2. **Immediate `AWAIT`**: Currently, every `DISPATCH_FUTURE` is followed immediately by an `AWAIT` instruction. When the VM sees `AWAIT`, it returns control to the embedder saying "await future ID x". The embedder awaits the future, then calls `vm.fulfill_future(id, result)` to provide the result.
+
+```
+Current bytecode for: let x = ClassifyText("hello");
+
+LOAD_CONST "hello"
+DISPATCH_FUTURE ClassifyText    ; Returns to embedder, schedules LLM call
+AWAIT                           ; Returns to embedder, waits for result
+STORE_VAR x
+```
+
+This is a **cooperative coroutine model**: the VM yields to the embedder at specific points, and the embedder drives execution forward.
+
+### MIR Representation of LLM Calls
+
+In MIR, we model LLM calls with a dedicated `DispatchFuture` terminator that makes the suspend point explicit:
+
+```rust
+/// Dispatch an async operation (LLM call) and suspend.
+Terminator::DispatchFuture {
+    /// The LLM function to call.
+    callee: Operand,
+    /// Arguments to the function.
+    args: Vec<Operand>,
+    /// Future handle stored here.
+    future: Place,
+    /// Block to resume at after dispatch.
+    resume: BlockId,
+}
+
+/// Await a future and suspend until result is ready.
+Terminator::Await {
+    /// The future to await.
+    future: Place,
+    /// Where to store the result.
+    destination: Place,
+    /// Block to continue at after result is ready.
+    target: BlockId,
+    /// Block to jump to if the future fails (for catch).
+    unwind: Option<BlockId>,
+}
+```
+
+### Current Behavior: Implicit Await
+
+Today, without an `await` keyword, every LLM call is immediately awaited:
+
+Source:
+```baml
+function process(text: string) -> string {
+    let result = ClassifyText(text);
+    result
+}
+```
+
+MIR (current implicit await):
+```
+fn process(_1: string) -> string {
+    let _0: string;
+    let _2: Future<string>;    // Future handle
+
+    bb0: {
+        dispatch_future ClassifyText(_1) -> _2 resume bb1;
+    }
+
+    bb1: {
+        await _2 -> _0 target bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+```
+
+### Future: Explicit Await Syntax
+
+When we add the `await` keyword, users can dispatch multiple LLM calls before awaiting:
+
+```baml
+function parallel_classify(texts: string[]) -> string[] {
+    // Dispatch all futures (non-blocking)
+    let future1 = ClassifyText(texts[0]);
+    let future2 = ClassifyText(texts[1]);
+    let future3 = ClassifyText(texts[2]);
+
+    // Now await them (could be in any order)
+    let result1 = await future1;
+    let result2 = await future2;
+    let result3 = await future3;
+
+    [result1, result2, result3]
+}
+```
+
+MIR (explicit await):
+```
+fn parallel_classify(_1: string[]) -> string[] {
+    let _0: string[];
+    let _2: Future<string>;   // future1
+    let _3: Future<string>;   // future2
+    let _4: Future<string>;   // future3
+    let _5: string;           // result1
+    let _6: string;           // result2
+    let _7: string;           // result3
+
+    bb0: {
+        _8 = _1[const 0];
+        dispatch_future ClassifyText(_8) -> _2 resume bb1;
+    }
+
+    bb1: {
+        _9 = _1[const 1];
+        dispatch_future ClassifyText(_9) -> _3 resume bb2;
+    }
+
+    bb2: {
+        _10 = _1[const 2];
+        dispatch_future ClassifyText(_10) -> _4 resume bb3;
+    }
+
+    bb3: {
+        // All futures dispatched, now await them
+        await _2 -> _5 target bb4;
+    }
+
+    bb4: {
+        await _3 -> _6 target bb5;
+    }
+
+    bb5: {
+        await _4 -> _7 target bb6;
+    }
+
+    bb6: {
+        _0 = [_5, _6, _7];
+        return;
+    }
+}
+```
+
+### Await with Error Handling
+
+Combining `await` with `catch` allows handling LLM failures:
+
+```baml
+let result = await future catch {
+    e: LlmError => "fallback value",
+};
+```
+
+MIR:
+```
+bb3: {
+    await _2 -> _result target bb4 unwind bb5;
+}
+
+bb4 (success):
+    goto -> bb6;
+
+bb5 (error_handler):
+    _result = const "fallback value";
+    goto -> bb6;
+
+bb6 (join):
+    <use _result>
+```
+
+### Codegen: MIR to Bytecode
+
+The MIR terminators map directly to existing VM instructions:
+
+| MIR Terminator | Bytecode |
+|----------------|----------|
+| `dispatch_future f(args) -> _fut resume bb` | `DISPATCH_FUTURE f` |
+| `await _fut -> _dest target bb` | `AWAIT` |
+
+The key insight is that MIR makes the **suspend points explicit** as block boundaries. Each `dispatch_future` and `await` ends a basic block because control returns to the embedder.
+
 ## Human-Readable MIR Format
 
 ### Format Specification
@@ -969,7 +1192,9 @@ call func(args) -> [ok: bb1, err: bb2];               // Call with unwind
 call func(args) -> bb1;                               // Call without unwind
 return;                                               // Return
 unreachable;                                          // Should never execute
-await _future -> [ok: bb1, err: bb2];                 // Async await
+dispatch_future func(args) -> _fut resume bb1;        // Dispatch LLM call (suspend)
+await _fut -> _dest target bb1;                       // Await future (suspend)
+await _fut -> _dest target bb1 unwind bb2;            // Await with error handling
 ```
 
 ### Full Example
