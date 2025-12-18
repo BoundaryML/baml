@@ -7,11 +7,12 @@ use lsp_types::{
     self, GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range, Url,
     request as req,
 };
+
 // TODO: playground_server is disabled for now
 // use playground_server::WebviewRouterMessage;
-
 use crate::{
-    DocumentKey, Session,
+    DocumentKey,
+    Session,
     // TODO: BamlRuntimeExt is disabled for now
     // baml_project::{BamlRuntimeExt, position_utils::get_word_at_position, trim_line},
     baml_project::{position_utils::get_word_at_position, trim_line},

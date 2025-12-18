@@ -3,20 +3,21 @@
 //! This module collects errors from all compiler phases and converts them
 //! to LSP diagnostics format.
 
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use baml_db::{
-    baml_diagnostics::{NameError, ParseError, TypeError},
-    baml_hir::{file_items, project_items, validate_duplicate_names, ItemId},
-    baml_parser::parse_errors,
     FileId, SourceFile, Span,
+    baml_diagnostics::{NameError, ParseError, TypeError},
+    baml_hir::{ItemId, file_items, project_items, validate_duplicate_names},
+    baml_parser::parse_errors,
 };
 use lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Url};
 use text_size::TextRange;
 
-use super::position::{span_to_lsp_range, LineIndex};
-use super::LspDatabase;
+use super::{
+    LspDatabase,
+    position::{LineIndex, span_to_lsp_range},
+};
 
 /// An LSP diagnostic with file association.
 #[derive(Debug, Clone)]
@@ -186,12 +187,13 @@ fn convert_name_error(error: &NameError, db: &LspDatabase) -> Vec<LspDiagnostic>
                         code: Some(NumberOrString::String("E0011".to_string())),
                         code_description: None,
                         source: Some("baml".to_string()),
-                        message: format!("Duplicate {kind} `{name}` (first defined in {first_path})"),
+                        message: format!(
+                            "Duplicate {kind} `{name}` (first defined in {first_path})"
+                        ),
                         related_information: Some(vec![lsp_types::DiagnosticRelatedInformation {
                             location: lsp_types::Location {
-                                uri: Url::from_file_path(first_path).unwrap_or_else(|_| {
-                                    Url::parse("file:///unknown").unwrap()
-                                }),
+                                uri: Url::from_file_path(first_path)
+                                    .unwrap_or_else(|_| Url::parse("file:///unknown").unwrap()),
                                 range: first_line_index
                                     .as_ref()
                                     .map(|li| span_to_range_with_index(li, first))
@@ -246,9 +248,7 @@ fn convert_type_error<T: std::fmt::Display>(
             span,
             "E0001",
         ),
-        TypeError::UnknownType { name, span } => {
-            (format!("Unknown type `{name}`"), span, "E0002")
-        }
+        TypeError::UnknownType { name, span } => (format!("Unknown type `{name}`"), span, "E0002"),
         TypeError::UnknownVariable { name, span } => {
             (format!("Unknown variable `{name}`"), span, "E0003")
         }
@@ -303,8 +303,9 @@ fn span_to_range_with_index(line_index: &LineIndex, span: &Span) -> lsp_types::R
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::Path;
+
+    use super::*;
 
     #[test]
     fn test_parse_error_conversion() {

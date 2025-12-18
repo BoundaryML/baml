@@ -196,7 +196,9 @@ impl Session {
             "Creating new project for baml_src: {:?}",
             baml_src_root_path
         );
-        let new_project = Arc::new(Mutex::new(Project::new(BamlProject::new(baml_src_root_path.clone()))));
+        let new_project = Arc::new(Mutex::new(Project::new(BamlProject::new(
+            baml_src_root_path.clone(),
+        ))));
 
         // Insert and return the new project
         projects.insert(baml_src_root_path, new_project.clone());

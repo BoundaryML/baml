@@ -6,17 +6,19 @@
 use std::path::Path;
 
 use baml_db::{
-    baml_hir::{
-        self, file_item_tree, file_items, project_items, ClassId, ClientId, EnumId, FunctionId,
-        ItemId, TestId, TypeAliasId,
-    },
     Name, SourceFile, Span,
+    baml_hir::{
+        self, ClassId, ClientId, EnumId, FunctionId, ItemId, TestId, TypeAliasId, file_item_tree,
+        file_items, project_items,
+    },
 };
 use lsp_types::{Location, Position, Range, Url};
 use text_size::TextRange;
 
-use super::position::{span_to_lsp_range, LineIndex};
-use super::LspDatabase;
+use super::{
+    LspDatabase,
+    position::{LineIndex, span_to_lsp_range},
+};
 
 /// The kind of a symbol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -499,7 +501,12 @@ fn format_type_ref(ty: &baml_hir::TypeRef) -> String {
     use baml_db::baml_hir::TypeRef;
 
     match ty {
-        TypeRef::Path(path) => path.segments.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("::"),
+        TypeRef::Path(path) => path
+            .segments
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join("::"),
         TypeRef::Int => "int".to_string(),
         TypeRef::Float => "float".to_string(),
         TypeRef::String => "string".to_string(),
@@ -511,13 +518,23 @@ fn format_type_ref(ty: &baml_hir::TypeRef) -> String {
         TypeRef::Pdf => "pdf".to_string(),
         TypeRef::Optional(inner) => format!("{}?", format_type_ref(inner)),
         TypeRef::List(inner) => format!("{}[]", format_type_ref(inner)),
-        TypeRef::Map { key, value } => format!("map<{}, {}>", format_type_ref(key), format_type_ref(value)),
-        TypeRef::Union(types) => types.iter().map(format_type_ref).collect::<Vec<_>>().join(" | "),
+        TypeRef::Map { key, value } => {
+            format!("map<{}, {}>", format_type_ref(key), format_type_ref(value))
+        }
+        TypeRef::Union(types) => types
+            .iter()
+            .map(format_type_ref)
+            .collect::<Vec<_>>()
+            .join(" | "),
         TypeRef::StringLiteral(s) => format!("\"{}\"", s),
         TypeRef::IntLiteral(i) => i.to_string(),
         TypeRef::FloatLiteral(f) => f.clone(),
         TypeRef::Generic { base, args } => {
-            let args_str = args.iter().map(format_type_ref).collect::<Vec<_>>().join(", ");
+            let args_str = args
+                .iter()
+                .map(format_type_ref)
+                .collect::<Vec<_>>()
+                .join(", ");
             format!("{}<{}>", format_type_ref(base), args_str)
         }
         TypeRef::TypeParam(name) => name.to_string(),
@@ -531,7 +548,11 @@ fn format_class_definition(class: &baml_hir::Class) -> String {
     let mut lines = vec![format!("class {} {{", class.name)];
 
     for field in &class.fields {
-        lines.push(format!("  {} {}", field.name, format_type_ref(&field.type_ref)));
+        lines.push(format!(
+            "  {} {}",
+            field.name,
+            format_type_ref(&field.type_ref)
+        ));
     }
 
     lines.push("}".to_string());

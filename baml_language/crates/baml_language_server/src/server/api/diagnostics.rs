@@ -217,10 +217,13 @@ pub(super) fn project_diagnostics(
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
+                        *func_loc,
                     );
 
                     for type_error in &inference_result.errors {
-                        if let Some(diag) = type_error_to_diagnostic(type_error, &file_info, session) {
+                        if let Some(diag) =
+                            type_error_to_diagnostic(type_error, &file_info, session)
+                        {
                             add_diagnostic(get_type_error_file_id(type_error), diag);
                         }
                     }
@@ -243,15 +246,21 @@ fn parse_error_to_diagnostic(
             expected,
             found,
             span,
-        } => (format!("Expected {}, found {}", expected, found), span, "E0010"),
-        ParseError::UnexpectedEof { expected, span } => {
-            (format!("Unexpected end of file, expected {}", expected), span, "E0009")
-        }
+        } => (
+            format!("Expected {}, found {}", expected, found),
+            span,
+            "E0010",
+        ),
+        ParseError::UnexpectedEof { expected, span } => (
+            format!("Unexpected end of file, expected {}", expected),
+            span,
+            "E0009",
+        ),
     };
 
     let (_, source_text, line_index) = file_info.get(&span.file_id)?;
-    let range = convert_text_range(span.range)
-        .to_range(source_text, line_index, session.position_encoding);
+    let range =
+        convert_text_range(span.range).to_range(source_text, line_index, session.position_encoding);
 
     Some(lsp_types::Diagnostic {
         range,
@@ -282,8 +291,11 @@ fn name_error_to_diagnostic(
             second_path: _,
         } => {
             let (_, source_text, line_index) = file_info.get(&second.file_id)?;
-            let range = convert_text_range(second.range)
-                .to_range(source_text, line_index, session.position_encoding);
+            let range = convert_text_range(second.range).to_range(
+                source_text,
+                line_index,
+                session.position_encoding,
+            );
 
             let message = format!(
                 "Duplicate {} `{}` (first defined in {})",
@@ -291,18 +303,23 @@ fn name_error_to_diagnostic(
             );
 
             // Build related information pointing to the first definition
-            let related_information = file_info.get(&first.file_id).and_then(|(path, first_source_text, first_line_index)| {
-                let first_range = convert_text_range(first.range)
-                    .to_range(first_source_text, first_line_index, session.position_encoding);
-                let uri = Url::from_file_path(path).ok()?;
-                Some(vec![lsp_types::DiagnosticRelatedInformation {
-                    location: lsp_types::Location {
-                        uri,
-                        range: first_range,
-                    },
-                    message: format!("First definition of `{}` here", name),
-                }])
-            });
+            let related_information = file_info.get(&first.file_id).and_then(
+                |(path, first_source_text, first_line_index)| {
+                    let first_range = convert_text_range(first.range).to_range(
+                        first_source_text,
+                        first_line_index,
+                        session.position_encoding,
+                    );
+                    let uri = Url::from_file_path(path).ok()?;
+                    Some(vec![lsp_types::DiagnosticRelatedInformation {
+                        location: lsp_types::Location {
+                            uri,
+                            range: first_range,
+                        },
+                        message: format!("First definition of `{}` here", name),
+                    }])
+                },
+            );
 
             Some((
                 lsp_types::Diagnostic {
@@ -338,16 +355,12 @@ fn type_error_to_diagnostic<T: std::fmt::Display>(
             span,
             "E0001",
         ),
-        TypeError::UnknownType { name, span } => (
-            format!("Unknown type `{}`", name),
-            span,
-            "E0002",
-        ),
-        TypeError::UnknownVariable { name, span } => (
-            format!("Unknown variable `{}`", name),
-            span,
-            "E0003",
-        ),
+        TypeError::UnknownType { name, span } => {
+            (format!("Unknown type `{}`", name), span, "E0002")
+        }
+        TypeError::UnknownVariable { name, span } => {
+            (format!("Unknown variable `{}`", name), span, "E0003")
+        }
         TypeError::InvalidBinaryOp { op, lhs, rhs, span } => (
             format!("Invalid operation `{}` {} `{}`", lhs, op, rhs),
             span,
@@ -367,26 +380,22 @@ fn type_error_to_diagnostic<T: std::fmt::Display>(
             span,
             "E0005",
         ),
-        TypeError::NotCallable { ty, span } => (
-            format!("Type `{}` is not callable", ty),
-            span,
-            "E0006",
-        ),
+        TypeError::NotCallable { ty, span } => {
+            (format!("Type `{}` is not callable", ty), span, "E0006")
+        }
         TypeError::NoSuchField { ty, field, span } => (
             format!("Type `{}` has no field `{}`", ty, field),
             span,
             "E0007",
         ),
-        TypeError::NotIndexable { ty, span } => (
-            format!("Type `{}` is not indexable", ty),
-            span,
-            "E0008",
-        ),
+        TypeError::NotIndexable { ty, span } => {
+            (format!("Type `{}` is not indexable", ty), span, "E0008")
+        }
     };
 
     let (_, source_text, line_index) = file_info.get(&span.file_id)?;
-    let range = convert_text_range(span.range)
-        .to_range(source_text, line_index, session.position_encoding);
+    let range =
+        convert_text_range(span.range).to_range(source_text, line_index, session.position_encoding);
 
     Some(lsp_types::Diagnostic {
         range,

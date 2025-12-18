@@ -1,6 +1,6 @@
 use anyhow::Result;
-use clap::Args;
 use baml_language_server::run_server;
+use clap::Args;
 
 #[derive(Args, Debug)]
 pub struct LanguageServerArgs {}

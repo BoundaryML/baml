@@ -1,6 +1,8 @@
+#![allow(clippy::print_stderr, clippy::dbg_macro)]
+
 use std::{num::NonZeroUsize, thread};
 
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam::channel::{Receiver, Sender};
 use log::LevelFilter;
 use lsp_server::Message;
 use serde_json::json;

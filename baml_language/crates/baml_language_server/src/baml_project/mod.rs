@@ -7,13 +7,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use baml_lsp_types::{
-    BamlFunction, BamlFunctionTestCasePair, BamlGeneratorConfig, BamlSpan,
-};
+use baml_lsp_types::{BamlFunction, BamlFunctionTestCasePair, BamlGeneratorConfig, BamlSpan};
 use file_utils::gather_files;
-use lsp_types::{
-    Diagnostic, DiagnosticSeverity, Position, Range, TextDocumentItem,
-};
+use lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, TextDocumentItem};
 
 use crate::{DocumentKey, TextDocument, lsp_db::LspDatabase, server::client::Notifier, version};
 
@@ -228,7 +224,10 @@ impl Project {
     pub fn new(baml_project: BamlProject) -> Self {
         let mut lsp_db = LspDatabase::new();
         lsp_db.set_project_root(&baml_project.root_dir_name);
-        Self { baml_project, lsp_db }
+        Self {
+            baml_project,
+            lsp_db,
+        }
     }
 
     /// Returns a reference to the LspDatabase.

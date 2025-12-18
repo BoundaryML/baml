@@ -99,7 +99,10 @@ fn set_exit_handlers() {
     let (interrupt_send, interrupt_recv) = std::sync::mpsc::channel();
 
     ctrlc::set_handler(move || {
-        eprintln!("\nShutting Down BAML...");
+        #[allow(clippy::print_stderr)]
+        {
+            eprintln!("\nShutting Down BAML...");
+        }
         interrupt_send.send(()).ok();
     })
     .expect("Error setting Ctrl-C handler");

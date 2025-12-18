@@ -3,9 +3,9 @@ use std::{collections::HashMap, time::Instant};
 use lsp_types::{
     DidChangeTextDocumentParams, PublishDiagnosticsParams, notification::DidChangeTextDocument,
 };
+
 // TODO: playground_server is disabled for now
 // use playground_server::WebviewRouterMessage;
-
 use crate::{
     DocumentKey,
     server::{

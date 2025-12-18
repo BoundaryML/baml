@@ -7,10 +7,12 @@ pub mod diagnostics;
 pub mod position;
 pub mod symbols;
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
-use baml_db::{baml_workspace::Project, FileId, RootDatabase, Setter, SourceFile};
+use baml_db::{FileId, RootDatabase, Setter, SourceFile, baml_workspace::Project};
 
 /// LSP Database wrapper that provides high-level APIs for language server operations.
 ///

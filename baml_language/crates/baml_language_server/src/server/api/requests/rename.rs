@@ -7,7 +7,8 @@ use lsp_types::{RenameParams, TextEdit, WorkspaceEdit, request};
 use url::Url;
 
 use crate::{
-    DocumentKey, Session,
+    DocumentKey,
+    Session,
     // TODO: BamlRuntimeExt is disabled for now
     // baml_project::{BamlRuntimeExt, position_utils::get_word_at_position},
     baml_project::position_utils::get_word_at_position,

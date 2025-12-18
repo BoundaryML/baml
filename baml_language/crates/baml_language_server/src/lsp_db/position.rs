@@ -47,7 +47,7 @@ impl LineIndex {
 
         // Binary search for the line containing this offset
         let line = match self.line_starts.binary_search(&offset) {
-            Ok(line) => line,          // Exact match - start of a line
+            Ok(line) => line,                    // Exact match - start of a line
             Err(line) => line.saturating_sub(1), // Between lines - use previous line
         };
 
@@ -102,9 +102,7 @@ pub fn span_to_lsp_range(text: &str, span: &Span) -> Range {
             line: 0,
             character: 0,
         });
-    let end = line_index
-        .offset_to_position(end_offset)
-        .unwrap_or(start);
+    let end = line_index.offset_to_position(end_offset).unwrap_or(start);
 
     Range { start, end }
 }
@@ -122,9 +120,7 @@ pub fn span_to_lsp_range_with_index(line_index: &LineIndex, span: &Span) -> Rang
             line: 0,
             character: 0,
         });
-    let end = line_index
-        .offset_to_position(end_offset)
-        .unwrap_or(start);
+    let end = line_index.offset_to_position(end_offset).unwrap_or(start);
 
     Range { start, end }
 }
@@ -162,9 +158,7 @@ pub fn text_range_to_lsp_range(text: &str, range: text_size::TextRange) -> Range
             line: 0,
             character: 0,
         });
-    let end = line_index
-        .offset_to_position(end_offset)
-        .unwrap_or(start);
+    let end = line_index.offset_to_position(end_offset).unwrap_or(start);
 
     Range { start, end }
 }
@@ -172,7 +166,10 @@ pub fn text_range_to_lsp_range(text: &str, range: text_size::TextRange) -> Range
 /// Get the word at a given position in the text.
 ///
 /// Returns the word and its byte range in the text.
-pub fn get_word_at_position(text: &str, pos: &Position) -> Option<(String, std::ops::Range<usize>)> {
+pub fn get_word_at_position(
+    text: &str,
+    pos: &Position,
+) -> Option<(String, std::ops::Range<usize>)> {
     let offset = lsp_position_to_offset(text, pos);
 
     if offset > text.len() {
@@ -216,8 +213,9 @@ fn is_identifier_char(c: char) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use text_size::TextRange;
+
+    use super::*;
 
     #[test]
     fn test_line_index_simple() {
