@@ -1473,9 +1473,59 @@ We could use Static Single Assignment form where each variable is assigned exact
 - BAML doesn't need the optimizations SSA enables
 - Simple CFG is sufficient for our needs
 
+**Example optimization we don't need:** Constant propagation and folding. With SSA, a compiler can prove that if `_1 = 5` and `_2 = _1 + 3`, then `_2` is always `8`, eliminating the addition at compile time:
+
+```
+// Before optimization (SSA)     // After constant folding
+_1 = 5                           _3 = 16
+_2 = _1 + 3
+_3 = _2 * 2
+```
+
+SSA requires additional bookkeeping (phi nodes at control flow joins, dominance frontier computation) that adds significant implementation complexity. While these optimizations would save VM cycles, the performance gains don't justify that complexity at this stage. Simple CFG suffices for our current needs. If performance requirements change in the future, we can add SSA—MIR is completely transparent to users, so this would never be a breaking change.
+
+**Refactoring cost to add SSA later:** Converting non-SSA MIR to SSA is a moderate refactor, not trivial but well-understood:
+
+1. **Dominance analysis** - Build a dominator tree. O(n) with Lengauer-Tarjan.
+2. **Dominance frontier computation** - Find where phi nodes are needed. O(n) with optimized algorithms.
+3. **Phi node insertion** - At join points where a variable has different reaching definitions, insert `_x = phi(_x.1, _x.2)`.
+4. **Variable renaming** - Walk the dominator tree, renaming each assignment to a fresh version.
+
+This would require ~500-1000 lines of new code for the core algorithms (Cytron et al. 1991), a `Phi` variant in our MIR data structures, and updates to consumers (pretty printer, codegen). Crucially, our MIR is already block-structured—the hard prerequisite—so the path would simply be: THIR → MIR (current) → SSA pass → optimizations → codegen.
+
 ### Alternative 3: Stack-Based IR
 
 We could use a stack-based intermediate representation similar to the final bytecode. This was rejected because:
 - Stack-based IRs don't simplify control flow compilation
 - We'd still need the same jump patching complexity
 - CFG provides clearer separation of concerns
+
+**What is a stack-based IR?** Instead of named locals (`_1 = _2 + _3`), operations push and pop from an implicit stack:
+
+```
+// Source: let x = a + b * c
+
+// Register-based (MIR)          // Stack-based
+_1 = b                           LOAD b
+_2 = c                           LOAD c
+_3 = _1 * _2                     MUL
+_4 = a                           LOAD a
+_5 = _4 + _3                     ADD
+                                 STORE x
+```
+
+**Why jump patching remains:** Stack-based IRs address *data flow* (how values move), not *control flow* (how execution jumps). Forward jumps still need placeholders:
+
+```
+// Source: if (cond) { a() } else { b() }
+
+// Stack-based IR (still has the same problem!)
+0: LOAD cond
+1: JUMP_IF_FALSE ???    // Don't know target yet!
+2: CALL a
+3: JUMP ???             // Don't know target yet!
+4: CALL b               // Only now can we patch instruction 1
+5: ...                  // Only now can we patch instruction 3
+```
+
+The jump patching complexity comes from *linear instruction layout*, not from how we represent values. CFG solves this by making control flow *structural* (named block targets) rather than *positional* (byte offsets).
