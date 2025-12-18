@@ -282,6 +282,8 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             // Named type: could be enum, class, or type alias
             Ty::Named(name) => {
                 // Check if it's a type alias
+                // TODO(exhaustiveness): Add cycle detection for recursive type aliases like
+                // `type A = A | B`. Currently this would cause infinite recursion.
                 if let Some(alias_ty) = self.type_aliases.get(name) {
                     return self.expand_type_to_values(alias_ty);
                 }
