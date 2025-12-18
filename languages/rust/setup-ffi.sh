@@ -16,26 +16,54 @@ for arg in "$@"; do
     esac
 done
 
+# Detect current platform
+ARCH=$(uname -m)
+OS=$(uname -s)
+
+# Map to Rust target triple
+case "$OS" in
+    Darwin)
+        case "$ARCH" in
+            arm64)  TARGET_DIR="baml-ffi-aarch64-apple-darwin" ;;
+            x86_64) TARGET_DIR="baml-ffi-x86_64-apple-darwin" ;;
+            *)      echo "Unsupported architecture: $ARCH"; exit 1 ;;
+        esac
+        LIB_NAME="libbaml_cffi.a"
+        ;;
+    Linux)
+        case "$ARCH" in
+            aarch64) TARGET_DIR="baml-ffi-aarch64-unknown-linux-gnu" ;;
+            x86_64)  TARGET_DIR="baml-ffi-x86_64-unknown-linux-gnu" ;;
+            *)       echo "Unsupported architecture: $ARCH"; exit 1 ;;
+        esac
+        LIB_NAME="libbaml_cffi.a"
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        TARGET_DIR="baml-ffi-x86_64-pc-windows-msvc"
+        LIB_NAME="baml_cffi.lib"
+        ;;
+    *)
+        echo "Unsupported OS: $OS"
+        exit 1
+        ;;
+esac
+
+echo "Detected platform: $OS/$ARCH -> $TARGET_DIR"
+
 # Build CFFI library
 echo "Building baml_cffi ($BUILD_MODE)..."
 (cd ../../engine && cargo build -p baml_cffi $CARGO_FLAGS)
 
-# Copy to all vendored crate directories
-echo "Copying libraries..."
-for dir in baml-ffi-*/lib; do
-    mkdir -p "$dir"
-done
+# Copy to the correct vendored crate directory only
+ENGINE_TARGET="../../engine/target/$BUILD_MODE"
+mkdir -p "$TARGET_DIR/lib"
 
-# Copy based on what was built
-if [ -f "../../target/$BUILD_MODE/libbaml_cffi.a" ]; then
-    cp "../../target/$BUILD_MODE/libbaml_cffi.a" baml-ffi-aarch64-apple-darwin/lib/ 2>/dev/null || true
-    cp "../../target/$BUILD_MODE/libbaml_cffi.a" baml-ffi-x86_64-apple-darwin/lib/ 2>/dev/null || true
-    cp "../../target/$BUILD_MODE/libbaml_cffi.a" baml-ffi-x86_64-unknown-linux-gnu/lib/ 2>/dev/null || true
-    cp "../../target/$BUILD_MODE/libbaml_cffi.a" baml-ffi-aarch64-unknown-linux-gnu/lib/ 2>/dev/null || true
-fi
-
-if [ -f "../../target/$BUILD_MODE/baml_cffi.lib" ]; then
-    cp "../../target/$BUILD_MODE/baml_cffi.lib" baml-ffi-x86_64-pc-windows-msvc/lib/ 2>/dev/null || true
+if [ -f "$ENGINE_TARGET/$LIB_NAME" ]; then
+    cp "$ENGINE_TARGET/$LIB_NAME" "$TARGET_DIR/lib/"
+    echo "Copied $LIB_NAME to $TARGET_DIR/lib/"
+else
+    echo "Warning: $ENGINE_TARGET/$LIB_NAME not found"
+    exit 1
 fi
 
 echo "Done! Run 'cargo check -p baml' to verify."

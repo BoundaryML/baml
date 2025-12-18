@@ -7,10 +7,10 @@ description.workspace = true
 license-file.workspace = true
 
 [lib]
-# If you only wanted dynamic library, you'd use only "cdylib".
-# This demo shows both. See https://doc.rust-lang.org/reference/linkage.html
-# for more information.
-crate-type = ["cdylib"]
+# cdylib - Dynamic library for runtime linking (used by Go, Python, etc.)
+# staticlib - Static library for compile-time linking (used by Rust FFI crates)
+# See https://doc.rust-lang.org/reference/linkage.html
+crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 libc = "0.2.2"

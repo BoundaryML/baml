@@ -26,9 +26,9 @@ unsafe extern "C" {
 
     // Runtime lifecycle
     pub fn create_baml_runtime(
-        runtime_dir: *const c_char,
-        env_vars: *const c_char,
-        env_vars_len: *const c_char,
+        root_path: *const c_char,
+        src_files_json: *const c_char,
+        env_vars_json: *const c_char,
     ) -> *const c_void;
 
     pub fn destroy_baml_runtime(runtime: *const c_void);

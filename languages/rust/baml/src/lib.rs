@@ -14,5 +14,67 @@ mod proto {
     }
 }
 
+use std::ffi::CString;
+
 // Public API - re-exported through baml_client
 pub use error::BamlError;
+
+/// Call baml-cli with the given arguments
+/// Returns the exit code
+pub fn invoke_cli(args: &[&str]) -> i32 {
+    // Convert args to C strings
+    let c_args: Vec<CString> = args
+        .iter()
+        .map(|s| CString::new(*s).expect("invalid arg"))
+        .collect();
+
+    // Create array of pointers
+    let c_arg_ptrs: Vec<*const libc::c_char> = c_args
+        .iter()
+        .map(|s| s.as_ptr())
+        .chain(std::iter::once(std::ptr::null())) // null terminator
+        .collect();
+
+    unsafe { ffi::invoke_runtime_cli(c_arg_ptrs.as_ptr()) }
+}
+
+/// Get the BAML library version
+pub fn version() -> String {
+    let ptr = unsafe { ffi::version() };
+    if ptr.is_null() {
+        return "unknown".to_string();
+    }
+    unsafe {
+        std::ffi::CStr::from_ptr(ptr)
+            .to_string_lossy()
+            .into_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_version() {
+        let v = version();
+        println!("BAML version: {}", v);
+        assert!(!v.is_empty());
+        assert_ne!(v, "unknown");
+    }
+
+    #[test]
+    fn test_cli_version() {
+        // This is the smoke test - if FFI linkage works, this will succeed
+        // First arg should be program name
+        let exit_code = invoke_cli(&["baml", "--version"]);
+        assert_eq!(exit_code, 0, "baml --version should exit with 0");
+    }
+
+    #[test]
+    fn test_cli_help() {
+        // First arg should be program name
+        let exit_code = invoke_cli(&["baml", "--help"]);
+        assert_eq!(exit_code, 0, "baml --help should exit with 0");
+    }
+}
