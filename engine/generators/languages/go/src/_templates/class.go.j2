@@ -43,21 +43,14 @@ func (c *{{ name }}) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 {% endif %}
 }
 
-func (c {{ name }}) Encode() (*cffi.CFFIValueHolder, error) {
+func (c {{ name }}) Encode() (*cffi.HostValue, error) {
     fields := map[string]any{}
     {% for field in fields %}
     fields["{{ field.name }}"] = c.{{ field.name|exported_name }}
     {% endfor %}
-    return baml.EncodeClass(c.BamlEncodeName, fields, {% if dynamic %}&c.DynamicProperties{% else %}nil{% endif %})
+    return baml.EncodeClass("{{ name }}", fields, {% if dynamic %}&c.DynamicProperties{% else %}nil{% endif %})
 }
 
 func (c {{ name }}) BamlTypeName() string {
     return "{{ name }}"
-}
-
-func (u {{ name }}) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: {{ pkg.namespace() }},
-        Name:      "{{ name }}",
-    }
 }

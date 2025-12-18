@@ -661,6 +661,7 @@ impl CompilerRunner {
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
+                        *func_id,
                     );
 
                     // Collect type errors from inference

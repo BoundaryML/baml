@@ -384,11 +384,6 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         format!("[m] Mode: {}", app.visualization_mode_name())
     };
 
-    let line1 = format!(
-        "Snapshot: {}  |  [r] Recompile  |  {}  |  [Tab] Next File",
-        snapshot_help, mode_str
-    );
-
     // Show THIR-specific navigation help when in interactive mode
     let line2 = if app.current_phase() == CompilerPhase::Thir
         && app.thir_display_mode() == ThirDisplayMode::Interactive
@@ -427,8 +422,31 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         Span::raw("=Headers"),
     ];
 
+    // Build line1 with colored clipboard feedback
+    let line1_parts = if let Some(status) = app.clipboard_status() {
+        let is_error = status.starts_with("Failed") || status.starts_with("Clipboard unavailable");
+        let status_color = if is_error { Color::Red } else { Color::Green };
+        vec![
+            Span::raw(format!(
+                "Snapshot: {}  |  [r] Recompile  |  {}  |  [c/y] Copy  |  ",
+                snapshot_help, mode_str
+            )),
+            Span::styled(
+                status,
+                Style::default()
+                    .fg(status_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]
+    } else {
+        vec![Span::raw(format!(
+            "Snapshot: {}  |  [r] Recompile  |  {}  |  [c/y] Copy",
+            snapshot_help, mode_str
+        ))]
+    };
+
     let text = vec![
-        Line::from(line1),
+        Line::from(line1_parts),
         Line::from(line2.to_string()),
         Line::from(line3_parts),
     ];

@@ -3,8 +3,10 @@ mod ctypes;
 mod ffi;
 mod panic;
 mod raw_ptr_wrapper;
+pub mod rust;
 
 // Explicit API exports - this is the complete public C FFI API
+pub use ctypes::DecodeFromBuffer;
 pub use ffi::{
     callbacks::{register_callbacks, CallbackFn, OnTickCallbackFn},
     functions::{call_function_from_c, call_function_parse_from_c, call_function_stream_from_c},
@@ -15,6 +17,6 @@ pub use ffi::{
 // Keep the generated protobuf module
 pub mod baml {
     pub mod cffi {
-        include!(concat!(env!("OUT_DIR"), "/baml.cffi.rs"));
+        include!(concat!(env!("OUT_DIR"), "/baml.cffi.v1.rs"));
     }
 }

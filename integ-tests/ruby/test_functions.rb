@@ -178,7 +178,7 @@ describe "ruby<->baml integration tests" do
 
   it "should work with image" do
    res = b.TestImageInput(
-     img: Baml::Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
+     img: Baml::Image.from_url("https://drive.google.com/uc?id=1NhoSIIHYveygPytfCroGaAHwJ5agD5a6")
    )
    assert_includes res.downcase, "green"
   end

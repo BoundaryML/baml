@@ -170,7 +170,14 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
     fn describe_expr(expr: &Expr, ty: &str) -> String {
         match expr {
             Expr::Literal(lit) => format!("Literal({lit:?}): {ty}"),
-            Expr::Path(name) => format!("Path({name}): {ty}"),
+            Expr::Path(segments) => {
+                let path = segments
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                format!("Path({path}): {ty}")
+            }
             Expr::Binary { op, .. } => format!("Binary({op:?}): {ty}"),
             Expr::Unary { op, .. } => format!("Unary({op:?}): {ty}"),
             Expr::Call { .. } => format!("Call: {ty}"),
@@ -292,6 +299,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 pattern,
                 type_annotation,
                 initializer,
+                ..
             } => {
                 let pat = &body.patterns[*pattern];
                 let var_name = match pat {
@@ -336,46 +344,20 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
             Stmt::While {
                 condition,
                 body: while_body,
+                after,
+                origin,
             } => {
-                writeln!(self.output, "{prefix}While").ok();
+                let origin_str = match origin {
+                    baml_hir::LoopOrigin::While => "While",
+                    baml_hir::LoopOrigin::ForLoop => "While (from for-loop)",
+                };
+                writeln!(self.output, "{prefix}{origin_str}").ok();
                 self.push_continuation(!is_last);
                 self.render_expr(*condition, body, result, false);
-                self.render_expr(*while_body, body, result, true);
-                self.pop_continuation();
-            }
-            Stmt::ForIn {
-                pattern,
-                iterator,
-                body: for_body,
-            } => {
-                let pat = &body.patterns[*pattern];
-                let var_name = match pat {
-                    Pattern::Binding(name) => name.to_string(),
-                };
-                writeln!(self.output, "{prefix}ForIn ({var_name})").ok();
-                self.push_continuation(!is_last);
-                self.render_expr(*iterator, body, result, false);
-                self.render_expr(*for_body, body, result, true);
-                self.pop_continuation();
-            }
-            Stmt::ForCStyle {
-                initializer,
-                condition,
-                update,
-                body: for_body,
-            } => {
-                writeln!(self.output, "{prefix}ForCStyle").ok();
-                self.push_continuation(!is_last);
-                if let Some(init) = initializer {
-                    self.render_stmt(*init, body, result, false);
+                self.render_expr(*while_body, body, result, after.is_none());
+                if let Some(after_stmt) = after {
+                    self.render_stmt(*after_stmt, body, result, true);
                 }
-                if let Some(cond) = condition {
-                    self.render_expr(*cond, body, result, false);
-                }
-                if let Some(upd) = update {
-                    self.render_stmt(*upd, body, result, false);
-                }
-                self.render_expr(*for_body, body, result, true);
                 self.pop_continuation();
             }
             Stmt::Break => {
@@ -441,7 +423,11 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
             Literal::Bool(b) => b.to_string(),
             Literal::Null => "null".to_string(),
         },
-        Expr::Path(name) => name.to_string(),
+        Expr::Path(segments) => segments
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("."),
         Expr::Binary { op, lhs, rhs } => {
             let lhs_str = expr_to_string(*lhs, body);
             let rhs_str = expr_to_string(*rhs, body);

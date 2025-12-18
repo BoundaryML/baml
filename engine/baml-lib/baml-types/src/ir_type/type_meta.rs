@@ -2,8 +2,16 @@ pub type IR = base::TypeMeta;
 pub type NonStreaming = non_streaming::TypeMeta;
 pub type Streaming = stream::TypeMetaStreaming;
 
+/// Trait to check if a type metadata has @check constraints.
+/// Used by flatten() to preserve unions that have checks.
+pub trait MayHaveMeta {
+    fn has_checks(&self) -> bool;
+    fn has_stream_state(&self) -> bool;
+}
+
 pub mod base {
-    use crate::Constraint;
+    use super::MayHaveMeta;
+    use crate::{Constraint, ConstraintLevel};
 
     #[derive(serde::Serialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
     pub struct TypeMeta {
@@ -38,24 +46,62 @@ pub mod base {
             }
         }
     }
+
+    impl MayHaveMeta for TypeMeta {
+        fn has_checks(&self) -> bool {
+            self.constraints
+                .iter()
+                .any(|c| matches!(c.level, ConstraintLevel::Check))
+        }
+
+        fn has_stream_state(&self) -> bool {
+            self.streaming_behavior.state
+        }
+    }
 }
 
 pub mod non_streaming {
-    use crate::Constraint;
+    use super::MayHaveMeta;
+    use crate::{Constraint, ConstraintLevel};
 
     #[derive(serde::Serialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
     pub struct TypeMeta {
         pub constraints: Vec<Constraint>,
     }
+
+    impl MayHaveMeta for TypeMeta {
+        fn has_checks(&self) -> bool {
+            self.constraints
+                .iter()
+                .any(|c| matches!(c.level, ConstraintLevel::Check))
+        }
+
+        fn has_stream_state(&self) -> bool {
+            false
+        }
+    }
 }
 
 pub mod stream {
-    use crate::Constraint;
+    use super::MayHaveMeta;
+    use crate::{Constraint, ConstraintLevel};
 
     #[derive(serde::Serialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
     pub struct TypeMetaStreaming {
         pub constraints: Vec<Constraint>,
         pub streaming_behavior: StreamingBehavior,
+    }
+
+    impl MayHaveMeta for TypeMetaStreaming {
+        fn has_checks(&self) -> bool {
+            self.constraints
+                .iter()
+                .any(|c| matches!(c.level, ConstraintLevel::Check))
+        }
+
+        fn has_stream_state(&self) -> bool {
+            self.streaming_behavior.state
+        }
     }
 
     /// Metadata on a type that determines how it behaves under streaming conditions.

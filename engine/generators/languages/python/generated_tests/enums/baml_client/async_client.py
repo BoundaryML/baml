@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -78,37 +77,37 @@ class BamlAsyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-
+    
     async def ConsumeTestEnum(self, input: types.TestEnum,
         baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.ConsumeTestEnum(input=input,
+            stream = self.stream.ConsumeTestEnum(input=input,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ConsumeTestEnum", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="ConsumeTestEnum", args={
                 "input": input,
             })
-            return typing.cast(types.TestEnum, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.TestEnum, result.cast_to(types, types, stream_types, False, __runtime__))
     async def FnTestAliasedEnumOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.FnTestAliasedEnumOutput(input=input,
+            stream = self.stream.FnTestAliasedEnumOutput(input=input,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnTestAliasedEnumOutput", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="FnTestAliasedEnumOutput", args={
                 "input": input,
             })
-            return typing.cast(types.TestEnum, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.TestEnum, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -121,26 +120,26 @@ class BamlStreamClient:
     def ConsumeTestEnum(self, input: types.TestEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.TestEnum, types.TestEnum]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ConsumeTestEnum", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ConsumeTestEnum", args={
             "input": input,
         })
         return baml_py.BamlStream[types.TestEnum, types.TestEnum](
-          __result__,
+          result,
           lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def FnTestAliasedEnumOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.TestEnum, types.TestEnum]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnTestAliasedEnumOutput", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="FnTestAliasedEnumOutput", args={
             "input": input,
         })
         return baml_py.BamlStream[types.TestEnum, types.TestEnum](
-          __result__,
+          result,
           lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     
 
@@ -153,17 +152,17 @@ class BamlHttpRequestClient:
     async def ConsumeTestEnum(self, input: types.TestEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ConsumeTestEnum", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ConsumeTestEnum", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     async def FnTestAliasedEnumOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnTestAliasedEnumOutput", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnTestAliasedEnumOutput", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -175,17 +174,17 @@ class BamlHttpStreamRequestClient:
     async def ConsumeTestEnum(self, input: types.TestEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ConsumeTestEnum", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ConsumeTestEnum", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     async def FnTestAliasedEnumOutput(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnTestAliasedEnumOutput", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnTestAliasedEnumOutput", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     
 
 b = BamlAsyncClient(DoNotUseDirectlyCallManager({}))

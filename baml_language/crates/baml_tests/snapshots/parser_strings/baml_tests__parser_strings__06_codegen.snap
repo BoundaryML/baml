@@ -4,14 +4,14 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 3
-Objects: 8
-Globals: 3
+Objects: 26
+Globals: 21
 
 Function FormatMessage (arity: 1, kind: Llm):
   (no bytecode)
 
 Function GetRole (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   ( "user")
+     0   LOAD_CONST 0   (user)
      1   RETURN         
      2   RETURN         
 

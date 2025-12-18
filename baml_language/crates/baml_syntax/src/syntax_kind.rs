@@ -178,7 +178,33 @@ pub enum SyntaxKind {
     UNARY_EXPR,
     CALL_EXPR,
     INDEX_EXPR,
+    /// Field access on a complex expression: `arr[0].field`, `f().method`, `(a + b).field`
+    ///
+    /// Used when the base is NOT a simple identifier chain. For simple identifier
+    /// chains like `user.name.length`, use `PATH_EXPR` instead.
+    ///
+    /// Structure: `<base_expr> DOT WORD`
+    ///
+    /// The distinction matters because:
+    /// - `PATH_EXPR` can resolve to: local variable + field accesses, enum variant,
+    ///   module item, or function reference
+    /// - `FIELD_ACCESS_EXPR` is always a field/method access on a computed value
     FIELD_ACCESS_EXPR,
+    /// Path expression with one or more dot-separated identifier segments.
+    ///
+    /// Examples:
+    /// - Single segment: `foo`, `MyClass`
+    /// - Multi-segment: `user.name`, `baml.HttpMethod.Get`, `Status.Active`
+    ///
+    /// Structure: `WORD (DOT WORD)*`
+    ///
+    /// Resolution of what a path refers to happens in THIR:
+    /// - `user.name` might be local variable + field access
+    /// - `Status.Active` might be an enum variant
+    /// - `baml.HttpMethod` might be a module path
+    ///
+    /// For field access on complex expressions (like `f().field` or `arr[0].field`),
+    /// use `FIELD_ACCESS_EXPR` instead.
     PATH_EXPR,
     PAREN_EXPR,
     BLOCK_EXPR,

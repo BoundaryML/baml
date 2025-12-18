@@ -17,6 +17,8 @@ import (
 	"reflect"
 	"semantic_streaming/baml_client/stream_types"
 	"semantic_streaming/baml_client/types"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 var typeMap = map[string]reflect.Type{
@@ -28,4 +30,6 @@ var typeMap = map[string]reflect.Type{
 	"STREAM_TYPES.SemanticContainer":  reflect.TypeOf(stream_types.SemanticContainer{}),
 	"TYPES.SmallThing":                reflect.TypeOf(types.SmallThing{}),
 	"STREAM_TYPES.SmallThing":         reflect.TypeOf(stream_types.SmallThing{}),
+
+	"STREAM_STATE_TYPES.Optional__string": reflect.TypeOf(baml.StreamState[*string]{}),
 }

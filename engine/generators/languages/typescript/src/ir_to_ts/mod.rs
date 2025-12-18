@@ -7,7 +7,7 @@ use baml_types::{
 
 use crate::{
     package::Package,
-    r#type::{LiteralValue, MediaTypeTS, TypeMetaTS, TypeTS, TypeWrapper},
+    r#type::{LiteralValue, MediaTypeTS, TypeTS},
 };
 
 pub mod classes;
@@ -18,21 +18,17 @@ pub mod type_aliases;
 pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookups) -> TypeTS {
     use TypeStreaming as T;
     let recursive_fn = |field| stream_type_to_ts(field, _lookup);
-    let meta = stream_meta_to_ts(field.meta());
+    let (check_names, wrap_stream_state) = stream_meta_to_ts_with_checks(field.meta());
 
     let types_pkg: Package = Package::types();
     let stream_pkg: Package = Package::stream_types();
 
     let type_ts: TypeTS = match field {
-        T::Primitive(type_value, _) => {
-            let t: TypeTS = type_value.into();
-            t.with_meta(meta)
-        }
+        T::Primitive(type_value, _) => type_value.into(),
         T::Enum { name, dynamic, .. } => TypeTS::Enum {
             package: types_pkg.clone(),
             name: name.clone(),
             dynamic: *dynamic,
-            meta,
         },
         T::Literal(literal_value, _) => {
             let val = match literal_value {
@@ -40,7 +36,7 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
                 baml_types::LiteralValue::Int(val) => LiteralValue::Int(*val),
                 baml_types::LiteralValue::Bool(val) => LiteralValue::Bool(*val),
             };
-            TypeTS::Literal(val, meta)
+            TypeTS::Literal(val)
         }
         T::Class {
             name,
@@ -54,13 +50,11 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
             },
             name: name.clone(),
             dynamic: *dynamic,
-            meta,
         },
-        T::List(type_generic, _) => TypeTS::List(Box::new(recursive_fn(type_generic)), meta),
+        T::List(type_generic, _) => TypeTS::List(Box::new(recursive_fn(type_generic))),
         T::Map(type_generic, type_generic1, _) => TypeTS::Map(
             Box::new(recursive_fn(type_generic)),
             Box::new(recursive_fn(type_generic1)),
-            meta,
         ),
         T::RecursiveTypeAlias {
             name,
@@ -72,53 +66,32 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
                 false => stream_pkg.clone(),
             },
             name: name.clone(),
-            meta,
         },
         T::Tuple(..) => TypeTS::Any {
-            reason: "tuples are not supported in Go".to_string(),
-            meta,
+            reason: "tuples are not supported in TypeScript".to_string(),
         },
         T::Arrow(..) => TypeTS::Any {
-            reason: "arrow types are not supported in Go".to_string(),
-            meta,
+            reason: "arrow types are not supported in TypeScript".to_string(),
         },
         T::Union(union_type_generic, union_meta) => match union_type_generic.view() {
             baml_types::ir_type::UnionTypeViewGeneric::Null => TypeTS::Any {
-                reason: "Null types are not supported in Go".to_string(),
-                meta,
+                reason: "Null types are not supported in TypeScript".to_string(),
             },
             baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
-                let mut type_go = recursive_fn(type_generic);
-                if union_meta
-                    .constraints
-                    .iter()
-                    .any(|c| matches!(c.level, ConstraintLevel::Check))
-                {
-                    type_go.meta_mut().make_checked(
-                        union_meta
-                            .constraints
-                            .iter()
-                            .map(|c| c.label.clone())
-                            .collect(),
-                    );
-                }
-                type_go.meta_mut().make_optional();
-                if union_meta.streaming_behavior.state {
-                    type_go.meta_mut().set_stream_state();
-                }
-                type_go
+                let mut type_ts = recursive_fn(type_generic);
+                type_ts = type_ts.make_optional();
+                // Note: stream state wrapping is now handled at the end of the function
+                // based on the top-level meta's streaming_behavior.state
+                type_ts
             }
             baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => TypeTS::Union {
                 variants: type_generics.into_iter().map(&recursive_fn).collect(),
-                meta,
             },
             baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
-                let mut meta = meta;
-                meta.make_optional();
-                TypeTS::Union {
+                let union = TypeTS::Union {
                     variants: type_generics.into_iter().map(&recursive_fn).collect(),
-                    meta,
-                }
+                };
+                union.make_optional()
             }
         },
         T::Top(_) => panic!(
@@ -127,101 +100,86 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
         ),
     };
 
-    type_ts
+    // Apply checked wrapper if there are checks on this type
+    let type_ts = if let Some(names) = check_names {
+        type_ts.make_checked(names)
+    } else {
+        type_ts
+    };
+
+    // Apply stream state wrapper if needed
+    if wrap_stream_state {
+        type_ts.make_stream_state()
+    } else {
+        type_ts
+    }
 }
 
 pub(crate) fn type_to_ts(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -> TypeTS {
     use TypeNonStreaming as T;
     let recursive_fn = |field| type_to_ts(field, _lookup);
-    let meta = meta_to_ts(field.meta());
+    let check_names = meta_to_check_names(field.meta());
 
     let type_pkg = Package::types();
 
     let type_ts = match field {
         T::Primitive(type_value, _) => match type_value {
-            TypeValue::String => TypeTS::String(meta),
-            TypeValue::Int => TypeTS::Int(meta),
-            TypeValue::Float => TypeTS::Float(meta),
-            TypeValue::Bool => TypeTS::Bool(meta),
+            TypeValue::String => TypeTS::String,
+            TypeValue::Int => TypeTS::Int,
+            TypeValue::Float => TypeTS::Float,
+            TypeValue::Bool => TypeTS::Bool,
             TypeValue::Null => TypeTS::Any {
-                reason: "Null types are not supported in Typescript".to_string(),
-                meta,
+                reason: "Null types are not supported in TypeScript".to_string(),
             },
-            TypeValue::Media(baml_media_type) => TypeTS::Media(baml_media_type.into(), meta),
+            TypeValue::Media(baml_media_type) => TypeTS::Media(baml_media_type.into()),
         },
         T::Enum { name, dynamic, .. } => TypeTS::Enum {
             package: type_pkg.clone(),
             name: name.clone(),
             dynamic: *dynamic,
-            meta,
         },
-        T::Literal(literal_value, _) => TypeTS::Literal(
-            match literal_value {
-                baml_types::LiteralValue::String(val) => LiteralValue::String(val.to_string()),
-                baml_types::LiteralValue::Int(val) => LiteralValue::Int(*val),
-                baml_types::LiteralValue::Bool(val) => LiteralValue::Bool(*val),
-            },
-            meta,
-        ),
+        T::Literal(literal_value, _) => TypeTS::Literal(match literal_value {
+            baml_types::LiteralValue::String(val) => LiteralValue::String(val.to_string()),
+            baml_types::LiteralValue::Int(val) => LiteralValue::Int(*val),
+            baml_types::LiteralValue::Bool(val) => LiteralValue::Bool(*val),
+        }),
         T::Class { name, dynamic, .. } => TypeTS::Class {
             package: type_pkg.clone(),
             name: name.clone(),
             dynamic: *dynamic,
-            meta,
         },
-        T::List(type_generic, _) => TypeTS::List(Box::new(recursive_fn(type_generic)), meta),
+        T::List(type_generic, _) => TypeTS::List(Box::new(recursive_fn(type_generic))),
         T::Map(type_generic, type_generic1, _) => TypeTS::Map(
             Box::new(recursive_fn(type_generic)),
             Box::new(recursive_fn(type_generic1)),
-            meta,
         ),
         T::Tuple(..) => TypeTS::Any {
-            reason: "tuples are not supported in Typescript".to_string(),
-            meta,
+            reason: "tuples are not supported in TypeScript".to_string(),
         },
         T::Arrow(..) => TypeTS::Any {
-            reason: "arrow types are not supported in Typescript".to_string(),
-            meta,
+            reason: "arrow types are not supported in TypeScript".to_string(),
         },
         T::RecursiveTypeAlias { name, .. } => TypeTS::TypeAlias {
             package: type_pkg.clone(),
             name: name.clone(),
-            meta,
         },
         T::Union(union_type_generic, union_meta) => match union_type_generic.view() {
             baml_types::ir_type::UnionTypeViewGeneric::Null => TypeTS::Any {
-                reason: "Null types are not supported in Typescript".to_string(),
-                meta,
+                reason: "Null types are not supported in TypeScript".to_string(),
             },
             baml_types::ir_type::UnionTypeViewGeneric::Optional(type_generic) => {
                 let mut type_ts = recursive_fn(type_generic);
-                type_ts.meta_mut().make_optional();
-                if union_meta
-                    .constraints
-                    .iter()
-                    .any(|c| matches!(c.level, ConstraintLevel::Check))
-                {
-                    type_ts.meta_mut().make_checked(
-                        union_meta
-                            .constraints
-                            .iter()
-                            .map(|c| c.label.clone())
-                            .collect(),
-                    );
-                }
+                type_ts = type_ts.make_optional();
                 type_ts
             }
             baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => TypeTS::Union {
                 variants: type_generics.into_iter().map(&recursive_fn).collect(),
-                meta,
             },
             baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
-                let mut meta = meta;
-                meta.make_optional();
-                TypeTS::Union {
+                let union = TypeTS::Union {
                     variants: type_generics.into_iter().map(&recursive_fn).collect(),
-                    meta,
-                }
+                };
+                union.make_optional()
             }
         },
         T::Top(_) => panic!(
@@ -230,72 +188,65 @@ pub(crate) fn type_to_ts(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
         ),
     };
 
-    type_ts
-}
-
-// convert ir metadata to go metadata
-fn meta_to_ts(meta: &type_meta::NonStreaming) -> TypeMetaTS {
-    let has_checks = meta
-        .constraints
-        .iter()
-        .any(|c| matches!(c.level, ConstraintLevel::Check));
-
-    let wrapper = TypeWrapper::default();
-    let wrapper = if has_checks {
-        let names = meta
-            .constraints
-            .iter()
-            .map(|c| c.label.as_ref().map(|l| l.to_string()))
-            .collect();
-        wrapper.wrap_with_checked(names)
+    // Apply checked wrapper if there are checks on this type
+    if let Some(names) = check_names {
+        type_ts.make_checked(names)
     } else {
-        wrapper
-    };
-
-    // optionality is handled by unions
-    TypeMetaTS {
-        type_wrapper: wrapper,
-        wrap_stream_state: false,
+        type_ts
     }
 }
 
-fn stream_meta_to_ts(meta: &TypeMetaStreaming) -> TypeMetaTS {
+// Extract check names from ir metadata
+fn meta_to_check_names(meta: &type_meta::NonStreaming) -> Option<Vec<Option<String>>> {
     let has_checks = meta
         .constraints
         .iter()
         .any(|c| matches!(c.level, ConstraintLevel::Check));
 
-    let wrapper = TypeWrapper::default();
-    let wrapper = if has_checks {
-        wrapper.wrap_with_checked(
+    if has_checks {
+        Some(
             meta.constraints
                 .iter()
                 .map(|c| c.label.as_ref().map(|l| l.to_string()))
                 .collect(),
         )
     } else {
-        wrapper
+        None
+    }
+}
+
+// Extract check names and stream state flag from streaming ir metadata
+fn stream_meta_to_ts_with_checks(meta: &TypeMetaStreaming) -> (Option<Vec<Option<String>>>, bool) {
+    let has_checks = meta
+        .constraints
+        .iter()
+        .any(|c| matches!(c.level, ConstraintLevel::Check));
+
+    let check_names = if has_checks {
+        Some(
+            meta.constraints
+                .iter()
+                .map(|c| c.label.as_ref().map(|l| l.to_string()))
+                .collect(),
+        )
+    } else {
+        None
     };
 
-    TypeMetaTS {
-        type_wrapper: wrapper,
-        wrap_stream_state: meta.streaming_behavior.state,
-    }
+    (check_names, meta.streaming_behavior.state)
 }
 
 impl From<&TypeValue> for TypeTS {
     fn from(type_value: &TypeValue) -> Self {
-        let meta = TypeMetaTS::default();
         match type_value {
-            TypeValue::String => TypeTS::String(meta),
-            TypeValue::Int => TypeTS::Int(meta),
-            TypeValue::Float => TypeTS::Float(meta),
-            TypeValue::Bool => TypeTS::Bool(meta),
+            TypeValue::String => TypeTS::String,
+            TypeValue::Int => TypeTS::Int,
+            TypeValue::Float => TypeTS::Float,
+            TypeValue::Bool => TypeTS::Bool,
             TypeValue::Null => TypeTS::Any {
-                reason: "Null types are not supported in Typescript".to_string(),
-                meta,
+                reason: "Null types are not supported in TypeScript".to_string(),
             },
-            TypeValue::Media(baml_media_type) => TypeTS::Media(baml_media_type.into(), meta),
+            TypeValue::Media(baml_media_type) => TypeTS::Media(baml_media_type.into()),
         }
     }
 }

@@ -70,17 +70,11 @@ func (e *{{ name }}) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
     *e = {{ name }}(value)
 }
 
-func (e {{ name }}) Encode() (*cffi.CFFIValueHolder, error) {
-    return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e {{ name }}) Encode() (*cffi.HostValue, error) {
+    return baml.EncodeEnum("{{ name }}", string(e), false)
 }
 
 func (e {{ name }}) BamlTypeName() string {
     return "{{ name }}"
 }
 
-func (u {{ name }}) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Name:      "{{ name }}",
-        Namespace: {{ pkg.namespace() }},
-    }
-}

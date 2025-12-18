@@ -50,6 +50,9 @@ regex = "1.11"
 # Error handling
 anyhow = "1.0"
 
+# Clipboard support
+arboard = "3.4"
+
 # Standard library
 text-size = { workspace = true }
 

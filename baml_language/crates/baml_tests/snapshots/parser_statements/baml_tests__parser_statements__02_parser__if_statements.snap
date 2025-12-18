@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -11,11 +11,11 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "age"
-        TYPE_EXPR " int"
+        TYPE_EXPR "int"
           WORD "int"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " string"
+    TYPE_EXPR "string"
       WORD "string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
@@ -33,7 +33,7 @@ SOURCE_FILE
             L_BRACE "{"
             RETURN_STMT
               KW_RETURN "return"
-              STRING_LITERAL " "minor""
+              STRING_LITERAL "minor"
                 QUOTE """
                 WORD "minor"
                 QUOTE """
@@ -53,7 +53,7 @@ SOURCE_FILE
               L_BRACE "{"
               RETURN_STMT
                 KW_RETURN "return"
-                STRING_LITERAL " "adult""
+                STRING_LITERAL "adult"
                   QUOTE """
                   WORD "adult"
                   QUOTE """
@@ -64,7 +64,7 @@ SOURCE_FILE
               L_BRACE "{"
               RETURN_STMT
                 KW_RETURN "return"
-                STRING_LITERAL " "senior""
+                STRING_LITERAL "senior"
                   QUOTE """
                   WORD "senior"
                   QUOTE """

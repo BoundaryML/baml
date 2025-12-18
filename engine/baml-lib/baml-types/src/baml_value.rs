@@ -1004,6 +1004,32 @@ impl<T> BamlValueWithMeta<T> {
         }
     }
 
+    pub fn value_clone(&self) -> BamlValue {
+        match self {
+            BamlValueWithMeta::String(v, _) => BamlValue::String(v.clone()),
+            BamlValueWithMeta::Int(v, _) => BamlValue::Int(*v),
+            BamlValueWithMeta::Float(v, _) => BamlValue::Float(*v),
+            BamlValueWithMeta::Bool(v, _) => BamlValue::Bool(*v),
+            BamlValueWithMeta::Map(v, _) => BamlValue::Map(
+                v.into_iter()
+                    .map(|(k, v)| (k.clone(), v.value_clone()))
+                    .collect(),
+            ),
+            BamlValueWithMeta::List(v, _) => {
+                BamlValue::List(v.iter().map(|v| v.value_clone()).collect())
+            }
+            BamlValueWithMeta::Media(v, _) => BamlValue::Media(v.clone()),
+            BamlValueWithMeta::Enum(v, w, _) => BamlValue::Enum(v.clone(), w.clone()),
+            BamlValueWithMeta::Class(n, fs, _) => BamlValue::Class(
+                n.clone(),
+                fs.into_iter()
+                    .map(|(k, v)| (k.clone(), v.value_clone()))
+                    .collect(),
+            ),
+            BamlValueWithMeta::Null(_) => BamlValue::Null,
+        }
+    }
+
     pub fn meta(&self) -> &T {
         match self {
             BamlValueWithMeta::String(_, m) => m,

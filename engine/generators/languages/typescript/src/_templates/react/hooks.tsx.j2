@@ -334,7 +334,7 @@ function useBamlAction<FunctionName extends FunctionNames>(
  *
  * **Input Types:**
  * {%- for (name, arg_type) in func.args %}
- * - {{ name }}{% if arg_type.meta().is_optional() %} (optional){% endif %}: {{arg_type.serialize_type(pkg)}}
+ * - {{ name }}{% if arg_type.is_optional() %} (optional){% endif %}: {{arg_type.serialize_type(pkg)}}
  * {%- endfor %}
  *
  * **Return Type:**

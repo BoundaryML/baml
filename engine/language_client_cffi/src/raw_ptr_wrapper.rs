@@ -23,7 +23,7 @@ use type_builder::objects::{
 };
 
 use crate::{
-    baml::cffi::{self, CffiPointerType},
+    baml::cffi::{self, BamlPointerType},
     ctypes::object_response_encode::{BamlObjectResponse, BamlObjectResponseSuccess},
 };
 
@@ -75,8 +75,8 @@ impl<T> RawPtrWrapper<T> {
         }
     }
 
-    pub fn pointer(&self) -> CffiPointerType {
-        CffiPointerType {
+    pub fn pointer(&self) -> BamlPointerType {
+        BamlPointerType {
             pointer: Arc::into_raw(self.inner.clone()) as i64,
         }
     }
@@ -118,6 +118,16 @@ define_raw_ptr_types! {
     ClassBuilder,
     ClassPropertyBuilder,
     TypeIR => TypeDef as TypeWrapper: "Type" (Object::Type),
+}
+
+impl RawPtrType {
+    pub(crate) fn create_collector(name: Option<&str>) -> Result<Self, String> {
+        Self::new_collector(name).map(RawPtrType::from)
+    }
+
+    pub(crate) fn create_type_builder() -> Result<Self, String> {
+        Self::new_type_builder().map(RawPtrType::from)
+    }
 }
 
 fn create_media_object(

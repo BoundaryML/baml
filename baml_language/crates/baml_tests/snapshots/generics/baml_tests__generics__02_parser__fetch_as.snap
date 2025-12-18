@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -10,19 +10,19 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "id"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     FIELD
       WORD "title"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
     FIELD
       WORD "completed"
-      TYPE_EXPR " bool"
+      TYPE_EXPR "bool"
         WORD "bool"
     FIELD
       WORD "userId"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     R_BRACE "}"
   FUNCTION_DEF
@@ -32,15 +32,14 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " Todo"
+    TYPE_EXPR "Todo"
       WORD "Todo"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
         CALL_EXPR
           PATH_EXPR
-            PATH_EXPR "
-    baml.fetch_as"
+            PATH_EXPR "baml.fetch_as"
               WORD "baml"
               DOT "."
               WORD "fetch_as"
@@ -60,7 +59,7 @@ SOURCE_FILE
               OBJECT_FIELD
                 WORD "method"
                 COLON ":"
-                PATH_EXPR " baml.HttpMethod.Get"
+                PATH_EXPR "baml.HttpMethod.Get"
                   WORD "baml"
                   DOT "."
                   WORD "HttpMethod"
@@ -70,7 +69,7 @@ SOURCE_FILE
               OBJECT_FIELD
                 WORD "url"
                 COLON ":"
-                STRING_LITERAL " "dummyjson.com/todos/1""
+                STRING_LITERAL "dummyjson.com/todos/1"
                   QUOTE """
                   WORD "dummyjson"
                   DOT "."

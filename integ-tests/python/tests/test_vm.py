@@ -82,7 +82,7 @@ def test_return_category():
 
 
 def test_return_image_from_url():
-    url = "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+    url = "https://i.imgur.com/93fWs5R.png"
 
     # Image created within BAML.
     img = b.ReturnImageFromUrl(url)

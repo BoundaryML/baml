@@ -2020,21 +2020,21 @@ class LlmStreamParser:
 
     def FnOutputLiteralBool(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> bool:
+    ) -> typing_extensions.Literal[False]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputLiteralBool", llm_response=llm_response, mode="stream")
-        return typing.cast(bool, __result__)
+        return typing.cast(typing_extensions.Literal[False], __result__)
 
     def FnOutputLiteralInt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> int:
+    ) -> typing_extensions.Literal[5]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputLiteralInt", llm_response=llm_response, mode="stream")
-        return typing.cast(int, __result__)
+        return typing.cast(typing_extensions.Literal[5], __result__)
 
     def FnOutputLiteralString(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> typing_extensions.Literal['example output']:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputLiteralString", llm_response=llm_response, mode="stream")
-        return typing.cast(str, __result__)
+        return typing.cast(typing_extensions.Literal['example output'], __result__)
 
     def FnOutputStringList(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2086,15 +2086,15 @@ class LlmStreamParser:
 
     def InOutLiteralStringUnionMapKey(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Dict[typing.Union[str, str, str, str], str]:
+    ) -> typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="InOutLiteralStringUnionMapKey", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[typing.Union[str, str, str, str], str], __result__)
+        return typing.cast(typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], __result__)
 
     def InOutSingleLiteralStringMapKey(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Dict[str, str]:
+    ) -> typing.Dict[typing_extensions.Literal['key'], str]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="InOutSingleLiteralStringMapKey", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Dict[str, str], __result__)
+        return typing.cast(typing.Dict[typing_extensions.Literal['key'], str], __result__)
 
     def JsonTypeAliasCycle(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2110,9 +2110,9 @@ class LlmStreamParser:
 
     def LiteralUnionsTest(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Union[int, bool, str]:
+    ) -> typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="LiteralUnionsTest", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Union[int, bool, str], __result__)
+        return typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], __result__)
 
     def LlmReturnNumber(
         self, llm_response: str, baml_options: BamlCallOptions = {},

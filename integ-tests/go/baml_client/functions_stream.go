@@ -244,17 +244,13 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 				return
 			}
 			if result.HasData {
-				data := baml.CastChecked(result.Data, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.Data).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := baml.CastChecked(result.StreamData, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.StreamData).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:   false,
 					as_stream: &data,
@@ -6168,17 +6164,13 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 				return
 			}
 			if result.HasData {
-				data := baml.CastChecked(result.Data, func(inner any) types.BlockConstraint {
-					return (inner).(types.BlockConstraint)
-				})
+				data := (result.Data).(types.Checked[types.BlockConstraint])
 				channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := baml.CastChecked(result.StreamData, func(inner any) stream_types.BlockConstraint {
-					return (inner).(stream_types.BlockConstraint)
-				})
+				data := (result.StreamData).(types.Checked[stream_types.BlockConstraint])
 				channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
 					IsFinal:   false,
 					as_stream: &data,
@@ -7504,17 +7496,13 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 				return
 			}
 			if result.HasData {
-				data := baml.CastChecked(result.Data, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.Data).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := baml.CastChecked(result.StreamData, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.StreamData).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:   false,
 					as_stream: &data,
@@ -8544,17 +8532,13 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 				return
 			}
 			if result.HasData {
-				data := baml.CastChecked(result.Data, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.Data).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := baml.CastChecked(result.StreamData, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.StreamData).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:   false,
 					as_stream: &data,

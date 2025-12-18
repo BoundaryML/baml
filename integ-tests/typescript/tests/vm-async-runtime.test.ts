@@ -30,7 +30,7 @@ describe("VM Async Runtime Tests", () => {
     // media type is passed correctly.
     const description = await b.CallLlmDescribeImage(
       Image.fromUrl(
-        "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+        "https://i.imgur.com/93fWs5R.png"
       )
     );
 

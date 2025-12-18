@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -11,7 +11,7 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " int"
+    TYPE_EXPR "int"
       WORD "int"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
@@ -61,8 +61,7 @@ SOURCE_FILE
             STAR "*"
             WORD "c"
           SEMICOLON ";"
-        RETURN_STMT "
-  return d;"
+        RETURN_STMT "return d;"
           KW_RETURN "return"
           WORD "d"
           SEMICOLON ";"

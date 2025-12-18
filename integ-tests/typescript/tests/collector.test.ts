@@ -89,7 +89,7 @@ describe("Collector Tests", () => {
     const callUsage = call.usage;
     expect(callUsage?.inputTokens).toBeGreaterThan(0);
     expect(callUsage?.outputTokens).toBeGreaterThan(0);
-    expect(callUsage?.cachedInputTokens).toBeUndefined();
+    expect(callUsage?.cachedInputTokens).toBe(0);
 
     // Usage matches log usage
     expect(callUsage?.inputTokens).toBe(log?.usage.inputTokens);
@@ -246,10 +246,10 @@ describe("Collector Tests", () => {
     const call = log.calls[0];
     // Check if it's an LLMStreamCall by checking for sseResponses method
     expect('sseResponses' in call).toBe(true);
-    
+
     expect(call.provider).toBe("openai");
     expect(call.clientName).toBe("GPT4oMini");
-    
+
     // Cast to any to access sseResponses since TypeScript doesn't know about the union type
     const sseChunks = (call as any).sseResponses();
     expect(sseChunks).not.toBeNull();

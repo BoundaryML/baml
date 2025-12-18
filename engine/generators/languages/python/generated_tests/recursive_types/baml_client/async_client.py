@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -78,37 +77,37 @@ class BamlAsyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-
+    
     async def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> types.JSON:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.Foo(x=x,
+            stream = self.stream.Foo(x=x,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="Foo", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="Foo", args={
                 "x": x,
             })
-            return typing.cast(types.JSON, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.JSON, result.cast_to(types, types, stream_types, False, __runtime__))
     async def JsonInput(self, x: types.JSON,
         baml_options: BamlCallOptions = {},
     ) -> types.JSON:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.JsonInput(x=x,
+            stream = self.stream.JsonInput(x=x,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="JsonInput", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="JsonInput", args={
                 "x": x,
             })
-            return typing.cast(types.JSON, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.JSON, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -121,26 +120,26 @@ class BamlStreamClient:
     def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.JSON, types.JSON]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="Foo", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="Foo", args={
             "x": x,
         })
         return baml_py.BamlStream[stream_types.JSON, types.JSON](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.JSON, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.JSON, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def JsonInput(self, x: types.JSON,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.JSON, types.JSON]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="JsonInput", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="JsonInput", args={
             "x": x,
         })
         return baml_py.BamlStream[stream_types.JSON, types.JSON](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.JSON, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.JSON, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     
 
@@ -153,17 +152,17 @@ class BamlHttpRequestClient:
     async def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="Foo", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="Foo", args={
             "x": x,
         }, mode="request")
-        return __result__
+        return result
     async def JsonInput(self, x: types.JSON,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="JsonInput", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="JsonInput", args={
             "x": x,
         }, mode="request")
-        return __result__
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -175,17 +174,17 @@ class BamlHttpStreamRequestClient:
     async def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="Foo", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="Foo", args={
             "x": x,
         }, mode="stream")
-        return __result__
+        return result
     async def JsonInput(self, x: types.JSON,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="JsonInput", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="JsonInput", args={
             "x": x,
         }, mode="stream")
-        return __result__
+        return result
     
 
 b = BamlAsyncClient(DoNotUseDirectlyCallManager({}))

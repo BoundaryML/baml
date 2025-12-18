@@ -550,7 +550,7 @@ func TestTopLevelInt(ctx context.Context, input string, opts ...CallOptionFunc) 
 	}
 }
 
-func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc) (any, error) {
+func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc) (*interface{}, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -586,33 +586,33 @@ func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc)
 	if callOpts.onTick == nil {
 		result, err := bamlRuntime.CallFunction(ctx, "TestTopLevelNull", encoded, callOpts.onTick)
 		if err != nil {
-			return nil, err
+			return (*interface{})(nil), err
 		}
 
 		if result.Error != nil {
-			return nil, result.Error
+			return (*interface{})(nil), result.Error
 		}
 
-		casted := (result.Data).(any)
+		casted := (result.Data).(*interface{})
 
 		return casted, nil
 	} else {
 		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestTopLevelNull", encoded, callOpts.onTick)
 		if err != nil {
-			return nil, err
+			return (*interface{})(nil), err
 		}
 
 		for result := range channel {
 			if result.Error != nil {
-				return nil, result.Error
+				return (*interface{})(nil), result.Error
 			}
 
 			if result.HasData {
-				return result.Data.(any), nil
+				return result.Data.(*interface{}), nil
 			}
 		}
 
-		return nil, fmt.Errorf("No data returned from stream")
+		return (*interface{})(nil), fmt.Errorf("No data returned from stream")
 	}
 }
 

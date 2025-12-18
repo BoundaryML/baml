@@ -197,14 +197,24 @@ fn compile_source(source: &str) -> CompileResult {
 
     // Build globals map: function_name -> global_idx
     // This reconstructs the mapping from the program's globals list
+    // Include both user-defined functions and builtins
     let mut globals: HashMap<String, usize> = HashMap::new();
     for (global_idx, value) in program.globals.iter().enumerate() {
         if let baml_vm::Value::Object(obj_idx) = value {
+            // First check user-defined functions
+            let mut found = false;
             for (name, fn_obj_idx) in &program.function_indices {
                 if *fn_obj_idx == obj_idx.raw() {
                     globals.insert(name.clone(), global_idx);
+                    found = true;
                     break;
                 }
+            }
+            // If not found in user functions, check if it's a builtin function
+            if !found
+                && let Some(baml_vm::Object::Function(func)) = program.objects.get(obj_idx.raw())
+            {
+                globals.insert(func.name.clone(), global_idx);
             }
         }
     }

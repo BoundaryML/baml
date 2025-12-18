@@ -11,9 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 
-import baml_py
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -27,32 +25,32 @@ class LlmResponseParser:
     def TestBooleanLiterals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.BooleanLiterals:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestBooleanLiterals", llm_response=llm_response, mode="request")
-        return typing.cast(types.BooleanLiterals, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestBooleanLiterals", llm_response=llm_response, mode="request")
+        return typing.cast(types.BooleanLiterals, result)
 
     def TestComplexLiterals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ComplexLiterals:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexLiterals", llm_response=llm_response, mode="request")
-        return typing.cast(types.ComplexLiterals, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexLiterals", llm_response=llm_response, mode="request")
+        return typing.cast(types.ComplexLiterals, result)
 
     def TestIntegerLiterals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.IntegerLiterals:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestIntegerLiterals", llm_response=llm_response, mode="request")
-        return typing.cast(types.IntegerLiterals, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestIntegerLiterals", llm_response=llm_response, mode="request")
+        return typing.cast(types.IntegerLiterals, result)
 
     def TestMixedLiterals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.MixedLiterals:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedLiterals", llm_response=llm_response, mode="request")
-        return typing.cast(types.MixedLiterals, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedLiterals", llm_response=llm_response, mode="request")
+        return typing.cast(types.MixedLiterals, result)
 
     def TestStringLiterals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.StringLiterals:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestStringLiterals", llm_response=llm_response, mode="request")
-        return typing.cast(types.StringLiterals, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestStringLiterals", llm_response=llm_response, mode="request")
+        return typing.cast(types.StringLiterals, result)
 
     
 
@@ -65,31 +63,31 @@ class LlmStreamParser:
     def TestBooleanLiterals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.BooleanLiterals:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestBooleanLiterals", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.BooleanLiterals, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestBooleanLiterals", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.BooleanLiterals, result)
 
     def TestComplexLiterals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.ComplexLiterals:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexLiterals", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.ComplexLiterals, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexLiterals", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.ComplexLiterals, result)
 
     def TestIntegerLiterals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.IntegerLiterals:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestIntegerLiterals", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.IntegerLiterals, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestIntegerLiterals", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.IntegerLiterals, result)
 
     def TestMixedLiterals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.MixedLiterals:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedLiterals", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.MixedLiterals, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestMixedLiterals", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.MixedLiterals, result)
 
     def TestStringLiterals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.StringLiterals:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestStringLiterals", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.StringLiterals, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestStringLiterals", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.StringLiterals, result)
 
     

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -11,26 +11,25 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "text"
-        TYPE_EXPR " string"
+        TYPE_EXPR "string"
           WORD "string"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " Analysis"
+    TYPE_EXPR "Analysis"
       WORD "Analysis"
     LLM_FUNCTION_BODY
       L_BRACE "{"
-      CLIENT_FIELD "
-  client GPT4"
+      CLIENT_FIELD "client GPT4"
         KW_CLIENT "client"
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL " #"
+        RAW_STRING_LITERAL #"
     Analyze the following text:
     {{ text }}
     
     Return an Analysis object with sentiment and keywords.
-  "#"
+  "#
           HASH "#"
           QUOTE """
           WORD "Analyze"
@@ -61,17 +60,17 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "sentiment"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
     FIELD
       WORD "keywords"
-      TYPE_EXPR " string[]"
+      TYPE_EXPR "string[]"
         WORD "string"
         L_BRACKET "["
         R_BRACKET "]"
     FIELD
       WORD "score"
-      TYPE_EXPR " float"
+      TYPE_EXPR "float"
         WORD "float"
     R_BRACE "}"
   FUNCTION_DEF
@@ -81,11 +80,11 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "analysis"
-        TYPE_EXPR " Analysis"
+        TYPE_EXPR "Analysis"
           WORD "Analysis"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " string"
+    TYPE_EXPR "string"
       WORD "string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
@@ -94,7 +93,7 @@ SOURCE_FILE
           KW_LET "let"
           WORD "score"
           EQUALS "="
-          PATH_EXPR " analysis.score"
+          PATH_EXPR "analysis.score"
             WORD "analysis"
             DOT "."
             WORD "score"
@@ -109,14 +108,14 @@ SOURCE_FILE
             RETURN_STMT
               KW_RETURN "return"
               BINARY_EXPR
-                STRING_LITERAL " "Very positive: ""
+                STRING_LITERAL "Very positive: "
                   QUOTE """
                   WORD "Very"
                   WORD "positive"
                   COLON ":"
                   QUOTE """
                 PLUS "+"
-                PATH_EXPR " analysis.sentiment"
+                PATH_EXPR "analysis.sentiment"
                   WORD "analysis"
                   DOT "."
                   WORD "sentiment"
@@ -133,13 +132,13 @@ SOURCE_FILE
               RETURN_STMT
                 KW_RETURN "return"
                 BINARY_EXPR
-                  STRING_LITERAL " "Positive: ""
+                  STRING_LITERAL "Positive: "
                     QUOTE """
                     WORD "Positive"
                     COLON ":"
                     QUOTE """
                   PLUS "+"
-                  PATH_EXPR " analysis.sentiment"
+                  PATH_EXPR "analysis.sentiment"
                     WORD "analysis"
                     DOT "."
                     WORD "sentiment"
@@ -156,13 +155,13 @@ SOURCE_FILE
                 RETURN_STMT
                   KW_RETURN "return"
                   BINARY_EXPR
-                    STRING_LITERAL " "Neutral: ""
+                    STRING_LITERAL "Neutral: "
                       QUOTE """
                       WORD "Neutral"
                       COLON ":"
                       QUOTE """
                     PLUS "+"
-                    PATH_EXPR " analysis.sentiment"
+                    PATH_EXPR "analysis.sentiment"
                       WORD "analysis"
                       DOT "."
                       WORD "sentiment"
@@ -173,13 +172,13 @@ SOURCE_FILE
                 RETURN_STMT
                   KW_RETURN "return"
                   BINARY_EXPR
-                    STRING_LITERAL " "Negative: ""
+                    STRING_LITERAL "Negative: "
                       QUOTE """
                       WORD "Negative"
                       COLON ":"
                       QUOTE """
                     PLUS "+"
-                    PATH_EXPR " analysis.sentiment"
+                    PATH_EXPR "analysis.sentiment"
                       WORD "analysis"
                       DOT "."
                       WORD "sentiment"
@@ -192,26 +191,25 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "input"
-        TYPE_EXPR " string"
+        TYPE_EXPR "string"
           WORD "string"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " string"
+    TYPE_EXPR "string"
       WORD "string"
     LLM_FUNCTION_BODY
       L_BRACE "{"
-      CLIENT_FIELD "
-  client GPT4"
+      CLIENT_FIELD "client GPT4"
         KW_CLIENT "client"
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL " #"
+        RAW_STRING_LITERAL #"
     Process this through multiple steps:
     1. {{ input }}
     2. Transform it
     3. Return result
-  "#"
+  "#
           HASH "#"
           QUOTE """
           WORD "Process"
@@ -245,16 +243,16 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "a"
-        TYPE_EXPR " int"
+        TYPE_EXPR "int"
           WORD "int"
       COMMA ","
       PARAMETER
         WORD "b"
-        TYPE_EXPR " int"
+        TYPE_EXPR "int"
           WORD "int"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " int"
+    TYPE_EXPR "int"
       WORD "int"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR

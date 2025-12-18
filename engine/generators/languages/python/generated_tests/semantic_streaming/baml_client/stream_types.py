@@ -12,9 +12,8 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
-import baml_py
 
 from . import types
 
@@ -27,8 +26,8 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
 # #########################################################################
 
 class ClassWithBlockDone(BaseModel):
-    i_16_digits: typing.Optional[int] = None
-    s_20_words: typing.Optional[str] = None
+    i_16_digits: int
+    s_20_words: str
 
 class ClassWithoutDone(BaseModel):
     i_16_digits: typing.Optional[int] = None

@@ -16,8 +16,8 @@ func newHttpResponse(ptr int64, rt unsafe.Pointer) HTTPResponse {
 	return &httpResponse{raw_objects.FromPointer(ptr, rt)}
 }
 
-func (h *httpResponse) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_HTTP_RESPONSE
+func (h *httpResponse) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_HTTP_RESPONSE
 }
 
 func (h *httpResponse) pointer() int64 {

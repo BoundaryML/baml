@@ -592,6 +592,30 @@ test_partial_deserializer_streaming!(
     {"Description": "Test"}
 );
 
+test_partial_deserializer_streaming!(
+  test_person_with_check,
+  r#"
+  class Person {
+    known_ages int | null @check(hi, {{ false }})
+    name string
+  }
+  "#,
+  r#"{
+    known_ages: 10
+  "#,
+  TypeIR::class("Person"),
+  {"known_ages": {
+    "value": null,
+    "checks": {
+      "hi": {
+        "name": "hi",
+        "expression": "false",
+        "status": "failed"
+      }
+    }
+  }, "name": null}
+);
+
 // Regression test for nested AnyOf leaking into string output
 // This tests the scenario where a user sees "[json AnyOf[{,AnyOf[{,{},],]]i" in output
 const NESTED_ANYOF_BUG: &str = r#"

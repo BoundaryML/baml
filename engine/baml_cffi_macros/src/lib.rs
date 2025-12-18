@@ -1586,7 +1586,7 @@ pub fn generate_encode_decode_impls(input: TokenStream) -> TokenStream {
                 let wrapper_type = &type_def.wrapper_type;
                 Some(quote! {
                     impl Decode for #wrapper_type {
-                        type From = CffiPointerType;
+                        type From = BamlPointerType;
                         fn decode(from: Self::From) -> Result<Self, anyhow::Error>
                         where
                             Self: Sized,
@@ -1611,7 +1611,7 @@ pub fn generate_encode_decode_impls(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         impl Decode for RawPtrType {
-            type From = CffiRawObject;
+            type From = BamlObjectHandle;
 
             fn decode(from: Self::From) -> Result<Self, anyhow::Error>
             where
@@ -1624,8 +1624,8 @@ pub fn generate_encode_decode_impls(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl Encode<CffiRawObject> for RawPtrType {
-            fn encode(self) -> CffiRawObject {
+        impl Encode<BamlObjectHandle> for RawPtrType {
+            fn encode(self) -> BamlObjectHandle {
                 match self {
                     #(#encode_arms,)*
                 }
@@ -1797,7 +1797,7 @@ pub fn export_baml_new_fn(_attr: TokenStream, item: TokenStream) -> TokenStream 
         };
 
         quote! {
-            cffi::CffiObjectType::#cffi_variant => {
+            cffi::BamlObjectType::#cffi_variant => {
                 #(#param_extractions)*
                 match #method_call {
                     Ok(wrapper) => Ok(BamlObjectResponseSuccess::new_object(RawPtrType::from(wrapper))),
@@ -1831,7 +1831,7 @@ pub fn export_baml_new_fn(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
         impl #type_name {
             pub fn new_from(
-                object: cffi::CffiObjectType,
+                object: cffi::BamlObjectType,
                 kwargs: &baml_types::BamlMap<String, crate::ffi::Value>,
             ) -> BamlObjectResponse {
                 match object {

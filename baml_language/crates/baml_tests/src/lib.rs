@@ -35,11 +35,16 @@ fn format_node_recursive(node: &baml_db::baml_syntax::SyntaxNode, depth: usize) 
 
     result.push_str(&format!("{}{:?}", indent, node.kind()));
 
-    // For leaf nodes (tokens), include the text
+    // For leaf nodes (no child nodes), include the text
     if node.first_child().is_none() {
-        let text = node.text().to_string();
-        if !text.trim().is_empty() {
-            result.push_str(&format!(" \"{}\"", text));
+        let text = node.text().to_string().trim().to_string();
+        if !text.is_empty() {
+            // If text already has quotes, show as-is; otherwise wrap in quotes
+            if text.starts_with('"') || text.starts_with("#\"") {
+                result.push_str(&format!(" {}", text));
+            } else {
+                result.push_str(&format!(" \"{}\"", text));
+            }
         }
     }
 
@@ -68,6 +73,57 @@ fn format_node_recursive(node: &baml_db::baml_syntax::SyntaxNode, depth: usize) 
     result
 }
 
+// Helper function for formatting TypeRef as code
+#[cfg(test)]
+fn format_type_ref(type_ref: &baml_hir::TypeRef) -> String {
+    use baml_hir::TypeRef;
+    match type_ref {
+        TypeRef::Path(path) => format_path(path),
+        TypeRef::Int => "int".to_string(),
+        TypeRef::Float => "float".to_string(),
+        TypeRef::String => "string".to_string(),
+        TypeRef::Bool => "bool".to_string(),
+        TypeRef::Null => "null".to_string(),
+        TypeRef::Image => "image".to_string(),
+        TypeRef::Audio => "audio".to_string(),
+        TypeRef::Video => "video".to_string(),
+        TypeRef::Pdf => "pdf".to_string(),
+        TypeRef::Optional(inner) => format!("{}?", format_type_ref(inner)),
+        TypeRef::List(inner) => format!("{}[]", format_type_ref(inner)),
+        TypeRef::Map { key, value } => {
+            format!("Map<{}, {}>", format_type_ref(key), format_type_ref(value))
+        }
+        TypeRef::Union(types) => types
+            .iter()
+            .map(format_type_ref)
+            .collect::<Vec<_>>()
+            .join(" | "),
+        TypeRef::StringLiteral(s) => format!("\"{}\"", s),
+        TypeRef::IntLiteral(n) => n.to_string(),
+        TypeRef::FloatLiteral(s) => s.clone(),
+        TypeRef::Generic { base, args } => {
+            let args_str = args
+                .iter()
+                .map(format_type_ref)
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{}<{}>", format_type_ref(base), args_str)
+        }
+        TypeRef::TypeParam(name) => name.to_string(),
+        TypeRef::Error => "<error>".to_string(),
+        TypeRef::Unknown => "<unknown>".to_string(),
+    }
+}
+
+#[cfg(test)]
+fn format_path(path: &baml_hir::Path) -> String {
+    path.segments
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
 // Helper function for formatting HIR items from a specific file
 #[cfg(test)]
 fn format_hir_file(
@@ -91,110 +147,109 @@ fn format_hir_file(
                 let sig = function_signature(db, *func_id);
                 let body = function_body(db, *func_id);
 
-                writeln!(result, "function {} {{", func.name).unwrap();
-
-                // Show signature
-                if !sig.params.is_empty() {
-                    write!(result, "  params: [").unwrap();
-                    for (i, param) in sig.params.iter().enumerate() {
-                        if i > 0 {
-                            write!(result, ", ").unwrap();
-                        }
-                        write!(result, "{}: {:?}", param.name, param.type_ref).unwrap();
+                // Format as: function Name(param: Type, ...) -> ReturnType { body }
+                write!(result, "function {}(", func.name).unwrap();
+                for (i, param) in sig.params.iter().enumerate() {
+                    if i > 0 {
+                        write!(result, ", ").unwrap();
                     }
-                    writeln!(result, "]").unwrap();
+                    write!(
+                        result,
+                        "{}: {}",
+                        param.name,
+                        format_type_ref(&param.type_ref)
+                    )
+                    .unwrap();
                 }
-                writeln!(result, "  return: {:?}", sig.return_type).unwrap();
+                writeln!(result, ") -> {} {{", format_type_ref(&sig.return_type)).unwrap();
 
                 // Show body
                 match body.as_ref() {
                     baml_db::baml_hir::FunctionBody::Llm(llm) => {
-                        writeln!(result, "  body: Llm {{").unwrap();
+                        // Show LLM function body as inline config
                         if let Some(ref client) = llm.client {
-                            writeln!(result, "    client: {}", client).unwrap();
+                            writeln!(result, "  client {}", client).unwrap();
                         }
                         if let Some(ref prompt) = llm.prompt {
-                            writeln!(result, "    prompt: {:?}", prompt.text).unwrap();
-                            if !prompt.interpolations.is_empty() {
-                                write!(result, "    interpolations: [").unwrap();
-                                for (i, interp) in prompt.interpolations.iter().enumerate() {
-                                    if i > 0 {
-                                        write!(result, ", ").unwrap();
-                                    }
-                                    write!(result, "{}", interp.var_name).unwrap();
-                                }
-                                writeln!(result, "]").unwrap();
+                            // Show prompt as template string
+                            writeln!(result, "  prompt #\"").unwrap();
+                            for line in prompt.text.lines() {
+                                writeln!(result, "    {}", line).unwrap();
                             }
+                            writeln!(result, "  \"#").unwrap();
                         }
-                        writeln!(result, "  }}").unwrap();
                     }
                     baml_db::baml_hir::FunctionBody::Expr(expr_body) => {
-                        writeln!(result, "  body: Expr {{").unwrap();
-
-                        // Display all expressions
-                        if !expr_body.exprs.is_empty() {
-                            writeln!(result, "    exprs: [").unwrap();
-                            for (idx, expr) in expr_body.exprs.iter() {
-                                writeln!(result, "      {:?}: {:?}", idx, expr).unwrap();
+                        // Print as code for readability
+                        let code = baml_hir::body_to_code(expr_body);
+                        // Indent the code (skip the outer braces since we already have them)
+                        let code = code.trim();
+                        if code.starts_with('{') && code.ends_with('}') {
+                            // Remove outer braces and print contents
+                            let inner = &code[1..code.len() - 1];
+                            for line in inner.lines() {
+                                if !line.trim().is_empty() {
+                                    writeln!(result, "  {}", line).unwrap();
+                                }
                             }
-                            writeln!(result, "    ]").unwrap();
-                        }
-
-                        // Display all statements
-                        if !expr_body.stmts.is_empty() {
-                            writeln!(result, "    stmts: [").unwrap();
-                            for (idx, stmt) in expr_body.stmts.iter() {
-                                writeln!(result, "      {:?}: {:?}", idx, stmt).unwrap();
+                        } else {
+                            for line in code.lines() {
+                                writeln!(result, "    {}", line).unwrap();
                             }
-                            writeln!(result, "    ]").unwrap();
                         }
-
-                        // Display root expression
-                        if let Some(root) = expr_body.root_expr {
-                            writeln!(result, "    root: {:?}", root).unwrap();
-                        }
-
-                        writeln!(result, "  }}").unwrap();
                     }
                     baml_db::baml_hir::FunctionBody::Missing => {
-                        writeln!(result, "  body: Missing").unwrap();
+                        writeln!(result, "    // missing body").unwrap();
                     }
                 }
 
                 writeln!(result, "}}").unwrap();
+                writeln!(result).unwrap(); // blank line after function
             }
             ItemId::Class(class_id) => {
                 let class = &item_tree[class_id.id(db)];
                 writeln!(result, "class {} {{", class.name).unwrap();
                 for field in &class.fields {
-                    writeln!(result, "  {}: {:?}", field.name, field.type_ref).unwrap();
+                    writeln!(
+                        result,
+                        "  {}: {}",
+                        field.name,
+                        format_type_ref(&field.type_ref)
+                    )
+                    .unwrap();
                 }
                 if class.is_dynamic {
                     writeln!(result, "  @@dynamic").unwrap();
                 }
-                // Note: Generic parameters are queried separately via generic_params()
                 writeln!(result, "}}").unwrap();
+                writeln!(result).unwrap(); // blank line after class
             }
             ItemId::Enum(enum_id) => {
                 let enum_def = &item_tree[enum_id.id(db)];
                 writeln!(result, "enum {} {{", enum_def.name).unwrap();
                 for variant in &enum_def.variants {
-                    writeln!(result, "  {:?}", variant).unwrap();
+                    writeln!(result, "  {}", variant.name).unwrap();
                 }
-                // Note: Generic parameters are queried separately via generic_params()
                 writeln!(result, "}}").unwrap();
+                writeln!(result).unwrap(); // blank line after enum
             }
             ItemId::TypeAlias(alias_id) => {
                 let alias = &item_tree[alias_id.id(db)];
-                write!(result, "type {} = {:?}", alias.name, alias.type_ref).unwrap();
-                // Note: Generic parameters are queried separately via generic_params()
-                writeln!(result).unwrap();
+                writeln!(
+                    result,
+                    "type {} = {}",
+                    alias.name,
+                    format_type_ref(&alias.type_ref)
+                )
+                .unwrap();
+                writeln!(result).unwrap(); // blank line after type alias
             }
             ItemId::Client(client_id) => {
                 let client = &item_tree[client_id.id(db)];
                 writeln!(result, "client {} {{", client.name).unwrap();
                 writeln!(result, "  provider: {}", client.provider).unwrap();
                 writeln!(result, "}}").unwrap();
+                writeln!(result).unwrap(); // blank line after client
             }
             ItemId::Test(test_id) => {
                 let test = &item_tree[test_id.id(db)];
@@ -203,6 +258,7 @@ fn format_hir_file(
                     writeln!(result, "  functions: {:?}", test.function_refs).unwrap();
                 }
                 writeln!(result, "}}").unwrap();
+                writeln!(result).unwrap(); // blank line after test
             }
         }
     }

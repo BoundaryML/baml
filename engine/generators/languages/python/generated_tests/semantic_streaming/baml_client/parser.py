@@ -11,9 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 
-import baml_py
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -27,20 +25,20 @@ class LlmResponseParser:
     def MakeClassWithBlockDone(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ClassWithBlockDone:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithBlockDone", llm_response=llm_response, mode="request")
-        return typing.cast(types.ClassWithBlockDone, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithBlockDone", llm_response=llm_response, mode="request")
+        return typing.cast(types.ClassWithBlockDone, result)
 
     def MakeClassWithExternalDone(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ClassWithoutDone:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithExternalDone", llm_response=llm_response, mode="request")
-        return typing.cast(types.ClassWithoutDone, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithExternalDone", llm_response=llm_response, mode="request")
+        return typing.cast(types.ClassWithoutDone, result)
 
     def MakeSemanticContainer(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.SemanticContainer:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="MakeSemanticContainer", llm_response=llm_response, mode="request")
-        return typing.cast(types.SemanticContainer, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="MakeSemanticContainer", llm_response=llm_response, mode="request")
+        return typing.cast(types.SemanticContainer, result)
 
     
 
@@ -53,19 +51,19 @@ class LlmStreamParser:
     def MakeClassWithBlockDone(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ClassWithBlockDone:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithBlockDone", llm_response=llm_response, mode="stream")
-        return typing.cast(types.ClassWithBlockDone, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithBlockDone", llm_response=llm_response, mode="stream")
+        return typing.cast(types.ClassWithBlockDone, result)
 
     def MakeClassWithExternalDone(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ClassWithoutDone:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithExternalDone", llm_response=llm_response, mode="stream")
-        return typing.cast(types.ClassWithoutDone, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithExternalDone", llm_response=llm_response, mode="stream")
+        return typing.cast(types.ClassWithoutDone, result)
 
     def MakeSemanticContainer(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.SemanticContainer:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="MakeSemanticContainer", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.SemanticContainer, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="MakeSemanticContainer", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SemanticContainer, result)
 
     

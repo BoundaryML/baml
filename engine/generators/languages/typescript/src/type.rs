@@ -1,92 +1,5 @@
 use crate::package::{CurrentRenderPackage, Package};
 
-#[derive(Clone, PartialEq, Debug, Default)]
-pub enum TypeWrapper {
-    #[default]
-    None,
-    Checked(Box<TypeWrapper>, Vec<Option<String>>),
-    Optional(Box<TypeWrapper>),
-}
-
-impl TypeWrapper {
-    pub fn wrap_with_checked(self, names: Vec<Option<String>>) -> TypeWrapper {
-        TypeWrapper::Checked(Box::new(self), names)
-    }
-}
-
-#[derive(Clone, PartialEq, Debug, Default)]
-pub struct TypeMetaTS {
-    pub type_wrapper: TypeWrapper,
-    pub wrap_stream_state: bool,
-}
-
-impl TypeMetaTS {
-    pub fn is_optional(&self) -> bool {
-        matches!(self.type_wrapper, TypeWrapper::Optional(_))
-    }
-
-    pub fn make_checked(&mut self, names: Vec<Option<String>>) -> &mut Self {
-        self.type_wrapper =
-            TypeWrapper::Checked(Box::new(std::mem::take(&mut self.type_wrapper)), names);
-        self
-    }
-
-    pub fn make_optional(&mut self) -> &mut Self {
-        self.type_wrapper = TypeWrapper::Optional(Box::new(std::mem::take(&mut self.type_wrapper)));
-        self
-    }
-
-    pub fn set_stream_state(&mut self) -> &mut Self {
-        self.wrap_stream_state = true;
-        self
-    }
-}
-
-trait WrapType {
-    fn wrap_type(&self, params: (&CurrentRenderPackage, String)) -> String;
-}
-
-impl WrapType for TypeWrapper {
-    fn wrap_type(&self, params: (&CurrentRenderPackage, String)) -> String {
-        let (pkg, orig) = &params;
-        match self {
-            TypeWrapper::None => orig.clone(),
-            TypeWrapper::Checked(inner, names) => {
-                let mut names = names.clone();
-                names.dedup();
-                names.sort();
-                format!(
-                    "{}Checked<{},{}>",
-                    Package::checked().relative_from(pkg),
-                    inner.wrap_type(params),
-                    names
-                        .iter()
-                        .filter_map(|n| n.as_ref().map(|n| format!("\"{n}\"")))
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                )
-            }
-            TypeWrapper::Optional(inner) => format!("{} | null", inner.wrap_type(params)),
-        }
-    }
-}
-
-impl WrapType for TypeMetaTS {
-    fn wrap_type(&self, params: (&CurrentRenderPackage, String)) -> String {
-        let pkg = params.0;
-        let wrapped = self.type_wrapper.wrap_type(params);
-        if self.wrap_stream_state {
-            format!(
-                "{}StreamState<{}>",
-                Package::stream_state().relative_from(pkg),
-                wrapped
-            )
-        } else {
-            wrapped
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum MediaTypeTS {
     Image,
@@ -115,58 +28,78 @@ impl LiteralValue {
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum TypeTS {
-    Literal(LiteralValue, TypeMetaTS),
-    String(TypeMetaTS),
-    Int(TypeMetaTS),
-    Float(TypeMetaTS),
-    Bool(TypeMetaTS),
-    Media(MediaTypeTS, TypeMetaTS),
+    Literal(LiteralValue),
+    String,
+    Int,
+    Float,
+    Bool,
+    Media(MediaTypeTS),
     // unions become classes
     Class {
         package: Package,
         name: String,
         dynamic: bool,
-        meta: TypeMetaTS,
     },
     Union {
         variants: Vec<TypeTS>,
-        meta: TypeMetaTS,
     },
     Enum {
         package: Package,
         name: String,
         dynamic: bool,
-        meta: TypeMetaTS,
     },
     TypeAlias {
         name: String,
         package: Package,
-        meta: TypeMetaTS,
     },
-    List(Box<TypeTS>, TypeMetaTS),
-    Map(Box<TypeTS>, Box<TypeTS>, TypeMetaTS),
+    List(Box<TypeTS>),
+    Map(Box<TypeTS>, Box<TypeTS>),
     Interface {
         package: Package,
         name: String,
-        meta: TypeMetaTS,
     },
     // For any type that we can't represent in TS, we'll use this
     Any {
         reason: String,
-        meta: TypeMetaTS,
     },
+    // Wrapper types
+    Optional(Box<TypeTS>),
+    Checked {
+        inner: Box<TypeTS>,
+        names: Vec<Option<String>>,
+    },
+    StreamState(Box<TypeTS>),
 }
 
 impl TypeTS {
+    pub fn make_optional(self) -> Self {
+        TypeTS::Optional(Box::new(self))
+    }
+
+    pub fn make_checked(self, names: Vec<Option<String>>) -> Self {
+        TypeTS::Checked {
+            inner: Box::new(self),
+            names,
+        }
+    }
+
+    pub fn is_optional(&self) -> bool {
+        matches!(self, TypeTS::Optional(..))
+    }
+
+    pub fn make_stream_state(self) -> Self {
+        TypeTS::StreamState(Box::new(self))
+    }
+
     // for unions, we need a default name for the type when the union is not named
     pub fn default_name_within_union(&self) -> String {
         match self {
-            TypeTS::Literal(val, _) => val.serialize_type(),
-            TypeTS::String(_) => "string".to_string(),
-            TypeTS::Int(_) => "number".to_string(),
-            TypeTS::Float(_) => "number".to_string(),
-            TypeTS::Bool(_) => "boolean".to_string(),
-            TypeTS::Media(media_type, _) => match media_type {
+            TypeTS::Literal(val) => val.serialize_type(),
+            TypeTS::String => "string".to_string(),
+            TypeTS::Int => "number".to_string(),
+            TypeTS::Float => "number".to_string(),
+            TypeTS::Bool => "boolean".to_string(),
+            TypeTS::Media(media_type) => match media_type {
                 MediaTypeTS::Image => "Image".to_string(),
                 MediaTypeTS::Audio => "Audio".to_string(),
                 MediaTypeTS::Pdf => "Pdf".to_string(),
@@ -180,58 +113,33 @@ impl TypeTS {
                 .collect::<Vec<_>>()
                 .join(" | "),
             TypeTS::Enum { name, .. } => name.clone(),
-            TypeTS::List(inner, _) => format!("{}[]", inner.default_name_within_union()),
-            TypeTS::Map(key, value, _) => format!(
+            TypeTS::List(inner) => format!("{}[]", inner.default_name_within_union()),
+            TypeTS::Map(key, value) => format!(
                 "Record<{}, {}>",
                 key.default_name_within_union(),
                 value.default_name_within_union()
             ),
             TypeTS::Interface { name, .. } => name.clone(),
             TypeTS::Any { .. } => "any".to_string(),
+            TypeTS::Optional(inner) => format!("{} | null", inner.default_name_within_union()),
+            TypeTS::Checked { inner, names, .. } => {
+                let mut names = names.clone();
+                names.dedup();
+                names.sort();
+                format!(
+                    "Checked<{},{}>",
+                    inner.default_name_within_union(),
+                    names
+                        .iter()
+                        .filter_map(|n| n.as_ref().map(|n| format!("\"{n}\"")))
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                )
+            }
+            TypeTS::StreamState(inner) => {
+                format!("StreamState<{}>", inner.default_name_within_union())
+            }
         }
-    }
-
-    pub fn meta(&self) -> &TypeMetaTS {
-        match self {
-            TypeTS::Literal(_, meta) => meta,
-            TypeTS::String(meta) => meta,
-            TypeTS::Int(meta) => meta,
-            TypeTS::Float(meta) => meta,
-            TypeTS::Bool(meta) => meta,
-            TypeTS::Media(_, meta) => meta,
-            TypeTS::Class { meta, .. } => meta,
-            TypeTS::TypeAlias { meta, .. } => meta,
-            TypeTS::Union { meta, .. } => meta,
-            TypeTS::Enum { meta, .. } => meta,
-            TypeTS::List(_, meta) => meta,
-            TypeTS::Map(_, _, meta) => meta,
-            TypeTS::Interface { meta, .. } => meta,
-            TypeTS::Any { meta, .. } => meta,
-        }
-    }
-
-    pub fn meta_mut(&mut self) -> &mut TypeMetaTS {
-        match self {
-            TypeTS::Literal(_, meta) => meta,
-            TypeTS::String(meta) => meta,
-            TypeTS::Int(meta) => meta,
-            TypeTS::Float(meta) => meta,
-            TypeTS::Bool(meta) => meta,
-            TypeTS::Media(_, meta) => meta,
-            TypeTS::Class { meta, .. } => meta,
-            TypeTS::TypeAlias { meta, .. } => meta,
-            TypeTS::Union { meta, .. } => meta,
-            TypeTS::Enum { meta, .. } => meta,
-            TypeTS::List(_, meta) => meta,
-            TypeTS::Map(_, _, meta) => meta,
-            TypeTS::Interface { meta, .. } => meta,
-            TypeTS::Any { meta, .. } => meta,
-        }
-    }
-
-    pub fn with_meta(mut self, meta: TypeMetaTS) -> Self {
-        *(self.meta_mut()) = meta;
-        self
     }
 }
 
@@ -241,14 +149,13 @@ pub trait SerializeType {
 
 impl SerializeType for TypeTS {
     fn serialize_type(&self, pkg: &CurrentRenderPackage) -> String {
-        let meta = self.meta();
-        let type_str = match self {
-            TypeTS::Literal(val, _) => val.serialize_type(),
-            TypeTS::String(_) => "string".to_string(),
-            TypeTS::Int(_) => "number".to_string(),
-            TypeTS::Float(_) => "number".to_string(),
-            TypeTS::Bool(_) => "boolean".to_string(),
-            TypeTS::Media(media, _) => match media {
+        match self {
+            TypeTS::Literal(val) => val.serialize_type(),
+            TypeTS::String => "string".to_string(),
+            TypeTS::Int => "number".to_string(),
+            TypeTS::Float => "number".to_string(),
+            TypeTS::Bool => "boolean".to_string(),
+            TypeTS::Media(media) => match media {
                 MediaTypeTS::Image => "Image".to_string(),
                 MediaTypeTS::Audio => "Audio".to_string(),
                 MediaTypeTS::Pdf => "Pdf".to_string(),
@@ -282,17 +189,17 @@ impl SerializeType for TypeTS {
                     format!("{}{}", package.relative_from(pkg), name)
                 }
             }
-            TypeTS::List(inner, _) => match &**inner {
+            TypeTS::List(inner) => match &**inner {
                 TypeTS::Union { .. } => format!("({})[]", inner.serialize_type(pkg)),
                 _ => {
-                    if inner.meta().is_optional() {
+                    if inner.is_optional() {
                         format!("({})[]", inner.serialize_type(pkg))
                     } else {
                         format!("{}[]", inner.serialize_type(pkg))
                     }
                 }
             },
-            TypeTS::Map(key, value, _) => {
+            TypeTS::Map(key, value) => {
                 let k = key.serialize_type(pkg);
                 let v = value.serialize_type(pkg);
                 match &**key {
@@ -306,9 +213,30 @@ impl SerializeType for TypeTS {
                 format!("{}{}", package.relative_from(pkg), name)
             }
             TypeTS::Any { .. } => "undefined".to_string(),
-        };
-
-        meta.wrap_type((pkg, type_str))
+            TypeTS::Optional(inner) => format!("{} | null", inner.serialize_type(pkg)),
+            TypeTS::Checked { inner, names, .. } => {
+                let mut names = names.clone();
+                names.dedup();
+                names.sort();
+                format!(
+                    "{}Checked<{},{}>",
+                    Package::checked().relative_from(pkg),
+                    inner.serialize_type(pkg),
+                    names
+                        .iter()
+                        .filter_map(|n| n.as_ref().map(|n| format!("\"{n}\"")))
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                )
+            }
+            TypeTS::StreamState(inner) => {
+                format!(
+                    "{}StreamState<{}>",
+                    Package::stream_state().relative_from(pkg),
+                    inner.serialize_type(pkg)
+                )
+            }
+        }
     }
 }
 

@@ -16,8 +16,8 @@ func newFunctionLog(ptr int64, rt unsafe.Pointer) FunctionLog {
 	return &functionLog{raw_objects.FromPointer(ptr, rt)}
 }
 
-func (f *functionLog) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_FUNCTION_LOG
+func (f *functionLog) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_FUNCTION_LOG
 }
 
 func (f *functionLog) pointer() int64 {

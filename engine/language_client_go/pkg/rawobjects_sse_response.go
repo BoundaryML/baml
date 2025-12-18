@@ -16,8 +16,8 @@ func newSSEResponse(ptr int64, rt unsafe.Pointer) SSEResponse {
 	return &sseResponse{raw_objects.FromPointer(ptr, rt)}
 }
 
-func (s *sseResponse) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_SSE_RESPONSE
+func (s *sseResponse) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_SSE_RESPONSE
 }
 
 func (s *sseResponse) pointer() int64 {

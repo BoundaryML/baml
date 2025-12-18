@@ -12,11 +12,9 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
-import baml_py
 
-from . import types
 
 StreamStateValueT = typing.TypeVar('StreamStateValueT')
 class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
@@ -30,34 +28,34 @@ class Admin(BaseModel):
     id: typing.Optional[int] = None
     name: typing.Optional[str] = None
     permissions: typing.List[str]
-    type: typing.Optional[str] = None
+    type: typing.Optional[typing_extensions.Literal['admin']] = None
 
 class ApiError(BaseModel):
-    status: typing.Optional[str] = None
+    status: typing.Optional[typing_extensions.Literal['error']] = None
     message: typing.Optional[str] = None
     code: typing.Optional[int] = None
 
 class ApiPending(BaseModel):
-    status: typing.Optional[str] = None
+    status: typing.Optional[typing_extensions.Literal['pending']] = None
     progress: typing.Optional[float] = None
     eta: typing.Optional[int] = None
 
 class ApiSuccess(BaseModel):
-    status: typing.Optional[str] = None
+    status: typing.Optional[typing_extensions.Literal['success']] = None
     data: typing.Dict[str, str]
 
 class Bird(BaseModel):
-    species: typing.Optional[str] = None
+    species: typing.Optional[typing_extensions.Literal['bird']] = None
     canFly: typing.Optional[bool] = None
     wingspan: typing.Optional[float] = None
 
 class Cat(BaseModel):
-    species: typing.Optional[str] = None
+    species: typing.Optional[typing_extensions.Literal['cat']] = None
     color: typing.Optional[str] = None
     lives: typing.Optional[int] = None
 
 class Circle(BaseModel):
-    shape: typing.Optional[str] = None
+    shape: typing.Optional[typing_extensions.Literal['circle']] = None
     radius: typing.Optional[float] = None
 
 class ComplexUnions(BaseModel):
@@ -70,7 +68,7 @@ class ComplexUnions(BaseModel):
 class DataResponse(BaseModel):
     data: typing.Optional[str] = None
     timestamp: typing.Optional[int] = None
-    status: typing.Optional[str] = None
+    status: typing.Optional[typing_extensions.Literal['success']] = None
 
 class DiscriminatedUnions(BaseModel):
     shape: typing.Optional[typing.Union["Circle", "Rectangle", "Triangle"]] = None
@@ -78,12 +76,12 @@ class DiscriminatedUnions(BaseModel):
     response: typing.Optional[typing.Union["ApiSuccess", "ApiError", "ApiPending"]] = None
 
 class Dog(BaseModel):
-    species: typing.Optional[str] = None
+    species: typing.Optional[typing_extensions.Literal['dog']] = None
     breed: typing.Optional[str] = None
     goodBoy: typing.Optional[bool] = None
 
 class Error(BaseModel):
-    type: typing.Optional[str] = None
+    type: typing.Optional[typing_extensions.Literal['error']] = None
     message: typing.Optional[str] = None
     code: typing.Optional[int] = None
     details: typing.Optional[str] = None
@@ -91,7 +89,7 @@ class Error(BaseModel):
 class ErrorResponse(BaseModel):
     error: typing.Optional[str] = None
     code: typing.Optional[int] = None
-    status: typing.Optional[str] = None
+    status: typing.Optional[typing_extensions.Literal['error']] = None
 
 class PrimitiveUnions(BaseModel):
     stringOrInt: typing.Optional[typing.Union[str, int]] = None
@@ -104,10 +102,10 @@ class Product(BaseModel):
     id: typing.Optional[int] = None
     name: typing.Optional[str] = None
     price: typing.Optional[float] = None
-    type: typing.Optional[str] = None
+    type: typing.Optional[typing_extensions.Literal['product']] = None
 
 class Rectangle(BaseModel):
-    shape: typing.Optional[str] = None
+    shape: typing.Optional[typing_extensions.Literal['rectangle']] = None
     width: typing.Optional[float] = None
     height: typing.Optional[float] = None
 
@@ -120,12 +118,12 @@ class Result(BaseModel):
     metadata: typing.Dict[str, str]
 
 class Success(BaseModel):
-    type: typing.Optional[str] = None
+    type: typing.Optional[typing_extensions.Literal['success']] = None
     message: typing.Optional[str] = None
     data: typing.Dict[str, str]
 
 class Triangle(BaseModel):
-    shape: typing.Optional[str] = None
+    shape: typing.Optional[typing_extensions.Literal['triangle']] = None
     base: typing.Optional[float] = None
     height: typing.Optional[float] = None
 
@@ -138,10 +136,10 @@ class UnionArrays(BaseModel):
 class User(BaseModel):
     id: typing.Optional[int] = None
     name: typing.Optional[str] = None
-    type: typing.Optional[str] = None
+    type: typing.Optional[typing_extensions.Literal['user']] = None
 
 class Warning(BaseModel):
-    type: typing.Optional[str] = None
+    type: typing.Optional[typing_extensions.Literal['warning']] = None
     message: typing.Optional[str] = None
     level: typing.Optional[int] = None
 

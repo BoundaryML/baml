@@ -3,509 +3,217 @@ source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function mul_assign {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(3))
-      Idx::<Expr>(1): Path("x")
-      Idx::<Expr>(2): Literal(Int(4))
-      Idx::<Expr>(3): Path("x")
-      Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Mul, value: Idx::<Expr>(2) }
-      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(3)))
-    ]
-    root: Idx::<Expr>(4)
-  }
+function mul_assign() -> int {
+      let x = 3;
+      x *= 4;
+      return x;
 }
-function assign_in_loop {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Literal(Int(0))
-      Idx::<Expr>(2): Path("i")
-      Idx::<Expr>(3): Literal(Int(5))
-      Idx::<Expr>(4): Binary { op: Lt, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
-      Idx::<Expr>(5): Path("sum")
-      Idx::<Expr>(6): Path("i")
-      Idx::<Expr>(7): Path("i")
-      Idx::<Expr>(8): Literal(Int(1))
-      Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
-      Idx::<Expr>(10): Path("sum")
-      Idx::<Expr>(11): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(2): AssignOp { target: Idx::<Expr>(5), op: Add, value: Idx::<Expr>(6) }
-      Idx::<Stmt>(3): AssignOp { target: Idx::<Expr>(7), op: Add, value: Idx::<Expr>(8) }
-      Idx::<Stmt>(4): While { condition: Idx::<Expr>(4), body: Idx::<Expr>(9) }
-      Idx::<Stmt>(5): Return(Some(Idx::<Expr>(10)))
-    ]
-    root: Idx::<Expr>(11)
-  }
+
+function assign_in_loop() -> int {
+      let sum = 0;
+      let i = 0;
+      while (i < 5) {
+          sum += i;
+          i += 1;
+      }
+      return sum;
 }
-function multi_assign {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Literal(Int(2))
-      Idx::<Expr>(2): Path("a")
-      Idx::<Expr>(3): Literal(Int(10))
-      Idx::<Expr>(4): Path("b")
-      Idx::<Expr>(5): Literal(Int(20))
-      Idx::<Expr>(6): Path("a")
-      Idx::<Expr>(7): Path("b")
-      Idx::<Expr>(8): Binary { op: Add, lhs: Idx::<Expr>(6), rhs: Idx::<Expr>(7) }
-      Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(2): Assign { target: Idx::<Expr>(2), value: Idx::<Expr>(3) }
-      Idx::<Stmt>(3): Assign { target: Idx::<Expr>(4), value: Idx::<Expr>(5) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(8)))
-    ]
-    root: Idx::<Expr>(9)
-  }
+
+function multi_assign() -> int {
+      let a = 1;
+      let b = 2;
+      a = 10;
+      b = 20;
+      return a + b;
 }
-function sub_assign {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(10))
-      Idx::<Expr>(1): Path("x")
-      Idx::<Expr>(2): Literal(Int(3))
-      Idx::<Expr>(3): Path("x")
-      Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Sub, value: Idx::<Expr>(2) }
-      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(3)))
-    ]
-    root: Idx::<Expr>(4)
-  }
+
+function sub_assign() -> int {
+      let x = 10;
+      x -= 3;
+      return x;
 }
-function add_assign {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(10))
-      Idx::<Expr>(1): Path("x")
-      Idx::<Expr>(2): Literal(Int(5))
-      Idx::<Expr>(3): Path("x")
-      Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Add, value: Idx::<Expr>(2) }
-      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(3)))
-    ]
-    root: Idx::<Expr>(4)
-  }
+
+function add_assign() -> int {
+      let x = 10;
+      x += 5;
+      return x;
 }
-function simple_assign {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Path("x")
-      Idx::<Expr>(2): Literal(Int(5))
-      Idx::<Expr>(3): Path("x")
-      Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Assign { target: Idx::<Expr>(1), value: Idx::<Expr>(2) }
-      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(3)))
-    ]
-    root: Idx::<Expr>(4)
-  }
+
+function simple_assign() -> int {
+      let x = 1;
+      x = 5;
+      return x;
 }
-function block_with_tail {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Literal(Int(2))
-      Idx::<Expr>(2): Path("y")
-      Idx::<Expr>(3): Path("z")
-      Idx::<Expr>(4): Binary { op: Add, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
-      Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1)], tail_expr: Some(Idx::<Expr>(4)) }
-      Idx::<Expr>(6): Path("x")
-      Idx::<Expr>(7): Block { stmts: [Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(2), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(5)) }
-      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(6)))
-    ]
-    root: Idx::<Expr>(7)
-  }
+
+function block_with_tail() -> int {
+      let x = {
+          let y = 1;
+          let z = 2;
+          y + z
+      };
+      return x;
 }
-function break_in_for {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-      Idx::<Expr>(1): Literal(Int(0))
-      Idx::<Expr>(2): Path("i")
-      Idx::<Expr>(3): Literal(Int(10))
-      Idx::<Expr>(4): Binary { op: Lt, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
-      Idx::<Expr>(5): Path("i")
-      Idx::<Expr>(6): Path("i")
-      Idx::<Expr>(7): Literal(Int(1))
-      Idx::<Expr>(8): Binary { op: Add, lhs: Idx::<Expr>(6), rhs: Idx::<Expr>(7) }
-      Idx::<Expr>(9): Literal(Int(1))
-      Idx::<Expr>(10): Block { stmts: [Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Break
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(2): Assign { target: Idx::<Expr>(5), value: Idx::<Expr>(8) }
-      Idx::<Stmt>(3): ForCStyle { initializer: Some(Idx::<Stmt>(1)), condition: Some(Idx::<Expr>(4)), update: Some(Idx::<Stmt>(2)), body: Idx::<Expr>(0) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(9)))
-    ]
-    root: Idx::<Expr>(10)
-  }
+
+function break_in_for() -> int {
+      {
+          let i = 0;
+          while (i < 10) {
+              break;
+              i = i + 1;
+          }
+      };
+      return 1;
 }
-function simple_continue {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Bool(true))
-      Idx::<Expr>(1): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-      Idx::<Expr>(2): Literal(Int(0))
-      Idx::<Expr>(3): Block { stmts: [Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Continue
-      Idx::<Stmt>(1): While { condition: Idx::<Expr>(0), body: Idx::<Expr>(1) }
-      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(2)))
-    ]
-    root: Idx::<Expr>(3)
-  }
+
+function simple_continue() -> int {
+      while (true) {
+          continue;
+      }
+      return 0;
 }
-function continue_with_locals {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Bool(true))
-      Idx::<Expr>(1): Literal(Int(1))
-      Idx::<Expr>(2): Literal(Bool(true))
-      Idx::<Expr>(3): Literal(Int(2))
-      Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
-      Idx::<Expr>(5): If { condition: Idx::<Expr>(2), then_branch: Idx::<Expr>(4), else_branch: None }
-      Idx::<Expr>(6): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(5)) }
-      Idx::<Expr>(7): Literal(Int(5))
-      Idx::<Expr>(8): Block { stmts: [Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(3)) }
-      Idx::<Stmt>(2): Continue
-      Idx::<Stmt>(3): While { condition: Idx::<Expr>(0), body: Idx::<Expr>(6) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(7)))
-    ]
-    root: Idx::<Expr>(8)
-  }
+
+function continue_with_locals() -> int {
+      while (true) {
+          let x = 1;
+          if (true) {
+              let y = 2;
+              continue;
+          }
+      }
+      return 5;
 }
-function simple_break {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Bool(true))
-      Idx::<Expr>(1): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-      Idx::<Expr>(2): Literal(Int(42))
-      Idx::<Expr>(3): Block { stmts: [Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Break
-      Idx::<Stmt>(1): While { condition: Idx::<Expr>(0), body: Idx::<Expr>(1) }
-      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(2)))
-    ]
-    root: Idx::<Expr>(3)
-  }
+
+function simple_break() -> int {
+      while (true) {
+          break;
+      }
+      return 42;
 }
-function nested_break {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Bool(true))
-      Idx::<Expr>(1): Literal(Bool(true))
-      Idx::<Expr>(2): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-      Idx::<Expr>(3): Block { stmts: [Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
-      Idx::<Expr>(4): Literal(Int(3))
-      Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Break
-      Idx::<Stmt>(1): While { condition: Idx::<Expr>(1), body: Idx::<Expr>(2) }
-      Idx::<Stmt>(2): Break
-      Idx::<Stmt>(3): While { condition: Idx::<Expr>(0), body: Idx::<Expr>(3) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(4)))
-    ]
-    root: Idx::<Expr>(5)
-  }
+
+function nested_break() -> int {
+      while (true) {
+          while (true) {
+              break;
+          }
+          break;
+      }
+      return 3;
 }
-function continue_in_for {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-      Idx::<Expr>(1): Literal(Int(0))
-      Idx::<Expr>(2): Path("i")
-      Idx::<Expr>(3): Literal(Int(10))
-      Idx::<Expr>(4): Binary { op: Lt, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
-      Idx::<Expr>(5): Path("i")
-      Idx::<Expr>(6): Path("i")
-      Idx::<Expr>(7): Literal(Int(1))
-      Idx::<Expr>(8): Binary { op: Add, lhs: Idx::<Expr>(6), rhs: Idx::<Expr>(7) }
-      Idx::<Expr>(9): Literal(Int(2))
-      Idx::<Expr>(10): Block { stmts: [Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Continue
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(2): Assign { target: Idx::<Expr>(5), value: Idx::<Expr>(8) }
-      Idx::<Stmt>(3): ForCStyle { initializer: Some(Idx::<Stmt>(1)), condition: Some(Idx::<Expr>(4)), update: Some(Idx::<Stmt>(2)), body: Idx::<Expr>(0) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(9)))
-    ]
-    root: Idx::<Expr>(10)
-  }
+
+function continue_in_for() -> int {
+      {
+          let i = 0;
+          while (i < 10) {
+              {
+                  i = i + 1;
+                  continue;
+              };
+              i = i + 1;
+          }
+      };
+      return 2;
 }
-function break_with_locals {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Bool(true))
-      Idx::<Expr>(1): Literal(Int(1))
-      Idx::<Expr>(2): Literal(Bool(true))
-      Idx::<Expr>(3): Literal(Int(2))
-      Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(1), Idx::<Stmt>(2)], tail_expr: None }
-      Idx::<Expr>(5): If { condition: Idx::<Expr>(2), then_branch: Idx::<Expr>(4), else_branch: None }
-      Idx::<Expr>(6): Block { stmts: [Idx::<Stmt>(0)], tail_expr: Some(Idx::<Expr>(5)) }
-      Idx::<Expr>(7): Literal(Int(4))
-      Idx::<Expr>(8): Block { stmts: [Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(3)) }
-      Idx::<Stmt>(2): Break
-      Idx::<Stmt>(3): While { condition: Idx::<Expr>(0), body: Idx::<Expr>(6) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(7)))
-    ]
-    root: Idx::<Expr>(8)
-  }
+
+function break_with_locals() -> int {
+      while (true) {
+          let x = 1;
+          if (true) {
+              let y = 2;
+              break;
+          }
+      }
+      return 4;
 }
-function c_style_for_loop {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Path("result")
-      Idx::<Expr>(2): Path("i")
-      Idx::<Expr>(3): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
-      Idx::<Expr>(4): Literal(Int(0))
-      Idx::<Expr>(5): Path("i")
-      Idx::<Expr>(6): Literal(Int(10))
-      Idx::<Expr>(7): Binary { op: Lt, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(6) }
-      Idx::<Expr>(8): Path("i")
-      Idx::<Expr>(9): Literal(Int(1))
-      Idx::<Expr>(10): Path("result")
-      Idx::<Expr>(11): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Add, value: Idx::<Expr>(2) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(4)) }
-      Idx::<Stmt>(3): AssignOp { target: Idx::<Expr>(8), op: Add, value: Idx::<Expr>(9) }
-      Idx::<Stmt>(4): ForCStyle { initializer: Some(Idx::<Stmt>(2)), condition: Some(Idx::<Expr>(7)), update: Some(Idx::<Stmt>(3)), body: Idx::<Expr>(3) }
-      Idx::<Stmt>(5): Return(Some(Idx::<Expr>(10)))
-    ]
-    root: Idx::<Expr>(11)
-  }
+
+function c_style_for_loop() -> int {
+      let result = 0;
+      {
+          let i = 0;
+          while (i < 10) {
+              result += i;
+              i += 1;
+          }
+      };
+      return result;
 }
-function iterator_style_for_loop {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Path("result")
-      Idx::<Expr>(2): Path("i")
-      Idx::<Expr>(3): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
-      Idx::<Expr>(4): Literal(Int(1))
-      Idx::<Expr>(5): Literal(Int(2))
-      Idx::<Expr>(6): Literal(Int(3))
-      Idx::<Expr>(7): Array { elements: [Idx::<Expr>(4), Idx::<Expr>(5), Idx::<Expr>(6)] }
-      Idx::<Expr>(8): Path("result")
-      Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Add, value: Idx::<Expr>(2) }
-      Idx::<Stmt>(2): ForIn { pattern: Idx::<Pattern>(1), iterator: Idx::<Expr>(7), body: Idx::<Expr>(3) }
-      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(8)))
-    ]
-    root: Idx::<Expr>(9)
-  }
+
+function iterator_style_for_loop() -> int {
+      let result = 0;
+      {
+          let _iter = [1, 2, 3];
+          let _len = _iter.length();
+          let _i = 0;
+          while (_i < _len) {
+              let i = _iter[_i];
+              _i += 1;
+              result += i;
+          }
+      };
+      return result;
 }
-function nested_for_loop {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Path("result")
-      Idx::<Expr>(2): Path("i")
-      Idx::<Expr>(3): Path("j")
-      Idx::<Expr>(4): Binary { op: Mul, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
-      Idx::<Expr>(5): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
-      Idx::<Expr>(6): Literal(Int(4))
-      Idx::<Expr>(7): Literal(Int(5))
-      Idx::<Expr>(8): Literal(Int(6))
-      Idx::<Expr>(9): Array { elements: [Idx::<Expr>(6), Idx::<Expr>(7), Idx::<Expr>(8)] }
-      Idx::<Expr>(10): Block { stmts: [Idx::<Stmt>(2)], tail_expr: None }
-      Idx::<Expr>(11): Literal(Int(1))
-      Idx::<Expr>(12): Literal(Int(2))
-      Idx::<Expr>(13): Literal(Int(3))
-      Idx::<Expr>(14): Array { elements: [Idx::<Expr>(11), Idx::<Expr>(12), Idx::<Expr>(13)] }
-      Idx::<Expr>(15): Path("result")
-      Idx::<Expr>(16): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): AssignOp { target: Idx::<Expr>(1), op: Add, value: Idx::<Expr>(4) }
-      Idx::<Stmt>(2): ForIn { pattern: Idx::<Pattern>(1), iterator: Idx::<Expr>(9), body: Idx::<Expr>(5) }
-      Idx::<Stmt>(3): ForIn { pattern: Idx::<Pattern>(2), iterator: Idx::<Expr>(14), body: Idx::<Expr>(10) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(15)))
-    ]
-    root: Idx::<Expr>(16)
-  }
+
+function nested_for_loop() -> int {
+      let result = 0;
+      {
+          let _iter = [1, 2, 3];
+          let _len = _iter.length();
+          let _i = 0;
+          while (_i < _len) {
+              let i = _iter[_i];
+              _i += 1;
+              {
+                  let _iter1 = [4, 5, 6];
+                  let _len1 = _iter1.length();
+                  let _i1 = 0;
+                  while (_i1 < _len1) {
+                      let j = _iter1[_i1];
+                      _i1 += 1;
+                      result += i * j;
+                  }
+              };
+          }
+      };
+      return result;
 }
-function ConditionalLogic {
-  params: [age: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path("age")
-      Idx::<Expr>(1): Literal(Int(18))
-      Idx::<Expr>(2): Binary { op: Lt, lhs: Idx::<Expr>(0), rhs: Idx::<Expr>(1) }
-      Idx::<Expr>(3): Literal(String(" \"minor\""))
-      Idx::<Expr>(4): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-      Idx::<Expr>(5): Path("age")
-      Idx::<Expr>(6): Literal(Int(65))
-      Idx::<Expr>(7): Binary { op: Lt, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(6) }
-      Idx::<Expr>(8): Literal(String(" \"adult\""))
-      Idx::<Expr>(9): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
-      Idx::<Expr>(10): Literal(String(" \"senior\""))
-      Idx::<Expr>(11): Block { stmts: [Idx::<Stmt>(2)], tail_expr: None }
-      Idx::<Expr>(12): If { condition: Idx::<Expr>(7), then_branch: Idx::<Expr>(9), else_branch: Some(Idx::<Expr>(11)) }
-      Idx::<Expr>(13): If { condition: Idx::<Expr>(2), then_branch: Idx::<Expr>(4), else_branch: Some(Idx::<Expr>(12)) }
-      Idx::<Expr>(14): Block { stmts: [], tail_expr: Some(Idx::<Expr>(13)) }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Return(Some(Idx::<Expr>(3)))
-      Idx::<Stmt>(1): Return(Some(Idx::<Expr>(8)))
-      Idx::<Stmt>(2): Return(Some(Idx::<Expr>(10)))
-    ]
-    root: Idx::<Expr>(14)
-  }
+
+function ConditionalLogic(age: int) -> string {
+      if (age < 18) {
+          return "minor";
+      } else if (age < 65) {
+          return "adult";
+      } else {
+          return "senior";
+      }
 }
-function let_statements {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(1))
-      Idx::<Expr>(1): Literal(Int(2))
-      Idx::<Expr>(2): Literal(Int(1))
-      Idx::<Expr>(3): Literal(Int(2))
-      Idx::<Expr>(4): Literal(Int(3))
-      Idx::<Expr>(5): Array { elements: [Idx::<Expr>(2), Idx::<Expr>(3), Idx::<Expr>(4)] }
-      Idx::<Expr>(6): Literal(Int(1))
-      Idx::<Expr>(7): Literal(Int(2))
-      Idx::<Expr>(8): Object { type_name: Some("Point"), fields: [("x", Idx::<Expr>(6)), ("y", Idx::<Expr>(7))] }
-      Idx::<Expr>(9): Path("point")
-      Idx::<Expr>(10): FieldAccess { base: Idx::<Expr>(9), field: "x" }
-      Idx::<Expr>(11): Path("point")
-      Idx::<Expr>(12): FieldAccess { base: Idx::<Expr>(11), field: "y" }
-      Idx::<Expr>(13): Binary { op: Add, lhs: Idx::<Expr>(10), rhs: Idx::<Expr>(12) }
-      Idx::<Expr>(14): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(1), Idx::<Stmt>(2), Idx::<Stmt>(3), Idx::<Stmt>(4)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: Some(Int), initializer: Some(Idx::<Expr>(1)) }
-      Idx::<Stmt>(2): Let { pattern: Idx::<Pattern>(2), type_annotation: Some(List(Int)), initializer: Some(Idx::<Expr>(5)) }
-      Idx::<Stmt>(3): Let { pattern: Idx::<Pattern>(3), type_annotation: Some(Path(Path { segments: ["Point"], kind: Plain })), initializer: Some(Idx::<Expr>(8)) }
-      Idx::<Stmt>(4): Return(Some(Idx::<Expr>(13)))
-    ]
-    root: Idx::<Expr>(14)
-  }
+
+function let_statements() -> int {
+      let x = 1;
+      let y: int = 2;
+      let z: int[] = [1, 2, 3];
+      let point: Point = Point { x: 1, y: 2 };
+      return point.x + point.y;
 }
+
 class Point {
-  x: Int
-  y: Int
+  x: int
+  y: int
 }
-function simple_while_loop {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Path("i")
-      Idx::<Expr>(2): Literal(Int(10))
-      Idx::<Expr>(3): Binary { op: Lt, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
-      Idx::<Expr>(4): Path("i")
-      Idx::<Expr>(5): Path("i")
-      Idx::<Expr>(6): Literal(Int(1))
-      Idx::<Expr>(7): Binary { op: Add, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(6) }
-      Idx::<Expr>(8): Block { stmts: [Idx::<Stmt>(1)], tail_expr: None }
-      Idx::<Expr>(9): Path("i")
-      Idx::<Expr>(10): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(2), Idx::<Stmt>(3)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Assign { target: Idx::<Expr>(4), value: Idx::<Expr>(7) }
-      Idx::<Stmt>(2): While { condition: Idx::<Expr>(3), body: Idx::<Expr>(8) }
-      Idx::<Stmt>(3): Return(Some(Idx::<Expr>(9)))
-    ]
-    root: Idx::<Expr>(10)
-  }
+
+function simple_while_loop() -> int {
+      let i = 0;
+      while (i < 10) {
+          i = i + 1;
+      }
+      return i;
 }
-function nested_while_loop {
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(Int(0))
-      Idx::<Expr>(1): Path("i")
-      Idx::<Expr>(2): Literal(Int(10))
-      Idx::<Expr>(3): Binary { op: Lt, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
-      Idx::<Expr>(4): Literal(Int(0))
-      Idx::<Expr>(5): Path("j")
-      Idx::<Expr>(6): Literal(Int(10))
-      Idx::<Expr>(7): Binary { op: Lt, lhs: Idx::<Expr>(5), rhs: Idx::<Expr>(6) }
-      Idx::<Expr>(8): Path("j")
-      Idx::<Expr>(9): Path("j")
-      Idx::<Expr>(10): Literal(Int(1))
-      Idx::<Expr>(11): Binary { op: Add, lhs: Idx::<Expr>(9), rhs: Idx::<Expr>(10) }
-      Idx::<Expr>(12): Block { stmts: [Idx::<Stmt>(2)], tail_expr: None }
-      Idx::<Expr>(13): Block { stmts: [Idx::<Stmt>(1), Idx::<Stmt>(3)], tail_expr: None }
-      Idx::<Expr>(14): Path("i")
-      Idx::<Expr>(15): Block { stmts: [Idx::<Stmt>(0), Idx::<Stmt>(4), Idx::<Stmt>(5)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Let { pattern: Idx::<Pattern>(0), type_annotation: None, initializer: Some(Idx::<Expr>(0)) }
-      Idx::<Stmt>(1): Let { pattern: Idx::<Pattern>(1), type_annotation: None, initializer: Some(Idx::<Expr>(4)) }
-      Idx::<Stmt>(2): Assign { target: Idx::<Expr>(8), value: Idx::<Expr>(11) }
-      Idx::<Stmt>(3): While { condition: Idx::<Expr>(7), body: Idx::<Expr>(12) }
-      Idx::<Stmt>(4): While { condition: Idx::<Expr>(3), body: Idx::<Expr>(13) }
-      Idx::<Stmt>(5): Return(Some(Idx::<Expr>(14)))
-    ]
-    root: Idx::<Expr>(15)
-  }
+
+function nested_while_loop() -> int {
+      let i = 0;
+      while (i < 10) {
+          let j = 0;
+          while (j < 10) {
+              j = j + 1;
+          }
+      }
+      return i;
 }

@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -78,52 +77,52 @@ class BamlAsyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-
+    
     async def MakeClassWithBlockDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.ClassWithBlockDone:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.MakeClassWithBlockDone(
+            stream = self.stream.MakeClassWithBlockDone(
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="MakeClassWithBlockDone", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="MakeClassWithBlockDone", args={
                 
             })
-            return typing.cast(types.ClassWithBlockDone, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.ClassWithBlockDone, result.cast_to(types, types, stream_types, False, __runtime__))
     async def MakeClassWithExternalDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.ClassWithoutDone:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.MakeClassWithExternalDone(
+            stream = self.stream.MakeClassWithExternalDone(
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="MakeClassWithExternalDone", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="MakeClassWithExternalDone", args={
                 
             })
-            return typing.cast(types.ClassWithoutDone, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.ClassWithoutDone, result.cast_to(types, types, stream_types, False, __runtime__))
     async def MakeSemanticContainer(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.SemanticContainer:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.MakeSemanticContainer(
+            stream = self.stream.MakeSemanticContainer(
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="MakeSemanticContainer", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="MakeSemanticContainer", args={
                 
             })
-            return typing.cast(types.SemanticContainer, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.SemanticContainer, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -136,38 +135,38 @@ class BamlStreamClient:
     def MakeClassWithBlockDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.ClassWithBlockDone, types.ClassWithBlockDone]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeClassWithBlockDone", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeClassWithBlockDone", args={
             
         })
         return baml_py.BamlStream[types.ClassWithBlockDone, types.ClassWithBlockDone](
-          __result__,
+          result,
           lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def MakeClassWithExternalDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.ClassWithoutDone, types.ClassWithoutDone]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeClassWithExternalDone", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeClassWithExternalDone", args={
             
         })
         return baml_py.BamlStream[types.ClassWithoutDone, types.ClassWithoutDone](
-          __result__,
+          result,
           lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def MakeSemanticContainer(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.SemanticContainer, types.SemanticContainer]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeSemanticContainer", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeSemanticContainer", args={
             
         })
         return baml_py.BamlStream[stream_types.SemanticContainer, types.SemanticContainer](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.SemanticContainer, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.SemanticContainer, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     
 
@@ -180,24 +179,24 @@ class BamlHttpRequestClient:
     async def MakeClassWithBlockDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeClassWithBlockDone", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeClassWithBlockDone", args={
             
         }, mode="request")
-        return __result__
+        return result
     async def MakeClassWithExternalDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeClassWithExternalDone", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeClassWithExternalDone", args={
             
         }, mode="request")
-        return __result__
+        return result
     async def MakeSemanticContainer(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeSemanticContainer", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeSemanticContainer", args={
             
         }, mode="request")
-        return __result__
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -209,24 +208,24 @@ class BamlHttpStreamRequestClient:
     async def MakeClassWithBlockDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeClassWithBlockDone", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeClassWithBlockDone", args={
             
         }, mode="stream")
-        return __result__
+        return result
     async def MakeClassWithExternalDone(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeClassWithExternalDone", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeClassWithExternalDone", args={
             
         }, mode="stream")
-        return __result__
+        return result
     async def MakeSemanticContainer(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeSemanticContainer", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="MakeSemanticContainer", args={
             
         }, mode="stream")
-        return __result__
+        return result
     
 
 b = BamlAsyncClient(DoNotUseDirectlyCallManager({}))

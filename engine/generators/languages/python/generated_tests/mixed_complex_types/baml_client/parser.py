@@ -11,9 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 
-import baml_py
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -27,20 +25,20 @@ class LlmResponseParser:
     def TestKitchenSink(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.KitchenSink:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestKitchenSink", llm_response=llm_response, mode="request")
-        return typing.cast(types.KitchenSink, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestKitchenSink", llm_response=llm_response, mode="request")
+        return typing.cast(types.KitchenSink, result)
 
     def TestRecursiveComplexity(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.Node:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestRecursiveComplexity", llm_response=llm_response, mode="request")
-        return typing.cast(types.Node, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestRecursiveComplexity", llm_response=llm_response, mode="request")
+        return typing.cast(types.Node, result)
 
     def TestUltraComplex(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.UltraComplex:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestUltraComplex", llm_response=llm_response, mode="request")
-        return typing.cast(types.UltraComplex, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestUltraComplex", llm_response=llm_response, mode="request")
+        return typing.cast(types.UltraComplex, result)
 
     
 
@@ -53,19 +51,19 @@ class LlmStreamParser:
     def TestKitchenSink(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.KitchenSink:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestKitchenSink", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.KitchenSink, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestKitchenSink", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.KitchenSink, result)
 
     def TestRecursiveComplexity(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.Node:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestRecursiveComplexity", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.Node, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestRecursiveComplexity", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.Node, result)
 
     def TestUltraComplex(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.UltraComplex:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestUltraComplex", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.UltraComplex, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestUltraComplex", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.UltraComplex, result)
 
     

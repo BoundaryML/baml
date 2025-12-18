@@ -3,16 +3,16 @@ source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 4
-Objects: 7
-Globals: 4
+Functions: 5
+Objects: 26
+Globals: 23
 
 Function Bar (arity: 0, kind: Exec):
-     0   LOAD_GLOBAL 2   (<fn Foo>)
-     1   LOAD_CONST 0    (1)
-     2   CALL 1          
-     3   LOAD_VAR 1      (x)
-     4   RETURN          
+     0   LOAD_GLOBAL 21   (<fn Foo>)
+     1   LOAD_CONST 0     (1)
+     2   CALL 1           
+     3   LOAD_VAR 1       (x)
+     4   RETURN           
 
 Function Foo (arity: 1, kind: Exec):
      0   LOAD_VAR 1     (x)
@@ -31,11 +31,21 @@ Function GreetBaz (arity: 1, kind: Exec):
      7   RETURN             
 
 Function Greeting (arity: 1, kind: Exec):
-     0   LOAD_CONST 0   (
-      "Hello, ")
+     0   LOAD_CONST 0   (Hello, )
      1   LOAD_VAR 1     (self)
      2   LOAD_FIELD 0   
      3   BIN_OP +       
-     4   LOAD_CONST 1   ( "!")
+     4   LOAD_CONST 1   (!)
      5   BIN_OP +       
-     6   RETURN
+     6   RETURN         
+
+Function array_length (arity: 0, kind: Exec):
+     0   LOAD_CONST 0    (1)
+     1   LOAD_CONST 1    (2)
+     2   LOAD_CONST 2    (3)
+     3   ALLOC_ARRAY 3   
+     4   LOAD_GLOBAL 0   (<fn baml.Array.length>)
+     5   LOAD_VAR 1      (array)
+     6   CALL 1          
+     7   RETURN          
+     8   RETURN

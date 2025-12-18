@@ -39,7 +39,7 @@ client<llm> TestOpenAIWithMediaHandling {
 client<llm> TestAnthropicWithMediaHandling {
   provider anthropic
   options {
-    model "claude-3-5-sonnet-20241022"
+    model "claude-sonnet-4-5-20250929"
     api_key env.ANTHROPIC_API_KEY
     media_url_handler {
       image "send_url_add_mime_type"
@@ -128,7 +128,7 @@ client<llm> AzureO1 {
   options {
     resource_name "west-us-azure-baml"
     deployment_id "o1-mini"
-    api_version "2024-08-01-preview"
+    api_version "2024-12-01-preview"
     api_key env.AZURE_OPENAI_API_KEY
     max_tokens null
   }
@@ -140,7 +140,7 @@ client<llm> AzureO1WithMaxTokens {
   options {
     resource_name "west-us-azure-baml"
     deployment_id "o1-mini"
-    api_version "2024-08-01-preview"
+    api_version "2024-12-01-preview"
     api_key env.AZURE_OPENAI_API_KEY
     max_tokens 1000
   }
@@ -151,7 +151,7 @@ client<llm> AzureO1WithMaxCompletionTokens {
   options {
     resource_name "west-us-azure-baml"
     deployment_id "o1-mini"
-    api_version "2024-08-01-preview"
+    api_version "2024-12-01-preview"
     api_key env.AZURE_OPENAI_API_KEY
     max_completion_tokens 1000
   }
@@ -240,7 +240,7 @@ client<llm> VertexWithQueryParams {
 client<llm> VertexClaude {
   provider vertex-ai
   options {
-    model "claude-3-5-sonnet@20240620"
+    model "claude-sonnet-4-5@20250929"
     location us-east5
     anthropic_version "vertex-2023-10-16"
     credentials env.INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT
@@ -260,7 +260,7 @@ client<llm> AwsBedrock {
     model "amazon.nova-lite-v1:0"
     // model "anthropic.claude-3-5-sonnet-20240620-v1:0"
     // model_id "anthropic.claude-3-haiku-20240307-v1:0"
-    //model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    //model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
     // endpoint_url "https://bedrock-runtime.us-east-1.amazonaws.com/"
     // region "us-east-1"
     // access_key_id env.AWS_ACCESS_KEY_ID
@@ -348,7 +348,7 @@ client<llm> Invalid{
 client<llm> Sonnet {
   provider anthropic
   options {
-    model claude-3-5-sonnet-20241022
+    model claude-sonnet-4-5-20250929
     api_key env.ANTHROPIC_API_KEY
   }
 }
@@ -425,7 +425,7 @@ client<llm> TogetherAi {
 client<llm> OpenAIO1 {
   provider openai
   options {
-    model "o1-mini"
+    model "o4-mini"
     api_key env.OPENAI_API_KEY
   }
 }
@@ -434,7 +434,7 @@ client<llm> OpenAIO1 {
 client<llm> OpenAIO1WithMaxTokens {
   provider openai
   options {
-    model "o1-mini"
+    model "o4-mini"
     api_key env.OPENAI_API_KEY
     max_tokens 1000
   }
@@ -444,7 +444,7 @@ client<llm> OpenAIO1WithMaxTokens {
 client<llm> OpenAIO1WithMaxCompletionTokens {
   provider openai
   options {
-    model "o1-mini"
+    model "o4-mini"
     api_key env.OPENAI_API_KEY
     max_completion_tokens 1000
   }
@@ -466,7 +466,7 @@ client<llm> AzureO3 {
   options {
     resource_name "west-us-azure-baml"
     deployment_id "o3-mini"
-    api_version "2024-08-01-preview"
+    api_version "2024-12-01-preview"
     api_key env.AZURE_OPENAI_API_KEY
     max_tokens null
   }
@@ -478,7 +478,7 @@ client<llm> AzureO3WithMaxCompletionTokens {
   options {
     resource_name "west-us-azure-baml"
     deployment_id "o3-mini"
-    api_version "2024-08-01-preview"
+    api_version "2024-12-01-preview"
     api_key env.AZURE_OPENAI_API_KEY
     max_completion_tokens 1000
   }
