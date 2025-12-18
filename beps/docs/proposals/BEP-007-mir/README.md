@@ -429,6 +429,123 @@ impl MirBuilder {
 }
 ```
 
+### Salsa Integration
+
+The BAML compiler uses [Salsa](https://salsa-rs.github.io/salsa/) for incremental compilation. Each compiler phase (HIR, THIR) defines a database trait with tracked queries. MIR follows this pattern.
+
+#### Database Trait
+
+```rust
+/// Database trait for MIR queries.
+/// Extends THIR's database to access type information during lowering.
+#[salsa::db]
+pub trait Db: baml_thir::Db {}
+```
+
+The root database in `baml_db` implements all traits:
+
+```rust
+#[salsa::db]
+impl baml_mir::Db for RootDatabase {}
+```
+
+#### Tracked Queries
+
+MIR defines tracked functions that Salsa memoizes and invalidates incrementally:
+
+```rust
+/// Tracked: Lower a function from THIR to MIR.
+/// This query depends on:
+/// - `function_signature` (for parameter types)
+/// - `function_body` (for the expression tree)
+/// - `infer_function` (for type information)
+///
+/// It only re-executes when these dependencies change.
+#[salsa::tracked]
+pub fn lower_function<'db>(
+    db: &'db dyn Db,
+    function: FunctionLoc<'db>,
+) -> MirFunctionResult<'db> {
+    let signature = function_signature(db, function);
+    let body = function_body(db, function);
+    let inference = infer_function(db, function);
+
+    let mir = MirBuilder::lower(db, &signature, &body, &inference);
+
+    MirFunctionResult::new(db, mir)
+}
+
+/// Tracked: Get MIR for all functions in the project.
+#[salsa::tracked]
+pub fn project_mir<'db>(
+    db: &'db dyn Db,
+    project: Project,
+) -> ProjectMir<'db> {
+    let items = project_items(db, project);
+    let functions: Vec<_> = items
+        .items(db)
+        .iter()
+        .filter_map(|item| match item {
+            ItemId::Function(f) => Some(lower_function(db, *f)),
+            _ => None,
+        })
+        .collect();
+
+    ProjectMir::new(db, functions)
+}
+```
+
+#### Tracked Result Structs
+
+Following the Salsa 2022 pattern, results containing collections are wrapped in tracked structs:
+
+```rust
+/// Tracked struct holding the MIR for a single function.
+#[salsa::tracked]
+pub struct MirFunctionResult<'db> {
+    #[tracked]
+    pub mir: MirFunction,
+}
+
+/// Tracked struct holding MIR for all project functions.
+#[salsa::tracked]
+pub struct ProjectMir<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub functions: Vec<MirFunctionResult<'db>>,
+}
+```
+
+#### Incrementality Benefits
+
+With Salsa integration, MIR lowering is incremental:
+
+1. **Body-only changes**: If only a function body changes, only that function's MIR is re-lowered. Other functions' MIR is cached.
+
+2. **Signature changes**: If a function signature changes, dependent MIR (callers) may need re-lowering, but unrelated functions are unaffected.
+
+3. **Type changes**: If a class definition changes, only functions using that class re-lower.
+
+```
+Edit function foo() body
+    → invalidates: function_body(foo)
+    → re-executes: lower_function(foo)
+    → cached: lower_function(bar), lower_function(baz), ...
+```
+
+#### Interned IDs for MIR Entities
+
+For stable cross-function references (e.g., call targets), we use interned IDs:
+
+```rust
+/// Interned reference to a MIR function.
+/// Stable across incremental updates.
+#[salsa::interned]
+pub struct MirFunctionId<'db> {
+    pub loc: FunctionLoc<'db>,
+}
+```
+
 ## MIR and Loops
 
 ### While Loop Lowering
@@ -637,6 +754,82 @@ let x = call_fn_that_can_throw() catch {
     p: Panic => "catch panic",
 };
 ```
+
+### Two Approaches to Exception Handling in CFGs
+
+There are two main ways compilers model exception handling in Control Flow Graphs:
+
+#### Approach 1: Unwind Edges (Rust, LLVM, C++)
+
+In this model, every instruction that might throw has **two exit paths** encoded directly in the CFG:
+
+1. **Normal path**: Where to go if the operation succeeds
+2. **Unwind path**: Where to go if the operation throws
+
+```rust
+// Every potentially-throwing call has explicit edges
+Terminator::Call {
+    callee: Operand,
+    destination: Place,
+    target: BlockId,           // Success -> bb1
+    unwind: Option<BlockId>,   // Failure -> bb_catch
+}
+```
+
+**Pros:**
+- Exception flow is explicit in the CFG
+- Enables precise analysis of exception paths
+- No runtime table lookups
+
+**Cons:**
+- Every call site needs two edges, even if not in a try block
+- CFG becomes more complex with many edges
+- More difficult to add new throwing operations
+
+#### Approach 2: Exception Tables (JVM, CLR, CPython)
+
+In this model, the CFG remains simple (calls just continue to the next block), but a separate **Exception Table** maps bytecode ranges to handlers:
+
+```rust
+struct ExceptionTable {
+    entries: Vec<ExceptionTableEntry>,
+}
+
+struct ExceptionTableEntry {
+    start_pc: usize,        // Protected range start
+    end_pc: usize,          // Protected range end
+    handler_pc: usize,      // Handler address
+    exception_type: Type,   // What to catch
+}
+```
+
+When an exception occurs at PC `0x0020`:
+1. VM scans the exception table
+2. Finds entry where `start_pc <= 0x0020 < end_pc`
+3. Jumps to `handler_pc` if exception type matches
+
+**Pros:**
+- Simpler CFG (no unwind edges on every call)
+- Standard approach for bytecode VMs
+- Easy to add new exception types
+
+**Cons:**
+- Runtime table lookup on exception
+- Exception flow not visible in CFG
+- Slightly more complex VM implementation
+
+### Chosen Approach: Hybrid (Unwind Edges in MIR, Table in Bytecode)
+
+We use a **hybrid approach**:
+
+1. **In MIR**: Use unwind edges on Call terminators. This makes exception flow explicit during lowering and analysis. Only calls inside `catch` blocks have `unwind: Some(block)`.
+
+2. **During Codegen**: Convert unwind edges to exception table entries. The VM uses table-based dispatch at runtime.
+
+This gives us the best of both worlds:
+- **Clear MIR semantics**: Exception paths are explicit in the CFG for analysis
+- **Efficient runtime**: Table-based lookup avoids edge overhead in bytecode
+- **Simple calls**: Calls outside `catch` blocks have `unwind: None` and no table entry
 
 ### Catch Lowering
 

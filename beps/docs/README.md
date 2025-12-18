@@ -37,6 +37,9 @@ Below is an auto-generated index of all BEPs.
     <tr>
       <td><a href="./proposals/BEP-006-compiler-errors/"><strong>BEP-006</strong>: compiler-errors</a> &nbsp; <img src="https://img.shields.io/badge/Status-Draft-lightgrey" alt="Draft"><br><br>Uniform user-facing experience for compiler errors.<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): Greg Hale <greg@boundary.com></span></td>
     </tr>
+    <tr>
+      <td><a href="./proposals/BEP-007-mir/"><strong>BEP-007</strong>: Mid-level Intermediate Representation (MIR)</a> &nbsp; <img src="https://img.shields.io/badge/Status-Draft-lightgrey" alt="Draft"><br><br>This proposal introduces a Mid-level Intermediate Representation (MIR) between THIR and bytecode generation in the BAML compiler pipeline. MIR is a Control Flow Graph (CFG) based representation that simplifies the compilation of complex control flow constructs like `match` statements and error handling (`catch` expressions). By lowering high-level constructs into basic blocks connected by explicit jumps, MIR bridges the semantic gap between the tree-structured THIR and the linear bytecode, making codegen simpler, more maintainable, and easier to extend with new language features.<br><br><span style='font-size:0.8em; color:gray'>Shepherd(s): Antonio Sarosi <sarosiantonio@gmail.com></span></td>
+    </tr>
   </tbody>
 </table>
 
