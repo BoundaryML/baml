@@ -19,10 +19,12 @@ use baml_hir::{
 };
 use baml_workspace::Project;
 
+mod exhaustiveness;
 mod lower;
 pub mod pretty;
 mod types;
 
+pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::lower_type_ref;
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use types::*;
@@ -199,6 +201,62 @@ pub fn lower_project_class_fields(
         .collect()
 }
 
+/// Build type alias definitions from a project.
+///
+/// This maps type alias names to their resolved types, e.g.:
+/// `Result` -> `Success | Failure`
+///
+/// Used for exhaustiveness checking - type aliases are expanded to their
+/// underlying types when checking match coverage.
+pub fn build_type_aliases_from_project(
+    db: &dyn Db,
+    root: baml_workspace::Project,
+) -> HashMap<Name, Ty<'_>> {
+    let items = baml_hir::project_items(db, root);
+    let mut type_aliases = HashMap::new();
+
+    for item in items.items(db) {
+        if let baml_hir::ItemId::TypeAlias(alias_loc) = item {
+            let file = alias_loc.file(db);
+            let item_tree = baml_hir::file_item_tree(db, file);
+            let alias_data = &item_tree[alias_loc.id(db)];
+
+            let lowered_ty = lower_type_ref(db, &alias_data.type_ref);
+            type_aliases.insert(alias_data.name.clone(), lowered_ty);
+        }
+    }
+
+    type_aliases
+}
+
+/// Build enum variant definitions from a project.
+///
+/// This maps enum names to their variant names, e.g.:
+/// `Status` -> `[Active, Inactive, Pending]`
+///
+/// Used for exhaustiveness checking - when matching on an enum type,
+/// all variants must be covered (unless there's a catch-all).
+pub fn build_enum_variants_from_project(
+    db: &dyn Db,
+    root: baml_workspace::Project,
+) -> HashMap<Name, Vec<Name>> {
+    let items = baml_hir::project_items(db, root);
+    let mut enum_variants = HashMap::new();
+
+    for item in items.items(db) {
+        if let baml_hir::ItemId::Enum(enum_loc) = item {
+            let file = enum_loc.file(db);
+            let item_tree = baml_hir::file_item_tree(db, file);
+            let enum_data = &item_tree[enum_loc.id(db)];
+
+            let variants: Vec<Name> = enum_data.variants.iter().map(|v| v.name.clone()).collect();
+            enum_variants.insert(enum_data.name.clone(), variants);
+        }
+    }
+
+    enum_variants
+}
+
 // ============================================================================
 // Type Inference Results
 // ============================================================================
@@ -231,6 +289,10 @@ pub struct TypeContext<'db> {
     scopes: Vec<HashMap<Name, Ty<'db>>>,
     /// Class field types: `class_name` -> (`field_name` -> `field_type`)
     class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
+    /// Type alias definitions: `alias_name` -> `resolved_type`
+    type_aliases: HashMap<Name, Ty<'db>>,
+    /// Enum variant definitions: `enum_name` -> `Vec<variant_name>`
+    enum_variants: HashMap<Name, Vec<Name>>,
     /// Inferred types for expressions.
     expr_types: HashMap<ExprId, Ty<'db>>,
     /// For multi-segment paths, the type of each segment.
@@ -249,6 +311,8 @@ impl<'db> TypeContext<'db> {
             db,
             scopes: vec![globals],
             class_fields: HashMap::new(),
+            type_aliases: HashMap::new(),
+            enum_variants: HashMap::new(),
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             errors: Vec::new(),
@@ -265,10 +329,42 @@ impl<'db> TypeContext<'db> {
             db,
             scopes: vec![globals],
             class_fields,
+            type_aliases: HashMap::new(),
+            enum_variants: HashMap::new(),
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             errors: Vec::new(),
         }
+    }
+
+    /// Create a new type context with full type resolution info.
+    pub fn with_type_info(
+        db: &'db dyn Db,
+        globals: HashMap<Name, Ty<'db>>,
+        class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
+        type_aliases: HashMap<Name, Ty<'db>>,
+        enum_variants: HashMap<Name, Vec<Name>>,
+    ) -> Self {
+        TypeContext {
+            db,
+            scopes: vec![globals],
+            class_fields,
+            type_aliases,
+            enum_variants,
+            expr_types: HashMap::new(),
+            path_segment_types: HashMap::new(),
+            errors: Vec::new(),
+        }
+    }
+
+    /// Look up a type alias definition.
+    pub fn lookup_type_alias(&self, name: &Name) -> Option<&Ty<'db>> {
+        self.type_aliases.get(name)
+    }
+
+    /// Look up enum variants.
+    pub fn lookup_enum_variants(&self, name: &Name) -> Option<&Vec<Name>> {
+        self.enum_variants.get(name)
     }
 
     /// Look up a field in a class.
@@ -399,11 +495,15 @@ pub fn infer_function_body<'db>(
     expected_return: &Ty<'db>,
     globals: Option<HashMap<Name, Ty<'db>>>,
     class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
+    type_aliases: Option<HashMap<Name, Ty<'db>>>,
+    enum_variants: Option<HashMap<Name, Vec<Name>>>,
 ) -> InferenceResult<'db> {
-    let mut ctx = TypeContext::with_class_fields(
+    let mut ctx = TypeContext::with_type_info(
         db,
         globals.unwrap_or_default(),
         class_fields.unwrap_or_default(),
+        type_aliases.unwrap_or_default(),
+        enum_variants.unwrap_or_default(),
     );
 
     // Add parameters to the current scope (on top of globals)
@@ -453,12 +553,17 @@ pub fn infer_function_body<'db>(
 ///
 /// The `globals` parameter provides types for top-level functions, allowing
 /// function calls to be properly typed. Pass `None` if no global context is needed.
+///
+/// The `type_aliases` and `enum_variants` parameters enable proper exhaustiveness
+/// checking for match expressions involving type aliases and enum types.
 pub fn infer_function<'db>(
     db: &'db dyn Db,
     signature: &FunctionSignature,
     body: &FunctionBody,
     globals: Option<HashMap<Name, Ty<'db>>>,
     class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
+    type_aliases: Option<HashMap<Name, Ty<'db>>>,
+    enum_variants: Option<HashMap<Name, Vec<Name>>>,
 ) -> InferenceResult<'db> {
     // Convert parameter TypeRefs to Tys
     let param_types: HashMap<Name, Ty<'db>> = signature
@@ -481,6 +586,8 @@ pub fn infer_function<'db>(
         &expected_return,
         globals,
         class_fields,
+        type_aliases,
+        enum_variants,
     )
 }
 
@@ -872,119 +979,20 @@ fn extract_pattern_binding<'db>(
 // ============================================================================
 // Match Exhaustiveness and Unreachability Checking
 // ============================================================================
-
-/// Represents the coverage of a match pattern.
-///
-/// Coverage is used to track which cases have been handled by match arms.
-/// This enables both exhaustiveness checking (ensuring all cases are covered)
-/// and unreachable arm detection (detecting arms that can never match).
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum PatternCoverage<'db> {
-    /// Covers a specific named type (class, enum, or primitive).
-    Type(Ty<'db>),
-    /// Covers all remaining cases (catch-all binding like `_` or `other`).
-    CatchAll,
-    /// Covers nothing (patterns with guards don't guarantee coverage).
-    Guarded,
-    /// Covers a specific literal value.
-    Literal(baml_hir::Literal),
-    /// Covers multiple patterns (union of coverage).
-    Union(Vec<PatternCoverage<'db>>),
-}
-
-/// Extract the coverage of a pattern (what cases it handles).
-///
-/// # Arguments
-/// * `pattern` - The pattern to analyze
-/// * `has_guard` - Whether this arm has a guard expression
-/// * `body` - The expression body (for accessing nested patterns)
-/// * `db` - Database reference for type lowering
-///
-/// # Coverage Rules (per BEP-002)
-/// - Guards do NOT contribute to exhaustiveness (always return `Guarded`)
-/// - Untyped bindings (`x`, `_`) are catch-alls covering all remaining cases
-/// - Typed bindings (`s: Success`) cover that specific type
-/// - Literals cover nothing for type exhaustiveness (they're value-level)
-/// - Enum variants cover nothing for type exhaustiveness (they're value-level)
-fn extract_pattern_coverage<'db>(
-    pattern: &Pattern,
-    has_guard: bool,
-    body: &ExprBody,
-    db: &'db dyn Db,
-) -> PatternCoverage<'db> {
-    // Guards prevent a pattern from contributing to exhaustiveness
-    if has_guard {
-        return PatternCoverage::Guarded;
-    }
-
-    match pattern {
-        // Untyped binding (including `_`) is a catch-all
-        Pattern::Binding(_) => PatternCoverage::CatchAll,
-
-        // Typed binding covers the specified type
-        Pattern::TypedBinding { ty, .. } => {
-            let lowered_ty = lower_type_ref(db, ty);
-            PatternCoverage::Type(lowered_ty)
-        }
-
-        // Literals cover a specific value (not type-level coverage)
-        Pattern::Literal(lit) => PatternCoverage::Literal(lit.clone()),
-
-        // Enum variants are value-level, not type-level coverage
-        Pattern::EnumVariant { .. } => PatternCoverage::Literal(baml_hir::Literal::Null), // Placeholder
-
-        // Union patterns combine coverage of sub-patterns
-        Pattern::Union(sub_pats) => {
-            let coverages: Vec<_> = sub_pats
-                .iter()
-                .map(|pat_id| {
-                    let sub_pattern = &body.patterns[*pat_id];
-                    extract_pattern_coverage(sub_pattern, false, body, db)
-                })
-                .collect();
-            PatternCoverage::Union(coverages)
-        }
-    }
-}
-
-/// Expand a type into its constituent cases for exhaustiveness checking.
-///
-/// For union types, this returns each member of the union.
-/// For other types, returns a single-element set containing the type itself.
-fn expand_type_to_cases<'db>(ty: &Ty<'db>) -> Vec<Ty<'db>> {
-    match ty {
-        Ty::Union(members) => {
-            // Flatten nested unions and collect all cases
-            members.iter().flat_map(expand_type_to_cases).collect()
-        }
-        Ty::Optional(inner) => {
-            // Optional<T> is equivalent to T | null
-            let mut cases = expand_type_to_cases(inner);
-            cases.push(Ty::Null);
-            cases
-        }
-        _ => vec![ty.clone()],
-    }
-}
-
-/// Check if two types overlap (have common values).
-///
-/// This is used for exhaustiveness checking to determine if a pattern
-/// covering one type could potentially match values of another type.
-fn types_overlap<'db>(ty1: &Ty<'db>, ty2: &Ty<'db>) -> bool {
-    // Same type always overlaps
-    if ty1 == ty2 {
-        return true;
-    }
-
-    // Handle union types
-    match (ty1, ty2) {
-        (Ty::Union(members1), _) => members1.iter().any(|m| types_overlap(m, ty2)),
-        (_, Ty::Union(members2)) => members2.iter().any(|m| types_overlap(ty1, m)),
-        (Ty::Named(n1), Ty::Named(n2)) => n1 == n2,
-        _ => false,
-    }
-}
+//
+// Exhaustiveness checking is implemented in the `exhaustiveness` module using
+// a value-based model (`ValueSet`). See `exhaustiveness.rs` for details.
+//
+// Key design principle: Pattern matching operates on VALUES, not types.
+// - `Status.Active` matches one specific value
+// - `s: Status` matches all values of type Status
+// - `_` or `other` matches everything (catch-all)
+//
+// The `ExhaustivenessChecker` tracks which value sets have been covered
+// by match arms and reports:
+// - Non-exhaustive matches (uncovered cases)
+// - Unreachable arms (arms that can never match)
+// ============================================================================
 
 /// Check match exhaustiveness and detect unreachable arms.
 ///
@@ -1009,109 +1017,25 @@ fn check_match_exhaustiveness<'db>(
         return;
     }
 
-    // Expand the scrutinee type into its constituent cases
-    let all_cases = expand_type_to_cases(scrutinee_ty);
+    // Use the new value-based exhaustiveness checker
+    let checker = ExhaustivenessChecker::new(ctx.db(), &ctx.enum_variants, &ctx.type_aliases);
 
-    // Track which cases have been covered (without guards)
-    let mut covered_cases: Vec<Ty<'db>> = Vec::new();
-    let mut has_catch_all = false;
+    let result = checker.check(scrutinee_ty, arms, body);
 
-    for (_arm_idx, arm) in arms.iter().enumerate() {
-        let pattern = &body.patterns[arm.pattern];
-        let has_guard = arm.guard.is_some();
-        let coverage = extract_pattern_coverage(pattern, has_guard, body, ctx.db());
-
-        // Check for unreachable arm
-        // An arm is unreachable if:
-        // 1. A previous catch-all (without guard) already covered all cases
-        // 2. All types this pattern could match are already covered
-        if has_catch_all {
-            // After a catch-all, all subsequent arms are unreachable
-            // We need a span for this arm, but we don't have one in MatchArm
-            // For now, use the match expression span
-            ctx.push_error(TypeError::UnreachableArm { span });
-            continue;
-        }
-
-        // Check if this arm is unreachable due to type coverage
-        if !has_guard {
-            match &coverage {
-                PatternCoverage::Type(arm_ty) => {
-                    // Check if all cases this arm could match are already covered
-                    let arm_cases = expand_type_to_cases(arm_ty);
-                    let all_arm_cases_covered = arm_cases.iter().all(|case| {
-                        covered_cases.iter().any(|covered| {
-                            case == covered
-                                || case.is_subtype_of(covered)
-                                || types_overlap(case, covered)
-                        })
-                    });
-
-                    if all_arm_cases_covered && !arm_cases.is_empty() {
-                        ctx.push_error(TypeError::UnreachableArm { span });
-                    }
-                }
-                PatternCoverage::CatchAll => {
-                    // This arm is a catch-all - mark it
-                    has_catch_all = true;
-                }
-                _ => {}
-            }
-        }
-
-        // Update covered cases (only for non-guarded patterns)
-        if !has_guard {
-            match coverage {
-                PatternCoverage::CatchAll => {
-                    // Catch-all covers everything
-                    covered_cases = all_cases.clone();
-                }
-                PatternCoverage::Type(ty) => {
-                    // Add the covered type(s)
-                    for case in expand_type_to_cases(&ty) {
-                        if !covered_cases.contains(&case) {
-                            covered_cases.push(case);
-                        }
-                    }
-                }
-                PatternCoverage::Union(coverages) => {
-                    // Add all types from the union
-                    for cov in coverages {
-                        if let PatternCoverage::Type(ty) = cov {
-                            for case in expand_type_to_cases(&ty) {
-                                if !covered_cases.contains(&case) {
-                                    covered_cases.push(case);
-                                }
-                            }
-                        }
-                    }
-                }
-                PatternCoverage::Literal(_) | PatternCoverage::Guarded => {
-                    // Literals and guarded patterns don't contribute to type-level coverage
-                }
-            }
-        }
+    // Report unreachable arms
+    for _arm_idx in result.unreachable_arms {
+        ctx.push_error(TypeError::UnreachableArm { span });
     }
 
-    // Check exhaustiveness: all cases must be covered
-    if !has_catch_all {
-        let missing_cases: Vec<String> = all_cases
-            .iter()
-            .filter(|case| {
-                !covered_cases.iter().any(|covered| {
-                    *case == covered || case.is_subtype_of(covered) || types_overlap(case, covered)
-                })
-            })
-            .map(|ty| ty.to_string())
-            .collect();
+    // Report non-exhaustive match
+    if !result.is_exhaustive {
+        let missing_cases: Vec<String> = result.uncovered.iter().map(|v| v.to_string()).collect();
 
-        if !missing_cases.is_empty() {
-            ctx.push_error(TypeError::NonExhaustiveMatch {
-                scrutinee_type: scrutinee_ty.clone(),
-                missing_cases,
-                span,
-            });
-        }
+        ctx.push_error(TypeError::NonExhaustiveMatch {
+            scrutinee_type: scrutinee_ty.clone(),
+            missing_cases,
+            span,
+        });
     }
 }
 
