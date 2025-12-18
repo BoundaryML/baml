@@ -1023,6 +1023,8 @@ fn check_match_exhaustiveness<'db>(
     let result = checker.check(scrutinee_ty, arms, body);
 
     // Report unreachable arms
+    // TODO(exhaustiveness): Improve error spans to point to the specific unreachable
+    // arm rather than the entire match expression. Requires tracking arm spans in HIR.
     for _arm_idx in result.unreachable_arms {
         ctx.push_error(TypeError::UnreachableArm { span });
     }
