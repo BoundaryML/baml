@@ -633,27 +633,27 @@ impl Vm {
             }
 
             // Runtime debugging information.
-            #[cfg(debug_assertions)]
-            {
-                let stack = self
-                    .stack
-                    .iter()
-                    .map(|v| crate::debug::display_value(v, &self.objects))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+            // #[cfg(debug_assertions)]
+            // {
+            //     let stack = self
+            //         .stack
+            //         .iter()
+            //         .map(|v| crate::debug::display_value(v, &self.objects))
+            //         .collect::<Vec<_>>()
+            //         .join(", ");
 
-                eprintln!("[{stack}]");
+            //     eprintln!("[{stack}]");
 
-                let (instruction, metadata) = crate::debug::display_instruction(
-                    instruction_ptr,
-                    function,
-                    &self.stack,
-                    &self.objects,
-                    &self.globals,
-                );
+            //     let (instruction, metadata) = crate::debug::display_instruction(
+            //         instruction_ptr,
+            //         function,
+            //         &self.stack,
+            //         &self.objects,
+            //         &self.globals,
+            //     );
 
-                eprintln!("{instruction} {metadata}");
-            }
+            //     eprintln!("{instruction} {metadata}");
+            // }
 
             #[allow(clippy::cast_sign_loss)] // instruction_ptr is validated non-negative above
             match function.bytecode.instructions[instruction_ptr as usize] {

@@ -14,12 +14,11 @@
 //! The compiler takes MIR functions (control flow graphs) and generates
 //! stack-based bytecode instructions. Key components:
 //!
-//! - **MirCodegen**: Compiles MIR CFG to bytecode
+//! - **`MirCodegen`**: Compiles MIR CFG to bytecode
 //! - **Local slot allocation**: Maps MIR locals to VM stack slots
 //! - **Block emission**: Emits bytecode for each basic block
 //! - **Jump patching**: Resolves jump targets after all blocks are emitted
 
-mod compiler;
 mod mir_codegen;
 
 use std::collections::HashMap;
@@ -31,7 +30,6 @@ pub use baml_vm::{
     ObjectIndex, Program, UnaryOp, Value,
 };
 use baml_workspace::Project;
-pub use compiler::{CodegenContext, Compiler, compile_function};
 
 /// Generate bytecode for all functions in a project.
 ///

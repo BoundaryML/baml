@@ -21,7 +21,7 @@ use baml_vm::{
 ///
 /// Contains all shared state needed during MIR compilation:
 /// global mappings, class information, and the shared object pool.
-pub struct MirCodegenContext<'ctx, 'obj> {
+pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     /// Resolved global names to indices (function names -> global index).
     pub globals: &'ctx HashMap<String, usize>,
     /// Resolved class field indices (class name -> field name -> field index).
@@ -35,7 +35,7 @@ pub struct MirCodegenContext<'ctx, 'obj> {
 /// MIR to bytecode compiler.
 ///
 /// Compiles a MIR function (control flow graph) to stack-based VM bytecode.
-pub struct MirCodegen<'ctx, 'obj> {
+struct MirCodegen<'ctx, 'obj> {
     /// Resolved global names to indices.
     globals: &'ctx HashMap<String, usize>,
     /// Resolved class field indices (for future use).
@@ -53,10 +53,10 @@ pub struct MirCodegen<'ctx, 'obj> {
     /// - slot arity+1..: locals and temporaries
     local_slots: HashMap<Local, usize>,
 
-    /// Maps BlockId -> bytecode instruction index (for jump patching).
+    /// Maps `BlockId` -> bytecode instruction index (for jump patching).
     block_addresses: HashMap<BlockId, usize>,
 
-    /// Pending jumps that need patching: (instruction_index, target_block).
+    /// Pending jumps that need patching: (`instruction_index`, `target_block`).
     pending_jumps: Vec<(usize, BlockId)>,
 
     /// Bytecode being generated.
@@ -68,7 +68,8 @@ pub struct MirCodegen<'ctx, 'obj> {
 
 impl<'ctx, 'obj> MirCodegen<'ctx, 'obj> {
     /// Create a new MIR codegen instance.
-    pub fn new(ctx: MirCodegenContext<'ctx, 'obj>) -> Self {
+    #[allow(clippy::needless_pass_by_value)] // ctx contains &mut which must be moved
+    fn new(ctx: MirCodegenContext<'ctx, 'obj>) -> Self {
         Self {
             globals: ctx.globals,
             classes: ctx.classes,
@@ -83,7 +84,7 @@ impl<'ctx, 'obj> MirCodegen<'ctx, 'obj> {
     }
 
     /// Compile a MIR function to bytecode.
-    pub fn compile(&mut self, mir: &MirFunction<'_>) -> Function {
+    fn compile(&mut self, mir: &MirFunction<'_>) -> Function {
         // 1. Allocate stack slots for all locals
         self.allocate_locals(mir);
 
@@ -102,7 +103,7 @@ impl<'ctx, 'obj> MirCodegen<'ctx, 'obj> {
             arity: mir.arity,
             bytecode: self.bytecode.clone(),
             kind: FunctionKind::Exec,
-            locals_in_scope: self.build_locals_in_scope(mir),
+            locals_in_scope: Self::build_locals_in_scope(mir),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
         }
@@ -712,7 +713,7 @@ impl<'ctx, 'obj> MirCodegen<'ctx, 'obj> {
         }
     }
 
-    /// Convert MIR BinOp to VM instruction.
+    /// Convert MIR `BinOp` to VM instruction.
     fn binop_instruction(op: BinOp) -> Instruction {
         match op {
             BinOp::Add => Instruction::BinOp(VmBinOp::Add),
@@ -734,7 +735,7 @@ impl<'ctx, 'obj> MirCodegen<'ctx, 'obj> {
         }
     }
 
-    /// Convert MIR UnaryOp to VM instruction.
+    /// Convert MIR `UnaryOp` to VM instruction.
     fn unaryop_instruction(op: UnaryOp) -> Instruction {
         match op {
             UnaryOp::Not => Instruction::UnaryOp(VmUnaryOp::Not),
@@ -742,8 +743,8 @@ impl<'ctx, 'obj> MirCodegen<'ctx, 'obj> {
         }
     }
 
-    /// Build locals_in_scope debug info from MIR.
-    fn build_locals_in_scope(&self, mir: &MirFunction<'_>) -> Vec<Vec<String>> {
+    /// Build `locals_in_scope` debug info from MIR.
+    fn build_locals_in_scope(mir: &MirFunction<'_>) -> Vec<Vec<String>> {
         // Build a single scope with all locals
         let mut names = vec![format!("<fn {}>", mir.name)];
 
@@ -751,7 +752,7 @@ impl<'ctx, 'obj> MirCodegen<'ctx, 'obj> {
             let name = local_decl
                 .name
                 .as_ref()
-                .map(|n| n.to_string())
+                .map(std::string::ToString::to_string)
                 .unwrap_or_else(|| format!("_{idx}"));
             names.push(name);
         }
@@ -763,7 +764,10 @@ impl<'ctx, 'obj> MirCodegen<'ctx, 'obj> {
 /// Compile a MIR function to bytecode.
 ///
 /// This is the main entry point for MIR-based code generation.
-pub fn compile_mir_function(mir: &MirFunction<'_>, ctx: MirCodegenContext<'_, '_>) -> Function {
+pub(crate) fn compile_mir_function(
+    mir: &MirFunction<'_>,
+    ctx: MirCodegenContext<'_, '_>,
+) -> Function {
     let mut codegen = MirCodegen::new(ctx);
     codegen.compile(mir)
 }

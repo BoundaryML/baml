@@ -228,7 +228,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
         match expr {
             Expr::Literal(lit) => {
-                let constant = self.lower_literal(lit);
+                let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
             }
@@ -462,7 +462,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Lower a literal to a constant.
-    fn lower_literal(&self, lit: &baml_hir::Literal) -> Constant<'db> {
+    fn lower_literal(lit: &baml_hir::Literal) -> Constant<'db> {
         match lit {
             baml_hir::Literal::Int(n) => Constant::Int(*n),
             baml_hir::Literal::Float(s) => Constant::Float(s.parse().unwrap_or(0.0)),
