@@ -124,7 +124,8 @@ impl Ty<'_> {
             // Empty union has no members, therefore no possible values
             Ty::Union(types) => types.is_empty(),
             // All other types are inhabited
-            // TODO: Check for zero-variant enums (requires db access)
+            // TODO(exhaustiveness): Check for zero-variant enums. This requires database
+            // access to look up enum definitions. Currently only empty unions are detected.
             _ => false,
         }
     }
