@@ -519,6 +519,7 @@ impl InitArgs {
             },
             GeneratorOutputType::TypescriptReact => "TypeScript React clients".to_string(),
             GeneratorOutputType::Go => "Go clients".to_string(),
+            GeneratorOutputType::Rust => "Rust clients".to_string(),
         };
 
         ui_context.add_completion_message(&format!(
@@ -546,7 +547,8 @@ fn generate_main_baml_content(
     let default_client_mode = match output_type {
         GeneratorOutputType::OpenApi
         | GeneratorOutputType::RubySorbet
-        | GeneratorOutputType::Go => "".to_string(),
+        | GeneratorOutputType::Go
+        | GeneratorOutputType::Rust => "".to_string(),
         GeneratorOutputType::PythonPydantic
         | GeneratorOutputType::PythonPydanticV1
         | GeneratorOutputType::Typescript

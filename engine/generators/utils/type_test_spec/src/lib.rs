@@ -28,6 +28,8 @@ pub struct TestCase {
     pub typescript: Option<(String, String)>,
     /// Expected Go types: (non_streaming, streaming)
     pub go: Option<(String, String)>,
+    /// Expected Rust types: (non_streaming, streaming)
+    pub rust: Option<(String, String)>,
     /// For enum tests: the expected values
     pub enum_values: Option<Vec<String>>,
     /// Line number in the markdown file where this test is defined (1-indexed)
@@ -99,12 +101,13 @@ pub fn parse_test_spec(content: &str) -> Vec<TestCase> {
             continue;
         }
 
-        // Check for type code block start (```python, ```typescript, ```go, or just ```)
+        // Check for type code block start (```python, ```typescript, ```go, ```rust, or just ```)
         if current_language.is_some()
             && parse_mode != ParseMode::None
             && (line.trim().starts_with("```python")
                 || line.trim().starts_with("```typescript")
                 || line.trim().starts_with("```go")
+                || line.trim().starts_with("```rust")
                 || line.trim() == "```")
         {
             in_type_block = true;
@@ -125,6 +128,7 @@ pub fn parse_test_spec(content: &str) -> Vec<TestCase> {
                             Some("python") => test.python = Some((ns, s)),
                             Some("typescript") => test.typescript = Some((ns, s)),
                             Some("go") => test.go = Some((ns, s)),
+                            Some("rust") => test.rust = Some((ns, s)),
                             _ => {}
                         }
                     }
@@ -160,6 +164,7 @@ pub fn parse_test_spec(content: &str) -> Vec<TestCase> {
                             Some("python") => test.python = Some((ns, s)),
                             Some("typescript") => test.typescript = Some((ns, s)),
                             Some("go") => test.go = Some((ns, s)),
+                            Some("rust") => test.rust = Some((ns, s)),
                             _ => {}
                         }
                     }
@@ -203,6 +208,11 @@ pub fn parse_test_spec(content: &str) -> Vec<TestCase> {
                 parse_mode = ParseMode::None;
                 pending_non_streaming = None;
                 pending_streaming = None;
+            } else if section == "Rust" {
+                current_language = Some("rust");
+                parse_mode = ParseMode::None;
+                pending_non_streaming = None;
+                pending_streaming = None;
             } else {
                 current_language = None;
                 parse_mode = ParseMode::None;
@@ -230,6 +240,7 @@ pub fn parse_test_spec(content: &str) -> Vec<TestCase> {
                             Some("python") => test.python = Some((ns.clone(), s.clone())),
                             Some("typescript") => test.typescript = Some((ns.clone(), s.clone())),
                             Some("go") => test.go = Some((ns.clone(), s.clone())),
+                            Some("rust") => test.rust = Some((ns.clone(), s.clone())),
                             _ => {}
                         }
                     }
@@ -247,6 +258,7 @@ pub fn parse_test_spec(content: &str) -> Vec<TestCase> {
                 Some("python") => test.python = Some((ns, s)),
                 Some("typescript") => test.typescript = Some((ns, s)),
                 Some("go") => test.go = Some((ns, s)),
+                Some("rust") => test.rust = Some((ns, s)),
                 _ => {}
             }
         }
@@ -271,6 +283,7 @@ struct TestCaseBuilder {
     python: Option<(String, String)>,
     typescript: Option<(String, String)>,
     go: Option<(String, String)>,
+    rust: Option<(String, String)>,
     enum_values: Option<Vec<String>>,
     line_number: usize,
 }
@@ -284,6 +297,7 @@ impl TestCaseBuilder {
             python: None,
             typescript: None,
             go: None,
+            rust: None,
             enum_values: None,
             line_number,
         }
@@ -298,6 +312,7 @@ impl TestCaseBuilder {
             python: self.python,
             typescript: self.typescript,
             go: self.go,
+            rust: self.rust,
             enum_values: self.enum_values,
             line_number: self.line_number,
         })
@@ -363,10 +378,11 @@ pub fn generate_test_code(language: &str) -> String {
     code.push_str("// Auto-generated test code from type_serialization_tests.md\n");
     code.push_str("// Do not edit manually!\n\n");
 
-    let (module_name, field_accessor, type_method) = match language {
+    let (module_name, _field_accessor, _type_method) = match language {
         "python" => ("type_gen", "python", "serialize_type"),
         "typescript" => ("type_gen", "typescript", "serialize_type"),
         "go" => ("type_gen", "go", "serialize_type"),
+        "rust" => ("type_gen", "rust", "serialize_type"),
         _ => panic!("Unknown language: {}", language),
     };
 
@@ -378,6 +394,7 @@ pub fn generate_test_code(language: &str) -> String {
             "python" => test.python.is_some(),
             "typescript" => test.typescript.is_some(),
             "go" => test.go.is_some(),
+            "rust" => test.rust.is_some(),
             _ => false,
         };
         let has_enum_test = test.enum_values.is_some();
@@ -418,6 +435,7 @@ pub fn generate_test_code(language: &str) -> String {
                 "python" => test.python.as_ref().unwrap(),
                 "typescript" => test.typescript.as_ref().unwrap(),
                 "go" => test.go.as_ref().unwrap(),
+                "rust" => test.rust.as_ref().unwrap(),
                 _ => unreachable!(),
             };
 
@@ -446,6 +464,7 @@ fn language_short(language: &str) -> &str {
         "python" => "py",
         "typescript" => "ts",
         "go" => "go",
+        "rust" => "rs",
         _ => language,
     }
 }
