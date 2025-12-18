@@ -150,7 +150,16 @@ impl TypeRef {
     }
 
     /// Create a `TypeRef` from a single type text (not a union).
-    fn from_type_text(text: &str) -> Self {
+    ///
+    /// This handles:
+    /// - String literal types: `"foo"` or `'bar'`
+    /// - Array types: `int[]`
+    /// - Optional types: `int?`
+    /// - Boolean literal types: `true` or `false`
+    /// - Integer literal types: `42`
+    /// - Primitive types: `int`, `string`, etc.
+    /// - Named types: `User`, `MyClass`
+    pub(crate) fn from_type_text(text: &str) -> Self {
         // Check for string literal types like "user" or "assistant"
         if (text.starts_with('"') && text.ends_with('"'))
             || (text.starts_with('\'') && text.ends_with('\''))

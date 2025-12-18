@@ -717,65 +717,14 @@ pub fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
 
     // If we found pipes, this is a union type
     if has_pipe && parts.len() > 1 {
-        let members: Vec<TypeRef> = parts.iter().map(|p| lower_type_text(p)).collect();
+        let members: Vec<TypeRef> = parts.iter().map(|p| TypeRef::from_type_text(p)).collect();
         return TypeRef::Union(members);
     }
 
     // Otherwise, lower as a single type
     let text = syntax.text().to_string();
     let text = text.trim();
-    lower_type_text(text)
-}
-
-/// Lower a single type text (not a union) to a TypeRef.
-fn lower_type_text(text: &str) -> TypeRef {
-    // Handle primitives
-    match text {
-        "int" => TypeRef::Int,
-        "float" => TypeRef::Float,
-        "string" => TypeRef::String,
-        "bool" => TypeRef::Bool,
-        "null" => TypeRef::Null,
-        "image" => TypeRef::Image,
-        "audio" => TypeRef::Audio,
-        "video" => TypeRef::Video,
-        "pdf" => TypeRef::Pdf,
-        _ => {
-            // Check for string literal types
-            if (text.starts_with('"') && text.ends_with('"'))
-                || (text.starts_with('\'') && text.ends_with('\''))
-            {
-                // String literal type; extract the value
-                let inner = &text[1..text.len() - 1];
-                return TypeRef::StringLiteral(inner.to_string());
-            }
-
-            // Check if it ends with '?' (optional)
-            if let Some(inner_text) = text.strip_suffix('?') {
-                let inner = lower_type_text(inner_text);
-                TypeRef::optional(inner)
-            }
-            // Check if it ends with '[]' (list)
-            else if let Some(inner_text) = text.strip_suffix("[]") {
-                let inner = lower_type_text(inner_text);
-                TypeRef::list(inner)
-            }
-            // Check for boolean literal types
-            else if text == "true" {
-                TypeRef::BoolLiteral(true)
-            } else if text == "false" {
-                TypeRef::BoolLiteral(false)
-            }
-            // Check for integer literal types (for exhaustiveness)
-            else if let Ok(int_val) = text.parse::<i64>() {
-                TypeRef::IntLiteral(int_val)
-            }
-            // Otherwise treat as named type
-            else {
-                TypeRef::named(text.into())
-            }
-        }
-    }
+    TypeRef::from_type_text(text)
 }
 
 //
