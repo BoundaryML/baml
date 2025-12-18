@@ -1,0 +1,291 @@
+---
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn AnotherLLM(input: String) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: String // input // param
+    let _2: Unknown
+
+    bb0: {
+        _2 = dispatch_future const fn AnotherLLM(copy _1) -> bb1;
+    }
+
+    bb1: {
+        _0 = await _2 -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn Ambiguous(input: String) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: String // input // param
+    let _2: Unknown
+
+    bb0: {
+        _2 = dispatch_future const fn Ambiguous(copy _1) -> bb1;
+    }
+
+    bb1: {
+        _0 = await _2 -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn ProcessData(data: Named("JsonData")) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Named("JsonData") // data // param
+    let _2: Int // result
+    let _3: Int
+    let _4: Int
+    let _5: Void
+    let _6: Bool
+    let _7: Int
+    let _8: Int
+
+    bb0: {
+        _3 = copy _1.0;
+        _4 = copy _1.1;
+        _2 = copy _3 + copy _4;
+        _7 = copy _2;
+        _8 = const 100_i64;
+        _6 = copy _7 > copy _8;
+        branch copy _6 -> [bb2, bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = const "high";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _5 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _0 = const "low";
+        goto -> bb6;
+    }
+
+    bb5: {
+        return;
+    }
+
+    bb6: {
+        return;
+    }
+
+}
+
+fn ExtractData(text: String) -> Named("JsonData") {
+    // Locals:
+    let _0: Named("JsonData") // return
+    let _1: String // text // param
+    let _2: Unknown
+
+    bb0: {
+        _2 = dispatch_future const fn ExtractData(copy _1) -> bb1;
+    }
+
+    bb1: {
+        _0 = await _2 -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn SimpleCalc(a: Int, b: Int) -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Int // a // param
+    let _2: Int // b // param
+    let _3: Int
+    let _4: Int
+    let _5: Int
+    let _6: Int
+
+    bb0: {
+        _3 = copy _1;
+        _5 = copy _2;
+        _6 = const 2_i64;
+        _4 = copy _5 * copy _6;
+        _0 = copy _3 + copy _4;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn ProcessAnalysis(analysis: Named("Analysis")) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Named("Analysis") // analysis // param
+    let _2: Float // score
+    let _3: Bool
+    let _4: Float
+    let _5: Float
+    let _6: String
+    let _7: String
+    let _8: Bool
+    let _9: Float
+    let _10: Float
+    let _11: String
+    let _12: String
+    let _13: Bool
+    let _14: Float
+    let _15: Float
+    let _16: String
+    let _17: String
+    let _18: String
+    let _19: String
+
+    bb0: {
+        _2 = copy _1.2;
+        _4 = copy _2;
+        _5 = const 0.8_f64;
+        _3 = copy _4 > copy _5;
+        branch copy _3 -> [bb2, bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _6 = const "Very positive: ";
+        _7 = copy _1.0;
+        _0 = copy _6 + copy _7;
+        goto -> bb5;
+    }
+
+    bb3: {
+        _9 = copy _2;
+        _10 = const 0.5_f64;
+        _8 = copy _9 > copy _10;
+        branch copy _8 -> [bb6, bb7];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        return;
+    }
+
+    bb6: {
+        _11 = const "Positive: ";
+        _12 = copy _1.0;
+        _0 = copy _11 + copy _12;
+        goto -> bb9;
+    }
+
+    bb7: {
+        _14 = copy _2;
+        _15 = const 0.2_f64;
+        _13 = copy _14 > copy _15;
+        branch copy _13 -> [bb10, bb11];
+    }
+
+    bb8: {
+        goto -> bb4;
+    }
+
+    bb9: {
+        return;
+    }
+
+    bb10: {
+        _16 = const "Neutral: ";
+        _17 = copy _1.0;
+        _0 = copy _16 + copy _17;
+        goto -> bb13;
+    }
+
+    bb11: {
+        _18 = const "Negative: ";
+        _19 = copy _1.0;
+        _0 = copy _18 + copy _19;
+        goto -> bb14;
+    }
+
+    bb12: {
+        goto -> bb8;
+    }
+
+    bb13: {
+        return;
+    }
+
+    bb14: {
+        return;
+    }
+
+}
+
+fn LLMAnalyze(text: String) -> Named("Analysis") {
+    // Locals:
+    let _0: Named("Analysis") // return
+    let _1: String // text // param
+    let _2: Unknown
+
+    bb0: {
+        _2 = dispatch_future const fn LLMAnalyze(copy _1) -> bb1;
+    }
+
+    bb1: {
+        _0 = await _2 -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn ChainedProcess(input: String) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: String // input // param
+    let _2: Unknown
+
+    bb0: {
+        _2 = dispatch_future const fn ChainedProcess(copy _1) -> bb1;
+    }
+
+    bb1: {
+        _0 = await _2 -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+
+}

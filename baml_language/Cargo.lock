@@ -319,6 +319,7 @@ dependencies = [
  "anyhow",
  "baml_base",
  "baml_hir",
+ "baml_mir",
  "baml_tests",
  "baml_thir",
  "baml_vm",
@@ -337,6 +338,7 @@ dependencies = [
  "baml_diagnostics",
  "baml_hir",
  "baml_lexer",
+ "baml_mir",
  "baml_parser",
  "baml_syntax",
  "baml_thir",
@@ -444,6 +446,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_mir"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "baml_hir",
+ "baml_thir",
+ "baml_workspace",
+ "la-arena",
+ "rustc-hash 2.1.1",
+ "salsa",
+ "smol_str",
+ "text-size",
+]
+
+[[package]]
 name = "baml_onionskin"
 version = "0.0.0"
 dependencies = [
@@ -502,6 +519,7 @@ dependencies = [
  "baml_db",
  "baml_diagnostics",
  "baml_hir",
+ "baml_mir",
  "baml_thir",
  "baml_vm",
  "codspeed-divan-compat",

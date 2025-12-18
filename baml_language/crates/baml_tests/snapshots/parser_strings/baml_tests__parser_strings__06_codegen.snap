@@ -11,9 +11,14 @@ Function FormatMessage (arity: 1, kind: Llm):
   (no bytecode)
 
 Function GetRole (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (user)
-     1   RETURN         
-     2   RETURN         
+     0   LOAD_CONST 0   (null)
+     1   LOAD_CONST 1   (user)
+     2   STORE_VAR 1    (_0)
+     3   JUMP +3        (to 6)
+     4   LOAD_VAR 1     (_0)
+     5   RETURN         
+     6   LOAD_VAR 1     (_0)
+     7   RETURN         
 
 Function ProcessText (arity: 1, kind: Llm):
   (no bytecode)

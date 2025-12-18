@@ -1,0 +1,222 @@
+---
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn Calculate() -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Int // a
+    let _2: Int
+    let _3: Int
+    let _4: Int // b
+    let _5: Int
+    let _6: Int
+    let _7: Int // c
+    let _8: Int
+    let _9: Int
+    let _10: Int
+    let _11: Int
+    let _12: Int // d
+    let _13: Int
+    let _14: Int
+    let _15: Int
+    let _16: Int
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _1 = copy _2 + copy _3;
+        _5 = copy _1;
+        _6 = const 3_i64;
+        _4 = copy _5 * copy _6;
+        _9 = copy _4;
+        _10 = const 2_i64;
+        _8 = copy _9 / copy _10;
+        _11 = const 1_i64;
+        _7 = copy _8 - copy _11;
+        _14 = copy _1;
+        _15 = copy _4;
+        _13 = copy _14 + copy _15;
+        _16 = copy _7;
+        _12 = copy _13 * copy _16;
+        _0 = copy _12;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn FieldAccess(user: Named("User")) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Named("User") // user // param
+    let _2: String // name
+    let _3: String // bio
+    let _4: String // theme
+    let _5: String // firstTag
+    let _6: List(String)
+    let _7: Int
+
+    bb0: {
+        _2 = copy _1.0;
+        _3 = copy _1.1.0;
+        _4 = copy _1.1.1.0;
+        _6 = copy _1.2;
+        _7 = const 0_i64;
+        _5 = copy _6[_7];
+        _0 = copy _4;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn IndexAccess(users: List(Named("IndexUser"))) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: List(Named("IndexUser")) // users // param
+    let _2: Named("IndexUser") // first
+    let _3: List(Named("IndexUser"))
+    let _4: Int
+    let _5: Int // idx
+    let _6: Named("IndexUser") // second
+    let _7: List(Named("IndexUser"))
+    let _8: Int
+    let _9: String // firstName
+    let _10: Named("IndexUser")
+    let _11: List(Named("IndexUser"))
+    let _12: Int
+    let _13: String // tag
+    let _14: List(String)
+    let _15: Named("IndexUser")
+    let _16: List(Named("IndexUser"))
+    let _17: Int
+    let _18: Int
+
+    bb0: {
+        _3 = copy _1;
+        _4 = const 0_i64;
+        _2 = copy _3[_4];
+        _5 = const 1_i64;
+        _7 = copy _1;
+        _8 = copy _5;
+        _6 = copy _7[_8];
+        _11 = copy _1;
+        _12 = const 0_i64;
+        _10 = copy _11[_12];
+        _9 = copy _10.0;
+        _16 = copy _1;
+        _17 = const 0_i64;
+        _15 = copy _16[_17];
+        _14 = copy _15.2;
+        _18 = const 0_i64;
+        _13 = copy _14[_18];
+        _0 = copy _9;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn TestPrecedence() -> Bool {
+    // Locals:
+    let _0: Bool // return
+    let _1: Int // a
+    let _2: Int
+    let _3: Int
+    let _4: Int
+    let _5: Int
+    let _6: Int // c
+    let _7: Int
+    let _8: Int
+    let _9: Int
+    let _10: Int
+    let _11: Bool // b
+    let _12: Int
+    let _13: Int
+    let _14: Int
+    let _15: Int
+    let _16: Bool // d
+    let _17: Bool
+    let _18: Bool
+
+    bb0: {
+        _2 = const 2_i64;
+        _4 = const 3_i64;
+        _5 = const 4_i64;
+        _3 = copy _4 * copy _5;
+        _1 = copy _2 + copy _3;
+        _8 = const 2_i64;
+        _9 = const 3_i64;
+        _7 = copy _8 * copy _9;
+        _10 = const 4_i64;
+        _6 = copy _7 + copy _10;
+        _12 = copy _1;
+        _14 = const 10_i64;
+        _15 = const 2_i64;
+        _13 = copy _14 + copy _15;
+        _11 = copy _12 > copy _13;
+        _17 = const true;
+        branch copy _17 -> [bb2, bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _16 = const true;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _18 = const false;
+        branch copy _18 -> [bb5, bb6];
+    }
+
+    bb4: {
+        _0 = copy _16;
+        goto -> bb8;
+    }
+
+    bb5: {
+        _16 = const false;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _16 = const false;
+        goto -> bb7;
+    }
+
+    bb7: {
+        goto -> bb4;
+    }
+
+    bb8: {
+        return;
+    }
+
+}

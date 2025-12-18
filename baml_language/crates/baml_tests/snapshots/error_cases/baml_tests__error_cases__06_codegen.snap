@@ -8,4 +8,9 @@ Objects: 20
 Globals: 19
 
 Function Invalid (arity: 0, kind: Exec):
-     0   RETURN
+     0   LOAD_CONST 0   (null)
+     1   LOAD_CONST 0   (null)
+     2   STORE_VAR 1    (_0)
+     3   JUMP +1        (to 4)
+     4   LOAD_VAR 1     (_0)
+     5   RETURN

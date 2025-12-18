@@ -8,5 +8,14 @@ Objects: 20
 Globals: 19
 
 Function GetTodo (arity: 0, kind: Exec):
-     0   CALL 0   
-     1   RETURN
+     0    LOAD_CONST 0   (null)
+     1    LOAD_CONST 0   (null)
+     2    LOAD_CONST 0   (null)
+     3    STORE_VAR 2    (_1)
+     4    LOAD_VAR 2     (_1)
+     5    CALL 0         
+     6    STORE_VAR 1    (_0)
+     7    JUMP +3        (to 10)
+     8    LOAD_VAR 1     (_0)
+     9    RETURN         
+     10   JUMP -2        (to 8)

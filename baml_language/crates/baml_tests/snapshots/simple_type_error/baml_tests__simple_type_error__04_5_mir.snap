@@ -1,0 +1,23 @@
+---
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn Foo() -> Error {
+    // Locals:
+    let _0: Error // return
+    let _1: Int
+    let _2: String
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const "foo";
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
