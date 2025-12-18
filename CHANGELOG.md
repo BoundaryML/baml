@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.215.0](https://github.com/boundaryml/baml/compare/0.214.0..0.215.0) - 2025-12-18
+
+### Bug Fixes
+
+- golang type system fixes, CFFI refactor, and testing infrastructure (#2778) - ([1afa7e8](https://github.com/boundaryml/baml/commit/1afa7e8dea1d693034a2e54f239c9378f8e091d1)) - hellovai
+- fix index bug (#2742) `merge_messages` previously used `foo.len() - 1`. Since `len` is a `USIZE` (unsigned int), size 0 was wrapping after decrement, cau - ([518dc61](https://github.com/boundaryml/baml/commit/518dc610525c8fb0633fa9f63e5c8e27b6e7a78c)) - Greg Hale
+- undocumented null return for OpenAI reasoning content (#2803) - ([0012eb1](https://github.com/boundaryml/baml/commit/0012eb1a7515fc23fe7b7011060738bfaaa7c8df)) - Patrick Wadström
+- fix variable shadowing bug in generated python/TS clients (#2810) - ([5ae0010](https://github.com/boundaryml/baml/commit/5ae001011559bc29997f6dd04cbbbf65d970b12d)) - Antonio Sarosi
+- Fix `baml-cli test` panic when `BOUNDARY_API_KEY` is set (#2779) - ([220ad19](https://github.com/boundaryml/baml/commit/220ad1901fecab2fbe90d92e2306a42c6a10bb62)) - Antonio Sarosi
+- Fix some docs about SSE chunks, anthropic not having SSE events in streams, adding comments in prmopt strings with command + / (#2802) - ([c17c93d](https://github.com/boundaryml/baml/commit/c17c93dbeabc3a61bd3de5a101d7f1b04df89fdb)) - aaronvg
+
+### Features
+
+- ts: add windows arm64 support; target glibc 2.17 on linux arm64 (#2771) - ([23f367f](https://github.com/boundaryml/baml/commit/23f367f23c7538ab73284df9e2d6bda744c2c3c4)) - Sam Lijin
+- allow users to optimize BAML startup/footprint by trimming tests from inlined baml files (#2772) - ([fe72ecd](https://github.com/boundaryml/baml/commit/fe72ecd83639c36e2054569b0a2fba786948677e)) - Greg Hale
+- add option to output_format for quoting class keys in prompts (#2769) - ([969da89](https://github.com/boundaryml/baml/commit/969da89d38093afffd0abe8d30f14b70b70b9a32)) - Greg Hale
+- Add search functionality to prompt (#2804) - ([4f7a46b](https://github.com/boundaryml/baml/commit/4f7a46bda53de992b6d3959779bf497e47f09e83)) - aaronvg
+- Prompt optimization visualizer (#2807) - ([9d1bf87](https://github.com/boundaryml/baml/commit/9d1bf8734887c8c0bdd6f501498bd56a6229e8c7)) - Greg Hale
+- parser performance improvements (#2806) - ([f44cd28](https://github.com/boundaryml/baml/commit/f44cd289e9347dd77bc06562af7e2ef4139689fa)) - aaronvg
+
+### Docs
+
+- how-to integrate with Microsoft Foundry (#2745) - ([83c85b4](https://github.com/boundaryml/baml/commit/83c85b46c9a8241b97e0f803845fa7ae94d3d5ac)) - aaronvg
+- Document baml-cffi docker build caching (#2756) - ([fb4d00c](https://github.com/boundaryml/baml/commit/fb4d00c006f61d37e9f81938d91e79eb181a51d4)) - hellovai
+- Add project URLs to Pypi (#2712) - ([9e8d731](https://github.com/boundaryml/baml/commit/9e8d731efcdeac2c43cb09ba7f8188812d7c9936)) - Toundra
+- Fix react chatbot documentation and implementation (#2770) - ([d1f1842](https://github.com/boundaryml/baml/commit/d1f184291938cdadccccbc6eae649c41c1938de1)) - hellovai
+- update prompt caching docs example as caching is now GA for Anthropic (#2790) - ([1811be6](https://github.com/boundaryml/baml/commit/1811be6a771752b8287eae0836dfa98a13ef9c7a)) - Sanjan Das
+- Symbol tuning documentation clarification (#2808) - ([46cda11](https://github.com/boundaryml/baml/commit/46cda11033a1e9cc56a209952268176b8bc2b97c)) - hellovai
+- optimization docs (#2809) - ([d2971b7](https://github.com/boundaryml/baml/commit/d2971b7f257ecb9c5bcdac64a76e230965fdf119)) - Greg Hale
+- Prompt optimization documentation update (#2821) - ([eb82648](https://github.com/boundaryml/baml/commit/eb82648a1095a719d9c3df14ed257e0573badedc)) - hellovai
+
+### Miscellaneous Chores
+
+- switch npm publishing to use OIDC (#2829) - ([c439d98](https://github.com/boundaryml/baml/commit/c439d98fa734b587cc3790cf6da293e7925fe708)) - mendral-app[bot]
+- Simplify how docs are generated. Only changes to fern/** or typescript/sage*/* should trigger it. (#2757) - ([d1f3e3a](https://github.com/boundaryml/baml/commit/d1f3e3a1da475ae5c21e3f1f6ef37320ec7af1e4)) - hellovai
+- Remove support for deprecated piece of syntax (#2744) - ([6992bd1](https://github.com/boundaryml/baml/commit/6992bd1d1f8f9e2dfbb07a2d088958b6153b6193)) - Greg Hale
+- fix zed release workflow (#2816) - ([6df303c](https://github.com/boundaryml/baml/commit/6df303c4415be283ce3b2611b45e114c6e7c280d)) - Sam Lijin
+- Fix setup-tools action with directory existence checks (#2741) - ([70f77c7](https://github.com/boundaryml/baml/commit/70f77c71235898c9b393b66e7b0f464049b2135d)) - mendral-app[bot]
+- Upgrade all setup-node usages to Node.js v6 (#2785) - ([8c8eea5](https://github.com/boundaryml/baml/commit/8c8eea56790b3b15df4603fae52edd78d86794f2)) - mendral-app[bot]
+- Update react in fiddle apps (#2788) - ([e250a9b](https://github.com/boundaryml/baml/commit/e250a9b15ddd4f5db2db25d0892b5a5089ef34b4)) - aaronvg
+- update next (#2793) - ([3ff97b2](https://github.com/boundaryml/baml/commit/3ff97b2080a9f8d2d55331dd181b83b434ee85d9)) - aaronvg
+- Patch React CVE (#2801) - ([a3934b9](https://github.com/boundaryml/baml/commit/a3934b9347be689f1542431e3e8418a92764099e)) - aaronvg
+
+
 ## [0.214.0](https://github.com/boundaryml/baml/compare/0.213.0..0.214.0) - 2025-11-24
 
 ### Bug Fixes
