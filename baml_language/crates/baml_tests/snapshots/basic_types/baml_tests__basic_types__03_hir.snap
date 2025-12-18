@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -8,9 +8,9 @@ class FieldAttributes {
   currency: String
   name: String
   summary: String
-  details: Optional(Path(Path { segments: ["string"], kind: Plain }))
+  details: Optional(String)
   state: String
-  multiple: Optional(Path(Path { segments: ["string"], kind: Plain }))
+  multiple: Optional(String)
 }
 class ClassAttributes {
   name: String

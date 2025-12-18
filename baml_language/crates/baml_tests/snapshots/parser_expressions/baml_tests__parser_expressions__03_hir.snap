@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -66,7 +66,7 @@ class Settings {
 class User {
   name: String
   profile: Path(Path { segments: ["Profile"], kind: Plain })
-  tags: List(Path(Path { segments: ["string"], kind: Plain }))
+  tags: List(String)
 }
 class Profile {
   bio: String
@@ -111,7 +111,7 @@ function IndexAccess {
 class IndexUser {
   name: String
   age: Int
-  tags: List(Path(Path { segments: ["string"], kind: Plain }))
+  tags: List(String)
 }
 function TestPrecedence {
   return: Bool

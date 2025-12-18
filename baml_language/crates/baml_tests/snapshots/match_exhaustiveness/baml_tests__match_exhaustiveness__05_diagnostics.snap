@@ -10,7 +10,17 @@ expression: output
    │ │ 
    │ ╰─ Unreachable match arm: previous arms already cover all cases
    │ 
-   │ Note: Error code: E0013
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Non-exhaustive match: type bool not fully covered. Missing: true, false
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type bool not fully covered. Missing: true, false
+   │ 
+   │ Note: Error code: E0062
 ───╯
 
   [type] Error: Unreachable match arm: previous arms already cover all cases
@@ -20,7 +30,117 @@ expression: output
    │ │ 
    │ ╰─ Unreachable match arm: previous arms already cover all cases
    │ 
-   │ Note: Error code: E0013
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Non-exhaustive match: type bool not fully covered. Missing: true
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type bool not fully covered. Missing: true
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Non-exhaustive match: type Status? not fully covered. Missing: null
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type Status? not fully covered. Missing: null
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type Result not fully covered. Missing: Failure
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type Result not fully covered. Missing: Failure
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Non-exhaustive match: type DoubleMaybe not fully covered. Missing: null
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type DoubleMaybe not fully covered. Missing: null
+   │ 
+   │ Note: Error code: E0062
 ───╯
 
   [type] Error: Non-exhaustive match: type int not fully covered. Missing: int
@@ -30,7 +150,17 @@ expression: output
    │ │ 
    │ ╰─ Non-exhaustive match: type int not fully covered. Missing: int
    │ 
-   │ Note: Error code: E0012
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type bool not fully covered. Missing: false
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type bool not fully covered. Missing: false
+   │ 
+   │ Note: Error code: E0062
 ───╯
 
   [type] Error: Unreachable match arm: previous arms already cover all cases
@@ -40,5 +170,225 @@ expression: output
    │ │ 
    │ ╰─ Unreachable match arm: previous arms already cover all cases
    │ 
-   │ Note: Error code: E0013
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Non-exhaustive match: type MaybeOk not fully covered. Missing: 200
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type MaybeOk not fully covered. Missing: 200
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type MaybeOk not fully covered. Missing: null
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type MaybeOk not fully covered. Missing: null
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type AlwaysTrue not fully covered. Missing: true
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type AlwaysTrue not fully covered. Missing: true
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type OkOrCreated not fully covered. Missing: 201
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type OkOrCreated not fully covered. Missing: 201
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type Status? not fully covered. Missing: Status.Pending
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type Status? not fully covered. Missing: Status.Pending
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type FullResult not fully covered. Missing: Pending
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type FullResult not fully covered. Missing: Pending
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type SuccessOr200 not fully covered. Missing: 200
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type SuccessOr200 not fully covered. Missing: 200
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Non-exhaustive match: type Status not fully covered. Missing: Status.Pending
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type Status not fully covered. Missing: Status.Pending
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type CustomBool not fully covered. Missing: false
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type CustomBool not fully covered. Missing: false
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type SuccessOr200 not fully covered. Missing: Success
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type SuccessOr200 not fully covered. Missing: Success
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Non-exhaustive match: type FullResult not fully covered. Missing: Pending
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type FullResult not fully covered. Missing: Pending
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
+───╯
+
+  [type] Error: Non-exhaustive match: type Status not fully covered. Missing: Status.Inactive, Status.Pending
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type Status not fully covered. Missing: Status.Inactive, Status.Pending
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Non-exhaustive match: type SuccessCode not fully covered. Missing: 204
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Non-exhaustive match: type SuccessCode not fully covered. Missing: 204
+   │ 
+   │ Note: Error code: E0062
+───╯
+
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test: Match expression exhaustiveness and unreachable arm detection
+   │ │ 
+   │ ╰─ Unreachable match arm: previous arms already cover all cases
+   │ 
+   │ Note: Error code: E0063
 ───╯

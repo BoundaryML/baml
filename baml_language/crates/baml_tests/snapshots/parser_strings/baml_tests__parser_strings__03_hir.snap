@@ -16,7 +16,7 @@ class NestedQuotes {
   single_in_double: String
   double_in_single: String
   She: Path(Path { segments: ["said"], kind: Plain })
-  hello: Path(Path { segments: ["\"')\n  escaped_in_escaped string @alias(\""], kind: Plain })
+  hello: StringLiteral("')\n  escaped_in_escaped string @alias(")
   The: Path(Path { segments: [""], kind: Plain })
   quote: Path(Path { segments: [""], kind: Plain })
   is: Path(Path { segments: ["here"], kind: Plain })

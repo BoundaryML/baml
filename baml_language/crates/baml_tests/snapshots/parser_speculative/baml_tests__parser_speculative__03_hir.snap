@@ -141,6 +141,6 @@ function ChainedProcess {
 }
 class Analysis {
   sentiment: String
-  keywords: List(Path(Path { segments: ["string"], kind: Plain }))
+  keywords: List(String)
   score: Float
 }
