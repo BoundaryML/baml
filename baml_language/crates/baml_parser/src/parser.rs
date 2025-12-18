@@ -912,14 +912,21 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type_primary(&mut self) {
-        // Check for string literal types
+        // Check for string literal types: "user" | "assistant"
         if self.parse_any_string() {
-            // String literal type: "user" | "assistant"
+            return;
+        }
+
+        // Check for integer literal types: 200 | 201 | 204
+        // Used for exhaustiveness checking on literal unions
+        if self.at(TokenKind::IntegerLiteral) {
+            self.bump();
             return;
         }
 
         if self.at(TokenKind::Word) {
-            // Base type name or generic type
+            // Base type name, generic type, or boolean literal (true/false)
+            // Note: true/false are Word tokens, and they become BoolLiteral types
             self.bump();
 
             // Check for generic arguments: map<K, V>
