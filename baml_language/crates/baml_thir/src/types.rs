@@ -5,6 +5,41 @@ use std::fmt;
 use baml_base::Name;
 use baml_hir::{ClassId, EnumId};
 
+/// The value component of a singleton type.
+///
+/// In type theory, singleton types are types inhabited by exactly one value.
+/// For example, `SingletonValue::Int(42)` represents the value `42` which
+/// defines the singleton type `{42}` — the type whose only inhabitant is `42`.
+///
+/// This enum unifies all "specific value" types:
+/// - Primitive literals: `42`, `"hello"`, `true`
+/// - Enum variants: `Status.Active` (also singleton types with exactly one value)
+///
+/// Note: Float values are intentionally excluded because floating-point
+/// equality is problematic (NaN != NaN, -0.0 == 0.0, etc.).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SingletonValue {
+    Int(i64),
+    String(std::string::String),
+    Bool(bool),
+    /// A specific enum variant: `Status.Active`
+    /// The first Name is the enum name, the second is the variant name.
+    EnumVariant(Name, Name),
+}
+
+impl fmt::Display for SingletonValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SingletonValue::Int(v) => write!(f, "{v}"),
+            SingletonValue::String(v) => write!(f, "\"{v}\""),
+            SingletonValue::Bool(v) => write!(f, "{v}"),
+            SingletonValue::EnumVariant(enum_name, variant_name) => {
+                write!(f, "{enum_name}.{variant_name}")
+            }
+        }
+    }
+}
+
 /// A resolved type in BAML.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Ty<'db> {
@@ -20,6 +55,11 @@ pub enum Ty<'db> {
     Audio,
     Video,
     Pdf,
+
+    /// Singleton type: a type inhabited by exactly one value.
+    /// Used for exhaustiveness checking of literal unions like `200 | 201 | 204`.
+    /// The singleton type `{42}` contains only the value `42`.
+    Singleton(SingletonValue),
 
     // User-defined types (fully resolved with IDs)
     Class(ClassId<'db>),
@@ -207,6 +247,7 @@ impl fmt::Display for Ty<'_> {
             Ty::Audio => write!(f, "audio"),
             Ty::Video => write!(f, "video"),
             Ty::Pdf => write!(f, "pdf"),
+            Ty::Singleton(val) => write!(f, "{val}"),
             Ty::Class(_) => write!(f, "<class>"),
             Ty::Enum(_) => write!(f, "<enum>"),
             Ty::Named(name) => write!(f, "{name}"),
