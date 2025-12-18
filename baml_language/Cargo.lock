@@ -280,6 +280,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_cli"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "baml_language_server",
+ "cfg-if",
+ "clap",
+ "clap-cargo",
+ "colored",
+ "ctrlc",
+]
+
+[[package]]
 name = "baml_codegen"
 version = "0.0.0"
 dependencies = [
@@ -342,6 +355,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum 0.8.7",
+ "baml_db",
  "baml_lsp_types",
  "colored",
  "console-subscriber",
@@ -354,6 +368,7 @@ dependencies = [
  "is-macro",
  "itertools 0.14.0",
  "jod-thread",
+ "libc",
  "log",
  "lsp-server",
  "lsp-types",
@@ -373,6 +388,7 @@ dependencies = [
  "shellexpand",
  "similar",
  "simple-logging",
+ "text-size",
  "thiserror 2.0.17",
  "tokio",
  "tower 0.5.2",
@@ -555,6 +571,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "block2"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdeb9d870516001442e364c5220d3574d2da8dc765554b4a617230d33fa58ef5"
+dependencies = [
+ "objc2",
+]
+
+[[package]]
 name = "borsh"
 version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -648,6 +673,16 @@ checksum = "4c26d721170e0295f191a69bd9a1f93efcdb0aff38684b61ab5750468972e5f5"
 dependencies = [
  "clap_builder",
  "clap_derive",
+]
+
+[[package]]
+name = "clap-cargo"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b2ea69cefa96b848b73ad516ad1d59a195cdf9263087d977f648a818c8b43e"
+dependencies = [
+ "anstyle",
+ "clap",
 ]
 
 [[package]]
@@ -995,6 +1030,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctrlc"
+version = "3.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73736a89c4aff73035ba2ed2e565061954da00d4970fc9ac25dcc85a2a20d790"
+dependencies = [
+ "dispatch2",
+ "nix",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1064,6 +1110,18 @@ dependencies = [
  "option-ext",
  "redox_users",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "dispatch2"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89a09f22a6c6069a18470eb92d2298acf25463f14256d24778e1230d789a2aec"
+dependencies = [
+ "bitflags 2.10.0",
+ "block2",
+ "libc",
+ "objc2",
 ]
 
 [[package]]

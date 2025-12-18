@@ -3,8 +3,14 @@
 // but without the wasm-bindgen dependency.
 // Wasm-bindgen causes strange issues with ruby builds so we'd rather not add that dependency if we can.
 
-use baml_types::FunctionFlavor;
 use serde::{Deserialize, Serialize};
+
+// TODO: Previously imported from baml_types, now defined locally
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FunctionFlavor {
+    Function,
+    Prompt,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BamlSpan {
@@ -115,15 +121,16 @@ pub struct SerializableOrchestratorNode {
     pub provider: String,
 }
 
-impl From<&baml_runtime::internal_baml_diagnostics::Span> for BamlSpan {
-    fn from(span: &baml_runtime::internal_baml_diagnostics::Span) -> Self {
-        let (start, end) = span.line_and_column();
-        BamlSpan {
-            file_path: span.file.path().to_string(),
-            start: span.start,
-            end: span.end,
-            start_line: start.0,
-            end_line: end.0,
-        }
-    }
-}
+// TODO: Previously converted from baml_runtime::internal_baml_diagnostics::Span
+// impl From<&baml_runtime::internal_baml_diagnostics::Span> for BamlSpan {
+//     fn from(span: &baml_runtime::internal_baml_diagnostics::Span) -> Self {
+//         let (start, end) = span.line_and_column();
+//         BamlSpan {
+//             file_path: span.file.path().to_string(),
+//             start: span.start,
+//             end: span.end,
+//             start_line: start.0,
+//             end_line: end.0,
+//         }
+//     }
+// }

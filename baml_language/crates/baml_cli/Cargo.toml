@@ -1,0 +1,54 @@
+[package]
+name = "baml_cli"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+
+[dependencies]
+anyhow.workspace = true
+baml_language_server.workspace = true
+cfg-if.workspace = true
+clap = { workspace = true, features = ["color", "env"] }
+clap-cargo.workspace = true
+colored.workspace = true
+
+ctrlc.workspace = true
+
+# openssl = { version = "0.10", optional = true }
+
+[features]
+defaults = []
+internal = []
+skip-integ-tests = []
+# TODO: reqwest is not currently a dependency
+# static-ssl = ["reqwest/native-tls-vendored"]
+
+# [dev-dependencies]
+# assert_cmd = "2"
+# console_log = "1"
+# dissimilar = "1.0.4"
+# expect-test = "1.1.0"
+# indoc.workspace = true
+# either = "1.8.1"
+# rstest = "0.22.0"
+# walkdir = "2.5.0"
+# wasm-logger = "0.2.0"
+
+
+[[bin]]
+name = "baml-cli"
+path = "src/main.rs"
+

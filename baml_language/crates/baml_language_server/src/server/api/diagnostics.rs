@@ -1,24 +1,41 @@
+// Diagnostics implementation using the Salsa database.
+// Gathers parse errors, type errors, and name errors from the compiler.
+
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use baml_runtime::InternalRuntimeInterface;
-use internal_baml_diagnostics::{SourceFile, Span};
-use lsp_server::{ErrorCode, Notification, Request};
+use baml_db::{
+    FileId, RootDatabase, Setter, SourceFile,
+    baml_diagnostics::{NameError, ParseError, TypeError},
+    baml_hir::{self, FunctionBody, ItemId},
+    baml_parser, baml_thir,
+};
+use lsp_server::ErrorCode;
 use lsp_types::{
-    Diagnostic, DiagnosticSeverity, PublishDiagnosticsParams, Url, notification::PublishDiagnostics,
+    DiagnosticSeverity, PublishDiagnosticsParams, Url, notification::PublishDiagnostics,
 };
 use parking_lot::Mutex;
 
 use super::LSPResult;
 use crate::{
-    DocumentKey, Session,
-    baml_project::{self, Project},
-    baml_text_size::TextSize,
+    Session,
+    baml_project::Project,
+    baml_source_file::LineIndex,
+    baml_text_size::{TextRange, TextSize},
+    edit::ToRangeExt,
     server::{Result, api::ResultExt, client::Notifier},
 };
+
+/// Convert a text_size::TextRange (from baml_base/Span) to our local TextRange
+fn convert_text_range(range: text_size::TextRange) -> TextRange {
+    TextRange::new(
+        TextSize::new(range.start().into()),
+        TextSize::new(range.end().into()),
+    )
+}
 
 pub(super) fn clear_diagnostics(uri: &Url, notifier: &Notifier) -> Result<()> {
     notifier
@@ -31,7 +48,7 @@ pub(super) fn clear_diagnostics(uri: &Url, notifier: &Notifier) -> Result<()> {
     Ok(())
 }
 
-pub fn publish_diagnostics(
+pub(super) fn publish_diagnostics(
     notifier: &Notifier,
     project: Arc<Mutex<Project>>,
     version: Option<i32>,
@@ -127,7 +144,7 @@ pub fn publish_session_lsp_diagnostics(
     Ok(())
 }
 
-pub fn project_diagnostics(
+pub(super) fn project_diagnostics(
     project: Arc<Mutex<Project>>,
     feature_flags: &[String],
     session: &Session,
@@ -136,23 +153,14 @@ pub fn project_diagnostics(
         "project_diagnostics called with feature_flags: {:?}",
         feature_flags
     );
-    let mut guard = project.lock();
+    let guard = project.lock();
     let root_path = PathBuf::from(guard.root_path());
-    let fake_env = HashMap::new();
-    let baml_diagnostics = match guard.baml_project.runtime(fake_env, feature_flags) {
-        Ok(runtime) => {
-            runtime.diagnostics().clone()
-            // Diagnostics::new(PathBuf::from("/fake1"))
-        }
-        Err(err) => err,
-    };
-    tracing::debug!("baml_project_diagnostics: {:?}", baml_diagnostics);
 
     // Initialize the map with an entry for every file in the project.
     // This is important as we want to CLEAR existing error diagnostics we pushed if errors got fixed.
     let mut diagnostics_map: HashMap<Url, Vec<lsp_types::Diagnostic>> = guard
         .baml_project
-        .files // Use the files map from the project
+        .files
         .keys()
         .filter_map(|doc_key| {
             let path = doc_key.path();
@@ -169,148 +177,97 @@ pub fn project_diagnostics(
         })
         .collect();
 
-    // Add regular BAML diagnostics
-    for error in baml_diagnostics.errors().iter() {
-        let span_path = ensure_absolute(&root_path, &PathBuf::from(error.span().file.path()));
-        let url = match Url::from_file_path(&span_path) {
-            Ok(url) => url,
-            Err(_) => {
-                tracing::warn!(
-                    "Failed to convert path {:?} to URL for diagnostic",
-                    span_path
-                );
-                continue;
-            }
-        };
-        if let Some(range) = span_to_range(&guard, &root_path, error.span()) {
-            let diag = lsp_types::Diagnostic::new(
-                range,
-                Some(DiagnosticSeverity::ERROR),
-                None,
-                None,
-                error.message().to_string(),
-                None,
-                None,
-            );
-            diagnostics_map.entry(url).or_default().push(diag);
-        }
+    // Create a RootDatabase and add all files
+    let mut db = RootDatabase::new();
+
+    // Build a mapping from FileId -> (PathBuf, source text, LineIndex)
+    // We need this to convert Spans to LSP Ranges later
+    let mut file_info: HashMap<FileId, (PathBuf, String, LineIndex)> = HashMap::new();
+    let mut source_files: Vec<SourceFile> = Vec::new();
+
+    // Merge files and unsaved_files, with unsaved_files taking precedence
+    let mut all_files = guard.baml_project.files.clone();
+    for (key, doc) in &guard.baml_project.unsaved_files {
+        all_files.insert(key.clone(), doc.clone());
     }
 
-    for warning in baml_diagnostics.warnings().iter() {
-        let span_path = ensure_absolute(&root_path, &PathBuf::from(warning.span().file.path()));
-        let url = match Url::from_file_path(&span_path) {
-            Ok(url) => url,
-            Err(_) => {
-                tracing::warn!(
-                    "Failed to convert path {:?} to URL for diagnostic",
-                    span_path
-                );
-                continue;
-            }
-        };
-        if let Some(range) = span_to_range(&guard, &root_path, warning.span()) {
-            let diag = lsp_types::Diagnostic::new(
-                range,
-                Some(DiagnosticSeverity::WARNING),
-                None,
-                None,
-                warning.message().to_string(),
-                None,
-                None,
-            );
-            diagnostics_map.entry(url).or_default().push(diag);
-        }
+    for (doc_key, text_doc) in &all_files {
+        let path = doc_key.path();
+        let contents = text_doc.contents.clone();
+        let line_index = LineIndex::from_source_text(&contents);
+
+        let source_file = db.add_file(path, &contents);
+        let file_id = source_file.file_id(&db);
+        file_info.insert(file_id, (path.to_path_buf(), contents, line_index));
+        source_files.push(source_file);
     }
 
-    // Add generator version diagnostics
-    if let Ok(generators) = guard.baml_project.list_generators(feature_flags) {
-        for generator in generators.into_iter() {
-            if let Some(message) = guard.baml_project.check_version(&generator, false) {
-                if let Some(range) = span_to_range(
-                    &guard,
-                    &root_path,
-                    &Span {
-                        file: SourceFile::new_static(
-                            PathBuf::from(generator.span.file_path.clone()),
-                            "",
-                        ),
-                        start: generator.span.start,
-                        end: generator.span.end,
-                    },
-                ) {
-                    let diagnostic = Diagnostic {
-                        range,
-                        message,
-                        severity: Some(DiagnosticSeverity::ERROR),
-                        source: Some("baml".to_string()),
-                        ..Default::default()
-                    };
+    // Create the project root and set the files
+    let project_root = db.set_project_root(&root_path);
+    project_root.set_files(&mut db).to(source_files.clone());
 
-                    let span_path = ensure_absolute(
-                        &root_path,
-                        &PathBuf::from(generator.span.file_path.clone()),
-                    );
-                    match Url::from_file_path(span_path) {
-                        Ok(uri) => {
-                            diagnostics_map.entry(uri).or_default().push(diagnostic);
-                        }
-                        Err(_) => {
-                            tracing::error!(
-                                "Failed to parse URI for generator diagnostic: {}",
-                                generator.span.file_path
-                            );
-                        }
+    // 1. Gather parse errors
+    for source_file in &source_files {
+        let parse_errors = baml_parser::parse_errors(&db, *source_file);
+        for error in parse_errors {
+            if let Some(diag) = parse_error_to_diagnostic(&error, &file_info, session) {
+                let file_id = get_parse_error_file_id(&error);
+                if let Some((path, _, _)) = file_info.get(&file_id) {
+                    if let Ok(url) = Url::from_file_path(path) {
+                        diagnostics_map.entry(url).or_default().push(diag);
                     }
-                } else {
-                    tracing::warn!(
-                        "Could not get range for generator diagnostic span in file {}",
-                        generator.span.file_path
-                    );
                 }
             }
         }
     }
 
-    // Check for generator version mismatch as well.
-    if let Err(message) = guard.get_common_generator_version() {
-        // Add the diagnostic to all generators
-        if let Ok(generators) = guard.list_generators(feature_flags) {
-            // Need to list generators again to get their spans
-            for generator in &generators {
-                if let Some(range) = span_to_range(
-                    &guard,
-                    &root_path,
-                    &Span {
-                        file: SourceFile::new_static(
-                            PathBuf::from(generator.span.file_path.clone()),
-                            "",
-                        ),
-                        start: generator.span.start,
-                        end: generator.span.end,
-                    },
-                ) {
-                    let diagnostic = Diagnostic {
-                        range,
-                        message: message.to_string(),
-                        severity: Some(DiagnosticSeverity::ERROR),
-                        source: Some("baml".to_string()),
-                        ..Default::default()
-                    };
+    // 2. Gather name errors (duplicate names)
+    let name_errors = baml_hir::validate_duplicate_names(&db, project_root);
+    for error in name_errors {
+        if let Some((diag, file_id)) = name_error_to_diagnostic(&error, &file_info, session) {
+            if let Some((path, _, _)) = file_info.get(&file_id) {
+                if let Ok(url) = Url::from_file_path(path) {
+                    diagnostics_map.entry(url).or_default().push(diag);
+                }
+            }
+        }
+    }
 
-                    let span_path = ensure_absolute(
-                        &root_path,
-                        &PathBuf::from(generator.span.file_path.clone()),
+    // 3. Gather type errors from function inference
+    // Build typing context for all functions
+    let globals = baml_thir::build_typing_context_from_files(&db, &source_files);
+    let class_fields = baml_thir::build_class_fields_from_files(&db, project_root);
+
+    for source_file in &source_files {
+        let _file_id = source_file.file_id(&db);
+        let items_struct = baml_hir::file_items(&db, *source_file);
+        let items = items_struct.items(&db);
+
+        for item in items {
+            if let ItemId::Function(func_loc) = item {
+                let signature = baml_hir::function_signature(&db, *func_loc);
+                let body = baml_hir::function_body(&db, *func_loc);
+
+                // Only infer types for expression functions (not LLM functions)
+                if matches!(*body, FunctionBody::Expr(_)) {
+                    let inference_result = baml_thir::infer_function(
+                        &db,
+                        &signature,
+                        &body,
+                        Some(globals.clone()),
+                        Some(class_fields.clone()),
                     );
 
-                    match Url::from_file_path(span_path) {
-                        Ok(uri) => {
-                            diagnostics_map.entry(uri).or_default().push(diagnostic);
-                        }
-                        Err(_) => {
-                            tracing::error!(
-                                "Failed to parse URI for version mismatch diagnostic: {}",
-                                generator.span.file_path
-                            );
+                    for type_error in &inference_result.errors {
+                        if let Some(diag) =
+                            type_error_to_diagnostic(type_error, &file_info, session)
+                        {
+                            let error_file_id = get_type_error_file_id(type_error);
+                            if let Some((path, _, _)) = file_info.get(&error_file_id) {
+                                if let Ok(url) = Url::from_file_path(path) {
+                                    diagnostics_map.entry(url).or_default().push(diag);
+                                }
+                            }
                         }
                     }
                 }
@@ -321,9 +278,167 @@ pub fn project_diagnostics(
     diagnostics_map
 }
 
+/// Convert a ParseError to an LSP Diagnostic
+fn parse_error_to_diagnostic(
+    error: &ParseError,
+    file_info: &HashMap<FileId, (PathBuf, String, LineIndex)>,
+    session: &Session,
+) -> Option<lsp_types::Diagnostic> {
+    let (message, span) = match error {
+        ParseError::UnexpectedToken {
+            expected,
+            found,
+            span,
+        } => (format!("Expected {}, found {}", expected, found), span),
+        ParseError::UnexpectedEof { expected, span } => {
+            (format!("Unexpected end of file, expected {}", expected), span)
+        }
+    };
+
+    let (_, source_text, line_index) = file_info.get(&span.file_id)?;
+    let range = convert_text_range(span.range)
+        .to_range(source_text, line_index, session.position_encoding);
+
+    Some(lsp_types::Diagnostic {
+        range,
+        severity: Some(DiagnosticSeverity::ERROR),
+        code: Some(lsp_types::NumberOrString::String("parse-error".to_string())),
+        code_description: None,
+        source: Some("baml".to_string()),
+        message,
+        related_information: None,
+        tags: None,
+        data: None,
+    })
+}
+
+/// Convert a NameError to an LSP Diagnostic
+fn name_error_to_diagnostic(
+    error: &NameError,
+    file_info: &HashMap<FileId, (PathBuf, String, LineIndex)>,
+    session: &Session,
+) -> Option<(lsp_types::Diagnostic, FileId)> {
+    match error {
+        NameError::DuplicateName {
+            name,
+            kind,
+            first: _,
+            first_path,
+            second,
+            second_path: _,
+        } => {
+            let (_, source_text, line_index) = file_info.get(&second.file_id)?;
+            let range = convert_text_range(second.range)
+                .to_range(source_text, line_index, session.position_encoding);
+
+            let message = format!(
+                "Duplicate {} '{}' (first defined in {})",
+                kind, name, first_path
+            );
+
+            Some((
+                lsp_types::Diagnostic {
+                    range,
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: Some(lsp_types::NumberOrString::String("name-error".to_string())),
+                    code_description: None,
+                    source: Some("baml".to_string()),
+                    message,
+                    related_information: None,
+                    tags: None,
+                    data: None,
+                },
+                second.file_id,
+            ))
+        }
+    }
+}
+
+/// Convert a TypeError to an LSP Diagnostic
+fn type_error_to_diagnostic<T: std::fmt::Display>(
+    error: &TypeError<T>,
+    file_info: &HashMap<FileId, (PathBuf, String, LineIndex)>,
+    session: &Session,
+) -> Option<lsp_types::Diagnostic> {
+    let (message, span) = match error {
+        TypeError::TypeMismatch {
+            expected,
+            found,
+            span,
+        } => (
+            format!("Type mismatch: expected {}, found {}", expected, found),
+            span,
+        ),
+        TypeError::UnknownType { name, span } => (format!("Unknown type: {}", name), span),
+        TypeError::UnknownVariable { name, span } => (format!("Unknown variable: {}", name), span),
+        TypeError::InvalidBinaryOp { op, lhs, rhs, span } => (
+            format!("Invalid binary operation '{}' on {} and {}", op, lhs, rhs),
+            span,
+        ),
+        TypeError::InvalidUnaryOp { op, operand, span } => {
+            (format!("Invalid unary operation '{}' on {}", op, operand), span)
+        }
+        TypeError::ArgumentCountMismatch {
+            expected,
+            found,
+            span,
+        } => (
+            format!(
+                "Argument count mismatch: expected {}, found {}",
+                expected, found
+            ),
+            span,
+        ),
+        TypeError::NotCallable { ty, span } => (format!("Type {} is not callable", ty), span),
+        TypeError::NoSuchField { ty, field, span } => {
+            (format!("No field '{}' on type {}", field, ty), span)
+        }
+        TypeError::NotIndexable { ty, span } => (format!("Type {} is not indexable", ty), span),
+    };
+
+    let (_, source_text, line_index) = file_info.get(&span.file_id)?;
+    let range = convert_text_range(span.range)
+        .to_range(source_text, line_index, session.position_encoding);
+
+    Some(lsp_types::Diagnostic {
+        range,
+        severity: Some(DiagnosticSeverity::ERROR),
+        code: Some(lsp_types::NumberOrString::String("type-error".to_string())),
+        code_description: None,
+        source: Some("baml".to_string()),
+        message,
+        related_information: None,
+        tags: None,
+        data: None,
+    })
+}
+
+/// Get the FileId from a ParseError
+fn get_parse_error_file_id(error: &ParseError) -> FileId {
+    match error {
+        ParseError::UnexpectedToken { span, .. } => span.file_id,
+        ParseError::UnexpectedEof { span, .. } => span.file_id,
+    }
+}
+
+/// Get the FileId from a TypeError
+fn get_type_error_file_id<T>(error: &TypeError<T>) -> FileId {
+    match error {
+        TypeError::TypeMismatch { span, .. } => span.file_id,
+        TypeError::UnknownType { span, .. } => span.file_id,
+        TypeError::UnknownVariable { span, .. } => span.file_id,
+        TypeError::InvalidBinaryOp { span, .. } => span.file_id,
+        TypeError::InvalidUnaryOp { span, .. } => span.file_id,
+        TypeError::ArgumentCountMismatch { span, .. } => span.file_id,
+        TypeError::NotCallable { span, .. } => span.file_id,
+        TypeError::NoSuchField { span, .. } => span.file_id,
+        TypeError::NotIndexable { span, .. } => span.file_id,
+    }
+}
+
 /// Returns diagnostics only for the specified file URL.
 pub fn file_diagnostics(
-    project: Arc<Mutex<Project>>,
+    _project: Arc<Mutex<Project>>,
     file_url: &Url,
     feature_flags: &[String],
 ) -> Vec<lsp_types::Diagnostic> {
@@ -332,127 +447,14 @@ pub fn file_diagnostics(
         file_url,
         feature_flags
     );
-    let mut guard = project.lock();
-    let root_path = PathBuf::from(guard.root_path());
-    let fake_env = HashMap::new();
-    let baml_diagnostics = match guard.baml_project.runtime(fake_env, feature_flags) {
-        Ok(runtime) => runtime.diagnostics().clone(),
-        Err(err) => err,
-    };
 
-    let errors = baml_diagnostics
-        .errors()
-        .iter()
-        .filter(|e| matches_target(&root_path, file_url, e.span()))
-        .filter_map(|error| {
-            Some(lsp_types::Diagnostic::new(
-                span_to_range(&guard, &root_path, error.span())?,
-                Some(DiagnosticSeverity::ERROR),
-                None,
-                None,
-                error.message().to_string(),
-                None,
-                None,
-            ))
-        });
-
-    let warnings = baml_diagnostics
-        .warnings()
-        .iter()
-        .filter(|w| matches_target(&root_path, file_url, w.span()))
-        .filter_map(|warning| {
-            Some(lsp_types::Diagnostic::new(
-                span_to_range(&guard, &root_path, warning.span())?,
-                Some(DiagnosticSeverity::WARNING),
-                None,
-                None,
-                warning.message().to_string(),
-                None,
-                None,
-            ))
-        });
-
-    errors.chain(warnings).collect()
-}
-
-/// Checks if the diagnostic span's file path matches the target URL's path.
-fn matches_target(
-    project_root: &Path,
-    target_url: &Url,
-    span: &internal_baml_diagnostics::Span,
-) -> bool {
-    let absolute_file = DocumentKey::from_url(project_root, target_url);
-    let absolute_target = DocumentKey::from_path(project_root, &PathBuf::from(span.file.path()));
-    match (&absolute_file, &absolute_target) {
-        (Ok(file), Ok(target)) => file.path() == target.path(),
-        _ => {
-            tracing::error!(
-                "Error determining file path: {:?}, or target path: {:?}",
-                absolute_file,
-                absolute_target
-            );
-            false
-        }
-    }
-}
-
-/// Convert a baml Span into a lsp_types::Range for use in an `lsp_types::Diagnostic.
-/// Params:
-///   - project: Pass the baml project, we'll need it for getting the span's
-///     document's line index.
-///   - project_root: Root of the baml project, needed for augmenting span paths, which
-///     seem to sporadically be relative paths.
-///   - file_url: The absolute file:/// url of the file whose diagnostics we care about.
-///     Spans not related to this URL will be filtered out.
-///   - span: The baml span to convert.
-fn span_to_range(
-    project: &Project,
-    project_root: &Path,
-    span: &internal_baml_diagnostics::Span,
-) -> Option<lsp_types::Range> {
-    let span_path = ensure_absolute(project_root, &PathBuf::from(span.file.path()));
-    // let span_path_with_prefix = span.file.path();
-    // let span_path = span_path_with_prefix.strip_prefix("file://").map_err(|e| {
-    //     tracing::warn!("Failed to strip file:// prefix from span path: {}", e);
-    //     e
-    // })?;
-
-    let doc_key = DocumentKey::from_path(project_root, &span_path)
-        .map_err(|e| {
-            tracing::warn!("Failed to create DocumentKey: {}", e);
-        })
-        .ok()?;
-    let doc = project
-        .baml_project
-        .unsaved_files
-        .get(&doc_key)
-        .or(project.baml_project.files.get(&doc_key))?;
-    let line_index = doc.index();
-
-    let start_loc =
-        line_index.source_location(TextSize::new(span.start as u32), span.file.as_str());
-    let end_loc = line_index.source_location(TextSize::new(span.end as u32), span.file.as_str());
-
-    let (start_line, start_col) = (
-        start_loc.row.to_zero_indexed(),
-        start_loc.column.to_zero_indexed(),
-    );
-    let (end_line, end_col) = (
-        end_loc.row.to_zero_indexed(),
-        end_loc.column.to_zero_indexed(),
-    );
-    Some(lsp_types::Range {
-        start: lsp_types::Position::new(start_line as u32, start_col as u32),
-        end: lsp_types::Position::new(end_line as u32, end_col as u32),
-    })
+    // TODO: Implement actual diagnostics using salsa database
+    // For now, return empty diagnostics
+    vec![]
 }
 
 /// For a project root and a path to a file in that project, return an absolute path
 /// to that file.
-/// This function is taylored to the quirks of spans coming from baml_runtime, which
-/// sometimes include absolute paths to the source files and sometimes include
-/// "relative" paths (scare-quotes are used because these paths prefixed with `/`,
-/// making them technically absolute).
 fn ensure_absolute(project_root: &Path, file_path: &Path) -> PathBuf {
     let file_path_relative = file_path
         .strip_prefix(std::path::MAIN_SEPARATOR_STR)
@@ -479,8 +481,8 @@ pub fn not_in_baml_src_diagnostic(file_url: &Url) -> lsp_types::PublishDiagnosti
     );
 
     lsp_types::PublishDiagnosticsParams {
-                        uri: file_url.clone(),
-                        diagnostics: vec![lsp_types::Diagnostic::new(
+        uri: file_url.clone(),
+        diagnostics: vec![lsp_types::Diagnostic::new(
             range,
             Some(lsp_types::DiagnosticSeverity::ERROR),
             None,
@@ -489,6 +491,6 @@ pub fn not_in_baml_src_diagnostic(file_url: &Url) -> lsp_types::PublishDiagnosti
             None,
             None,
         )],
-                        version: None,
-                    }
+        version: None,
+    }
 }

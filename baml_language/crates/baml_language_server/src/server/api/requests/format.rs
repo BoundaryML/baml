@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use internal_baml_core::internal_baml_ast::{FormatOptions, format_schema};
+// TODO: internal_baml_core is disabled for now
+// use internal_baml_core::internal_baml_ast::{FormatOptions, format_schema};
 use lsp_types::{DocumentFormattingParams, TextEdit, request};
 
 use crate::{

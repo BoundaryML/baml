@@ -13,7 +13,7 @@
       ],
       "outFiles": ["${workspaceFolder}/typescript/apps/vscode-ext/dist/**"],
       "env": {
-        "VSCODE_DEBUG_BAML_CLI_PATH": "${workspaceFolder}/engine/target/debug/baml-cli",
+        "VSCODE_DEBUG_BAML_CLI_PATH": "${workspaceFolder}/baml_language/target/debug/baml-cli",
         "VSCODE_DEBUG_MODE": "true"
       }
     },

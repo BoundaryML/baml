@@ -13,7 +13,8 @@ use index::DocumentController;
 use itertools::any;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
 use parking_lot::Mutex;
-use playground_server::{WebviewCommand, WebviewRouterMessage};
+// TODO: playground_server is disabled for now
+// use playground_server::{WebviewCommand, WebviewRouterMessage};
 use serde_json::Value;
 
 pub(crate) use self::{capabilities::ResolvedClientCapabilities, settings::AllSettings};
@@ -52,7 +53,8 @@ pub struct Session {
     pub baml_settings: BamlSettings,
 
     pub playground_port: u16,
-    pub to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+    // TODO: playground_server is disabled for now, using dummy () type
+    pub to_webview_router_tx: broadcast::Sender<()>,
 }
 
 impl Clone for Session {
@@ -76,7 +78,8 @@ impl Session {
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
         playground_port: u16,
-        to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+        // TODO: playground_server is disabled for now, using dummy () type
+        to_webview_router_tx: broadcast::Sender<()>,
         client_version: Option<String>,
     ) -> anyhow::Result<Self> {
         let mut projects = HashMap::new();
@@ -91,12 +94,7 @@ impl Session {
             if let Some(baml_src) = find_top_level_parent(&workspace_path) {
                 projects.insert(
                     baml_src.clone(),
-                    Arc::new(Mutex::new(Project::new(BamlProject {
-                        root_dir_name: baml_src.clone(),
-                        files: HashMap::new(),
-                        unsaved_files: HashMap::new(),
-                        cached_runtime: None,
-                    }))),
+                    Arc::new(Mutex::new(Project::new(BamlProject::new(baml_src.clone())))),
                 );
                 tracing::info!(
                     "Session::new: Added initial project for baml_src path: {:?}",
@@ -198,12 +196,7 @@ impl Session {
             "Creating new project for baml_src: {:?}",
             baml_src_root_path
         );
-        let new_project = Arc::new(Mutex::new(Project::new(BamlProject {
-            root_dir_name: baml_src_root_path.clone(),
-            files: HashMap::new(),
-            unsaved_files: HashMap::new(),
-            cached_runtime: None,
-        })));
+        let new_project = Arc::new(Mutex::new(Project::new(BamlProject::new(baml_src_root_path.clone()))));
 
         // Insert and return the new project
         projects.insert(baml_src_root_path, new_project.clone());

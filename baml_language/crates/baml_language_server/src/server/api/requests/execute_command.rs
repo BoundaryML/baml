@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use lsp_server::{ErrorCode, Notification};
 use lsp_types::{ExecuteCommandParams, MessageType, request};
-use playground_server::WebviewRouterMessage;
+// TODO: playground_server is disabled for now
+// use playground_server::WebviewRouterMessage;
 use serde_json::json;
 use tokio::time::sleep;
 use webbrowser;
@@ -56,19 +57,20 @@ impl SyncRequestHandler for ExecuteCommand {
                 });
             }
 
-            let _ = session
-                .to_webview_router_tx
-                .send(WebviewRouterMessage::SendMessageToWebview(
-                    playground_server::WebviewCommand::LspMessage(Notification::new(
-                        "workspace/executeCommand".to_string(),
-                        json!(params),
-                    )),
-                ))
-                .inspect_err(|e| {
-                    tracing::error!(
-                        "Failed to send SEND_MESSAGE_TO_WEBVIEW message to webview: {e}"
-                    );
-                });
+            // TODO: playground_server forwarding is disabled for now
+            // let _ = session
+            //     .to_webview_router_tx
+            //     .send(WebviewRouterMessage::SendMessageToWebview(
+            //         playground_server::WebviewCommand::LspMessage(Notification::new(
+            //             "workspace/executeCommand".to_string(),
+            //             json!(params),
+            //         )),
+            //     ))
+            //     .inspect_err(|e| {
+            //         tracing::error!(
+            //             "Failed to send SEND_MESSAGE_TO_WEBVIEW message to webview: {e}"
+            //         );
+            //     });
             return Ok(None);
         }
 

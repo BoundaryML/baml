@@ -21,7 +21,8 @@ use lsp_types::{
     WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
     notification::DidChangeTextDocument,
 };
-use playground_server::{WebviewCommand, WebviewRouterMessage};
+// TODO: playground_server is disabled for now
+// use playground_server::{WebviewCommand, WebviewRouterMessage};
 use schedule::Task;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -52,9 +53,10 @@ pub type Result<T> = std::result::Result<T, api::Error>;
 
 pub(crate) struct ServerArgs {
     pub tokio_runtime: tokio::runtime::Runtime,
-    pub webview_router_to_websocket_tx: broadcast::Sender<WebviewCommand>,
-    pub to_webview_router_rx: broadcast::Receiver<WebviewRouterMessage>,
-    pub to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+    // TODO: playground_server is disabled for now, using dummy () types
+    pub webview_router_to_websocket_tx: broadcast::Sender<()>,
+    pub to_webview_router_rx: broadcast::Receiver<()>,
+    pub to_webview_router_tx: broadcast::Sender<()>,
     pub playground_port: u16,
     pub proxy_port: u16,
 }
@@ -206,92 +208,93 @@ impl Server {
             args,
         };
 
-        {
-            let lsp_sender = server.connection.make_sender();
-            server.args.tokio_runtime.spawn(async move {
-                let _ = lsp_sender
-                    .send(Message::Notification(
-                        BamlNotification::PlaygroundPort {
-                            port: server.args.playground_port,
-                        }
-                        .to_lsp_notification(),
-                    ))
-                    .inspect_err(|e| {
-                        tracing::error!(
-                            "Failed to send baml/playground_port notification to IDE: {e}"
-                        );
-                    });
-            });
-        }
-        {
-            // Start the webview router loop
-            //
-            // This is the communication bridge between the webview and IDE in non-VSCode environments
-            // and allows the webview to send messages to Jetbrains and allows Jetbrains to send messages
-            // to the webview.
-            //
-            // webview->IDE is generally backed by the webview POSTing to /webview/SEND_LSP_NOTIFICATION_TO_IDE,
-            //   and the language server will then forward that to the IDE
-            // IDE->webview is generally backed by the IDE calling POST /webview/SEND_LSP_NOTIFICATION_TO_WEBVIEW,
-            //   and the language server will then forward that to the webview
-            //
-            // (Note that although the language-server pretends to offer a request-response API, it does not
-            // block on either the IDE or webview responding before responding to its caller.)
-            //
-            // Incoming messages are received via to_webview_router_tx, which the router will then decide to
-            // dispatch to either the webview (via its websocket) or the IDE (via its LSP connection).
-            let notifier = client.notifier();
-            let lsp_sender = server.connection.make_sender();
-            let mut to_webview_router_rx = server.args.to_webview_router_rx.resubscribe();
-            let webview_router_to_websocket_tx = server.args.webview_router_to_websocket_tx.clone();
-            let mut session = server.session.clone();
-            server.args.tokio_runtime.spawn(async move {
-                tracing::info!("Starting the webview router loop: will dispatch messages to the webview and IDE");
-                while let Ok(msg) = to_webview_router_rx.recv().await {
-                    match msg {
-                        WebviewRouterMessage::WasmIsInitialized => {
-                            // Reloading the session publishes a runtime_updated notification to the webview
-                            let _ = session.reload(Some(notifier.clone())).inspect_err(|e| {
-                                tracing::error!("Failed to reload session: {e}");
-                            });
-                        }
-                        WebviewRouterMessage::GetLanguageServerSettings(sender) => {
-                            tracing::info!("Received playground GET_LANGUAGE_SERVER_SETTINGS request");
-                            let _ = sender.send(json!(&session.baml_settings)).inspect_err(|e| {
-                                tracing::error!("Failed to send GET_LANGUAGE_SERVER_SETTINGS response to WebviewRouter: {e}");
-                            });
-                        }
-                        WebviewRouterMessage::UpdateLanguageServerSettings(unparsed_settings) => {
-                            tracing::info!("Received playground UPDATE_LANGUAGE_SERVER_SETTINGS request: {:?}", unparsed_settings);
-                            let _ = session.update_baml_settings(unparsed_settings.clone());
-                            let _ = notifier
-                                .notify_raw("baml_settings_updated".to_string(), json!(&session.baml_settings))
-                                .inspect_err(|e| {
-                                    tracing::error!("Failed to send baml_settings_updated notification to IDE: {e}");
-                                });
-                        }
-                        WebviewRouterMessage::SendLspNotificationToIde (notification) => {
-                            tracing::info!("Received playground SEND_LSP_NOTIFICATION_TO_IDE request: {:?}", notification);
-                            let _ = lsp_sender
-                                .send(Message::Notification(notification))
-                                .inspect_err(|e| {
-                                    tracing::error!("Failed to forward SEND_LSP_NOTIFICATION_TO_IDE message to IDE: {e}");
-                                });
-                        }
-                        WebviewRouterMessage::SendMessageToWebview(command) => {
-                            tracing::info!("Received playground SEND_MESSAGE_TO_WEBVIEW request: {:?}", command);
-                            // Simply forward the WebviewCommand to the websocket - no processing needed
-                            let _ = webview_router_to_websocket_tx
-                                .send(command)
-                                .inspect_err(|e| {
-                                    tracing::error!("Failed to send WebviewCommand to websocket: {e}");
-                                });
-                        }
-                    }
-                }
-                tracing::info!("Playground rx channel closed");
-            });
-        }
+        // TODO: playground_server is disabled for now
+        // {
+        //     let lsp_sender = server.connection.make_sender();
+        //     server.args.tokio_runtime.spawn(async move {
+        //         let _ = lsp_sender
+        //             .send(Message::Notification(
+        //                 BamlNotification::PlaygroundPort {
+        //                     port: server.args.playground_port,
+        //                 }
+        //                 .to_lsp_notification(),
+        //             ))
+        //             .inspect_err(|e| {
+        //                 tracing::error!(
+        //                     "Failed to send baml/playground_port notification to IDE: {e}"
+        //                 );
+        //             });
+        //     });
+        // }
+        // {
+        //     // Start the webview router loop
+        //     //
+        //     // This is the communication bridge between the webview and IDE in non-VSCode environments
+        //     // and allows the webview to send messages to Jetbrains and allows Jetbrains to send messages
+        //     // to the webview.
+        //     //
+        //     // webview->IDE is generally backed by the webview POSTing to /webview/SEND_LSP_NOTIFICATION_TO_IDE,
+        //     //   and the language server will then forward that to the IDE
+        //     // IDE->webview is generally backed by the IDE calling POST /webview/SEND_LSP_NOTIFICATION_TO_WEBVIEW,
+        //     //   and the language server will then forward that to the webview
+        //     //
+        //     // (Note that although the language-server pretends to offer a request-response API, it does not
+        //     // block on either the IDE or webview responding before responding to its caller.)
+        //     //
+        //     // Incoming messages are received via to_webview_router_tx, which the router will then decide to
+        //     // dispatch to either the webview (via its websocket) or the IDE (via its LSP connection).
+        //     let notifier = client.notifier();
+        //     let lsp_sender = server.connection.make_sender();
+        //     let mut to_webview_router_rx = server.args.to_webview_router_rx.resubscribe();
+        //     let webview_router_to_websocket_tx = server.args.webview_router_to_websocket_tx.clone();
+        //     let mut session = server.session.clone();
+        //     server.args.tokio_runtime.spawn(async move {
+        //         tracing::info!("Starting the webview router loop: will dispatch messages to the webview and IDE");
+        //         while let Ok(msg) = to_webview_router_rx.recv().await {
+        //             match msg {
+        //                 WebviewRouterMessage::WasmIsInitialized => {
+        //                     // Reloading the session publishes a runtime_updated notification to the webview
+        //                     let _ = session.reload(Some(notifier.clone())).inspect_err(|e| {
+        //                         tracing::error!("Failed to reload session: {e}");
+        //                     });
+        //                 }
+        //                 WebviewRouterMessage::GetLanguageServerSettings(sender) => {
+        //                     tracing::info!("Received playground GET_LANGUAGE_SERVER_SETTINGS request");
+        //                     let _ = sender.send(json!(&session.baml_settings)).inspect_err(|e| {
+        //                         tracing::error!("Failed to send GET_LANGUAGE_SERVER_SETTINGS response to WebviewRouter: {e}");
+        //                     });
+        //                 }
+        //                 WebviewRouterMessage::UpdateLanguageServerSettings(unparsed_settings) => {
+        //                     tracing::info!("Received playground UPDATE_LANGUAGE_SERVER_SETTINGS request: {:?}", unparsed_settings);
+        //                     let _ = session.update_baml_settings(unparsed_settings.clone());
+        //                     let _ = notifier
+        //                         .notify_raw("baml_settings_updated".to_string(), json!(&session.baml_settings))
+        //                         .inspect_err(|e| {
+        //                             tracing::error!("Failed to send baml_settings_updated notification to IDE: {e}");
+        //                         });
+        //                 }
+        //                 WebviewRouterMessage::SendLspNotificationToIde (notification) => {
+        //                     tracing::info!("Received playground SEND_LSP_NOTIFICATION_TO_IDE request: {:?}", notification);
+        //                     let _ = lsp_sender
+        //                         .send(Message::Notification(notification))
+        //                         .inspect_err(|e| {
+        //                             tracing::error!("Failed to forward SEND_LSP_NOTIFICATION_TO_IDE message to IDE: {e}");
+        //                         });
+        //                 }
+        //                 WebviewRouterMessage::SendMessageToWebview(command) => {
+        //                     tracing::info!("Received playground SEND_MESSAGE_TO_WEBVIEW request: {:?}", command);
+        //                     // Simply forward the WebviewCommand to the websocket - no processing needed
+        //                     let _ = webview_router_to_websocket_tx
+        //                         .send(command)
+        //                         .inspect_err(|e| {
+        //                             tracing::error!("Failed to send WebviewCommand to websocket: {e}");
+        //                         });
+        //                 }
+        //             }
+        //         }
+        //         tracing::info!("Playground rx channel closed");
+        //     });
+        // }
 
         Ok(server)
     }
@@ -387,7 +390,8 @@ impl Server {
         client_capabilities: &ClientCapabilities,
         mut session: Session,
         worker_threads: NonZeroUsize,
-        webview_router_to_websocket_tx: broadcast::Sender<WebviewCommand>,
+        // TODO: playground_server is disabled for now
+        _webview_router_to_websocket_tx: broadcast::Sender<()>,
     ) -> anyhow::Result<()> {
         let to_webview_router_tx = session.to_webview_router_tx.clone();
         let lsp_methods_to_forward_to_webview = session
@@ -415,27 +419,29 @@ impl Server {
             if connection.handle_shutdown(&msg)? {
                 break;
             }
+            // TODO: playground_server forwarding is disabled for now
             // webview_router_to_websocket_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
             let tasks = match msg {
                 Message::Request(req) => {
-                    if lsp_methods_to_forward_to_webview
-                        .clone()
-                        .unwrap_or_default()
-                        .contains(&req.method)
-                    {
-                        let _ = to_webview_router_tx
-                            .send(WebviewRouterMessage::SendMessageToWebview(
-                                playground_server::WebviewCommand::LspMessage(
-                                    lsp_server::Notification::new(
-                                        req.method.clone(),
-                                        req.params.clone(),
-                                    ),
-                                ),
-                            ))
-                            .inspect_err(|e| {
-                                tracing::error!("Failed to forward LSP request to webview: {e}");
-                            });
-                    }
+                    // TODO: playground_server forwarding is disabled for now
+                    // if lsp_methods_to_forward_to_webview
+                    //     .clone()
+                    //     .unwrap_or_default()
+                    //     .contains(&req.method)
+                    // {
+                    //     let _ = to_webview_router_tx
+                    //         .send(WebviewRouterMessage::SendMessageToWebview(
+                    //             playground_server::WebviewCommand::LspMessage(
+                    //                 lsp_server::Notification::new(
+                    //                     req.method.clone(),
+                    //                     req.params.clone(),
+                    //                 ),
+                    //             ),
+                    //         ))
+                    //         .inspect_err(|e| {
+                    //             tracing::error!("Failed to forward LSP request to webview: {e}");
+                    //         });
+                    // }
                     vec![api::request(req)]
                 }
                 Message::Notification(notification) => api::notification(notification),

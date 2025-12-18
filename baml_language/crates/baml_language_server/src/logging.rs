@@ -67,12 +67,13 @@ pub(crate) fn init_logging(_log_level: LogLevel, log_file: Option<&std::path::Pa
     tracing::subscriber::set_global_default(subscriber)
         .expect("should be able to set global default subscriber");
 
-    match baml_log::set_running_in_lsp(true) {
-        Ok(_) => (),
-        Err(e) => {
-            tracing::error!("Failed to set running in LSP: {}", e);
-        }
-    }
+    // TODO: baml_log is disabled for now
+    // match baml_log::set_running_in_lsp(true) {
+    //     Ok(_) => (),
+    //     Err(e) => {
+    //         tracing::error!("Failed to set running in LSP: {}", e);
+    //     }
+    // }
 }
 
 /// The log level for the server as provided by the client during initialization.

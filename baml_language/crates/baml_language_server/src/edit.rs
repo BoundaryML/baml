@@ -5,7 +5,7 @@ mod text_document;
 use std::path::{Path, PathBuf};
 
 use lsp_types::{PositionEncodingKind, Url};
-pub(crate) use range::RangeExt;
+pub(crate) use range::{RangeExt, ToRangeExt};
 use serde::{Deserialize, Serialize};
 pub(crate) use text_document::DocumentVersion;
 pub use text_document::TextDocument;

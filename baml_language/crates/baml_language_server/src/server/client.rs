@@ -1,7 +1,8 @@
 use std::any::TypeId;
 
 use lsp_server::{Notification, RequestId};
-use playground_server::WebviewRouterMessage;
+// TODO: playground_server is disabled for now
+// use playground_server::WebviewRouterMessage;
 use rustc_hash::FxHashMap;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
@@ -19,7 +20,8 @@ pub(crate) struct Client<'s> {
 #[derive(Clone)]
 pub struct Notifier {
     client_sender: ClientSender,
-    to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+    // TODO: playground_server is disabled for now, using dummy () type
+    to_webview_router_tx: broadcast::Sender<()>,
     lsp_methods_to_forward_to_webview: Vec<String>,
 }
 
@@ -35,7 +37,8 @@ pub(crate) struct Requester<'s> {
 impl Client<'_> {
     pub(super) fn new(
         sender: ClientSender,
-        to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
+        // TODO: playground_server is disabled for now, using dummy () type
+        to_webview_router_tx: broadcast::Sender<()>,
         lsp_methods_to_forward_to_webview: Vec<String>,
     ) -> Self {
         Self {
@@ -78,21 +81,22 @@ impl Notifier {
     ) -> anyhow::Result<()> {
         let notification = Notification::new(method.clone(), params);
         let message = lsp_server::Message::Notification(notification.clone());
-        // Send to both client and webview router
+        // Send to client
         self.client_sender.send(message)?;
-        // Use configuration instead of hardcoded list
-        if self.lsp_methods_to_forward_to_webview.contains(&method) {
-            let _ = self
-                .to_webview_router_tx
-                .send(WebviewRouterMessage::SendMessageToWebview(
-                    playground_server::WebviewCommand::LspMessage(notification),
-                ))
-                .inspect_err(|e| {
-                    tracing::error!(
-                        "Failed to send SEND_LSP_NOTIFICATION_TO_WEBVIEW message to webview: {e}"
-                    );
-                });
-        }
+        // TODO: playground_server forwarding is disabled for now
+        // // Use configuration instead of hardcoded list
+        // if self.lsp_methods_to_forward_to_webview.contains(&method) {
+        //     let _ = self
+        //         .to_webview_router_tx
+        //         .send(WebviewRouterMessage::SendMessageToWebview(
+        //             playground_server::WebviewCommand::LspMessage(notification),
+        //         ))
+        //         .inspect_err(|e| {
+        //             tracing::error!(
+        //                 "Failed to send SEND_LSP_NOTIFICATION_TO_WEBVIEW message to webview: {e}"
+        //             );
+        //         });
+        // }
         Ok(())
     }
 

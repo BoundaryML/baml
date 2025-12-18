@@ -3,7 +3,8 @@ use std::{collections::HashMap, time::Instant};
 use lsp_types::{
     DidChangeTextDocumentParams, PublishDiagnosticsParams, notification::DidChangeTextDocument,
 };
-use playground_server::WebviewRouterMessage;
+// TODO: playground_server is disabled for now
+// use playground_server::WebviewRouterMessage;
 
 use crate::{
     DocumentKey,
@@ -32,7 +33,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         _requester: &mut Requester,
         params: DidChangeTextDocumentParams,
     ) -> Result<()> {
-        tracing::info!("DidChangeTextDocumentHandler");
+        tracing::info!("DidChangeTextDocumentHandlerv2");
         let start_time_total = Instant::now();
 
         let url = params.text_document.uri;
