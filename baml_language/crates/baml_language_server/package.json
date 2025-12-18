@@ -1,5 +1,5 @@
 {
-  "name": "@baml/language-server",
+  "name": "@baml/language-serverv2",
   "version": "0.1.0",
   "private": true,
   "scripts": {
