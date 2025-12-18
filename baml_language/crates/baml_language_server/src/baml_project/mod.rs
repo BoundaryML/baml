@@ -15,7 +15,7 @@ use lsp_types::{
     Diagnostic, DiagnosticSeverity, Position, Range, TextDocumentItem,
 };
 
-use crate::{DocumentKey, TextDocument, server::client::Notifier, version};
+use crate::{DocumentKey, TextDocument, lsp_db::LspDatabase, server::client::Notifier, version};
 
 pub mod file_utils;
 pub mod position_utils;
@@ -212,6 +212,9 @@ impl BamlProject {
 /// diagnostics, symbol lookup, and code generation.
 pub struct Project {
     pub baml_project: BamlProject,
+    /// Salsa-based database for incremental compilation.
+    /// This is lazily initialized when diagnostics are first requested.
+    lsp_db: LspDatabase,
 }
 
 impl std::fmt::Debug for Project {
@@ -223,7 +226,39 @@ impl std::fmt::Debug for Project {
 impl Project {
     /// Creates a new `Project` instance.
     pub fn new(baml_project: BamlProject) -> Self {
-        Self { baml_project }
+        let mut lsp_db = LspDatabase::new();
+        lsp_db.set_project_root(&baml_project.root_dir_name);
+        Self { baml_project, lsp_db }
+    }
+
+    /// Returns a reference to the LspDatabase.
+    pub fn lsp_db(&self) -> &LspDatabase {
+        &self.lsp_db
+    }
+
+    /// Returns a mutable reference to the LspDatabase.
+    pub fn lsp_db_mut(&mut self) -> &mut LspDatabase {
+        &mut self.lsp_db
+    }
+
+    /// Syncs all files from the BamlProject to the LspDatabase.
+    /// This should be called after loading/reloading files.
+    pub fn sync_files_to_lsp_db(&mut self) {
+        // Merge files and unsaved_files, with unsaved_files taking precedence
+        let mut all_files = self.baml_project.files.clone();
+        for (key, doc) in &self.baml_project.unsaved_files {
+            all_files.insert(key.clone(), doc.clone());
+        }
+
+        for (doc_key, text_doc) in &all_files {
+            let path = doc_key.path();
+            self.lsp_db.add_or_update_file(path, &text_doc.contents);
+        }
+    }
+
+    /// Updates a single file in the LspDatabase.
+    pub fn update_file_in_lsp_db(&mut self, path: &Path, content: &str) {
+        self.lsp_db.add_or_update_file(path, content);
     }
 
     /// Checks the version of a given generator.
@@ -253,8 +288,9 @@ impl Project {
         _runtime_notifier: Option<Notifier>,
         _feature_flags: &[String],
     ) -> anyhow::Result<()> {
-        // TODO: Implement using salsa database to get diagnostics
-        tracing::debug!("update_runtime called (currently a no-op)");
+        // Sync files to the LspDatabase for incremental compilation
+        self.sync_files_to_lsp_db();
+        tracing::debug!("update_runtime: synced files to LspDatabase");
         Ok(())
     }
 

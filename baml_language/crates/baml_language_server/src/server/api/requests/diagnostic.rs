@@ -15,7 +15,7 @@ use crate::{
         Result,
         api::{
             ResultExt,
-            diagnostics::{file_diagnostics, project_diagnostics},
+            diagnostics::file_diagnostics,
             traits::{BackgroundDocumentRequestHandler, RequestHandler, SyncRequestHandler},
         },
         client::{Notifier, Requester},

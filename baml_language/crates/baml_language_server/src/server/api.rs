@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
-use diagnostics::{file_diagnostics, project_diagnostics};
+use diagnostics::file_diagnostics;
 use log::info;
 use lsp_server;
 use lsp_types::{

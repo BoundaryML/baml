@@ -1,12 +1,7 @@
-// TODO: This file has been modified to remove baml_runtime dependency.
-// For now, hover returns None.
-
-use std::collections::HashMap;
-
-use lsp_types::{self as types, HoverParams, TextDocumentItem, request as req};
+use lsp_types::{self as types, HoverParams, request as req};
 
 use crate::{
-    DocumentKey, Session,
+    Session,
     server::{
         Result,
         api::{
@@ -25,63 +20,45 @@ impl RequestHandler for Hover {
 
 impl SyncRequestHandler for Hover {
     fn run(
-        _session: &mut Session,
+        session: &mut Session,
         _notifier: Notifier,
         _requester: &mut Requester,
-        _params: HoverParams,
+        params: HoverParams,
     ) -> Result<Option<types::Hover>> {
-        // TODO: Hover is disabled until we have the salsa database integration
-        // For now, return None
-        Ok(None)
+        let url = &params.text_document_position_params.text_document.uri;
+        let path = url
+            .to_file_path()
+            .internal_error_msg("Could not convert URL to path")?;
+        let position = &params.text_document_position_params.position;
 
-        // TODO: Original implementation commented out below
-        // let url = &params.text_document_position_params.text_document.uri;
-        // let path = url
-        //     .to_file_path()
-        //     .internal_error_msg("Could not convert URL to path")?;
-        // let Ok(project) = session.get_or_create_project(&path) else {
-        //     return Ok(None);
-        // };
+        // Get the project to access the LspDatabase
+        let Ok(project) = session.get_or_create_project(&path) else {
+            return Ok(None);
+        };
 
-        // let document_key =
-        //     DocumentKey::from_url(project.lock().root_path(), url).internal_error()?;
+        let guard = project.lock();
+        let lsp_db = guard.lsp_db();
 
-        // let text_document_item = match project.lock().baml_project.files.get(&document_key) {
-        //     None => {
-        //         tracing::warn!("*** HOVER: Failed to find doc {:?}", url);
-        //         Err(anyhow::anyhow!(
-        //             "File {} was not present in the project",
-        //             url
-        //         ))
-        //     }
-        //     Some(text_document) => Ok(TextDocumentItem {
-        //         uri: url.clone(),
-        //         language_id: "BAML".to_string(),
-        //         text: text_document.contents.clone(),
-        //         version: 1,
-        //     }),
-        // }
-        // .internal_error()?;
-        // let position = params.text_document_position_params.position;
-        // // Just swallow the error here, we dont want hover failures to show error notifs for a user.
-        // let default_flags = vec!["beta".to_string()];
-        // let hover = match project.lock().handle_hover_request(
-        //     &text_document_item,
-        //     &position,
-        //     notifier,
-        //     session
-        //         .baml_settings
-        //         .feature_flags
-        //         .as_ref()
-        //         .unwrap_or(&default_flags),
-        // ) {
-        //     Ok(hover) => hover,
-        //     Err(e) => {
-        //         tracing::error!("Error handling hover request: {}", e);
-        //         None
-        //     }
-        // };
+        // Get the SourceFile for this path
+        let Some(source_file) = lsp_db.get_file(&path) else {
+            tracing::debug!("Hover: file not found in LspDatabase: {:?}", path);
+            return Ok(None);
+        };
 
-        // Ok(hover)
+        // Find symbol at position
+        let Some(symbol) = lsp_db.symbol_at_position(source_file, position) else {
+            return Ok(None);
+        };
+
+        // Generate hover text
+        let hover_text = lsp_db.get_hover_text(&symbol);
+
+        Ok(Some(types::Hover {
+            contents: types::HoverContents::Markup(types::MarkupContent {
+                kind: types::MarkupKind::Markdown,
+                value: format!("```baml\n{}\n```", hover_text),
+            }),
+            range: None,
+        }))
     }
 }
