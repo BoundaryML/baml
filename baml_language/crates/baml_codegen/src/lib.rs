@@ -115,12 +115,18 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                 let body = function_body(db, *func_loc);
 
                 // Run type inference
+                // Note: type_aliases and enum_variants are not passed here,
+                // so exhaustiveness checking for type aliases and enums won't work.
+                // This is acceptable since codegen is for runtime execution,
+                // and type errors should be caught in the THIR.
                 let inference = baml_thir::infer_function(
                     db,
                     &signature,
                     &body,
                     Some(typing_context.clone()),
                     Some(class_field_types.clone()),
+                    None,
+                    None,
                 );
 
                 // Compile to bytecode (objects are added directly to program.objects)
