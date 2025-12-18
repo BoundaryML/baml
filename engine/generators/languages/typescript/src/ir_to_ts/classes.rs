@@ -76,6 +76,8 @@ fn ir_field_to_ts_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> Fi
 mod tests {
     use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
 
+    use crate::r#type::TypeTS;
+
     use super::*;
 
     #[test]
@@ -94,7 +96,7 @@ mod tests {
         let class_go = ir_class_to_ts_stream(class, &pkg);
         assert_eq!(class_go.name, "SimpleClass");
         assert_eq!(class_go.fields.len(), 1);
-        assert!(class_go.fields[0].r#type.is_stream_state());
+        assert!(matches!(class_go.fields[0].r#type, TypeTS::StreamState(_)));
         println!("{}", class_go.fields[0]);
     }
 
@@ -123,7 +125,7 @@ mod tests {
                 .elem
                 .to_streaming_type(ir.as_ref())
         );
-        assert!(digits_field.r#type.is_stream_state());
+        assert!(matches!(digits_field.r#type, TypeTS::StreamState(_)));
         assert_eq!(class_ts.name, "ChildClass");
         assert_eq!(class_ts.fields.len(), 1);
         println!("{}", class_ts.fields[0]);
