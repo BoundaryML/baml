@@ -454,111 +454,12 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
         covered: &[ValueSet],
         _required: &[ValueSet],
     ) -> bool {
-        match value_set {
-            ValueSet::All => {
-                // Catch-all is never "already covered" - it's the ultimate cover
-                false
-            }
-            ValueSet::Empty => {
-                // Empty is always "covered" (it matches nothing)
-                true
-            }
-            ValueSet::OfType(name) => {
-                // Check if this type is covered by an existing OfType or All
-                covered.iter().any(|c| match c {
-                    ValueSet::All => true,
-                    ValueSet::OfType(covered_name) => covered_name == name,
-                    _ => false,
-                })
-            }
-            ValueSet::EnumVariant {
-                enum_name,
-                variant_name,
-            } => {
-                // Check if this specific variant is covered
-                covered.iter().any(|c| match c {
-                    ValueSet::All => true,
-                    ValueSet::OfType(covered_name) => covered_name == enum_name,
-                    ValueSet::EnumVariant {
-                        enum_name: ce,
-                        variant_name: cv,
-                    } => ce == enum_name && cv == variant_name,
-                    ValueSet::Union(subs) => subs.iter().any(|s| {
-                        self.is_fully_covered(
-                            &ValueSet::EnumVariant {
-                                enum_name: enum_name.clone(),
-                                variant_name: variant_name.clone(),
-                            },
-                            &[s.clone()],
-                            &[],
-                        )
-                    }),
-                    _ => false,
-                })
-            }
-            ValueSet::Literal(lit) => {
-                // Check if this specific literal is covered
-                covered.iter().any(|c| match c {
-                    ValueSet::All => true,
-                    ValueSet::OfType(name) => self.literal_has_type(lit, name),
-                    ValueSet::Literal(covered_lit) => covered_lit == lit,
-                    ValueSet::Union(subs) => subs.iter().any(|s| {
-                        self.is_fully_covered(&ValueSet::Literal(lit.clone()), &[s.clone()], &[])
-                    }),
-                    _ => false,
-                })
-            }
-            ValueSet::Union(subs) => {
-                // Union is covered if ALL sub-sets are covered
-                subs.iter()
-                    .all(|s| self.is_fully_covered(s, covered, _required))
-            }
-        }
-    }
-
-    /// Check if a literal has a given type name.
-    fn literal_has_type(&self, lit: &Literal, type_name: &Name) -> bool {
-        let type_str = type_name.as_str();
-        match lit {
-            Literal::Int(_) => type_str == "int",
-            Literal::Float(_) => type_str == "float",
-            Literal::String(_) => type_str == "string",
-            Literal::Bool(_) => type_str == "bool",
-            Literal::Null => type_str == "null",
-        }
+        is_value_set_covered(value_set, covered, self.enum_variants)
     }
 
     /// Add a value set to the coverage list.
     fn add_coverage(&self, covered: &mut Vec<ValueSet>, value_set: &ValueSet) {
-        match value_set {
-            ValueSet::Union(subs) => {
-                // Flatten unions
-                for sub in subs {
-                    self.add_coverage(covered, sub);
-                }
-            }
-            ValueSet::OfType(name) => {
-                // For OfType, expand if it's a finite type (enum)
-                if let Some(variants) = self.enum_variants.get(name) {
-                    for variant_name in variants {
-                        let variant = ValueSet::EnumVariant {
-                            enum_name: name.clone(),
-                            variant_name: variant_name.clone(),
-                        };
-                        if !covered.contains(&variant) {
-                            covered.push(variant);
-                        }
-                    }
-                } else if !covered.contains(value_set) {
-                    covered.push(value_set.clone());
-                }
-            }
-            _ => {
-                if !covered.contains(value_set) {
-                    covered.push(value_set.clone());
-                }
-            }
-        }
+        add_to_coverage(covered, value_set, self.enum_variants);
     }
 
     /// Find value sets that are not covered.
@@ -568,6 +469,137 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             .filter(|req| !self.is_fully_covered(req, covered, required))
             .cloned()
             .collect()
+    }
+}
+
+// ============================================================================
+// Shared Coverage Functions
+// ============================================================================
+
+/// Check if a value set is fully covered by existing coverage.
+///
+/// This is a free function that can be used by both `ExhaustivenessChecker`
+/// and test mocks without duplicating logic.
+fn is_value_set_covered(
+    value_set: &ValueSet,
+    covered: &[ValueSet],
+    enum_variants: &HashMap<Name, Vec<Name>>,
+) -> bool {
+    match value_set {
+        ValueSet::All => {
+            // Catch-all is never "already covered" - it's the ultimate cover
+            false
+        }
+        ValueSet::Empty => {
+            // Empty is always "covered" (it matches nothing)
+            true
+        }
+        ValueSet::OfType(name) => {
+            // Check if this type is covered by an existing OfType or All
+            covered.iter().any(|c| match c {
+                ValueSet::All => true,
+                ValueSet::OfType(covered_name) => covered_name == name,
+                _ => false,
+            })
+        }
+        ValueSet::EnumVariant {
+            enum_name,
+            variant_name,
+        } => {
+            // Check if this specific variant is covered
+            covered.iter().any(|c| match c {
+                ValueSet::All => true,
+                ValueSet::OfType(covered_name) => covered_name == enum_name,
+                ValueSet::EnumVariant {
+                    enum_name: ce,
+                    variant_name: cv,
+                } => ce == enum_name && cv == variant_name,
+                ValueSet::Union(subs) => subs.iter().any(|s| {
+                    is_value_set_covered(
+                        &ValueSet::EnumVariant {
+                            enum_name: enum_name.clone(),
+                            variant_name: variant_name.clone(),
+                        },
+                        &[s.clone()],
+                        enum_variants,
+                    )
+                }),
+                _ => false,
+            })
+        }
+        ValueSet::Literal(lit) => {
+            // Check if this specific literal is covered
+            covered.iter().any(|c| match c {
+                ValueSet::All => true,
+                ValueSet::OfType(name) => literal_has_type(lit, name),
+                ValueSet::Literal(covered_lit) => covered_lit == lit,
+                ValueSet::Union(subs) => subs.iter().any(|s| {
+                    is_value_set_covered(
+                        &ValueSet::Literal(lit.clone()),
+                        &[s.clone()],
+                        enum_variants,
+                    )
+                }),
+                _ => false,
+            })
+        }
+        ValueSet::Union(subs) => {
+            // Union is covered if ALL sub-sets are covered
+            subs.iter()
+                .all(|s| is_value_set_covered(s, covered, enum_variants))
+        }
+    }
+}
+
+/// Check if a literal has a given type name.
+fn literal_has_type(lit: &Literal, type_name: &Name) -> bool {
+    let type_str = type_name.as_str();
+    match lit {
+        Literal::Int(_) => type_str == "int",
+        Literal::Float(_) => type_str == "float",
+        Literal::String(_) => type_str == "string",
+        Literal::Bool(_) => type_str == "bool",
+        Literal::Null => type_str == "null",
+    }
+}
+
+/// Add a value set to the coverage list.
+///
+/// This is a free function that can be used by both `ExhaustivenessChecker`
+/// and test mocks without duplicating logic.
+fn add_to_coverage(
+    covered: &mut Vec<ValueSet>,
+    value_set: &ValueSet,
+    enum_variants: &HashMap<Name, Vec<Name>>,
+) {
+    match value_set {
+        ValueSet::Union(subs) => {
+            // Flatten unions
+            for sub in subs {
+                add_to_coverage(covered, sub, enum_variants);
+            }
+        }
+        ValueSet::OfType(name) => {
+            // For OfType, expand if it's a finite type (enum)
+            if let Some(variants) = enum_variants.get(name) {
+                for variant_name in variants {
+                    let variant = ValueSet::EnumVariant {
+                        enum_name: name.clone(),
+                        variant_name: variant_name.clone(),
+                    };
+                    if !covered.contains(&variant) {
+                        covered.push(variant);
+                    }
+                }
+            } else if !covered.contains(value_set) {
+                covered.push(value_set.clone());
+            }
+        }
+        _ => {
+            if !covered.contains(value_set) {
+                covered.push(value_set.clone());
+            }
+        }
     }
 }
 
@@ -615,17 +647,17 @@ mod tests {
     // ========================================================================
 
     /// Helper to create a mock checker for testing coverage logic.
-    /// Uses empty type_aliases and enum_variants since we're testing coverage directly.
+    ///
+    /// This delegates to the shared free functions `is_value_set_covered` and
+    /// `add_to_coverage`, avoiding code duplication with `ExhaustivenessChecker`.
     struct MockChecker {
         enum_variants: HashMap<Name, Vec<Name>>,
-        type_aliases: HashMap<Name, Ty<'static>>,
     }
 
     impl MockChecker {
         fn new() -> Self {
             Self {
                 enum_variants: HashMap::new(),
-                type_aliases: HashMap::new(),
             }
         }
 
@@ -638,86 +670,11 @@ mod tests {
         }
 
         fn is_fully_covered(&self, value_set: &ValueSet, covered: &[ValueSet]) -> bool {
-            // Replicate the logic from ExhaustivenessChecker::is_fully_covered
-            match value_set {
-                ValueSet::All => false,
-                ValueSet::Empty => true,
-                ValueSet::OfType(name) => covered.iter().any(|c| match c {
-                    ValueSet::All => true,
-                    ValueSet::OfType(covered_name) => covered_name == name,
-                    _ => false,
-                }),
-                ValueSet::EnumVariant {
-                    enum_name,
-                    variant_name,
-                } => covered.iter().any(|c| match c {
-                    ValueSet::All => true,
-                    ValueSet::OfType(covered_name) => covered_name == enum_name,
-                    ValueSet::EnumVariant {
-                        enum_name: ce,
-                        variant_name: cv,
-                    } => ce == enum_name && cv == variant_name,
-                    ValueSet::Union(subs) => subs.iter().any(|s| {
-                        self.is_fully_covered(
-                            &ValueSet::EnumVariant {
-                                enum_name: enum_name.clone(),
-                                variant_name: variant_name.clone(),
-                            },
-                            &[s.clone()],
-                        )
-                    }),
-                    _ => false,
-                }),
-                ValueSet::Literal(lit) => covered.iter().any(|c| match c {
-                    ValueSet::All => true,
-                    ValueSet::OfType(name) => {
-                        let type_str = name.as_str();
-                        match lit {
-                            Literal::Int(_) => type_str == "int",
-                            Literal::Float(_) => type_str == "float",
-                            Literal::String(_) => type_str == "string",
-                            Literal::Bool(_) => type_str == "bool",
-                            Literal::Null => type_str == "null",
-                        }
-                    }
-                    ValueSet::Literal(covered_lit) => covered_lit == lit,
-                    ValueSet::Union(subs) => subs.iter().any(|s| {
-                        self.is_fully_covered(&ValueSet::Literal(lit.clone()), &[s.clone()])
-                    }),
-                    _ => false,
-                }),
-                ValueSet::Union(subs) => subs.iter().all(|s| self.is_fully_covered(s, covered)),
-            }
+            is_value_set_covered(value_set, covered, &self.enum_variants)
         }
 
         fn add_coverage(&self, covered: &mut Vec<ValueSet>, value_set: &ValueSet) {
-            match value_set {
-                ValueSet::Union(subs) => {
-                    for sub in subs {
-                        self.add_coverage(covered, sub);
-                    }
-                }
-                ValueSet::OfType(name) => {
-                    if let Some(variants) = self.enum_variants.get(name) {
-                        for variant_name in variants {
-                            let variant = ValueSet::EnumVariant {
-                                enum_name: name.clone(),
-                                variant_name: variant_name.clone(),
-                            };
-                            if !covered.contains(&variant) {
-                                covered.push(variant);
-                            }
-                        }
-                    } else if !covered.contains(value_set) {
-                        covered.push(value_set.clone());
-                    }
-                }
-                _ => {
-                    if !covered.contains(value_set) {
-                        covered.push(value_set.clone());
-                    }
-                }
-            }
+            add_to_coverage(covered, value_set, &self.enum_variants);
         }
     }
 
