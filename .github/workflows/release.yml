@@ -179,7 +179,7 @@ jobs:
           path: engine/language_client_typescript/artifacts
 
       - name: Publish to NPM
-        # OIDC for every architecture we release is pinned to `release.yml` as the workflow filename
+        # OIDC is pinned to `release.yml` as the workflow filename for every architecture we release
         run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
 
   # publish-to-rubygems:
