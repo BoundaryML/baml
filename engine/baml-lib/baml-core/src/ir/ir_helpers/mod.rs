@@ -8,7 +8,7 @@ use anyhow::Result;
 use baml_types::{
     ir_type::{TypeGeneric, TypeNonStreaming, UnionConstructor},
     BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel,
-    LiteralValue, TypeIR, TypeValue, UnionType,
+    LiteralValue, TemplateStringRenderer, TypeIR, TypeValue, UnionType,
 };
 use indexmap::IndexMap;
 use internal_baml_ast::ast::{WithIdentifier, WithSpan};
@@ -2021,5 +2021,48 @@ mod subtype_tests {
         let mut expected = TypeIR::recursive_type_alias("JsonValue");
         expected.meta_mut().streaming_behavior.needed = true;
         assert_eq!(ret, expected, "{ret} != {expected}");
+    }
+}
+
+/// Implementation of TemplateStringRenderer for IntermediateRepr.
+/// This allows template_string calls to be resolved during test argument evaluation.
+impl TemplateStringRenderer for IntermediateRepr {
+    fn render_template(&self, name: &str, args: &[serde_json::Value]) -> Result<String> {
+        // Find the template string definition
+        let template = self.find_template_string(name)?;
+        let template_content = template.template();
+        let template_params = template.inputs();
+
+        // Validate argument count
+        if args.len() != template_params.len() {
+            anyhow::bail!(
+                "Template string '{}' expects {} arguments, but {} were provided",
+                name,
+                template_params.len(),
+                args.len()
+            );
+        }
+
+        // Build the arguments map for minijinja
+        let mut args_map = serde_json::Map::new();
+        for (param, arg) in template_params.iter().zip(args.iter()) {
+            args_map.insert(param.name.clone(), arg.clone());
+        }
+
+        // Create a minijinja environment and render the template
+        let mut env = minijinja::Environment::new();
+        env.add_template("__template__", template_content)
+            .map_err(|e| anyhow::anyhow!("Failed to parse template '{}': {}", name, e))?;
+
+        let tmpl = env
+            .get_template("__template__")
+            .map_err(|e| anyhow::anyhow!("Failed to get template '{}': {}", name, e))?;
+
+        let context = minijinja::Value::from_serialize(&args_map);
+        let rendered = tmpl
+            .render(context)
+            .map_err(|e| anyhow::anyhow!("Failed to render template '{}': {}", name, e))?;
+
+        Ok(rendered)
     }
 }
