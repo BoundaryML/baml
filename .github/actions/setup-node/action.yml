@@ -30,9 +30,6 @@ inputs:
     description: 'Path for Turbo cache directory'
     required: false
     default: '.turbo'
-  npm-token:
-    description: 'NPM authentication token'
-    required: false
   node-action-version:
     description: 'Version of actions/setup-node to use (v4 or v6)'
     required: false
