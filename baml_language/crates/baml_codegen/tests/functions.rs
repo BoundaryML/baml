@@ -92,9 +92,7 @@ fn return_function_call() -> anyhow::Result<()> {
         expected: vec![
             (
                 "one",
-                // THIR codegen (efficient):
-                // vec![Instruction::LoadConst(Value::Int(1)), Instruction::Return],
-                // MIR codegen (naive) - same semantics, more instructions:
+                // Stackification codegen:
                 vec![
                     Instruction::LoadConst(Value::Null),
                     Instruction::LoadConst(Value::Int(1)),
@@ -106,25 +104,18 @@ fn return_function_call() -> anyhow::Result<()> {
             ),
             (
                 "main",
-                // THIR codegen (efficient):
-                // vec![
-                //     Instruction::LoadGlobal(Value::function("one")),
-                //     Instruction::Call(0),
-                //     Instruction::Return,
-                // ],
-                // MIR codegen (naive) - same semantics, more instructions:
+                // Stackification codegen - function reference is virtual:
                 vec![
                     Instruction::LoadConst(Value::Null),
-                    Instruction::LoadConst(Value::Null),
+                    // Load function directly (inlined)
                     Instruction::LoadGlobal(Value::function("one")),
-                    Instruction::StoreVar("_1".to_string()),
-                    Instruction::LoadVar("_1".to_string()),
                     Instruction::Call(0),
                     Instruction::StoreVar("_0".to_string()),
-                    Instruction::Jump(3),
+                    // Exit block and return block share same jump target
+                    Instruction::Jump(1),
+                    Instruction::Jump(1),
                     Instruction::LoadVar("_0".to_string()),
                     Instruction::Return,
-                    Instruction::Jump(-2),
                 ],
             ),
         ],
@@ -147,9 +138,7 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
         expected: vec![
             (
                 "two",
-                // THIR codegen (efficient):
-                // vec![Instruction::LoadConst(Value::Int(2)), Instruction::Return],
-                // MIR codegen (naive) - same semantics, more instructions:
+                // Stackification codegen:
                 vec![
                     Instruction::LoadConst(Value::Null),
                     Instruction::LoadConst(Value::Int(2)),
@@ -161,29 +150,21 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
             ),
             (
                 "main",
-                // THIR codegen (efficient):
-                // vec![
-                //     Instruction::LoadGlobal(Value::function("two")),
-                //     Instruction::Call(0),
-                //     Instruction::LoadVar("a".to_string()),
-                //     Instruction::Return,
-                // ],
-                // MIR codegen (naive) - same semantics, more instructions:
+                // Stackification codegen - function reference is virtual, a is real:
                 vec![
-                    Instruction::LoadConst(Value::Null),
-                    Instruction::LoadConst(Value::Null),
-                    Instruction::LoadConst(Value::Null),
+                    Instruction::LoadConst(Value::Null), // _0
+                    Instruction::LoadConst(Value::Null), // a (user variable, used later)
+                    // Load function directly (inlined)
                     Instruction::LoadGlobal(Value::function("two")),
-                    Instruction::StoreVar("_2".to_string()),
-                    Instruction::LoadVar("_2".to_string()),
                     Instruction::Call(0),
                     Instruction::StoreVar("a".to_string()),
-                    Instruction::Jump(3),
-                    Instruction::LoadVar("_0".to_string()),
-                    Instruction::Return,
+                    Instruction::Jump(1),
+                    // Return a
                     Instruction::LoadVar("a".to_string()),
                     Instruction::StoreVar("_0".to_string()),
-                    Instruction::Jump(-4),
+                    Instruction::Jump(1),
+                    Instruction::LoadVar("_0".to_string()),
+                    Instruction::Return,
                 ],
             ),
         ],

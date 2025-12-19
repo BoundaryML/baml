@@ -17,8 +17,6 @@ Function NextFunction (arity: 0, kind: Exec):
      0   LOAD_CONST 0   (null)
      1   LOAD_CONST 1   (parsed)
      2   STORE_VAR 1    (_0)
-     3   JUMP +3        (to 6)
+     3   JUMP +1        (to 4)
      4   LOAD_VAR 1     (_0)
-     5   RETURN         
-     6   LOAD_VAR 1     (_0)
-     7   RETURN
+     5   RETURN

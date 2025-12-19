@@ -29,35 +29,23 @@ fn basic_and() -> anyhow::Result<()> {
             //     Instruction::Call(0),
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // Stackification codegen - LHS inlined, function ref inlined:
             vec![
-                // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate LHS of &&
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::StoreVar("_1".to_string()),
-                Instruction::LoadVar("_1".to_string()),
-                Instruction::JumpIfFalse(10),
-                // Return block
-                Instruction::Jump(3),
-                Instruction::LoadVar("_0".to_string()),
-                Instruction::Return,
-                // Evaluate RHS (short-circuit path)
-                Instruction::LoadGlobal(Value::function("ret_bool")),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::Call(0),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(5),
-                // False branch (short-circuit)
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(4),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::StoreVar("_0".to_string()),
+                Instruction::Jump(6),
+                Instruction::LoadGlobal(Value::function("ret_bool")),
+                Instruction::Call(0),
+                Instruction::StoreVar("_0".to_string()),
                 Instruction::Jump(1),
-                // Control flow
-                Instruction::Jump(-11),
-                Instruction::Jump(-1),
+                Instruction::Jump(1),
+                Instruction::Jump(1),
+                Instruction::LoadVar("_0".to_string()),
+                Instruction::Return,
             ],
         )],
     })
@@ -87,35 +75,23 @@ fn basic_or() -> anyhow::Result<()> {
             //     Instruction::Call(0),
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // Stackification codegen - LHS inlined, function ref inlined:
             vec![
-                // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate LHS of ||
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::StoreVar("_1".to_string()),
-                Instruction::LoadVar("_1".to_string()),
-                Instruction::JumpIfFalse(7),
-                // Return block
-                Instruction::Jump(3),
-                Instruction::LoadVar("_0".to_string()),
-                Instruction::Return,
-                // True branch (short-circuit)
-                Instruction::LoadConst(Value::Bool(true)),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(7),
-                // Evaluate RHS (false path)
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(6),
                 Instruction::LoadGlobal(Value::function("ret_bool")),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::LoadVar("_2".to_string()),
                 Instruction::Call(0),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(2),
-                // Control flow
-                Instruction::Jump(-11),
-                Instruction::Jump(-1),
+                Instruction::Jump(1),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Bool(true)),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::Jump(1),
+                Instruction::Jump(1),
+                Instruction::LoadVar("_0".to_string()),
+                Instruction::Return,
             ],
         )],
     })
@@ -140,24 +116,12 @@ fn basic_add() -> anyhow::Result<()> {
             //     Instruction::LoadVar("a".to_string()),
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // Stackification codegen - all temps inlined, a inlined since single-use:
             vec![
-                // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate 1 + 2
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_3".to_string()),
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::LoadVar("_3".to_string()),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("a".to_string()),
-                // Return a
-                Instruction::LoadVar("a".to_string()),
                 Instruction::StoreVar("_0".to_string()),
                 Instruction::Jump(1),
                 Instruction::LoadVar("_0".to_string()),

@@ -1,0 +1,593 @@
+//! MIR analysis for stackification.
+//!
+//! This module provides:
+//! - CFG predecessor computation
+//! - Dominator tree computation (Cooper-Harvey-Kennedy algorithm)
+//! - Def-use information collection
+//! - Local classification (Virtual vs Real)
+
+use std::collections::{HashMap, HashSet};
+
+use baml_mir::{BlockId, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator};
+
+// ============================================================================
+// Data Structures
+// ============================================================================
+
+/// Where a local is defined.
+#[derive(Clone, Debug)]
+pub struct DefLocation<'db> {
+    pub block: BlockId,
+    pub statement_idx: usize,
+    /// The rvalue that produces this local's value (for inlining).
+    pub rvalue: Rvalue<'db>,
+}
+
+/// Where a local is used.
+#[derive(Clone, Debug)]
+pub struct UseLocation {
+    pub block: BlockId,
+    pub statement_idx: usize,
+}
+
+/// Sentinel value for uses in terminators.
+pub const TERMINATOR_IDX: usize = usize::MAX;
+
+/// Def-use information for a single local.
+#[derive(Clone, Debug)]
+pub struct LocalDefUse<'db> {
+    pub local: Local,
+    /// Definition site (None for parameters, which are defined at entry).
+    pub def: Option<DefLocation<'db>>,
+    /// All use sites.
+    pub uses: Vec<UseLocation>,
+}
+
+/// Classification of a local variable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalClassification {
+    /// Return value (_0) - always real.
+    ReturnValue,
+    /// Function parameter - always real.
+    Parameter,
+    /// Multi-use or cross-block local - needs stack slot.
+    Real,
+    /// Single-use temporary that can be inlined.
+    Virtual,
+}
+
+/// Dominator tree.
+#[derive(Debug)]
+pub struct Dominators {
+    /// Immediate dominator of each block (entry has None).
+    pub idom: HashMap<BlockId, Option<BlockId>>,
+    /// Reverse postorder indices for faster intersection.
+    rpo_idx: HashMap<BlockId, usize>,
+}
+
+impl Dominators {
+    /// Check if `dominator` dominates `block`.
+    pub fn dominates(&self, dominator: BlockId, block: BlockId) -> bool {
+        if dominator == block {
+            return true;
+        }
+
+        let mut current = block;
+        while let Some(Some(idom)) = self.idom.get(&current) {
+            if *idom == dominator {
+                return true;
+            }
+            current = *idom;
+        }
+
+        false
+    }
+}
+
+/// Complete analysis result for a function.
+#[derive(Debug)]
+pub struct AnalysisResult<'db> {
+    /// Classification for each local.
+    pub classifications: HashMap<Local, LocalClassification>,
+    /// Def-use information for each local.
+    pub def_use: HashMap<Local, LocalDefUse<'db>>,
+    /// Dominator tree.
+    pub dominators: Dominators,
+    /// Reverse postorder of blocks (for iteration).
+    pub rpo: Vec<BlockId>,
+    /// Predecessor map for each block.
+    pub predecessors: HashMap<BlockId, Vec<BlockId>>,
+}
+
+// ============================================================================
+// Analysis Entry Point
+// ============================================================================
+
+impl<'db> AnalysisResult<'db> {
+    /// Analyze a MIR function and produce classification results.
+    pub fn analyze(mir: &MirFunction<'db>) -> Self {
+        // Step 1: Build predecessor map
+        let predecessors = build_predecessors(mir);
+
+        // Step 2: Compute reverse postorder
+        let rpo = compute_rpo(mir);
+
+        // Step 3: Compute dominators
+        let dominators = compute_dominators(mir, &rpo, &predecessors);
+
+        // Step 4: Collect def-use information
+        let def_use = collect_def_use(mir);
+
+        // Step 5: Classify each local
+        let classifications = classify_locals(mir, &def_use, &dominators);
+
+        Self {
+            classifications,
+            def_use,
+            dominators,
+            rpo,
+            predecessors,
+        }
+    }
+}
+
+// ============================================================================
+// CFG Analysis
+// ============================================================================
+
+/// Build predecessor map for all blocks.
+fn build_predecessors(mir: &MirFunction<'_>) -> HashMap<BlockId, Vec<BlockId>> {
+    let mut preds: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
+
+    // Initialize with empty vecs
+    for block in &mir.blocks {
+        preds.insert(block.id, Vec::new());
+    }
+
+    // Collect predecessor edges from terminators
+    for block in &mir.blocks {
+        if let Some(term) = &block.terminator {
+            for succ in term.successors() {
+                if let Some(pred_list) = preds.get_mut(&succ) {
+                    pred_list.push(block.id);
+                }
+            }
+        }
+    }
+
+    preds
+}
+
+/// Compute reverse postorder (depth-first, postorder reversed).
+fn compute_rpo(mir: &MirFunction<'_>) -> Vec<BlockId> {
+    let mut visited = HashSet::new();
+    let mut postorder = Vec::new();
+
+    fn dfs(
+        mir: &MirFunction<'_>,
+        block_id: BlockId,
+        visited: &mut HashSet<BlockId>,
+        postorder: &mut Vec<BlockId>,
+    ) {
+        if visited.contains(&block_id) {
+            return;
+        }
+        visited.insert(block_id);
+
+        let block = mir.block(block_id);
+        if let Some(term) = &block.terminator {
+            for succ in term.successors() {
+                dfs(mir, succ, visited, postorder);
+            }
+        }
+        postorder.push(block_id);
+    }
+
+    dfs(mir, mir.entry, &mut visited, &mut postorder);
+    postorder.reverse();
+    postorder
+}
+
+// ============================================================================
+// Dominator Computation (Cooper-Harvey-Kennedy Algorithm)
+// ============================================================================
+
+/// Compute dominators using the Cooper-Harvey-Kennedy algorithm.
+///
+/// This is a simple, efficient iterative algorithm that computes immediate
+/// dominators by repeatedly intersecting dominator sets until convergence.
+fn compute_dominators(
+    mir: &MirFunction<'_>,
+    rpo: &[BlockId],
+    preds: &HashMap<BlockId, Vec<BlockId>>,
+) -> Dominators {
+    // Map BlockId to RPO index for faster lookup
+    let rpo_idx: HashMap<BlockId, usize> = rpo.iter().enumerate().map(|(i, &b)| (b, i)).collect();
+
+    let mut idom: HashMap<BlockId, Option<BlockId>> = HashMap::new();
+
+    // Initialize: entry dominates itself (represented as None for "no parent")
+    idom.insert(mir.entry, None);
+
+    let mut changed = true;
+    while changed {
+        changed = false;
+
+        // Skip entry (index 0)
+        for &block in &rpo[1..] {
+            let predecessors = &preds[&block];
+
+            // Find first predecessor with defined idom
+            let mut new_idom = None;
+            for &p in predecessors {
+                if idom.contains_key(&p) {
+                    new_idom = Some(p);
+                    break;
+                }
+            }
+
+            // Intersect with remaining predecessors
+            if let Some(mut new_idom_val) = new_idom {
+                for &p in predecessors {
+                    if idom.contains_key(&p) && p != new_idom_val {
+                        // Intersect
+                        new_idom_val = intersect(&rpo_idx, &idom, p, new_idom_val);
+                    }
+                }
+
+                let old = idom.get(&block);
+                if old != Some(&Some(new_idom_val)) {
+                    idom.insert(block, Some(new_idom_val));
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    Dominators { idom, rpo_idx }
+}
+
+/// Intersect two dominator chains to find their common dominator.
+fn intersect(
+    rpo_idx: &HashMap<BlockId, usize>,
+    idom: &HashMap<BlockId, Option<BlockId>>,
+    mut b1: BlockId,
+    mut b2: BlockId,
+) -> BlockId {
+    while b1 != b2 {
+        while rpo_idx[&b1] > rpo_idx[&b2] {
+            b1 = idom[&b1].expect("should have idom");
+        }
+        while rpo_idx[&b2] > rpo_idx[&b1] {
+            b2 = idom[&b2].expect("should have idom");
+        }
+    }
+    b1
+}
+
+// ============================================================================
+// Def-Use Collection
+// ============================================================================
+
+/// Collect def-use information for all locals.
+fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'db>> {
+    let mut def_use: HashMap<Local, LocalDefUse<'db>> = HashMap::new();
+
+    // Initialize for all locals
+    for (idx, _) in mir.locals.iter().enumerate() {
+        let local = Local(idx);
+        def_use.insert(
+            local,
+            LocalDefUse {
+                local,
+                def: None,
+                uses: Vec::new(),
+            },
+        );
+    }
+
+    // Walk all blocks
+    for block in &mir.blocks {
+        // Walk statements
+        for (stmt_idx, stmt) in block.statements.iter().enumerate() {
+            match &stmt.kind {
+                StatementKind::Assign { destination, value } => {
+                    // Record definition
+                    if let Place::Local(local) = destination {
+                        if let Some(du) = def_use.get_mut(local) {
+                            du.def = Some(DefLocation {
+                                block: block.id,
+                                statement_idx: stmt_idx,
+                                rvalue: value.clone(),
+                            });
+                        }
+                    }
+
+                    // Record uses in the rvalue
+                    collect_uses_in_rvalue(value, block.id, stmt_idx, &mut def_use);
+                }
+                StatementKind::Drop(place) => {
+                    collect_uses_in_place(place, block.id, stmt_idx, &mut def_use);
+                }
+                StatementKind::Nop => {}
+            }
+        }
+
+        // Walk terminator
+        if let Some(term) = &block.terminator {
+            collect_uses_in_terminator(term, block.id, &mut def_use);
+        }
+    }
+
+    def_use
+}
+
+/// Collect uses in an rvalue.
+fn collect_uses_in_rvalue<'db>(
+    rvalue: &Rvalue<'db>,
+    block: BlockId,
+    stmt_idx: usize,
+    def_use: &mut HashMap<Local, LocalDefUse<'db>>,
+) {
+    match rvalue {
+        Rvalue::Use(operand) => {
+            collect_uses_in_operand(operand, block, stmt_idx, def_use);
+        }
+        Rvalue::BinaryOp { left, right, .. } => {
+            collect_uses_in_operand(left, block, stmt_idx, def_use);
+            collect_uses_in_operand(right, block, stmt_idx, def_use);
+        }
+        Rvalue::UnaryOp { operand, .. } => {
+            collect_uses_in_operand(operand, block, stmt_idx, def_use);
+        }
+        Rvalue::Array(elements) => {
+            for elem in elements {
+                collect_uses_in_operand(elem, block, stmt_idx, def_use);
+            }
+        }
+        Rvalue::Aggregate { fields, .. } => {
+            for field in fields {
+                collect_uses_in_operand(field, block, stmt_idx, def_use);
+            }
+        }
+        Rvalue::Discriminant(place) | Rvalue::Len(place) => {
+            collect_uses_in_place(place, block, stmt_idx, def_use);
+        }
+    }
+}
+
+/// Collect uses in an operand.
+fn collect_uses_in_operand<'db>(
+    operand: &Operand<'db>,
+    block: BlockId,
+    stmt_idx: usize,
+    def_use: &mut HashMap<Local, LocalDefUse<'db>>,
+) {
+    match operand {
+        Operand::Copy(place) | Operand::Move(place) => {
+            collect_uses_in_place(place, block, stmt_idx, def_use);
+        }
+        Operand::Constant(_) => {}
+    }
+}
+
+/// Collect uses in a place.
+fn collect_uses_in_place<'db>(
+    place: &Place,
+    block: BlockId,
+    stmt_idx: usize,
+    def_use: &mut HashMap<Local, LocalDefUse<'db>>,
+) {
+    // The base local is used
+    let base = place.base_local();
+    if let Some(du) = def_use.get_mut(&base) {
+        du.uses.push(UseLocation {
+            block,
+            statement_idx: stmt_idx,
+        });
+    }
+
+    // For index places, the index local is also used
+    if let Place::Index { index, .. } = place {
+        if let Some(du) = def_use.get_mut(index) {
+            du.uses.push(UseLocation {
+                block,
+                statement_idx: stmt_idx,
+            });
+        }
+    }
+}
+
+/// Collect uses in a terminator.
+fn collect_uses_in_terminator<'db>(
+    term: &Terminator<'db>,
+    block: BlockId,
+    def_use: &mut HashMap<Local, LocalDefUse<'db>>,
+) {
+    match term {
+        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
+        Terminator::Branch { condition, .. } => {
+            collect_uses_in_operand(condition, block, TERMINATOR_IDX, def_use);
+        }
+        Terminator::Switch { discriminant, .. } => {
+            collect_uses_in_operand(discriminant, block, TERMINATOR_IDX, def_use);
+        }
+        Terminator::Call { callee, args, .. } => {
+            collect_uses_in_operand(callee, block, TERMINATOR_IDX, def_use);
+            for arg in args {
+                collect_uses_in_operand(arg, block, TERMINATOR_IDX, def_use);
+            }
+        }
+        Terminator::DispatchFuture { callee, args, .. } => {
+            collect_uses_in_operand(callee, block, TERMINATOR_IDX, def_use);
+            for arg in args {
+                collect_uses_in_operand(arg, block, TERMINATOR_IDX, def_use);
+            }
+        }
+        Terminator::Await { future, .. } => {
+            collect_uses_in_place(future, block, TERMINATOR_IDX, def_use);
+        }
+    }
+}
+
+// ============================================================================
+// Local Classification
+// ============================================================================
+
+/// Classify each local as Virtual or Real.
+fn classify_locals<'db>(
+    mir: &MirFunction<'db>,
+    def_use: &HashMap<Local, LocalDefUse<'db>>,
+    dominators: &Dominators,
+) -> HashMap<Local, LocalClassification> {
+    let mut classifications = HashMap::new();
+
+    for (idx, _) in mir.locals.iter().enumerate() {
+        let local = Local(idx);
+        let du = &def_use[&local];
+
+        let classification = if idx == 0 {
+            // _0 is always real (return value)
+            LocalClassification::ReturnValue
+        } else if idx <= mir.arity {
+            // Parameters are always real
+            LocalClassification::Parameter
+        } else if can_be_virtual(local, du, dominators, mir) {
+            LocalClassification::Virtual
+        } else {
+            LocalClassification::Real
+        };
+
+        classifications.insert(local, classification);
+    }
+
+    classifications
+}
+
+/// Check if a local can be classified as Virtual.
+fn can_be_virtual<'db>(
+    _local: Local,
+    du: &LocalDefUse<'db>,
+    dominators: &Dominators,
+    mir: &MirFunction<'db>,
+) -> bool {
+    // Must have exactly one definition
+    let Some(def) = &du.def else {
+        return false;
+    };
+
+    // Must have exactly one use for simple virtual inlining
+    if du.uses.len() != 1 {
+        return false;
+    }
+
+    let use_loc = &du.uses[0];
+
+    // Definition must dominate use
+    if !dominators.dominates(def.block, use_loc.block) {
+        return false;
+    }
+
+    // If in same block, use must come after def
+    if def.block == use_loc.block {
+        // Handle terminator uses (TERMINATOR_IDX)
+        if use_loc.statement_idx == TERMINATOR_IDX {
+            // Terminator always comes after all statements, so this is fine
+            // But check for side effects between def and end of block
+            if has_side_effects_between(
+                mir,
+                def.block,
+                def.statement_idx,
+                mir.block(def.block).statements.len(),
+            ) {
+                return false;
+            }
+        } else if use_loc.statement_idx <= def.statement_idx {
+            return false;
+        } else {
+            // Check for intervening side effects
+            if has_side_effects_between(mir, def.block, def.statement_idx, use_loc.statement_idx) {
+                return false;
+            }
+        }
+    }
+
+    // Check if the rvalue is inlinable
+    is_inlinable_rvalue(&def.rvalue)
+}
+
+/// Check for side effects between two statement indices in a block.
+fn has_side_effects_between(
+    mir: &MirFunction<'_>,
+    block_id: BlockId,
+    start: usize,
+    end: usize,
+) -> bool {
+    let block = mir.block(block_id);
+
+    for stmt_idx in (start + 1)..end {
+        let stmt = &block.statements[stmt_idx];
+        if has_side_effect(&stmt.kind) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Check if a statement has side effects that would prevent inlining.
+fn has_side_effect(kind: &StatementKind<'_>) -> bool {
+    match kind {
+        StatementKind::Assign { value, .. } => {
+            // Function calls have side effects
+            if let Rvalue::Use(Operand::Constant(baml_mir::Constant::Function(_))) = value {
+                return true;
+            }
+            false
+        }
+        StatementKind::Drop(_) => true,
+        StatementKind::Nop => false,
+    }
+}
+
+/// Check if an rvalue can be inlined.
+fn is_inlinable_rvalue(_rvalue: &Rvalue<'_>) -> bool {
+    // All current rvalues can be inlined
+    // May want to exclude complex aggregates in the future
+    true
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dominates_entry() {
+        let mut idom = HashMap::new();
+        idom.insert(BlockId(0), None);
+        idom.insert(BlockId(1), Some(BlockId(0)));
+        idom.insert(BlockId(2), Some(BlockId(1)));
+
+        let mut rpo_idx = HashMap::new();
+        rpo_idx.insert(BlockId(0), 0);
+        rpo_idx.insert(BlockId(1), 1);
+        rpo_idx.insert(BlockId(2), 2);
+
+        let doms = Dominators { idom, rpo_idx };
+
+        // Entry dominates everything
+        assert!(doms.dominates(BlockId(0), BlockId(0)));
+        assert!(doms.dominates(BlockId(0), BlockId(1)));
+        assert!(doms.dominates(BlockId(0), BlockId(2)));
+
+        // bb1 dominates bb2
+        assert!(doms.dominates(BlockId(1), BlockId(2)));
+
+        // bb2 doesn't dominate bb1
+        assert!(!doms.dominates(BlockId(2), BlockId(1)));
+    }
+}

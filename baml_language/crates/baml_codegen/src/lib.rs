@@ -18,8 +18,14 @@
 //! - **Local slot allocation**: Maps MIR locals to VM stack slots
 //! - **Block emission**: Emits bytecode for each basic block
 //! - **Jump patching**: Resolves jump targets after all blocks are emitted
+//!
+//! # Codegen Variants
+//!
+//! - **`mir_codegen`**: Naive codegen (all locals get stack slots)
+//! - **`mir_codegen_v2`**: Stackification codegen (virtual locals inlined)
 
 mod mir_codegen;
+mod mir_codegen_v2;
 
 use std::collections::HashMap;
 
@@ -191,14 +197,14 @@ pub fn compile_files(db: &dyn baml_mir::Db, files: &[SourceFile]) -> Program {
                         let mir =
                             baml_mir::lower_function(&signature, &body, &inference, db, &classes);
 
-                        // Compile MIR to bytecode
-                        let ctx = mir_codegen::MirCodegenContext {
+                        // Compile MIR to bytecode using stackification codegen
+                        let ctx = mir_codegen_v2::MirCodegenContext {
                             globals: &globals,
                             classes: &classes,
                             class_object_indices: &class_object_indices,
                             objects: &mut program.objects,
                         };
-                        mir_codegen::compile_mir_function(&mir, ctx)
+                        mir_codegen_v2::compile_mir_function(&mir, ctx)
                     }
                 };
 

@@ -16,40 +16,20 @@ fn array_constructor() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::LoadConst(Value::Int(2)),
-            //     Instruction::LoadConst(Value::Int(3)),
-            //     Instruction::AllocArray(3),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // Stackification codegen - virtual locals inlined:
             vec![
-                // Pre-allocate locals with null
+                // Pre-allocate only real locals (_0 return value)
                 Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate array elements to temps
+                // Array elements pushed directly (temps are virtual)
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_3".to_string()),
                 Instruction::LoadConst(Value::Int(3)),
-                Instruction::StoreVar("_4".to_string()),
-                // Load temps and create array
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::LoadVar("_4".to_string()),
                 Instruction::AllocArray(3),
-                Instruction::StoreVar("a".to_string()),
-                // Return value
-                Instruction::LoadVar("a".to_string()),
+                // Store to _0 (return value)
                 Instruction::StoreVar("_0".to_string()),
+                // Goto exit block
                 Instruction::Jump(1),
+                // Return
                 Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
@@ -67,36 +47,20 @@ fn return_array_literal() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::LoadConst(Value::Int(2)),
-            //     Instruction::LoadConst(Value::Int(3)),
-            //     Instruction::AllocArray(3),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // Stackification codegen - virtual locals inlined:
             vec![
-                // Pre-allocate locals with null
+                // Pre-allocate only real locals (_0 return value)
                 Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate array elements to temps
+                // Array elements pushed directly (temps are virtual)
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_1".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadConst(Value::Int(3)),
-                Instruction::StoreVar("_3".to_string()),
-                // Load temps and create array
-                Instruction::LoadVar("_1".to_string()),
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::LoadVar("_3".to_string()),
                 Instruction::AllocArray(3),
+                // Store to _0 (return value)
                 Instruction::StoreVar("_0".to_string()),
-                // Return
+                // Goto exit block
                 Instruction::Jump(1),
+                // Return
                 Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],

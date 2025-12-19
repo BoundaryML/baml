@@ -8,24 +8,15 @@ Objects: 35
 Globals: 29
 
 Function boolArray (arity: 0, kind: Exec):
-     0    LOAD_CONST 0    (null)
-     1    LOAD_CONST 0    (null)
-     2    LOAD_CONST 0    (null)
-     3    LOAD_CONST 0    (null)
-     4    LOAD_CONST 1    (true)
-     5    STORE_VAR 2     (_1)
-     6    LOAD_CONST 2    (false)
-     7    STORE_VAR 3     (_2)
-     8    LOAD_CONST 1    (true)
-     9    STORE_VAR 4     (_3)
-     10   LOAD_VAR 2      (_1)
-     11   LOAD_VAR 3      (_2)
-     12   LOAD_VAR 4      (_3)
-     13   ALLOC_ARRAY 3   
-     14   STORE_VAR 1     (_0)
-     15   JUMP +1         (to 16)
-     16   LOAD_VAR 1      (_0)
-     17   RETURN          
+     0   LOAD_CONST 0    (null)
+     1   LOAD_CONST 1    (true)
+     2   LOAD_CONST 2    (false)
+     3   LOAD_CONST 1    (true)
+     4   ALLOC_ARRAY 3   
+     5   STORE_VAR 1     (_0)
+     6   JUMP +1         (to 7)
+     7   LOAD_VAR 1      (_0)
+     8   RETURN          
 
 Function boolValues (arity: 0, kind: Exec):
      0   LOAD_CONST 0   (null)
@@ -36,24 +27,15 @@ Function boolValues (arity: 0, kind: Exec):
      5   RETURN         
 
 Function floatArray (arity: 0, kind: Exec):
-     0    LOAD_CONST 0    (null)
-     1    LOAD_CONST 0    (null)
-     2    LOAD_CONST 0    (null)
-     3    LOAD_CONST 0    (null)
-     4    LOAD_CONST 1    (1)
-     5    STORE_VAR 2     (_1)
-     6    LOAD_CONST 2    (2)
-     7    STORE_VAR 3     (_2)
-     8    LOAD_CONST 3    (3)
-     9    STORE_VAR 4     (_3)
-     10   LOAD_VAR 2      (_1)
-     11   LOAD_VAR 3      (_2)
-     12   LOAD_VAR 4      (_3)
-     13   ALLOC_ARRAY 3   
-     14   STORE_VAR 1     (_0)
-     15   JUMP +1         (to 16)
-     16   LOAD_VAR 1      (_0)
-     17   RETURN          
+     0   LOAD_CONST 0    (null)
+     1   LOAD_CONST 1    (1)
+     2   LOAD_CONST 2    (2)
+     3   LOAD_CONST 3    (3)
+     4   ALLOC_ARRAY 3   
+     5   STORE_VAR 1     (_0)
+     6   JUMP +1         (to 7)
+     7   LOAD_VAR 1      (_0)
+     8   RETURN          
 
 Function floatValues (arity: 0, kind: Exec):
      0   LOAD_CONST 0   (null)
@@ -64,24 +46,15 @@ Function floatValues (arity: 0, kind: Exec):
      5   RETURN         
 
 Function intArray (arity: 0, kind: Exec):
-     0    LOAD_CONST 0    (null)
-     1    LOAD_CONST 0    (null)
-     2    LOAD_CONST 0    (null)
-     3    LOAD_CONST 0    (null)
-     4    LOAD_CONST 1    (1)
-     5    STORE_VAR 2     (_1)
-     6    LOAD_CONST 2    (2)
-     7    STORE_VAR 3     (_2)
-     8    LOAD_CONST 3    (3)
-     9    STORE_VAR 4     (_3)
-     10   LOAD_VAR 2      (_1)
-     11   LOAD_VAR 3      (_2)
-     12   LOAD_VAR 4      (_3)
-     13   ALLOC_ARRAY 3   
-     14   STORE_VAR 1     (_0)
-     15   JUMP +1         (to 16)
-     16   LOAD_VAR 1      (_0)
-     17   RETURN          
+     0   LOAD_CONST 0    (null)
+     1   LOAD_CONST 1    (1)
+     2   LOAD_CONST 2    (2)
+     3   LOAD_CONST 3    (3)
+     4   ALLOC_ARRAY 3   
+     5   STORE_VAR 1     (_0)
+     6   JUMP +1         (to 7)
+     7   LOAD_VAR 1      (_0)
+     8   RETURN          
 
 Function intValues (arity: 0, kind: Exec):
      0   LOAD_CONST 0   (null)
@@ -93,99 +66,57 @@ Function intValues (arity: 0, kind: Exec):
 
 Function point (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (null)
-     1    LOAD_CONST 0       (null)
-     2    LOAD_CONST 0       (null)
+     1    ALLOC_INSTANCE 2   (<class Point>)
+     2    COPY 0             
      3    LOAD_CONST 1       (1)
-     4    STORE_VAR 2        (_1)
-     5    LOAD_CONST 2       (2)
-     6    STORE_VAR 3        (_2)
-     7    ALLOC_INSTANCE 2   (<class Point>)
-     8    COPY 0             
-     9    LOAD_VAR 2         (_1)
-     10   STORE_FIELD 0      
-     11   COPY 0             
-     12   LOAD_VAR 3         (_2)
-     13   STORE_FIELD 1      
-     14   STORE_VAR 1        (_0)
-     15   JUMP +1            (to 16)
-     16   LOAD_VAR 1         (_0)
-     17   RETURN             
+     4    STORE_FIELD 0      
+     5    COPY 0             
+     6    LOAD_CONST 2       (2)
+     7    STORE_FIELD 1      
+     8    STORE_VAR 1        (_0)
+     9    JUMP +1            (to 10)
+     10   LOAD_VAR 1         (_0)
+     11   RETURN             
 
 Function pointArray (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (null)
-     1    LOAD_CONST 0       (null)
-     2    LOAD_CONST 0       (null)
-     3    LOAD_CONST 0       (null)
-     4    LOAD_CONST 0       (null)
-     5    LOAD_CONST 0       (null)
-     6    LOAD_CONST 0       (null)
-     7    LOAD_CONST 0       (null)
-     8    LOAD_CONST 0       (null)
-     9    LOAD_CONST 0       (null)
-     10   LOAD_CONST 1       (1)
-     11   STORE_VAR 3        (_2)
-     12   LOAD_CONST 2       (2)
-     13   STORE_VAR 4        (_3)
-     14   ALLOC_INSTANCE 2   (<class Point>)
-     15   COPY 0             
-     16   LOAD_VAR 3         (_2)
-     17   STORE_FIELD 0      
-     18   COPY 0             
-     19   LOAD_VAR 4         (_3)
-     20   STORE_FIELD 1      
-     21   STORE_VAR 2        (_1)
-     22   LOAD_CONST 3       (3)
-     23   STORE_VAR 6        (_5)
-     24   LOAD_CONST 4       (4)
-     25   STORE_VAR 7        (_6)
-     26   ALLOC_INSTANCE 2   (<class Point>)
-     27   COPY 0             
-     28   LOAD_VAR 6         (_5)
-     29   STORE_FIELD 0      
-     30   COPY 0             
-     31   LOAD_VAR 7         (_6)
-     32   STORE_FIELD 1      
-     33   STORE_VAR 5        (_4)
-     34   LOAD_CONST 5       (5)
-     35   STORE_VAR 9        (_8)
-     36   LOAD_CONST 6       (6)
-     37   STORE_VAR 10       (_9)
-     38   ALLOC_INSTANCE 2   (<class Point>)
-     39   COPY 0             
-     40   LOAD_VAR 9         (_8)
-     41   STORE_FIELD 0      
-     42   COPY 0             
-     43   LOAD_VAR 10        (_9)
-     44   STORE_FIELD 1      
-     45   STORE_VAR 8        (_7)
-     46   LOAD_VAR 2         (_1)
-     47   LOAD_VAR 5         (_4)
-     48   LOAD_VAR 8         (_7)
-     49   ALLOC_ARRAY 3      
-     50   STORE_VAR 1        (_0)
-     51   JUMP +1            (to 52)
-     52   LOAD_VAR 1         (_0)
-     53   RETURN             
+     1    ALLOC_INSTANCE 2   (<class Point>)
+     2    COPY 0             
+     3    LOAD_CONST 1       (1)
+     4    STORE_FIELD 0      
+     5    COPY 0             
+     6    LOAD_CONST 2       (2)
+     7    STORE_FIELD 1      
+     8    ALLOC_INSTANCE 2   (<class Point>)
+     9    COPY 0             
+     10   LOAD_CONST 3       (3)
+     11   STORE_FIELD 0      
+     12   COPY 0             
+     13   LOAD_CONST 4       (4)
+     14   STORE_FIELD 1      
+     15   ALLOC_INSTANCE 2   (<class Point>)
+     16   COPY 0             
+     17   LOAD_CONST 5       (5)
+     18   STORE_FIELD 0      
+     19   COPY 0             
+     20   LOAD_CONST 6       (6)
+     21   STORE_FIELD 1      
+     22   ALLOC_ARRAY 3      
+     23   STORE_VAR 1        (_0)
+     24   JUMP +1            (to 25)
+     25   LOAD_VAR 1         (_0)
+     26   RETURN             
 
 Function stringArray (arity: 0, kind: Exec):
-     0    LOAD_CONST 0    (null)
-     1    LOAD_CONST 0    (null)
-     2    LOAD_CONST 0    (null)
-     3    LOAD_CONST 0    (null)
-     4    LOAD_CONST 1    (hello)
-     5    STORE_VAR 2     (_1)
-     6    LOAD_CONST 2    (world)
-     7    STORE_VAR 3     (_2)
-     8    LOAD_CONST 3    (test)
-     9    STORE_VAR 4     (_3)
-     10   LOAD_VAR 2      (_1)
-     11   LOAD_VAR 3      (_2)
-     12   LOAD_VAR 4      (_3)
-     13   ALLOC_ARRAY 3   
-     14   STORE_VAR 1     (_0)
-     15   JUMP +1         (to 16)
-     16   LOAD_VAR 1      (_0)
-     17   RETURN          
+     0   LOAD_CONST 0    (null)
+     1   LOAD_CONST 1    (hello)
+     2   LOAD_CONST 2    (world)
+     3   LOAD_CONST 3    (test)
+     4   ALLOC_ARRAY 3   
+     5   STORE_VAR 1     (_0)
+     6   JUMP +1         (to 7)
+     7   LOAD_VAR 1      (_0)
+     8   RETURN          
 
 Function stringValues (arity: 0, kind: Exec):
      0   LOAD_CONST 0   (null)
@@ -197,44 +128,26 @@ Function stringValues (arity: 0, kind: Exec):
 
 Function vec2d (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (null)
-     1    LOAD_CONST 0       (null)
-     2    LOAD_CONST 0       (null)
-     3    LOAD_CONST 0       (null)
-     4    LOAD_CONST 0       (null)
-     5    LOAD_CONST 0       (null)
-     6    LOAD_CONST 0       (null)
-     7    LOAD_CONST 1       (1)
-     8    STORE_VAR 3        (_2)
-     9    LOAD_CONST 2       (2)
-     10   STORE_VAR 4        (_3)
-     11   ALLOC_INSTANCE 2   (<class Point>)
-     12   COPY 0             
-     13   LOAD_VAR 3         (_2)
-     14   STORE_FIELD 0      
-     15   COPY 0             
-     16   LOAD_VAR 4         (_3)
-     17   STORE_FIELD 1      
-     18   STORE_VAR 2        (_1)
-     19   LOAD_CONST 3       (3)
-     20   STORE_VAR 6        (_5)
-     21   LOAD_CONST 4       (4)
-     22   STORE_VAR 7        (_6)
-     23   ALLOC_INSTANCE 2   (<class Point>)
-     24   COPY 0             
-     25   LOAD_VAR 6         (_5)
-     26   STORE_FIELD 0      
-     27   COPY 0             
-     28   LOAD_VAR 7         (_6)
-     29   STORE_FIELD 1      
-     30   STORE_VAR 5        (_4)
-     31   ALLOC_INSTANCE 1   (<class Vec2D>)
-     32   COPY 0             
-     33   LOAD_VAR 2         (_1)
-     34   STORE_FIELD 0      
-     35   COPY 0             
-     36   LOAD_VAR 5         (_4)
-     37   STORE_FIELD 1      
-     38   STORE_VAR 1        (_0)
-     39   JUMP +1            (to 40)
-     40   LOAD_VAR 1         (_0)
-     41   RETURN
+     1    ALLOC_INSTANCE 1   (<class Vec2D>)
+     2    COPY 0             
+     3    ALLOC_INSTANCE 2   (<class Point>)
+     4    COPY 0             
+     5    LOAD_CONST 1       (1)
+     6    STORE_FIELD 0      
+     7    COPY 0             
+     8    LOAD_CONST 2       (2)
+     9    STORE_FIELD 1      
+     10   STORE_FIELD 0      
+     11   COPY 0             
+     12   ALLOC_INSTANCE 2   (<class Point>)
+     13   COPY 0             
+     14   LOAD_CONST 3       (3)
+     15   STORE_FIELD 0      
+     16   COPY 0             
+     17   LOAD_CONST 4       (4)
+     18   STORE_FIELD 1      
+     19   STORE_FIELD 1      
+     20   STORE_VAR 1        (_0)
+     21   JUMP +1            (to 22)
+     22   LOAD_VAR 1         (_0)
+     23   RETURN
