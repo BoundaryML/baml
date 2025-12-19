@@ -23,7 +23,8 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          node-action-version: 'v6'
+          node-action-version: v6
+          node-version: latest
 
       - name: Check npm CLI version
         run: npm --version
