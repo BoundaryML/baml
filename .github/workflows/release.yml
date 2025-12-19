@@ -36,4 +36,4 @@ jobs:
 
       - name: Publish to NPM
         # Uses OIDC authentication via trusted publishers
-        run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
+        run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks --tag 0.215.0
