@@ -230,7 +230,7 @@ fn lower_method_signature(
                 } else {
                     param_node
                         .ty()
-                        .map(|t| lower_type_ref(&t))
+                        .map(|t| TypeRef::from_ast(&t))
                         .unwrap_or(TypeRef::Unknown)
                 };
 
@@ -245,7 +245,7 @@ fn lower_method_signature(
     // Extract return type
     let return_type = method_node
         .return_type()
-        .map(|t| lower_type_ref(&t))
+        .map(|t| TypeRef::from_ast(&t))
         .unwrap_or(TypeRef::Unknown);
 
     Arc::new(FunctionSignature {
@@ -506,7 +506,7 @@ fn lower_class(node: &SyntaxNode) -> Option<Class> {
         if let Some(field_name) = field_node.name() {
             let type_ref = field_node
                 .ty()
-                .map(|t| lower_type_ref(&t))
+                .map(|t| TypeRef::from_ast(&t))
                 .unwrap_or(TypeRef::Unknown);
 
             fields.push(crate::Field {
@@ -608,7 +608,7 @@ fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
     // Extract type using AST accessor
     let type_ref = alias
         .ty()
-        .map(|t| lower_type_ref(&t))
+        .map(|t| TypeRef::from_ast(&t))
         .unwrap_or(TypeRef::Unknown);
 
     Some(TypeAlias { name, type_ref })
@@ -663,68 +663,6 @@ fn lower_test(node: &SyntaxNode) -> Option<Test> {
         name,
         function_refs,
     })
-}
-
-/// Lower a type reference from CST.
-///
-/// This function properly parses complex types including:
-/// - Primitives: int, string, bool, etc.
-/// - Named types: User, MyClass
-/// - Optional types: string?
-/// - List types: string[]
-/// - Union types: Success | Failure
-/// - String literal types: "user" | "assistant"
-pub fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
-    use baml_syntax::SyntaxKind;
-    use rowan::NodeOrToken;
-
-    let syntax = node.syntax();
-
-    // Collect all the parts of the type expression
-    // For union types, we'll find PIPE tokens that separate the members
-    let mut parts: Vec<String> = Vec::new();
-    let mut current_part = String::new();
-    let mut has_pipe = false;
-
-    for child in syntax.children_with_tokens() {
-        match child {
-            NodeOrToken::Token(token) => {
-                if token.kind() == SyntaxKind::PIPE {
-                    // This is a union separator - save the current part and start a new one
-                    let trimmed = current_part.trim().to_string();
-                    if !trimmed.is_empty() {
-                        parts.push(trimmed);
-                    }
-                    current_part = String::new();
-                    has_pipe = true;
-                } else {
-                    // Append token text to current part
-                    current_part.push_str(token.text());
-                }
-            }
-            NodeOrToken::Node(child_node) => {
-                // For nested nodes (like TYPE_ARGS), include their full text
-                current_part.push_str(&child_node.text().to_string());
-            }
-        }
-    }
-
-    // Include the last part
-    let trimmed = current_part.trim().to_string();
-    if !trimmed.is_empty() {
-        parts.push(trimmed);
-    }
-
-    // If we found pipes, this is a union type
-    if has_pipe && parts.len() > 1 {
-        let members: Vec<TypeRef> = parts.iter().map(|p| TypeRef::from_type_text(p)).collect();
-        return TypeRef::Union(members);
-    }
-
-    // Otherwise, lower as a single type
-    let text = syntax.text().to_string();
-    let text = text.trim();
-    TypeRef::from_type_text(text)
 }
 
 //

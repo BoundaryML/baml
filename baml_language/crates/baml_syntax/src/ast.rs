@@ -67,6 +67,57 @@ ast_node!(ConfigItem, CONFIG_ITEM);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
+
+impl TypeExpr {
+    /// Check if this is a union type (contains PIPE separators).
+    ///
+    /// Returns `true` for types like `Success | Failure` or `"user" | "assistant"`.
+    pub fn is_union(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::PIPE)
+    }
+
+    /// Get the text parts of this type expression, split by PIPE separators.
+    ///
+    /// For union types like `A | B | C`, returns `["A", "B", "C"]`.
+    /// For non-union types like `string?`, returns `["string?"]`.
+    ///
+    /// Each part is trimmed of surrounding whitespace.
+    pub fn parts(&self) -> Vec<String> {
+        let mut parts = Vec::new();
+        let mut current_part = String::new();
+
+        for child in self.syntax.children_with_tokens() {
+            match child {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::PIPE {
+                        let trimmed = current_part.trim().to_string();
+                        if !trimmed.is_empty() {
+                            parts.push(trimmed);
+                        }
+                        current_part = String::new();
+                    } else {
+                        current_part.push_str(token.text());
+                    }
+                }
+                rowan::NodeOrToken::Node(child_node) => {
+                    // For nested nodes (like TYPE_ARGS), include their full text
+                    current_part.push_str(&child_node.text().to_string());
+                }
+            }
+        }
+
+        // Include the final part
+        let trimmed = current_part.trim().to_string();
+        if !trimmed.is_empty() {
+            parts.push(trimmed);
+        }
+
+        parts
+    }
+}
 ast_node!(BlockAttribute, BLOCK_ATTRIBUTE);
 
 ast_node!(Expr, EXPR);

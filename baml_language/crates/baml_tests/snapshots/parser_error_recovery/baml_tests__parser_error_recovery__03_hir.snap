@@ -4,7 +4,7 @@ expression: output
 ---
 === HIR ITEMS ===
 function Foo {
-  return: Path(Path { segments: [""], kind: Plain })
+  return: Unknown
   body: Llm {
     client: GPT4
   }
@@ -41,9 +41,9 @@ function NextFunction {
 class Partial {
   field1: Path(Path { segments: ["str"], kind: Plain })
   field2: Path(Path { segments: ["// Missing type entirely\n  field3"], kind: Plain })
-  string: Path(Path { segments: [""], kind: Plain })
-  string: Path(Path { segments: [""], kind: Plain })
-  string: Path(Path { segments: [""], kind: Plain })
+  string: Unknown
+  string: Unknown
+  string: Unknown
 }
 enum ValidEnum {
   EnumVariant { name: "OPTION1" }

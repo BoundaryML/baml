@@ -766,7 +766,7 @@ function NonExhaustiveEnumMissingOne {
   }
 }
 function ExhaustiveOptional {
-  params: [x: Optional(Path(Path { segments: ["int"], kind: Plain }))]
+  params: [x: Optional(Int)]
   return: String
   body: Expr {
     exprs: [
@@ -834,7 +834,7 @@ function UnreachableAfterCatchAll {
   }
 }
 function OptionalWithCatchAll {
-  params: [x: Optional(Path(Path { segments: ["int"], kind: Plain }))]
+  params: [x: Optional(Int)]
   return: String
   body: Expr {
     exprs: [

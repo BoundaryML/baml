@@ -4,7 +4,7 @@ expression: output
 ---
 === HIR ITEMS ===
 function floatArray {
-  return: List(Path(Path { segments: ["float"], kind: Plain }))
+  return: List(Float)
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Float("1.0"))
@@ -17,7 +17,7 @@ function floatArray {
   }
 }
 function stringArray {
-  return: List(Path(Path { segments: ["string"], kind: Plain }))
+  return: List(String)
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(String("hello"))
@@ -49,7 +49,7 @@ function pointArray {
   }
 }
 function boolArray {
-  return: List(Path(Path { segments: ["bool"], kind: Plain }))
+  return: List(Bool)
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Bool(true))
@@ -62,7 +62,7 @@ function boolArray {
   }
 }
 function intArray {
-  return: List(Path(Path { segments: ["int"], kind: Plain }))
+  return: List(Int)
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(Int(1))

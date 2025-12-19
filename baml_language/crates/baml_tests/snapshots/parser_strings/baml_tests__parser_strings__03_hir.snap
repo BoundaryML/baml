@@ -17,15 +17,15 @@ class NestedQuotes {
   double_in_single: String
   She: Path(Path { segments: ["said"], kind: Plain })
   hello: StringLiteral("')\n  escaped_in_escaped string @alias(")
-  The: Path(Path { segments: [""], kind: Plain })
-  quote: Path(Path { segments: [""], kind: Plain })
+  The: Unknown
+  quote: Unknown
   is: Path(Path { segments: ["here"], kind: Plain })
   complex_nesting: String
-  really: Path(Path { segments: [""], kind: Plain })
-  complex: Path(Path { segments: [""], kind: Plain })
+  really: Unknown
+  complex: Unknown
   json_like: String
-  key: Path(Path { segments: [""], kind: Plain })
-  value: Path(Path { segments: [""], kind: Plain })
+  key: Unknown
+  value: Unknown
 }
 function ProcessText {
   params: [input: String]
@@ -43,7 +43,7 @@ class RawStrings {
   multiline: String
 }
 function GetRole {
-  return: Path(Path { segments: ["\"admin\" | \"user\" | \"guest\""], kind: Plain })
+  return: Union([StringLiteral("admin"), StringLiteral("user"), StringLiteral("guest")])
   body: Expr {
     exprs: [
       Idx::<Expr>(0): Literal(String("user"))
@@ -61,7 +61,7 @@ class Messages {
   with_spaces: String
   with_escapes: String
   with_quotes: String
-  hello: Path(Path { segments: [""], kind: Plain })
+  hello: Unknown
 }
 class UnicodeStrings {
   emoji_basic: String

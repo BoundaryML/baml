@@ -97,56 +97,19 @@ impl TypeRef {
     /// - Union types: Success | Failure
     /// - String literal types: "user" | "assistant"
     pub fn from_ast(type_expr: &baml_syntax::ast::TypeExpr) -> Self {
-        use baml_syntax::SyntaxKind;
-        use rowan::{NodeOrToken, ast::AstNode};
+        let parts = type_expr.parts();
 
-        let syntax = type_expr.syntax();
-
-        // Collect all the parts of the type expression
-        // For union types, we'll find PIPE tokens that separate the members
-        let mut parts: Vec<String> = Vec::new();
-        let mut current_part = String::new();
-        let mut has_pipe = false;
-
-        for child in syntax.children_with_tokens() {
-            match child {
-                NodeOrToken::Token(token) => {
-                    if token.kind() == SyntaxKind::PIPE {
-                        // This is a union separator - save the current part and start a new one
-                        let trimmed = current_part.trim().to_string();
-                        if !trimmed.is_empty() {
-                            parts.push(trimmed);
-                        }
-                        current_part = String::new();
-                        has_pipe = true;
-                    } else {
-                        // Append token text to current part
-                        current_part.push_str(token.text());
-                    }
-                }
-                NodeOrToken::Node(child_node) => {
-                    // For nested nodes (like TYPE_ARGS), include their full text
-                    current_part.push_str(&child_node.text().to_string());
-                }
-            }
-        }
-
-        // Don't forget the last part
-        let trimmed = current_part.trim().to_string();
-        if !trimmed.is_empty() {
-            parts.push(trimmed);
-        }
-
-        // If we found pipes, this is a union type
-        if has_pipe && parts.len() > 1 {
+        // If multiple parts, this is a union type
+        if parts.len() > 1 {
             let members: Vec<TypeRef> = parts.iter().map(|p| Self::from_type_text(p)).collect();
             return TypeRef::Union(members);
         }
 
-        // Otherwise, lower as a single type
-        let text = syntax.text().to_string();
-        let text = text.trim();
-        Self::from_type_text(text)
+        // Single type (possibly with modifiers like ? or [])
+        parts
+            .first()
+            .map(|p| Self::from_type_text(p))
+            .unwrap_or(TypeRef::Unknown)
     }
 
     /// Create a `TypeRef` from a single type text (not a union).

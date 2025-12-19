@@ -5,8 +5,6 @@
 
 use std::sync::Arc;
 
-use rowan::ast::AstNode;
-
 use crate::{Name, type_ref::TypeRef};
 
 /// The signature of a function (everything except the body).
@@ -44,7 +42,7 @@ impl FunctionSignature {
                 if let Some(name_token) = param_node.name() {
                     let type_ref = param_node
                         .ty()
-                        .map(|t| lower_type_ref(&t))
+                        .map(|t| TypeRef::from_ast(&t))
                         .unwrap_or(TypeRef::Unknown);
 
                     params.push(Param {
@@ -58,7 +56,7 @@ impl FunctionSignature {
         // Extract return type
         let return_type = func_node
             .return_type()
-            .map(|t| lower_type_ref(&t))
+            .map(|t| TypeRef::from_ast(&t))
             .unwrap_or(TypeRef::Unknown);
 
         Arc::new(FunctionSignature {
@@ -66,34 +64,5 @@ impl FunctionSignature {
             params,
             return_type,
         })
-    }
-}
-
-/// Lower a type reference from CST.
-fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
-    let text = node.syntax().text().to_string();
-    let text = text.trim();
-
-    match text {
-        "int" => TypeRef::Int,
-        "float" => TypeRef::Float,
-        "string" => TypeRef::String,
-        "bool" => TypeRef::Bool,
-        "null" => TypeRef::Null,
-        "image" => TypeRef::Image,
-        "audio" => TypeRef::Audio,
-        "video" => TypeRef::Video,
-        "pdf" => TypeRef::Pdf,
-        _ => {
-            if let Some(inner_text) = text.strip_suffix('?') {
-                let inner = TypeRef::named(inner_text.into());
-                TypeRef::optional(inner)
-            } else if let Some(inner_text) = text.strip_suffix("[]") {
-                let inner = TypeRef::named(inner_text.into());
-                TypeRef::list(inner)
-            } else {
-                TypeRef::named(text.into())
-            }
-        }
     }
 }
