@@ -151,19 +151,35 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
+        
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
           node-action-version: 'v6'
+          node-version: latest
+
+      - name: Ensure npm CLI supports trusted publishing
+        run: |
+          set -euo pipefail
+          required_version="11.5.1"
+          current_version="$(npm --version)"
+          if [ "$(printf '%s\n' "$required_version" "$current_version" | sort -V | head -n1)" != "$required_version" ]; then
+            echo "npm $current_version is lower than required $required_version" >&2
+            echo "npm 11.5.1+ is required for trusted publishing because it is the earliest version that can use OIDC auth" >&2
+            exit 1
+          fi
+          echo "npm $current_version satisfies >= $required_version"
+
       - uses: actions/download-artifact@v4
         with:
           pattern: bindings-*
           path: engine/language_client_typescript/artifacts
 
       - name: Publish to NPM
-        # Uses OIDC authentication via trusted publishers
+        # OIDC is pinned to `release.yml` as the workflow filename for every architecture we release
         run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
 
   # publish-to-rubygems:
