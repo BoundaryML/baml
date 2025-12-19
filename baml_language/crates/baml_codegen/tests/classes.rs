@@ -34,7 +34,7 @@ fn class_constructor() -> anyhow::Result<()> {
             //     Instruction::LoadVar("p".to_string()),
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with peephole optimization
             vec![
                 // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
@@ -54,12 +54,7 @@ fn class_constructor() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadVar("_3".to_string()),
                 Instruction::StoreField(1),
-                Instruction::StoreVar("p".to_string()),
-                // Return p
-                Instruction::LoadVar("p".to_string()),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
+                // Return - Point already on stack, no need for store/load
                 Instruction::Return,
             ],
         )],
@@ -92,7 +87,7 @@ fn class_constructor_return_directly() -> anyhow::Result<()> {
             //     Instruction::StoreField(1),
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with peephole optimization
             vec![
                 // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
@@ -111,10 +106,7 @@ fn class_constructor_return_directly() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadVar("_2".to_string()),
                 Instruction::StoreField(1),
-                Instruction::StoreVar("_0".to_string()),
-                // Return
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
+                // Return - Point already on stack
                 Instruction::Return,
             ],
         )],
@@ -190,21 +182,7 @@ fn nested_class_construction() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     // Outer constructor
-            //     Instruction::AllocInstance(Value::class("Outer")),
-            //     Instruction::Copy(0),
-            //     // Nested Inner construction
-            //     Instruction::AllocInstance(Value::class("Inner")),
-            //     Instruction::Copy(0),
-            //     Instruction::LoadConst(Value::Int(42)),
-            //     Instruction::StoreField(0), // Inner.value = 42
-            //     Instruction::StoreField(0), // Outer.inner = Inner
-            //     Instruction::LoadConst(Value::Int(42)),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with peephole optimization
             vec![
                 // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
@@ -225,12 +203,10 @@ fn nested_class_construction() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadVar("_2".to_string()),
                 Instruction::StoreField(0),
-                Instruction::StoreVar("o".to_string()),
+                // Outer on stack but not used - pop it
+                Instruction::Pop(1),
                 // Return 42
                 Instruction::LoadConst(Value::Int(42)),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -280,7 +256,7 @@ fn nested_class_with_multiple_fields() -> anyhow::Result<()> {
             //     Instruction::LoadConst(Value::Int(30)),
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with peephole optimization
             vec![
                 // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
@@ -314,12 +290,10 @@ fn nested_class_with_multiple_fields() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadVar("_5".to_string()),
                 Instruction::StoreField(1),
-                Instruction::StoreVar("o".to_string()),
+                // Outer on stack but unused - pop it
+                Instruction::Pop(1),
                 // Return 30
                 Instruction::LoadConst(Value::Int(30)),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -360,7 +334,7 @@ fn nested_field_read() -> anyhow::Result<()> {
             //     Instruction::LoadField(0), // inner.value
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with peephole optimization
             vec![
                 // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
@@ -376,19 +350,14 @@ fn nested_field_read() -> anyhow::Result<()> {
                 Instruction::LoadVar("_3".to_string()),
                 Instruction::StoreField(0),
                 Instruction::StoreVar("_2".to_string()),
-                // Construct Outer
+                // Construct Outer - optimized store-load: use Copy+Store
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
                 Instruction::LoadVar("_2".to_string()),
                 Instruction::StoreField(0),
-                Instruction::StoreVar("o".to_string()),
-                // Return o.inner.value
-                Instruction::LoadVar("o".to_string()),
+                // Return o.inner.value - Outer already on stack
                 Instruction::LoadField(0),
                 Instruction::LoadField(0),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -753,7 +722,7 @@ fn nested_object_construction() -> anyhow::Result<()> {
             //     Instruction::LoadField(1),             // value
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with peephole optimization
             vec![
                 // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
@@ -779,7 +748,7 @@ fn nested_object_construction() -> anyhow::Result<()> {
                 // Evaluate Outer.value
                 Instruction::LoadConst(Value::Int(30)),
                 Instruction::StoreVar("_5".to_string()),
-                // Construct Outer
+                // Construct Outer - optimized: keep on stack for o.value access
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
                 Instruction::LoadVar("_2".to_string()),
@@ -787,13 +756,8 @@ fn nested_object_construction() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadVar("_5".to_string()),
                 Instruction::StoreField(1),
-                Instruction::StoreVar("o".to_string()),
-                // Return o.value
-                Instruction::LoadVar("o".to_string()),
+                // Return o.value - Outer already on stack
                 Instruction::LoadField(1),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],

@@ -97,7 +97,10 @@ impl<'ctx, 'obj> MirCodegen<'ctx, 'obj> {
         // 3. Patch all jump targets
         self.patch_jumps();
 
-        // 4. Build the Function
+        // 4. Apply peephole optimizations
+        crate::peephole::optimize(&mut self.bytecode);
+
+        // 5. Build the Function
         Function {
             name: mir.name.clone(),
             arity: mir.arity,

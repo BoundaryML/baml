@@ -8,88 +8,34 @@ Objects: 35
 Globals: 29
 
 Function boolArray (arity: 0, kind: Exec):
-     0    LOAD_CONST 0    (null)
-     1    LOAD_CONST 0    (null)
-     2    LOAD_CONST 0    (null)
-     3    LOAD_CONST 0    (null)
-     4    LOAD_CONST 1    (true)
-     5    STORE_VAR 2     (_1)
-     6    LOAD_CONST 2    (false)
-     7    STORE_VAR 3     (_2)
-     8    LOAD_CONST 1    (true)
-     9    STORE_VAR 4     (_3)
-     10   LOAD_VAR 2      (_1)
-     11   LOAD_VAR 3      (_2)
-     12   LOAD_VAR 4      (_3)
-     13   ALLOC_ARRAY 3   
-     14   STORE_VAR 1     (_0)
-     15   JUMP +1         (to 16)
-     16   LOAD_VAR 1      (_0)
-     17   RETURN          
+     0   LOAD_CONST 1    (true)
+     1   LOAD_CONST 2    (false)
+     2   LOAD_CONST 1    (true)
+     3   ALLOC_ARRAY 3   
+     4   RETURN          
 
 Function boolValues (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (null)
-     1   LOAD_CONST 0   (null)
-     2   STORE_VAR 1    (_0)
-     3   JUMP +1        (to 4)
-     4   LOAD_VAR 1     (_0)
-     5   RETURN         
+     0   RETURN   
 
 Function floatArray (arity: 0, kind: Exec):
-     0    LOAD_CONST 0    (null)
-     1    LOAD_CONST 0    (null)
-     2    LOAD_CONST 0    (null)
-     3    LOAD_CONST 0    (null)
-     4    LOAD_CONST 1    (1)
-     5    STORE_VAR 2     (_1)
-     6    LOAD_CONST 2    (2)
-     7    STORE_VAR 3     (_2)
-     8    LOAD_CONST 3    (3)
-     9    STORE_VAR 4     (_3)
-     10   LOAD_VAR 2      (_1)
-     11   LOAD_VAR 3      (_2)
-     12   LOAD_VAR 4      (_3)
-     13   ALLOC_ARRAY 3   
-     14   STORE_VAR 1     (_0)
-     15   JUMP +1         (to 16)
-     16   LOAD_VAR 1      (_0)
-     17   RETURN          
+     0   LOAD_CONST 1    (1)
+     1   LOAD_CONST 2    (2)
+     2   LOAD_CONST 3    (3)
+     3   ALLOC_ARRAY 3   
+     4   RETURN          
 
 Function floatValues (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (null)
-     1   LOAD_CONST 0   (null)
-     2   STORE_VAR 1    (_0)
-     3   JUMP +1        (to 4)
-     4   LOAD_VAR 1     (_0)
-     5   RETURN         
+     0   RETURN   
 
 Function intArray (arity: 0, kind: Exec):
-     0    LOAD_CONST 0    (null)
-     1    LOAD_CONST 0    (null)
-     2    LOAD_CONST 0    (null)
-     3    LOAD_CONST 0    (null)
-     4    LOAD_CONST 1    (1)
-     5    STORE_VAR 2     (_1)
-     6    LOAD_CONST 2    (2)
-     7    STORE_VAR 3     (_2)
-     8    LOAD_CONST 3    (3)
-     9    STORE_VAR 4     (_3)
-     10   LOAD_VAR 2      (_1)
-     11   LOAD_VAR 3      (_2)
-     12   LOAD_VAR 4      (_3)
-     13   ALLOC_ARRAY 3   
-     14   STORE_VAR 1     (_0)
-     15   JUMP +1         (to 16)
-     16   LOAD_VAR 1      (_0)
-     17   RETURN          
+     0   LOAD_CONST 1    (1)
+     1   LOAD_CONST 2    (2)
+     2   LOAD_CONST 3    (3)
+     3   ALLOC_ARRAY 3   
+     4   RETURN          
 
 Function intValues (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (null)
-     1   LOAD_CONST 0   (null)
-     2   STORE_VAR 1    (_0)
-     3   JUMP +1        (to 4)
-     4   LOAD_VAR 1     (_0)
-     5   RETURN         
+     0   RETURN   
 
 Function point (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (null)
@@ -106,10 +52,7 @@ Function point (arity: 0, kind: Exec):
      11   COPY 0             
      12   LOAD_VAR 3         (_2)
      13   STORE_FIELD 1      
-     14   STORE_VAR 1        (_0)
-     15   JUMP +1            (to 16)
-     16   LOAD_VAR 1         (_0)
-     17   RETURN             
+     14   RETURN             
 
 Function pointArray (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (null)
@@ -133,67 +76,40 @@ Function pointArray (arity: 0, kind: Exec):
      18   COPY 0             
      19   LOAD_VAR 4         (_3)
      20   STORE_FIELD 1      
-     21   STORE_VAR 2        (_1)
-     22   LOAD_CONST 3       (3)
-     23   STORE_VAR 6        (_5)
-     24   LOAD_CONST 4       (4)
-     25   STORE_VAR 7        (_6)
-     26   ALLOC_INSTANCE 2   (<class Point>)
-     27   COPY 0             
-     28   LOAD_VAR 6         (_5)
-     29   STORE_FIELD 0      
-     30   COPY 0             
-     31   LOAD_VAR 7         (_6)
-     32   STORE_FIELD 1      
-     33   STORE_VAR 5        (_4)
-     34   LOAD_CONST 5       (5)
-     35   STORE_VAR 9        (_8)
-     36   LOAD_CONST 6       (6)
-     37   STORE_VAR 10       (_9)
-     38   ALLOC_INSTANCE 2   (<class Point>)
-     39   COPY 0             
-     40   LOAD_VAR 9         (_8)
-     41   STORE_FIELD 0      
-     42   COPY 0             
-     43   LOAD_VAR 10        (_9)
-     44   STORE_FIELD 1      
-     45   STORE_VAR 8        (_7)
-     46   LOAD_VAR 2         (_1)
-     47   LOAD_VAR 5         (_4)
-     48   LOAD_VAR 8         (_7)
-     49   ALLOC_ARRAY 3      
-     50   STORE_VAR 1        (_0)
-     51   JUMP +1            (to 52)
-     52   LOAD_VAR 1         (_0)
-     53   RETURN             
+     21   LOAD_CONST 3       (3)
+     22   STORE_VAR 6        (_5)
+     23   LOAD_CONST 4       (4)
+     24   STORE_VAR 7        (_6)
+     25   ALLOC_INSTANCE 2   (<class Point>)
+     26   COPY 0             
+     27   LOAD_VAR 6         (_5)
+     28   STORE_FIELD 0      
+     29   COPY 0             
+     30   LOAD_VAR 7         (_6)
+     31   STORE_FIELD 1      
+     32   LOAD_CONST 5       (5)
+     33   STORE_VAR 9        (_8)
+     34   LOAD_CONST 6       (6)
+     35   STORE_VAR 10       (_9)
+     36   ALLOC_INSTANCE 2   (<class Point>)
+     37   COPY 0             
+     38   LOAD_VAR 9         (_8)
+     39   STORE_FIELD 0      
+     40   COPY 0             
+     41   LOAD_VAR 10        (_9)
+     42   STORE_FIELD 1      
+     43   ALLOC_ARRAY 3      
+     44   RETURN             
 
 Function stringArray (arity: 0, kind: Exec):
-     0    LOAD_CONST 0    (null)
-     1    LOAD_CONST 0    (null)
-     2    LOAD_CONST 0    (null)
-     3    LOAD_CONST 0    (null)
-     4    LOAD_CONST 1    (hello)
-     5    STORE_VAR 2     (_1)
-     6    LOAD_CONST 2    (world)
-     7    STORE_VAR 3     (_2)
-     8    LOAD_CONST 3    (test)
-     9    STORE_VAR 4     (_3)
-     10   LOAD_VAR 2      (_1)
-     11   LOAD_VAR 3      (_2)
-     12   LOAD_VAR 4      (_3)
-     13   ALLOC_ARRAY 3   
-     14   STORE_VAR 1     (_0)
-     15   JUMP +1         (to 16)
-     16   LOAD_VAR 1      (_0)
-     17   RETURN          
+     0   LOAD_CONST 1    (hello)
+     1   LOAD_CONST 2    (world)
+     2   LOAD_CONST 3    (test)
+     3   ALLOC_ARRAY 3   
+     4   RETURN          
 
 Function stringValues (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (null)
-     1   LOAD_CONST 0   (null)
-     2   STORE_VAR 1    (_0)
-     3   JUMP +1        (to 4)
-     4   LOAD_VAR 1     (_0)
-     5   RETURN         
+     0   RETURN   
 
 Function vec2d (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (null)
@@ -234,7 +150,4 @@ Function vec2d (arity: 0, kind: Exec):
      35   COPY 0             
      36   LOAD_VAR 5         (_4)
      37   STORE_FIELD 1      
-     38   STORE_VAR 1        (_0)
-     39   JUMP +1            (to 40)
-     40   LOAD_VAR 1         (_0)
-     41   RETURN
+     38   RETURN

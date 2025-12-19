@@ -16,41 +16,17 @@ fn array_constructor() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::LoadConst(Value::Int(2)),
-            //     Instruction::LoadConst(Value::Int(3)),
-            //     Instruction::AllocArray(3),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with stackification:
+            // - Temporary variables eliminated
+            // - Values stay on stack
+            // - Pre-allocated null slots eliminated
             vec![
-                // Pre-allocate locals with null
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate array elements to temps
+                // Array elements pushed directly to stack
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_3".to_string()),
                 Instruction::LoadConst(Value::Int(3)),
-                Instruction::StoreVar("_4".to_string()),
-                // Load temps and create array
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::LoadVar("_4".to_string()),
                 Instruction::AllocArray(3),
-                Instruction::StoreVar("a".to_string()),
-                // Return value
-                Instruction::LoadVar("a".to_string()),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
+                // Return
                 Instruction::Return,
             ],
         )],
@@ -67,37 +43,16 @@ fn return_array_literal() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::LoadConst(Value::Int(2)),
-            //     Instruction::LoadConst(Value::Int(3)),
-            //     Instruction::AllocArray(3),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with stackification:
+            // - All temporary variables eliminated
+            // - Values stay on stack, flow directly to ALLOC_ARRAY
             vec![
-                // Pre-allocate locals with null
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate array elements to temps
+                // Array elements pushed directly to stack
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_1".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadConst(Value::Int(3)),
-                Instruction::StoreVar("_3".to_string()),
-                // Load temps and create array
-                Instruction::LoadVar("_1".to_string()),
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::LoadVar("_3".to_string()),
                 Instruction::AllocArray(3),
-                Instruction::StoreVar("_0".to_string()),
-                // Return
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
+                // Return - array is on stack
                 Instruction::Return,
             ],
         )],

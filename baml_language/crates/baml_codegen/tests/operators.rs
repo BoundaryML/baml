@@ -29,7 +29,7 @@ fn basic_and() -> anyhow::Result<()> {
             //     Instruction::Call(0),
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with peephole optimization
             vec![
                 // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
@@ -37,27 +37,22 @@ fn basic_and() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 // Evaluate LHS of &&
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::StoreVar("_1".to_string()),
-                Instruction::LoadVar("_1".to_string()),
-                Instruction::JumpIfFalse(10),
+                Instruction::JumpIfFalse(8),
                 // Return block
                 Instruction::Jump(3),
                 Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
                 // Evaluate RHS (short-circuit path)
                 Instruction::LoadGlobal(Value::function("ret_bool")),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::LoadVar("_2".to_string()),
                 Instruction::Call(0),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(5),
+                Instruction::Jump(-5),
                 // False branch (short-circuit)
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
+                Instruction::Jump(-8),
                 // Control flow
-                Instruction::Jump(-11),
-                Instruction::Jump(-1),
+                Instruction::Jump(-9),
             ],
         )],
     })
@@ -87,7 +82,7 @@ fn basic_or() -> anyhow::Result<()> {
             //     Instruction::Call(0),
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with peephole optimization
             vec![
                 // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
@@ -95,8 +90,6 @@ fn basic_or() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 // Evaluate LHS of ||
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::StoreVar("_1".to_string()),
-                Instruction::LoadVar("_1".to_string()),
                 Instruction::JumpIfFalse(7),
                 // Return block
                 Instruction::Jump(3),
@@ -105,17 +98,15 @@ fn basic_or() -> anyhow::Result<()> {
                 // True branch (short-circuit)
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(7),
+                Instruction::Jump(-4),
                 // Evaluate RHS (false path)
                 Instruction::LoadGlobal(Value::function("ret_bool")),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::LoadVar("_2".to_string()),
                 Instruction::Call(0),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(2),
+                Instruction::Jump(-8),
                 // Control flow
-                Instruction::Jump(-11),
-                Instruction::Jump(-1),
+                Instruction::Jump(-9),
+                Instruction::Jump(-10),
             ],
         )],
     })
@@ -132,35 +123,12 @@ fn basic_add() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::LoadConst(Value::Int(2)),
-            //     Instruction::BinOp(BinOp::Add),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with stackification:
+            // - All temporaries eliminated
             vec![
-                // Pre-allocate locals
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate 1 + 2
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_3".to_string()),
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::LoadVar("_3".to_string()),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("a".to_string()),
-                // Return a
-                Instruction::LoadVar("a".to_string()),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],

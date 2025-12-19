@@ -13,35 +13,24 @@ Function Bar (arity: 0, kind: Exec):
      2    LOAD_CONST 0     (null)
      3    LOAD_CONST 0     (null)
      4    LOAD_GLOBAL 21   (<fn Foo>)
-     5    STORE_VAR 3      (_2)
-     6    LOAD_CONST 1     (1)
-     7    STORE_VAR 4      (_3)
-     8    LOAD_VAR 3       (_2)
-     9    LOAD_VAR 4       (_3)
-     10   CALL 1           
-     11   STORE_VAR 2      (x)
-     12   JUMP +3          (to 15)
-     13   LOAD_VAR 1       (_0)
-     14   RETURN           
-     15   LOAD_VAR 2       (x)
-     16   STORE_VAR 1      (_0)
-     17   JUMP -4          (to 13)
+     5    LOAD_CONST 1     (1)
+     6    CALL 1           
+     7    STORE_VAR 2      (x)
+     8    JUMP +3          (to 11)
+     9    LOAD_VAR 1       (_0)
+     10   RETURN           
+     11   LOAD_VAR 2       (x)
+     12   STORE_VAR 1      (_0)
+     13   JUMP -4          (to 9)
 
 Function Foo (arity: 1, kind: Exec):
-     0    LOAD_CONST 0   (null)
-     1    LOAD_CONST 0   (null)
-     2    LOAD_CONST 0   (null)
-     3    LOAD_VAR 1     (_0)
-     4    STORE_VAR 3    (_2)
-     5    LOAD_CONST 1   (1)
-     6    STORE_VAR 4    (_3)
-     7    LOAD_VAR 3     (_2)
-     8    LOAD_VAR 4     (_3)
-     9    BIN_OP +       
-     10   STORE_VAR 2    (x)
-     11   JUMP +1        (to 12)
-     12   LOAD_VAR 2     (x)
-     13   RETURN         
+     0   LOAD_CONST 0   (null)
+     1   LOAD_CONST 0   (null)
+     2   LOAD_CONST 0   (null)
+     3   LOAD_VAR 1     (_0)
+     4   LOAD_CONST 1   (1)
+     5   BIN_OP +       
+     6   RETURN         
 
 Function GreetBaz (arity: 1, kind: Exec):
      0    LOAD_CONST 0       (null)
@@ -54,17 +43,10 @@ Function GreetBaz (arity: 1, kind: Exec):
      7    COPY 0             
      8    LOAD_VAR 4         (_3)
      9    STORE_FIELD 0      
-     10   STORE_VAR 3        (baz)
-     11   LOAD_VAR 3         (baz)
-     12   LOAD_FIELD 0       
-     13   STORE_VAR 5        (_4)
-     14   LOAD_VAR 5         (_4)
-     15   CALL 0             
-     16   STORE_VAR 2        (n)
-     17   JUMP +3            (to 20)
-     18   LOAD_VAR 2         (n)
-     19   RETURN             
-     20   JUMP -2            (to 18)
+     10   LOAD_FIELD 0       
+     11   CALL 0             
+     12   RETURN             
+     13   JUMP -1            (to 12)
 
 Function Greeting (arity: 1, kind: Exec):
      0    LOAD_CONST 0   (null)
@@ -73,23 +55,12 @@ Function Greeting (arity: 1, kind: Exec):
      3    LOAD_CONST 0   (null)
      4    LOAD_CONST 0   (null)
      5    LOAD_CONST 1   (Hello, )
-     6    STORE_VAR 4    (_3)
-     7    LOAD_VAR 1     (_0)
-     8    LOAD_FIELD 0   
-     9    STORE_VAR 5    (_4)
-     10   LOAD_VAR 4     (_3)
-     11   LOAD_VAR 5     (_4)
-     12   BIN_OP +       
-     13   STORE_VAR 3    (_2)
-     14   LOAD_CONST 2   (!)
-     15   STORE_VAR 6    (_5)
-     16   LOAD_VAR 3     (_2)
-     17   LOAD_VAR 6     (_5)
-     18   BIN_OP +       
-     19   STORE_VAR 2    (self)
-     20   JUMP +1        (to 21)
-     21   LOAD_VAR 2     (self)
-     22   RETURN         
+     6    LOAD_VAR 1     (_0)
+     7    LOAD_FIELD 0   
+     8    BIN_OP +       
+     9    LOAD_CONST 2   (!)
+     10   BIN_OP +       
+     11   RETURN         
 
 Function array_length (arity: 0, kind: Exec):
      0    LOAD_CONST 0    (null)
@@ -100,27 +71,14 @@ Function array_length (arity: 0, kind: Exec):
      5    LOAD_CONST 0    (null)
      6    LOAD_CONST 0    (null)
      7    LOAD_CONST 1    (1)
-     8    STORE_VAR 3     (_2)
-     9    LOAD_CONST 2    (2)
-     10   STORE_VAR 4     (_3)
-     11   LOAD_CONST 3    (3)
-     12   STORE_VAR 5     (_4)
-     13   LOAD_VAR 3      (_2)
-     14   LOAD_VAR 4      (_3)
-     15   LOAD_VAR 5      (_4)
-     16   ALLOC_ARRAY 3   
-     17   STORE_VAR 2     (array)
-     18   LOAD_CONST 0    (null)
-     19   STORE_VAR 6     (_5)
-     20   LOAD_VAR 2      (array)
-     21   STORE_VAR 7     (_6)
-     22   LOAD_VAR 6      (_5)
-     23   LOAD_VAR 7      (_6)
-     24   CALL 1          
-     25   STORE_VAR 1     (_0)
-     26   JUMP +3         (to 29)
-     27   LOAD_VAR 1      (_0)
-     28   RETURN          
-     29   JUMP +1         (to 30)
-     30   LOAD_VAR 1      (_0)
-     31   RETURN
+     8    LOAD_CONST 2    (2)
+     9    LOAD_CONST 3    (3)
+     10   ALLOC_ARRAY 3   
+     11   LOAD_CONST 0    (null)
+     12   CALL 1          
+     13   STORE_VAR 1     (_0)
+     14   JUMP +3         (to 17)
+     15   LOAD_VAR 1      (_0)
+     16   RETURN          
+     17   LOAD_VAR 1      (_0)
+     18   RETURN

@@ -20,6 +20,7 @@
 //! - **Jump patching**: Resolves jump targets after all blocks are emitted
 
 mod mir_codegen;
+mod peephole;
 
 use std::collections::HashMap;
 

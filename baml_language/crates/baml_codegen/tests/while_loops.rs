@@ -79,32 +79,8 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::LoadConst(Value::Int(5)),
-            //     Instruction::CmpOp(CmpOp::Lt),
-            //     Instruction::JumpIfFalse(15),
-            //     Instruction::Pop(1),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::BinOp(BinOp::Add),
-            //     Instruction::StoreVar("a".to_string()),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::LoadConst(Value::Int(2)),
-            //     Instruction::CmpOp(CmpOp::Eq),
-            //     Instruction::JumpIfFalse(4),
-            //     Instruction::Pop(1),
-            //     Instruction::Jump(5), // break jumps past if-without-else and loop
-            //     Instruction::Jump(2), // skip false-path pop
-            //     Instruction::Pop(1),  // pop condition (false path)
-            //     Instruction::Jump(-17),
-            //     Instruction::Pop(1),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with stackification:
+            // - Comparison temporaries eliminated
             vec![
                 // Pre-allocate locals with null
                 Instruction::LoadConst(Value::Null),
@@ -128,51 +104,30 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
                 Instruction::Return,
                 // While loop condition: a < 5
                 Instruction::LoadVar("a".to_string()),
-                Instruction::StoreVar("_3".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
-                Instruction::StoreVar("_4".to_string()),
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::LoadVar("_4".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::JumpIfFalse(23),
-                Instruction::Jump(1),
+                Instruction::JumpIfFalse(9),
                 // a += 1
                 Instruction::LoadVar("a".to_string()),
-                Instruction::StoreVar("_6".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_7".to_string()),
-                Instruction::LoadVar("_6".to_string()),
-                Instruction::LoadVar("_7".to_string()),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("_8".to_string()),
-                Instruction::LoadVar("_8".to_string()),
+                Instruction::Copy(0),
                 Instruction::StoreVar("a".to_string()),
                 // if (a == 2) condition
-                Instruction::LoadVar("a".to_string()),
-                Instruction::StoreVar("_10".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_11".to_string()),
-                Instruction::LoadVar("_10".to_string()),
-                Instruction::LoadVar("_11".to_string()),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::StoreVar("_9".to_string()),
-                Instruction::LoadVar("_9".to_string()),
-                Instruction::JumpIfFalse(6),
+                Instruction::JumpIfFalse(5),
                 // break: return a
-                Instruction::Jump(4),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(-36),
+                Instruction::Jump(-16),
                 // Skip else
                 Instruction::Jump(-3),
                 // After if (null for unit type)
                 Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_5".to_string()),
-                Instruction::Jump(1),
+                Instruction::Pop(1),
                 // Loop back
-                Instruction::Jump(-39),
+                Instruction::Jump(-18),
             ],
         )],
     })
@@ -198,32 +153,8 @@ fn while_loop_with_break() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::LoadConst(Value::Int(5)),
-            //     Instruction::CmpOp(CmpOp::Lt),
-            //     Instruction::JumpIfFalse(15),
-            //     Instruction::Pop(1),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::BinOp(BinOp::Add),
-            //     Instruction::StoreVar("a".to_string()),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::LoadConst(Value::Int(2)),
-            //     Instruction::CmpOp(CmpOp::Eq),
-            //     Instruction::JumpIfFalse(4),
-            //     Instruction::Pop(1),
-            //     Instruction::Jump(5), // break jumps past if-without-else and loop
-            //     Instruction::Jump(2), // skip false-path pop
-            //     Instruction::Pop(1),  // pop condition (false path)
-            //     Instruction::Jump(-17),
-            //     Instruction::Pop(1),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with stackification:
+            // - Comparison temporaries eliminated
             vec![
                 // Pre-allocate locals with null
                 Instruction::LoadConst(Value::Null),
@@ -247,51 +178,30 @@ fn while_loop_with_break() -> anyhow::Result<()> {
                 Instruction::Return,
                 // While loop condition: a < 5
                 Instruction::LoadVar("a".to_string()),
-                Instruction::StoreVar("_3".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
-                Instruction::StoreVar("_4".to_string()),
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::LoadVar("_4".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::JumpIfFalse(23),
-                Instruction::Jump(1),
+                Instruction::JumpIfFalse(9),
                 // a += 1
                 Instruction::LoadVar("a".to_string()),
-                Instruction::StoreVar("_6".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_7".to_string()),
-                Instruction::LoadVar("_6".to_string()),
-                Instruction::LoadVar("_7".to_string()),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("_8".to_string()),
-                Instruction::LoadVar("_8".to_string()),
+                Instruction::Copy(0),
                 Instruction::StoreVar("a".to_string()),
                 // if (a == 2) condition
-                Instruction::LoadVar("a".to_string()),
-                Instruction::StoreVar("_10".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_11".to_string()),
-                Instruction::LoadVar("_10".to_string()),
-                Instruction::LoadVar("_11".to_string()),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::StoreVar("_9".to_string()),
-                Instruction::LoadVar("_9".to_string()),
-                Instruction::JumpIfFalse(6),
+                Instruction::JumpIfFalse(5),
                 // break: return a
-                Instruction::Jump(4),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(-36),
+                Instruction::Jump(-16),
                 // Skip else
                 Instruction::Jump(-3),
                 // After if (null for unit type)
                 Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_5".to_string()),
-                Instruction::Jump(1),
+                Instruction::Pop(1),
                 // Loop back
-                Instruction::Jump(-39),
+                Instruction::Jump(-18),
             ],
         )],
     })
@@ -446,7 +356,7 @@ fn continue_nested() -> anyhow::Result<()> {
             //     Instruction::LoadConst(Value::Int(5)),
             //     Instruction::Return,
             // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with peephole optimization
             vec![
                 // Pre-allocate locals with null
                 Instruction::LoadConst(Value::Null),
@@ -461,37 +371,27 @@ fn continue_nested() -> anyhow::Result<()> {
                 Instruction::Return,
                 // Outer while (true) condition
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::StoreVar("_1".to_string()),
-                Instruction::LoadVar("_1".to_string()),
-                Instruction::JumpIfFalse(3),
-                Instruction::Jump(1),
+                Instruction::JumpIfFalse(2),
                 // After outer loop: return 5
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(-10),
+                Instruction::Jump(-7),
                 // Inner while (false) condition
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::StoreVar("_3".to_string()),
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::JumpIfFalse(3),
-                Instruction::Jump(1),
+                Instruction::JumpIfFalse(2),
                 // continue in inner loop (jump back)
-                Instruction::Jump(-5),
+                Instruction::Jump(-2),
                 // if (false) condition
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::StoreVar("_5".to_string()),
-                Instruction::LoadVar("_5".to_string()),
-                Instruction::JumpIfFalse(3),
-                Instruction::Jump(1),
+                Instruction::JumpIfFalse(2),
                 // continue in outer loop
-                Instruction::Jump(-20),
+                Instruction::Jump(-11),
                 // After if (null for unit type)
                 Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::Jump(1),
+                Instruction::Pop(1),
                 // Loop back to outer condition
-                Instruction::Jump(-24),
+                Instruction::Jump(-14),
             ],
         )],
     })
@@ -516,33 +416,8 @@ fn break_nested() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "Nested",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Int(5)),
-            //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(18),
-            //     Instruction::Pop(1),
-            //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(8),
-            //     Instruction::Pop(1),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::BinOp(BinOp::Add),
-            //     Instruction::StoreVar("a".to_string()),
-            //     Instruction::Jump(3),
-            //     Instruction::Jump(-8),
-            //     Instruction::Pop(1),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::BinOp(BinOp::Add),
-            //     Instruction::StoreVar("a".to_string()),
-            //     Instruction::Jump(3),
-            //     Instruction::Jump(-18),
-            //     Instruction::Pop(1),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // MIR codegen with stackification:
+            // - Arithmetic temporaries eliminated
             vec![
                 // Pre-allocate locals with null
                 Instruction::LoadConst(Value::Null),
@@ -566,47 +441,25 @@ fn break_nested() -> anyhow::Result<()> {
                 Instruction::Return,
                 // Outer while (true) condition
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::JumpIfFalse(3),
-                Instruction::Jump(1),
+                Instruction::JumpIfFalse(2),
                 // After outer loop: return a
                 Instruction::Jump(4),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(-10),
+                Instruction::Jump(-7),
                 // Inner while (true) condition
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::StoreVar("_4".to_string()),
-                Instruction::LoadVar("_4".to_string()),
-                Instruction::JumpIfFalse(13),
-                Instruction::Jump(1),
+                Instruction::JumpIfFalse(4),
                 // Inner loop body: a = a + 1
                 Instruction::LoadVar("a".to_string()),
-                Instruction::StoreVar("_7".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_8".to_string()),
-                Instruction::LoadVar("_7".to_string()),
-                Instruction::LoadVar("_8".to_string()),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("_6".to_string()),
-                Instruction::LoadVar("_6".to_string()),
-                Instruction::StoreVar("a".to_string()),
-                // break from inner loop
-                Instruction::Jump(1),
                 // After inner loop: a = a + 1
-                Instruction::LoadVar("a".to_string()),
-                Instruction::StoreVar("_10".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_11".to_string()),
-                Instruction::LoadVar("_10".to_string()),
-                Instruction::LoadVar("_11".to_string()),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("_9".to_string()),
-                Instruction::LoadVar("_9".to_string()),
                 Instruction::StoreVar("a".to_string()),
                 // break from outer loop (loop back to outer condition then exit)
-                Instruction::Jump(-29),
+                Instruction::Jump(-11),
             ],
         )],
     })
