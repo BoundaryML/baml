@@ -12,10 +12,14 @@ template_string TemplateStringForEchoTest(arg: int) ##"
   The number is {{ arg }}
 "##
 
+template_string TemplateStringForEchoTest2() ##"
+  The number is 44
+"##
+
 test TemplateStringArgTest {
   functions [TemplateStringTestEcho]
   args {
-   input: TemplateStringForEchoTest(43)
+   input: TemplateStringForEchoTest2()
   }
-  @@assert( {{ this == "The number is 43" }} )
+  @@assert( {{ this == "The number is 44" }} )
 }

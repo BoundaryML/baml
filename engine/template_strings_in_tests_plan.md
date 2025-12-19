@@ -360,6 +360,8 @@ The feature has been fully implemented. Here's what was done:
 | `engine/baml-lib/baml-core/src/ir/ir_helpers/mod.rs` | Implemented `TemplateStringRenderer` for `IntermediateRepr` |
 | `engine/baml-lib/llm-client/src/clients/fallback.rs` | Added match case for `TemplateStringCall` |
 | `engine/baml-lib/llm-client/src/clients/round_robin.rs` | Added match case for `TemplateStringCall` |
+| `engine/baml-lib/ast/src/parser/datamodel.pest` | Added `fn_app` and `generic_fn_app` to `config_primary_expression` rule, reordered to try function calls before string literals |
+| `engine/baml-lib/ast/src/parser/parse_expression.rs` | Added handling for `Rule::fn_app` and `Rule::generic_fn_app` in `parse_config_primary_expression` |
 
 ### Key Design Decisions
 
@@ -392,3 +394,9 @@ test MyTest {
 ```
 
 The test argument `message` will be resolved to `"Hello, World!\n"` at test execution time.
+
+### Parser Fix Details
+
+The initial implementation added `fn_app` to the `config_primary_expression` grammar rule, but the parser still failed because `string_literal` was ordered before `fn_app`. Since `string_literal` includes `unquoted_string_literal` which greedily matches identifiers (stopping at `(`), a template call like `MakeGreeting("World")` would be partially matched as the string `MakeGreeting`, leaving `("World")` unparsed.
+
+The fix was to reorder `config_primary_expression` to try function calls (`generic_fn_app` and `fn_app`) before `string_literal`. This ensures that `MakeGreeting("World")` is correctly parsed as a function application rather than an unquoted string.
