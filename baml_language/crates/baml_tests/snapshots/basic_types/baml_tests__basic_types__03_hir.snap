@@ -41,3 +41,9 @@ enum Status {
   EnumVariant { name: "Active" }
   EnumVariant { name: "Inactive" }
 }
+type OptionalRoleList = Optional(List(StringLiteral("writer")))
+type RoleList = List(StringLiteral("reader"))
+type OptionalRole = Optional(StringLiteral("admin"))
+type Role = Union([StringLiteral("user"), StringLiteral("assistant"), StringLiteral("system")])
+type OptionalFlag = Optional(BoolLiteral(true))
+type OptionalCode = Optional(IntLiteral(200))

@@ -175,3 +175,85 @@ impl TypeRef {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_string_literal() {
+        assert_eq!(
+            TypeRef::from_type_text(r#""user""#),
+            TypeRef::StringLiteral("user".to_string())
+        );
+    }
+
+    #[test]
+    fn test_optional_string_literal() {
+        // Regression test: ensure "literal"? correctly produces Optional(StringLiteral)
+        // The string literal check requires BOTH starts_with('"') AND ends_with('"').
+        // For `"user"?`, ends_with('"') is false, so we fall through to optional check.
+        assert_eq!(
+            TypeRef::from_type_text(r#""user"?"#),
+            TypeRef::Optional(Box::new(TypeRef::StringLiteral("user".to_string())))
+        );
+    }
+
+    #[test]
+    fn test_array_of_string_literal() {
+        assert_eq!(
+            TypeRef::from_type_text(r#""user"[]"#),
+            TypeRef::List(Box::new(TypeRef::StringLiteral("user".to_string())))
+        );
+    }
+
+    #[test]
+    fn test_optional_array_of_string_literal() {
+        // "user"[]? -> Optional(List(StringLiteral("user")))
+        assert_eq!(
+            TypeRef::from_type_text(r#""user"[]?"#),
+            TypeRef::Optional(Box::new(TypeRef::List(Box::new(TypeRef::StringLiteral(
+                "user".to_string()
+            )))))
+        );
+    }
+
+    #[test]
+    fn test_optional_int_literal() {
+        assert_eq!(
+            TypeRef::from_type_text("200?"),
+            TypeRef::Optional(Box::new(TypeRef::IntLiteral(200)))
+        );
+    }
+
+    #[test]
+    fn test_optional_bool_literal() {
+        assert_eq!(
+            TypeRef::from_type_text("true?"),
+            TypeRef::Optional(Box::new(TypeRef::BoolLiteral(true)))
+        );
+    }
+
+    #[test]
+    fn test_primitives() {
+        assert_eq!(TypeRef::from_type_text("int"), TypeRef::Int);
+        assert_eq!(TypeRef::from_type_text("string"), TypeRef::String);
+        assert_eq!(TypeRef::from_type_text("bool"), TypeRef::Bool);
+    }
+
+    #[test]
+    fn test_optional_primitive() {
+        assert_eq!(
+            TypeRef::from_type_text("int?"),
+            TypeRef::Optional(Box::new(TypeRef::Int))
+        );
+    }
+
+    #[test]
+    fn test_array_of_primitive() {
+        assert_eq!(
+            TypeRef::from_type_text("int[]"),
+            TypeRef::List(Box::new(TypeRef::Int))
+        );
+    }
+}
