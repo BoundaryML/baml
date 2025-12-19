@@ -916,6 +916,12 @@ impl<'a> Parser<'a> {
             return;
         }
 
+        // Check for number literal types
+        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+            self.bump();
+            return;
+        }
+
         if self.at(TokenKind::Word) {
             // Base type name or generic type
             self.bump();
