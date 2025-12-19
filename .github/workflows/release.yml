@@ -163,25 +163,15 @@ jobs:
 
       - name: Ensure npm CLI supports trusted publishing
         run: |
-          node <<'EOF'
-          const required = '11.5.1';
-          const current = require('child_process').execSync('npm --version', { encoding: 'utf8' }).trim();
-          const semverCompare = (a, b) => {
-            const pa = a.split('.').map(Number);
-            const pb = b.split('.').map(Number);
-            for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-              const diff = (pa[i] || 0) - (pb[i] || 0);
-              if (diff !== 0) return diff;
-            }
-            return 0;
-          };
-          if (semverCompare(current, required) < 0) {
-            console.error(`npm ${current} is lower than required ${required}`);
-            console.error('npm 11.5.1+ is required for trusted publishing because earlier versions cannot exchange OIDC tokens directly with the npm registry.');
-            process.exit(1);
-          }
-          console.log(`npm ${current} satisfies >= ${required}`);
-          EOF
+          set -euo pipefail
+          required_version="11.5.1"
+          current_version="$(npm --version)"
+          if [ "$(printf '%s\n' "$required_version" "$current_version" | sort -V | head -n1)" != "$required_version" ]; then
+            echo "npm $current_version is lower than required $required_version" >&2
+            echo "npm 11.5.1+ is required for trusted publishing because it is the earliest version that can use OIDC auth" >&2
+            exit 1
+          fi
+          echo "npm $current_version satisfies >= $required_version"
 
       - uses: actions/download-artifact@v4
         with:
