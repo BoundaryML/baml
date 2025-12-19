@@ -102,19 +102,14 @@ fn basic_add() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::LoadConst(Value::Int(2)),
-            //     Instruction::BinOp(BinOp::Add),
-            //     Instruction::LoadVar("a".to_string()),
-            //     Instruction::Return,
-            // ],
-            // Stackification with Virtual _0 and fall-through elimination:
+            // Named variable 'a' is Real (not inlined):
             vec![
+                Instruction::LoadConst(Value::Null), // Pre-allocate for 'a'
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::BinOp(BinOp::Add),
+                Instruction::StoreVar("a".to_string()),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],

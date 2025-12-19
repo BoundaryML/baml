@@ -15,7 +15,7 @@ use baml_vm::{
     ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp, Value,
 };
 
-use super::{
+use crate::{
     MirCodegenContext,
     analysis::{AnalysisResult, LocalClassification},
 };
@@ -60,6 +60,7 @@ struct StackifyCodegen<'ctx, 'obj, 'db> {
 
 impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     /// Create a new stackification codegen instance.
+    #[allow(clippy::needless_pass_by_value)] // ctx is destructured into self fields
     fn new(ctx: MirCodegenContext<'ctx, 'obj>, analysis: AnalysisResult<'db>) -> Self {
         Self {
             globals: ctx.globals,

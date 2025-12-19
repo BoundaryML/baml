@@ -74,23 +74,26 @@ Function ProcessAnalysis (arity: 1, kind: Exec):
 
 Function ProcessData (arity: 1, kind: Exec):
      0    LOAD_CONST 0       (null)
-     1    LOAD_VAR 1         (data)
-     2    LOAD_FIELD 0       
-     3    LOAD_VAR 1         (data)
-     4    LOAD_FIELD 1       
-     5    BIN_OP +           
-     6    LOAD_CONST 1       (100)
-     7    CMP_OP >           
-     8    JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +5            (to 14)
-     10   LOAD_CONST 2       (low)
-     11   STORE_VAR 2        (_0)
-     12   LOAD_VAR 2         (_0)
-     13   RETURN             
-     14   LOAD_CONST 3       (high)
-     15   STORE_VAR 2        (_0)
-     16   LOAD_VAR 2         (_0)
-     17   RETURN             
+     1    LOAD_CONST 0       (null)
+     2    LOAD_VAR 1         (data)
+     3    LOAD_FIELD 0       
+     4    LOAD_VAR 1         (data)
+     5    LOAD_FIELD 1       
+     6    BIN_OP +           
+     7    STORE_VAR 3        (result)
+     8    LOAD_VAR 3         (result)
+     9    LOAD_CONST 1       (100)
+     10   CMP_OP >           
+     11   JUMP_IF_FALSE +2   (to 13)
+     12   JUMP +5            (to 17)
+     13   LOAD_CONST 2       (low)
+     14   STORE_VAR 2        (_0)
+     15   LOAD_VAR 2         (_0)
+     16   RETURN             
+     17   LOAD_CONST 3       (high)
+     18   STORE_VAR 2        (_0)
+     19   LOAD_VAR 2         (_0)
+     20   RETURN             
 
 Function SimpleCalc (arity: 2, kind: Exec):
      0   LOAD_CONST 0   (null)

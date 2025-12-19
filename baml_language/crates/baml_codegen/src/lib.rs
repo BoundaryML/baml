@@ -1,6 +1,6 @@
 //! Code generation for BAML.
 //!
-//! Compiles MIR (Mid-level IR) to bytecode for the BAML VM.
+//! Compiles MIR (Mid-level IR) to bytecode for the BAML VM using stackification.
 //!
 //! # Architecture
 //!
@@ -11,21 +11,34 @@
 //!
 //! This crate handles the final step: MIR -> Bytecode.
 //!
-//! The compiler takes MIR functions (control flow graphs) and generates
-//! stack-based bytecode instructions. Key components:
+//! The compiler classifies MIR locals as Virtual or Real:
+//! - **Virtual locals**: Single-use temporaries inlined at use site
+//! - **Real locals**: Multi-use or cross-block variables that need stack slots
 //!
-//! - **`MirCodegen`**: Compiles MIR CFG to bytecode
-//! - **Local slot allocation**: Maps MIR locals to VM stack slots
-//! - **Block emission**: Emits bytecode for each basic block
-//! - **Jump patching**: Resolves jump targets after all blocks are emitted
-//!
-//! # Codegen Variants
-//!
-//! - **`mir_codegen`**: Naive codegen (all locals get stack slots)
-//! - **`mir_codegen_v2`**: Stackification codegen (virtual locals inlined)
+//! Key modules:
+//! - **`analysis`**: Def-use analysis, dominator computation, local classification
+//! - **`emit`**: Bytecode emission with stackification optimization
 
-mod mir_codegen;
-mod mir_codegen_v2;
+mod analysis;
+mod emit;
+
+use baml_vm::ObjectPool;
+pub(crate) use emit::compile_mir_function;
+
+/// Context for MIR codegen.
+///
+/// Contains all shared state needed during MIR compilation:
+/// global mappings, class information, and the shared object pool.
+pub(crate) struct MirCodegenContext<'ctx, 'obj> {
+    /// Resolved global names to indices (function names -> global index).
+    pub globals: &'ctx HashMap<String, usize>,
+    /// Resolved class field indices (class name -> field name -> field index).
+    pub classes: &'ctx HashMap<String, HashMap<String, usize>>,
+    /// Pre-allocated Class object indices in the program's object pool.
+    pub class_object_indices: &'ctx HashMap<String, usize>,
+    /// Shared object pool for strings, etc.
+    pub objects: &'obj mut ObjectPool,
+}
 
 use std::collections::HashMap;
 
@@ -197,14 +210,14 @@ pub fn compile_files(db: &dyn baml_mir::Db, files: &[SourceFile]) -> Program {
                         let mir =
                             baml_mir::lower_function(&signature, &body, &inference, db, &classes);
 
-                        // Compile MIR to bytecode using stackification codegen
-                        let ctx = mir_codegen_v2::MirCodegenContext {
+                        // Compile MIR to bytecode
+                        let ctx = MirCodegenContext {
                             globals: &globals,
                             classes: &classes,
                             class_object_indices: &class_object_indices,
                             objects: &mut program.objects,
                         };
-                        mir_codegen_v2::compile_mir_function(&mir, ctx)
+                        compile_mir_function(&mir, ctx)
                     }
                 };
 

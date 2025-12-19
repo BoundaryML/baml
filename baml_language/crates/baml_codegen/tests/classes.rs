@@ -22,8 +22,9 @@ fn class_constructor() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Stackification with Virtual _0 and fall-through elimination:
+            // Named variable 'p' is Real (not inlined), so we get explicit store/load:
             vec![
+                Instruction::LoadConst(Value::Null), // Pre-allocate for 'p'
                 Instruction::AllocInstance(Value::class("Point")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(1)),
@@ -31,6 +32,8 @@ fn class_constructor() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreField(1),
+                Instruction::StoreVar("p".to_string()),
+                Instruction::LoadVar("p".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -221,9 +224,9 @@ fn nested_field_read() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Stackification with Virtual _0 and fall-through elimination:
-            // o is virtual (single use in field access), _0 is virtual
+            // Named variable 'o' is Real (not inlined), so we get explicit store/load:
             vec![
+                Instruction::LoadConst(Value::Null), // Pre-allocate for 'o'
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
                 Instruction::AllocInstance(Value::class("Inner")),
@@ -231,6 +234,8 @@ fn nested_field_read() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(42)),
                 Instruction::StoreField(0),
                 Instruction::StoreField(0),
+                Instruction::StoreVar("o".to_string()),
+                Instruction::LoadVar("o".to_string()),
                 Instruction::LoadField(0),
                 Instruction::LoadField(0),
                 Instruction::Return,
@@ -575,9 +580,9 @@ fn nested_object_construction() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Stackification with Virtual _0 and fall-through elimination:
-            // o is virtual (single use in field access), _0 is virtual
+            // Named variable 'o' is Real (not inlined), so we get explicit store/load:
             vec![
+                Instruction::LoadConst(Value::Null), // Pre-allocate for 'o'
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
                 Instruction::AllocInstance(Value::class("Inner")),
@@ -591,6 +596,8 @@ fn nested_object_construction() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(30)),
                 Instruction::StoreField(1),
+                Instruction::StoreVar("o".to_string()),
+                Instruction::LoadVar("o".to_string()),
                 Instruction::LoadField(1),
                 Instruction::Return,
             ],

@@ -16,12 +16,15 @@ fn array_constructor() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Stackification with Virtual _0 and fall-through elimination:
+            // Named variable 'a' is Real (not inlined), so we get explicit store/load:
             vec![
+                Instruction::LoadConst(Value::Null), // Pre-allocate for 'a'
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
+                Instruction::StoreVar("a".to_string()),
+                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],
