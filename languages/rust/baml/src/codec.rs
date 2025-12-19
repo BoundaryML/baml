@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::error::BamlError;
@@ -19,11 +20,38 @@ pub trait BamlEncode {
 }
 
 // =============================================================================
+// Union variant unwrapping helper
+// =============================================================================
+
+/// Unwrap single-pattern union variants (e.g., optional fields during streaming).
+///
+/// BAML wraps values in UnionVariantValue with is_single_pattern=true for optional types.
+/// This function recursively unwraps these wrappers to get to the actual value.
+fn unwrap_single_pattern_union(holder: &CffiValueHolder) -> Cow<'_, CffiValueHolder> {
+    match &holder.value {
+        Some(cffi_value_holder::Value::UnionVariantValue(union)) if union.is_single_pattern => {
+            match &union.value {
+                Some(inner) => {
+                    // Recursively unwrap in case of nested wrappers
+                    match unwrap_single_pattern_union(inner) {
+                        Cow::Borrowed(h) => Cow::Borrowed(h),
+                        Cow::Owned(h) => Cow::Owned(h),
+                    }
+                }
+                None => Cow::Borrowed(holder),
+            }
+        }
+        _ => Cow::Borrowed(holder),
+    }
+}
+
+// =============================================================================
 // Primitive BamlDecode implementations
 // =============================================================================
 
 impl BamlDecode for String {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::StringValue(s)) => Ok(s.clone()),
             other => Err(BamlError::internal(format!(
@@ -36,6 +64,7 @@ impl BamlDecode for String {
 
 impl BamlDecode for i64 {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::IntValue(i)) => Ok(*i),
             other => Err(BamlError::internal(format!(
@@ -48,6 +77,7 @@ impl BamlDecode for i64 {
 
 impl BamlDecode for f64 {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::FloatValue(f)) => Ok(*f),
             other => Err(BamlError::internal(format!(
@@ -60,6 +90,7 @@ impl BamlDecode for f64 {
 
 impl BamlDecode for bool {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::BoolValue(b)) => Ok(*b),
             other => Err(BamlError::internal(format!(
@@ -76,6 +107,7 @@ impl BamlDecode for bool {
 
 impl<T: BamlDecode> BamlDecode for Vec<T> {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::ListValue(list)) => {
                 list.items.iter().map(T::baml_decode).collect()
@@ -90,15 +122,18 @@ impl<T: BamlDecode> BamlDecode for Vec<T> {
 
 impl<T: BamlDecode> BamlDecode for Option<T> {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        // First unwrap any single-pattern union wrappers
+        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::NullValue(_)) | None => Ok(None),
-            _ => Ok(Some(T::baml_decode(holder)?)),
+            _ => Ok(Some(T::baml_decode(&holder)?)),
         }
     }
 }
 
 impl<V: BamlDecode> BamlDecode for HashMap<String, V> {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::MapValue(map)) => {
                 let mut result = HashMap::new();
@@ -222,6 +257,7 @@ pub trait BamlClass: Sized {
 
 impl<T: BamlClass> BamlDecode for T {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::ClassValue(class)) => T::from_class_value(class),
             other => Err(BamlError::internal(format!(
@@ -247,6 +283,7 @@ pub trait BamlEnum: Sized {
 
 /// Decode an enum from a CffiValueHolder
 pub fn decode_enum<T: BamlEnum>(holder: &CffiValueHolder) -> Result<T, BamlError> {
+    let holder = unwrap_single_pattern_union(holder);
     match &holder.value {
         Some(cffi_value_holder::Value::EnumValue(e)) => T::from_variant_name(&e.value),
         other => Err(BamlError::internal(format!(

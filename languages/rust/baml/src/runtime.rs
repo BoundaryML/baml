@@ -1,0 +1,240 @@
+use std::collections::HashMap;
+use std::ffi::{c_void, CStr, CString};
+
+use prost::Message;
+
+use crate::args::FunctionArgs;
+use crate::codec::BamlDecode;
+use crate::error::BamlError;
+use crate::ffi::{self, callbacks};
+use crate::proto::baml_cffi_v1::CffiValueHolder;
+use crate::stream::StreamResult;
+
+/// Handle to the BAML runtime
+pub struct BamlRuntime {
+    ptr: *const c_void,
+}
+
+// Safety: The runtime is thread-safe internally (protected by Rust's runtime)
+unsafe impl Send for BamlRuntime {}
+unsafe impl Sync for BamlRuntime {}
+
+impl BamlRuntime {
+    /// Create a new runtime from embedded BAML source files
+    ///
+    /// # Arguments
+    /// * `baml_src_dir` - Base directory path for BAML sources
+    /// * `files` - Map of relative file paths to file contents
+    /// * `env` - Environment variables
+    pub fn new(
+        baml_src_dir: &str,
+        files: HashMap<String, String>,
+        env: HashMap<String, String>,
+    ) -> Result<Self, BamlError> {
+        // Initialize callbacks first
+        callbacks::initialize_callbacks();
+
+        // Encode files and env as JSON (matching CFFI format)
+        let files_json = json_encode_map(&files)?;
+        let env_json = json_encode_map(&env)?;
+
+        let dir_cstr = CString::new(baml_src_dir)
+            .map_err(|_| BamlError::internal("invalid baml_src_dir path (contains null byte)"))?;
+        let files_cstr = CString::new(files_json)
+            .map_err(|_| BamlError::internal("invalid files json (contains null byte)"))?;
+        let env_cstr = CString::new(env_json)
+            .map_err(|_| BamlError::internal("invalid env json (contains null byte)"))?;
+
+        let ptr = unsafe {
+            ffi::create_baml_runtime(dir_cstr.as_ptr(), files_cstr.as_ptr(), env_cstr.as_ptr())
+        };
+
+        if ptr.is_null() {
+            return Err(BamlError::internal("failed to create runtime"));
+        }
+
+        Ok(BamlRuntime { ptr })
+    }
+
+    /// Call a function synchronously (blocks until complete)
+    pub fn call_function<T: BamlDecode>(
+        &self,
+        name: &str,
+        args: &FunctionArgs,
+    ) -> Result<T, BamlError> {
+        let encoded = args.encode()?;
+        let name_cstr =
+            CString::new(name).map_err(|_| BamlError::internal("invalid function name"))?;
+
+        let (id, receiver) = callbacks::create_callback();
+
+        let error_ptr = unsafe {
+            ffi::call_function_from_c(
+                self.ptr,
+                name_cstr.as_ptr(),
+                encoded.as_ptr().cast::<i8>(),
+                encoded.len(),
+                id,
+            )
+        };
+
+        // Check for immediate error
+        if !error_ptr.is_null() {
+            callbacks::remove_callback(id);
+            let error_msg = unsafe {
+                let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
+                cstr.to_string_lossy().into_owned()
+            };
+            return Err(BamlError::internal(error_msg));
+        }
+
+        // Wait for result
+        match receiver.recv() {
+            Ok(callbacks::CallbackResult::Final(data)) => {
+                let holder = CffiValueHolder::decode(&data[..])
+                    .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
+                T::baml_decode(&holder)
+            }
+            Ok(callbacks::CallbackResult::Partial(_)) => {
+                Err(BamlError::internal("unexpected partial result in sync call"))
+            }
+            Ok(callbacks::CallbackResult::Error(e)) => Err(e),
+            Err(_) => Err(BamlError::internal("callback channel closed")),
+        }
+    }
+
+    /// Call a function with streaming results
+    pub fn call_function_stream<TPartial, TFinal>(
+        &self,
+        name: &str,
+        args: &FunctionArgs,
+    ) -> Result<StreamResult<TPartial, TFinal>, BamlError>
+    where
+        TPartial: BamlDecode + Send + 'static,
+        TFinal: BamlDecode + Send + 'static,
+    {
+        let encoded = args.encode()?;
+        let name_cstr =
+            CString::new(name).map_err(|_| BamlError::internal("invalid function name"))?;
+
+        let (id, receiver) = callbacks::create_callback();
+
+        let error_ptr = unsafe {
+            ffi::call_function_stream_from_c(
+                self.ptr,
+                name_cstr.as_ptr(),
+                encoded.as_ptr().cast::<i8>(),
+                encoded.len(),
+                id,
+            )
+        };
+
+        if !error_ptr.is_null() {
+            callbacks::remove_callback(id);
+            let error_msg = unsafe {
+                let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
+                cstr.to_string_lossy().into_owned()
+            };
+            return Err(BamlError::internal(error_msg));
+        }
+
+        Ok(StreamResult::new(receiver))
+    }
+
+    /// Parse raw LLM output into typed result
+    pub fn parse<T: BamlDecode>(
+        &self,
+        _function_name: &str,
+        _llm_response: &str,
+    ) -> Result<T, BamlError> {
+        // TODO: Implement using call_function_parse_from_c
+        Err(BamlError::internal("parse not yet implemented"))
+    }
+}
+
+impl Drop for BamlRuntime {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::destroy_baml_runtime(self.ptr);
+        }
+    }
+}
+
+/// Simple JSON encoding for maps
+///
+/// This is a minimal implementation to avoid adding serde_json as a dependency.
+/// For simplicity, we assume keys and values don't contain problematic characters
+/// that would require complex escaping beyond basic escapes.
+fn json_encode_map(map: &HashMap<String, String>) -> Result<String, BamlError> {
+    let mut parts = Vec::with_capacity(map.len());
+    for (k, v) in map {
+        let escaped_k = json_escape_string(k);
+        let escaped_v = json_escape_string(v);
+        parts.push(format!("\"{escaped_k}\":\"{escaped_v}\""));
+    }
+    Ok(format!("{{{}}}", parts.join(",")))
+}
+
+/// Escape a string for JSON encoding
+fn json_escape_string(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => result.push_str("\\\""),
+            '\\' => result.push_str("\\\\"),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            '\t' => result.push_str("\\t"),
+            c if c.is_control() => {
+                // Escape control characters as \uXXXX
+                result.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => result.push(c),
+        }
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_json_encode_empty_map() {
+        let map: HashMap<String, String> = HashMap::new();
+        let result = json_encode_map(&map).unwrap();
+        assert_eq!(result, "{}");
+    }
+
+    #[test]
+    fn test_json_encode_simple_map() {
+        let mut map = HashMap::new();
+        map.insert("key".to_string(), "value".to_string());
+        let result = json_encode_map(&map).unwrap();
+        assert_eq!(result, "{\"key\":\"value\"}");
+    }
+
+    #[test]
+    fn test_json_escape_quotes() {
+        let escaped = json_escape_string("hello \"world\"");
+        assert_eq!(escaped, "hello \\\"world\\\"");
+    }
+
+    #[test]
+    fn test_json_escape_backslash() {
+        let escaped = json_escape_string("path\\to\\file");
+        assert_eq!(escaped, "path\\\\to\\\\file");
+    }
+
+    #[test]
+    fn test_json_escape_newlines() {
+        let escaped = json_escape_string("line1\nline2\rline3");
+        assert_eq!(escaped, "line1\\nline2\\rline3");
+    }
+
+    #[test]
+    fn test_json_escape_tabs() {
+        let escaped = json_escape_string("col1\tcol2");
+        assert_eq!(escaped, "col1\\tcol2");
+    }
+}
