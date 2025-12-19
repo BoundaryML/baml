@@ -25,6 +25,9 @@ jobs:
         with:
           node-action-version: 'v6'
 
+      - name: Check npm CLI version
+        run: npm --version
+
       - name: Download bindings artifacts
         uses: actions/download-artifact@v4
         with:
@@ -33,6 +36,9 @@ jobs:
           pattern: bindings-*
           path: engine/language_client_typescript/artifacts
           github-token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
+
+      - name: Check npm CLI version
+        run: npm --version
 
       - name: Publish to NPM
         # Uses OIDC authentication via trusted publishers
