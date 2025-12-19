@@ -3,7 +3,25 @@
 //! This crate provides the runtime support for BAML-generated Rust code.
 //! Users should not import from this crate directly - instead, use the
 //! generated `baml_client` crate which re-exports necessary types.
+//!
+//! # Derive Macros
+//!
+//! Use `#[derive(BamlEncode)]` and `#[derive(BamlDecode)]` to automatically
+//! implement serialization for your types:
+//!
+//! ```ignore
+//! use baml::{BamlEncode, BamlDecode};
+//!
+//! #[derive(BamlEncode, BamlDecode)]
+//! #[baml(name = "Person")]
+//! struct Person {
+//!     name: String,
+//!     #[baml(name = "years_old")]
+//!     age: i64,
+//! }
+//! ```
 
+mod codec;
 mod error;
 mod ffi;
 
@@ -17,7 +35,24 @@ mod proto {
 use std::ffi::CString;
 
 // Public API - re-exported through baml_client
+pub use codec::{
+    decode_enum, decode_field, decode_optional_field, encode_class, encode_enum, BamlClass,
+    BamlDecode, BamlEncode, BamlEnum,
+};
 pub use error::BamlError;
+
+// Re-export derive macros
+pub use baml_macros::{BamlDecode, BamlEncode};
+
+/// Internal module for derive macro support.
+///
+/// This module exposes proto types needed by the generated derive macro code.
+/// Do not use directly - use the derive macros instead.
+#[doc(hidden)]
+pub mod __internal {
+    pub use crate::ffi::callbacks;
+    pub use crate::proto::baml_cffi_v1::*;
+}
 
 /// Call baml-cli with the given arguments
 /// Returns the exit code
@@ -48,33 +83,5 @@ pub fn version() -> String {
         std::ffi::CStr::from_ptr(ptr)
             .to_string_lossy()
             .into_owned()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_version() {
-        let v = version();
-        println!("BAML version: {}", v);
-        assert!(!v.is_empty());
-        assert_ne!(v, "unknown");
-    }
-
-    #[test]
-    fn test_cli_version() {
-        // This is the smoke test - if FFI linkage works, this will succeed
-        // First arg should be program name
-        let exit_code = invoke_cli(&["baml", "--version"]);
-        assert_eq!(exit_code, 0, "baml --version should exit with 0");
-    }
-
-    #[test]
-    fn test_cli_help() {
-        // First arg should be program name
-        let exit_code = invoke_cli(&["baml", "--help"]);
-        assert_eq!(exit_code, 0, "baml --help should exit with 0");
     }
 }

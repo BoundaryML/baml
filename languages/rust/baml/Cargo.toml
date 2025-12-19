@@ -17,6 +17,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml-macros = { workspace = true }
 libc = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
