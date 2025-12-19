@@ -227,38 +227,16 @@ impl<Id, Meta> Resolvable<Id, Meta> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum StringOr {
     EnvVar(String),
     Value(String),
     JinjaExpression(JinjaExpression),
     /// A template_string invocation with positional arguments.
-    /// The arguments are stored as UnresolvedValue<()> to allow nested template calls.
     TemplateStringCall {
         name: String,
         args: Vec<Resolvable<StringOr, ()>>,
     },
-}
-
-impl std::hash::Hash for StringOr {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // Include the discriminant
-        match self {
-            Self::EnvVar(_) => state.write_u8(0),
-            Self::Value(_) => state.write_u8(1),
-            Self::JinjaExpression(_) => state.write_u8(2),
-            Self::TemplateStringCall { .. } => state.write_u8(3),
-        }
-
-        match self {
-            Self::EnvVar(s) | Self::Value(s) => s.hash(state),
-            Self::JinjaExpression(j) => j.hash(state),
-            Self::TemplateStringCall { name, args } => {
-                name.hash(state);
-                args.hash(state);
-            }
-        }
-    }
 }
 
 /// Helper function to recursively collect env vars from a Resolvable<StringOr, _>

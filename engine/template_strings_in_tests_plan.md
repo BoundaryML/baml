@@ -400,3 +400,37 @@ The test argument `message` will be resolved to `"Hello, World!\n"` at test exec
 The initial implementation added `fn_app` to the `config_primary_expression` grammar rule, but the parser still failed because `string_literal` was ordered before `fn_app`. Since `string_literal` includes `unquoted_string_literal` which greedily matches identifiers (stopping at `(`), a template call like `MakeGreeting("World")` would be partially matched as the string `MakeGreeting`, leaving `("World")` unparsed.
 
 The fix was to reorder `config_primary_expression` to try function calls (`generic_fn_app` and `fn_app`) before `string_literal`. This ensures that `MakeGreeting("World")` is correctly parsed as a function application rather than an unquoted string.
+
+### Nested Template String Support
+
+The initial `TemplateStringRenderer` implementation created a bare minijinja environment with only the target template, which meant nested template_string calls (e.g., `Outer()` calling `Inner()`) would fail with "unknown function" errors.
+
+The fix was to collect ALL template_strings from the IR and inject them as Jinja macros before rendering, matching how the prompt renderer handles template_strings:
+
+```rust
+// Collect all template_strings as Jinja macro definitions
+let macro_defs: String = self
+    .walk_template_strings()
+    .map(|t| {
+        let args_str = t.inputs().iter().map(|i| i.name.as_str()).collect::<Vec<_>>().join(", ");
+        format!("{{% macro {}({}) %}}{}{{% endmacro %}}\n", t.name(), args_str, t.template())
+    })
+    .collect();
+
+// Prepend macro definitions to the template content
+let full_template = format!("{}{}", macro_defs, template_content);
+```
+
+This allows nested calls like:
+
+```baml
+template_string Outer(arg: int) #"The {{ Inner() }} is {{ arg }}"#
+template_string Inner() #"FOO"#
+
+test MyTest {
+  functions [SomeFunc]
+  args {
+    input: Outer(43)  // Renders to "The FOO is 43"
+  }
+}
+```

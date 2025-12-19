@@ -291,6 +291,34 @@ test LongTextTest {
 }
 ```
 
+## Template Strings
+
+Share string data between tests by putting it into a `template_string`,
+then invoke the `template_string` in the test args:
+
+```baml
+function Echo(input: string) -> string {
+  client GPT4o
+  prompt #"
+    Echo the input string back to me verbatim:
+    {{ input }}
+  "#
+}
+
+template_string EchoTestData(arg: int) ##"
+  The number is {{ arg }}
+"##
+
+test TemplateTest {
+  functions [Echo]
+  args {
+   input: EchoTestData()
+  }
+  @@assert( {{ this == "The number is 43" }} )
+}
+
+```
+
 ## Testing Multiple Functions
 
 This requires each function to have the exact same parameters:

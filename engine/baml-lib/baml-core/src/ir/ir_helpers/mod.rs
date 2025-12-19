@@ -2049,9 +2049,33 @@ impl TemplateStringRenderer for IntermediateRepr {
             args_map.insert(param.name.clone(), arg.clone());
         }
 
+        // Collect all template_strings as Jinja macro definitions.
+        // This allows nested template_string calls to work (e.g., Outer() calling Inner()).
+        // This matches how the prompt renderer handles template_strings.
+        let macro_defs: String = self
+            .walk_template_strings()
+            .map(|t| {
+                let args_str = t
+                    .inputs()
+                    .iter()
+                    .map(|i| i.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "{{% macro {}({}) %}}{}{{% endmacro %}}\n",
+                    t.name(),
+                    args_str,
+                    t.template()
+                )
+            })
+            .collect();
+
+        // Prepend macro definitions to the template content
+        let full_template = format!("{}{}", macro_defs, template_content);
+
         // Create a minijinja environment and render the template
         let mut env = minijinja::Environment::new();
-        env.add_template("__template__", template_content)
+        env.add_template("__template__", &full_template)
             .map_err(|e| anyhow::anyhow!("Failed to parse template '{}': {}", name, e))?;
 
         let tmpl = env
