@@ -29,7 +29,7 @@ fn basic_and() -> anyhow::Result<()> {
             //     Instruction::Call(0),
             //     Instruction::Return,
             // ],
-            // Stackification codegen - LHS inlined, function ref inlined:
+            // Stackification with fall-through elimination:
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
@@ -37,13 +37,10 @@ fn basic_and() -> anyhow::Result<()> {
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(6),
+                Instruction::Jump(4),
                 Instruction::LoadGlobal(Value::function("ret_bool")),
                 Instruction::Call(0),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::Jump(1),
-                Instruction::Jump(1),
                 Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
@@ -75,21 +72,18 @@ fn basic_or() -> anyhow::Result<()> {
             //     Instruction::Call(0),
             //     Instruction::Return,
             // ],
-            // Stackification codegen - LHS inlined, function ref inlined:
+            // Stackification with fall-through elimination:
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(2),
-                Instruction::Jump(6),
+                Instruction::Jump(5),
                 Instruction::LoadGlobal(Value::function("ret_bool")),
                 Instruction::Call(0),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::Jump(4),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::Jump(1),
                 Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
@@ -116,15 +110,11 @@ fn basic_add() -> anyhow::Result<()> {
             //     Instruction::LoadVar("a".to_string()),
             //     Instruction::Return,
             // ],
-            // Stackification codegen - all temps inlined, a inlined since single-use:
+            // Stackification with Virtual _0 and fall-through elimination:
             vec![
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],

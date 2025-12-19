@@ -8,7 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_mir::{BlockId, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator};
+use baml_mir::{BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator};
 
 // ============================================================================
 // Data Structures
@@ -46,8 +46,6 @@ pub struct LocalDefUse<'db> {
 /// Classification of a local variable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LocalClassification {
-    /// Return value (_0) - always real.
-    ReturnValue,
     /// Function parameter - always real.
     Parameter,
     /// Multi-use or cross-block local - needs stack slot.
@@ -398,34 +396,91 @@ fn collect_uses_in_place<'db>(
     }
 }
 
-/// Collect uses in a terminator.
+/// Collect uses (and defs for Call/Await) in a terminator.
 fn collect_uses_in_terminator<'db>(
     term: &Terminator<'db>,
     block: BlockId,
     def_use: &mut HashMap<Local, LocalDefUse<'db>>,
 ) {
     match term {
-        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
+        Terminator::Goto { .. } | Terminator::Unreachable => {}
+        Terminator::Return => {
+            // Return implicitly uses _0 (the return value local)
+            let return_local = Local(0);
+            if let Some(du) = def_use.get_mut(&return_local) {
+                du.uses.push(UseLocation {
+                    block,
+                    statement_idx: TERMINATOR_IDX,
+                });
+            }
+        }
         Terminator::Branch { condition, .. } => {
             collect_uses_in_operand(condition, block, TERMINATOR_IDX, def_use);
         }
         Terminator::Switch { discriminant, .. } => {
             collect_uses_in_operand(discriminant, block, TERMINATOR_IDX, def_use);
         }
-        Terminator::Call { callee, args, .. } => {
+        Terminator::Call {
+            callee,
+            args,
+            destination,
+            ..
+        } => {
             collect_uses_in_operand(callee, block, TERMINATOR_IDX, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, TERMINATOR_IDX, def_use);
             }
+            // Record the def for the destination (where call result is stored)
+            if let Place::Local(local) = destination {
+                if let Some(du) = def_use.get_mut(local) {
+                    // For Call terminators, we use a synthetic Rvalue::Use with a placeholder
+                    // The actual value comes from the call, but for classification purposes,
+                    // we just need to know there's a def here
+                    du.def = Some(DefLocation {
+                        block,
+                        statement_idx: TERMINATOR_IDX,
+                        rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+                    });
+                }
+            }
         }
-        Terminator::DispatchFuture { callee, args, .. } => {
+        Terminator::DispatchFuture {
+            callee,
+            args,
+            future,
+            ..
+        } => {
             collect_uses_in_operand(callee, block, TERMINATOR_IDX, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, TERMINATOR_IDX, def_use);
             }
+            // Record the def for the future place
+            if let Place::Local(local) = future {
+                if let Some(du) = def_use.get_mut(local) {
+                    du.def = Some(DefLocation {
+                        block,
+                        statement_idx: TERMINATOR_IDX,
+                        rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+                    });
+                }
+            }
         }
-        Terminator::Await { future, .. } => {
+        Terminator::Await {
+            future,
+            destination,
+            ..
+        } => {
             collect_uses_in_place(future, block, TERMINATOR_IDX, def_use);
+            // Record the def for the destination
+            if let Place::Local(local) = destination {
+                if let Some(du) = def_use.get_mut(local) {
+                    du.def = Some(DefLocation {
+                        block,
+                        statement_idx: TERMINATOR_IDX,
+                        rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+                    });
+                }
+            }
         }
     }
 }
@@ -446,13 +501,11 @@ fn classify_locals<'db>(
         let local = Local(idx);
         let du = &def_use[&local];
 
-        let classification = if idx == 0 {
-            // _0 is always real (return value)
-            LocalClassification::ReturnValue
-        } else if idx <= mir.arity {
-            // Parameters are always real
+        let classification = if idx > 0 && idx <= mir.arity {
+            // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
         } else if can_be_virtual(local, du, dominators, mir) {
+            // Check if local (including _0) can be virtual
             LocalClassification::Virtual
         } else {
             LocalClassification::Real
@@ -475,6 +528,12 @@ fn can_be_virtual<'db>(
     let Some(def) = &du.def else {
         return false;
     };
+
+    // Definitions in terminators (Call/Await/DispatchFuture) cannot be inlined
+    // because the value comes from the operation itself, not from a re-emittable rvalue
+    if def.statement_idx == TERMINATOR_IDX {
+        return false;
+    }
 
     // Must have exactly one use for simple virtual inlining
     if du.uses.len() != 1 {

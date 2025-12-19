@@ -53,6 +53,9 @@ struct StackifyCodegen<'ctx, 'obj, 'db> {
 
     /// Current source line for debugging.
     current_source_line: usize,
+
+    /// The next block in RPO order (for fall-through optimization).
+    next_block: Option<BlockId>,
 }
 
 impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
@@ -69,6 +72,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             pending_jumps: Vec::new(),
             bytecode: Bytecode::new(),
             current_source_line: 0,
+            next_block: None,
         }
     }
 
@@ -78,8 +82,11 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
         self.allocate_real_locals(mir);
 
         // 2. Emit blocks in RPO order
-        for &block_id in &self.analysis.rpo.clone() {
+        let rpo = self.analysis.rpo.clone();
+        for (i, &block_id) in rpo.iter().enumerate() {
             self.block_addresses.insert(block_id, self.current_pc());
+            // Track the next block for fall-through optimization
+            self.next_block = rpo.get(i + 1).copied();
             self.emit_block(mir.block(block_id), mir);
         }
 
@@ -114,18 +121,12 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             let classification = self.analysis.classifications[&local];
 
             match classification {
-                LocalClassification::ReturnValue => {
-                    // _0 gets the first slot after params
-                    self.local_slots.insert(local, arity + 1);
-                    next_slot = arity + 2;
-                    slots_to_allocate += 1;
-                }
                 LocalClassification::Parameter => {
                     // Parameters map to slots 1..=arity
                     self.local_slots.insert(local, idx);
                 }
                 LocalClassification::Real => {
-                    // Real locals get slots after return value
+                    // Real locals (including non-virtual _0) get slots
                     self.local_slots.insert(local, next_slot);
                     next_slot += 1;
                     slots_to_allocate += 1;
@@ -169,6 +170,20 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
         }
         self.bytecode.constants.push(value);
         self.bytecode.constants.len() - 1
+    }
+
+    /// Emit a jump to target, unless it's a fall-through to the next block.
+    ///
+    /// Returns true if a jump was emitted, false if it was elided.
+    fn emit_jump_unless_fallthrough(&mut self, target: BlockId) -> bool {
+        if self.next_block == Some(target) {
+            // Target is the next block - no jump needed, just fall through
+            false
+        } else {
+            let jump_idx = self.emit(Instruction::Jump(0));
+            self.pending_jumps.push((jump_idx, target));
+            true
+        }
     }
 
     // ========================================================================
@@ -438,8 +453,8 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     fn emit_terminator(&mut self, term: &Terminator<'db>, mir: &MirFunction<'db>) {
         match term {
             Terminator::Goto { target } => {
-                let jump_idx = self.emit(Instruction::Jump(0));
-                self.pending_jumps.push((jump_idx, *target));
+                // Skip jump if target is the next block (fall-through)
+                self.emit_jump_unless_fallthrough(*target);
             }
 
             Terminator::Branch {
@@ -448,10 +463,11 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 else_block,
             } => {
                 self.emit_operand_pull(condition, mir);
+                // JumpIfFalse to else_block
                 let else_jump = self.emit(Instruction::JumpIfFalse(0));
                 self.pending_jumps.push((else_jump, *else_block));
-                let then_jump = self.emit(Instruction::Jump(0));
-                self.pending_jumps.push((then_jump, *then_block));
+                // Jump to then_block (may be elided if it's next)
+                self.emit_jump_unless_fallthrough(*then_block);
             }
 
             Terminator::Switch {
@@ -469,20 +485,18 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                     let jump_idx = self.emit(Instruction::JumpIfFalse(0));
                     self.emit(Instruction::Pop(1));
                     self.emit(Instruction::Pop(1));
-                    let target_jump = self.emit(Instruction::Jump(0));
-                    self.pending_jumps.push((target_jump, *target));
+                    self.emit_jump_unless_fallthrough(*target);
                     let skip_to = self.current_pc();
                     self.patch_jump_to(jump_idx, skip_to);
                 }
 
                 self.emit(Instruction::Pop(1));
-                let otherwise_jump = self.emit(Instruction::Jump(0));
-                self.pending_jumps.push((otherwise_jump, *otherwise));
+                self.emit_jump_unless_fallthrough(*otherwise);
             }
 
             Terminator::Return => {
-                let return_slot = self.local_slots[&Local(0)];
-                self.emit(Instruction::LoadVar(return_slot));
+                // Use pull model for return value - if _0 is Virtual, inline it
+                self.emit_place_value_pull(&Place::Local(Local(0)), mir);
                 self.emit(Instruction::Return);
             }
 
@@ -499,8 +513,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 }
                 self.emit(Instruction::Call(args.len()));
                 self.emit_store_place(destination, mir);
-                let jump_idx = self.emit(Instruction::Jump(0));
-                self.pending_jumps.push((jump_idx, *target));
+                self.emit_jump_unless_fallthrough(*target);
             }
 
             Terminator::Unreachable => {
@@ -521,8 +534,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 }
                 self.emit(Instruction::DispatchFuture(args.len()));
                 self.emit_store_place(future, mir);
-                let jump_idx = self.emit(Instruction::Jump(0));
-                self.pending_jumps.push((jump_idx, *resume));
+                self.emit_jump_unless_fallthrough(*resume);
             }
 
             Terminator::Await {
@@ -534,8 +546,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 self.emit_place_value_pull(future, mir);
                 self.emit(Instruction::Await);
                 self.emit_store_place(destination, mir);
-                let jump_idx = self.emit(Instruction::Jump(0));
-                self.pending_jumps.push((jump_idx, *target));
+                self.emit_jump_unless_fallthrough(*target);
             }
         }
     }

@@ -16,21 +16,12 @@ fn array_constructor() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Stackification codegen - virtual locals inlined:
+            // Stackification with Virtual _0 and fall-through elimination:
             vec![
-                // Pre-allocate only real locals (_0 return value)
-                Instruction::LoadConst(Value::Null),
-                // Array elements pushed directly (temps are virtual)
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
-                // Store to _0 (return value)
-                Instruction::StoreVar("_0".to_string()),
-                // Goto exit block
-                Instruction::Jump(1),
-                // Return
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -47,21 +38,12 @@ fn return_array_literal() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Stackification codegen - virtual locals inlined:
+            // Stackification with Virtual _0 and fall-through elimination:
             vec![
-                // Pre-allocate only real locals (_0 return value)
-                Instruction::LoadConst(Value::Null),
-                // Array elements pushed directly (temps are virtual)
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
-                // Store to _0 (return value)
-                Instruction::StoreVar("_0".to_string()),
-                // Goto exit block
-                Instruction::Jump(1),
-                // Return
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],

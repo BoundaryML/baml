@@ -15,17 +15,8 @@ fn return_literal_int() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![Instruction::LoadConst(Value::Int(42)), Instruction::Return],
-            // MIR codegen (naive) - same semantics, more instructions:
-            vec![
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Int(42)),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
-                Instruction::Return,
-            ],
+            // Stackification with Virtual _0 and fall-through elimination:
+            vec![Instruction::LoadConst(Value::Int(42)), Instruction::Return],
         )],
     })
 }
@@ -40,18 +31,9 @@ fn return_literal_bool() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // Stackification with Virtual _0 and fall-through elimination:
             vec![
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -92,28 +74,17 @@ fn return_function_call() -> anyhow::Result<()> {
         expected: vec![
             (
                 "one",
-                // Stackification codegen:
-                vec![
-                    Instruction::LoadConst(Value::Null),
-                    Instruction::LoadConst(Value::Int(1)),
-                    Instruction::StoreVar("_0".to_string()),
-                    Instruction::Jump(1),
-                    Instruction::LoadVar("_0".to_string()),
-                    Instruction::Return,
-                ],
+                // Stackification with Virtual _0:
+                vec![Instruction::LoadConst(Value::Int(1)), Instruction::Return],
             ),
             (
                 "main",
-                // Stackification codegen - function reference is virtual:
+                // Call result is stored to _0 (Real because def is in Call terminator)
                 vec![
                     Instruction::LoadConst(Value::Null),
-                    // Load function directly (inlined)
                     Instruction::LoadGlobal(Value::function("one")),
                     Instruction::Call(0),
                     Instruction::StoreVar("_0".to_string()),
-                    // Exit block and return block share same jump target
-                    Instruction::Jump(1),
-                    Instruction::Jump(1),
                     Instruction::LoadVar("_0".to_string()),
                     Instruction::Return,
                 ],
@@ -138,31 +109,17 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
         expected: vec![
             (
                 "two",
-                // Stackification codegen:
-                vec![
-                    Instruction::LoadConst(Value::Null),
-                    Instruction::LoadConst(Value::Int(2)),
-                    Instruction::StoreVar("_0".to_string()),
-                    Instruction::Jump(1),
-                    Instruction::LoadVar("_0".to_string()),
-                    Instruction::Return,
-                ],
+                // Stackification with Virtual _0 and fall-through elimination:
+                vec![Instruction::LoadConst(Value::Int(2)), Instruction::Return],
             ),
             (
                 "main",
-                // Stackification codegen - function reference is virtual, a is real:
+                // Call result is stored to _0 (Real because def is in Call terminator)
                 vec![
-                    Instruction::LoadConst(Value::Null), // _0
-                    Instruction::LoadConst(Value::Null), // a (user variable, used later)
-                    // Load function directly (inlined)
+                    Instruction::LoadConst(Value::Null),
                     Instruction::LoadGlobal(Value::function("two")),
                     Instruction::Call(0),
-                    Instruction::StoreVar("a".to_string()),
-                    Instruction::Jump(1),
-                    // Return a
-                    Instruction::LoadVar("a".to_string()),
                     Instruction::StoreVar("_0".to_string()),
-                    Instruction::Jump(1),
                     Instruction::LoadVar("_0".to_string()),
                     Instruction::Return,
                 ],
