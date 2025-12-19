@@ -174,8 +174,8 @@ impl Session {
     /// previous methods. It handles both lookup and creation in a single method.
     ///
     /// Returns:
-    /// - Some(Arc<Mutex<Project>>) if a project was found or created
-    /// - None if no baml_src directory could be found for the path
+    /// - `Some(Arc<Mutex<Project>>)` if a project was found or created
+    /// - `None` if no baml_src directory could be found for the path
     pub fn get_or_create_project(
         &self,
         path: impl AsRef<Path> + std::fmt::Debug,
