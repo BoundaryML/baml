@@ -8,8 +8,10 @@ on:
 
 jobs:
   fetch-artifacts:
+    environment: release
     runs-on: ubuntu-latest
     permissions:
+      id-token: write
       contents: read
     steps:
       - name: Checkout
@@ -31,3 +33,7 @@ jobs:
           pattern: bindings-*
           path: engine/language_client_typescript/artifacts
           github-token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
+
+      - name: Publish to NPM
+        # Uses OIDC authentication via trusted publishers
+        run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
