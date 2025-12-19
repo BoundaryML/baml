@@ -161,9 +161,7 @@ impl TypeRef {
     /// - Named types: `User`, `MyClass`
     pub(crate) fn from_type_text(text: &str) -> Self {
         // Check for string literal types like "user" or "assistant"
-        if (text.starts_with('"') && text.ends_with('"'))
-            || (text.starts_with('\'') && text.ends_with('\''))
-        {
+        if text.starts_with('"') && text.ends_with('"') {
             let inner = &text[1..text.len() - 1];
             return TypeRef::StringLiteral(inner.to_string());
         }
