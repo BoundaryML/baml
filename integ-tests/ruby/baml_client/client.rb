@@ -3301,6 +3301,31 @@ module BamlClient
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
+      def TemplateStringTestEcho(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TemplateStringTestEcho may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TemplateStringTestEcho", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
       def TestAbortFallbackChain(
           *varargs,
           input:,
@@ -9175,6 +9200,31 @@ module BamlClient
 
           __ctx__, __result__ = __options__.create_sync_stream(function_name: "TellStory", args: {
               story: story,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TemplateStringTestEcho(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TemplateStringTestEcho may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TemplateStringTestEcho", args: {
+              input: input,
           })
 
           Baml::BamlStream[String, String].new(

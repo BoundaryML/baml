@@ -6874,6 +6874,56 @@ export function useTellStory(
   }
 }
 /**
+ * A specialized hook for the TemplateStringTestEcho BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTemplateStringTestEcho({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTemplateStringTestEcho({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTemplateStringTestEcho(props: HookInput<'TemplateStringTestEcho', { stream: false }>): HookOutput<'TemplateStringTestEcho', { stream: false }>
+export function useTemplateStringTestEcho(props?: HookInput<'TemplateStringTestEcho', { stream?: true }>): HookOutput<'TemplateStringTestEcho', { stream: true }>
+export function useTemplateStringTestEcho(
+  props: HookInput<'TemplateStringTestEcho', { stream?: boolean }> = {},
+): HookOutput<'TemplateStringTestEcho', { stream: true }> | HookOutput<'TemplateStringTestEcho', { stream: false }> {
+  let action: ServerAction = Actions.TemplateStringTestEcho;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TemplateStringTestEcho;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TemplateStringTestEcho', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the TestAbortFallbackChain BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

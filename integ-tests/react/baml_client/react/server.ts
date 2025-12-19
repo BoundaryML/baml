@@ -2412,6 +2412,24 @@ export const TellStory = async (
 };
 
 /**
+ * Executes the "TemplateStringTestEcho" BAML action.
+ *
+ * This server action calls the underlying BAML function "TemplateStringTestEcho"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TemplateStringTestEcho = async (
+  input: string,
+): Promise<string> => {
+  return b.TemplateStringTestEcho(
+    input,
+  );
+};
+
+/**
  * Executes the "TestAbortFallbackChain" BAML action.
  *
  * This server action calls the underlying BAML function "TestAbortFallbackChain"

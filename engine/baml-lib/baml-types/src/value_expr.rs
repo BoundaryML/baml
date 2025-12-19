@@ -462,19 +462,6 @@ pub trait TemplateStringRenderer {
     fn render_template(&self, name: &str, args: &[serde_json::Value]) -> Result<String>;
 }
 
-/// A no-op template renderer that fails on any template call.
-/// Used when template resolution is not needed.
-pub struct NoTemplateRenderer;
-
-impl TemplateStringRenderer for NoTemplateRenderer {
-    fn render_template(&self, name: &str, _args: &[serde_json::Value]) -> Result<String> {
-        anyhow::bail!(
-            "Template string '{}' cannot be rendered without IR context",
-            name
-        )
-    }
-}
-
 pub struct EvaluationContext<'a> {
     env_vars: Option<&'a HashMap<String, String>>,
     fill_missing_env_vars: bool,
