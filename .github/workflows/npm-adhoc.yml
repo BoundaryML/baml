@@ -30,4 +30,4 @@ jobs:
           run-id: 20328548071
           pattern: bindings-*
           path: engine/language_client_typescript/artifacts
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
