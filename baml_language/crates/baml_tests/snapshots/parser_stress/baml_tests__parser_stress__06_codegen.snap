@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -10,27 +10,22 @@ Globals: 121
 Function BodyTorture (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (null)
      1    LOAD_CONST 0       (null)
-     2    LOAD_CONST 0       (null)
-     3    JUMP +1            (to 4)
-     4    LOAD_VAR 2         (x)
-     5    LOAD_CONST 1       (1)
-     6    BIN_OP +           
-     7    STORE_VAR 2        (x)
-     8    LOAD_CONST 0       (null)
-     9    JUMP_IF_FALSE +2   (to 11)
-     10   JUMP +6            (to 16)
-     11   LOAD_CONST 0       (null)
-     12   STORE_VAR 1        (_0)
-     13   JUMP +1            (to 14)
-     14   LOAD_VAR 1         (_0)
-     15   RETURN             
-     16   LOAD_VAR 2         (x)
-     17   LOAD_CONST 1       (1)
-     18   BIN_OP +           
-     19   STORE_VAR 2        (x)
-     20   LOAD_CONST 0       (null)
-     21   STORE_VAR 3        (_2)
-     22   JUMP -18           (to 4)
+     2    LOAD_VAR 1         (_0)
+     3    LOAD_CONST 1       (1)
+     4    BIN_OP +           
+     5    STORE_VAR 1        (_0)
+     6    LOAD_CONST 0       (null)
+     7    JUMP_IF_FALSE +2   (to 9)
+     8    JUMP +3            (to 11)
+     9    LOAD_CONST 0       (null)
+     10   RETURN             
+     11   LOAD_VAR 1         (_0)
+     12   LOAD_CONST 1       (1)
+     13   BIN_OP +           
+     14   STORE_VAR 1        (_0)
+     15   LOAD_CONST 0       (null)
+     16   STORE_VAR 2        (x)
+     17   JUMP -15           (to 2)
 
 Function ComplexType (arity: 0, kind: Exec):
   (no bytecode)
@@ -57,9 +52,8 @@ Function DeepExpression (arity: 0, kind: Exec):
      18   LOAD_CONST 10   (10)
      19   BIN_OP +        
      20   STORE_VAR 1     (_0)
-     21   JUMP +1         (to 22)
-     22   LOAD_VAR 1      (_0)
-     23   RETURN          
+     21   LOAD_VAR 1      (_0)
+     22   RETURN          
 
 Function Process1 (arity: 1, kind: Llm):
   (no bytecode)

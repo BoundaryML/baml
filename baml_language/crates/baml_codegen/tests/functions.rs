@@ -114,13 +114,13 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
             ),
             (
                 "main",
-                // Call result is stored to _0 (Real because def is in Call terminator)
+                // Call result is stored to user variable a (Real because def is in Call terminator)
                 vec![
                     Instruction::LoadConst(Value::Null),
                     Instruction::LoadGlobal(Value::function("two")),
                     Instruction::Call(0),
-                    Instruction::StoreVar("_0".to_string()),
-                    Instruction::LoadVar("_0".to_string()),
+                    Instruction::StoreVar("a".to_string()),
+                    Instruction::LoadVar("a".to_string()),
                     Instruction::Return,
                 ],
             ),

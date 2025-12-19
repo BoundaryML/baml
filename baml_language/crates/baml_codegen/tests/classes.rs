@@ -136,8 +136,8 @@ fn nested_class_construction() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Stackification with Virtual _0 and fall-through elimination:
-            // Note: o is assigned but never read, so it stores to _0 (slot reuse)
+            // Stackification with fall-through elimination:
+            // o is assigned but never read (dead store)
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::AllocInstance(Value::class("Outer")),
@@ -147,7 +147,7 @@ fn nested_class_construction() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(42)),
                 Instruction::StoreField(0),
                 Instruction::StoreField(0),
-                Instruction::StoreVar("_0".to_string()),
+                Instruction::StoreVar("o".to_string()),
                 Instruction::LoadConst(Value::Int(42)),
                 Instruction::Return,
             ],
@@ -178,7 +178,8 @@ fn nested_class_with_multiple_fields() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Stackification with Virtual _0 and fall-through elimination:
+            // Stackification with fall-through elimination:
+            // o is assigned but never read (dead store)
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::AllocInstance(Value::class("Outer")),
@@ -194,7 +195,7 @@ fn nested_class_with_multiple_fields() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(30)),
                 Instruction::StoreField(1),
-                Instruction::StoreVar("_0".to_string()),
+                Instruction::StoreVar("o".to_string()),
                 Instruction::LoadConst(Value::Int(30)),
                 Instruction::Return,
             ],

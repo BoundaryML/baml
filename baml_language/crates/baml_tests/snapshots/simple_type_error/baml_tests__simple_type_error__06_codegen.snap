@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -8,11 +8,7 @@ Objects: 20
 Globals: 19
 
 Function Foo (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (null)
-     1   LOAD_CONST 1   (1)
-     2   LOAD_CONST 2   (foo)
-     3   BIN_OP +       
-     4   STORE_VAR 1    (_0)
-     5   JUMP +1        (to 6)
-     6   LOAD_VAR 1     (_0)
-     7   RETURN
+     0   LOAD_CONST 0   (1)
+     1   LOAD_CONST 1   (foo)
+     2   BIN_OP +       
+     3   RETURN

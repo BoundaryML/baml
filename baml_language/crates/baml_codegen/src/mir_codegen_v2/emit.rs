@@ -99,7 +99,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             arity: mir.arity,
             bytecode: self.bytecode,
             kind: FunctionKind::Exec,
-            locals_in_scope: Self::build_locals_in_scope(mir),
+            locals_in_scope: Self::build_locals_in_scope(mir, &self.local_slots),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
         }
@@ -234,7 +234,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     /// Emit an operand using the pull model.
     ///
     /// For Virtual locals, this recursively emits the definition's rvalue inline.
-    /// For Real locals, this emits a LoadVar instruction.
+    /// For Real locals, this emits a `LoadVar` instruction.
     fn emit_operand_pull(&mut self, operand: &Operand<'db>, mir: &MirFunction<'db>) {
         match operand {
             Operand::Copy(place) | Operand::Move(place) => {
@@ -623,17 +623,30 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
         }
     }
 
-    /// Build `locals_in_scope` debug info from MIR.
-    fn build_locals_in_scope(mir: &MirFunction<'_>) -> Vec<Vec<String>> {
-        let mut names = vec![format!("<fn {}>", mir.name)];
+    /// Build `locals_in_scope` debug info from MIR and actual slot assignments.
+    ///
+    /// This ensures user variable names are preserved in bytecode output,
+    /// mapping slot indices to their actual names based on how locals were assigned.
+    fn build_locals_in_scope(
+        mir: &MirFunction<'_>,
+        local_slots: &HashMap<Local, usize>,
+    ) -> Vec<Vec<String>> {
+        // Find the maximum slot index to size the names vector
+        let max_slot = local_slots.values().max().copied().unwrap_or(0);
 
-        for (idx, local_decl) in mir.locals.iter().enumerate() {
+        // Initialize with placeholder names (slot 0 is function reference)
+        let mut names = vec![String::new(); max_slot + 1];
+        names[0] = format!("<fn {}>", mir.name);
+
+        // Fill in actual names based on slot assignments
+        for (&local, &slot) in local_slots {
+            let local_decl = mir.local(local);
             let name = local_decl
                 .name
                 .as_ref()
                 .map(std::string::ToString::to_string)
-                .unwrap_or_else(|| format!("_{idx}"));
-            names.push(name);
+                .unwrap_or_else(|| format!("_{}", local.0));
+            names[slot] = name;
         }
 
         vec![names]
@@ -647,7 +660,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
 /// Compile a MIR function to bytecode using stackification.
 ///
 /// This is the main entry point for the optimized MIR-based code generation.
-pub fn compile_mir_function(mir: &MirFunction<'_>, ctx: MirCodegenContext<'_, '_>) -> Function {
+pub(crate) fn compile_mir_function(mir: &MirFunction<'_>, ctx: MirCodegenContext<'_, '_>) -> Function {
     // Run analysis
     let analysis = AnalysisResult::analyze(mir);
 

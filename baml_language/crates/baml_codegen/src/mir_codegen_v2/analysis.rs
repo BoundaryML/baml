@@ -8,7 +8,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_mir::{BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator};
+use baml_mir::{
+    BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator,
+};
 
 // ============================================================================
 // Data Structures
@@ -16,7 +18,7 @@ use baml_mir::{BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, St
 
 /// Where a local is defined.
 #[derive(Clone, Debug)]
-pub struct DefLocation<'db> {
+pub(super) struct DefLocation<'db> {
     pub block: BlockId,
     pub statement_idx: usize,
     /// The rvalue that produces this local's value (for inlining).
@@ -25,17 +27,17 @@ pub struct DefLocation<'db> {
 
 /// Where a local is used.
 #[derive(Clone, Debug)]
-pub struct UseLocation {
+pub(super) struct UseLocation {
     pub block: BlockId,
     pub statement_idx: usize,
 }
 
 /// Sentinel value for uses in terminators.
-pub const TERMINATOR_IDX: usize = usize::MAX;
+pub(super) const TERMINATOR_IDX: usize = usize::MAX;
 
 /// Def-use information for a single local.
 #[derive(Clone, Debug)]
-pub struct LocalDefUse<'db> {
+pub(super) struct LocalDefUse<'db> {
     pub local: Local,
     /// Definition site (None for parameters, which are defined at entry).
     pub def: Option<DefLocation<'db>>,
@@ -45,7 +47,7 @@ pub struct LocalDefUse<'db> {
 
 /// Classification of a local variable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LocalClassification {
+pub(super) enum LocalClassification {
     /// Function parameter - always real.
     Parameter,
     /// Multi-use or cross-block local - needs stack slot.
@@ -56,7 +58,7 @@ pub enum LocalClassification {
 
 /// Dominator tree.
 #[derive(Debug)]
-pub struct Dominators {
+pub(super) struct Dominators {
     /// Immediate dominator of each block (entry has None).
     pub idom: HashMap<BlockId, Option<BlockId>>,
     /// Reverse postorder indices for faster intersection.
@@ -65,7 +67,7 @@ pub struct Dominators {
 
 impl Dominators {
     /// Check if `dominator` dominates `block`.
-    pub fn dominates(&self, dominator: BlockId, block: BlockId) -> bool {
+    pub(super) fn dominates(&self, dominator: BlockId, block: BlockId) -> bool {
         if dominator == block {
             return true;
         }
@@ -84,7 +86,7 @@ impl Dominators {
 
 /// Complete analysis result for a function.
 #[derive(Debug)]
-pub struct AnalysisResult<'db> {
+pub(super) struct AnalysisResult<'db> {
     /// Classification for each local.
     pub classifications: HashMap<Local, LocalClassification>,
     /// Def-use information for each local.
@@ -103,7 +105,7 @@ pub struct AnalysisResult<'db> {
 
 impl<'db> AnalysisResult<'db> {
     /// Analyze a MIR function and produce classification results.
-    pub fn analyze(mir: &MirFunction<'db>) -> Self {
+    pub(super) fn analyze(mir: &MirFunction<'db>) -> Self {
         // Step 1: Build predecessor map
         let predecessors = build_predecessors(mir);
 
@@ -370,11 +372,11 @@ fn collect_uses_in_operand<'db>(
 }
 
 /// Collect uses in a place.
-fn collect_uses_in_place<'db>(
+fn collect_uses_in_place(
     place: &Place,
     block: BlockId,
     stmt_idx: usize,
-    def_use: &mut HashMap<Local, LocalDefUse<'db>>,
+    def_use: &mut HashMap<Local, LocalDefUse<'_>>,
 ) {
     // The base local is used
     let base = place.base_local();

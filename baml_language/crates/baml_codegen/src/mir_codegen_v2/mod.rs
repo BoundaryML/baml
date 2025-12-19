@@ -15,7 +15,7 @@ mod emit;
 use std::collections::HashMap;
 
 use baml_vm::ObjectPool;
-pub use emit::compile_mir_function;
+pub(crate) use emit::compile_mir_function;
 
 /// Context for MIR codegen.
 ///
