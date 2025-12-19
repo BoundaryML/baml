@@ -118,7 +118,24 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                 // Note: type_aliases and enum_variants are not passed here,
                 // so exhaustiveness checking for type aliases and enums won't work.
                 // This is acceptable since codegen is for runtime execution,
-                // and type errors should be caught in the THIR.
+                // and type errors should be caught in the THIR phase.
+                //
+                // TODO(codegen-inference): Re-evaluate whether we need full type context here.
+                // Currently this works because:
+                //   1. Exhaustiveness errors (NonExhaustiveMatch, UnreachableArm) are caught
+                //      in the THIR/Diagnostics phase which DOES pass type_aliases/enum_variants
+                //   2. The core type inference (infer_expr, etc.) doesn't depend on these maps
+                //   3. Codegen only uses inference.expr_types and inference.path_segment_types,
+                //      neither of which require type alias resolution or enum variant enumeration
+                //
+                // If codegen ever needs to:
+                //   - Resolve type aliases to their underlying types
+                //   - Enumerate enum variants for code generation decisions
+                //   - Use exhaustiveness results for codegen logic
+                // ...then we must either pass full context here, or cache the inference result
+                // from the THIR phase instead of re-running inference.
+                //
+                // See PR discussion: https://github.com/BoundaryML/baml/pull/2838/files/1e6d23cc70e4825bfca302069caee658c7a0f437#r2635683771
                 let inference = baml_thir::infer_function(
                     db,
                     &signature,
