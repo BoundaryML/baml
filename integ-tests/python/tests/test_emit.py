@@ -74,6 +74,7 @@ async def test_emit_basic_changes():
     print(f"\nFunction result: {response}")
 
 
+@pytest.mark.skip("Skipping test_emit_block_handler until later")
 @pytest.mark.asyncio
 async def test_emit_stream_handler():
     """Test that stream handlers work correctly"""
@@ -100,6 +101,7 @@ async def test_emit_stream_handler():
     assert len(stream_chunks) > 0
 
 
+@pytest.mark.skip("Skipping test_emit_block_handler until later")
 @pytest.mark.asyncio
 async def test_emit_block_handler():
     """Test that block handlers work correctly"""

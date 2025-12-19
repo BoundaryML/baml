@@ -169,7 +169,7 @@ describe("Dynamic Type Tests", () => {
       let tb = new TypeBuilder();
       tb.addBaml(`
         class ExtraPersonInfo {
-            height int
+            height int @alias("height_feet")
             weight int
         }
 

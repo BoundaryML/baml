@@ -60,7 +60,7 @@ func (c *Action) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Action) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Action) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["type"] = c.Type
@@ -69,18 +69,11 @@ func (c Action) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["async_"] = c.Async_
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Action", fields, nil)
 }
 
 func (c Action) BamlTypeName() string {
 	return "Action"
-}
-
-func (u Action) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Action",
-	}
 }
 
 type Asset struct {
@@ -125,7 +118,7 @@ func (c *Asset) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Asset) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Asset) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -136,18 +129,11 @@ func (c Asset) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["tags"] = c.Tags
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Asset", fields, nil)
 }
 
 func (c Asset) BamlTypeName() string {
 	return "Asset"
-}
-
-func (u Asset) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Asset",
-	}
 }
 
 type AssetMetadata struct {
@@ -196,7 +182,7 @@ func (c *AssetMetadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 
 }
 
-func (c AssetMetadata) Encode() (*cffi.CFFIValueHolder, error) {
+func (c AssetMetadata) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["filename"] = c.Filename
@@ -209,18 +195,11 @@ func (c AssetMetadata) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["checksum"] = c.Checksum
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("AssetMetadata", fields, nil)
 }
 
 func (c AssetMetadata) BamlTypeName() string {
 	return "AssetMetadata"
-}
-
-func (u AssetMetadata) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "AssetMetadata",
-	}
 }
 
 type ButtonWidget struct {
@@ -261,7 +240,7 @@ func (c *ButtonWidget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 
 }
 
-func (c ButtonWidget) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ButtonWidget) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["label"] = c.Label
@@ -270,18 +249,11 @@ func (c ButtonWidget) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["style"] = c.Style
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ButtonWidget", fields, nil)
 }
 
 func (c ButtonWidget) BamlTypeName() string {
 	return "ButtonWidget"
-}
-
-func (u ButtonWidget) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ButtonWidget",
-	}
 }
 
 type ComplexData struct {
@@ -322,7 +294,7 @@ func (c *ComplexData) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 
 }
 
-func (c ComplexData) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ComplexData) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["primary"] = c.Primary
@@ -331,18 +303,11 @@ func (c ComplexData) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["tertiary"] = c.Tertiary
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ComplexData", fields, nil)
 }
 
 func (c ComplexData) BamlTypeName() string {
 	return "ComplexData"
-}
-
-func (u ComplexData) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ComplexData",
-	}
 }
 
 type Condition struct {
@@ -379,25 +344,18 @@ func (c *Condition) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Condition) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Condition) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["type"] = c.Type
 
 	fields["conditions"] = c.Conditions
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Condition", fields, nil)
 }
 
 func (c Condition) BamlTypeName() string {
 	return "Condition"
-}
-
-func (u Condition) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Condition",
-	}
 }
 
 type Configuration struct {
@@ -442,7 +400,7 @@ func (c *Configuration) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 
 }
 
-func (c Configuration) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Configuration) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["version"] = c.Version
@@ -453,18 +411,11 @@ func (c Configuration) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["rules"] = c.Rules
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Configuration", fields, nil)
 }
 
 func (c Configuration) BamlTypeName() string {
 	return "Configuration"
-}
-
-func (u Configuration) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Configuration",
-	}
 }
 
 type ContainerWidget struct {
@@ -505,7 +456,7 @@ func (c *ContainerWidget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 }
 
-func (c ContainerWidget) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ContainerWidget) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["layout"] = c.Layout
@@ -514,18 +465,11 @@ func (c ContainerWidget) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["style"] = c.Style
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ContainerWidget", fields, nil)
 }
 
 func (c ContainerWidget) BamlTypeName() string {
 	return "ContainerWidget"
-}
-
-func (u ContainerWidget) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ContainerWidget",
-	}
 }
 
 type DataObject struct {
@@ -562,25 +506,18 @@ func (c *DataObject) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c DataObject) Encode() (*cffi.CFFIValueHolder, error) {
+func (c DataObject) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["type"] = c.Type
 
 	fields["value"] = c.Value
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("DataObject", fields, nil)
 }
 
 func (c DataObject) BamlTypeName() string {
 	return "DataObject"
-}
-
-func (u DataObject) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "DataObject",
-	}
 }
 
 type Dimensions struct {
@@ -617,25 +554,18 @@ func (c *Dimensions) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Dimensions) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Dimensions) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["width"] = c.Width
 
 	fields["height"] = c.Height
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Dimensions", fields, nil)
 }
 
 func (c Dimensions) BamlTypeName() string {
 	return "Dimensions"
-}
-
-func (u Dimensions) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Dimensions",
-	}
 }
 
 type Environment struct {
@@ -680,7 +610,7 @@ func (c *Environment) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 
 }
 
-func (c Environment) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Environment) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["name"] = c.Name
@@ -691,18 +621,11 @@ func (c Environment) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["secrets"] = c.Secrets
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Environment", fields, nil)
 }
 
 func (c Environment) BamlTypeName() string {
 	return "Environment"
-}
-
-func (u Environment) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Environment",
-	}
 }
 
 type Error struct {
@@ -743,7 +666,7 @@ func (c *Error) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Error) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Error) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["type"] = c.Type
@@ -752,18 +675,11 @@ func (c Error) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["code"] = c.Code
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Error", fields, nil)
 }
 
 func (c Error) BamlTypeName() string {
 	return "Error"
-}
-
-func (u Error) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Error",
-	}
 }
 
 type ErrorDetail struct {
@@ -804,7 +720,7 @@ func (c *ErrorDetail) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 
 }
 
-func (c ErrorDetail) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ErrorDetail) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["code"] = c.Code
@@ -813,18 +729,11 @@ func (c ErrorDetail) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["details"] = c.Details
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ErrorDetail", fields, nil)
 }
 
 func (c ErrorDetail) BamlTypeName() string {
 	return "ErrorDetail"
-}
-
-func (u ErrorDetail) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ErrorDetail",
-	}
 }
 
 type Feature struct {
@@ -869,7 +778,7 @@ func (c *Feature) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Feature) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Feature) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["name"] = c.Name
@@ -880,18 +789,11 @@ func (c Feature) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["dependencies"] = c.Dependencies
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Feature", fields, nil)
 }
 
 func (c Feature) BamlTypeName() string {
 	return "Feature"
-}
-
-func (u Feature) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Feature",
-	}
 }
 
 type ImageWidget struct {
@@ -928,25 +830,18 @@ func (c *ImageWidget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 
 }
 
-func (c ImageWidget) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ImageWidget) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["alt"] = c.Alt
 
 	fields["dimensions"] = c.Dimensions
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ImageWidget", fields, nil)
 }
 
 func (c ImageWidget) BamlTypeName() string {
 	return "ImageWidget"
-}
-
-func (u ImageWidget) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ImageWidget",
-	}
 }
 
 type Item struct {
@@ -991,7 +886,7 @@ func (c *Item) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Item) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Item) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -1002,18 +897,11 @@ func (c Item) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["attributes"] = c.Attributes
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Item", fields, nil)
 }
 
 func (c Item) BamlTypeName() string {
 	return "Item"
-}
-
-func (u Item) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Item",
-	}
 }
 
 type KitchenSink struct {
@@ -1021,7 +909,7 @@ type KitchenSink struct {
 	Name        *string                                        `json:"name"`
 	Score       *float64                                       `json:"score"`
 	Active      *bool                                          `json:"active"`
-	Nothing     any                                            `json:"nothing"`
+	Nothing     *interface{}                                   `json:"nothing"`
 	Status      *types.Union3KarchivedOrKdraftOrKpublished     `json:"status"`
 	Priority    *types.Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 `json:"priority"`
 	Tags        []string                                       `json:"tags"`
@@ -1065,7 +953,7 @@ func (c *KitchenSink) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 			c.Active = baml.Decode(valueHolder).Interface().(*bool)
 
 		case "nothing":
-			c.Nothing = baml.Decode(valueHolder).Interface().(any)
+			c.Nothing = (*interface{})(nil)
 
 		case "status":
 			c.Status = baml.Decode(valueHolder).Interface().(*types.Union3KarchivedOrKdraftOrKpublished)
@@ -1118,7 +1006,7 @@ func (c *KitchenSink) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 
 }
 
-func (c KitchenSink) Encode() (*cffi.CFFIValueHolder, error) {
+func (c KitchenSink) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -1159,18 +1047,11 @@ func (c KitchenSink) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["config"] = c.Config
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("KitchenSink", fields, nil)
 }
 
 func (c KitchenSink) BamlTypeName() string {
 	return "KitchenSink"
-}
-
-func (u KitchenSink) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "KitchenSink",
-	}
 }
 
 type Node struct {
@@ -1215,7 +1096,7 @@ func (c *Node) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Node) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Node) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -1226,18 +1107,11 @@ func (c Node) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["metadata"] = c.Metadata
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Node", fields, nil)
 }
 
 func (c Node) BamlTypeName() string {
 	return "Node"
-}
-
-func (u Node) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Node",
-	}
 }
 
 type NodeMetadata struct {
@@ -1282,7 +1156,7 @@ func (c *NodeMetadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 
 }
 
-func (c NodeMetadata) Encode() (*cffi.CFFIValueHolder, error) {
+func (c NodeMetadata) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["created"] = c.Created
@@ -1293,18 +1167,11 @@ func (c NodeMetadata) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["attributes"] = c.Attributes
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("NodeMetadata", fields, nil)
 }
 
 func (c NodeMetadata) BamlTypeName() string {
 	return "NodeMetadata"
-}
-
-func (u NodeMetadata) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "NodeMetadata",
-	}
 }
 
 type PrimaryData struct {
@@ -1345,7 +1212,7 @@ func (c *PrimaryData) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 
 }
 
-func (c PrimaryData) Encode() (*cffi.CFFIValueHolder, error) {
+func (c PrimaryData) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["values"] = c.Values
@@ -1354,18 +1221,11 @@ func (c PrimaryData) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["flags"] = c.Flags
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("PrimaryData", fields, nil)
 }
 
 func (c PrimaryData) BamlTypeName() string {
 	return "PrimaryData"
-}
-
-func (u PrimaryData) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "PrimaryData",
-	}
 }
 
 type Record struct {
@@ -1406,7 +1266,7 @@ func (c *Record) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Record) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Record) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -1415,18 +1275,11 @@ func (c Record) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["related"] = c.Related
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Record", fields, nil)
 }
 
 func (c Record) BamlTypeName() string {
 	return "Record"
-}
-
-func (u Record) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Record",
-	}
 }
 
 type ResponseMetadata struct {
@@ -1471,7 +1324,7 @@ func (c *ResponseMetadata) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 
 }
 
-func (c ResponseMetadata) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ResponseMetadata) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["timestamp"] = c.Timestamp
@@ -1482,18 +1335,11 @@ func (c ResponseMetadata) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["retries"] = c.Retries
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ResponseMetadata", fields, nil)
 }
 
 func (c ResponseMetadata) BamlTypeName() string {
 	return "ResponseMetadata"
-}
-
-func (u ResponseMetadata) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ResponseMetadata",
-	}
 }
 
 type Rule struct {
@@ -1542,7 +1388,7 @@ func (c *Rule) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Rule) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Rule) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -1555,18 +1401,11 @@ func (c Rule) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["priority"] = c.Priority
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Rule", fields, nil)
 }
 
 func (c Rule) BamlTypeName() string {
 	return "Rule"
-}
-
-func (u Rule) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Rule",
-	}
 }
 
 type SecondaryData struct {
@@ -1603,25 +1442,18 @@ func (c *SecondaryData) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 
 }
 
-func (c SecondaryData) Encode() (*cffi.CFFIValueHolder, error) {
+func (c SecondaryData) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["records"] = c.Records
 
 	fields["index"] = c.Index
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("SecondaryData", fields, nil)
 }
 
 func (c SecondaryData) BamlTypeName() string {
 	return "SecondaryData"
-}
-
-func (u SecondaryData) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "SecondaryData",
-	}
 }
 
 type Setting struct {
@@ -1662,7 +1494,7 @@ func (c *Setting) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Setting) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Setting) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["key"] = c.Key
@@ -1671,18 +1503,11 @@ func (c Setting) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["metadata"] = c.Metadata
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Setting", fields, nil)
 }
 
 func (c Setting) BamlTypeName() string {
 	return "Setting"
-}
-
-func (u Setting) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Setting",
-	}
 }
 
 type SimpleCondition struct {
@@ -1723,7 +1548,7 @@ func (c *SimpleCondition) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 }
 
-func (c SimpleCondition) Encode() (*cffi.CFFIValueHolder, error) {
+func (c SimpleCondition) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["field"] = c.Field
@@ -1732,18 +1557,11 @@ func (c SimpleCondition) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["value"] = c.Value
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("SimpleCondition", fields, nil)
 }
 
 func (c SimpleCondition) BamlTypeName() string {
 	return "SimpleCondition"
-}
-
-func (u SimpleCondition) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "SimpleCondition",
-	}
 }
 
 type Success struct {
@@ -1780,25 +1598,18 @@ func (c *Success) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Success) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Success) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["type"] = c.Type
 
 	fields["data"] = c.Data
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Success", fields, nil)
 }
 
 func (c Success) BamlTypeName() string {
 	return "Success"
-}
-
-func (u Success) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Success",
-	}
 }
 
 type TertiaryData struct {
@@ -1839,7 +1650,7 @@ func (c *TertiaryData) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 
 }
 
-func (c TertiaryData) Encode() (*cffi.CFFIValueHolder, error) {
+func (c TertiaryData) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["raw"] = c.Raw
@@ -1848,18 +1659,11 @@ func (c TertiaryData) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["valid"] = c.Valid
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("TertiaryData", fields, nil)
 }
 
 func (c TertiaryData) BamlTypeName() string {
 	return "TertiaryData"
-}
-
-func (u TertiaryData) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "TertiaryData",
-	}
 }
 
 type TextWidget struct {
@@ -1900,7 +1704,7 @@ func (c *TextWidget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c TextWidget) Encode() (*cffi.CFFIValueHolder, error) {
+func (c TextWidget) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["content"] = c.Content
@@ -1909,18 +1713,11 @@ func (c TextWidget) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["style"] = c.Style
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("TextWidget", fields, nil)
 }
 
 func (c TextWidget) BamlTypeName() string {
 	return "TextWidget"
-}
-
-func (u TextWidget) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "TextWidget",
-	}
 }
 
 type UltraComplex struct {
@@ -1969,7 +1766,7 @@ func (c *UltraComplex) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 
 }
 
-func (c UltraComplex) Encode() (*cffi.CFFIValueHolder, error) {
+func (c UltraComplex) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["tree"] = c.Tree
@@ -1982,18 +1779,11 @@ func (c UltraComplex) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["assets"] = c.Assets
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("UltraComplex", fields, nil)
 }
 
 func (c UltraComplex) BamlTypeName() string {
 	return "UltraComplex"
-}
-
-func (u UltraComplex) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "UltraComplex",
-	}
 }
 
 type User struct {
@@ -2034,7 +1824,7 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c User) Encode() (*cffi.CFFIValueHolder, error) {
+func (c User) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -2043,18 +1833,11 @@ func (c User) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["settings"] = c.Settings
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("User", fields, nil)
 }
 
 func (c User) BamlTypeName() string {
 	return "User"
-}
-
-func (u User) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "User",
-	}
 }
 
 type UserProfile struct {
@@ -2099,7 +1882,7 @@ func (c *UserProfile) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 
 }
 
-func (c UserProfile) Encode() (*cffi.CFFIValueHolder, error) {
+func (c UserProfile) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["name"] = c.Name
@@ -2110,18 +1893,11 @@ func (c UserProfile) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["links"] = c.Links
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("UserProfile", fields, nil)
 }
 
 func (c UserProfile) BamlTypeName() string {
 	return "UserProfile"
-}
-
-func (u UserProfile) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "UserProfile",
-	}
 }
 
 type UserResponse struct {
@@ -2166,7 +1942,7 @@ func (c *UserResponse) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 
 }
 
-func (c UserResponse) Encode() (*cffi.CFFIValueHolder, error) {
+func (c UserResponse) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["status"] = c.Status
@@ -2177,18 +1953,11 @@ func (c UserResponse) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["metadata"] = c.Metadata
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("UserResponse", fields, nil)
 }
 
 func (c UserResponse) BamlTypeName() string {
 	return "UserResponse"
-}
-
-func (u UserResponse) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "UserResponse",
-	}
 }
 
 type Variant struct {
@@ -2233,7 +2002,7 @@ func (c *Variant) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Variant) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Variant) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["sku"] = c.Sku
@@ -2244,18 +2013,11 @@ func (c Variant) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["options"] = c.Options
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Variant", fields, nil)
 }
 
 func (c Variant) BamlTypeName() string {
 	return "Variant"
-}
-
-func (u Variant) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Variant",
-	}
 }
 
 type Widget struct {
@@ -2304,7 +2066,7 @@ func (c *Widget) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Widget) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Widget) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["type"] = c.Type
@@ -2317,16 +2079,9 @@ func (c Widget) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["container"] = c.Container
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Widget", fields, nil)
 }
 
 func (c Widget) BamlTypeName() string {
 	return "Widget"
-}
-
-func (u Widget) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Widget",
-	}
 }

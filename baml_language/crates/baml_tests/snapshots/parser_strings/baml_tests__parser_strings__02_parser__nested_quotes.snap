@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -10,14 +10,14 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "single_in_double"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       ATTRIBUTE
         AT "@"
         WORD "alias"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL ""He said 'hello'""
+          STRING_LITERAL "He said 'hello'"
             QUOTE """
             WORD "He"
             WORD "said"
@@ -28,7 +28,7 @@ SOURCE_FILE
           R_PAREN ")"
     FIELD
       WORD "double_in_single"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       ATTRIBUTE
         AT "@"
@@ -38,14 +38,14 @@ SOURCE_FILE
     ERROR_TOKEN "'"
     FIELD
       WORD "She"
-      TYPE_EXPR " said"
+      TYPE_EXPR "said"
         WORD "said"
     QUOTE """
     FIELD
       WORD "hello"
       TYPE_EXPR
-        STRING_LITERAL ""')
-  escaped_in_escaped string @alias(""
+        STRING_LITERAL "')
+  escaped_in_escaped string @alias("
           QUOTE """
           ERROR_TOKEN "'"
           R_PAREN ")"
@@ -67,20 +67,20 @@ SOURCE_FILE
     QUOTE """
     FIELD
       WORD "is"
-      TYPE_EXPR " here"
+      TYPE_EXPR "here"
         WORD "here"
     QUOTE """
     R_PAREN ")"
     FIELD
       WORD "complex_nesting"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       ATTRIBUTE
         AT "@"
         WORD "description"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL ""It's \""
+          STRING_LITERAL "It's \"
             QUOTE """
             WORD "It"
             ERROR_TOKEN "'"
@@ -101,14 +101,14 @@ SOURCE_FILE
     R_PAREN ")"
     FIELD
       WORD "json_like"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       ATTRIBUTE
         AT "@"
         WORD "alias"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL ""{\""
+          STRING_LITERAL "{\"
             QUOTE """
             L_BRACE "{"
             ERROR_TOKEN "\"
@@ -137,24 +137,23 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "name"
-        TYPE_EXPR " string"
+        TYPE_EXPR "string"
           WORD "string"
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " string"
+    TYPE_EXPR "string"
       WORD "string"
     LLM_FUNCTION_BODY
       L_BRACE "{"
-      CLIENT_FIELD "
-  client GPT4"
+      CLIENT_FIELD "client GPT4"
         KW_CLIENT "client"
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL " #"
+        RAW_STRING_LITERAL #"
     Generate a message for "{{ name }}"
     Include quotes like: "Welcome, '{{ name }}'!"
-  "#"
+  "#
           HASH "#"
           QUOTE """
           WORD "Generate"

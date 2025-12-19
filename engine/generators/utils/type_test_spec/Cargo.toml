@@ -1,0 +1,8 @@
+[package]
+name = "type_test_spec"
+version = "0.1.0"
+edition = "2021"
+description = "Parser for shared type serialization test specifications"
+
+[dependencies]
+

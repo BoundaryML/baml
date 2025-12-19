@@ -1,82 +1,82 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function FormatMessage {
-  params: [name: String]
-  return: String
-  body: Llm {
-    client: GPT4
-    prompt: "\n    Generate a message for \"{{ name }}\"\n    Include quotes like: \"Welcome, '{{ name }}'!\"\n  "
-    interpolations: [name, name]
-  }
+function FormatMessage(name: string) -> string {
+  client GPT4
+  prompt #"
+    
+        Generate a message for "{{ name }}"
+        Include quotes like: "Welcome, '{{ name }}'!"
+      
+  "#
 }
+
 class NestedQuotes {
-  single_in_double: String
-  double_in_single: String
-  She: Path(Path { segments: ["said"], kind: Plain })
-  hello: Path(Path { segments: ["\"')\n  escaped_in_escaped string @alias(\""], kind: Plain })
-  The: Path(Path { segments: [""], kind: Plain })
-  quote: Path(Path { segments: [""], kind: Plain })
-  is: Path(Path { segments: ["here"], kind: Plain })
-  complex_nesting: String
-  really: Path(Path { segments: [""], kind: Plain })
-  complex: Path(Path { segments: [""], kind: Plain })
-  json_like: String
-  key: Path(Path { segments: [""], kind: Plain })
-  value: Path(Path { segments: [""], kind: Plain })
+  single_in_double: string
+  double_in_single: string
+  She: said
+  hello: "')
+  escaped_in_escaped string @alias("
+  The: 
+  quote: 
+  is: here
+  complex_nesting: string
+  really: 
+  complex: 
+  json_like: string
+  key: 
+  value: 
 }
-function ProcessText {
-  params: [input: String]
-  return: String
-  body: Llm {
-    client: GPT4
-    prompt: "\n    Process the following text:\n    {{ input }}\n    \n    Return the processed result.\n  "
-    interpolations: [input]
-  }
+
+function ProcessText(input: string) -> string {
+  client GPT4
+  prompt #"
+    
+        Process the following text:
+        {{ input }}
+        
+        Return the processed result.
+      
+  "#
 }
+
 class RawStrings {
-  simple: String
-  with_quotes: String
-  multi_hash: String
-  multiline: String
+  simple: string
+  with_quotes: string
+  multi_hash: string
+  multiline: string
 }
-function GetRole {
-  return: Path(Path { segments: ["\"admin\" | \"user\" | \"guest\""], kind: Plain })
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(String(" \"user\""))
-      Idx::<Expr>(1): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Return(Some(Idx::<Expr>(0)))
-    ]
-    root: Idx::<Expr>(1)
-  }
+
+function GetRole() -> "admin" | "user" | "guest" {
+      return "user";
 }
+
 class Messages {
-  greeting: String
-  empty: String
-  with_spaces: String
-  with_escapes: String
-  with_quotes: String
-  hello: Path(Path { segments: [""], kind: Plain })
+  greeting: string
+  empty: string
+  with_spaces: string
+  with_escapes: string
+  with_quotes: string
+  hello: 
 }
+
 class UnicodeStrings {
-  emoji_basic: String
-  emoji_multiple: String
-  emoji_in_text: String
-  chinese: String
-  arabic: String
-  japanese: String
-  russian: String
-  math_symbols: String
-  currency: String
-  arrows: String
-  zero_width: String
-  rtl_override: String
+  emoji_basic: string
+  emoji_multiple: string
+  emoji_in_text: string
+  chinese: string
+  arabic: string
+  japanese: string
+  russian: string
+  math_symbols: string
+  currency: string
+  arrows: string
+  zero_width: string
+  rtl_override: string
 }
+
 client GPT4 {
   provider: unknown
 }

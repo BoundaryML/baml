@@ -1,26 +1,25 @@
 //! Code generation for BAML.
 //!
-//! Compiles the Typed High-level IR (THIR) to bytecode for the BAML VM.
+//! Compiles MIR (Mid-level IR) to bytecode for the BAML VM.
 //!
 //! # Architecture
 //!
 //! The compilation pipeline is:
 //! ```text
-//! Source -> CST -> HIR -> THIR -> Bytecode
+//! Source -> CST -> HIR -> THIR -> MIR -> Bytecode
 //! ```
 //!
-//! This crate handles the final step: THIR -> Bytecode.
+//! This crate handles the final step: MIR -> Bytecode.
 //!
-//! The compiler takes THIR's `InferenceResult` (which contains type information
-//! for every expression) along with the HIR expression body, and generates
+//! The compiler takes MIR functions (control flow graphs) and generates
 //! stack-based bytecode instructions. Key components:
 //!
-//! - **Compiler**: Main entry point that compiles functions using THIR types
-//! - **Scope tracking**: Manages local variables and their stack positions
-//! - **Constant pool**: Deduplicates constant values
-//! - **Jump patching**: Handles forward jumps for control flow
+//! - **`MirCodegen`**: Compiles MIR CFG to bytecode
+//! - **Local slot allocation**: Maps MIR locals to VM stack slots
+//! - **Block emission**: Emits bytecode for each basic block
+//! - **Jump patching**: Resolves jump targets after all blocks are emitted
 
-mod compiler;
+mod mir_codegen;
 
 use std::collections::HashMap;
 
@@ -31,14 +30,13 @@ pub use baml_vm::{
     ObjectIndex, Program, UnaryOp, Value,
 };
 use baml_workspace::Project;
-pub use compiler::{CodegenContext, Compiler, compile_function};
 
 /// Generate bytecode for all functions in a project.
 ///
 /// This is the main entry point for project-wide code generation.
 /// It collects all functions from HIR, type-checks them via THIR,
-/// and compiles them to bytecode.
-pub fn generate_project_bytecode(db: &dyn baml_thir::Db, root: Project) -> Program {
+/// lowers to MIR, and compiles to bytecode.
+pub fn generate_project_bytecode(db: &dyn baml_mir::Db, root: Project) -> Program {
     let files = baml_workspace::project_files(db, root);
     compile_files(db, &files)
 }
@@ -46,16 +44,25 @@ pub fn generate_project_bytecode(db: &dyn baml_thir::Db, root: Project) -> Progr
 /// Generate bytecode for a list of source files.
 ///
 /// This is useful for testing or when you have a subset of files.
-pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
+pub fn compile_files(db: &dyn baml_mir::Db, files: &[SourceFile]) -> Program {
     let mut program = Program::new();
 
     // Build typing context (maps function names to their types)
     let typing_context = build_typing_context(db, files);
 
     // Build globals map (function name -> global index)
+    // Register builtins first for stable indices, then user functions
     let mut globals: HashMap<String, usize> = HashMap::new();
     let mut global_idx = 0;
 
+    // First, add builtin functions (stable indices 0, 1, 2, ...)
+    let builtins = baml_vm::functions();
+    for path in builtins.keys() {
+        globals.insert(path.clone(), global_idx);
+        global_idx += 1;
+    }
+
+    // Then, add user-defined functions
     for file in files {
         let items_struct = baml_hir::file_items(db, *file);
         for item in items_struct.items(db) {
@@ -106,7 +113,22 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
         }
     }
 
-    // Compile each function
+    // Add builtin functions to globals FIRST (stable indices)
+    for (path, (native_fn, arity)) in &builtins {
+        let builtin_fn = Function {
+            name: path.clone(),
+            arity: *arity,
+            bytecode: Bytecode::default(),
+            kind: FunctionKind::Native(*native_fn),
+            locals_in_scope: Vec::new(),
+            span: baml_base::Span::fake(),
+            block_notifications: Vec::new(),
+        };
+        let fn_obj_idx = program.add_object(Object::Function(builtin_fn));
+        program.add_global(Value::Object(ObjectIndex::from_raw(fn_obj_idx)));
+    }
+
+    // Compile each user function using MIR
     for file in files {
         let items_struct = baml_hir::file_items(db, *file);
         for item in items_struct.items(db) {
@@ -114,24 +136,71 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
                 let signature = function_signature(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
-                // Run type inference
-                let inference = baml_thir::infer_function(
-                    db,
-                    &signature,
-                    &body,
-                    Some(typing_context.clone()),
-                    Some(class_field_types.clone()),
-                );
+                // Handle different function body types
+                let compiled_fn = match &*body {
+                    baml_hir::FunctionBody::Llm(_) => {
+                        // LLM functions have no bytecode - they are dispatched by the embedder
+                        let params: Vec<baml_base::Name> =
+                            signature.params.iter().map(|p| p.name.clone()).collect();
+                        Function {
+                            name: signature.name.to_string(),
+                            arity: params.len(),
+                            bytecode: Bytecode::new(),
+                            kind: FunctionKind::Llm,
+                            locals_in_scope: vec![
+                                params
+                                    .iter()
+                                    .map(std::string::ToString::to_string)
+                                    .collect(),
+                            ],
+                            span: baml_base::Span::fake(),
+                            block_notifications: Vec::new(),
+                        }
+                    }
+                    baml_hir::FunctionBody::Missing => {
+                        // Missing body - placeholder function
+                        let params: Vec<baml_base::Name> =
+                            signature.params.iter().map(|p| p.name.clone()).collect();
+                        Function {
+                            name: signature.name.to_string(),
+                            arity: params.len(),
+                            bytecode: Bytecode::new(),
+                            kind: FunctionKind::Exec,
+                            locals_in_scope: vec![
+                                params
+                                    .iter()
+                                    .map(std::string::ToString::to_string)
+                                    .collect(),
+                            ],
+                            span: baml_base::Span::fake(),
+                            block_notifications: Vec::new(),
+                        }
+                    }
+                    baml_hir::FunctionBody::Expr(_) => {
+                        // Run type inference
+                        let inference = baml_thir::infer_function(
+                            db,
+                            &signature,
+                            &body,
+                            Some(typing_context.clone()),
+                            Some(class_field_types.clone()),
+                            *func_loc,
+                        );
 
-                // Compile to bytecode (objects are added directly to program.objects)
-                let ctx = CodegenContext {
-                    inference: &inference,
-                    globals: &globals,
-                    classes: &classes,
-                    class_object_indices: &class_object_indices,
-                    objects: &mut program.objects,
+                        // Lower to MIR
+                        let mir =
+                            baml_mir::lower_function(&signature, &body, &inference, db, &classes);
+
+                        // Compile MIR to bytecode
+                        let ctx = mir_codegen::MirCodegenContext {
+                            globals: &globals,
+                            classes: &classes,
+                            class_object_indices: &class_object_indices,
+                            objects: &mut program.objects,
+                        };
+                        mir_codegen::compile_mir_function(&mir, ctx)
+                    }
                 };
-                let compiled_fn = compile_function(&signature, &body, ctx);
 
                 // Add function object to program
                 let fn_obj_idx = program.add_object(Object::Function(compiled_fn));
@@ -154,7 +223,7 @@ pub fn compile_files(db: &dyn baml_thir::Db, files: &[SourceFile]) -> Program {
 ///
 /// Maps function names to their arrow types for use during type inference.
 fn build_typing_context<'db>(
-    db: &'db dyn baml_thir::Db,
+    db: &'db dyn baml_mir::Db,
     files: &[SourceFile],
 ) -> HashMap<Name, baml_thir::Ty<'db>> {
     let mut context = HashMap::new();

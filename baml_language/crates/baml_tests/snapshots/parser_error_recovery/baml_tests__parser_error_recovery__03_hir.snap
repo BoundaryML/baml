@@ -1,57 +1,52 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function Foo {
-  return: Path(Path { segments: [""], kind: Plain })
-  body: Llm {
-    client: GPT4
-  }
+function Foo() ->  {
+  client GPT4
 }
+
 enum Status {
-  EnumVariant { name: "ACTIVE" }
-  EnumVariant { name: "INACTIVE" }
-  EnumVariant { name: "PENDING" }
+  ACTIVE
+  INACTIVE
+  PENDING
 }
+
 class Another {
-  field: Int
+  field: int
 }
+
 class User {
-  name: String
+  name: string
 }
-function Incomplete {
-  params: [param1: String]
-  return: Unknown
-  body: Missing
+
+function Incomplete(param1: string) -> <unknown> {
+    // missing body
 }
-function NextFunction {
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(String(" \"parsed\""))
-      Idx::<Expr>(1): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Return(Some(Idx::<Expr>(0)))
-    ]
-    root: Idx::<Expr>(1)
-  }
+
+function NextFunction() -> string {
+      return "parsed";
 }
+
 class Partial {
-  field1: Path(Path { segments: ["str"], kind: Plain })
-  field2: Path(Path { segments: ["// Missing type entirely\n  field3"], kind: Plain })
-  string: Path(Path { segments: [""], kind: Plain })
-  string: Path(Path { segments: [""], kind: Plain })
-  string: Path(Path { segments: [""], kind: Plain })
+  field1: str
+  field2: // Missing type entirely
+  field3
+  string: 
+  string: 
+  string: 
 }
+
 enum ValidEnum {
-  EnumVariant { name: "OPTION1" }
-  EnumVariant { name: "OPTION2" }
+  OPTION1
+  OPTION2
 }
+
 class Test {
-  field1: String
-  field2: String
-  another: Path(Path { segments: ["closed"], kind: Plain })
-  string: Path(Path { segments: ["\")  // Should still parse this\n}"], kind: Plain })
+  field1: string
+  field2: string
+  another: closed
+  string: ")  // Should still parse this
+}
 }

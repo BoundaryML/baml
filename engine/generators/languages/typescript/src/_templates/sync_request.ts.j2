@@ -21,7 +21,7 @@ export class HttpRequest {
   {% for func in functions %}
   {{ func.name }}(
       {% for (name, arg_type) in func.args -%}
-      {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+      {{name}}{% if arg_type.is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
       {%- endfor %}
       __baml_options__?: BamlCallOptions<{{ func.event_type_param() }}>
   ): HTTPRequest {
@@ -34,7 +34,7 @@ export class HttpRequest {
         "{{func.name}}",
         {
           {% for (name, arg_type) in func.args -%}
-          "{{name}}": {{name}}{% if arg_type.meta().is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          "{{name}}": {{name}}{% if arg_type.is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
           {%- endfor %}
         },
         this.ctxManager.cloneContext(),
@@ -56,7 +56,7 @@ export class HttpStreamRequest {
   {% for func in functions %}
   {{ func.name }}(
       {% for (name, arg_type) in func.args -%}
-      {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+      {{name}}{% if arg_type.is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
       {%- endfor %}
       __baml_options__?: BamlCallOptions<{{ func.event_type_param() }}>
   ): HTTPRequest {
@@ -69,7 +69,7 @@ export class HttpStreamRequest {
         "{{func.name}}",
         {
           {% for (name, arg_type) in func.args -%}
-          "{{name}}": {{name}}{% if arg_type.meta().is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          "{{name}}": {{name}}{% if arg_type.is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
           {%- endfor %}
         },
         this.ctxManager.cloneContext(),

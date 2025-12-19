@@ -161,9 +161,7 @@ func (*parse) AliasWithMultipleAttrs(text string, opts ...CallOptionFunc) (types
 		return types.Checked[int64]{}, err
 	}
 
-	casted := baml.CastChecked(result, func(inner any) int64 {
-		return (inner).(int64)
-	})
+	casted := (result).(types.Checked[int64])
 
 	return casted, nil
 }
@@ -3923,9 +3921,7 @@ func (*parse) MakeBlockConstraint(text string, opts ...CallOptionFunc) (types.Ch
 		return types.Checked[types.BlockConstraint]{}, err
 	}
 
-	casted := baml.CastChecked(result, func(inner any) types.BlockConstraint {
-		return (inner).(types.BlockConstraint)
-	})
+	casted := (result).(types.Checked[types.BlockConstraint])
 
 	return casted, nil
 }
@@ -4771,9 +4767,7 @@ func (*parse) PredictAgeBare(text string, opts ...CallOptionFunc) (types.Checked
 		return types.Checked[int64]{}, err
 	}
 
-	casted := baml.CastChecked(result, func(inner any) int64 {
-		return (inner).(int64)
-	})
+	casted := (result).(types.Checked[int64])
 
 	return casted, nil
 }
@@ -5431,9 +5425,7 @@ func (*parse) ReturnAliasWithMergedAttributes(text string, opts ...CallOptionFun
 		return types.Checked[int64]{}, err
 	}
 
-	casted := baml.CastChecked(result, func(inner any) int64 {
-		return (inner).(int64)
-	})
+	casted := (result).(types.Checked[int64])
 
 	return casted, nil
 }

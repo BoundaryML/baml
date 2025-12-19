@@ -33,7 +33,7 @@ async def test_call_llm_describe_image():
     # media type is passed correctly.
     description = await b.CallLlmDescribeImage(
         Image.from_url(
-            "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+            "https://i.imgur.com/93fWs5R.png"
         )
     )
 

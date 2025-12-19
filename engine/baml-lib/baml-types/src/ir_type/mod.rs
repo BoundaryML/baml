@@ -5,6 +5,7 @@ use itertools::Itertools;
 
 use crate::{
     baml_value::{TypeLookups, TypeLookupsMeta},
+    type_meta::MayHaveMeta,
     BamlMediaType, ConstraintLevel,
 };
 
@@ -83,6 +84,31 @@ impl<T> TypeGeneric<T> {
             TypeGeneric::Union(_, _) => "union",
         }
     }
+}
+
+macro_rules! impl_as_variant {
+    ($method_name:ident, $variant:pat, $err_msg:literal) => {
+        pub fn $method_name<U: TypeLookupsMeta<T>>(
+            self,
+            lookup: &U,
+        ) -> anyhow::Result<TypeGeneric<T>> {
+            match self {
+                $variant => Ok(self),
+                TypeGeneric::RecursiveTypeAlias { name, .. } => {
+                    let expanded_type = TypeLookupsMeta::<T>::expand_recursive_type(lookup, &name)?;
+                    expanded_type.$method_name::<U>(lookup)
+                }
+                _ => anyhow::bail!(concat!("Expected a ", $err_msg, ", got: {}"), self),
+            }
+        }
+    };
+}
+
+impl<T: MetaSuffix> TypeGeneric<T> {
+    impl_as_variant!(resolve_map, TypeGeneric::Map(..), "map type");
+    impl_as_variant!(resolve_list, TypeGeneric::List(..), "list type");
+    impl_as_variant!(resolve_enum, TypeGeneric::Enum { .. }, "enum type");
+    impl_as_variant!(resolve_class, TypeGeneric::Class { .. }, "class type");
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, strum::Display)]
@@ -322,7 +348,7 @@ enum UnionTypeViewGenericMut<'a, T> {
     OneOfOptional(Vec<&'a mut TypeGeneric<T>>),
 }
 
-impl<T: Default + std::fmt::Debug + Clone> UnionTypeViewGeneric<'_, T> {
+impl<T: Default + std::fmt::Debug + Clone + type_meta::MayHaveMeta> UnionTypeViewGeneric<'_, T> {
     /// A helper-function for the `FieldType::flatten`.
     /// See `FieldType::flatten` for context.
     fn flatten(&self) -> Vec<TypeGeneric<T>> {
@@ -432,6 +458,13 @@ impl<T> UnionTypeGeneric<T> {
     }
 }
 
+pub struct SelectedTypeIndexResult<'a, T> {
+    // If None, then value is a null
+    pub index: usize,
+    // Null should be in the options list if its allowed
+    pub options: Vec<&'a TypeGeneric<T>>,
+}
+
 impl<T: std::cmp::Eq + std::hash::Hash> UnionTypeGeneric<T>
 where
     TypeGeneric<T>: std::fmt::Display,
@@ -440,13 +473,8 @@ where
         &self,
         type_to_find: &TypeGeneric<T>,
         lookup: &impl TypeLookupsMeta<T>,
-    ) -> Result<Option<(usize, Vec<&TypeGeneric<T>>)>, anyhow::Error> {
-        let options = match self.view() {
-            // singles don't apply (only one option)
-            UnionTypeViewGeneric::Null | UnionTypeViewGeneric::Optional(..) => return Ok(None),
-            UnionTypeViewGeneric::OneOf(type_generics) => type_generics,
-            UnionTypeViewGeneric::OneOfOptional(type_generics) => type_generics,
-        };
+    ) -> Result<SelectedTypeIndexResult<'_, T>, anyhow::Error> {
+        let options = self.iter_include_null();
 
         for (i, t) in options.iter().enumerate() {
             if match t {
@@ -455,7 +483,7 @@ where
                 }
                 _ => *t == type_to_find,
             } {
-                return Ok(Some((i, options)));
+                return Ok(SelectedTypeIndexResult { index: i, options });
             }
         }
 
@@ -503,12 +531,23 @@ impl<T> TypeGeneric<T> {
     ///
     /// e.g. (( ((int | null) | int) | (map<string,string> | null ))) =>
     ///         int | int | map<string,string> | null
+    ///
+    /// Note: Unions with @check constraints are NOT flattened - they are
+    /// preserved as a unit to avoid losing the check metadata.
     pub fn flatten(&self) -> Vec<TypeGeneric<T>>
     where
-        T: Clone + std::fmt::Debug + Default,
+        T: Clone + std::fmt::Debug + Default + type_meta::MayHaveMeta,
     {
         match self {
-            TypeGeneric::Union(inner, _) => inner.view().flatten(),
+            TypeGeneric::Union(inner, meta) => {
+                // Don't flatten unions that have @check constraints - they are
+                // "wrapped" types that should be preserved as a unit
+                if meta.has_checks() {
+                    vec![self.clone()]
+                } else {
+                    inner.view().flatten()
+                }
+            }
             _ => vec![self.clone()],
         }
     }
@@ -518,8 +557,9 @@ impl<T> TypeGeneric<T> {
         predicate: &impl Fn(&TypeGeneric<T>) -> bool,
         ignore_map_keys: bool,
     ) -> Vec<&'a TypeGeneric<T>> {
+        let mut result = vec![];
         if predicate(self) {
-            return vec![self];
+            result.push(self);
         }
 
         match self {
@@ -528,24 +568,34 @@ impl<T> TypeGeneric<T> {
             | TypeGeneric::Enum { .. }
             | TypeGeneric::Literal(..)
             | TypeGeneric::Class { .. }
-            | TypeGeneric::RecursiveTypeAlias { .. } => vec![],
-            TypeGeneric::List(inner, _) => inner.find_if(predicate, ignore_map_keys),
+            | TypeGeneric::RecursiveTypeAlias { .. } => {}
+            TypeGeneric::List(inner, _) => {
+                result.extend(inner.find_if(predicate, ignore_map_keys));
+            }
             TypeGeneric::Map(key_type, value_type, _) => {
                 let mut res = value_type.find_if(predicate, ignore_map_keys);
                 if !ignore_map_keys {
                     res.extend(key_type.find_if(predicate, ignore_map_keys));
                 }
-                res
+                result.extend(res);
             }
-            TypeGeneric::Tuple(type_generics, _) => type_generics
-                .iter()
-                .flat_map(|t| t.find_if(predicate, ignore_map_keys))
-                .collect(),
-            TypeGeneric::Union(union_type_generic, _) => union_type_generic
-                .iter_skip_null()
-                .iter()
-                .flat_map(|t| t.find_if(predicate, ignore_map_keys))
-                .collect(),
+            TypeGeneric::Tuple(type_generics, _) => {
+                for t in type_generics
+                    .iter()
+                    .flat_map(|t| t.find_if(predicate, ignore_map_keys))
+                {
+                    result.push(t);
+                }
+            }
+            TypeGeneric::Union(union_type_generic, _) => {
+                for t in union_type_generic
+                    .iter_skip_null()
+                    .iter()
+                    .flat_map(|t| t.find_if(predicate, ignore_map_keys))
+                {
+                    result.push(t);
+                }
+            }
             TypeGeneric::Arrow(arrow_generic, _) => {
                 let res = arrow_generic
                     .param_types
@@ -555,9 +605,11 @@ impl<T> TypeGeneric<T> {
                     .return_type
                     .find_if(predicate, ignore_map_keys);
                 returned.extend(res);
-                returned
+                result.extend(returned);
             }
-        }
+        };
+
+        result
     }
 
     pub fn set_meta(&mut self, meta: T) {
@@ -687,10 +739,11 @@ impl<T> TypeGeneric<T> {
         }
     }
 
-    pub fn is_optional(&self) -> bool
-    where
-        T: std::fmt::Debug + Default,
-    {
+    pub fn is_literal(&self) -> bool {
+        matches!(self, TypeGeneric::Literal(_, _))
+    }
+
+    pub fn is_optional(&self) -> bool {
         match self {
             TypeGeneric::Primitive(TypeValue::Null, _) => true,
             TypeGeneric::Union(choices, _) => choices.is_optional(),
@@ -794,14 +847,19 @@ fn merge_modes<Mode: Iterator<Item = anyhow::Result<StreamingMode>>>(
     Ok(StreamingMode::NonStreaming)
 }
 
-impl<T> TypeGeneric<T> {
+impl<T: type_meta::MayHaveMeta> TypeGeneric<T> {
     pub fn mode(
         &self,
         mode: &StreamingMode,
         _lookup: &impl TypeLookups,
+        union_depth: usize,
     ) -> anyhow::Result<StreamingMode> {
         if *mode == StreamingMode::NonStreaming {
             return Ok(StreamingMode::NonStreaming);
+        }
+
+        if union_depth > 1 && self.meta().has_stream_state() {
+            return Ok(StreamingMode::Streaming);
         }
 
         match self {
@@ -811,21 +869,23 @@ impl<T> TypeGeneric<T> {
             | TypeGeneric::Primitive(_, _)
             | TypeGeneric::Enum { .. }
             | TypeGeneric::Literal(_, _) => Ok(StreamingMode::NonStreaming),
-            TypeGeneric::List(inner, _) => inner.mode(mode, _lookup),
+            TypeGeneric::List(inner, _) => inner.mode(mode, _lookup, union_depth),
             TypeGeneric::Map(key, value, ..) => {
-                let items: Vec<Result<StreamingMode, anyhow::Error>> =
-                    vec![key.mode(mode, _lookup), value.mode(mode, _lookup)];
+                let items: Vec<Result<StreamingMode, anyhow::Error>> = vec![
+                    key.mode(mode, _lookup, union_depth),
+                    value.mode(mode, _lookup, union_depth),
+                ];
                 merge_modes(items.into_iter())
             }
             TypeGeneric::RecursiveTypeAlias { mode, .. } => Ok(*mode),
             TypeGeneric::Tuple(inner, _) => {
-                merge_modes(inner.iter().map(|t| t.mode(mode, _lookup)))
+                merge_modes(inner.iter().map(|t| t.mode(mode, _lookup, union_depth)))
             }
             TypeGeneric::Union(union_type_generic, _) => merge_modes(
                 union_type_generic
                     .types
                     .iter()
-                    .map(|t| t.mode(mode, _lookup)),
+                    .map(|t| t.mode(mode, _lookup, union_depth + 1)),
             ),
         }
     }
@@ -844,11 +904,11 @@ impl TypeGeneric<type_meta::IR> {
 }
 
 pub trait ToUnionName<T> {
-    fn to_union_name(&self) -> String;
+    fn to_union_name(&self, include_metadata: bool) -> String;
     fn find_union_types(&self) -> IndexSet<&TypeGeneric<T>>;
 }
 
-impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Meta> {
+impl<Meta: std::hash::Hash + std::cmp::Eq + MayHaveMeta> ToUnionName<Meta> for TypeGeneric<Meta> {
     fn find_union_types(&self) -> IndexSet<&TypeGeneric<Meta>> {
         use TypeGeneric as T;
         // TODO: its pretty hard to get type aliases here
@@ -872,9 +932,10 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
         }
     }
 
-    fn to_union_name(&self) -> String {
+    fn to_union_name(&self, include_metadata: bool) -> String {
         use TypeGeneric as T;
-        match self {
+
+        let result = match self {
             T::Top(_) => "ANY".to_string(),
             T::Primitive(type_value, _) => type_value.to_string(),
             T::Enum { name, .. } => name.to_string(),
@@ -891,41 +952,71 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
             },
             T::Class { name, .. } => name.to_string(),
             T::List(field_type, _) => {
-                format!("List__{}", field_type.to_union_name())
+                format!("List__{}", field_type.to_union_name(include_metadata))
             }
             T::Map(field_type, field_type1, _) => {
                 format!(
                     "Map__{}_{}",
-                    field_type.to_union_name(),
-                    field_type1.to_union_name()
+                    field_type.to_union_name(include_metadata),
+                    field_type1.to_union_name(include_metadata)
                 )
             }
-            T::Union(field_types, _) => match field_types.view() {
-                UnionTypeViewGeneric::Null => "null".to_string(),
-                UnionTypeViewGeneric::Optional(field_type) => field_type.to_union_name(),
-                UnionTypeViewGeneric::OneOf(field_types)
-                | UnionTypeViewGeneric::OneOfOptional(field_types) => {
-                    format!(
-                        "Union__{}",
-                        field_types
-                            .iter()
-                            .map(|t| t.to_union_name())
-                            .sorted()
-                            .collect::<Vec<_>>()
-                            .join("__")
-                    )
+            T::Union(field_types, _) => {
+                let format_union_name = |options: Vec<&TypeGeneric<Meta>>| -> String {
+                    options
+                        .iter()
+                        .map(|t| t.to_union_name(include_metadata))
+                        .sorted()
+                        .collect::<Vec<_>>()
+                        .join("__")
+                };
+                let wrap_optional = |name: String| -> String {
+                    if include_metadata {
+                        format!("Optional__{}", name)
+                    } else {
+                        name
+                    }
+                };
+
+                match field_types.view() {
+                    UnionTypeViewGeneric::Null => "null".to_string(),
+                    UnionTypeViewGeneric::Optional(field_type) => {
+                        wrap_optional(field_type.to_union_name(include_metadata))
+                    }
+                    UnionTypeViewGeneric::OneOf(field_types) => format_union_name(field_types),
+                    UnionTypeViewGeneric::OneOfOptional(field_types) => {
+                        wrap_optional(format_union_name(field_types))
+                    }
                 }
-            },
+            }
             T::Tuple(field_types, _) => format!(
                 "Tuple__{}",
                 field_types
                     .iter()
-                    .map(|v| v.to_union_name())
+                    .map(|v| v.to_union_name(include_metadata))
                     .collect::<Vec<_>>()
                     .join("__")
             ),
             T::RecursiveTypeAlias { name, .. } => name.to_string(),
             T::Arrow(_, _) => "function".to_string(),
+        };
+
+        if include_metadata {
+            let result = if self.meta().has_stream_state() {
+                format!("StreamState__{}", result)
+            } else {
+                result
+            };
+
+            let result = if self.meta().has_checks() {
+                format!("Checked__{}", result)
+            } else {
+                result
+            };
+
+            result
+        } else {
+            result
         }
     }
 }
@@ -1534,8 +1625,7 @@ mod tests {
             Default::default(),
         ));
         let actual = converters::streaming::from_type_ir(&union, &TestLookup);
-
-        assert_eq!(actual, expected);
+        assert_eq!(actual, expected, "actual: {actual}\nexpected: {expected}");
     }
 
     #[test]
@@ -1680,5 +1770,275 @@ mod tests {
         dbg!(&streaming_type_variants[2]);
         assert_eq!(streaming_type_variants[0], expected_first_variant);
         assert_eq!(streaming_type_variants[1], expected_second_variant);
+    }
+
+    #[test]
+    fn partialize_checked_optional_int() {
+        // int? @check("foo", "bar")
+        // represented as Union(Int, Null) with constraints.
+        let constraint = Constraint::new_check("foo", "bar");
+        let mut optional_int = TypeIR::union(vec![TypeIR::int(), TypeIR::null()]);
+        optional_int.set_meta(type_meta::IR {
+            constraints: vec![constraint.clone()],
+            streaming_behavior: Default::default(),
+        });
+
+        // Expected streaming type:
+        // Union(stream(Int), Null) with constraints.
+        // The outer null is collapsed into the inner null.
+        let expected = TypeStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    // Inner int is marked needed=true because it was inside a union
+                    TypeStreaming::Primitive(
+                        TypeValue::Int,
+                        TypeMetaStreaming {
+                            streaming_behavior: type_meta::stream::StreamingBehavior {
+                                done: true,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                    ),
+                    TypeStreaming::null(),
+                ])
+            },
+            TypeMetaStreaming {
+                constraints: vec![constraint],
+                streaming_behavior: Default::default(),
+            },
+        );
+
+        let actual = converters::streaming::from_type_ir(&optional_int, &TestLookup);
+        assert_eq!(
+            actual, expected,
+            "\nActual: {}\nExpected: {}",
+            actual, expected
+        );
+    }
+
+    #[test]
+    fn partialize_checked_int() {
+        // Case: int @check(..)
+        let constraint = Constraint::new_check("foo", "bar");
+        let mut input = TypeIR::int();
+        input.set_meta(type_meta::IR {
+            constraints: vec![constraint.clone()],
+            streaming_behavior: Default::default(),
+        });
+
+        // Non-streaming: Just the int with the check.
+        let expected_non_streaming = TypeNonStreaming::Primitive(
+            TypeValue::Int,
+            type_meta::NonStreaming {
+                constraints: vec![constraint.clone()],
+            },
+        );
+
+        // Streaming: int becomes Union(int, null).
+        // The int keeps the check.
+        let expected_streaming = TypeStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeStreaming::Primitive(
+                        TypeValue::Int,
+                        type_meta::stream::TypeMetaStreaming {
+                            constraints: vec![constraint.clone()],
+                            streaming_behavior: type_meta::stream::StreamingBehavior {
+                                done: true,
+                                ..Default::default()
+                            },
+                        },
+                    ),
+                    TypeStreaming::null(),
+                ])
+            },
+            Default::default(),
+        );
+
+        let actual_non_streaming = input.to_non_streaming_type(&TestLookup);
+        assert_eq!(actual_non_streaming.to_string(), "int @check(foo, {{..}} )");
+        assert_eq!(
+            actual_non_streaming, expected_non_streaming,
+            "Non-streaming mismatch"
+        );
+
+        let actual_streaming = input.to_streaming_type(&TestLookup);
+        assert_eq!(
+            actual_streaming.to_string(),
+            "(int @check(foo, {{..}} ) @stream.done | null)"
+        );
+        assert_eq!(actual_streaming, expected_streaming, "Streaming mismatch");
+    }
+
+    #[test]
+    fn partialize_checked_union_on_union() {
+        // Case: (int | null) @check(..)
+        let constraint = Constraint::new_check("foo", "bar");
+        let mut input = TypeIR::union(vec![TypeIR::int(), TypeIR::null()]);
+        input.set_meta(type_meta::IR {
+            constraints: vec![constraint.clone()],
+            streaming_behavior: Default::default(),
+        });
+
+        let expected_non_streaming = TypeNonStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeNonStreaming::Primitive(TypeValue::Int, Default::default()),
+                    TypeNonStreaming::Primitive(TypeValue::Null, Default::default()),
+                ])
+            },
+            type_meta::NonStreaming {
+                constraints: vec![constraint.clone()],
+            },
+        );
+
+        let expected_streaming = TypeStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeStreaming::Primitive(
+                        TypeValue::Int,
+                        type_meta::stream::TypeMetaStreaming::default().done(),
+                    ),
+                    TypeStreaming::null(),
+                ])
+            },
+            type_meta::stream::TypeMetaStreaming {
+                constraints: vec![constraint.clone()],
+                streaming_behavior: Default::default(),
+            },
+        );
+
+        let actual_non_streaming = input.to_non_streaming_type(&TestLookup);
+        assert_eq!(
+            actual_non_streaming.to_string(),
+            "(int | null) @check(foo, {{..}} )"
+        );
+        assert_eq!(
+            actual_non_streaming, expected_non_streaming,
+            "Non-streaming mismatch"
+        );
+
+        let actual_streaming = input.to_streaming_type(&TestLookup);
+        assert_eq!(
+            actual_streaming.to_string(),
+            "(int @stream.done | null) @check(foo, {{..}} )"
+        );
+        assert_eq!(actual_streaming, expected_streaming, "Streaming mismatch");
+    }
+
+    #[test]
+    fn partialize_checked_union_on_variant() {
+        // Case: (int @check(..)) | null
+        let constraint = Constraint::new_check("foo", "bar");
+        let mut int = TypeIR::int();
+        int.set_meta(type_meta::IR {
+            constraints: vec![constraint.clone()],
+            streaming_behavior: Default::default(),
+        });
+        let input = TypeIR::union(vec![int, TypeIR::null()]);
+
+        let int_non_streaming = TypeNonStreaming::Primitive(
+            TypeValue::Int,
+            type_meta::NonStreaming {
+                constraints: vec![constraint.clone()],
+            },
+        );
+        let expected_non_streaming = TypeNonStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    int_non_streaming,
+                    TypeNonStreaming::Primitive(TypeValue::Null, Default::default()),
+                ])
+            },
+            Default::default(),
+        );
+
+        let expected_streaming = TypeStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeStreaming::Primitive(
+                        TypeValue::Int,
+                        type_meta::stream::TypeMetaStreaming {
+                            constraints: vec![constraint.clone()],
+                            streaming_behavior: type_meta::stream::StreamingBehavior {
+                                done: true,
+                                ..Default::default()
+                            },
+                        },
+                    ),
+                    TypeStreaming::null(),
+                ])
+            },
+            Default::default(),
+        );
+
+        let actual_non_streaming = input.to_non_streaming_type(&TestLookup);
+        assert_eq!(
+            actual_non_streaming.to_string(),
+            "(int @check(foo, {{..}} ) | null)"
+        );
+        assert_eq!(
+            actual_non_streaming, expected_non_streaming,
+            "Non-streaming mismatch"
+        );
+
+        let actual_streaming = input.to_streaming_type(&TestLookup);
+        assert_eq!(
+            actual_streaming.to_string(),
+            "(int @check(foo, {{..}} ) @stream.done | null)"
+        );
+        assert_eq!(actual_streaming, expected_streaming, "Streaming mismatch");
+    }
+
+    #[test]
+    fn partialize_checked_union_on_null_variant() {
+        // Case: int | (null @check(..))
+        let constraint = Constraint::new_check("foo", "bar");
+        let mut null = TypeIR::null();
+        null.set_meta(type_meta::IR {
+            constraints: vec![constraint.clone()],
+            streaming_behavior: Default::default(),
+        });
+        let input = TypeIR::union(vec![TypeIR::int(), null]);
+
+        let expected_non_streaming = {
+            // NOTE: checks on null are currently lost in non-streaming conversion as well
+            let null = TypeNonStreaming::Primitive(TypeValue::Null, Default::default());
+            TypeNonStreaming::Union(
+                unsafe {
+                    UnionTypeGeneric::new_unsafe(vec![
+                        TypeNonStreaming::Primitive(TypeValue::Int, Default::default()),
+                        null,
+                    ])
+                },
+                Default::default(),
+            )
+        };
+
+        let expected_streaming = TypeStreaming::Union(
+            unsafe {
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeStreaming::Primitive(
+                        TypeValue::Int,
+                        type_meta::stream::TypeMetaStreaming::default().done(),
+                    ),
+                    // NOTE: checks on null are lost in streaming conversion due to iter_skip_null usage
+                    TypeStreaming::null(),
+                ])
+            },
+            Default::default(),
+        );
+
+        let actual_non_streaming = input.to_non_streaming_type(&TestLookup);
+        assert_eq!(actual_non_streaming.to_string(), "(int | null)");
+        assert_eq!(
+            actual_non_streaming, expected_non_streaming,
+            "Non-streaming mismatch"
+        );
+
+        let actual_streaming = input.to_streaming_type(&TestLookup);
+        assert_eq!(actual_streaming.to_string(), "(int @stream.done | null)");
+        assert_eq!(actual_streaming, expected_streaming, "Streaming mismatch");
     }
 }

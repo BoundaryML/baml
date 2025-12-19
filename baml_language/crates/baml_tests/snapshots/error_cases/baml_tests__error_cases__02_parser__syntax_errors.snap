@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -10,7 +10,7 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "field"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     FUNCTION_DEF
       KW_FUNCTION "function"
@@ -20,7 +20,7 @@ SOURCE_FILE
         L_PAREN "("
         R_PAREN ")"
       EXPR_FUNCTION_BODY
-        BLOCK_EXPR " {}"
+        BLOCK_EXPR "{}"
           L_BRACE "{"
           R_BRACE "}"
 

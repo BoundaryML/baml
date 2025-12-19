@@ -104,7 +104,7 @@ test TestName {
 client<llm> AwsBedrockClaude37Client {
   provider "aws-bedrock"
   options {
-    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
     additional_model_request_fields {
       thinking {
         type "enabled"
@@ -119,6 +119,6 @@ client<llm> AwsBedrockClaude37Client {
 client<llm> AwsBedrockInferenceProfileClient {
   provider "aws-bedrock"
   options {
-    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
   }
 }

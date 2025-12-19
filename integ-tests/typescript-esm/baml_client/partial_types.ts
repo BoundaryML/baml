@@ -38,9 +38,9 @@ export interface StreamState<T> {
 export namespace partial_types {
     export interface AddTodoItem {
       type: "add_todo_item"
-      item?: string | null
-      time?: string | null
-      description?: string | null
+      item: string
+      time: string
+      description: string
     }
     export interface AddressWithMeta {
       street?: string | null
@@ -94,8 +94,8 @@ export namespace partial_types {
       list?: LinkedListAliasNode | null
     }
     export interface ClassWithBlockDone {
-      i_16_digits?: number | null
-      s_20_words?: string | null
+      i_16_digits: number
+      s_20_words: string
     }
     export interface ClassWithImage {
       myImage?: Image | null
@@ -104,7 +104,7 @@ export namespace partial_types {
     }
     export interface ClassWithoutDone {
       i_16_digits?: number | null
-      s_20_words?: StreamState<string | null>
+      s_20_words: StreamState<string | null>
     }
     export interface ClientDetails1559 {
       client_name?: string | null

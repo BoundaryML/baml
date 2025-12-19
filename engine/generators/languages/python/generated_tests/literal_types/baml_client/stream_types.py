@@ -12,11 +12,9 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
-import baml_py
 
-from . import types
 
 StreamStateValueT = typing.TypeVar('StreamStateValueT')
 class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
@@ -27,33 +25,33 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
 # #########################################################################
 
 class BooleanLiterals(BaseModel):
-    alwaysTrue: typing.Optional[bool] = None
-    alwaysFalse: typing.Optional[bool] = None
-    eitherBool: typing.Optional[typing.Union[bool, bool]] = None
+    alwaysTrue: typing.Optional[typing_extensions.Literal[True]] = None
+    alwaysFalse: typing.Optional[typing_extensions.Literal[False]] = None
+    eitherBool: typing.Optional[typing.Union[typing_extensions.Literal[True], typing_extensions.Literal[False]]] = None
 
 class ComplexLiterals(BaseModel):
-    state: typing.Optional[typing.Union[str, str, str, str]] = None
-    retryCount: typing.Optional[typing.Union[int, int, int, int, int, int, int]] = None
-    response: typing.Optional[typing.Union[str, str, str]] = None
-    flags: typing.List[typing.Union[bool, bool]]
-    codes: typing.List[typing.Union[int, int, int]]
+    state: typing.Optional[typing.Union[typing_extensions.Literal['draft'], typing_extensions.Literal['published'], typing_extensions.Literal['archived'], typing_extensions.Literal['deleted']]] = None
+    retryCount: typing.Optional[typing.Union[typing_extensions.Literal[0], typing_extensions.Literal[1], typing_extensions.Literal[2], typing_extensions.Literal[3], typing_extensions.Literal[5], typing_extensions.Literal[8], typing_extensions.Literal[13]]] = None
+    response: typing.Optional[typing.Union[typing_extensions.Literal['success'], typing_extensions.Literal['error'], typing_extensions.Literal['timeout']]] = None
+    flags: typing.List[typing.Union[typing_extensions.Literal[True], typing_extensions.Literal[False]]]
+    codes: typing.List[typing.Union[typing_extensions.Literal[200], typing_extensions.Literal[404], typing_extensions.Literal[500]]]
 
 class IntegerLiterals(BaseModel):
-    priority: typing.Optional[typing.Union[int, int, int, int, int]] = None
-    httpStatus: typing.Optional[typing.Union[int, int, int, int, int]] = None
-    maxRetries: typing.Optional[typing.Union[int, int, int, int]] = None
+    priority: typing.Optional[typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[2], typing_extensions.Literal[3], typing_extensions.Literal[4], typing_extensions.Literal[5]]] = None
+    httpStatus: typing.Optional[typing.Union[typing_extensions.Literal[200], typing_extensions.Literal[201], typing_extensions.Literal[400], typing_extensions.Literal[404], typing_extensions.Literal[500]]] = None
+    maxRetries: typing.Optional[typing.Union[typing_extensions.Literal[0], typing_extensions.Literal[1], typing_extensions.Literal[3], typing_extensions.Literal[5]]] = None
 
 class MixedLiterals(BaseModel):
     id: typing.Optional[int] = None
-    type: typing.Optional[typing.Union[str, str, str]] = None
-    level: typing.Optional[typing.Union[int, int, int]] = None
-    isActive: typing.Optional[typing.Union[bool, bool]] = None
-    apiVersion: typing.Optional[typing.Union[str, str, str]] = None
+    type: typing.Optional[typing.Union[typing_extensions.Literal['user'], typing_extensions.Literal['admin'], typing_extensions.Literal['guest']]] = None
+    level: typing.Optional[typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[2], typing_extensions.Literal[3]]] = None
+    isActive: typing.Optional[typing.Union[typing_extensions.Literal[True], typing_extensions.Literal[False]]] = None
+    apiVersion: typing.Optional[typing.Union[typing_extensions.Literal['v1'], typing_extensions.Literal['v2'], typing_extensions.Literal['v3']]] = None
 
 class StringLiterals(BaseModel):
-    status: typing.Optional[typing.Union[str, str, str]] = None
-    environment: typing.Optional[typing.Union[str, str, str]] = None
-    method: typing.Optional[typing.Union[str, str, str, str]] = None
+    status: typing.Optional[typing.Union[typing_extensions.Literal['active'], typing_extensions.Literal['inactive'], typing_extensions.Literal['pending']]] = None
+    environment: typing.Optional[typing.Union[typing_extensions.Literal['dev'], typing_extensions.Literal['staging'], typing_extensions.Literal['prod']]] = None
+    method: typing.Optional[typing.Union[typing_extensions.Literal['GET'], typing_extensions.Literal['POST'], typing_extensions.Literal['PUT'], typing_extensions.Literal['DELETE']]] = None
 
 # #########################################################################
 # Generated type aliases (0)

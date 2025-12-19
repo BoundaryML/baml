@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 1
-Objects: 2
-Globals: 1
+Objects: 20
+Globals: 19
 
 Function HelloWorld (arity: 1, kind: Llm):
   (no bytecode)

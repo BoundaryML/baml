@@ -515,7 +515,7 @@ Received message: &quot;BamlError: BamlClientError: BamlClientHttpError: Request
 Caused by:
     0: failed to convert function result to vm value
     1: error parsing function result: LLM client &quot;GPT4o&quot; failed with status code: Unspecified error code: 400
-       Message: Request failed with status code: 400 Bad Request. {&quot;error&quot;:{&quot;message&quot;:&quot;Error while downloading https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png.&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;param&quot;:null,&quot;code&quot;:&quot;invalid_image_url&quot;}}</failure>
+       Message: Request failed with status code: 400 Bad Request. {&quot;error&quot;:{&quot;message&quot;:&quot;Error while downloading https://drive.google.com/uc?id=1NhoSIIHYveygPytfCroGaAHwJ5agD5a6.&quot;,&quot;type&quot;:&quot;invalid_request_error&quot;,&quot;param&quot;:null,&quot;code&quot;:&quot;invalid_image_url&quot;}}</failure>
     </testcase>
     <testcase classname="VM Async Runtime Tests should execute fetch as" name="VM Async Runtime Tests should execute fetch as" time="0.371">
     </testcase>

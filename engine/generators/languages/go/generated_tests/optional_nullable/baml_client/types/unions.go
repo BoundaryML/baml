@@ -31,7 +31,7 @@ type Union2IntOrString struct {
 
 func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -39,7 +39,7 @@ func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap b
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 
 	default:
@@ -47,14 +47,14 @@ func (u *Union2IntOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap b
 	}
 }
 
-func (u Union2IntOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2IntOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -65,13 +65,6 @@ func (u Union2IntOrString) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2IntOrString) BamlTypeName() string {
 	return "Union2IntOrString"
-}
-
-func (u Union2IntOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__int__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2IntOrString) MarshalJSON() ([]byte, error) {
@@ -176,7 +169,7 @@ type Union2ProductOrUser struct {
 
 func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "User":
 		u.variant = "User"
@@ -192,14 +185,14 @@ func (u *Union2ProductOrUser) Decode(holder *cffi.CFFIValueUnionVariant, typeMap
 	}
 }
 
-func (u Union2ProductOrUser) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2ProductOrUser) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "User":
-		return baml.EncodeUnion(u.BamlEncodeName, "User", *u.variant_User)
+		return baml.EncodeValue(*u.variant_User)
 
 	case "Product":
-		return baml.EncodeUnion(u.BamlEncodeName, "Product", *u.variant_Product)
+		return baml.EncodeValue(*u.variant_Product)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -210,13 +203,6 @@ func (u Union2ProductOrUser) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2ProductOrUser) BamlTypeName() string {
 	return "Union2ProductOrUser"
-}
-
-func (u Union2ProductOrUser) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Product__User",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2ProductOrUser) MarshalJSON() ([]byte, error) {

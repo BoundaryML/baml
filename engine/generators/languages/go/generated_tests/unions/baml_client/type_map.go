@@ -25,12 +25,12 @@ var typeMap = map[string]reflect.Type{
 	"TYPES.UseMyUnion":                     reflect.TypeOf(types.UseMyUnion{}),
 	"STREAM_TYPES.UseMyUnion":              reflect.TypeOf(stream_types.UseMyUnion{}),
 
-	"TYPES.Union__List__Recursive1__int":           reflect.TypeOf(types.Union2IntOrListRecursive1{}),
-	"TYPES.Union__string_resource__string_service": reflect.TypeOf(types.Union2KresourceOrKservice{}),
-	"TYPES.Union__Recursive1__int__string":         reflect.TypeOf(types.Union3IntOrRecursive1OrString{}),
+	"TYPES.List__Recursive1__int":           reflect.TypeOf(types.Union2IntOrListRecursive1{}),
+	"TYPES.string_resource__string_service": reflect.TypeOf(types.Union2KresourceOrKservice{}),
+	"TYPES.Recursive1__int__string":         reflect.TypeOf(types.Union3IntOrRecursive1OrString{}),
 
-	"STREAM_TYPES.Union__List__Recursive1__int":   reflect.TypeOf(stream_types.Union2IntOrListRecursive1{}),
-	"STREAM_TYPES.Union__Recursive1__int__string": reflect.TypeOf(stream_types.Union3IntOrRecursive1OrString{}),
+	"STREAM_TYPES.List__Recursive1__int":   reflect.TypeOf(stream_types.Union2IntOrListRecursive1{}),
+	"STREAM_TYPES.Recursive1__int__string": reflect.TypeOf(stream_types.Union3IntOrRecursive1OrString{}),
 
 	"TYPES.MyUnion":                 reflect.TypeOf((*types.Union3IntOrRecursive1OrString)(nil)),
 	"TYPES.Nonrecursive1":           reflect.TypeOf((*int64)(nil)),

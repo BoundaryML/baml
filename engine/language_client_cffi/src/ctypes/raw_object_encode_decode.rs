@@ -1,7 +1,7 @@
 use baml_cffi_macros::generate_encode_decode_impls;
 
 use crate::{
-    baml::cffi::{cffi_raw_object::Object, CffiPointerType, CffiRawObject},
+    baml::cffi::{baml_object_handle::Object, BamlObjectHandle, BamlPointerType},
     ctypes::utils::{Decode, Encode},
     raw_ptr_wrapper::{
         ClassBuilderWrapper, ClassPropertyBuilderWrapper, CollectorWrapper, EnumBuilderWrapper,
@@ -37,19 +37,19 @@ trait ObjectType {
     fn object_type(&self) -> Object;
 }
 
-impl<T> Encode<CffiRawObject> for RawPtrWrapper<T>
+impl<T> Encode<BamlObjectHandle> for RawPtrWrapper<T>
 where
     RawPtrWrapper<T>: ObjectType,
 {
-    fn encode(self) -> CffiRawObject {
-        CffiRawObject {
+    fn encode(self) -> BamlObjectHandle {
+        BamlObjectHandle {
             object: Some(self.object_type()),
         }
     }
 }
 
 impl Decode for MediaWrapper {
-    type From = CffiPointerType;
+    type From = BamlPointerType;
 
     fn decode(from: Self::From) -> Result<Self, anyhow::Error>
     where

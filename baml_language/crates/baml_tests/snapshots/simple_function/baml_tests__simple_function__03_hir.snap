@@ -1,18 +1,18 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function HelloWorld {
-  params: [name: String]
-  return: String
-  body: Llm {
-    client: GPT4
-    prompt: "\n    Say hello to {{name}}\n  "
-    interpolations: [name]
-  }
+function HelloWorld(name: string) -> string {
+  client GPT4
+  prompt #"
+    
+        Say hello to {{name}}
+      
+  "#
 }
+
 class User {
-  name: String
-  age: Int
+  name: string
+  age: int
 }

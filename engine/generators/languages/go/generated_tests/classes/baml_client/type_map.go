@@ -17,9 +17,13 @@ import (
 	"classes/baml_client/stream_types"
 	"classes/baml_client/types"
 	"reflect"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 var typeMap = map[string]reflect.Type{
 	"TYPES.SimpleClass":        reflect.TypeOf(types.SimpleClass{}),
 	"STREAM_TYPES.SimpleClass": reflect.TypeOf(stream_types.SimpleClass{}),
+
+	"STREAM_STATE_TYPES.Optional__string": reflect.TypeOf(baml.StreamState[*string]{}),
 }

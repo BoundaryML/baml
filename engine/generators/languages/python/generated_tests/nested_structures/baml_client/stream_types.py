@@ -12,11 +12,9 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
-import baml_py
 
-from . import types
 
 StreamStateValueT = typing.TypeVar('StreamStateValueT')
 class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
@@ -56,7 +54,7 @@ class Company(BaseModel):
 class CompanyMetadata(BaseModel):
     founded: typing.Optional[str] = None
     industry: typing.Optional[str] = None
-    size: typing.Optional[typing.Union[str, str, str, str]] = None
+    size: typing.Optional[typing.Union[typing_extensions.Literal['small'], typing_extensions.Literal['medium'], typing_extensions.Literal['large'], typing_extensions.Literal['enterprise']]] = None
     certifications: typing.List[str]
     partnerships: typing.Optional[typing.List["Company"]] = None
 
@@ -89,7 +87,7 @@ class Department(BaseModel):
 class DisplaySettings(BaseModel):
     fontSize: typing.Optional[int] = None
     colorScheme: typing.Optional[str] = None
-    layout: typing.Optional[typing.Union[str, str]] = None
+    layout: typing.Optional[typing.Union[typing_extensions.Literal['grid'], typing_extensions.Literal['list']]] = None
 
 class Employee(BaseModel):
     id: typing.Optional[int] = None
@@ -140,15 +138,15 @@ class NotificationSettings(BaseModel):
     email: typing.Optional[bool] = None
     push: typing.Optional[bool] = None
     sms: typing.Optional[bool] = None
-    frequency: typing.Optional[typing.Union[str, str, str]] = None
+    frequency: typing.Optional[typing.Union[typing_extensions.Literal['immediate'], typing_extensions.Literal['daily'], typing_extensions.Literal['weekly']]] = None
 
 class Preferences(BaseModel):
-    theme: typing.Optional[typing.Union[str, str]] = None
+    theme: typing.Optional[typing.Union[typing_extensions.Literal['light'], typing_extensions.Literal['dark']]] = None
     language: typing.Optional[str] = None
     notifications: typing.Optional["NotificationSettings"] = None
 
 class PrivacySettings(BaseModel):
-    profileVisibility: typing.Optional[typing.Union[str, str, str]] = None
+    profileVisibility: typing.Optional[typing.Union[typing_extensions.Literal['public'], typing_extensions.Literal['private'], typing_extensions.Literal['friends']]] = None
     showEmail: typing.Optional[bool] = None
     showPhone: typing.Optional[bool] = None
 
@@ -162,7 +160,7 @@ class Project(BaseModel):
     id: typing.Optional[int] = None
     name: typing.Optional[str] = None
     description: typing.Optional[str] = None
-    status: typing.Optional[typing.Union[str, str, str, str]] = None
+    status: typing.Optional[typing.Union[typing_extensions.Literal['planning'], typing_extensions.Literal['active'], typing_extensions.Literal['completed'], typing_extensions.Literal['cancelled']]] = None
     team: typing.List["Employee"]
     milestones: typing.List["Milestone"]
     budget: typing.Optional["Budget"] = None
@@ -190,8 +188,8 @@ class Task(BaseModel):
     title: typing.Optional[str] = None
     description: typing.Optional[str] = None
     assignee: typing.Optional[str] = None
-    priority: typing.Optional[typing.Union[str, str, str]] = None
-    status: typing.Optional[typing.Union[str, str, str]] = None
+    priority: typing.Optional[typing.Union[typing_extensions.Literal['low'], typing_extensions.Literal['medium'], typing_extensions.Literal['high']]] = None
+    status: typing.Optional[typing.Union[typing_extensions.Literal['todo'], typing_extensions.Literal['in_progress'], typing_extensions.Literal['done']]] = None
     subtasks: typing.Optional[typing.List["Task"]] = None
 
 class User(BaseModel):

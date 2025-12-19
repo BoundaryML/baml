@@ -14,8 +14,8 @@ type classBuilder struct {
 	llmRenderableObject
 }
 
-func (cb *classBuilder) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_CLASS_BUILDER
+func (cb *classBuilder) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_CLASS_BUILDER
 }
 
 func newClassBuilder(ptr int64, rt unsafe.Pointer) ClassBuilder {

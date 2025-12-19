@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -90,77 +89,77 @@ class BamlSyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-
+    
     def TestBooleanLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.BooleanLiterals:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestBooleanLiterals(input=input,
+            stream = self.stream.TestBooleanLiterals(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestBooleanLiterals", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestBooleanLiterals", args={
                 "input": input,
             })
-            return typing.cast(types.BooleanLiterals, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.BooleanLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestComplexLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ComplexLiterals:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestComplexLiterals(input=input,
+            stream = self.stream.TestComplexLiterals(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestComplexLiterals", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestComplexLiterals", args={
                 "input": input,
             })
-            return typing.cast(types.ComplexLiterals, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.ComplexLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestIntegerLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.IntegerLiterals:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestIntegerLiterals(input=input,
+            stream = self.stream.TestIntegerLiterals(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestIntegerLiterals", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestIntegerLiterals", args={
                 "input": input,
             })
-            return typing.cast(types.IntegerLiterals, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.IntegerLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestMixedLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.MixedLiterals:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestMixedLiterals(input=input,
+            stream = self.stream.TestMixedLiterals(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestMixedLiterals", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestMixedLiterals", args={
                 "input": input,
             })
-            return typing.cast(types.MixedLiterals, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.MixedLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestStringLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.StringLiterals:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestStringLiterals(input=input,
+            stream = self.stream.TestStringLiterals(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestStringLiterals", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestStringLiterals", args={
                 "input": input,
             })
-            return typing.cast(types.StringLiterals, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.StringLiterals, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -173,62 +172,62 @@ class BamlStreamClient:
     def TestBooleanLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.BooleanLiterals, types.BooleanLiterals]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestBooleanLiterals", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestBooleanLiterals", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.BooleanLiterals, types.BooleanLiterals](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.BooleanLiterals, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.BooleanLiterals, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestComplexLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.ComplexLiterals, types.ComplexLiterals]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestComplexLiterals", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestComplexLiterals", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.ComplexLiterals, types.ComplexLiterals](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.ComplexLiterals, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.ComplexLiterals, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestIntegerLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.IntegerLiterals, types.IntegerLiterals]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestIntegerLiterals", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestIntegerLiterals", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.IntegerLiterals, types.IntegerLiterals](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.IntegerLiterals, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.IntegerLiterals, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestMixedLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.MixedLiterals, types.MixedLiterals]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestMixedLiterals", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestMixedLiterals", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.MixedLiterals, types.MixedLiterals](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.MixedLiterals, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.MixedLiterals, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestStringLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.StringLiterals, types.StringLiterals]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestStringLiterals", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestStringLiterals", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.StringLiterals, types.StringLiterals](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.StringLiterals, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.StringLiterals, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     
 
@@ -241,38 +240,38 @@ class BamlHttpRequestClient:
     def TestBooleanLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestBooleanLiterals", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestBooleanLiterals", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestComplexLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestComplexLiterals", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestComplexLiterals", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestIntegerLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestIntegerLiterals", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestIntegerLiterals", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestMixedLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestMixedLiterals", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestMixedLiterals", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestStringLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestStringLiterals", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestStringLiterals", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -284,38 +283,38 @@ class BamlHttpStreamRequestClient:
     def TestBooleanLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestBooleanLiterals", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestBooleanLiterals", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestComplexLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestComplexLiterals", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestComplexLiterals", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestIntegerLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestIntegerLiterals", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestIntegerLiterals", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestMixedLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestMixedLiterals", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestMixedLiterals", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestStringLiterals(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestStringLiterals", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestStringLiterals", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     
 
 b = BamlSyncClient(DoNotUseDirectlyCallManager({}))

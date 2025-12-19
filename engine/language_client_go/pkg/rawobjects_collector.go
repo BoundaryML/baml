@@ -16,8 +16,8 @@ func newCollector(ptr int64, rt unsafe.Pointer) Collector {
 	return &collector{raw_objects.FromPointer(ptr, rt)}
 }
 
-func (c *collector) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_COLLECTOR
+func (c *collector) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_COLLECTOR
 }
 
 func (c *collector) pointer() int64 {

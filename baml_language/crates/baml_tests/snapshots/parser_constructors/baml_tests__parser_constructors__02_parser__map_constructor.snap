@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 872
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -19,7 +18,7 @@ SOURCE_FILE
         TYPE_EXPR "string"
           WORD "string"
         COMMA ","
-        TYPE_EXPR " string"
+        TYPE_EXPR "string"
           WORD "string"
         GREATER ">"
     EXPR_FUNCTION_BODY
@@ -28,25 +27,23 @@ SOURCE_FILE
         MAP_LITERAL
           L_BRACE "{"
           OBJECT_FIELD
-            STRING_LITERAL "
-    "hello""
+            STRING_LITERAL "hello"
               QUOTE """
               WORD "hello"
               QUOTE """
             COLON ":"
-            STRING_LITERAL " "world""
+            STRING_LITERAL "world"
               QUOTE """
               WORD "world"
               QUOTE """
           COMMA ","
           OBJECT_FIELD
-            STRING_LITERAL "
-    "test""
+            STRING_LITERAL "test"
               QUOTE """
               KW_TEST "test"
               QUOTE """
             COLON ":"
-            STRING_LITERAL " "test""
+            STRING_LITERAL "test"
               QUOTE """
               KW_TEST "test"
               QUOTE """
@@ -66,7 +63,7 @@ SOURCE_FILE
         TYPE_EXPR "string"
           WORD "string"
         COMMA ","
-        TYPE_EXPR " int"
+        TYPE_EXPR "int"
           WORD "int"
         GREATER ">"
     EXPR_FUNCTION_BODY
@@ -75,8 +72,7 @@ SOURCE_FILE
         MAP_LITERAL
           L_BRACE "{"
           OBJECT_FIELD
-            STRING_LITERAL "
-    "hello""
+            STRING_LITERAL "hello"
               QUOTE """
               WORD "hello"
               QUOTE """
@@ -84,8 +80,7 @@ SOURCE_FILE
             INTEGER_LITERAL "1"
           COMMA ","
           OBJECT_FIELD
-            STRING_LITERAL "
-    "test""
+            STRING_LITERAL "test"
               QUOTE """
               KW_TEST "test"
               QUOTE """
@@ -107,7 +102,7 @@ SOURCE_FILE
         TYPE_EXPR "string"
           WORD "string"
         COMMA ","
-        TYPE_EXPR " float"
+        TYPE_EXPR "float"
           WORD "float"
         GREATER ">"
     EXPR_FUNCTION_BODY
@@ -116,8 +111,7 @@ SOURCE_FILE
         MAP_LITERAL
           L_BRACE "{"
           OBJECT_FIELD
-            STRING_LITERAL "
-    "hello""
+            STRING_LITERAL "hello"
               QUOTE """
               WORD "hello"
               QUOTE """
@@ -125,8 +119,7 @@ SOURCE_FILE
             FLOAT_LITERAL "1.0"
           COMMA ","
           OBJECT_FIELD
-            STRING_LITERAL "
-    "test""
+            STRING_LITERAL "test"
               QUOTE """
               KW_TEST "test"
               QUOTE """
@@ -148,7 +141,7 @@ SOURCE_FILE
         TYPE_EXPR "string"
           WORD "string"
         COMMA ","
-        TYPE_EXPR " bool"
+        TYPE_EXPR "bool"
           WORD "bool"
         GREATER ">"
     EXPR_FUNCTION_BODY
@@ -157,8 +150,7 @@ SOURCE_FILE
         MAP_LITERAL
           L_BRACE "{"
           OBJECT_FIELD
-            STRING_LITERAL "
-    "hello""
+            STRING_LITERAL "hello"
               QUOTE """
               WORD "hello"
               QUOTE """
@@ -166,8 +158,7 @@ SOURCE_FILE
             WORD "true"
           COMMA ","
           OBJECT_FIELD
-            STRING_LITERAL "
-    "test""
+            STRING_LITERAL "test"
               QUOTE """
               KW_TEST "test"
               QUOTE """

@@ -55,5 +55,5 @@ var typeMap = map[string]reflect.Type{
 	"TYPES.VeryLongStrings":           reflect.TypeOf(types.VeryLongStrings{}),
 	"STREAM_TYPES.VeryLongStrings":    reflect.TypeOf(stream_types.VeryLongStrings{}),
 
-	"TYPES.Union__bool__int__string": reflect.TypeOf(types.Union3BoolOrIntOrString{}),
+	"TYPES.bool__int__string": reflect.TypeOf(types.Union3BoolOrIntOrString{}),
 }

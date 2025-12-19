@@ -23,8 +23,8 @@ import (
 )
 
 type ClassWithBlockDone struct {
-	I_16_digits *int64  `json:"i_16_digits"`
-	S_20_words  *string `json:"s_20_words"`
+	I_16_digits int64  `json:"i_16_digits"`
+	S_20_words  string `json:"s_20_words"`
 }
 
 func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -42,10 +42,10 @@ func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Ty
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).Interface().(*int64)
+			c.I_16_digits = baml.Decode(valueHolder).Int()
 
 		case "s_20_words":
-			c.S_20_words = baml.Decode(valueHolder).Interface().(*string)
+			c.S_20_words = baml.Decode(valueHolder).Interface().(string)
 
 		default:
 
@@ -56,25 +56,18 @@ func (c *ClassWithBlockDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Ty
 
 }
 
-func (c ClassWithBlockDone) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ClassWithBlockDone) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["i_16_digits"] = c.I_16_digits
 
 	fields["s_20_words"] = c.S_20_words
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ClassWithBlockDone", fields, nil)
 }
 
 func (c ClassWithBlockDone) BamlTypeName() string {
 	return "ClassWithBlockDone"
-}
-
-func (u ClassWithBlockDone) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ClassWithBlockDone",
-	}
 }
 
 type ClassWithoutDone struct {
@@ -100,9 +93,7 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 			c.I_16_digits = baml.Decode(valueHolder).Interface().(*int64)
 
 		case "s_20_words":
-			c.S_20_words = baml.DecodeStreamingState(valueHolder, func(inner *cffi.CFFIValueHolder) *string {
-				return baml.Decode(inner).Interface().(*string)
-			})
+			c.S_20_words = baml.Decode(valueHolder).Interface().(baml.StreamState[*string])
 
 		default:
 
@@ -113,25 +104,18 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 
 }
 
-func (c ClassWithoutDone) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ClassWithoutDone) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["i_16_digits"] = c.I_16_digits
 
 	fields["s_20_words"] = c.S_20_words
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ClassWithoutDone", fields, nil)
 }
 
 func (c ClassWithoutDone) BamlTypeName() string {
 	return "ClassWithoutDone"
-}
-
-func (u ClassWithoutDone) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ClassWithoutDone",
-	}
 }
 
 type SemanticContainer struct {
@@ -192,7 +176,7 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass, typeMap baml.Typ
 
 }
 
-func (c SemanticContainer) Encode() (*cffi.CFFIValueHolder, error) {
+func (c SemanticContainer) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["sixteen_digit_number"] = c.Sixteen_digit_number
@@ -211,18 +195,11 @@ func (c SemanticContainer) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["final_string"] = c.Final_string
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("SemanticContainer", fields, nil)
 }
 
 func (c SemanticContainer) BamlTypeName() string {
 	return "SemanticContainer"
-}
-
-func (u SemanticContainer) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "SemanticContainer",
-	}
 }
 
 type SmallThing struct {
@@ -245,7 +222,7 @@ func (c *SmallThing) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 		switch key {
 
 		case "i_16_digits":
-			c.I_16_digits = baml.Decode(valueHolder).Interface().(int64)
+			c.I_16_digits = baml.Decode(valueHolder).Int()
 
 		case "i_8_digits":
 			c.I_8_digits = baml.Decode(valueHolder).Interface().(*int64)
@@ -259,23 +236,16 @@ func (c *SmallThing) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c SmallThing) Encode() (*cffi.CFFIValueHolder, error) {
+func (c SmallThing) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["i_16_digits"] = c.I_16_digits
 
 	fields["i_8_digits"] = c.I_8_digits
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("SmallThing", fields, nil)
 }
 
 func (c SmallThing) BamlTypeName() string {
 	return "SmallThing"
-}
-
-func (u SmallThing) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "SmallThing",
-	}
 }

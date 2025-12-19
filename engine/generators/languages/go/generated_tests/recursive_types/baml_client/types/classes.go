@@ -50,21 +50,14 @@ func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c UseMyUnion) Encode() (*cffi.CFFIValueHolder, error) {
+func (c UseMyUnion) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["u"] = c.U
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("UseMyUnion", fields, nil)
 }
 
 func (c UseMyUnion) BamlTypeName() string {
 	return "UseMyUnion"
-}
-
-func (u UseMyUnion) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "UseMyUnion",
-	}
 }

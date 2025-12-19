@@ -5,10 +5,12 @@
 
 use std::sync::Arc;
 
+use baml_syntax::TypeExpr;
 use la_arena::{Arena, Idx};
-use rowan::ast::AstNode;
+use rowan::{TextRange, ast::AstNode};
+use rustc_hash::FxHashMap;
 
-use crate::Name;
+use crate::{Name, type_ref::TypeRef};
 
 /// The body of a function - determined by CST node type.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,6 +69,25 @@ pub struct ExprBody {
 
     /// Root expression of the function body (usually a `BLOCK_EXPR`)
     pub root_expr: Option<ExprId>,
+
+    // NEW: Inline source maps
+    pub expr_spans: FxHashMap<ExprId, TextRange>,
+    pub stmt_spans: FxHashMap<StmtId, TextRange>,
+    pub pattern_spans: FxHashMap<PatId, TextRange>,
+}
+
+impl ExprBody {
+    pub fn expr_span(&self, id: ExprId) -> Option<TextRange> {
+        self.expr_spans.get(&id).copied()
+    }
+
+    pub fn stmt_span(&self, id: StmtId) -> Option<TextRange> {
+        self.stmt_spans.get(&id).copied()
+    }
+
+    pub fn pattern_span(&self, id: PatId) -> Option<TextRange> {
+        self.pattern_spans.get(&id).copied()
+    }
 }
 
 // IDs for arena indices
@@ -150,25 +171,23 @@ pub enum Stmt {
     Let {
         pattern: PatId,
         type_annotation: Option<crate::type_ref::TypeRef>,
+        type_span: Option<TextRange>,
         initializer: Option<ExprId>,
     },
 
     /// While loop: `while (condition) { body }`
-    While { condition: ExprId, body: ExprId },
-
-    /// For loop (iterator-style): `for (let i in items) { body }`
-    ForIn {
-        pattern: PatId,
-        iterator: ExprId,
+    ///
+    /// The `origin` field tracks whether this loop was written directly
+    /// by the user or desugared from a for loop.
+    ///
+    /// The optional `after` statement runs after each iteration (including on `continue`).
+    /// This is used to desugar C-style for loops: `for (init; cond; update)`.
+    While {
+        condition: ExprId,
         body: ExprId,
-    },
-
-    /// For loop (C-style): `for (let i = 0; i < 10; i += 1) { body }`
-    ForCStyle {
-        initializer: Option<StmtId>,
-        condition: Option<ExprId>,
-        update: Option<StmtId>,
-        body: ExprId,
+        /// Optional statement to run after each iteration (for C-style for loops' update).
+        after: Option<StmtId>,
+        origin: LoopOrigin,
     },
 
     /// Return statement: `return "minor";`
@@ -192,6 +211,18 @@ pub enum Stmt {
 
     /// Missing/error statement
     Missing,
+}
+
+/// Indicates where a loop construct originated from.
+///
+/// This is used to provide better error messages for desugared constructs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LoopOrigin {
+    /// User wrote a `while` loop directly
+    #[default]
+    While,
+    /// Desugared from a `for-in` loop
+    ForLoop,
 }
 
 /// Compound assignment operators.
@@ -268,11 +299,24 @@ impl FunctionBody {
     ///
     /// The CST already tells us if it's LLM or Expr via node type!
     pub fn lower(func_node: &baml_syntax::ast::FunctionDef) -> Arc<FunctionBody> {
+        // Collect parameter names to add to scope
+        let param_names: Vec<String> = func_node
+            .param_list()
+            .map(|pl| {
+                pl.params()
+                    .filter_map(|p| p.name().map(|n| n.text().to_string()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
         // Check which body type we have
         if let Some(llm_body) = func_node.llm_body() {
             Arc::new(FunctionBody::Llm(Self::lower_llm_body(&llm_body)))
         } else if let Some(expr_body) = func_node.expr_body() {
-            Arc::new(FunctionBody::Expr(Self::lower_expr_body(&expr_body)))
+            Arc::new(FunctionBody::Expr(Self::lower_expr_body(
+                &expr_body,
+                &param_names,
+            )))
         } else {
             Arc::new(FunctionBody::Missing)
         }
@@ -355,8 +399,16 @@ impl FunctionBody {
         interpolations
     }
 
-    fn lower_expr_body(expr_body: &baml_syntax::ast::ExprFunctionBody) -> ExprBody {
+    fn lower_expr_body(
+        expr_body: &baml_syntax::ast::ExprFunctionBody,
+        param_names: &[String],
+    ) -> ExprBody {
         let mut ctx = LoweringContext::new();
+
+        // Add function parameters to scope so gensym avoids them
+        for name in param_names {
+            ctx.add_name_to_scope(name);
+        }
 
         // The EXPR_FUNCTION_BODY contains a BLOCK_EXPR as its child
         // which contains all the statements and expressions
@@ -366,12 +418,7 @@ impl FunctionBody {
             .find_map(baml_syntax::ast::BlockExpr::cast)
             .map(|block| ctx.lower_block_expr(&block));
 
-        ExprBody {
-            exprs: ctx.exprs,
-            stmts: ctx.stmts,
-            patterns: ctx.patterns,
-            root_expr,
-        }
+        ctx.finish(root_expr)
     }
 }
 
@@ -379,6 +426,13 @@ struct LoweringContext {
     exprs: Arena<Expr>,
     stmts: Arena<Stmt>,
     patterns: Arena<Pattern>,
+    /// All names used in this function, for generating unique synthetic variable names.
+    names_in_scope: std::collections::HashSet<String>,
+
+    // Span tracking
+    expr_spans: FxHashMap<ExprId, TextRange>,
+    stmt_spans: FxHashMap<StmtId, TextRange>,
+    pattern_spans: FxHashMap<PatId, TextRange>,
 }
 
 impl LoweringContext {
@@ -387,7 +441,73 @@ impl LoweringContext {
             exprs: Arena::new(),
             stmts: Arena::new(),
             patterns: Arena::new(),
+            names_in_scope: std::collections::HashSet::new(),
+            expr_spans: FxHashMap::default(),
+            stmt_spans: FxHashMap::default(),
+            pattern_spans: FxHashMap::default(),
         }
+    }
+
+    fn alloc_expr(&mut self, expr: Expr, span: TextRange) -> ExprId {
+        let id = self.exprs.alloc(expr);
+        self.expr_spans.insert(id, span);
+        id
+    }
+
+    fn alloc_stmt(&mut self, stmt: Stmt, span: TextRange) -> StmtId {
+        let id = self.stmts.alloc(stmt);
+        self.stmt_spans.insert(id, span);
+        id
+    }
+
+    fn alloc_pattern(&mut self, pattern: Pattern, span: TextRange) -> PatId {
+        let id = self.patterns.alloc(pattern);
+        self.pattern_spans.insert(id, span);
+        id
+    }
+
+    fn finish(self, root_expr: Option<ExprId>) -> ExprBody {
+        ExprBody {
+            exprs: self.exprs,
+            stmts: self.stmts,
+            patterns: self.patterns,
+            root_expr,
+            expr_spans: self.expr_spans,
+            stmt_spans: self.stmt_spans,
+            pattern_spans: self.pattern_spans,
+        }
+    }
+
+    /// Generate a unique variable name for desugaring.
+    ///
+    /// Tries readable names first, then adds numeric suffixes if needed:
+    /// - First tries `_iter`, then `_iter1`, `_iter2`, ...
+    /// - First tries `_len`, then `_len1`, `_len2`, ...
+    /// - First tries `_i`, then `_i1`, `_i2`, ...
+    fn gensym(&mut self, prefix: &str) -> Name {
+        let base = format!("_{prefix}");
+
+        // First try without a number
+        if !self.names_in_scope.contains(&base) {
+            self.names_in_scope.insert(base.clone());
+            return Name::new(&base);
+        }
+
+        // Then try with incrementing numbers
+        let mut counter = 1;
+        loop {
+            let name = format!("{base}{counter}");
+            if !self.names_in_scope.contains(&name) {
+                self.names_in_scope.insert(name.clone());
+                return Name::new(&name);
+            }
+            counter += 1;
+        }
+    }
+
+    /// Add a user-defined name to the set of known names.
+    fn add_name_to_scope(&mut self, name: &str) {
+        self.names_in_scope.insert(name.to_string());
     }
 
     fn lower_block_expr(&mut self, block: &baml_syntax::ast::BlockExpr) -> ExprId {
@@ -400,7 +520,6 @@ impl LoweringContext {
 
         for (idx, element) in elements.iter().enumerate() {
             let is_last = idx == elements.len() - 1;
-
             match element {
                 BlockElement::Stmt(node) => {
                     let stmt_id = match node.kind() {
@@ -408,9 +527,11 @@ impl LoweringContext {
                         SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
                         SyntaxKind::FOR_EXPR => self.lower_for_stmt(node),
-                        SyntaxKind::BREAK_STMT => self.stmts.alloc(Stmt::Break),
-                        SyntaxKind::CONTINUE_STMT => self.stmts.alloc(Stmt::Continue),
-                        _ => self.stmts.alloc(Stmt::Missing),
+                        SyntaxKind::BREAK_STMT => self.alloc_stmt(Stmt::Break, node.text_range()),
+                        SyntaxKind::CONTINUE_STMT => {
+                            self.alloc_stmt(Stmt::Continue, node.text_range())
+                        }
+                        _ => self.alloc_stmt(Stmt::Missing, node.text_range()),
                     };
                     stmts.push(stmt_id);
                 }
@@ -432,28 +553,30 @@ impl LoweringContext {
                         tail_expr = Some(expr_id);
                     } else {
                         // Expression statement (with semicolon or not last)
-                        stmts.push(self.stmts.alloc(Stmt::Expr(expr_id)));
+                        stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), node.text_range()));
                     }
                 }
                 BlockElement::ExprToken(token) => {
                     // Handle bare tokens as potential tail expressions
+                    let span = token.text_range();
                     let expr_id = match token.kind() {
                         SyntaxKind::WORD => {
                             let text = token.text();
-                            match text {
-                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
-                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
-                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
-                            }
+                            let expr_to_alloc = match text {
+                                "true" => Expr::Literal(Literal::Bool(true)),
+                                "false" => Expr::Literal(Literal::Bool(false)),
+                                "null" => Expr::Literal(Literal::Null),
+                                _ => Expr::Path(vec![Name::new(text)]),
+                            };
+                            self.alloc_expr(expr_to_alloc, span)
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
-                            self.exprs.alloc(Expr::Literal(Literal::Int(value)))
+                            self.alloc_expr(Expr::Literal(Literal::Int(value)), span)
                         }
                         SyntaxKind::FLOAT_LITERAL => {
                             let text = token.text().to_string();
-                            self.exprs.alloc(Expr::Literal(Literal::Float(text)))
+                            self.alloc_expr(Expr::Literal(Literal::Float(text)), span)
                         }
                         SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                             let text = token.text().to_string();
@@ -464,23 +587,28 @@ impl LoweringContext {
                             } else {
                                 text
                             };
-                            self.exprs.alloc(Expr::Literal(Literal::String(content)))
+                            self.alloc_expr(Expr::Literal(Literal::String(content)), span)
                         }
-                        _ => self.exprs.alloc(Expr::Missing),
+                        _ => self.alloc_expr(Expr::Missing, span),
                     };
 
                     // Check if this is a tail expression
                     // Last element without semicolon becomes tail expression
+                    // TODO: in the case of optional semicolons in the future,
+                    // simply knowing whether an expr has a trailing semicolon will not be enough
                     if is_last && !element.has_trailing_semicolon() {
                         tail_expr = Some(expr_id);
                     } else {
-                        stmts.push(self.stmts.alloc(Stmt::Expr(expr_id)));
+                        stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), span));
                     }
                 }
             }
         }
 
-        self.exprs.alloc(Expr::Block { stmts, tail_expr })
+        self.alloc_expr(
+            Expr::Block { stmts, tail_expr },
+            block.syntax().text_range(),
+        )
     }
 
     fn lower_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -495,7 +623,7 @@ impl LoweringContext {
                 if let Some(block) = baml_syntax::ast::BlockExpr::cast(node.clone()) {
                     self.lower_block_expr(&block)
                 } else {
-                    self.exprs.alloc(Expr::Missing)
+                    self.alloc_expr(Expr::Missing, node.text_range())
                 }
             }
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
@@ -509,7 +637,7 @@ impl LoweringContext {
                 } else {
                     // No child nodes - try to find a literal token (true/false/null/int)
                     self.try_lower_literal_token(node)
-                        .unwrap_or_else(|| self.exprs.alloc(Expr::Missing))
+                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()))
                 }
             }
             SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
@@ -522,7 +650,7 @@ impl LoweringContext {
                 if let Some(literal) = self.try_lower_literal_token(node) {
                     literal
                 } else {
-                    self.exprs.alloc(Expr::Missing)
+                    self.alloc_expr(Expr::Missing, node.text_range())
                 }
             }
         }
@@ -550,6 +678,7 @@ impl LoweringContext {
                     }
                 }
                 rowan::NodeOrToken::Token(token) => {
+                    let span = token.text_range();
                     match token.kind() {
                         // Operators
                         SyntaxKind::PLUS => op = Some(BinaryOp::Add),
@@ -574,7 +703,7 @@ impl LoweringContext {
                         // Literals and identifiers - convert to expressions
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
-                            let expr_id = self.exprs.alloc(Expr::Literal(Literal::Int(value)));
+                            let expr_id = self.alloc_expr(Expr::Literal(Literal::Int(value)), span);
                             if lhs.is_none() {
                                 lhs = Some(expr_id);
                             } else {
@@ -582,9 +711,10 @@ impl LoweringContext {
                             }
                         }
                         SyntaxKind::FLOAT_LITERAL => {
-                            let expr_id = self
-                                .exprs
-                                .alloc(Expr::Literal(Literal::Float(token.text().to_string())));
+                            let expr_id = self.alloc_expr(
+                                Expr::Literal(Literal::Float(token.text().to_string())),
+                                span,
+                            );
                             if lhs.is_none() {
                                 lhs = Some(expr_id);
                             } else {
@@ -594,10 +724,12 @@ impl LoweringContext {
                         SyntaxKind::WORD => {
                             let text = token.text();
                             let expr_id = match text {
-                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
-                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
-                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
+                                "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
+                                "false" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
+                                }
+                                "null" => self.alloc_expr(Expr::Literal(Literal::Null), span),
+                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), span),
                             };
                             if lhs.is_none() {
                                 lhs = Some(expr_id);
@@ -611,11 +743,11 @@ impl LoweringContext {
             }
         }
 
-        let lhs = lhs.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
-        let rhs = rhs.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+        let lhs = lhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let rhs = rhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
         let op = op.unwrap_or(BinaryOp::Add);
 
-        self.exprs.alloc(Expr::Binary { op, lhs, rhs })
+        self.alloc_expr(Expr::Binary { op, lhs, rhs }, node.text_range())
     }
 
     /// Try to lower a `BINARY_EXPR` as an assignment statement.
@@ -668,11 +800,12 @@ impl LoweringContext {
                     }
                 }
                 rowan::NodeOrToken::Token(token) => {
+                    let span = token.text_range();
                     // Handle literals/identifiers as expressions (skip operators)
                     match token.kind() {
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
-                            let expr_id = self.exprs.alloc(Expr::Literal(Literal::Int(value)));
+                            let expr_id = self.alloc_expr(Expr::Literal(Literal::Int(value)), span);
                             if lhs.is_none() {
                                 lhs = Some(expr_id);
                             } else {
@@ -682,10 +815,12 @@ impl LoweringContext {
                         SyntaxKind::WORD => {
                             let text = token.text();
                             let expr_id = match text {
-                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
-                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
-                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
+                                "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
+                                "false" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
+                                }
+                                "null" => self.alloc_expr(Expr::Literal(Literal::Null), span),
+                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), span),
                             };
                             if lhs.is_none() {
                                 lhs = Some(expr_id);
@@ -698,15 +833,15 @@ impl LoweringContext {
                 }
             }
         }
-        let target = lhs.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
-        let value = rhs.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+        let target = lhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let value = rhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
         let stmt = match assign_op {
             None => Stmt::Assign { target, value },
             Some(op) => Stmt::AssignOp { target, op, value },
         };
 
-        Some(self.stmts.alloc(stmt))
+        Some(self.alloc_stmt(stmt, node.text_range()))
     }
 
     fn lower_unary_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -728,9 +863,9 @@ impl LoweringContext {
             .children()
             .next()
             .map(|n| self.lower_expr(&n))
-            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
-        self.exprs.alloc(Expr::Unary { op, expr })
+        self.alloc_expr(Expr::Unary { op, expr }, node.text_range())
     }
 
     fn lower_if_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -740,12 +875,12 @@ impl LoweringContext {
         let condition = children
             .first()
             .map(|n| self.lower_expr(n))
-            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
         let then_branch = children
             .get(1)
             .map(|n| self.lower_expr(n))
-            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
         // Check for else branch - it might be another IF_EXPR (else if) or BLOCK_EXPR (else)
         let else_branch = if children.len() > 2 {
@@ -754,11 +889,14 @@ impl LoweringContext {
             None
         };
 
-        self.exprs.alloc(Expr::If {
-            condition,
-            then_branch,
-            else_branch,
-        })
+        self.alloc_expr(
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            },
+            node.text_range(),
+        )
     }
 
     fn lower_call_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -786,123 +924,136 @@ impl LoweringContext {
 
             if let Some(token) = word_token {
                 let name = token.text().to_string();
-                self.exprs.alloc(Expr::Path(vec![Name::new(&name)]))
+                self.alloc_expr(Expr::Path(vec![Name::new(&name)]), token.text_range())
             } else {
-                self.exprs.alloc(Expr::Missing)
+                self.alloc_expr(Expr::Missing, node.text_range())
             }
         };
 
         // Find CALL_ARGS node and extract arguments
-        let args = node
-            .children()
-            .find(|n| n.kind() == SyntaxKind::CALL_ARGS)
-            .map(|args_node| {
-                let mut args = Vec::new();
+        let args =
+            node.children()
+                .find(|n| n.kind() == SyntaxKind::CALL_ARGS)
+                .map(|args_node| {
+                    let mut args = Vec::new();
 
-                // First, collect expression nodes
-                for child in args_node.children() {
-                    if matches!(
-                        child.kind(),
-                        SyntaxKind::EXPR
-                            | SyntaxKind::BINARY_EXPR
-                            | SyntaxKind::UNARY_EXPR
-                            | SyntaxKind::CALL_EXPR
-                            | SyntaxKind::PATH_EXPR
-                            | SyntaxKind::FIELD_ACCESS_EXPR
-                            | SyntaxKind::INDEX_EXPR
-                            | SyntaxKind::IF_EXPR
-                            | SyntaxKind::BLOCK_EXPR
-                            | SyntaxKind::PAREN_EXPR
-                    ) {
-                        args.push(self.lower_expr(&child));
+                    // First, collect expression nodes
+                    for child in args_node.children() {
+                        if matches!(
+                            child.kind(),
+                            SyntaxKind::EXPR
+                                | SyntaxKind::BINARY_EXPR
+                                | SyntaxKind::UNARY_EXPR
+                                | SyntaxKind::CALL_EXPR
+                                | SyntaxKind::PATH_EXPR
+                                | SyntaxKind::FIELD_ACCESS_EXPR
+                                | SyntaxKind::INDEX_EXPR
+                                | SyntaxKind::IF_EXPR
+                                | SyntaxKind::BLOCK_EXPR
+                                | SyntaxKind::PAREN_EXPR
+                                | SyntaxKind::ARRAY_LITERAL
+                        ) {
+                            args.push(self.lower_expr(&child));
+                        }
                     }
-                }
 
-                // If no expression nodes found, check for literal tokens
-                // (parser may emit literals as tokens directly in CALL_ARGS)
-                if args.is_empty() {
-                    for element in args_node.children_with_tokens() {
-                        match element {
-                            baml_syntax::NodeOrToken::Token(token) => {
-                                let expr = match token.kind() {
-                                    SyntaxKind::INTEGER_LITERAL => {
-                                        let text = token.text();
-                                        let value = text.parse::<i64>().unwrap_or(0);
-                                        Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))))
-                                    }
-                                    SyntaxKind::FLOAT_LITERAL => {
-                                        let text = token.text().to_string();
-                                        Some(self.exprs.alloc(Expr::Literal(Literal::Float(text))))
-                                    }
-                                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                                        let text = token.text().to_string();
-                                        // Strip quotes
-                                        let content =
-                                            if text.starts_with("#\"") && text.ends_with("\"#") {
+                    // If no expression nodes found, check for literal tokens
+                    // (parser may emit literals as tokens directly in CALL_ARGS)
+                    if args.is_empty() {
+                        for element in args_node.children_with_tokens() {
+                            match element {
+                                baml_syntax::NodeOrToken::Token(token) => {
+                                    let span = token.text_range();
+                                    let expr = match token.kind() {
+                                        SyntaxKind::INTEGER_LITERAL => {
+                                            let text = token.text();
+                                            let value = text.parse::<i64>().unwrap_or(0);
+                                            Some(self.alloc_expr(
+                                                Expr::Literal(Literal::Int(value)),
+                                                span,
+                                            ))
+                                        }
+                                        SyntaxKind::FLOAT_LITERAL => {
+                                            let text = token.text().to_string();
+                                            Some(self.alloc_expr(
+                                                Expr::Literal(Literal::Float(text)),
+                                                span,
+                                            ))
+                                        }
+                                        SyntaxKind::STRING_LITERAL
+                                        | SyntaxKind::RAW_STRING_LITERAL => {
+                                            let text = token.text().to_string();
+                                            // Strip quotes
+                                            let content = if text.starts_with("#\"")
+                                                && text.ends_with("\"#")
+                                            {
                                                 text[2..text.len() - 2].to_string()
                                             } else if text.starts_with('"') && text.ends_with('"') {
                                                 text[1..text.len() - 1].to_string()
                                             } else {
                                                 text
                                             };
-                                        Some(
-                                            self.exprs
-                                                .alloc(Expr::Literal(Literal::String(content))),
-                                        )
-                                    }
-                                    SyntaxKind::WORD => {
-                                        // Variable reference or keyword (true/false/null)
-                                        let text = token.text();
-                                        match text {
-                                            "true" => Some(
-                                                self.exprs
-                                                    .alloc(Expr::Literal(Literal::Bool(true))),
-                                            ),
-                                            "false" => Some(
-                                                self.exprs
-                                                    .alloc(Expr::Literal(Literal::Bool(false))),
-                                            ),
-                                            "null" => {
-                                                Some(self.exprs.alloc(Expr::Literal(Literal::Null)))
-                                            }
-                                            _ => Some(
-                                                self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
-                                            ),
+                                            Some(self.alloc_expr(
+                                                Expr::Literal(Literal::String(content)),
+                                                span,
+                                            ))
                                         }
+                                        SyntaxKind::WORD => {
+                                            // Variable reference or keyword (true/false/null)
+                                            let text = token.text();
+                                            match text {
+                                                "true" => Some(self.alloc_expr(
+                                                    Expr::Literal(Literal::Bool(true)),
+                                                    span,
+                                                )),
+                                                "false" => Some(self.alloc_expr(
+                                                    Expr::Literal(Literal::Bool(false)),
+                                                    span,
+                                                )),
+                                                "null" => Some(self.alloc_expr(
+                                                    Expr::Literal(Literal::Null),
+                                                    span,
+                                                )),
+                                                _ => Some(self.alloc_expr(
+                                                    Expr::Path(vec![Name::new(text)]),
+                                                    span,
+                                                )),
+                                            }
+                                        }
+                                        _ => None,
+                                    };
+                                    if let Some(e) = expr {
+                                        args.push(e);
                                     }
-                                    _ => None,
-                                };
-                                if let Some(e) = expr {
-                                    args.push(e);
                                 }
-                            }
-                            baml_syntax::NodeOrToken::Node(node) => {
-                                // Also handle expression nodes in this pass
-                                if matches!(
-                                    node.kind(),
-                                    SyntaxKind::EXPR
-                                        | SyntaxKind::BINARY_EXPR
-                                        | SyntaxKind::UNARY_EXPR
-                                        | SyntaxKind::CALL_EXPR
-                                        | SyntaxKind::PATH_EXPR
-                                        | SyntaxKind::FIELD_ACCESS_EXPR
-                                        | SyntaxKind::INDEX_EXPR
-                                        | SyntaxKind::IF_EXPR
-                                        | SyntaxKind::BLOCK_EXPR
-                                        | SyntaxKind::PAREN_EXPR
-                                ) {
-                                    args.push(self.lower_expr(&node));
+                                baml_syntax::NodeOrToken::Node(child_node) => {
+                                    // Also handle expression nodes in this pass
+                                    if matches!(
+                                        child_node.kind(),
+                                        SyntaxKind::EXPR
+                                            | SyntaxKind::BINARY_EXPR
+                                            | SyntaxKind::UNARY_EXPR
+                                            | SyntaxKind::CALL_EXPR
+                                            | SyntaxKind::PATH_EXPR
+                                            | SyntaxKind::FIELD_ACCESS_EXPR
+                                            | SyntaxKind::INDEX_EXPR
+                                            | SyntaxKind::IF_EXPR
+                                            | SyntaxKind::BLOCK_EXPR
+                                            | SyntaxKind::PAREN_EXPR
+                                            | SyntaxKind::ARRAY_LITERAL
+                                    ) {
+                                        args.push(self.lower_expr(&child_node));
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                args
-            })
-            .unwrap_or_default();
+                    args
+                })
+                .unwrap_or_default();
 
-        self.exprs.alloc(Expr::Call { callee, args })
+        self.alloc_expr(Expr::Call { callee, args }, node.text_range())
     }
 
     /// Lower a `FIELD_ACCESS_EXPR` to `Expr::FieldAccess`.
@@ -927,20 +1078,20 @@ impl LoweringContext {
 
         // FIELD_ACCESS_EXPR structure: base expression, DOT token, field name (WORD)
         let Some(field_access) = FieldAccessExpr::cast(node.clone()) else {
-            return self.exprs.alloc(Expr::Missing);
+            return self.alloc_expr(Expr::Missing, node.text_range());
         };
 
         let base = field_access
             .base()
             .map(|n| self.lower_expr(&n))
-            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
         let field = field_access
             .field()
             .map(|token| Name::new(token.text()))
             .unwrap_or_else(|| Name::new(""));
 
-        self.exprs.alloc(Expr::FieldAccess { base, field })
+        self.alloc_expr(Expr::FieldAccess { base, field }, node.text_range())
     }
 
     fn lower_index_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -965,6 +1116,7 @@ impl LoweringContext {
                     }
                 }
                 rowan::NodeOrToken::Token(token) => {
+                    let span = token.text_range();
                     match token.kind() {
                         SyntaxKind::L_BRACKET => {
                             inside_brackets = true;
@@ -975,7 +1127,7 @@ impl LoweringContext {
                         // Handle direct tokens (literals, identifiers)
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
-                            let expr_id = self.exprs.alloc(Expr::Literal(Literal::Int(value)));
+                            let expr_id = self.alloc_expr(Expr::Literal(Literal::Int(value)), span);
                             if !inside_brackets {
                                 base = Some(expr_id);
                             } else {
@@ -983,9 +1135,10 @@ impl LoweringContext {
                             }
                         }
                         SyntaxKind::FLOAT_LITERAL => {
-                            let expr_id = self
-                                .exprs
-                                .alloc(Expr::Literal(Literal::Float(token.text().to_string())));
+                            let expr_id = self.alloc_expr(
+                                Expr::Literal(Literal::Float(token.text().to_string())),
+                                span,
+                            );
                             if !inside_brackets {
                                 base = Some(expr_id);
                             } else {
@@ -995,10 +1148,12 @@ impl LoweringContext {
                         SyntaxKind::WORD => {
                             let text = token.text();
                             let expr_id = match text {
-                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
-                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
-                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
+                                "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
+                                "false" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
+                                }
+                                "null" => self.alloc_expr(Expr::Literal(Literal::Null), span),
+                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), span),
                             };
                             if !inside_brackets {
                                 base = Some(expr_id);
@@ -1012,10 +1167,10 @@ impl LoweringContext {
             }
         }
 
-        let base = base.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
-        let index = index.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let index = index.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
-        self.exprs.alloc(Expr::Index { base, index })
+        self.alloc_expr(Expr::Index { base, index }, node.text_range())
     }
 
     fn lower_path_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -1032,7 +1187,7 @@ impl LoweringContext {
         // module item) happens in THIR.
 
         let Some(path_expr) = PathExpr::cast(node.clone()) else {
-            return self.exprs.alloc(Expr::Missing);
+            return self.alloc_expr(Expr::Missing, node.text_range());
         };
 
         let segments: Vec<Name> = path_expr
@@ -1041,14 +1196,31 @@ impl LoweringContext {
             .collect();
 
         if segments.is_empty() {
-            return self.exprs.alloc(Expr::Missing);
+            return self.alloc_expr(Expr::Missing, node.text_range());
         }
 
-        self.exprs.alloc(Expr::Path(segments))
+        self.alloc_expr(Expr::Path(segments), node.text_range())
     }
 
     fn lower_string_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        let text = node.text().to_string();
+        use baml_syntax::SyntaxKind;
+
+        // Find the actual STRING_LITERAL or RAW_STRING_LITERAL token inside the node.
+        // This avoids including trivia/whitespace that might be part of the node's text span.
+        let text = node
+            .children_with_tokens()
+            .filter_map(baml_syntax::NodeOrToken::into_token)
+            .find(|t| {
+                matches!(
+                    t.kind(),
+                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
+                )
+            })
+            .map(|t| t.text().to_string())
+            .unwrap_or_else(|| {
+                // Fallback: trim the node text to remove surrounding trivia
+                node.text().to_string().trim().to_string()
+            });
 
         // Strip quotes
         let content = if text.starts_with("#\"") && text.ends_with("\"#") {
@@ -1059,8 +1231,10 @@ impl LoweringContext {
             &text
         };
 
-        self.exprs
-            .alloc(Expr::Literal(Literal::String(content.to_string())))
+        self.alloc_expr(
+            Expr::Literal(Literal::String(content.to_string())),
+            node.text_range(),
+        )
     }
 
     fn lower_array_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -1080,16 +1254,18 @@ impl LoweringContext {
         if elements.is_empty() {
             for elem in node.children_with_tokens() {
                 if let rowan::NodeOrToken::Token(token) = elem {
+                    let span = token.text_range();
                     match token.kind() {
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
-                            elements.push(self.exprs.alloc(Expr::Literal(Literal::Int(value))));
+                            elements
+                                .push(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
                         }
                         SyntaxKind::FLOAT_LITERAL => {
-                            elements
-                                .push(self.exprs.alloc(Expr::Literal(Literal::Float(
-                                    token.text().to_string(),
-                                ))));
+                            elements.push(self.alloc_expr(
+                                Expr::Literal(Literal::Float(token.text().to_string())),
+                                span,
+                            ));
                         }
                         SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                             let text = token.text();
@@ -1100,18 +1276,20 @@ impl LoweringContext {
                             } else {
                                 text
                             };
-                            elements.push(
-                                self.exprs
-                                    .alloc(Expr::Literal(Literal::String(content.to_string()))),
-                            );
+                            elements.push(self.alloc_expr(
+                                Expr::Literal(Literal::String(content.to_string())),
+                                span,
+                            ));
                         }
                         SyntaxKind::WORD => {
                             let text = token.text();
                             let expr = match text {
-                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
-                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
-                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
+                                "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
+                                "false" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
+                                }
+                                "null" => self.alloc_expr(Expr::Literal(Literal::Null), span),
+                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), span),
                             };
                             elements.push(expr);
                         }
@@ -1121,7 +1299,7 @@ impl LoweringContext {
             }
         }
 
-        self.exprs.alloc(Expr::Array { elements })
+        self.alloc_expr(Expr::Array { elements }, node.text_range())
     }
 
     fn lower_object_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -1135,89 +1313,100 @@ impl LoweringContext {
             .map(|token| Name::new(token.text()));
 
         // Extract fields from OBJECT_FIELD children
-        let fields = node
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::OBJECT_FIELD)
-            .filter_map(|field_node| {
-                // OBJECT_FIELD has: WORD (field name), COLON, value (EXPR or literal token)
-                let field_name = field_node
-                    .children_with_tokens()
-                    .filter_map(baml_syntax::NodeOrToken::into_token)
-                    .find(|token| token.kind() == SyntaxKind::WORD)
-                    .map(|token| Name::new(token.text()))?;
+        let fields =
+            node.children()
+                .filter(|n| n.kind() == SyntaxKind::OBJECT_FIELD)
+                .filter_map(|field_node| {
+                    let field_span = field_node.text_range();
+                    // OBJECT_FIELD has: WORD (field name), COLON, value (EXPR or literal token)
+                    let field_name = field_node
+                        .children_with_tokens()
+                        .filter_map(baml_syntax::NodeOrToken::into_token)
+                        .find(|token| token.kind() == SyntaxKind::WORD)
+                        .map(|token| Name::new(token.text()))?;
 
-                // Try to get value as a child node first
-                let value = field_node
-                    .children()
-                    .next()
-                    .map(|n| self.lower_expr(&n))
-                    .or_else(|| {
-                        // Try to get value as a direct token (literal or identifier)
-                        // Skip the field name WORD and look for the value token after COLON
-                        let mut seen_colon = false;
-                        field_node
-                            .children_with_tokens()
-                            .filter_map(baml_syntax::NodeOrToken::into_token)
-                            .find_map(|token| {
-                                if token.kind() == SyntaxKind::COLON {
-                                    seen_colon = true;
-                                    return None;
-                                }
-                                if !seen_colon {
-                                    return None;
-                                }
-                                match token.kind() {
-                                    SyntaxKind::INTEGER_LITERAL => {
-                                        let value = token.text().parse::<i64>().unwrap_or(0);
-                                        Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))))
+                    // Try to get value as a child node first
+                    let value = field_node
+                        .children()
+                        .next()
+                        .map(|n| self.lower_expr(&n))
+                        .or_else(|| {
+                            // Try to get value as a direct token (literal or identifier)
+                            // Skip the field name WORD and look for the value token after COLON
+                            let mut seen_colon = false;
+                            field_node
+                                .children_with_tokens()
+                                .filter_map(baml_syntax::NodeOrToken::into_token)
+                                .find_map(|token| {
+                                    if token.kind() == SyntaxKind::COLON {
+                                        seen_colon = true;
+                                        return None;
                                     }
-                                    SyntaxKind::FLOAT_LITERAL => Some(self.exprs.alloc(
-                                        Expr::Literal(Literal::Float(token.text().to_string())),
-                                    )),
-                                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                                        let text = token.text();
-                                        let content =
-                                            if text.starts_with("#\"") && text.ends_with("\"#") {
+                                    if !seen_colon {
+                                        return None;
+                                    }
+                                    let span = token.text_range();
+                                    match token.kind() {
+                                        SyntaxKind::INTEGER_LITERAL => {
+                                            let value = token.text().parse::<i64>().unwrap_or(0);
+                                            Some(self.alloc_expr(
+                                                Expr::Literal(Literal::Int(value)),
+                                                span,
+                                            ))
+                                        }
+                                        SyntaxKind::FLOAT_LITERAL => Some(self.alloc_expr(
+                                            Expr::Literal(Literal::Float(token.text().to_string())),
+                                            span,
+                                        )),
+                                        SyntaxKind::STRING_LITERAL
+                                        | SyntaxKind::RAW_STRING_LITERAL => {
+                                            let text = token.text();
+                                            let content = if text.starts_with("#\"")
+                                                && text.ends_with("\"#")
+                                            {
                                                 &text[2..text.len() - 2]
                                             } else if text.starts_with('"') && text.ends_with('"') {
                                                 &text[1..text.len() - 1]
                                             } else {
                                                 text
                                             };
-                                        Some(self.exprs.alloc(Expr::Literal(Literal::String(
-                                            content.to_string(),
-                                        ))))
+                                            Some(self.alloc_expr(
+                                                Expr::Literal(Literal::String(content.to_string())),
+                                                span,
+                                            ))
+                                        }
+                                        SyntaxKind::WORD => {
+                                            // Variable reference or boolean/null literal
+                                            let text = token.text();
+                                            let expr = match text {
+                                                "true" => self.alloc_expr(
+                                                    Expr::Literal(Literal::Bool(true)),
+                                                    span,
+                                                ),
+                                                "false" => self.alloc_expr(
+                                                    Expr::Literal(Literal::Bool(false)),
+                                                    span,
+                                                ),
+                                                "null" => self
+                                                    .alloc_expr(Expr::Literal(Literal::Null), span),
+                                                _ => self.alloc_expr(
+                                                    Expr::Path(vec![Name::new(text)]),
+                                                    span,
+                                                ),
+                                            };
+                                            Some(expr)
+                                        }
+                                        _ => None,
                                     }
-                                    SyntaxKind::WORD => {
-                                        // Variable reference or boolean/null literal
-                                        let text = token.text();
-                                        let expr = match text {
-                                            "true" => {
-                                                self.exprs.alloc(Expr::Literal(Literal::Bool(true)))
-                                            }
-                                            "false" => self
-                                                .exprs
-                                                .alloc(Expr::Literal(Literal::Bool(false))),
-                                            "null" => {
-                                                self.exprs.alloc(Expr::Literal(Literal::Null))
-                                            }
-                                            _ => {
-                                                self.exprs.alloc(Expr::Path(vec![Name::new(text)]))
-                                            }
-                                        };
-                                        Some(expr)
-                                    }
-                                    _ => None,
-                                }
-                            })
-                    })
-                    .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+                                })
+                        })
+                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, field_span));
 
-                Some((field_name, value))
-            })
-            .collect();
+                    Some((field_name, value))
+                })
+                .collect();
 
-        self.exprs.alloc(Expr::Object { type_name, fields })
+        self.alloc_expr(Expr::Object { type_name, fields }, node.text_range())
     }
 
     fn try_lower_literal_token(&mut self, node: &baml_syntax::SyntaxNode) -> Option<ExprId> {
@@ -1230,35 +1419,33 @@ impl LoweringContext {
     /// Lower a bare token (WORD, `INTEGER_LITERAL`, `FLOAT_LITERAL`) to an expression.
     fn lower_bare_token(&mut self, token: &baml_syntax::SyntaxToken) -> ExprId {
         self.try_lower_token(token)
-            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing))
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, token.text_range()))
     }
 
     /// Try to lower a token to a literal expression.
     fn try_lower_token(&mut self, token: &baml_syntax::SyntaxToken) -> Option<ExprId> {
         use baml_syntax::SyntaxKind;
 
+        let span = token.text_range();
         match token.kind() {
             SyntaxKind::WORD => {
                 // Check if this is a boolean or null literal
                 let text = token.text();
                 match text {
-                    "true" => Some(self.exprs.alloc(Expr::Literal(Literal::Bool(true)))),
-                    "false" => Some(self.exprs.alloc(Expr::Literal(Literal::Bool(false)))),
-                    "null" => Some(self.exprs.alloc(Expr::Literal(Literal::Null))),
+                    "true" => Some(self.alloc_expr(Expr::Literal(Literal::Bool(true)), span)),
+                    "false" => Some(self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)),
+                    "null" => Some(self.alloc_expr(Expr::Literal(Literal::Null), span)),
                     _ => None,
                 }
             }
             SyntaxKind::INTEGER_LITERAL => {
                 let text = token.text();
                 let value = text.parse::<i64>().unwrap_or(0);
-                Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))))
+                Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
             }
             SyntaxKind::FLOAT_LITERAL => {
                 let text = token.text();
-                Some(
-                    self.exprs
-                        .alloc(Expr::Literal(Literal::Float(text.to_string()))),
-                )
+                Some(self.alloc_expr(Expr::Literal(Literal::Float(text.to_string())), span))
             }
             _ => None,
         }
@@ -1275,19 +1462,24 @@ impl LoweringContext {
             .as_ref()
             .and_then(baml_syntax::LetStmt::name)
             .map(|token| {
-                let name = Name::new(token.text());
+                let name_str = token.text();
+                self.add_name_to_scope(name_str);
+                let name = Name::new(name_str);
                 self.patterns.alloc(Pattern::Binding(name))
             })
             .unwrap_or_else(|| {
-                self.patterns
-                    .alloc(Pattern::Binding(Name::new("missing_let")))
+                self.alloc_pattern(
+                    Pattern::Binding(Name::new("missing_let")),
+                    node.text_range(),
+                )
             });
 
+        let type_node = let_stmt.as_ref().and_then(baml_syntax::LetStmt::ty);
+
         // Extract type annotation if present
-        let type_annotation = let_stmt
-            .as_ref()
-            .and_then(baml_syntax::LetStmt::ty)
-            .map(|type_expr| crate::type_ref::TypeRef::from_ast(&type_expr));
+        let type_annotation = type_node.as_ref().map(TypeRef::from_ast);
+
+        let type_span = type_node.map(|t: TypeExpr| t.syntax().text_range());
 
         // Extract initializer expression - first try as a node, then as a token
         let initializer = let_stmt
@@ -1299,35 +1491,45 @@ impl LoweringContext {
                 let_stmt
                     .as_ref()
                     .and_then(baml_syntax::LetStmt::initializer_token)
-                    .map(|token| match token.kind() {
-                        SyntaxKind::INTEGER_LITERAL => {
-                            let value = token.text().parse::<i64>().unwrap_or(0);
-                            self.exprs.alloc(Expr::Literal(Literal::Int(value)))
+                    .map(|token| {
+                        let span = token.text_range();
+                        match token.kind() {
+                            SyntaxKind::INTEGER_LITERAL => {
+                                let value = token.text().parse::<i64>().unwrap_or(0);
+                                self.alloc_expr(Expr::Literal(Literal::Int(value)), span)
+                            }
+                            SyntaxKind::FLOAT_LITERAL => self.alloc_expr(
+                                Expr::Literal(Literal::Float(token.text().to_string())),
+                                span,
+                            ),
+                            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                                let text = token.text();
+                                let content = if text.starts_with("#\"") && text.ends_with("\"#") {
+                                    &text[2..text.len() - 2]
+                                } else if text.starts_with('"') && text.ends_with('"') {
+                                    &text[1..text.len() - 1]
+                                } else {
+                                    text
+                                };
+                                self.alloc_expr(
+                                    Expr::Literal(Literal::String(content.to_string())),
+                                    span,
+                                )
+                            }
+                            _ => self.alloc_expr(Expr::Missing, span),
                         }
-                        SyntaxKind::FLOAT_LITERAL => self
-                            .exprs
-                            .alloc(Expr::Literal(Literal::Float(token.text().to_string()))),
-                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                            let text = token.text();
-                            let content = if text.starts_with("#\"") && text.ends_with("\"#") {
-                                &text[2..text.len() - 2]
-                            } else if text.starts_with('"') && text.ends_with('"') {
-                                &text[1..text.len() - 1]
-                            } else {
-                                text
-                            };
-                            self.exprs
-                                .alloc(Expr::Literal(Literal::String(content.to_string())))
-                        }
-                        _ => self.exprs.alloc(Expr::Missing),
                     })
             });
 
-        self.stmts.alloc(Stmt::Let {
-            pattern,
-            type_annotation,
-            initializer,
-        })
+        self.alloc_stmt(
+            Stmt::Let {
+                pattern,
+                type_annotation,
+                type_span,
+                initializer,
+            },
+            node.text_range(),
+        )
     }
 
     fn lower_return_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
@@ -1356,45 +1558,50 @@ impl LoweringContext {
             // Check for direct tokens (literals, identifiers)
             node.children_with_tokens()
                 .filter_map(baml_syntax::NodeOrToken::into_token)
-                .find_map(|token| match token.kind() {
-                    SyntaxKind::INTEGER_LITERAL => {
-                        let value = token.text().parse::<i64>().unwrap_or(0);
-                        Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))))
+                .find_map(|token| {
+                    let span = token.text_range();
+                    match token.kind() {
+                        SyntaxKind::INTEGER_LITERAL => {
+                            let value = token.text().parse::<i64>().unwrap_or(0);
+                            Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
+                        }
+                        SyntaxKind::FLOAT_LITERAL => Some(self.alloc_expr(
+                            Expr::Literal(Literal::Float(token.text().to_string())),
+                            span,
+                        )),
+                        SyntaxKind::WORD => {
+                            let text = token.text();
+                            let expr_id = match text {
+                                "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
+                                "false" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
+                                }
+                                "null" => self.alloc_expr(Expr::Literal(Literal::Null), span),
+                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), span),
+                            };
+                            Some(expr_id)
+                        }
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                            let text = token.text();
+                            // Strip quotes
+                            let content = if text.starts_with("#\"") && text.ends_with("\"#") {
+                                &text[2..text.len() - 2]
+                            } else if text.starts_with('"') && text.ends_with('"') {
+                                &text[1..text.len() - 1]
+                            } else {
+                                text
+                            };
+                            Some(self.alloc_expr(
+                                Expr::Literal(Literal::String(content.to_string())),
+                                span,
+                            ))
+                        }
+                        _ => None,
                     }
-                    SyntaxKind::FLOAT_LITERAL => Some(
-                        self.exprs
-                            .alloc(Expr::Literal(Literal::Float(token.text().to_string()))),
-                    ),
-                    SyntaxKind::WORD => {
-                        let text = token.text();
-                        let expr_id = match text {
-                            "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
-                            "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
-                            "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                            _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
-                        };
-                        Some(expr_id)
-                    }
-                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                        let text = token.text();
-                        // Strip quotes
-                        let content = if text.starts_with("#\"") && text.ends_with("\"#") {
-                            &text[2..text.len() - 2]
-                        } else if text.starts_with('"') && text.ends_with('"') {
-                            &text[1..text.len() - 1]
-                        } else {
-                            text
-                        };
-                        Some(
-                            self.exprs
-                                .alloc(Expr::Literal(Literal::String(content.to_string()))),
-                        )
-                    }
-                    _ => None,
                 })
         };
 
-        self.stmts.alloc(Stmt::Return(return_value))
+        self.alloc_stmt(Stmt::Return(return_value), node.text_range())
     }
 
     fn lower_while_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
@@ -1405,14 +1612,19 @@ impl LoweringContext {
             .as_ref()
             .and_then(baml_syntax::WhileStmt::condition)
             .map(|n| self.lower_expr(&n))
-            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
         let body = while_stmt
             .and_then(|w| w.body())
             .map(|block| self.lower_block_expr(&block))
-            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
-        self.stmts.alloc(Stmt::While { condition, body })
+        self.stmts.alloc(Stmt::While {
+            condition,
+            body,
+            after: None,
+            origin: LoopOrigin::While,
+        })
     }
 
     fn lower_for_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
@@ -1420,77 +1632,399 @@ impl LoweringContext {
         let for_expr = baml_syntax::ast::ForExpr::cast(node.clone());
 
         let Some(for_expr) = for_expr else {
-            return self.stmts.alloc(Stmt::Missing);
+            return self.alloc_stmt(Stmt::Missing, node.text_range());
         };
 
-        // Get the body (common to both styles)
-        let body = for_expr
+        // Note: We pass the body AST node to desugar functions, which will:
+        // 1. Generate their synthetic names FIRST (claiming _iter, _len, _i)
+        // 2. THEN lower the body (inner loops will get _iter1, etc.)
+        // This ensures outer loops get simpler names than inner loops.
+        if for_expr.is_iterator_style() {
+            // Iterator-style: for (let i in items) { ... }
+            // Desugar into a while loop
+            self.desugar_for_in(&for_expr)
+        } else {
+            // C-style: for (let i = 0; i < 10; i += 1) { ... }
+            // Desugar into a while loop
+            self.desugar_c_style_for(&for_expr)
+        }
+    }
+
+    /// Desugar a C-style `for (init; cond; update) { body }` loop into a while loop.
+    ///
+    /// The transformation is:
+    /// ```text
+    /// for (init; cond; update) { body }
+    /// ```
+    /// becomes:
+    /// ```text
+    /// {
+    ///     init;
+    ///     while (cond) {
+    ///         body
+    ///         // after: update (runs even on continue)
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// If there's no condition, it becomes `while (true)` (infinite loop).
+    fn desugar_c_style_for(&mut self, for_expr: &baml_syntax::ast::ForExpr) -> StmtId {
+        // 1. Lower the initializer (if present)
+        let initializer = for_expr
+            .let_stmt()
+            .map(|let_stmt| self.lower_let_stmt(let_stmt.syntax()));
+
+        // 2. Lower the condition, or default to `true` for infinite loop
+        let condition = for_expr
+            .condition()
+            .map(|n| self.lower_expr(&n))
+            .or_else(|| {
+                for_expr
+                    .condition_token()
+                    .map(|token| self.lower_bare_token(&token))
+            })
+            .unwrap_or_else(|| self.exprs.alloc(Expr::Literal(Literal::Bool(true))));
+
+        // 3. Get the update AST node (we'll lower it multiple times as needed)
+        let update_ast = for_expr.update();
+
+        // 4. Lower the body AFTER processing init/condition/update
+        // This ensures outer loops' synthetic names are claimed before inner loops
+        let user_body = for_expr
+            .body()
+            .map(|block| self.lower_block_expr(&block))
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, for_expr.syntax().text_range()));
+
+        // 5. Create the while loop body
+        // If there's an update, we need to:
+        // a) Transform all `continue` in the body to `{ update; continue; }`
+        // b) Add the update at the end of the body
+        let while_body = if let Some(ref update_node) = update_ast {
+            // Transform continues to include the update (re-lowers the AST each time)
+            let transformed_body =
+                self.transform_continues_in_expr_with_update(user_body, update_node);
+            // Lower the update for the end of body
+            let after_at_end = self.lower_update_stmt(update_node);
+            // If the body is already a block, flatten its statements into the new block
+            // to avoid unnecessary nesting like `{ { body }; update; }`
+            if let Expr::Block { stmts, tail_expr } = &self.exprs[transformed_body] {
+                let mut new_stmts = stmts.clone();
+                // If there's a tail expression, convert it to a statement first
+                if let Some(tail) = tail_expr {
+                    new_stmts.push(self.stmts.alloc(Stmt::Expr(*tail)));
+                }
+                new_stmts.push(after_at_end);
+                self.exprs.alloc(Expr::Block {
+                    stmts: new_stmts,
+                    tail_expr: None,
+                })
+            } else {
+                // Body is not a block, wrap it
+                let body_stmt = self.stmts.alloc(Stmt::Expr(transformed_body));
+                self.exprs.alloc(Expr::Block {
+                    stmts: vec![body_stmt, after_at_end],
+                    tail_expr: None,
+                })
+            }
+        } else {
+            // No update - just use the body as-is (it's typically already a block)
+            user_body
+        };
+
+        let while_stmt = self.stmts.alloc(Stmt::While {
+            condition,
+            body: while_body,
+            after: None,
+            origin: LoopOrigin::ForLoop,
+        });
+
+        // 5. Wrap in outer block with initializer
+        let mut outer_stmts = Vec::new();
+        if let Some(init) = initializer {
+            outer_stmts.push(init);
+        }
+        outer_stmts.push(while_stmt);
+
+        let outer_block = self.exprs.alloc(Expr::Block {
+            stmts: outer_stmts,
+            tail_expr: None,
+        });
+
+        self.stmts.alloc(Stmt::Expr(outer_block))
+    }
+
+    /// Lower an update expression AST node to a statement.
+    fn lower_update_stmt(&mut self, update_node: &baml_syntax::SyntaxNode) -> StmtId {
+        if let Some(assign_stmt) = self.try_lower_assignment(update_node) {
+            assign_stmt
+        } else {
+            let expr = self.lower_expr(update_node);
+            self.stmts.alloc(Stmt::Expr(expr))
+        }
+    }
+
+    /// Transform an expression, replacing all `continue` statements with
+    /// `{ update; continue; }` by re-lowering the update AST each time.
+    fn transform_continues_in_expr_with_update(
+        &mut self,
+        expr_id: ExprId,
+        update_ast: &baml_syntax::SyntaxNode,
+    ) -> ExprId {
+        let expr = self.exprs[expr_id].clone();
+        let new_expr = match expr {
+            Expr::Block { stmts, tail_expr } => {
+                let new_stmts = stmts
+                    .iter()
+                    .map(|s| self.transform_continues_in_stmt_with_update(*s, update_ast))
+                    .collect();
+                let new_tail =
+                    tail_expr.map(|e| self.transform_continues_in_expr_with_update(e, update_ast));
+                Expr::Block {
+                    stmts: new_stmts,
+                    tail_expr: new_tail,
+                }
+            }
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let new_then =
+                    self.transform_continues_in_expr_with_update(then_branch, update_ast);
+                let new_else = else_branch
+                    .map(|e| self.transform_continues_in_expr_with_update(e, update_ast));
+                Expr::If {
+                    condition,
+                    then_branch: new_then,
+                    else_branch: new_else,
+                }
+            }
+            // Other expressions don't contain statements
+            _ => return expr_id, // Return original, no transformation needed
+        };
+        self.exprs.alloc(new_expr)
+    }
+
+    /// Transform a statement, replacing `continue` with `{ update; continue; }`.
+    fn transform_continues_in_stmt_with_update(
+        &mut self,
+        stmt_id: StmtId,
+        update_ast: &baml_syntax::SyntaxNode,
+    ) -> StmtId {
+        // Clone the statement to avoid borrow checker issues when calling mutable methods
+        let stmt = self.stmts[stmt_id].clone();
+        match stmt {
+            Stmt::Continue => {
+                // Replace continue with { update; continue; }
+                let update_stmt = self.lower_update_stmt(update_ast);
+                let continue_stmt = self.stmts.alloc(Stmt::Continue);
+                let block = self.exprs.alloc(Expr::Block {
+                    stmts: vec![update_stmt, continue_stmt],
+                    tail_expr: None,
+                });
+                self.stmts.alloc(Stmt::Expr(block))
+            }
+            Stmt::Expr(expr_id) => {
+                let new_expr = self.transform_continues_in_expr_with_update(expr_id, update_ast);
+                if new_expr == expr_id {
+                    stmt_id // No change
+                } else {
+                    self.stmts.alloc(Stmt::Expr(new_expr))
+                }
+            }
+            Stmt::While { .. } => {
+                // Don't transform inside nested loops - their continues refer to the inner loop
+                stmt_id
+            }
+            // Other statements don't contain continues
+            _ => stmt_id,
+        }
+    }
+
+    /// Desugar a `for (let x in arr) { body }` loop into a while loop.
+    ///
+    /// The transformation is:
+    /// ```text
+    /// for (let x in arr) { body }
+    /// ```
+    /// becomes:
+    /// ```text
+    /// {
+    ///     let _arr_N = arr;
+    ///     let _len_N = _arr_N.length();
+    ///     let _i_N = 0;
+    ///     while (_i_N < _len_N) {
+    ///         let x = _arr_N[_i_N];
+    ///         _i_N += 1;
+    ///         body
+    ///     }
+    /// }
+    /// ```
+    fn desugar_for_in(&mut self, for_expr: &baml_syntax::ast::ForExpr) -> StmtId {
+        // Generate unique names for synthetic variables FIRST
+        // This ensures outer loops claim _iter, _len, _i before inner loops
+        let arr_name = self.gensym("iter");
+        let len_name = self.gensym("len");
+        let idx_name = self.gensym("i");
+
+        // Now lower the body - inner for-loops will get _iter1, _len1, _i1, etc.
+        let user_body = for_expr
             .body()
             .map(|block| self.lower_block_expr(&block))
             .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
-        if for_expr.is_iterator_style() {
-            // Iterator-style: for (let i in items) { ... }
-            let pattern = for_expr
-                .let_stmt()
-                .and_then(|let_stmt| let_stmt.name())
-                .map(|name| {
-                    let name = crate::Name::new(name.text());
-                    self.patterns.alloc(Pattern::Binding(name))
-                })
-                .or_else(|| {
-                    // Fallback to simple loop variable without let
-                    for_expr.loop_var().map(|name| {
-                        let name = crate::Name::new(name.text());
-                        self.patterns.alloc(Pattern::Binding(name))
-                    })
-                })
-                .unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(crate::Name::new("_"))));
+        // 1. let _arr_N = <iterator>
+        // First try to get iterator as a child node (for complex expressions like arrays, calls, etc.)
+        // If not found, look for a bare WORD token (simple identifier like `xs`)
+        let iterator_expr = for_expr
+            .iterator()
+            .map(|n| self.lower_expr(&n))
+            .or_else(|| {
+                // Look for a bare WORD token after 'in' keyword
+                // The iterator could be a simple identifier that wasn't wrapped in a node
+                use baml_syntax::SyntaxKind;
+                let mut seen_in = false;
+                for element in for_expr.syntax().children_with_tokens() {
+                    match element {
+                        baml_syntax::NodeOrToken::Token(token) => {
+                            if token.kind() == SyntaxKind::KW_IN {
+                                seen_in = true;
+                            } else if seen_in && token.kind() == SyntaxKind::WORD {
+                                // Found the iterator identifier
+                                return Some(
+                                    self.exprs.alloc(Expr::Path(vec![Name::new(token.text())])),
+                                );
+                            }
+                        }
+                        baml_syntax::NodeOrToken::Node(_) => {}
+                    }
+                }
+                None
+            })
+            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
-            let iterator = for_expr
-                .iterator()
-                .map(|n| self.lower_expr(&n))
-                .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+        let arr_pat = self.patterns.alloc(Pattern::Binding(arr_name.clone()));
+        let arr_let = self.stmts.alloc(Stmt::Let {
+            pattern: arr_pat,
+            type_annotation: None,
+            type_span: None,
+            initializer: Some(iterator_expr),
+        });
 
-            self.stmts.alloc(Stmt::ForIn {
-                pattern,
-                iterator,
-                body,
+        // 2. let _len_N = _arr_N.length()
+        // This is a method call: FieldAccess followed by Call with no arguments.
+        // The typechecker will resolve `length` as a method on arrays.
+        let arr_ref = self.exprs.alloc(Expr::Path(vec![arr_name.clone()]));
+        let length_method = self.exprs.alloc(Expr::FieldAccess {
+            base: arr_ref,
+            field: Name::new("length"),
+        });
+        let length_call = self.exprs.alloc(Expr::Call {
+            callee: length_method,
+            args: vec![],
+        });
+        let len_pat = self.patterns.alloc(Pattern::Binding(len_name.clone()));
+        let len_let = self.stmts.alloc(Stmt::Let {
+            pattern: len_pat,
+            type_annotation: None,
+            type_span: None,
+            initializer: Some(length_call),
+        });
+
+        // 3. let _i_N = 0
+        let zero = self.exprs.alloc(Expr::Literal(Literal::Int(0)));
+        let idx_pat = self.patterns.alloc(Pattern::Binding(idx_name.clone()));
+        let idx_let = self.stmts.alloc(Stmt::Let {
+            pattern: idx_pat,
+            type_annotation: None,
+            type_span: None,
+            initializer: Some(zero),
+        });
+
+        // 4. Condition: _i_N < _len_N
+        let idx_ref = self.exprs.alloc(Expr::Path(vec![idx_name.clone()]));
+        let len_ref = self.exprs.alloc(Expr::Path(vec![len_name]));
+        let condition = self.exprs.alloc(Expr::Binary {
+            op: BinaryOp::Lt,
+            lhs: idx_ref,
+            rhs: len_ref,
+        });
+
+        // 5. Loop body: let x = _arr_N[_i_N]
+        let user_pattern = for_expr
+            .let_stmt()
+            .and_then(|ls| ls.name())
+            .map(|n| {
+                self.add_name_to_scope(n.text());
+                self.patterns.alloc(Pattern::Binding(Name::new(n.text())))
+            })
+            .or_else(|| {
+                for_expr.loop_var().map(|n| {
+                    self.add_name_to_scope(n.text());
+                    self.patterns.alloc(Pattern::Binding(Name::new(n.text())))
+                })
+            })
+            .unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(Name::new("_"))));
+
+        let arr_ref2 = self.exprs.alloc(Expr::Path(vec![arr_name]));
+        let idx_ref2 = self.exprs.alloc(Expr::Path(vec![idx_name.clone()]));
+        let element_access = self.exprs.alloc(Expr::Index {
+            base: arr_ref2,
+            index: idx_ref2,
+        });
+        let elem_let = self.stmts.alloc(Stmt::Let {
+            pattern: user_pattern,
+            type_annotation: None,
+            type_span: None,
+            initializer: Some(element_access),
+        });
+
+        // 6. Increment: _i_N += 1
+        let idx_target = self.exprs.alloc(Expr::Path(vec![idx_name]));
+        let one = self.exprs.alloc(Expr::Literal(Literal::Int(1)));
+        let idx_assign = self.stmts.alloc(Stmt::AssignOp {
+            target: idx_target,
+            op: AssignOp::Add,
+            value: one,
+        });
+
+        // 7. Assemble while body: [elem_let, idx_assign, ...user_body_stmts]
+        // Note: increment after elem_let so `continue` works correctly
+        // Flatten the user body if it's already a block to avoid unnecessary nesting
+        let while_body = if let Expr::Block { stmts, tail_expr } = &self.exprs[user_body] {
+            let mut body_stmts = vec![elem_let, idx_assign];
+            body_stmts.extend(stmts.iter().copied());
+            // If there's a tail expression, convert it to a statement
+            if let Some(tail) = tail_expr {
+                body_stmts.push(self.stmts.alloc(Stmt::Expr(*tail)));
+            }
+            self.exprs.alloc(Expr::Block {
+                stmts: body_stmts,
+                tail_expr: None,
             })
         } else {
-            // C-style: for (let i = 0; i < 10; i += 1) { ... }
-            let initializer = for_expr
-                .let_stmt()
-                .map(|let_stmt| self.lower_let_stmt(let_stmt.syntax()));
-
-            // Get condition as expression node, or fall back to bare token
-            let condition = for_expr
-                .condition()
-                .map(|n| self.lower_expr(&n))
-                .or_else(|| {
-                    for_expr.condition_token().map(|token| {
-                        // Lower bare token to expression
-                        self.lower_bare_token(&token)
-                    })
-                });
-
-            // The update may be an assignment (i += 1) or a plain expression (f()).
-            // Try to lower as assignment first, otherwise wrap as Stmt::Expr.
-            let update = for_expr.update().map(|n| {
-                if let Some(assign_stmt) = self.try_lower_assignment(&n) {
-                    assign_stmt
-                } else {
-                    let expr = self.lower_expr(&n);
-                    self.stmts.alloc(Stmt::Expr(expr))
-                }
-            });
-
-            self.stmts.alloc(Stmt::ForCStyle {
-                initializer,
-                condition,
-                update,
-                body,
+            let body_stmt = self.stmts.alloc(Stmt::Expr(user_body));
+            self.exprs.alloc(Expr::Block {
+                stmts: vec![elem_let, idx_assign, body_stmt],
+                tail_expr: None,
             })
-        }
+        };
+
+        // 8. While statement with ForLoop origin
+        // Note: idx_assign is in the body, so no separate after statement needed
+        let while_stmt = self.stmts.alloc(Stmt::While {
+            condition,
+            body: while_body,
+            after: None,
+            origin: LoopOrigin::ForLoop,
+        });
+
+        // 9. Wrap in outer block
+        let outer_block = self.exprs.alloc(Expr::Block {
+            stmts: vec![arr_let, len_let, idx_let, while_stmt],
+            tail_expr: None,
+        });
+
+        self.stmts.alloc(Stmt::Expr(outer_block))
     }
 }

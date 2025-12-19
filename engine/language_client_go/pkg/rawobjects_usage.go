@@ -16,8 +16,8 @@ func newUsage(ptr int64, rt unsafe.Pointer) Usage {
 	return &usage{raw_objects.FromPointer(ptr, rt)}
 }
 
-func (u *usage) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_USAGE
+func (u *usage) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_USAGE
 }
 
 func (u *usage) pointer() int64 {

@@ -41,10 +41,10 @@ func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 		switch key {
 
 		case "alwaysTrue":
-			c.AlwaysTrue = baml.Decode(valueHolder).Interface().(bool)
+			c.AlwaysTrue = baml.Decode(valueHolder).Bool()
 
 		case "alwaysFalse":
-			c.AlwaysFalse = baml.Decode(valueHolder).Interface().(bool)
+			c.AlwaysFalse = baml.Decode(valueHolder).Bool()
 
 		case "eitherBool":
 			c.EitherBool = baml.Decode(valueHolder).Interface().(Union2BoolKFalseOrBoolKTrue)
@@ -58,7 +58,7 @@ func (c *BooleanLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 }
 
-func (c BooleanLiterals) Encode() (*cffi.CFFIValueHolder, error) {
+func (c BooleanLiterals) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["alwaysTrue"] = c.AlwaysTrue
@@ -67,18 +67,11 @@ func (c BooleanLiterals) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["eitherBool"] = c.EitherBool
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("BooleanLiterals", fields, nil)
 }
 
 func (c BooleanLiterals) BamlTypeName() string {
 	return "BooleanLiterals"
-}
-
-func (u BooleanLiterals) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "BooleanLiterals",
-	}
 }
 
 type ComplexLiterals struct {
@@ -127,7 +120,7 @@ func (c *ComplexLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 }
 
-func (c ComplexLiterals) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ComplexLiterals) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["state"] = c.State
@@ -140,18 +133,11 @@ func (c ComplexLiterals) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["codes"] = c.Codes
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ComplexLiterals", fields, nil)
 }
 
 func (c ComplexLiterals) BamlTypeName() string {
 	return "ComplexLiterals"
-}
-
-func (u ComplexLiterals) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "ComplexLiterals",
-	}
 }
 
 type IntegerLiterals struct {
@@ -192,7 +178,7 @@ func (c *IntegerLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 }
 
-func (c IntegerLiterals) Encode() (*cffi.CFFIValueHolder, error) {
+func (c IntegerLiterals) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["priority"] = c.Priority
@@ -201,18 +187,11 @@ func (c IntegerLiterals) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["maxRetries"] = c.MaxRetries
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("IntegerLiterals", fields, nil)
 }
 
 func (c IntegerLiterals) BamlTypeName() string {
 	return "IntegerLiterals"
-}
-
-func (u IntegerLiterals) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "IntegerLiterals",
-	}
 }
 
 type MixedLiterals struct {
@@ -238,7 +217,7 @@ func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 		switch key {
 
 		case "id":
-			c.Id = baml.Decode(valueHolder).Interface().(int64)
+			c.Id = baml.Decode(valueHolder).Int()
 
 		case "type":
 			c.Type = baml.Decode(valueHolder).Interface().(Union3KadminOrKguestOrKuser)
@@ -261,7 +240,7 @@ func (c *MixedLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 
 }
 
-func (c MixedLiterals) Encode() (*cffi.CFFIValueHolder, error) {
+func (c MixedLiterals) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -274,18 +253,11 @@ func (c MixedLiterals) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["apiVersion"] = c.ApiVersion
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("MixedLiterals", fields, nil)
 }
 
 func (c MixedLiterals) BamlTypeName() string {
 	return "MixedLiterals"
-}
-
-func (u MixedLiterals) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "MixedLiterals",
-	}
 }
 
 type StringLiterals struct {
@@ -326,7 +298,7 @@ func (c *StringLiterals) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 
 }
 
-func (c StringLiterals) Encode() (*cffi.CFFIValueHolder, error) {
+func (c StringLiterals) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["status"] = c.Status
@@ -335,16 +307,9 @@ func (c StringLiterals) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["method"] = c.Method
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("StringLiterals", fields, nil)
 }
 
 func (c StringLiterals) BamlTypeName() string {
 	return "StringLiterals"
-}
-
-func (u StringLiterals) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "StringLiterals",
-	}
 }

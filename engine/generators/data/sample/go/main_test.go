@@ -3,15 +3,45 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
-
 	b "sample/baml_client"
+	"strings"
 	"testing"
+	"time"
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/tidwall/gjson"
 )
+
+func TestDecodeOptional(t *testing.T) {
+	result, err := b.ParseStream.Bar(`
+	Accumulated:  I need to create a JSON response that follows one of the two schemas provided. Let me analyze the schemas:
+
+Schema 1 (example_2):
+- type: "example_2"
+- item: an object with type "example_1", a (int), b (string)
+- element: string
+- element2: string
+
+Schema 2 (example_1):
+- type: "example_1" 
+- a: int
+- b: string
+
+I need to use 8192 somewhere in the data model. I can use it as the integer value for 'a' in either schema.
+
+Let me go with the more complex schema (example_2) to show both structures:
+{
+    type: "example_2",
+	item: {
+		type: "example_1",
+		a: 8192,
+		b: "test",
+`)
+	if err != nil {
+		t.Fatalf("Error in Bar: %v", err)
+	}
+	fmt.Println("output: ", result)
+}
 
 func getOnTick() (baml.TickCallback, *string, *int) {
 	var lastThinking string

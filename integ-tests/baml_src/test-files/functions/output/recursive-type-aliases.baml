@@ -66,7 +66,7 @@ function ReturnJsonEntry(s: string) -> JsonTemplate {
   prompt #"
     {{ _.role("user") }}
 
-    Extract info from this string:
+    Extract info from this string exactly as it is:
     {{ s }}
 
     {{ ctx.output_format }}

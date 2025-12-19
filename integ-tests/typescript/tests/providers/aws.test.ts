@@ -28,7 +28,7 @@ describe("AWS Provider", () => {
     );
 
     await expect(response).rejects.toMatchObject({
-      code: "GenericFailure",
+      name: "BamlClientHttpError",
     });
   });
 

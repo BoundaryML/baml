@@ -1,0 +1,33 @@
+[package]
+name = "baml_lsp_types"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+
+[dependencies]
+anyhow.workspace = true
+# baml-types = { path = "../baml-lib/baml-types" }
+cfg-if.workspace = true
+indexmap.workspace = true
+lsp-server.workspace = true
+lsp-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+
+# [profile.release]
+# debug = true
