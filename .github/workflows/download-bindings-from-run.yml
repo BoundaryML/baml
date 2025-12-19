@@ -1,6 +1,9 @@
 name: Download Bindings From Run
 
 on:
+  push:
+    branches:
+      - sam/npm-adhoc2
   workflow_dispatch:
 
 jobs:
