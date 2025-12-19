@@ -2,11 +2,11 @@
 
 mod common;
 
-use baml::__internal::host_value;
-use baml::{BamlDecode, BamlEncode};
+use baml::__internal::{host_value, CffiStreamState};
+use baml::{BamlDecode, BamlEncode, CheckStatus, Checked, StreamState, StreamingState};
 use common::{
-    make_bool_holder, make_float_holder, make_int_holder, make_list_holder, make_null_holder,
-    make_string_holder,
+    make_bool_holder, make_checked_holder, make_float_holder, make_int_holder, make_list_holder,
+    make_null_holder, make_stream_state_holder, make_string_holder,
 };
 
 // =============================================================================
@@ -203,5 +203,135 @@ mod helpers {
         } else {
             panic!("expected enum value");
         }
+    }
+}
+
+// =============================================================================
+// Checked<T> tests
+// =============================================================================
+
+mod checked {
+    use super::*;
+
+    #[test]
+    fn decode_with_all_passed_checks() {
+        let inner = make_string_holder("test value");
+        let holder = make_checked_holder(
+            inner,
+            vec![
+                ("check1", "value.len() > 0", "passed"),
+                ("check2", "value != null", "PASSED"),
+            ],
+        );
+
+        let result: Checked<String> = BamlDecode::baml_decode(&holder).unwrap();
+        assert_eq!(result.value, "test value");
+        assert_eq!(result.checks.len(), 2);
+        assert!(result.all_passed());
+        assert!(!result.any_failed());
+    }
+
+    #[test]
+    fn decode_with_failed_check() {
+        let inner = make_int_holder(5);
+        let holder = make_checked_holder(
+            inner,
+            vec![
+                ("min_check", "value >= 10", "failed"),
+                ("type_check", "is_int(value)", "passed"),
+            ],
+        );
+
+        let result: Checked<i64> = BamlDecode::baml_decode(&holder).unwrap();
+        assert_eq!(result.value, 5);
+        assert!(!result.all_passed());
+        assert!(result.any_failed());
+    }
+
+    #[test]
+    fn get_check_returns_correct_check() {
+        let inner = make_string_holder("hello");
+        let holder = make_checked_holder(
+            inner,
+            vec![
+                ("length_check", "value.len() <= 10", "passed"),
+                ("format_check", "is_alpha(value)", "failed"),
+            ],
+        );
+
+        let result: Checked<String> = BamlDecode::baml_decode(&holder).unwrap();
+
+        let length_check = result.get_check("length_check").unwrap();
+        assert_eq!(length_check.name, "length_check");
+        assert_eq!(length_check.expression, "value.len() <= 10");
+        assert_eq!(length_check.status, CheckStatus::Passed);
+
+        let format_check = result.get_check("format_check").unwrap();
+        assert_eq!(format_check.status, CheckStatus::Failed);
+
+        assert!(result.get_check("nonexistent").is_none());
+    }
+
+    #[test]
+    fn decode_checked_with_empty_checks() {
+        let inner = make_float_holder(3.14);
+        let holder = make_checked_holder(inner, vec![]);
+
+        let result: Checked<f64> = BamlDecode::baml_decode(&holder).unwrap();
+        assert!((result.value - 3.14).abs() < f64::EPSILON);
+        assert!(result.checks.is_empty());
+        assert!(result.all_passed()); // vacuously true
+        assert!(!result.any_failed());
+    }
+}
+
+// =============================================================================
+// StreamState<T> tests
+// =============================================================================
+
+mod stream_state {
+    use super::*;
+
+    #[test]
+    fn decode_pending_state() {
+        let inner = make_string_holder("partial");
+        let holder = make_stream_state_holder(inner, CffiStreamState::Pending);
+
+        let result: StreamState<String> = BamlDecode::baml_decode(&holder).unwrap();
+        assert_eq!(result.value, "partial");
+        assert_eq!(result.state, StreamingState::Pending);
+    }
+
+    #[test]
+    fn decode_started_state() {
+        let inner = make_int_holder(42);
+        let holder = make_stream_state_holder(inner, CffiStreamState::Started);
+
+        let result: StreamState<i64> = BamlDecode::baml_decode(&holder).unwrap();
+        assert_eq!(result.value, 42);
+        assert_eq!(result.state, StreamingState::Started);
+    }
+
+    #[test]
+    fn decode_done_state() {
+        let inner = make_bool_holder(true);
+        let holder = make_stream_state_holder(inner, CffiStreamState::Done);
+
+        let result: StreamState<bool> = BamlDecode::baml_decode(&holder).unwrap();
+        assert!(result.value);
+        assert_eq!(result.state, StreamingState::Done);
+    }
+
+    #[test]
+    fn decode_stream_state_with_list() {
+        let inner = make_list_holder(vec![
+            make_string_holder("a"),
+            make_string_holder("b"),
+        ]);
+        let holder = make_stream_state_holder(inner, CffiStreamState::Started);
+
+        let result: StreamState<Vec<String>> = BamlDecode::baml_decode(&holder).unwrap();
+        assert_eq!(result.value, vec!["a", "b"]);
+        assert_eq!(result.state, StreamingState::Started);
     }
 }

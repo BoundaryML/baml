@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use baml::{BamlRuntime, FunctionArgs};
+use baml::{BamlRuntime, FunctionArgs, StreamState, StreamingState};
 
 /// Helper to create environment variables HashMap from current environment
 fn env_vars() -> HashMap<String, String> {
@@ -627,6 +627,302 @@ mod function_calls {
         assert_eq!(person.name, "John");
         assert_eq!(person.age, 30);
         println!("Got person: {:?}", person);
+    }
+
+    /// Test function call that returns Checked<T> with @check constraints
+    #[test]
+    fn call_function_with_checked_type_succeeds() {
+        use baml::{CheckStatus, Checked};
+
+        let api_key = require_env!("OPENAI_API_KEY");
+
+        let mut files = HashMap::new();
+        files.insert(
+            "main.baml".to_string(),
+            r##"
+            client<llm> GPT4 {
+                provider openai
+                options {
+                    model "gpt-4o-mini"
+                    api_key env.OPENAI_API_KEY
+                }
+            }
+
+            // Return type with @check constraint - returns Checked<int>
+            function PredictAge(name: string) -> int @check(reasonable_age, {{ this > 0 and this < 150 }}) {
+                client GPT4
+                prompt #"Guess the age of someone named {{name}}. Return only a number."#
+            }
+            "##
+            .to_string(),
+        );
+
+        let runtime =
+            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+        let args = FunctionArgs::new()
+            .arg("name", "Alice")
+            .with_env("OPENAI_API_KEY", &api_key);
+
+        let result: Result<Checked<i64>, _> = runtime.call_function("PredictAge", &args);
+
+        assert!(
+            result.is_ok(),
+            "Expected success but got: {:?}",
+            result.err()
+        );
+
+        let checked = result.unwrap();
+        println!("Got Checked value: {}", checked.value);
+        println!("Checks: {:?}", checked.checks);
+
+        // The value should be a reasonable age
+        assert!(checked.value > 0, "Age should be positive");
+
+        // Should have exactly one check named "reasonable_age"
+        assert_eq!(checked.checks.len(), 1, "Should have one check");
+        let check = checked.get_check("reasonable_age").expect("Should have 'reasonable_age' check");
+        assert_eq!(check.name, "reasonable_age");
+
+        // If the LLM returned a reasonable age (1-149), the check should pass
+        if checked.value > 0 && checked.value < 150 {
+            assert_eq!(check.status, CheckStatus::Passed, "Check should pass for reasonable age");
+            assert!(checked.all_passed());
+        }
+    }
+
+    /// Test function call that returns Checked<Option<T>> with @check constraints on optional type
+    #[test]
+    fn call_function_with_checked_optional_type_succeeds() {
+        use baml::{CheckStatus, Checked};
+
+        let api_key = require_env!("OPENAI_API_KEY");
+
+        let mut files = HashMap::new();
+        files.insert(
+            "main.baml".to_string(),
+            r##"
+            client<llm> GPT4 {
+                provider openai
+                options {
+                    model "gpt-4o-mini"
+                    api_key env.OPENAI_API_KEY
+                }
+            }
+
+            // Return type with @check constraint on optional type - returns Checked<int?>
+            function MaybeGetAge(name: string) -> int? @check(if_present_reasonable, {{ this == null or (this > 0 and this < 150) }}) {
+                client GPT4
+                prompt #"If you know the age of someone named {{name}}, return just the number. If you don't know, return null."#
+            }
+            "##
+            .to_string(),
+        );
+
+        let runtime =
+            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+        let args = FunctionArgs::new()
+            .arg("name", "Alice")
+            .with_env("OPENAI_API_KEY", &api_key);
+
+        let result: Result<Checked<Option<i64>>, _> = runtime.call_function("MaybeGetAge", &args);
+
+        assert!(
+            result.is_ok(),
+            "Expected success but got: {:?}",
+            result.err()
+        );
+
+        let checked = result.unwrap();
+        println!("Got Checked<Option<i64>> value: {:?}", checked.value);
+        println!("Checks: {:?}", checked.checks);
+
+        // Should have exactly one check named "if_present_reasonable"
+        assert_eq!(checked.checks.len(), 1, "Should have one check");
+        let check = checked.get_check("if_present_reasonable").expect("Should have 'if_present_reasonable' check");
+        assert_eq!(check.name, "if_present_reasonable");
+
+        // The check should pass whether it's Some(reasonable_age) or None
+        match checked.value {
+            Some(age) => {
+                println!("Got age: {}", age);
+                if age > 0 && age < 150 {
+                    assert_eq!(check.status, CheckStatus::Passed, "Check should pass for reasonable age");
+                }
+            }
+            None => {
+                println!("Got null (no age)");
+                assert_eq!(check.status, CheckStatus::Passed, "Check should pass for null");
+            }
+        }
+    }
+
+    /// Test function call that returns Option<Checked<T>> - i.e., (int @check)?
+    #[test]
+    fn call_function_with_optional_checked_type_succeeds() {
+        use baml::{CheckStatus, Checked};
+
+        let api_key = require_env!("OPENAI_API_KEY");
+
+        let mut files = HashMap::new();
+        files.insert(
+            "main.baml".to_string(),
+            r##"
+            client<llm> GPT4 {
+                provider openai
+                options {
+                    model "gpt-4o-mini"
+                    api_key env.OPENAI_API_KEY
+                }
+            }
+
+            // Return type (int @check)? - the whole checked value is optional
+            function MaybeGetCheckedAge(name: string) -> (int @check(reasonable_age, {{ this > 0 and this < 150 }}))? {
+                client GPT4
+                prompt #"If you know the age of someone named {{name}}, return just the number. If you don't know, return null."#
+            }
+            "##
+            .to_string(),
+        );
+
+        let runtime =
+            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+        let args = FunctionArgs::new()
+            .arg("name", "Bob")
+            .with_env("OPENAI_API_KEY", &api_key);
+
+        let result: Result<Option<Checked<i64>>, _> = runtime.call_function("MaybeGetCheckedAge", &args);
+
+        assert!(
+            result.is_ok(),
+            "Expected success but got: {:?}",
+            result.err()
+        );
+
+        let maybe_checked = result.unwrap();
+        println!("Got Option<Checked<i64>>: {:?}", maybe_checked.as_ref().map(|c| c.value));
+
+        match maybe_checked {
+            Some(checked) => {
+                println!("Got Checked value: {}", checked.value);
+                println!("Checks: {:?}", checked.checks);
+
+                // Should have exactly one check named "reasonable_age"
+                assert_eq!(checked.checks.len(), 1, "Should have one check");
+                let check = checked.get_check("reasonable_age").expect("Should have 'reasonable_age' check");
+                assert_eq!(check.name, "reasonable_age");
+
+                // If the LLM returned a reasonable age (1-149), the check should pass
+                if checked.value > 0 && checked.value < 150 {
+                    assert_eq!(check.status, CheckStatus::Passed, "Check should pass for reasonable age");
+                    assert!(checked.all_passed());
+                }
+            }
+            None => {
+                println!("Got None (null response)");
+                // This is valid - the whole checked value is optional
+            }
+        }
+    }
+
+    /// Test streaming function call that returns StreamState<T> with @stream.with_state
+    #[test]
+    fn call_function_stream_with_state_succeeds() {
+        use baml::{BamlDecode, BamlEncode, StreamEvent};
+
+        let api_key = require_env!("OPENAI_API_KEY");
+
+        // Partial type with StreamState field - only needs BamlDecode since it's only received
+        // For `string @stream.with_state`, the streaming type is `StreamState<Option<String>>`
+        // The outer Option is because the field might not exist yet during streaming
+        #[derive(Debug, Clone, BamlDecode)]
+        #[baml(name = "MessageWithState")]
+        struct PartialMessageWithState {
+            content: Option<StreamState<Option<String>>>,
+        }
+
+        // Final type - all fields required, no StreamState wrapper
+        #[derive(Debug, Clone, BamlDecode)]
+        #[baml(name = "MessageWithState")]
+        struct MessageWithState {
+            content: String,
+        }
+
+        let mut files = HashMap::new();
+        files.insert(
+            "main.baml".to_string(),
+            r##"
+            client<llm> GPT4 {
+                provider openai
+                options {
+                    model "gpt-4o-mini"
+                    api_key env.OPENAI_API_KEY
+                }
+            }
+
+            class MessageWithState {
+                content string @stream.with_state
+            }
+
+            function GenerateMessage(topic: string) -> MessageWithState {
+                client GPT4
+                prompt #"Write a short message about {{topic}}."#
+            }
+            "##
+            .to_string(),
+        );
+
+        let runtime =
+            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+        let args = FunctionArgs::new()
+            .arg("topic", "rust programming")
+            .with_env("OPENAI_API_KEY", &api_key);
+
+        let stream = runtime
+            .call_function_stream::<PartialMessageWithState, MessageWithState>("GenerateMessage", &args)
+            .expect("stream creation failed");
+
+        let mut saw_pending = false;
+        let mut saw_started = false;
+        let mut saw_done = false;
+        let mut partial_count = 0;
+        let mut final_result: Option<MessageWithState> = None;
+
+        for event in stream {
+            match event {
+                StreamEvent::Partial(partial) => {
+                    partial_count += 1;
+                    if let Some(ref state) = partial.content {
+                        // state.value is Option<String> since it's StreamState<Option<String>>
+                        println!(
+                            "Partial {}: state={:?}, value={:?}",
+                            partial_count, state.state, state.value
+                        );
+                        match state.state {
+                            StreamingState::Pending => saw_pending = true,
+                            StreamingState::Started => saw_started = true,
+                            StreamingState::Done => saw_done = true,
+                        }
+                    }
+                }
+                StreamEvent::Final(msg) => {
+                    println!("Final: {:?}", msg);
+                    final_result = Some(msg);
+                }
+                StreamEvent::Error(e) => {
+                    println!("Stream error (may be expected for early partials): {:?}", e);
+                }
+            }
+        }
+
+        // We should get at least some partial updates
+        assert!(partial_count > 0, "Expected at least one partial result");
+
+        // Should have seen at least Started and Done states (Pending might be missed if streaming is fast)
+        assert!(saw_started || saw_done, "Expected to see Started or Done streaming state");
+
+        let msg = final_result.expect("Expected final result");
+        assert!(!msg.content.is_empty(), "Content should not be empty");
+        println!("Streaming with state test passed with {} partial updates", partial_count);
     }
 
     /// Test streaming function call with valid API key

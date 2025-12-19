@@ -51,7 +51,6 @@ fn unwrap_single_pattern_union(holder: &CffiValueHolder) -> Cow<'_, CffiValueHol
 
 impl BamlDecode for String {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
-        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::StringValue(s)) => Ok(s.clone()),
             other => Err(BamlError::internal(format!(
@@ -64,7 +63,6 @@ impl BamlDecode for String {
 
 impl BamlDecode for i64 {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
-        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::IntValue(i)) => Ok(*i),
             other => Err(BamlError::internal(format!(
@@ -77,7 +75,6 @@ impl BamlDecode for i64 {
 
 impl BamlDecode for f64 {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
-        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::FloatValue(f)) => Ok(*f),
             other => Err(BamlError::internal(format!(
@@ -90,7 +87,6 @@ impl BamlDecode for f64 {
 
 impl BamlDecode for bool {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
-        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::BoolValue(b)) => Ok(*b),
             other => Err(BamlError::internal(format!(
@@ -107,7 +103,6 @@ impl BamlDecode for bool {
 
 impl<T: BamlDecode> BamlDecode for Vec<T> {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
-        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::ListValue(list)) => {
                 list.items.iter().map(T::baml_decode).collect()
@@ -133,7 +128,6 @@ impl<T: BamlDecode> BamlDecode for Option<T> {
 
 impl<V: BamlDecode> BamlDecode for HashMap<String, V> {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
-        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::MapValue(map)) => {
                 let mut result = HashMap::new();
@@ -257,7 +251,6 @@ pub trait BamlClass: Sized {
 
 impl<T: BamlClass> BamlDecode for T {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
-        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
             Some(cffi_value_holder::Value::ClassValue(class)) => T::from_class_value(class),
             other => Err(BamlError::internal(format!(
@@ -283,7 +276,6 @@ pub trait BamlEnum: Sized {
 
 /// Decode an enum from a CffiValueHolder
 pub fn decode_enum<T: BamlEnum>(holder: &CffiValueHolder) -> Result<T, BamlError> {
-    let holder = unwrap_single_pattern_union(holder);
     match &holder.value {
         Some(cffi_value_holder::Value::EnumValue(e)) => T::from_variant_name(&e.value),
         other => Err(BamlError::internal(format!(
