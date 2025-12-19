@@ -12,12 +12,12 @@ Function Bar (arity: 0, kind: Exec):
      1   LOAD_GLOBAL 21   (<fn Foo>)
      2   LOAD_CONST 1     (1)
      3   CALL 1           
-     4   STORE_VAR 1      (_0)
-     5   LOAD_VAR 1       (_0)
+     4   STORE_VAR 1      (x)
+     5   LOAD_VAR 1       (x)
      6   RETURN           
 
 Function Foo (arity: 1, kind: Exec):
-     0   LOAD_VAR 1     (_0)
+     0   LOAD_VAR 1     (x)
      1   LOAD_CONST 0   (1)
      2   BIN_OP +       
      3   RETURN         
@@ -26,17 +26,17 @@ Function GreetBaz (arity: 1, kind: Exec):
      0   LOAD_CONST 0       (null)
      1   ALLOC_INSTANCE 0   (<class Baz>)
      2   COPY 0             
-     3   LOAD_VAR 1         (_0)
+     3   LOAD_VAR 1         (n)
      4   STORE_FIELD 0      
      5   LOAD_FIELD 0       
      6   CALL 0             
-     7   STORE_VAR 2        (n)
-     8   LOAD_VAR 2         (n)
+     7   STORE_VAR 2        (_0)
+     8   LOAD_VAR 2         (_0)
      9   RETURN             
 
 Function Greeting (arity: 1, kind: Exec):
      0   LOAD_CONST 0   (Hello, )
-     1   LOAD_VAR 1     (_0)
+     1   LOAD_VAR 1     (self)
      2   LOAD_FIELD 0   
      3   BIN_OP +       
      4   LOAD_CONST 1   (!)

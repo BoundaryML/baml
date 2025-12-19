@@ -806,22 +806,17 @@ fn if_without_else_statement() -> anyhow::Result<()> {
             //     Instruction::Return,
             // ],
             // Stackification with fall-through elimination:
-            // x is user variable, _2 is compiler temporary for if result
+            // if-without-else is void - no temporary needed
             vec![
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::Jump(5),
+                Instruction::Jump(2),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::StoreVar("x".to_string()),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::Return,
             ],
@@ -845,39 +840,17 @@ fn if_without_else_with_local_var() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Int(0)), // let result = 0
-            //     // if (true)
-            //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(5), // jump to false path
-            //     Instruction::Pop(1),         // pop condition (true path)
-            //     // then block: let temp = 10
-            //     Instruction::LoadConst(Value::Int(10)),
-            //     Instruction::Pop(1),  // exit_scope pops temp
-            //     Instruction::Jump(2), // skip false path
-            //     // false path
-            //     Instruction::Pop(1), // pop condition (false path)
-            //     // No Stmt::Expr pop - if-without-else doesn't produce a value
-            //     // return result
-            //     Instruction::LoadVar("result".to_string()),
-            //     Instruction::Return,
-            // ],
             // Stackification with fall-through elimination:
-            // temp is user variable inside the if block, _2 is compiler temporary
+            // if-without-else is void - no temporary needed
+            // result is Virtual (inlined as LoadConst(0))
             vec![
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::Jump(5),
+                Instruction::Jump(2),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::StoreVar("temp".to_string()),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::Return,
             ],
@@ -926,33 +899,23 @@ fn consecutive_if_without_else() -> anyhow::Result<()> {
             //     Instruction::Return,
             // ],
             // Stackification with fall-through elimination:
-            // x is user variable, _2 and _5 are compiler temporaries for if results
+            // Both if-without-else are void - no temporaries needed
             vec![
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::Jump(5),
+                Instruction::Jump(2),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("x".to_string()),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::JumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_5".to_string()),
-                Instruction::Jump(5),
+                Instruction::Jump(2),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("x".to_string()),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_5".to_string()),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::Return,
             ],

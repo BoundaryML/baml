@@ -10,21 +10,21 @@ Globals: 121
 Function BodyTorture (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (null)
      1    LOAD_CONST 0       (null)
-     2    LOAD_VAR 1         (_0)
+     2    LOAD_VAR 1         (x)
      3    LOAD_CONST 1       (1)
      4    BIN_OP +           
-     5    STORE_VAR 1        (_0)
+     5    STORE_VAR 1        (x)
      6    LOAD_CONST 0       (null)
      7    JUMP_IF_FALSE +2   (to 9)
      8    JUMP +3            (to 11)
      9    LOAD_CONST 0       (null)
      10   RETURN             
-     11   LOAD_VAR 1         (_0)
+     11   LOAD_VAR 1         (x)
      12   LOAD_CONST 1       (1)
      13   BIN_OP +           
-     14   STORE_VAR 1        (_0)
+     14   STORE_VAR 1        (x)
      15   LOAD_CONST 0       (null)
-     16   STORE_VAR 2        (x)
+     16   STORE_VAR 2        (_6)
      17   JUMP -15           (to 2)
 
 Function ComplexType (arity: 0, kind: Exec):

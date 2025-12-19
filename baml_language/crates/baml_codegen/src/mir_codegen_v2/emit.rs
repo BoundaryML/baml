@@ -660,7 +660,10 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
 /// Compile a MIR function to bytecode using stackification.
 ///
 /// This is the main entry point for the optimized MIR-based code generation.
-pub(crate) fn compile_mir_function(mir: &MirFunction<'_>, ctx: MirCodegenContext<'_, '_>) -> Function {
+pub(crate) fn compile_mir_function(
+    mir: &MirFunction<'_>,
+    ctx: MirCodegenContext<'_, '_>,
+) -> Function {
     // Run analysis
     let analysis = AnalysisResult::analyze(mir);
 
