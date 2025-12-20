@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.215.1](https://github.com/boundaryml/baml/compare/0.215.0..0.215.1) - 2025-12-20
+
+### Bug Fixes
+- Vertex ai model error (#2836) - ([8482c1d](https://github.com/boundaryml/baml/commit/8482c1d06135b35cbaf3715e7dec5e4a841c3d52)) - aaronvg
+
+### Miscellaneous Chores
+- fix win arm64 ts release (#2841) - ([19e7dd6](https://github.com/boundaryml/baml/commit/19e7dd662821635e2a182c8219ef8db13ece4c47)) - Sam Lijin
+- fix jetbrains release for 2025.2+ (#2842) - ([1252528](https://github.com/boundaryml/baml/commit/12525286db748432b5b887567050ec118f55ad85)) - Sam Lijin
+- make npm releases work with OIDC auth (#2843) - ([20d7bb1](https://github.com/boundaryml/baml/commit/20d7bb15c94548c82b769e1d52dd60b48e810246)) - Sam Lijin
+
 ## [0.215.0](https://github.com/boundaryml/baml/compare/0.214.0..0.215.0) - 2025-12-18
 
 ### Bug Fixes
