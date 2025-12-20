@@ -25,6 +25,7 @@ mod args;
 mod codec;
 mod error;
 mod ffi;
+mod raw_objects;
 mod runtime;
 mod stream;
 mod types;
@@ -45,6 +46,16 @@ pub use codec::{
     BamlDecode, BamlEncode, BamlEnum,
 };
 pub use error::BamlError;
+pub use raw_objects::{
+    // Collector types
+    Collector, FunctionLog, Usage,
+    // Media types
+    Audio, Image, Pdf, Video,
+    // TypeBuilder types
+    ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder, TypeDef,
+    // Trait
+    RawObjectTrait,
+};
 pub use runtime::BamlRuntime;
 pub use stream::{StreamEvent, StreamResult};
 pub use types::{Check, CheckStatus, Checked, StreamState, StreamingState};
