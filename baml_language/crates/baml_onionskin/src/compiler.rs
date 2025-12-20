@@ -32,6 +32,7 @@ pub(crate) enum CompilerPhase {
     Ast,
     Hir,
     Thir,
+    Mir,
     Diagnostics,
     Codegen,
     VmRunner,
@@ -45,6 +46,7 @@ impl CompilerPhase {
         CompilerPhase::Ast,
         CompilerPhase::Hir,
         CompilerPhase::Thir,
+        CompilerPhase::Mir,
         CompilerPhase::Diagnostics,
         CompilerPhase::Codegen,
         CompilerPhase::VmRunner,
@@ -58,6 +60,7 @@ impl CompilerPhase {
             CompilerPhase::Ast => "AST (Typed Nodes)",
             CompilerPhase::Hir => "HIR (High-level IR)",
             CompilerPhase::Thir => "THIR (Typed IR)",
+            CompilerPhase::Mir => "MIR (CFG)",
             CompilerPhase::Diagnostics => "Diagnostics",
             CompilerPhase::Codegen => "Codegen (Bytecode)",
             CompilerPhase::VmRunner => "VM Runner",
@@ -71,7 +74,8 @@ impl CompilerPhase {
             CompilerPhase::Parser => CompilerPhase::Ast,
             CompilerPhase::Ast => CompilerPhase::Hir,
             CompilerPhase::Hir => CompilerPhase::Thir,
-            CompilerPhase::Thir => CompilerPhase::Diagnostics,
+            CompilerPhase::Thir => CompilerPhase::Mir,
+            CompilerPhase::Mir => CompilerPhase::Diagnostics,
             CompilerPhase::Diagnostics => CompilerPhase::Codegen,
             CompilerPhase::Codegen => CompilerPhase::VmRunner,
             CompilerPhase::VmRunner => CompilerPhase::Metrics,
@@ -86,7 +90,8 @@ impl CompilerPhase {
             CompilerPhase::Ast => CompilerPhase::Parser,
             CompilerPhase::Hir => CompilerPhase::Ast,
             CompilerPhase::Thir => CompilerPhase::Hir,
-            CompilerPhase::Diagnostics => CompilerPhase::Thir,
+            CompilerPhase::Mir => CompilerPhase::Thir,
+            CompilerPhase::Diagnostics => CompilerPhase::Mir,
             CompilerPhase::Codegen => CompilerPhase::Diagnostics,
             CompilerPhase::VmRunner => CompilerPhase::Codegen,
             CompilerPhase::Metrics => CompilerPhase::VmRunner,
@@ -369,6 +374,7 @@ impl CompilerRunner {
             CompilerPhase::Ast,
             CompilerPhase::Hir,
             CompilerPhase::Thir,
+            CompilerPhase::Mir,
             CompilerPhase::Diagnostics,
             CompilerPhase::Codegen,
             CompilerPhase::VmRunner,
@@ -386,6 +392,7 @@ impl CompilerRunner {
             CompilerPhase::Ast => self.run_ast(),
             CompilerPhase::Hir => self.run_hir(),
             CompilerPhase::Thir => self.run_thir(),
+            CompilerPhase::Mir => self.run_mir(),
             CompilerPhase::Diagnostics => self.run_diagnostics(),
             CompilerPhase::Codegen => self.run_codegen(),
             CompilerPhase::VmRunner => self.run_vm_runner(),
@@ -570,40 +577,171 @@ impl CompilerRunner {
             let file_path = path.display().to_string();
 
             // Use real baml_hir for item extraction
+            let item_tree = baml_hir::file_item_tree(&self.db, *source_file);
             let items_struct = baml_hir::file_items(&self.db, *source_file);
             let items = items_struct.items(&self.db);
 
             // Check if THIS specific file was modified
             let file_recomputed = self.modified_files.contains(path);
+            let status = if file_recomputed {
+                LineStatus::Recomputed
+            } else {
+                LineStatus::Cached
+            };
 
             writeln!(output, "File: {file_path}").ok();
             output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
 
-            // Show real HIR items
-            if !items.is_empty() {
-                for item in items {
-                    let item_line = format!("  {item:?}");
-                    writeln!(output, "{item_line}").ok();
-                    output_annotated.push((
-                        item_line,
-                        if file_recomputed {
-                            LineStatus::Recomputed
-                        } else {
-                            LineStatus::Cached
-                        },
-                    ));
-                }
-            } else {
+            // Show real HIR items with pretty printing
+            if items.is_empty() {
                 let no_items = "  (no items)".to_string();
                 writeln!(output, "{no_items}").ok();
-                output_annotated.push((
-                    no_items,
-                    if file_recomputed {
-                        LineStatus::Recomputed
-                    } else {
-                        LineStatus::Cached
-                    },
-                ));
+                output_annotated.push((no_items, status));
+            } else {
+                for item in items {
+                    match item {
+                        ItemId::Function(func_loc) => {
+                            let func = &item_tree[func_loc.id(&self.db)];
+                            let signature = function_signature(&self.db, *func_loc);
+                            let body = function_body(&self.db, *func_loc);
+
+                            // Build function header
+                            let params_str: Vec<String> = signature
+                                .params
+                                .iter()
+                                .map(|p| {
+                                    format!(
+                                        "{}: {}",
+                                        p.name,
+                                        baml_hir::pretty::type_ref_to_str(&p.type_ref)
+                                    )
+                                })
+                                .collect();
+                            let return_str =
+                                baml_hir::pretty::type_ref_to_str(&signature.return_type);
+
+                            // Print body based on type
+                            match &*body {
+                                baml_hir::FunctionBody::Expr(expr_body) => {
+                                    let body_code = baml_hir::body_to_code(expr_body);
+                                    // Combine header with body, putting { on same line
+                                    let header = format!(
+                                        "function {}({}) -> {} {{",
+                                        func.name,
+                                        params_str.join(", "),
+                                        return_str
+                                    );
+                                    writeln!(output, "{header}").ok();
+                                    output_annotated.push((header, status));
+
+                                    // Skip the opening brace line from body_code and print rest
+                                    let body_lines: Vec<&str> = body_code.lines().collect();
+                                    // body_code starts with "{", so skip first line and last "}"
+                                    for line in body_lines
+                                        .iter()
+                                        .skip(1)
+                                        .take(body_lines.len().saturating_sub(2))
+                                    {
+                                        writeln!(output, "{line}").ok();
+                                        output_annotated.push((line.to_string(), status));
+                                    }
+                                    let closing = "}".to_string();
+                                    writeln!(output, "{closing}").ok();
+                                    output_annotated.push((closing, status));
+                                }
+                                baml_hir::FunctionBody::Llm(_) => {
+                                    let header = format!(
+                                        "function {}({}) -> {}",
+                                        func.name,
+                                        params_str.join(", "),
+                                        return_str
+                                    );
+                                    writeln!(output, "{header}").ok();
+                                    output_annotated.push((header, status));
+                                    let line = "  <LLM function>".to_string();
+                                    writeln!(output, "{line}").ok();
+                                    output_annotated.push((line, status));
+                                }
+                                baml_hir::FunctionBody::Missing => {
+                                    let header = format!(
+                                        "function {}({}) -> {}",
+                                        func.name,
+                                        params_str.join(", "),
+                                        return_str
+                                    );
+                                    writeln!(output, "{header}").ok();
+                                    output_annotated.push((header, status));
+                                    let line = "  <missing body>".to_string();
+                                    writeln!(output, "{line}").ok();
+                                    output_annotated.push((line, status));
+                                }
+                            }
+                            writeln!(output).ok();
+                            output_annotated.push((String::new(), LineStatus::Unknown));
+                        }
+                        ItemId::Class(class_loc) => {
+                            let class = &item_tree[class_loc.id(&self.db)];
+                            let header = format!("class {}", class.name);
+                            writeln!(output, "{header}").ok();
+                            output_annotated.push((header, status));
+
+                            for field in &class.fields {
+                                let field_str = format!(
+                                    "  {}: {}",
+                                    field.name,
+                                    baml_hir::pretty::type_ref_to_str(&field.type_ref)
+                                );
+                                writeln!(output, "{field_str}").ok();
+                                output_annotated.push((field_str, status));
+                            }
+                            writeln!(output).ok();
+                            output_annotated.push((String::new(), LineStatus::Unknown));
+                        }
+                        ItemId::Enum(enum_loc) => {
+                            let enum_def = &item_tree[enum_loc.id(&self.db)];
+                            let header = format!("enum {}", enum_def.name);
+                            writeln!(output, "{header}").ok();
+                            output_annotated.push((header, status));
+
+                            for variant in &enum_def.variants {
+                                let variant_str = format!("  {}", variant.name);
+                                writeln!(output, "{variant_str}").ok();
+                                output_annotated.push((variant_str, status));
+                            }
+                            writeln!(output).ok();
+                            output_annotated.push((String::new(), LineStatus::Unknown));
+                        }
+                        ItemId::TypeAlias(alias_loc) => {
+                            let alias = &item_tree[alias_loc.id(&self.db)];
+                            let line = format!(
+                                "type {} = {}",
+                                alias.name,
+                                baml_hir::pretty::type_ref_to_str(&alias.type_ref)
+                            );
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            writeln!(output).ok();
+                            output_annotated.push((String::new(), LineStatus::Unknown));
+                        }
+                        ItemId::Client(client_loc) => {
+                            let client = &item_tree[client_loc.id(&self.db)];
+                            let line =
+                                format!("client {} (provider: {})", client.name, client.provider);
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            writeln!(output).ok();
+                            output_annotated.push((String::new(), LineStatus::Unknown));
+                        }
+                        ItemId::Test(test_loc) => {
+                            let test = &item_tree[test_loc.id(&self.db)];
+                            let line = format!("test {}", test.name);
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            writeln!(output).ok();
+                            output_annotated.push((String::new(), LineStatus::Unknown));
+                        }
+                    }
+                }
             }
 
             writeln!(output).ok();
@@ -711,6 +849,105 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Thir, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Thir, output_annotated);
+    }
+
+    fn run_mir(&mut self) {
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Build typing context and class fields map for MIR lowering
+        let file_list: Vec<_> = self.source_files.values().copied().collect();
+        let globals = build_typing_context_from_files(&self.db, &file_list);
+        let class_field_types = build_class_fields_from_files(&self.db, self.project_root);
+
+        // Build classes map (class name -> field name -> field index) for MIR lowering
+        let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
+        for file in &file_list {
+            let item_tree = baml_hir::file_item_tree(&self.db, *file);
+            let items_struct = baml_hir::file_items(&self.db, *file);
+            for item in items_struct.items(&self.db) {
+                if let ItemId::Class(class_loc) = item {
+                    let class = &item_tree[class_loc.id(&self.db)];
+                    let class_name = class.name.to_string();
+
+                    let mut field_indices = HashMap::new();
+                    for (idx, field) in class.fields.iter().enumerate() {
+                        field_indices.insert(field.name.to_string(), idx);
+                    }
+                    classes.insert(class_name, field_indices);
+                }
+            }
+        }
+
+        // Sort files alphabetically
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(path);
+
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
+
+            // Get HIR items for this file
+            let items_struct = baml_hir::file_items(&self.db, *source_file);
+            let items = items_struct.items(&self.db);
+
+            for item in items {
+                if let ItemId::Function(func_id) = item {
+                    let signature = function_signature(&self.db, *func_id);
+                    let func_name = signature.name.to_string();
+                    let body = function_body(&self.db, *func_id);
+
+                    // Run type inference with global function types
+                    let inference_result = baml_thir::infer_function(
+                        &self.db,
+                        &signature,
+                        &body,
+                        Some(globals.clone()),
+                        Some(class_field_types.clone()),
+                        *func_id,
+                    );
+
+                    // Lower to MIR
+                    let mir = baml_mir::lower_function(
+                        &signature,
+                        &body,
+                        &inference_result,
+                        &self.db,
+                        &classes,
+                    );
+
+                    // Display the MIR
+                    let mir_output = baml_mir::pretty::display_function(&mir);
+
+                    let status = if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    };
+
+                    // Add function header
+                    writeln!(output, "=== Function: {} ===", func_name).ok();
+                    output_annotated.push((format!("=== Function: {} ===", func_name), status));
+
+                    for line in mir_output.lines() {
+                        writeln!(output, "{}", line).ok();
+                        output_annotated.push((line.to_string(), status));
+                    }
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+            }
+
+            writeln!(output).ok();
+            output_annotated.push((String::new(), LineStatus::Unknown));
+        }
+
+        self.phase_outputs.insert(CompilerPhase::Mir, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Mir, output_annotated);
     }
 
     fn run_diagnostics(&mut self) {
