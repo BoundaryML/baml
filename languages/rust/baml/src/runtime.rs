@@ -8,6 +8,7 @@ use crate::codec::BamlDecode;
 use crate::error::BamlError;
 use crate::ffi::{self, callbacks};
 use crate::proto::baml_cffi_v1::CffiValueHolder;
+use crate::raw_objects::{Audio, Image, Pdf, Video};
 use crate::stream::StreamResult;
 
 /// Handle to the BAML runtime
@@ -149,6 +150,50 @@ impl BamlRuntime {
     ) -> Result<T, BamlError> {
         // TODO: Implement using call_function_parse_from_c
         Err(BamlError::internal("parse not yet implemented"))
+    }
+
+    // =========================================================================
+    // Media Factory Methods
+    // =========================================================================
+
+    /// Create an Image from a URL
+    pub fn new_image_from_url(&self, url: &str, mime_type: Option<&str>) -> Image {
+        Image::from_url(self.ptr, url, mime_type)
+    }
+
+    /// Create an Image from base64-encoded data
+    pub fn new_image_from_base64(&self, base64: &str, mime_type: Option<&str>) -> Image {
+        Image::from_base64(self.ptr, base64, mime_type)
+    }
+
+    /// Create Audio from a URL
+    pub fn new_audio_from_url(&self, url: &str, mime_type: Option<&str>) -> Audio {
+        Audio::from_url(self.ptr, url, mime_type)
+    }
+
+    /// Create Audio from base64-encoded data
+    pub fn new_audio_from_base64(&self, base64: &str, mime_type: Option<&str>) -> Audio {
+        Audio::from_base64(self.ptr, base64, mime_type)
+    }
+
+    /// Create a PDF from a URL
+    pub fn new_pdf_from_url(&self, url: &str, mime_type: Option<&str>) -> Pdf {
+        Pdf::from_url(self.ptr, url, mime_type)
+    }
+
+    /// Create a PDF from base64-encoded data
+    pub fn new_pdf_from_base64(&self, base64: &str, mime_type: Option<&str>) -> Pdf {
+        Pdf::from_base64(self.ptr, base64, mime_type)
+    }
+
+    /// Create a Video from a URL
+    pub fn new_video_from_url(&self, url: &str, mime_type: Option<&str>) -> Video {
+        Video::from_url(self.ptr, url, mime_type)
+    }
+
+    /// Create a Video from base64-encoded data
+    pub fn new_video_from_base64(&self, base64: &str, mime_type: Option<&str>) -> Video {
+        Video::from_base64(self.ptr, base64, mime_type)
     }
 }
 

@@ -97,6 +97,19 @@ impl BamlDecode for bool {
     }
 }
 
+/// Unit type decodes from null or empty values (for void method returns)
+impl BamlDecode for () {
+    fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        match &holder.value {
+            Some(cffi_value_holder::Value::NullValue(_)) | None => Ok(()),
+            other => Err(BamlError::internal(format!(
+                "expected null/void, got {:?}",
+                other.as_ref().map(variant_name)
+            ))),
+        }
+    }
+}
+
 // =============================================================================
 // Container BamlDecode implementations
 // =============================================================================
@@ -331,6 +344,69 @@ pub fn encode_enum(enum_name: &str, variant: &str) -> HostValue {
             name: enum_name.to_string(),
             value: variant.to_string(),
         })),
+    }
+}
+
+// =============================================================================
+// Kwargs encoding for method calls
+// =============================================================================
+
+/// Trait for types that can be converted to method kwargs.
+///
+/// This allows ergonomic method calls without manually constructing `HostMapEntry` vectors.
+pub trait IntoKwargs {
+    fn into_kwargs(self) -> Vec<HostMapEntry>;
+}
+
+/// Empty kwargs - for methods with no arguments
+impl IntoKwargs for () {
+    fn into_kwargs(self) -> Vec<HostMapEntry> {
+        vec![]
+    }
+}
+
+/// Pre-built kwargs vector passes through
+impl IntoKwargs for Vec<HostMapEntry> {
+    fn into_kwargs(self) -> Vec<HostMapEntry> {
+        self
+    }
+}
+
+/// Single kwarg from tuple
+impl<V: BamlEncode> IntoKwargs for (&str, V) {
+    fn into_kwargs(self) -> Vec<HostMapEntry> {
+        vec![HostMapEntry {
+            key: Some(host_map_entry::Key::StringKey(self.0.to_string())),
+            value: Some(self.1.baml_encode()),
+        }]
+    }
+}
+
+/// Multiple kwargs from slice of tuples (up to reasonable sizes)
+impl<V: BamlEncode + Clone> IntoKwargs for &[(&str, V)] {
+    fn into_kwargs(self) -> Vec<HostMapEntry> {
+        self.iter()
+            .map(|(k, v)| HostMapEntry {
+                key: Some(host_map_entry::Key::StringKey((*k).to_string())),
+                value: Some(v.baml_encode()),
+            })
+            .collect()
+    }
+}
+
+/// Two kwargs from tuple pair
+impl<V1: BamlEncode, V2: BamlEncode> IntoKwargs for ((&str, V1), (&str, V2)) {
+    fn into_kwargs(self) -> Vec<HostMapEntry> {
+        vec![
+            HostMapEntry {
+                key: Some(host_map_entry::Key::StringKey(self.0.0.to_string())),
+                value: Some(self.0.1.baml_encode()),
+            },
+            HostMapEntry {
+                key: Some(host_map_entry::Key::StringKey(self.1.0.to_string())),
+                value: Some(self.1.1.baml_encode()),
+            },
+        ]
     }
 }
 

@@ -53,8 +53,6 @@ pub use raw_objects::{
     Audio, Image, Pdf, Video,
     // TypeBuilder types
     ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder, TypeDef,
-    // Trait
-    RawObjectTrait,
 };
 pub use runtime::BamlRuntime;
 pub use stream::{StreamEvent, StreamResult};

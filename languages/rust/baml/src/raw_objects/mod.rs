@@ -6,6 +6,7 @@
 /// Macro to define a wrapper type around `RawObject`.
 ///
 /// This reduces boilerplate for all FFI-backed object types.
+/// Generates: struct, from_raw, RawObjectTrait impl, and BamlEncode impl.
 macro_rules! define_raw_object_wrapper {
     (
         $(#[$meta:meta])*
@@ -29,6 +30,16 @@ macro_rules! define_raw_object_wrapper {
                 &self.raw
             }
         }
+
+        impl $crate::codec::BamlEncode for $name {
+            fn baml_encode(&self) -> $crate::proto::baml_cffi_v1::HostValue {
+                $crate::proto::baml_cffi_v1::HostValue {
+                    value: Some($crate::proto::baml_cffi_v1::host_value::Value::Handle(
+                        self.raw.encode(),
+                    )),
+                }
+            }
+        }
     };
 }
 
@@ -43,25 +54,29 @@ mod type_builder;
 // Re-export all public types from submodules
 pub use collector::{Collector, FunctionLog, Usage};
 pub use media::{Audio, Image, Pdf, Video};
-pub use type_builder::{ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder, TypeDef};
+pub use type_builder::{
+    ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder, TypeDef,
+};
 
 use std::ffi::c_void;
 
 use prost::Message;
 
+use crate::baml_unreachable;
+use crate::codec::{BamlDecode, IntoKwargs};
 use crate::error::BamlError;
 use crate::ffi;
 use crate::proto::baml_cffi_v1::{
-    baml_object_handle, invocation_response, invocation_response_success, BamlObjectConstructorInvocation,
-    BamlObjectHandle, BamlObjectMethodInvocation, BamlObjectType, BamlPointerType,
-    HostMapEntry, InvocationResponse,
+    BamlObjectConstructorInvocation, BamlObjectHandle, BamlObjectMethodInvocation, BamlObjectType,
+    BamlPointerType, CffiValueHolder, HostMapEntry, InvocationResponse, baml_object_handle,
+    invocation_response, invocation_response_success,
 };
 
 /// A handle to a FFI-backed BAML object.
 ///
 /// This is the base type for Media, Collector, TypeBuilder, etc.
 /// It wraps a raw pointer managed by the Rust runtime.
-pub struct RawObject {
+pub(crate) struct RawObject {
     ptr: i64,
     runtime: *const c_void,
     object_type: BamlObjectType,
@@ -73,7 +88,11 @@ unsafe impl Sync for RawObject {}
 
 impl RawObject {
     /// Create from an existing FFI pointer
-    pub(crate) fn from_pointer(ptr: i64, runtime: *const c_void, object_type: BamlObjectType) -> Self {
+    pub(crate) fn from_pointer(
+        ptr: i64,
+        runtime: *const c_void,
+        object_type: BamlObjectType,
+    ) -> Self {
         Self {
             ptr,
             runtime,
@@ -82,15 +101,15 @@ impl RawObject {
     }
 
     /// Create a new object by calling the constructor
-    pub(crate) fn new(
+    pub(crate) fn new<K: IntoKwargs>(
         runtime: *const c_void,
         object_type: BamlObjectType,
-        kwargs: Vec<HostMapEntry>,
+        kwargs: K,
     ) -> Result<Self, BamlError> {
         // Encode constructor invocation
         let invocation = BamlObjectConstructorInvocation {
             r#type: object_type.into(),
-            kwargs,
+            kwargs: kwargs.into_kwargs(),
         };
 
         let mut buf = Vec::new();
@@ -135,29 +154,74 @@ impl RawObject {
         }
     }
 
-    /// Call a method on this object that returns a value
-    pub fn call_method_for_value<T: prost::Message + Default>(
+    /// Call a method on this object and decode the result using `BamlDecode`.
+    ///
+    /// This is the primary method for calling object methods that return values.
+    /// Use `T = ()` for void methods (side-effect only).
+    ///
+    /// # Panics
+    /// Panics if the FFI call fails. This should never happen in practice since
+    /// we control both sides of the FFI boundary.
+    ///
+    /// # Examples
+    /// ```ignore
+    /// // No arguments
+    /// let is_url: bool = obj.call_method("is_url", ());
+    ///
+    /// // Single argument
+    /// let result: String = obj.call_method("process", ("input", "hello"));
+    ///
+    /// // Two arguments
+    /// let result: i64 = obj.call_method("add", (("a", 1), ("b", 2)));
+    ///
+    /// // Void method (side-effect only)
+    /// obj.call_method::<()>("reset", ());
+    /// ```
+    pub fn call_method<T: BamlDecode, K: IntoKwargs>(&self, method_name: &str, kwargs: K) -> T {
+        self.try_call_method(method_name, kwargs)
+            .unwrap_or_else(|e| {
+                baml_unreachable!(
+                    "FFI method call '{}' on {:?} failed: {}",
+                    method_name,
+                    self.object_type,
+                    e
+                )
+            })
+    }
+
+    /// Call a method on this object and decode the result using `BamlDecode`.
+    ///
+    /// Returns a `Result` for callers that need to handle FFI errors explicitly.
+    /// Most callers should use `call_method` instead.
+    ///
+    /// Use `T = ()` for void methods (side-effect only).
+    pub fn try_call_method<T: BamlDecode, K: IntoKwargs>(
         &self,
         method_name: &str,
-        kwargs: Vec<HostMapEntry>,
+        kwargs: K,
     ) -> Result<T, BamlError> {
-        let response = self.call_method_raw(method_name, kwargs)?;
+        let response = self.call_method_raw_internal(method_name, kwargs.into_kwargs())?;
 
         match response.response {
             Some(invocation_response::Response::Success(success)) => {
                 match success.result {
                     Some(invocation_response_success::Result::Value(value)) => {
-                        // The value is a CFFIValueHolder - we need to decode it
-                        // For now, we'll decode the protobuf message
-                        let mut buf = Vec::new();
-                        value.encode(&mut buf).map_err(|e| {
-                            BamlError::internal(format!("failed to re-encode value: {e}"))
-                        })?;
-                        T::decode(&*buf).map_err(|e| {
-                            BamlError::internal(format!("failed to decode value as {}: {e}", std::any::type_name::<T>()))
-                        })
+                        T::baml_decode(&value)
                     }
-                    _ => Err(BamlError::internal("expected value in response")),
+                    Some(invocation_response_success::Result::Object(_)) => {
+                        Err(BamlError::internal(
+                            "method returned object handle, use call_method_for_object instead",
+                        ))
+                    }
+                    Some(invocation_response_success::Result::Objects(_)) => {
+                        Err(BamlError::internal(
+                            "method returned object handles, use call_method_for_objects instead",
+                        ))
+                    }
+                    None => {
+                        // No result - decode as empty value (works for () and Option<T>)
+                        T::baml_decode(&CffiValueHolder { value: None })
+                    }
                 }
             }
             Some(invocation_response::Response::Error(e)) => Err(BamlError::internal(e)),
@@ -165,59 +229,48 @@ impl RawObject {
         }
     }
 
-    /// Call a method on this object that returns another object
-    pub fn call_method_for_object(
+    /// Call a method on this object that returns another object handle.
+    ///
+    /// Use this for methods that return FFI object references (not values).
+    pub(crate) fn call_method_for_object<K: IntoKwargs>(
         &self,
         method_name: &str,
-        kwargs: Vec<HostMapEntry>,
+        kwargs: K,
     ) -> Result<BamlObjectHandle, BamlError> {
-        let response = self.call_method_raw(method_name, kwargs)?;
+        let response = self.call_method_raw_internal(method_name, kwargs.into_kwargs())?;
 
         match response.response {
-            Some(invocation_response::Response::Success(success)) => {
-                match success.result {
-                    Some(invocation_response_success::Result::Object(handle)) => Ok(handle),
-                    _ => Err(BamlError::internal("expected object handle in response")),
-                }
-            }
+            Some(invocation_response::Response::Success(success)) => match success.result {
+                Some(invocation_response_success::Result::Object(handle)) => Ok(handle),
+                _ => Err(BamlError::internal("expected object handle in response")),
+            },
             Some(invocation_response::Response::Error(e)) => Err(BamlError::internal(e)),
             None => Err(BamlError::internal("empty response")),
         }
     }
 
-    /// Call a method on this object that returns multiple objects
-    pub fn call_method_for_objects(
+    /// Call a method on this object that returns multiple object handles.
+    ///
+    /// Use this for methods that return lists of FFI object references.
+    pub(crate) fn call_method_for_objects<K: IntoKwargs>(
         &self,
         method_name: &str,
-        kwargs: Vec<HostMapEntry>,
+        kwargs: K,
     ) -> Result<Vec<BamlObjectHandle>, BamlError> {
-        let response = self.call_method_raw(method_name, kwargs)?;
+        let response = self.call_method_raw_internal(method_name, kwargs.into_kwargs())?;
 
         match response.response {
-            Some(invocation_response::Response::Success(success)) => {
-                match success.result {
-                    Some(invocation_response_success::Result::Objects(handles)) => Ok(handles.objects),
-                    _ => Err(BamlError::internal("expected object handles in response")),
-                }
-            }
-            Some(invocation_response::Response::Error(e)) => Err(BamlError::internal(e)),
-            None => Err(BamlError::internal("empty response")),
-        }
-    }
-
-    /// Call a method that returns no value (void)
-    pub fn call_method_void(&self, method_name: &str, kwargs: Vec<HostMapEntry>) -> Result<(), BamlError> {
-        let response = self.call_method_raw(method_name, kwargs)?;
-
-        match response.response {
-            Some(invocation_response::Response::Success(_)) => Ok(()),
+            Some(invocation_response::Response::Success(success)) => match success.result {
+                Some(invocation_response_success::Result::Objects(handles)) => Ok(handles.objects),
+                _ => Err(BamlError::internal("expected object handles in response")),
+            },
             Some(invocation_response::Response::Error(e)) => Err(BamlError::internal(e)),
             None => Err(BamlError::internal("empty response")),
         }
     }
 
     /// Low-level method call that returns the raw InvocationResponse
-    fn call_method_raw(
+    fn call_method_raw_internal(
         &self,
         method_name: &str,
         kwargs: Vec<HostMapEntry>,
@@ -233,9 +286,8 @@ impl RawObject {
             .encode(&mut buf)
             .map_err(|e| BamlError::internal(format!("failed to encode method call: {e}")))?;
 
-        let response_buf = unsafe {
-            ffi::call_object_method(self.runtime, buf.as_ptr().cast::<i8>(), buf.len())
-        };
+        let response_buf =
+            unsafe { ffi::call_object_method(self.runtime, buf.as_ptr().cast::<i8>(), buf.len()) };
 
         // Decode response
         let response_bytes = unsafe {
@@ -255,22 +307,22 @@ impl RawObject {
     }
 
     /// Encode to `BamlObjectHandle` for passing to function calls
-    pub fn encode(&self) -> BamlObjectHandle {
+    pub(crate) fn encode(&self) -> BamlObjectHandle {
         encode_raw_object_handle(self.ptr, self.object_type)
     }
 
     /// Get the object type
-    pub fn object_type(&self) -> BamlObjectType {
+    pub(crate) fn object_type(&self) -> BamlObjectType {
         self.object_type
     }
 
-    /// Get the raw pointer (for advanced use)
-    pub fn ptr(&self) -> i64 {
+    /// Get the raw pointer
+    pub(crate) fn ptr(&self) -> i64 {
         self.ptr
     }
 
     /// Get the runtime pointer
-    pub fn runtime(&self) -> *const c_void {
+    pub(crate) fn runtime(&self) -> *const c_void {
         self.runtime
     }
 }
@@ -279,7 +331,7 @@ impl Drop for RawObject {
     fn drop(&mut self) {
         // Call destructor via FFI
         // Ignore errors during drop - we can't do much about them
-        let _ = self.call_method_void("~destructor", vec![]);
+        let _ = self.try_call_method::<(), _>("~destructor", ());
     }
 }
 
@@ -340,9 +392,13 @@ fn object_type_from_handle(handle: &BamlObjectHandle) -> Result<BamlObjectType, 
                 baml_object_handle::Object::TypeBuilder(_) => BamlObjectType::ObjectTypeBuilder,
                 baml_object_handle::Object::Type(_) => BamlObjectType::ObjectType,
                 baml_object_handle::Object::EnumBuilder(_) => BamlObjectType::ObjectEnumBuilder,
-                baml_object_handle::Object::EnumValueBuilder(_) => BamlObjectType::ObjectEnumValueBuilder,
+                baml_object_handle::Object::EnumValueBuilder(_) => {
+                    BamlObjectType::ObjectEnumValueBuilder
+                }
                 baml_object_handle::Object::ClassBuilder(_) => BamlObjectType::ObjectClassBuilder,
-                baml_object_handle::Object::ClassPropertyBuilder(_) => BamlObjectType::ObjectClassPropertyBuilder,
+                baml_object_handle::Object::ClassPropertyBuilder(_) => {
+                    BamlObjectType::ObjectClassPropertyBuilder
+                }
             };
             Ok(object_type)
         }
@@ -373,9 +429,13 @@ fn encode_raw_object_handle(ptr: i64, object_type: BamlObjectType) -> BamlObject
         BamlObjectType::ObjectTypeBuilder => baml_object_handle::Object::TypeBuilder(pointer),
         BamlObjectType::ObjectType => baml_object_handle::Object::Type(pointer),
         BamlObjectType::ObjectEnumBuilder => baml_object_handle::Object::EnumBuilder(pointer),
-        BamlObjectType::ObjectEnumValueBuilder => baml_object_handle::Object::EnumValueBuilder(pointer),
+        BamlObjectType::ObjectEnumValueBuilder => {
+            baml_object_handle::Object::EnumValueBuilder(pointer)
+        }
         BamlObjectType::ObjectClassBuilder => baml_object_handle::Object::ClassBuilder(pointer),
-        BamlObjectType::ObjectClassPropertyBuilder => baml_object_handle::Object::ClassPropertyBuilder(pointer),
+        BamlObjectType::ObjectClassPropertyBuilder => {
+            baml_object_handle::Object::ClassPropertyBuilder(pointer)
+        }
         BamlObjectType::ObjectUnspecified => {
             // This shouldn't happen, but we need to handle it
             // Use Collector as a fallback (will likely fail at runtime)
@@ -389,7 +449,7 @@ fn encode_raw_object_handle(ptr: i64, object_type: BamlObjectType) -> BamlObject
 }
 
 /// Trait for types backed by `RawObject`
-pub trait RawObjectTrait: Send + Sync {
+pub(crate) trait RawObjectTrait: Send + Sync {
     /// Get a reference to the underlying `RawObject`
     fn raw(&self) -> &RawObject;
 
@@ -403,7 +463,7 @@ pub trait RawObjectTrait: Send + Sync {
 ///
 /// This function dispatches to the appropriate concrete type based on the object type
 /// in the handle.
-pub fn decode_object_handle(
+pub(crate) fn decode_object_handle(
     handle: &BamlObjectHandle,
     runtime: *const c_void,
 ) -> Result<Box<dyn RawObjectTrait>, BamlError> {
@@ -424,7 +484,9 @@ pub fn decode_object_handle(
         BamlObjectType::ObjectEnumBuilder => Ok(Box::new(EnumBuilder::from_raw(raw))),
         BamlObjectType::ObjectEnumValueBuilder => Ok(Box::new(EnumValueBuilder::from_raw(raw))),
         BamlObjectType::ObjectClassBuilder => Ok(Box::new(ClassBuilder::from_raw(raw))),
-        BamlObjectType::ObjectClassPropertyBuilder => Ok(Box::new(ClassPropertyBuilder::from_raw(raw))),
+        BamlObjectType::ObjectClassPropertyBuilder => {
+            Ok(Box::new(ClassPropertyBuilder::from_raw(raw)))
+        }
         // Types we don't expose directly yet
         BamlObjectType::ObjectTiming
         | BamlObjectType::ObjectStreamTiming
@@ -433,14 +495,10 @@ pub fn decode_object_handle(
         | BamlObjectType::ObjectHttpRequest
         | BamlObjectType::ObjectHttpResponse
         | BamlObjectType::ObjectHttpBody
-        | BamlObjectType::ObjectSseResponse => {
-            Err(BamlError::internal(format!(
-                "object type {:?} not yet exposed in Rust API",
-                object_type
-            )))
-        }
-        BamlObjectType::ObjectUnspecified => {
-            Err(BamlError::internal("unspecified object type"))
-        }
+        | BamlObjectType::ObjectSseResponse => Err(BamlError::internal(format!(
+            "object type {:?} not yet exposed in Rust API",
+            object_type
+        ))),
+        BamlObjectType::ObjectUnspecified => Err(BamlError::internal("unspecified object type")),
     }
 }
