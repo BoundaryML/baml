@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::ffi::{c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_void};
 
 use prost::Message;
 
@@ -95,9 +95,9 @@ impl BamlRuntime {
                     .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
                 T::baml_decode(&holder)
             }
-            Ok(callbacks::CallbackResult::Partial(_)) => {
-                Err(BamlError::internal("unexpected partial result in sync call"))
-            }
+            Ok(callbacks::CallbackResult::Partial(_)) => Err(BamlError::internal(
+                "unexpected partial result in sync call",
+            )),
             Ok(callbacks::CallbackResult::Error(e)) => Err(e),
             Err(_) => Err(BamlError::internal("callback channel closed")),
         }
