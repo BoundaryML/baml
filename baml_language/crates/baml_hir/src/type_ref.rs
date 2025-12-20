@@ -36,7 +36,7 @@ pub enum TypeRef {
     },
     Union(Vec<TypeRef>),
 
-    /// Literal types for exhaustiveness checking.
+    /// Literal (singleton) types for pattern matching.
     ///
     /// From a type-theoretic perspective, singleton types require decidable
     /// equality to support pattern matching and exhaustiveness checking. Floats are
