@@ -42,7 +42,6 @@ jobs:
     environment: release
     needs: [build-jetbrains-release]
     runs-on: ubuntu-latest
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup Tools
