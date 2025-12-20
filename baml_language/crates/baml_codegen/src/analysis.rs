@@ -505,20 +505,14 @@ fn classify_locals<'db>(
 ) -> HashMap<Local, LocalClassification> {
     let mut classifications = HashMap::new();
 
-    for (idx, local_decl) in mir.locals.iter().enumerate() {
+    for (idx, _local_decl) in mir.locals.iter().enumerate() {
         let local = Local(idx);
         let du = &def_use[&local];
 
         let classification = if idx > 0 && idx <= mir.arity {
             // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
-        } else if local_decl.name.is_some() {
-            // Named variables (user-defined or synthetic like _iter, _i) are always Real.
-            // Only unnamed compiler temporaries can be Virtual.
-            // This ensures bytecode matches user source more closely.
-            LocalClassification::Real
         } else if can_be_virtual(local, du, dominators, mir, def_use, predecessors) {
-            // Unnamed temporary - check if it can be virtual
             LocalClassification::Virtual
         } else {
             LocalClassification::Real

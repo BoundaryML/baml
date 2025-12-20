@@ -196,24 +196,18 @@ fn if_else_with_local_in_branches() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Named variables 'a' and 'b' are Real; '_0' is Real due to multiple assignments:
+            // 'a' and 'b' are Virtual (single-use, inlined). '_0' is Real (multiple assignments):
             vec![
                 Instruction::LoadConst(Value::Null), // Pre-allocate for '_0'
-                Instruction::LoadConst(Value::Null), // Pre-allocate for 'a'
-                Instruction::LoadConst(Value::Null), // Pre-allocate for 'b'
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(2),
-                Instruction::Jump(6),
-                // Else branch (b = 2; b)
+                Instruction::Jump(4),
+                // Else branch: b inlined as 2
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("b".to_string()),
-                Instruction::LoadVar("b".to_string()),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(5),
-                // Then branch (a = 1; a)
+                Instruction::Jump(3),
+                // Then branch: a inlined as 1
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("a".to_string()),
-                Instruction::LoadVar("a".to_string()),
                 Instruction::StoreVar("_0".to_string()),
                 // Return
                 Instruction::LoadVar("_0".to_string()),
@@ -834,19 +828,16 @@ fn if_without_else_with_local_var() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Named variables 'result' and 'temp' are Real (not inlined):
+            // 'result' is Virtual (single-use, inlined as 0). 'temp' is Real (assigned but unused):
             vec![
-                Instruction::LoadConst(Value::Null), // Pre-allocate for 'result'
                 Instruction::LoadConst(Value::Null), // Pre-allocate for 'temp'
-                Instruction::LoadConst(Value::Int(0)),
-                Instruction::StoreVar("result".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(2),
                 Instruction::Jump(2),
                 Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::StoreVar("temp".to_string()),
-                Instruction::LoadVar("result".to_string()),
+                Instruction::LoadConst(Value::Int(0)), // result inlined
                 Instruction::Return,
             ],
         )],
@@ -937,17 +928,8 @@ fn block_expr() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Named variables 'a' and 'b' are Real (not inlined):
-            vec![
-                Instruction::LoadConst(Value::Null), // Pre-allocate for 'a'
-                Instruction::LoadConst(Value::Null), // Pre-allocate for 'b'
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("b".to_string()),
-                Instruction::LoadVar("b".to_string()),
-                Instruction::StoreVar("a".to_string()),
-                Instruction::LoadVar("a".to_string()),
-                Instruction::Return,
-            ],
+            // 'a' and 'b' are Virtual (single-use), fully inlined:
+            vec![Instruction::LoadConst(Value::Int(1)), Instruction::Return],
         )],
     })
 }

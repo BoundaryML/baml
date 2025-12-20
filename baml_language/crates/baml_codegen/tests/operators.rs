@@ -102,14 +102,11 @@ fn basic_add() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
-            // Named variable 'a' is Real (not inlined):
+            // 'a' is Virtual (single-use), inlined:
             vec![
-                Instruction::LoadConst(Value::Null), // Pre-allocate for 'a'
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("a".to_string()),
-                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],

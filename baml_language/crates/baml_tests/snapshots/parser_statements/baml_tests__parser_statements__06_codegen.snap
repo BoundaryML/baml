@@ -77,37 +77,25 @@ Function assign_in_loop (arity: 0, kind: Exec):
      27   JUMP -19           (to 8)
 
 Function block_with_tail (arity: 0, kind: Exec):
-     0    LOAD_CONST 0   (null)
-     1    LOAD_CONST 0   (null)
-     2    LOAD_CONST 0   (null)
-     3    LOAD_CONST 0   (null)
-     4    LOAD_CONST 1   (1)
-     5    STORE_VAR 3    (y)
-     6    LOAD_CONST 2   (2)
-     7    STORE_VAR 4    (z)
-     8    LOAD_VAR 3     (y)
-     9    LOAD_VAR 4     (z)
-     10   BIN_OP +       
-     11   STORE_VAR 2    (x)
-     12   LOAD_VAR 2     (x)
-     13   STORE_VAR 1    (_0)
-     14   LOAD_VAR 1     (_0)
-     15   RETURN         
+     0   LOAD_CONST 0   (null)
+     1   LOAD_CONST 1   (1)
+     2   LOAD_CONST 2   (2)
+     3   BIN_OP +       
+     4   STORE_VAR 1    (_0)
+     5   LOAD_VAR 1     (_0)
+     6   RETURN         
 
 Function break_in_for (arity: 0, kind: Exec):
-     0    LOAD_CONST 0       (null)
-     1    LOAD_CONST 0       (null)
-     2    LOAD_CONST 0       (null)
-     3    LOAD_CONST 1       (0)
-     4    STORE_VAR 2        (i)
-     5    LOAD_VAR 2         (i)
-     6    LOAD_CONST 2       (10)
-     7    CMP_OP <           
-     8    JUMP_IF_FALSE +1   (to 9)
-     9    LOAD_CONST 3       (1)
-     10   STORE_VAR 1        (_0)
-     11   LOAD_VAR 1         (_0)
-     12   RETURN             
+     0   LOAD_CONST 0       (null)
+     1   LOAD_CONST 0       (null)
+     2   LOAD_CONST 1       (0)
+     3   LOAD_CONST 2       (10)
+     4   CMP_OP <           
+     5   JUMP_IF_FALSE +1   (to 6)
+     6   LOAD_CONST 3       (1)
+     7   STORE_VAR 1        (_0)
+     8   LOAD_VAR 1         (_0)
+     9   RETURN             
 
 Function break_with_locals (arity: 0, kind: Exec):
      0    LOAD_CONST 0        (null)
@@ -299,23 +287,13 @@ Function mul_assign (arity: 0, kind: Exec):
      11   RETURN         
 
 Function multi_assign (arity: 0, kind: Exec):
-     0    LOAD_CONST 0   (null)
-     1    LOAD_CONST 0   (null)
-     2    LOAD_CONST 0   (null)
-     3    LOAD_CONST 1   (1)
-     4    STORE_VAR 2    (a)
-     5    LOAD_CONST 2   (2)
-     6    STORE_VAR 3    (b)
-     7    LOAD_CONST 3   (10)
-     8    STORE_VAR 2    (a)
-     9    LOAD_CONST 4   (20)
-     10   STORE_VAR 3    (b)
-     11   LOAD_VAR 2     (a)
-     12   LOAD_VAR 3     (b)
-     13   BIN_OP +       
-     14   STORE_VAR 1    (_0)
-     15   LOAD_VAR 1     (_0)
-     16   RETURN         
+     0   LOAD_CONST 0   (null)
+     1   LOAD_CONST 1   (10)
+     2   LOAD_CONST 2   (20)
+     3   BIN_OP +       
+     4   STORE_VAR 1    (_0)
+     5   LOAD_VAR 1     (_0)
+     6   RETURN         
 
 Function nested_break (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (null)
@@ -447,15 +425,10 @@ Function nested_while_loop (arity: 0, kind: Exec):
 
 Function simple_assign (arity: 0, kind: Exec):
      0   LOAD_CONST 0   (null)
-     1   LOAD_CONST 0   (null)
-     2   LOAD_CONST 1   (1)
-     3   STORE_VAR 2    (x)
-     4   LOAD_CONST 2   (5)
-     5   STORE_VAR 2    (x)
-     6   LOAD_VAR 2     (x)
-     7   STORE_VAR 1    (_0)
-     8   LOAD_VAR 1     (_0)
-     9   RETURN         
+     1   LOAD_CONST 1   (5)
+     2   STORE_VAR 1    (_0)
+     3   LOAD_VAR 1     (_0)
+     4   RETURN         
 
 Function simple_break (arity: 0, kind: Exec):
      0   LOAD_CONST 0       (null)
