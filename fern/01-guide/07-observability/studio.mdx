@@ -74,7 +74,7 @@ async def test_book1():
 ```
 
 ```typescript TypeScript
-import { baml } from 'baml_client';
+import { b } from 'baml_client';
 import { Book, AuthorInfo } from 'baml_client/types';
 import { traceSync, traceAsync } from 'baml_client/tracing';
 
@@ -83,10 +83,10 @@ const preProcessText = traceSync('preProcessText', function(text: string): Promi
 });
 
 const fullAnalysis = traceAsync('fullAnalysis', async function(book: Book): Promise<any> {
-    const sentiment = await baml.ClassifySentiment(
+    const sentiment = await b.ClassifySentiment(
         preProcessText(book.content)
     );
-    const bookAnalysis = await baml.AnalyzeBook(book);
+    const bookAnalysis = await b.AnalyzeBook(book);
     return bookAnalysis;
 });
 

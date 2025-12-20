@@ -282,9 +282,6 @@ function ExtractResume(resume_text: string) -> Resume {
   prompt #"
     Extract information from this resume.
     
-    For seniority level, consider:
-    {{ ctx.output_format.seniority }}
-    
     Resume:
     ---
     {{ resume_text }}

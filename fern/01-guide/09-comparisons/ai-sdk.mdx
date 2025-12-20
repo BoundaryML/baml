@@ -252,9 +252,6 @@ function ExtractResume(resume_text: string) -> Resume {
   prompt #"
     Extract the following information from the resume.
     
-    Pay attention to the seniority descriptions:
-    {{ ctx.output_format.seniority }}
-    
     Resume:
     ---
     {{ resume_text }}
@@ -313,14 +310,14 @@ function ExtractResume(resume_text: string) -> Resume {
 
 Use it in TypeScript:
 ```typescript
-import { baml } from '@/baml_client';
+import { b } from '@/baml_client';
 
 // Use default model
-const resume = await baml.ExtractResume(resumeText);
+const resume = await b.ExtractResume(resumeText);
 
 // Switch models based on your needs
-const complexResume = await baml.ExtractResume(complexText, { client: "Claude" });
-const simpleResume = await baml.ExtractResume(simpleText, { client: "Llama" });
+const complexResume = await b.ExtractResume(complexText, { client: "Claude" });
+const simpleResume = await b.ExtractResume(simpleText, { client: "Llama" });
 
 // Everything is fully typed!
 console.log(resume.seniority); // TypeScript knows this is SeniorityLevel
