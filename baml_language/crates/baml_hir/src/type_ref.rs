@@ -152,21 +152,21 @@ impl TypeRef {
         }
 
         // Check for integer literal types (for exhaustiveness like 200 | 201)
-        //
-        // TODO: Handle integer overflow properly.
-        // If `text` is a number larger than i64::MAX (e.g., "9....9"),
-        // parse::<i64>() fails and we fall through to `from_type_name`, which
-        // incorrectly treats the number as a named type (like a class name).
-        // This causes confusing "unknown type" errors later instead of "integer overflow".
-        //
-        // Fix requires:
-        // 1. Add spans to TypeRef (or use Spanned<TypeRef>)
-        // 2. Thread span info through from_ast/from_type_text
-        // 3. Emit TypeError::IntegerOverflow during THIR lowering
-        //
-        // See: https://github.com/BoundaryML/baml/pull/2838/files/1e6d23cc70e4825bfca302069caee658c7a0f437#r2634900737
         if let Ok(int_val) = text.parse::<i64>() {
             return TypeRef::IntLiteral(int_val);
+        }
+
+        // Detect numeric literals that failed parsing above:
+        // - Integer overflow (e.g., "9...9" > i64::MAX)
+        // - Float literals (e.g., "3.14")
+        //
+        // Without this check, these would fall through to `from_type_name` and
+        // incorrectly become named types, causing confusing "unknown type" errors.
+        //
+        // TODO: Add spans to TypeRef to emit proper diagnostics instead of just Error.
+        // See: https://github.com/BoundaryML/baml/pull/2838/files/1e6d23cc70e4825bfca302069caee658c7a0f437#r2634900737
+        if text.starts_with(|c: char| c.is_ascii_digit()) {
+            return TypeRef::Error;
         }
 
         Self::from_type_name(text)
