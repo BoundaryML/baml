@@ -48,7 +48,7 @@ pub use codec::{
 pub use error::BamlError;
 pub use raw_objects::{
     // Collector types
-    Collector, FunctionLog, Usage,
+    Collector, FunctionLog, LogType, Usage,
     // Media types
     Audio, Image, Pdf, Video,
     // TypeBuilder types

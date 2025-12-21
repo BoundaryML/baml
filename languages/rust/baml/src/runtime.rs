@@ -8,7 +8,7 @@ use crate::codec::BamlDecode;
 use crate::error::BamlError;
 use crate::ffi::{self, callbacks};
 use crate::proto::baml_cffi_v1::CffiValueHolder;
-use crate::raw_objects::{Audio, Image, Pdf, Video};
+use crate::raw_objects::{Audio, Collector, Image, Pdf, Video};
 use crate::stream::StreamResult;
 
 /// Handle to the BAML runtime
@@ -194,6 +194,15 @@ impl BamlRuntime {
     /// Create a Video from base64-encoded data
     pub fn new_video_from_base64(&self, base64: &str, mime_type: Option<&str>) -> Video {
         Video::from_base64(self.ptr, base64, mime_type)
+    }
+
+    // =========================================================================
+    // Collector Factory Methods
+    // =========================================================================
+
+    /// Create a new collector for telemetry
+    pub fn new_collector(&self, name: &str) -> Collector {
+        Collector::new(self.ptr, name)
     }
 }
 

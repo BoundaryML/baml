@@ -52,7 +52,7 @@ mod media;
 mod type_builder;
 
 // Re-export all public types from submodules
-pub use collector::{Collector, FunctionLog, Usage};
+pub use collector::{Collector, FunctionLog, LogType, Usage};
 pub use media::{Audio, Image, Pdf, Video};
 pub use type_builder::{
     ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder, TypeDef,
@@ -336,7 +336,7 @@ impl Drop for RawObject {
 }
 
 /// Extract a pointer from a `BamlObjectHandle`
-fn extract_ptr_from_handle(handle: &BamlObjectHandle) -> Result<i64, BamlError> {
+pub(crate) fn extract_ptr_from_handle(handle: &BamlObjectHandle) -> Result<i64, BamlError> {
     match &handle.object {
         Some(obj) => {
             // All variants contain a BamlPointerType

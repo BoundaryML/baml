@@ -5,6 +5,7 @@ use crate::error::BamlError;
 use crate::proto::baml_cffi_v1::{
     host_map_entry, BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry,
 };
+use crate::raw_objects::{Collector, RawObjectTrait, TypeBuilder};
 
 /// Arguments for a BAML function call
 #[derive(Default)]
@@ -48,15 +49,15 @@ impl FunctionArgs {
         self
     }
 
-    /// Add a collector handle
-    pub fn with_collector(mut self, collector: BamlObjectHandle) -> Self {
-        self.collectors.push(collector);
+    /// Add a collector to gather telemetry
+    pub fn with_collector(mut self, collector: &Collector) -> Self {
+        self.collectors.push(collector.encode_handle());
         self
     }
 
-    /// Set type builder handle
-    pub fn with_type_builder(mut self, type_builder: BamlObjectHandle) -> Self {
-        self.type_builder = Some(type_builder);
+    /// Set type builder for dynamic types
+    pub fn with_type_builder(mut self, type_builder: &TypeBuilder) -> Self {
+        self.type_builder = Some(type_builder.encode_handle());
         self
     }
 
