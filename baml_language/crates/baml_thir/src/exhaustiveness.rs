@@ -292,8 +292,38 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             // Named type: could be enum, class, or type alias
             Ty::Named(name) => {
                 // Check if it's a type alias
-                // TODO(exhaustiveness): Add cycle detection for recursive type aliases like
-                // `type A = A | B`. Currently this would cause infinite recursion.
+                //
+                // TODO(type-alias-architecture): Type alias resolution should be its own
+                // dedicated phase that runs once after name resolution. Resolved aliases
+                // are used in multiple places:
+                //   - Bytecode generation
+                //   - Target language codegen (TS, Python, Go, Ruby)
+                //   - Prompt rendering
+                //   - Exhaustiveness checking (here)
+                //
+                // Currently we build the type_aliases map per-compilation, but as more
+                // consumers are added, this should become a cached Salsa query to avoid
+                // redundant resolution.
+                //
+                // TODO(recursive-type-aliases): Recursive type aliases like `type A = A | B`
+                // or structural recursion like `type LinkedList = { val: int, next: LinkedList? }`
+                // are NOT handled here. Currently this would cause infinite recursion.
+                //
+                // The legacy compiler solved this problem:
+                //   - PR #1163: Implement Type Aliases (basic support)
+                //   - PR #1207: Allow structural recursion in type aliases
+                //   - PR #1416: Recurse into recursive type alias unions
+                //
+                // The solution involves:
+                //   1. Building a dependency graph of alias references
+                //   2. Using Tarjan's SCC algorithm for cycle detection
+                //   3. Distinguishing structural vs non-structural recursion
+                //   4. Reporting diagnostics for invalid cycles, inserting Ty::Error
+                //
+                // Reference implementation: engine/baml-lib/parser-database/src/tarjan.rs
+                // and engine/baml-lib/parser-database/src/types/mod.rs (resolve_type_aliases)
+                //
+                // Porting this to the new compiler requires its own task for feature parity.
                 if let Some(alias_ty) = self.type_aliases.get(name) {
                     return self.expand_type_to_values(alias_ty);
                 }

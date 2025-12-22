@@ -221,12 +221,35 @@ pub fn build_type_aliases_from_project(
             let item_tree = baml_hir::file_item_tree(db, file);
             let alias_data = &item_tree[alias_loc.id(db)];
 
-            // TODO(recursive-aliases): Recursive type aliases like `type A = A | B` are not
-            // validated here. The lowered type will contain `Ty::Named("A")` which causes
-            // infinite recursion in `exhaustiveness::expand_type_to_values`. To fix properly:
-            // 1. Build a dependency graph of alias references
-            // 2. Detect cycles (e.g., via topological sort or Tarjan's SCC)
-            // 3. Report a diagnostic and insert `Ty::Error` for cyclic aliases
+            // TODO(recursive-type-aliases): Recursive type aliases are not validated here.
+            //
+            // Examples of problematic aliases:
+            //   - Direct cycle: `type A = A | B`
+            //   - Indirect cycle: `type A = B`, `type B = A`
+            //   - Structural recursion: `type Tree = { val: int, children: Tree[] }`
+            //
+            // The lowered type will contain `Ty::Named("A")` which causes infinite
+            // recursion in `exhaustiveness::expand_type_to_values`.
+            //
+            // The legacy compiler solved this with Tarjan's SCC algorithm:
+            //   - PR #1163: Implement Type Aliases
+            //   - PR #1207: Allow structural recursion in type aliases
+            //   - PR #1416: Recurse into recursive type alias unions
+            //
+            // To fix properly:
+            //   1. Build a dependency graph of alias references (which aliases reference which)
+            //   2. Run Tarjan's SCC to find cycles
+            //   3. Distinguish structural recursion (valid: behind Option/List) from
+            //      non-structural (invalid: direct or union cycles)
+            //   4. Report diagnostics for invalid cycles, insert `Ty::Error`
+            //   5. Store resolved aliases so downstream phases don't re-resolve
+            //
+            // Reference: engine/baml-lib/parser-database/src/tarjan.rs
+            //
+            // NOTE: This function (`build_type_aliases_from_project`) should eventually
+            // become a Salsa query for caching, as resolved aliases are needed by:
+            // bytecode generation, target language codegen, prompt rendering, and
+            // exhaustiveness checking.
             let lowered_ty = lower_type_ref(db, &alias_data.type_ref);
             type_aliases.insert(alias_data.name.clone(), lowered_ty);
         }
