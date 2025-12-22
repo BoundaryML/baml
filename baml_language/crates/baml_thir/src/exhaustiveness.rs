@@ -172,7 +172,7 @@ pub struct ExhaustivenessResult {
     /// Value sets that are not covered (empty if exhaustive)
     pub uncovered: Vec<ValueSet>,
 
-    /// Indices of unreachable arms (arms that can never match)
+    /// Indices (0-based) into the `arms` slice of unreachable arms (arms that can never match).
     pub unreachable_arms: Vec<usize>,
 }
 
