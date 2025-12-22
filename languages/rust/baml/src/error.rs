@@ -51,22 +51,6 @@ impl BamlError {
         }
     }
 
-    /// Create a type check error with a raw expected string.
-    /// Use this for dynamic types that don't implement BamlTypeName.
-    ///
-    /// # Example
-    /// ```ignore
-    /// match value {
-    ///     BamlValue::DynamicClass(dc) => Ok(dc),
-    ///     other => Err(BamlError::type_check_raw("DynamicClass", &other)),
-    /// }
-    /// ```
-    pub fn type_check_raw(expected: &'static str, got: &impl FullTypeName) -> Self {
-        BamlError::TypeCheck {
-            expected: expected.to_string(),
-            got: got.full_type_name(),
-        }
-    }
 }
 
 /// Trait for types that have a BAML type name.
@@ -152,6 +136,24 @@ impl<T: BamlTypeName> BamlTypeName for crate::types::StreamState<T> {
 // 1. Its type name is runtime-determined (depends on the actual variant)
 // 2. It would create a circular dependency (error.rs -> codec -> error.rs)
 // Instead, BamlValue implements FullTypeName (instance method) in baml_value.rs
+
+// Slice reference type name (for raw list access)
+impl<T> BamlTypeName for &[T] {
+    const BASE_TYPE_NAME: &'static str = "List";
+    fn baml_type_name() -> String {
+        // We don't know the element type at compile time for raw BamlValue slices
+        "List<?>".to_string()
+    }
+}
+
+// HashMap reference type name (for raw map access)
+impl<K, V> BamlTypeName for &HashMap<K, V> {
+    const BASE_TYPE_NAME: &'static str = "Map";
+    fn baml_type_name() -> String {
+        // We don't know the value type at compile time for raw BamlValue maps
+        "Map<String, ?>".to_string()
+    }
+}
 
 /// Panics with a user-friendly error message for internal/unreachable errors.
 ///

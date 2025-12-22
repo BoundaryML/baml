@@ -93,3 +93,21 @@ impl<T: KnownTypes, S: KnownTypes> FullTypeName for DynamicUnion<T, S> {
         format!("DynamicUnion({})", self.name)
     }
 }
+
+// =============================================================================
+// BamlTypeName trait implementations for dynamic types
+// =============================================================================
+
+use crate::error::BamlTypeName;
+
+impl<T: KnownTypes, S: KnownTypes> BamlTypeName for DynamicClass<T, S> {
+    const BASE_TYPE_NAME: &'static str = "DynamicClass";
+}
+
+impl BamlTypeName for DynamicEnum {
+    const BASE_TYPE_NAME: &'static str = "DynamicEnum";
+}
+
+impl<T: KnownTypes, S: KnownTypes> BamlTypeName for DynamicUnion<T, S> {
+    const BASE_TYPE_NAME: &'static str = "DynamicUnion";
+}

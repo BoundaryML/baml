@@ -53,3 +53,67 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for bool {
         }
     }
 }
+
+// =============================================================================
+// Container FromBamlValueRef implementations (raw container refs only)
+// =============================================================================
+
+use std::collections::HashMap;
+
+/// Raw list ref - returns slice of BamlValue, NOT converted types
+impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a [BamlValue<T, S>] {
+    fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
+        match value {
+            BamlValue::List(l) => Ok(l.as_slice()),
+            other => Err(BamlError::type_check::<Self>(other)),
+        }
+    }
+}
+
+/// Raw map ref - returns ref to HashMap of BamlValue, NOT converted values
+impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
+    for &'a HashMap<String, BamlValue<T, S>>
+{
+    fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
+        match value {
+            BamlValue::Map(m) => Ok(m),
+            other => Err(BamlError::type_check::<Self>(other)),
+        }
+    }
+}
+
+// =============================================================================
+// Dynamic Type FromBamlValueRef implementations
+// =============================================================================
+
+use super::dynamic_types::{DynamicClass, DynamicEnum, DynamicUnion};
+
+/// DynamicClass ref
+impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a DynamicClass<T, S> {
+    fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
+        match value {
+            BamlValue::DynamicClass(dc) => Ok(dc),
+            other => Err(BamlError::type_check::<DynamicClass<T, S>>(other)),
+        }
+    }
+}
+
+/// DynamicEnum ref
+impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a DynamicEnum {
+    fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
+        match value {
+            BamlValue::DynamicEnum(de) => Ok(de),
+            other => Err(BamlError::type_check::<DynamicEnum>(other)),
+        }
+    }
+}
+
+/// DynamicUnion ref
+impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a DynamicUnion<T, S> {
+    fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
+        match value {
+            BamlValue::DynamicUnion(du) => Ok(du),
+            other => Err(BamlError::type_check::<DynamicUnion<T, S>>(other)),
+        }
+    }
+}
