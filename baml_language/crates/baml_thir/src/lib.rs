@@ -869,6 +869,9 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
         Expr::Match { scrutinee, arms } => {
             let scrutinee_ty = infer_expr(ctx, *scrutinee, body);
 
+            // Use the actual match expression span if available, otherwise fall back to placeholder
+            let match_span = body.get_expr_span(expr_id).unwrap_or(span);
+
             if arms.is_empty() {
                 // Empty match is non-exhaustive (unless scrutinee is uninhabited).
                 // An uninhabited type has no possible values, so an empty match is
@@ -878,13 +881,13 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
                     ctx.push_error(TypeError::NonExhaustiveMatch {
                         scrutinee_type: scrutinee_ty.clone(),
                         missing_cases: vec!["all cases".to_string()],
-                        span,
+                        span: match_span,
                     });
                 }
                 Ty::Unknown
             } else {
                 // Perform exhaustiveness checking and unreachable arm detection
-                check_match_exhaustiveness(ctx, &scrutinee_ty, arms, body, span);
+                check_match_exhaustiveness(ctx, &scrutinee_ty, arms, body, expr_id, match_span);
 
                 // Collect result types from all arms
                 let arm_types: Vec<Ty> = arms
@@ -1016,7 +1019,8 @@ fn check_match_exhaustiveness<'db>(
     scrutinee_ty: &Ty<'db>,
     arms: &[baml_hir::MatchArm],
     body: &ExprBody,
-    span: Span,
+    match_expr_id: ExprId,
+    match_span: Span,
 ) {
     // Skip exhaustiveness checking for unknown/error types
     if scrutinee_ty.is_unknown() || scrutinee_ty.is_error() {
@@ -1028,21 +1032,28 @@ fn check_match_exhaustiveness<'db>(
 
     let result = checker.check(scrutinee_ty, arms, body);
 
-    // Report unreachable arms
-    // TODO(exhaustiveness): Improve error spans to point to the specific unreachable
-    // arm rather than the entire match expression. Requires tracking arm spans in HIR.
-    for _arm_idx in result.unreachable_arms {
+    // Get arm spans if available (for accurate error locations)
+    let arm_spans = body.get_match_arm_spans(match_expr_id);
+
+    // Report unreachable arms with accurate spans
+    for arm_idx in result.unreachable_arms {
+        // Use the arm's specific span if available, otherwise fall back to match span
+        let span = arm_spans
+            .and_then(|spans| spans.get(arm_idx))
+            .map(|s| s.arm_span)
+            .unwrap_or(match_span);
+
         ctx.push_error(TypeError::UnreachableArm { span });
     }
 
-    // Report non-exhaustive match
+    // Report non-exhaustive match (points to the match expression itself)
     if !result.is_exhaustive {
         let missing_cases: Vec<String> = result.uncovered.iter().map(|v| v.to_string()).collect();
 
         ctx.push_error(TypeError::NonExhaustiveMatch {
             scrutinee_type: scrutinee_ty.clone(),
             missing_cases,
-            span,
+            span: match_span,
         });
     }
 }
