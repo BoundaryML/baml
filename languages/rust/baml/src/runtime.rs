@@ -8,7 +8,7 @@ use crate::codec::BamlDecode;
 use crate::error::BamlError;
 use crate::ffi::{self, callbacks};
 use crate::proto::baml_cffi_v1::CffiValueHolder;
-use crate::raw_objects::{Audio, Collector, Image, Pdf, Video};
+use crate::raw_objects::{Audio, Collector, Image, Pdf, TypeBuilder, Video};
 use crate::stream::StreamResult;
 
 /// Handle to the BAML runtime
@@ -203,6 +203,15 @@ impl BamlRuntime {
     /// Create a new collector for telemetry
     pub fn new_collector(&self, name: &str) -> Collector {
         Collector::new(self.ptr, name)
+    }
+
+    // =========================================================================
+    // TypeBuilder Factory Methods
+    // =========================================================================
+
+    /// Create a new TypeBuilder for dynamic type construction
+    pub fn new_type_builder(&self) -> TypeBuilder {
+        TypeBuilder::new(self.ptr)
     }
 }
 

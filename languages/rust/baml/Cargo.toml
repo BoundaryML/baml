@@ -25,6 +25,9 @@ thiserror = { workspace = true }
 [build-dependencies]
 prost-build = { workspace = true }
 
+[dev-dependencies]
+serde_json = { workspace = true }
+
 [features]
 default = []
 # For development/testing - links against local build output

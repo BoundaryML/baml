@@ -29,6 +29,7 @@ prost = "0.13"
 prost-build = "0.13"
 proc-macro2 = "1"
 quote = "1"
+serde_json = "1"
 syn = { version = "2", features = ["full", "extra-traits"] }
 thiserror = "2"
 
