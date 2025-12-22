@@ -3,8 +3,10 @@
 //! The CST already distinguishes `LLM_FUNCTION_BODY` from `EXPR_FUNCTION_BODY`,
 //! so we just need to lower each type appropriately.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use baml_base::{FileId, Span};
 use la_arena::{Arena, Idx};
 use rowan::ast::AstNode;
 
@@ -67,6 +69,45 @@ pub struct ExprBody {
 
     /// Root expression of the function body (usually a `BLOCK_EXPR`)
     pub root_expr: Option<ExprId>,
+
+    // ========================================================================
+    // Span tracking (for accurate error messages)
+    // ========================================================================
+    /// Spans for expressions
+    pub expr_spans: HashMap<ExprId, Span>,
+
+    /// Spans for patterns
+    pub pattern_spans: HashMap<PatId, Span>,
+
+    /// Spans for match arms: maps match expression ID to its arm spans.
+    /// Each entry is (arm_span, pattern_span) for each arm in order.
+    pub match_arm_spans: HashMap<ExprId, Vec<MatchArmSpans>>,
+}
+
+/// Span information for a single match arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MatchArmSpans {
+    /// Span of the entire arm (pattern + guard + body)
+    pub arm_span: Span,
+    /// Span of just the pattern
+    pub pattern_span: Span,
+}
+
+impl ExprBody {
+    /// Get the span of an expression, if available.
+    pub fn get_expr_span(&self, expr_id: ExprId) -> Option<Span> {
+        self.expr_spans.get(&expr_id).copied()
+    }
+
+    /// Get the span of a pattern, if available.
+    pub fn get_pattern_span(&self, pat_id: PatId) -> Option<Span> {
+        self.pattern_spans.get(&pat_id).copied()
+    }
+
+    /// Get the arm spans for a match expression, if available.
+    pub fn get_match_arm_spans(&self, match_expr_id: ExprId) -> Option<&[MatchArmSpans]> {
+        self.match_arm_spans.get(&match_expr_id).map(Vec::as_slice)
+    }
 }
 
 // IDs for arena indices
@@ -311,12 +352,18 @@ impl FunctionBody {
     /// Lower a function body from CST to HIR.
     ///
     /// The CST already tells us if it's LLM or Expr via node type!
-    pub fn lower(func_node: &baml_syntax::ast::FunctionDef) -> Arc<FunctionBody> {
+    ///
+    /// # Arguments
+    /// - `func_node`: The function definition AST node
+    /// - `file_id`: The file ID for span tracking
+    pub fn lower(func_node: &baml_syntax::ast::FunctionDef, file_id: FileId) -> Arc<FunctionBody> {
         // Check which body type we have
         if let Some(llm_body) = func_node.llm_body() {
             Arc::new(FunctionBody::Llm(Self::lower_llm_body(&llm_body)))
         } else if let Some(expr_body) = func_node.expr_body() {
-            Arc::new(FunctionBody::Expr(Self::lower_expr_body(&expr_body)))
+            Arc::new(FunctionBody::Expr(Self::lower_expr_body(
+                &expr_body, file_id,
+            )))
         } else {
             Arc::new(FunctionBody::Missing)
         }
@@ -399,8 +446,11 @@ impl FunctionBody {
         interpolations
     }
 
-    fn lower_expr_body(expr_body: &baml_syntax::ast::ExprFunctionBody) -> ExprBody {
-        let mut ctx = LoweringContext::new();
+    fn lower_expr_body(
+        expr_body: &baml_syntax::ast::ExprFunctionBody,
+        file_id: FileId,
+    ) -> ExprBody {
+        let mut ctx = LoweringContext::new(file_id);
 
         // The EXPR_FUNCTION_BODY contains a BLOCK_EXPR as its child
         // which contains all the statements and expressions
@@ -415,6 +465,9 @@ impl FunctionBody {
             stmts: ctx.stmts,
             patterns: ctx.patterns,
             root_expr,
+            expr_spans: ctx.expr_spans,
+            pattern_spans: ctx.pattern_spans,
+            match_arm_spans: ctx.match_arm_spans,
         }
     }
 }
@@ -423,6 +476,14 @@ struct LoweringContext {
     exprs: Arena<Expr>,
     stmts: Arena<Stmt>,
     patterns: Arena<Pattern>,
+    /// File ID for creating spans
+    file_id: FileId,
+    /// Span tracking for expressions
+    expr_spans: HashMap<ExprId, Span>,
+    /// Span tracking for patterns
+    pattern_spans: HashMap<PatId, Span>,
+    /// Span tracking for match arms (maps match expr ID to arm spans)
+    match_arm_spans: HashMap<ExprId, Vec<MatchArmSpans>>,
 }
 
 /// Helper enum for building pattern elements during lowering.
@@ -437,12 +498,21 @@ enum PatternElement {
 }
 
 impl LoweringContext {
-    fn new() -> Self {
+    fn new(file_id: FileId) -> Self {
         Self {
             exprs: Arena::new(),
             stmts: Arena::new(),
             patterns: Arena::new(),
+            file_id,
+            expr_spans: HashMap::new(),
+            pattern_spans: HashMap::new(),
+            match_arm_spans: HashMap::new(),
         }
+    }
+
+    /// Create a span from a syntax node's text range.
+    fn span_from_node(&self, node: &baml_syntax::SyntaxNode) -> Span {
+        Span::new(self.file_id, node.text_range())
     }
 
     fn lower_block_expr(&mut self, block: &baml_syntax::ast::BlockExpr) -> ExprId {
@@ -825,8 +895,10 @@ impl LoweringContext {
     fn lower_match_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
         use baml_syntax::SyntaxKind;
 
+        let match_span = self.span_from_node(node);
         let mut scrutinee = None;
         let mut arms = Vec::new();
+        let mut arm_spans = Vec::new();
 
         // Use children_with_tokens to handle both node and token children
         for elem in node.children_with_tokens() {
@@ -834,7 +906,9 @@ impl LoweringContext {
                 rowan::NodeOrToken::Node(child) => {
                     match child.kind() {
                         SyntaxKind::MATCH_ARM => {
-                            arms.push(self.lower_match_arm(&child));
+                            let (arm, spans) = self.lower_match_arm(&child);
+                            arms.push(arm);
+                            arm_spans.push(spans);
                         }
                         _ => {
                             // First non-MATCH_ARM child is the scrutinee (as a node)
@@ -891,7 +965,13 @@ impl LoweringContext {
 
         let scrutinee = scrutinee.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
 
-        self.exprs.alloc(Expr::Match { scrutinee, arms })
+        let expr_id = self.exprs.alloc(Expr::Match { scrutinee, arms });
+
+        // Store span information for this match expression
+        self.expr_spans.insert(expr_id, match_span);
+        self.match_arm_spans.insert(expr_id, arm_spans);
+
+        expr_id
     }
 
     /// Lower a single match arm from CST to HIR.
@@ -901,10 +981,14 @@ impl LoweringContext {
     /// - Optional MATCH_GUARD node (contains 'if' keyword + expression)
     /// - FAT_ARROW token ('=>')
     /// - Body expression (BLOCK_EXPR or other expression, or literal token)
-    fn lower_match_arm(&mut self, node: &baml_syntax::SyntaxNode) -> MatchArm {
+    ///
+    /// Returns both the lowered arm and its span information.
+    fn lower_match_arm(&mut self, node: &baml_syntax::SyntaxNode) -> (MatchArm, MatchArmSpans) {
         use baml_syntax::SyntaxKind;
 
+        let arm_span = self.span_from_node(node);
         let mut pattern = None;
+        let mut pattern_span = None;
         let mut guard = None;
         let mut body = None;
         let mut seen_fat_arrow = false;
@@ -915,6 +999,7 @@ impl LoweringContext {
                 rowan::NodeOrToken::Node(child) => {
                     match child.kind() {
                         SyntaxKind::MATCH_PATTERN => {
+                            pattern_span = Some(self.span_from_node(&child));
                             pattern = Some(self.lower_match_pattern(&child));
                         }
                         SyntaxKind::MATCH_GUARD => {
@@ -981,12 +1066,19 @@ impl LoweringContext {
             }
         }
 
-        MatchArm {
+        let arm = MatchArm {
             pattern: pattern
                 .unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(Name::new("_")))),
             guard,
             body: body.unwrap_or_else(|| self.exprs.alloc(Expr::Missing)),
-        }
+        };
+
+        let spans = MatchArmSpans {
+            arm_span,
+            pattern_span: pattern_span.unwrap_or(arm_span),
+        };
+
+        (arm, spans)
     }
 
     /// Lower a match pattern from CST to HIR.
