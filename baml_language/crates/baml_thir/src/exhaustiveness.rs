@@ -645,48 +645,34 @@ mod tests {
     }
 
     // ========================================================================
-    // Coverage Tests - Testing is_fully_covered and add_coverage logic
+    // Coverage Tests - Testing is_value_set_covered and add_to_coverage
     // ========================================================================
 
-    /// Helper to create a mock checker for testing coverage logic.
-    ///
-    /// This delegates to the shared free functions `is_value_set_covered` and
-    /// `add_to_coverage`, avoiding code duplication with `ExhaustivenessChecker`.
-    struct MockChecker {
-        enum_variants: HashMap<Name, Vec<Name>>,
-    }
-
-    impl MockChecker {
-        fn new() -> Self {
-            Self {
-                enum_variants: HashMap::new(),
-            }
-        }
-
-        fn with_enum(mut self, name: &str, variants: &[&str]) -> Self {
-            self.enum_variants.insert(
-                make_name(name),
-                variants.iter().map(|v| make_name(v)).collect(),
-            );
-            self
-        }
-
-        fn is_fully_covered(&self, value_set: &ValueSet, covered: &[ValueSet]) -> bool {
-            is_value_set_covered(value_set, covered, &self.enum_variants)
-        }
-
-        fn add_coverage(&self, covered: &mut Vec<ValueSet>, value_set: &ValueSet) {
-            add_to_coverage(covered, value_set, &self.enum_variants);
-        }
+    /// Helper to create an enum_variants map for tests.
+    fn enum_variants_with(name: &str, variants: &[&str]) -> HashMap<Name, Vec<Name>> {
+        let mut map = HashMap::new();
+        map.insert(
+            make_name(name),
+            variants.iter().map(|v| make_name(v)).collect(),
+        );
+        map
     }
 
     #[test]
     fn test_coverage_of_type_matches_same_type() {
-        let checker = MockChecker::new();
+        let enum_variants = HashMap::new();
         let covered = vec![ValueSet::OfType(make_name("Success"))];
 
-        assert!(checker.is_fully_covered(&ValueSet::OfType(make_name("Success")), &covered));
-        assert!(!checker.is_fully_covered(&ValueSet::OfType(make_name("Failure")), &covered));
+        assert!(is_value_set_covered(
+            &ValueSet::OfType(make_name("Success")),
+            &covered,
+            &enum_variants
+        ));
+        assert!(!is_value_set_covered(
+            &ValueSet::OfType(make_name("Failure")),
+            &covered,
+            &enum_variants
+        ));
     }
 
     #[test]
@@ -695,7 +681,7 @@ mod tests {
         // Match arms: s: Success, f: Failure
         // Required: [OfType("Success"), OfType("Failure")]
         // Covered after processing: [OfType("Success"), OfType("Failure")]
-        let checker = MockChecker::new();
+        let enum_variants = HashMap::new();
 
         let required = vec![
             ValueSet::OfType(make_name("Success")),
@@ -708,13 +694,13 @@ mod tests {
         ];
 
         // Both should be covered
-        assert!(checker.is_fully_covered(&required[0], &covered));
-        assert!(checker.is_fully_covered(&required[1], &covered));
+        assert!(is_value_set_covered(&required[0], &covered, &enum_variants));
+        assert!(is_value_set_covered(&required[1], &covered, &enum_variants));
 
         // Find uncovered - should be empty
         let uncovered: Vec<_> = required
             .iter()
-            .filter(|req| !checker.is_fully_covered(req, &covered))
+            .filter(|req| !is_value_set_covered(req, &covered, &enum_variants))
             .cloned()
             .collect();
 
@@ -727,28 +713,44 @@ mod tests {
 
     #[test]
     fn test_add_coverage_of_type() {
-        let checker = MockChecker::new();
+        let enum_variants = HashMap::new();
         let mut covered = Vec::new();
 
-        checker.add_coverage(&mut covered, &ValueSet::OfType(make_name("Success")));
+        add_to_coverage(
+            &mut covered,
+            &ValueSet::OfType(make_name("Success")),
+            &enum_variants,
+        );
         assert_eq!(covered.len(), 1);
         assert_eq!(covered[0], ValueSet::OfType(make_name("Success")));
 
-        checker.add_coverage(&mut covered, &ValueSet::OfType(make_name("Failure")));
+        add_to_coverage(
+            &mut covered,
+            &ValueSet::OfType(make_name("Failure")),
+            &enum_variants,
+        );
         assert_eq!(covered.len(), 2);
 
         // Adding same type again should not duplicate
-        checker.add_coverage(&mut covered, &ValueSet::OfType(make_name("Success")));
+        add_to_coverage(
+            &mut covered,
+            &ValueSet::OfType(make_name("Success")),
+            &enum_variants,
+        );
         assert_eq!(covered.len(), 2);
     }
 
     #[test]
     fn test_enum_exhaustiveness() {
-        let checker = MockChecker::new().with_enum("Status", &["Active", "Inactive", "Pending"]);
+        let enum_variants = enum_variants_with("Status", &["Active", "Inactive", "Pending"]);
 
         // If we match _: Status, it should expand to all variants
         let mut covered = Vec::new();
-        checker.add_coverage(&mut covered, &ValueSet::OfType(make_name("Status")));
+        add_to_coverage(
+            &mut covered,
+            &ValueSet::OfType(make_name("Status")),
+            &enum_variants,
+        );
 
         // Should have 3 enum variants
         assert_eq!(covered.len(), 3);
@@ -760,33 +762,45 @@ mod tests {
 
     #[test]
     fn test_literal_covered_by_base_type() {
-        let checker = MockChecker::new();
-
+        let enum_variants = HashMap::new();
         let covered = vec![ValueSet::OfType(make_name("int"))];
 
         // A literal 42 should be covered by "int" type pattern
-        assert!(checker.is_fully_covered(&ValueSet::Literal(Literal::Int(42)), &covered));
+        assert!(is_value_set_covered(
+            &ValueSet::Literal(Literal::Int(42)),
+            &covered,
+            &enum_variants
+        ));
         // But not a string literal
-        assert!(!checker.is_fully_covered(
+        assert!(!is_value_set_covered(
             &ValueSet::Literal(Literal::String("hello".to_string())),
-            &covered
+            &covered,
+            &enum_variants
         ));
     }
 
     #[test]
     fn test_catch_all_covers_everything() {
-        let checker = MockChecker::new();
-
+        let enum_variants = HashMap::new();
         let covered = vec![ValueSet::All];
 
-        assert!(checker.is_fully_covered(&ValueSet::OfType(make_name("Success")), &covered));
-        assert!(checker.is_fully_covered(&ValueSet::Literal(Literal::Int(42)), &covered));
-        assert!(checker.is_fully_covered(
+        assert!(is_value_set_covered(
+            &ValueSet::OfType(make_name("Success")),
+            &covered,
+            &enum_variants
+        ));
+        assert!(is_value_set_covered(
+            &ValueSet::Literal(Literal::Int(42)),
+            &covered,
+            &enum_variants
+        ));
+        assert!(is_value_set_covered(
             &ValueSet::EnumVariant {
                 enum_name: make_name("Status"),
                 variant_name: make_name("Active"),
             },
-            &covered
+            &covered,
+            &enum_variants
         ));
     }
 }
