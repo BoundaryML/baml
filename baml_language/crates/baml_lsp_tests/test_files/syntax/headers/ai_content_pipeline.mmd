@@ -1,0 +1,65 @@
+flowchart TD
+  subgraph sg0["AI Content Pipeline"]
+    direction TB
+    n12["Complete"]
+    subgraph sg1["Fetch Resources"]
+      direction TB
+      n0["Retrieve Emails and Posts from Database"]
+      n1["Process and Load Video"]
+    end
+    subgraph sg2["Generate Content"]
+      direction TB
+      subgraph sg3["Video Summarization"]
+        direction TB
+        n2{"Video Summarization"}
+        class n2 decisionNode;
+        n5["Save Summary"]
+        n6["Skip Summarization"]
+        subgraph sg4["Generate Summary"]
+          direction TB
+          n3["Create Summary Text"]
+          n4["Label Summary Category"]
+        end
+      end
+      subgraph sg5["Generate Drafts for Posts"]
+        direction TB
+        n7["Get Content Type and Generate Draft"]
+        n8["Save Draft"]
+      end
+    end
+    subgraph sg6["Prepare Pull Request"]
+      direction TB
+      n9{"Prepare Pull Request"}
+      class n9 decisionNode;
+      n10["Create GitHub PR"]
+      n11["Missing Summary"]
+    end
+  end
+  n0 --> n1
+  n3 --> n4
+  n2 --> n3
+  n2 --> n6
+  n4 --> n7
+  n6 --> n7
+  n9 --> n10
+  n9 --> n11
+  n1 --> n2
+  n8 --> n9
+  n10 --> n12
+  n11 --> n12
+  n4 --> n5
+  n7 --> n8
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":4,"start":4,"end_line":4,"end":48},"n1":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":8,"start":4,"end_line":8,"end":31},"n2":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":15,"start":4,"end_line":15,"end":28},"n3":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":19,"start":8,"end_line":19,"end":34},"n4":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":22,"start":8,"end_line":22,"end":37},"n5":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":25,"start":8,"end_line":25,"end":26},"n6":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":30,"start":8,"end_line":30,"end":32},"n7":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":38,"start":8,"end_line":38,"end":49},"n8":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":42,"start":8,"end_line":42,"end":24},"n9":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":48,"start":4,"end_line":48,"end":28},"n10":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":50,"start":8,"end_line":50,"end":30},"n11":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":54,"start":8,"end_line":54,"end":29},"n12":{"file_path":"tests/validation_files/headers/ai_content_pipeline.baml","start_line":58,"start":4,"end_line":58,"end":16}}
+  click n0 call bamlMermaidNodeClick() "Go to source"
+  click n1 call bamlMermaidNodeClick() "Go to source"
+  click n2 call bamlMermaidNodeClick() "Go to source"
+  click n3 call bamlMermaidNodeClick() "Go to source"
+  click n4 call bamlMermaidNodeClick() "Go to source"
+  click n5 call bamlMermaidNodeClick() "Go to source"
+  click n6 call bamlMermaidNodeClick() "Go to source"
+  click n7 call bamlMermaidNodeClick() "Go to source"
+  click n8 call bamlMermaidNodeClick() "Go to source"
+  click n9 call bamlMermaidNodeClick() "Go to source"
+  click n10 call bamlMermaidNodeClick() "Go to source"
+  click n11 call bamlMermaidNodeClick() "Go to source"
+  click n12 call bamlMermaidNodeClick() "Go to source"

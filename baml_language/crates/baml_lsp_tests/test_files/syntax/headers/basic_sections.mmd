@@ -1,0 +1,16 @@
+flowchart TD
+  subgraph sg0["Main Processing"]
+    direction TB
+    n0["Generate Summary"]
+    subgraph sg1["Make Space"]
+      direction TB
+      n1["Prepare Final Output"]
+      n2["Final Output"]
+    end
+  end
+  n1 --> n2
+  n0 --> n1
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/basic_sections.baml","start_line":4,"start":4,"end_line":4,"end":25},"n1":{"file_path":"tests/validation_files/headers/basic_sections.baml","start_line":10,"start":4,"end_line":10,"end":30},"n2":{"file_path":"tests/validation_files/headers/basic_sections.baml","start_line":13,"start":4,"end_line":13,"end":22}}
+  click n0 call bamlMermaidNodeClick() "Go to source"
+  click n1 call bamlMermaidNodeClick() "Go to source"
+  click n2 call bamlMermaidNodeClick() "Go to source"
