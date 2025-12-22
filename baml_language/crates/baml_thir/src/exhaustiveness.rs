@@ -35,7 +35,7 @@ use std::collections::HashMap;
 use baml_base::Name;
 use baml_hir::{ExprBody, Literal, MatchArm, Pattern};
 
-use crate::{Db, Ty, lower_type_ref};
+use crate::{Db, SingletonValue, Ty, lower_type_ref};
 
 // ============================================================================
 // ValueSet: The Core Abstraction
@@ -353,22 +353,19 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             Ty::Null => vec![ValueSet::Literal(Literal::Null)],
 
             // Singleton types (literal types like `200` in `200 | 201`)
-            Ty::Singleton(sv) => {
-                use crate::SingletonValue;
-                match sv {
-                    SingletonValue::Int(v) => vec![ValueSet::Literal(Literal::Int(*v))],
-                    SingletonValue::String(v) => {
-                        vec![ValueSet::Literal(Literal::String(v.clone()))]
-                    }
-                    SingletonValue::Bool(v) => vec![ValueSet::Literal(Literal::Bool(*v))],
-                    SingletonValue::EnumVariant(enum_name, variant_name) => {
-                        vec![ValueSet::EnumVariant {
-                            enum_name: enum_name.clone(),
-                            variant_name: variant_name.clone(),
-                        }]
-                    }
+            Ty::Singleton(value) => match value {
+                SingletonValue::Int(v) => vec![ValueSet::Literal(Literal::Int(*v))],
+                SingletonValue::String(v) => {
+                    vec![ValueSet::Literal(Literal::String(v.clone()))]
                 }
-            }
+                SingletonValue::Bool(v) => vec![ValueSet::Literal(Literal::Bool(*v))],
+                SingletonValue::EnumVariant(enum_name, variant_name) => {
+                    vec![ValueSet::EnumVariant {
+                        enum_name: enum_name.clone(),
+                        variant_name: variant_name.clone(),
+                    }]
+                }
+            },
 
             // Infinite types: int, float, string, classes, etc.
             Ty::Int => vec![ValueSet::OfType(Name::new("int"))],
@@ -489,18 +486,15 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
                 // The coverage check will handle expansion
                 ValueSet::OfType(name.clone())
             }
-            Ty::Singleton(sv) => {
-                use crate::SingletonValue;
-                match sv {
-                    SingletonValue::Int(v) => ValueSet::Literal(Literal::Int(*v)),
-                    SingletonValue::String(v) => ValueSet::Literal(Literal::String(v.clone())),
-                    SingletonValue::Bool(v) => ValueSet::Literal(Literal::Bool(*v)),
-                    SingletonValue::EnumVariant(enum_name, variant_name) => ValueSet::EnumVariant {
-                        enum_name: enum_name.clone(),
-                        variant_name: variant_name.clone(),
-                    },
-                }
-            }
+            Ty::Singleton(value) => match value {
+                SingletonValue::Int(v) => ValueSet::Literal(Literal::Int(*v)),
+                SingletonValue::String(v) => ValueSet::Literal(Literal::String(v.clone())),
+                SingletonValue::Bool(v) => ValueSet::Literal(Literal::Bool(*v)),
+                SingletonValue::EnumVariant(enum_name, variant_name) => ValueSet::EnumVariant {
+                    enum_name: enum_name.clone(),
+                    variant_name: variant_name.clone(),
+                },
+            },
             Ty::Bool => ValueSet::OfType(Name::new("bool")),
             Ty::Int => ValueSet::OfType(Name::new("int")),
             Ty::Float => ValueSet::OfType(Name::new("float")),
