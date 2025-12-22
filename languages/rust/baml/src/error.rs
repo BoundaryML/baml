@@ -1,18 +1,157 @@
+use std::collections::HashMap;
+
 /// BAML runtime errors
 ///
 /// Note: This is intentionally minimal. Expand with specific variants
 /// (InitError, CallError, etc.) once the core functionality works.
 #[derive(Debug, thiserror::Error)]
 pub enum BamlError {
-    #[error("{0}")]
+    /// Internal/unexpected errors - bugs in BAML that should never happen
+    #[error("internal error: {0}")]
     Internal(String),
+
+    /// Type check errors - expected runtime failures (type mismatches)
+    #[error("type error: expected {expected}, got {got}")]
+    TypeCheck { expected: String, got: String },
+}
+
+/// Trait for types that can report their full type name for error messages.
+/// Used by BamlValue variants to provide descriptive "got" values.
+pub trait FullTypeName {
+    fn full_type_name(&self) -> String;
 }
 
 impl BamlError {
+    /// Create an internal error for unexpected bugs
     pub fn internal(msg: impl Into<String>) -> Self {
         BamlError::Internal(msg.into())
     }
+
+    /// Create a type check error for expected runtime type mismatches.
+    ///
+    /// - `T`: The expected type (must implement `BamlTypeName`)
+    /// - `got`: The actual value (must implement `FullTypeName`)
+    ///
+    /// This enforces good practice at compile time - you can't accidentally
+    /// use hardcoded strings for type names.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Instead of: BamlError::type_check("String", other.full_type_name())
+    /// // Use:        BamlError::type_check::<String>(&other)
+    /// match value {
+    ///     BamlValue::String(s) => Ok(s),
+    ///     other => Err(BamlError::type_check::<String>(&other)),
+    /// }
+    /// ```
+    pub fn type_check<T: BamlTypeName>(got: &impl FullTypeName) -> Self {
+        BamlError::TypeCheck {
+            expected: T::baml_type_name(),
+            got: got.full_type_name(),
+        }
+    }
+
+    /// Create a type check error with a raw expected string.
+    /// Use this for dynamic types that don't implement BamlTypeName.
+    ///
+    /// # Example
+    /// ```ignore
+    /// match value {
+    ///     BamlValue::DynamicClass(dc) => Ok(dc),
+    ///     other => Err(BamlError::type_check_raw("DynamicClass", &other)),
+    /// }
+    /// ```
+    pub fn type_check_raw(expected: &'static str, got: &impl FullTypeName) -> Self {
+        BamlError::TypeCheck {
+            expected: expected.to_string(),
+            got: got.full_type_name(),
+        }
+    }
 }
+
+/// Trait for types that have a BAML type name.
+/// This provides consistent type names for error messages.
+///
+/// Type names should be descriptive:
+/// - Primitives: "String", "Int", "Float", "Bool", "Null"
+/// - Containers: "List<String>", "Map<String, Int>", "Optional<Person>"
+/// - Wrappers: "Checked<String>", "StreamState<Person>"
+/// - Dynamic: "DynamicClass(PersonInfo)", "DynamicEnum(Sentiment)", "DynamicUnion(unknown)"
+pub trait BamlTypeName {
+    /// The base BAML type name (e.g., "String", "Int", "List", "Map")
+    /// For primitives this is the full name; for containers it's just the container name.
+    const BASE_TYPE_NAME: &'static str;
+
+    /// Get the full type name including generic parameters.
+    /// Default implementation returns BASE_TYPE_NAME for non-generic types.
+    fn baml_type_name() -> String {
+        Self::BASE_TYPE_NAME.to_string()
+    }
+}
+
+// Primitive type names (base name = full name)
+impl BamlTypeName for String {
+    const BASE_TYPE_NAME: &'static str = "String";
+}
+impl BamlTypeName for i64 {
+    const BASE_TYPE_NAME: &'static str = "Int";
+}
+impl BamlTypeName for f64 {
+    const BASE_TYPE_NAME: &'static str = "Float";
+}
+impl BamlTypeName for bool {
+    const BASE_TYPE_NAME: &'static str = "Bool";
+}
+impl BamlTypeName for () {
+    const BASE_TYPE_NAME: &'static str = "Null";
+}
+
+// Reference types delegate to their inner type
+impl BamlTypeName for &str {
+    const BASE_TYPE_NAME: &'static str = "String";
+}
+
+// Container type names (include element type)
+impl<T: BamlTypeName> BamlTypeName for Vec<T> {
+    const BASE_TYPE_NAME: &'static str = "List";
+    fn baml_type_name() -> String {
+        format!("List<{}>", T::baml_type_name())
+    }
+}
+
+impl<T: BamlTypeName> BamlTypeName for Option<T> {
+    const BASE_TYPE_NAME: &'static str = "Optional";
+    fn baml_type_name() -> String {
+        format!("Optional<{}>", T::baml_type_name())
+    }
+}
+
+impl<V: BamlTypeName> BamlTypeName for HashMap<String, V> {
+    const BASE_TYPE_NAME: &'static str = "Map";
+    fn baml_type_name() -> String {
+        format!("Map<String, {}>", V::baml_type_name())
+    }
+}
+
+// Wrapper types (include inner type)
+impl<T: BamlTypeName> BamlTypeName for crate::types::Checked<T> {
+    const BASE_TYPE_NAME: &'static str = "Checked";
+    fn baml_type_name() -> String {
+        format!("Checked<{}>", T::baml_type_name())
+    }
+}
+
+impl<T: BamlTypeName> BamlTypeName for crate::types::StreamState<T> {
+    const BASE_TYPE_NAME: &'static str = "StreamState";
+    fn baml_type_name() -> String {
+        format!("StreamState<{}>", T::baml_type_name())
+    }
+}
+
+// NOTE: BamlValue does NOT implement BamlTypeName because:
+// 1. Its type name is runtime-determined (depends on the actual variant)
+// 2. It would create a circular dependency (error.rs -> codec -> error.rs)
+// Instead, BamlValue implements FullTypeName (instance method) in baml_value.rs
 
 /// Panics with a user-friendly error message for internal/unreachable errors.
 ///

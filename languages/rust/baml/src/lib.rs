@@ -25,6 +25,7 @@ mod args;
 mod codec;
 mod error;
 mod ffi;
+mod known_types;
 mod raw_objects;
 mod runtime;
 mod stream;
@@ -44,6 +45,11 @@ pub use args::FunctionArgs;
 pub use codec::{
     decode_enum, decode_field, decode_optional_field, encode_class, encode_enum, BamlClass,
     BamlDecode, BamlEncode, BamlEnum,
+};
+// New dynamic type exports
+pub use codec::{
+    BamlValue, DynamicClass, DynamicEnum, DynamicUnion, FromBamlValue, FromBamlValueRef,
+    KnownTypes,
 };
 pub use error::BamlError;
 pub use raw_objects::{

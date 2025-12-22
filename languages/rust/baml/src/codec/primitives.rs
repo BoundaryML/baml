@@ -1,0 +1,129 @@
+//! Primitive type BamlDecode and BamlEncode implementations.
+
+use crate::error::BamlError;
+use crate::proto::baml_cffi_v1::{cffi_value_holder, host_value, CffiValueHolder, HostValue};
+
+use super::helpers::variant_name;
+use super::traits::{BamlDecode, BamlEncode};
+
+// =============================================================================
+// Primitive BamlDecode implementations
+// =============================================================================
+
+impl BamlDecode for String {
+    fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        match &holder.value {
+            Some(cffi_value_holder::Value::StringValue(s)) => Ok(s.clone()),
+            other => Err(BamlError::internal(format!(
+                "expected string, got {:?}",
+                other.as_ref().map(variant_name)
+            ))),
+        }
+    }
+}
+
+impl BamlDecode for i64 {
+    fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        match &holder.value {
+            Some(cffi_value_holder::Value::IntValue(i)) => Ok(*i),
+            other => Err(BamlError::internal(format!(
+                "expected int, got {:?}",
+                other.as_ref().map(variant_name)
+            ))),
+        }
+    }
+}
+
+impl BamlDecode for f64 {
+    fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        match &holder.value {
+            Some(cffi_value_holder::Value::FloatValue(f)) => Ok(*f),
+            other => Err(BamlError::internal(format!(
+                "expected float, got {:?}",
+                other.as_ref().map(variant_name)
+            ))),
+        }
+    }
+}
+
+impl BamlDecode for bool {
+    fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        match &holder.value {
+            Some(cffi_value_holder::Value::BoolValue(b)) => Ok(*b),
+            other => Err(BamlError::internal(format!(
+                "expected bool, got {:?}",
+                other.as_ref().map(variant_name)
+            ))),
+        }
+    }
+}
+
+/// Unit type decodes from null or empty values (for void method returns)
+impl BamlDecode for () {
+    fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        match &holder.value {
+            Some(cffi_value_holder::Value::NullValue(_)) | None => Ok(()),
+            other => Err(BamlError::internal(format!(
+                "expected null/void, got {:?}",
+                other.as_ref().map(variant_name)
+            ))),
+        }
+    }
+}
+
+// =============================================================================
+// Primitive BamlEncode implementations
+// =============================================================================
+
+impl BamlEncode for String {
+    fn baml_encode(&self) -> HostValue {
+        HostValue {
+            value: Some(host_value::Value::StringValue(self.clone())),
+        }
+    }
+}
+
+impl BamlEncode for &str {
+    fn baml_encode(&self) -> HostValue {
+        HostValue {
+            value: Some(host_value::Value::StringValue((*self).to_string())),
+        }
+    }
+}
+
+impl BamlEncode for i64 {
+    fn baml_encode(&self) -> HostValue {
+        HostValue {
+            value: Some(host_value::Value::IntValue(*self)),
+        }
+    }
+}
+
+impl BamlEncode for i32 {
+    fn baml_encode(&self) -> HostValue {
+        i64::from(*self).baml_encode()
+    }
+}
+
+impl BamlEncode for f64 {
+    fn baml_encode(&self) -> HostValue {
+        HostValue {
+            value: Some(host_value::Value::FloatValue(*self)),
+        }
+    }
+}
+
+impl BamlEncode for bool {
+    fn baml_encode(&self) -> HostValue {
+        HostValue {
+            value: Some(host_value::Value::BoolValue(*self)),
+        }
+    }
+}
+
+/// Blanket impl for references to encodable types
+impl<T: BamlEncode> BamlEncode for &T {
+    fn baml_encode(&self) -> HostValue {
+        (*self).baml_encode()
+    }
+}
