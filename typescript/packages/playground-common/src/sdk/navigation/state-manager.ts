@@ -59,7 +59,8 @@ export class StateManager {
             span: {
               filePath: span.filePath,
               startLine: span.startLine,
-              startColumn: span.startColumn,
+              startColumn: span.startColumn + 1, // TODO: HACK. the span doesn't count the start of the line, so what happens is, the cursor gets updated, and we quickly receive another event
+              // with the previous node_id, which is incorrect.
             },
           });
         }

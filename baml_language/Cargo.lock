@@ -473,6 +473,7 @@ dependencies = [
  "baml_diagnostics",
  "baml_hir",
  "baml_lexer",
+ "baml_mir",
  "baml_parser",
  "baml_thir",
  "baml_vm",

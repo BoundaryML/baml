@@ -144,7 +144,7 @@ export const DiamondNode: ComponentType<NodeProps<ReactflowDiamondNode>> = memo(
         `}>
           <div className="flex items-center gap-2 text-card-foreground text-left">
             <span className="inline-flex items-center justify-center rounded bg-amber-100 dark:bg-amber-900 px-1.5 py-1">
-              <GitBranch className="w-4 h-4 text-amber-700 dark:text-amber-200" />
+              <GitBranch className="w-4 h-4 text-amber-700 dark:text-amber-200 rotate-180" />
             </span>
             <div className="text-xs font-medium leading-tight">
               {data.label || data.id}

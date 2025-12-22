@@ -35,6 +35,13 @@ RUN baml-cli generate --from path-to-baml_src
 ```
 </CodeBlocks>
 
+<Tip>
+For production builds, add the `--no-tests` flag to reduce the generated client size by excluding test blocks:
+```bash
+baml-cli generate --from path-to-baml_src --no-tests
+```
+</Tip>
+
 ## Go: Multi-stage Docker builds
 
 When using Go, the `baml-cli generate` command downloads the `libbaml-cffi` native library that BAML needs at runtime. This library is cached to avoid downloading it every time your container runs.

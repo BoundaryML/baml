@@ -1073,6 +1073,8 @@ export class BAMLSDK {
       this.storage.clearHighlightedBlocks();
       this.storage.clearFlashRanges();
       this.storage.clearExecutionLog();
+      this.storage.clearAllNodeStates();
+      this.storage.clearAllNodeIterations();
 
       // Create test history run with all tests
       const historyRun: testAtoms.TestHistoryRun = {

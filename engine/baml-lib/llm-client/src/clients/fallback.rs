@@ -32,7 +32,9 @@ impl<Meta: Clone> UnresolvedFallback<Meta> {
             .flat_map(|(s, _)| match s {
                 either::Either::Left(s) => match s {
                     StringOr::Value(s) => HashSet::from([s.clone()]),
-                    StringOr::EnvVar(_) | StringOr::JinjaExpression(_) => Default::default(),
+                    StringOr::EnvVar(_)
+                    | StringOr::JinjaExpression(_)
+                    | StringOr::TemplateStringCall { .. } => Default::default(),
                 },
                 either::Either::Right(s) => s.dependencies(),
             })

@@ -1884,6 +1884,19 @@ paths:
                 title: TellStoryResponse
                 type: string
       operationId: TellStory
+  /call/TemplateStringTestEcho:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TemplateStringTestEcho'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TemplateStringTestEchoResponse
+                type: string
+      operationId: TemplateStringTestEcho
   /call/TestAbortFallbackChain:
     post:
       requestBody:
@@ -5448,6 +5461,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - story
+            additionalProperties: false
+    TemplateStringTestEcho:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TemplateStringTestEchoRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     TestAbortFallbackChain:
       required: true

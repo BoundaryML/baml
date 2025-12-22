@@ -22,44 +22,15 @@ fn class_constructor() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::AllocInstance(Value::class("Point")),
-            //     Instruction::Copy(0),
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::StoreField(0),
-            //     Instruction::Copy(0),
-            //     Instruction::LoadConst(Value::Int(2)),
-            //     Instruction::StoreField(1),
-            //     Instruction::LoadVar("p".to_string()),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // 'p' is Virtual (single-use), inlined at use site:
             vec![
-                // Pre-allocate locals
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate field values to temps
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_3".to_string()),
-                // Construct Point
                 Instruction::AllocInstance(Value::class("Point")),
                 Instruction::Copy(0),
-                Instruction::LoadVar("_2".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreField(0),
                 Instruction::Copy(0),
-                Instruction::LoadVar("_3".to_string()),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreField(1),
-                Instruction::StoreVar("p".to_string()),
-                // Return p
-                Instruction::LoadVar("p".to_string()),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -81,40 +52,15 @@ fn class_constructor_return_directly() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::AllocInstance(Value::class("Point")),
-            //     Instruction::Copy(0),
-            //     Instruction::LoadConst(Value::Int(1)),
-            //     Instruction::StoreField(0),
-            //     Instruction::Copy(0),
-            //     Instruction::LoadConst(Value::Int(2)),
-            //     Instruction::StoreField(1),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // Stackification with Virtual _0 and fall-through elimination:
             vec![
-                // Pre-allocate locals
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate field values to temps
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_1".to_string()),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_2".to_string()),
-                // Construct Point
                 Instruction::AllocInstance(Value::class("Point")),
                 Instruction::Copy(0),
-                Instruction::LoadVar("_1".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreField(0),
                 Instruction::Copy(0),
-                Instruction::LoadVar("_2".to_string()),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreField(1),
-                Instruction::StoreVar("_0".to_string()),
-                // Return
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -190,47 +136,19 @@ fn nested_class_construction() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     // Outer constructor
-            //     Instruction::AllocInstance(Value::class("Outer")),
-            //     Instruction::Copy(0),
-            //     // Nested Inner construction
-            //     Instruction::AllocInstance(Value::class("Inner")),
-            //     Instruction::Copy(0),
-            //     Instruction::LoadConst(Value::Int(42)),
-            //     Instruction::StoreField(0), // Inner.value = 42
-            //     Instruction::StoreField(0), // Outer.inner = Inner
-            //     Instruction::LoadConst(Value::Int(42)),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // Stackification with fall-through elimination:
+            // o is assigned but never read (dead store)
             vec![
-                // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate Inner field value
-                Instruction::LoadConst(Value::Int(42)),
-                Instruction::StoreVar("_3".to_string()),
-                // Construct Inner
-                Instruction::AllocInstance(Value::class("Inner")),
-                Instruction::Copy(0),
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::StoreField(0),
-                Instruction::StoreVar("_2".to_string()),
-                // Construct Outer
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
-                Instruction::LoadVar("_2".to_string()),
+                Instruction::AllocInstance(Value::class("Inner")),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(42)),
+                Instruction::StoreField(0),
                 Instruction::StoreField(0),
                 Instruction::StoreVar("o".to_string()),
-                // Return 42
                 Instruction::LoadConst(Value::Int(42)),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -260,66 +178,25 @@ fn nested_class_with_multiple_fields() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     // Outer constructor
-            //     Instruction::AllocInstance(Value::class("Outer")),
-            //     Instruction::Copy(0),
-            //     // Nested Inner construction
-            //     Instruction::AllocInstance(Value::class("Inner")),
-            //     Instruction::Copy(0),
-            //     Instruction::LoadConst(Value::Int(10)),
-            //     Instruction::StoreField(0), // x = 10
-            //     Instruction::Copy(0),
-            //     Instruction::LoadConst(Value::Int(20)),
-            //     Instruction::StoreField(1), // y = 20
-            //     Instruction::StoreField(0), // Outer.inner = Inner
-            //     Instruction::Copy(0),
-            //     Instruction::LoadConst(Value::Int(30)),
-            //     Instruction::StoreField(1), // Outer.value = 30
-            //     Instruction::LoadConst(Value::Int(30)),
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // Stackification with fall-through elimination:
+            // o is assigned but never read (dead store)
             vec![
-                // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate Inner fields
-                Instruction::LoadConst(Value::Int(10)),
-                Instruction::StoreVar("_3".to_string()),
-                Instruction::LoadConst(Value::Int(20)),
-                Instruction::StoreVar("_4".to_string()),
-                // Construct Inner
-                Instruction::AllocInstance(Value::class("Inner")),
-                Instruction::Copy(0),
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::StoreField(0),
-                Instruction::Copy(0),
-                Instruction::LoadVar("_4".to_string()),
-                Instruction::StoreField(1),
-                Instruction::StoreVar("_2".to_string()),
-                // Evaluate Outer.value
-                Instruction::LoadConst(Value::Int(30)),
-                Instruction::StoreVar("_5".to_string()),
-                // Construct Outer
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
-                Instruction::LoadVar("_2".to_string()),
+                Instruction::AllocInstance(Value::class("Inner")),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(10)),
                 Instruction::StoreField(0),
                 Instruction::Copy(0),
-                Instruction::LoadVar("_5".to_string()),
+                Instruction::LoadConst(Value::Int(20)),
+                Instruction::StoreField(1),
+                Instruction::StoreField(0),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(30)),
                 Instruction::StoreField(1),
                 Instruction::StoreVar("o".to_string()),
-                // Return 30
                 Instruction::LoadConst(Value::Int(30)),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -344,51 +221,17 @@ fn nested_field_read() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     // Create Outer { inner: Inner { value: 42 } }
-            //     Instruction::AllocInstance(Value::class("Outer")),
-            //     Instruction::Copy(0),
-            //     Instruction::AllocInstance(Value::class("Inner")),
-            //     Instruction::Copy(0),
-            //     Instruction::LoadConst(Value::Int(42)),
-            //     Instruction::StoreField(0), // Inner.value = 42
-            //     Instruction::StoreField(0), // Outer.inner = Inner
-            //     // o.inner.value
-            //     Instruction::LoadVar("o".to_string()),
-            //     Instruction::LoadField(0), // o.inner
-            //     Instruction::LoadField(0), // inner.value
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // 'o' is Virtual (single-use), inlined at use site:
             vec![
-                // Pre-allocate locals
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate Inner.value
-                Instruction::LoadConst(Value::Int(42)),
-                Instruction::StoreVar("_3".to_string()),
-                // Construct Inner
-                Instruction::AllocInstance(Value::class("Inner")),
-                Instruction::Copy(0),
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::StoreField(0),
-                Instruction::StoreVar("_2".to_string()),
-                // Construct Outer
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
-                Instruction::LoadVar("_2".to_string()),
+                Instruction::AllocInstance(Value::class("Inner")),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(42)),
                 Instruction::StoreField(0),
-                Instruction::StoreVar("o".to_string()),
-                // Return o.inner.value
-                Instruction::LoadVar("o".to_string()),
+                Instruction::StoreField(0),
                 Instruction::LoadField(0),
                 Instruction::LoadField(0),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -731,69 +574,22 @@ fn nested_object_construction() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     // Outer constructor
-            //     Instruction::AllocInstance(Value::class("Outer")), // Outer
-            //     Instruction::Copy(0),                              // Copy Outer instance
-            //     // Nested Inner construction
-            //     Instruction::AllocInstance(Value::class("Inner")), // Inner
-            //     Instruction::Copy(0),                              // Copy Inner instance
-            //     Instruction::LoadConst(Value::Int(10)),            // 10
-            //     Instruction::StoreField(0),                        // x = 10
-            //     Instruction::Copy(0),                              // Copy Inner instance again
-            //     Instruction::LoadConst(Value::Int(20)),            // 20
-            //     Instruction::StoreField(1),                        // y = 20
-            //     Instruction::StoreField(0),                        // Outer.inner = Inner
-            //     Instruction::Copy(0),                              // Copy Outer instance
-            //     Instruction::LoadConst(Value::Int(30)),            // 30
-            //     Instruction::StoreField(1),                        // Outer.value = 30
-            //     // o.value
-            //     Instruction::LoadVar("o".to_string()), // o
-            //     Instruction::LoadField(1),             // value
-            //     Instruction::Return,
-            // ],
-            // MIR codegen (naive) - same semantics, more instructions:
+            // 'o' is Virtual (single-use), inlined at use site:
             vec![
-                // Pre-allocate locals
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // Evaluate Inner fields
-                Instruction::LoadConst(Value::Int(10)),
-                Instruction::StoreVar("_3".to_string()),
-                Instruction::LoadConst(Value::Int(20)),
-                Instruction::StoreVar("_4".to_string()),
-                // Construct Inner
-                Instruction::AllocInstance(Value::class("Inner")),
-                Instruction::Copy(0),
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::StoreField(0),
-                Instruction::Copy(0),
-                Instruction::LoadVar("_4".to_string()),
-                Instruction::StoreField(1),
-                Instruction::StoreVar("_2".to_string()),
-                // Evaluate Outer.value
-                Instruction::LoadConst(Value::Int(30)),
-                Instruction::StoreVar("_5".to_string()),
-                // Construct Outer
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
-                Instruction::LoadVar("_2".to_string()),
+                Instruction::AllocInstance(Value::class("Inner")),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(10)),
                 Instruction::StoreField(0),
                 Instruction::Copy(0),
-                Instruction::LoadVar("_5".to_string()),
+                Instruction::LoadConst(Value::Int(20)),
                 Instruction::StoreField(1),
-                Instruction::StoreVar("o".to_string()),
-                // Return o.value
-                Instruction::LoadVar("o".to_string()),
+                Instruction::StoreField(0),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(30)),
+                Instruction::StoreField(1),
                 Instruction::LoadField(1),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(1),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],

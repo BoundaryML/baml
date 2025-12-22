@@ -276,7 +276,12 @@ impl<'a> Walker<'a, (&'a ExprFunctionNode, &'a TestCase)> {
     ) -> Result<IndexMap<String, Result<BamlValue>>> {
         self.args()
             .iter()
-            .map(|(k, v)| Ok((k.clone(), v.resolve_serde::<BamlValue>(ctx))))
+            .map(|(k, v)| {
+                Ok((
+                    k.clone(),
+                    v.resolve_serde_with_templates::<BamlValue>(ctx, self.ir),
+                ))
+            })
             .collect()
     }
 
@@ -315,7 +320,12 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
     ) -> Result<IndexMap<String, Result<BamlValue>>> {
         self.args()
             .iter()
-            .map(|(k, v)| Ok((k.clone(), v.resolve_serde::<BamlValue>(ctx))))
+            .map(|(k, v)| {
+                Ok((
+                    k.clone(),
+                    v.resolve_serde_with_templates::<BamlValue>(ctx, self.ir),
+                ))
+            })
             .collect()
     }
 

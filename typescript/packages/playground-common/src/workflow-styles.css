@@ -7,3 +7,21 @@
   pointer-events: none;
   opacity: 0;
 }
+
+:root {
+  --xy-controls-button-background-color-default: var(--background);
+  --xy-controls-button-background-color-hover-default: var(--muted);
+  --xy-controls-button-color-default: var(--foreground);
+  --xy-controls-button-color-hover-default: var(--foreground);
+  --xy-controls-button-border-color-default: var(--border);
+}
+
+.react-flow__controls-button {
+  background-color: var(--background);
+  border-color: var(--border);
+}
+
+.react-flow__attribution {
+  display: none;
+  visibility: hidden;
+}

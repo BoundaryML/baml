@@ -672,6 +672,96 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         self.builder.set_current_block(bb_join);
     }
 
+    /// Lower an expression purely for side effects, discarding any result.
+    ///
+    /// Used for void-typed expressions like if-else statements without tail expressions.
+    fn lower_expr_for_effect(
+        &mut self,
+        expr: ExprId,
+        body: &ExprBody,
+        inference: &InferenceResult<'db>,
+    ) {
+        use baml_hir::Expr;
+
+        let expr_data = &body.exprs[expr];
+
+        match expr_data {
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.lower_if_for_effect(*condition, *then_branch, *else_branch, body, inference);
+            }
+
+            Expr::Block { stmts, tail_expr } => {
+                // Lower statements
+                for &stmt_id in stmts {
+                    self.lower_stmt(stmt_id, body, inference);
+                    if self.builder.is_current_terminated() {
+                        return;
+                    }
+                }
+                // If there's a tail expression, lower it for effect too
+                if let Some(tail) = tail_expr {
+                    self.lower_expr_for_effect(*tail, body, inference);
+                }
+                // No null assignment needed - we're discarding the result
+            }
+
+            // For other expressions, fall back to creating a temp and discarding it
+            _ => {
+                let result_ty = inference
+                    .expr_types
+                    .get(&expr)
+                    .cloned()
+                    .unwrap_or(Ty::Unknown);
+                let temp = self.builder.temp(result_ty);
+                self.lower_expr_to_place(expr, Place::local(temp), body, inference);
+            }
+        }
+    }
+
+    /// Lower an if expression purely for side effects, discarding any result.
+    fn lower_if_for_effect(
+        &mut self,
+        condition: ExprId,
+        then_branch: ExprId,
+        else_branch: Option<ExprId>,
+        body: &ExprBody,
+        inference: &InferenceResult<'db>,
+    ) {
+        let cond_local = self.builder.temp(Ty::Bool);
+        self.lower_expr_to_place(condition, Place::local(cond_local), body, inference);
+
+        let bb_then = self.builder.create_block();
+        let bb_else = self.builder.create_block();
+        let bb_join = self.builder.create_block();
+
+        self.builder
+            .branch(Operand::copy_local(cond_local), bb_then, bb_else);
+
+        // Then branch - lower for effect
+        self.builder.set_current_block(bb_then);
+        self.lower_expr_for_effect(then_branch, body, inference);
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        // Else branch - lower for effect (or just jump to join if no else)
+        self.builder.set_current_block(bb_else);
+        if let Some(else_expr) = else_branch {
+            self.lower_expr_for_effect(else_expr, body, inference);
+        }
+        // No null assignment - we're discarding the result
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        // Continue from join
+        self.builder.set_current_block(bb_join);
+    }
+
     /// Lower a function call.
     fn lower_call(
         &mut self,
@@ -809,8 +899,15 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                     .get(expr)
                     .cloned()
                     .unwrap_or(Ty::Unknown);
-                let temp = self.builder.temp(result_ty);
-                self.lower_expr_to_place(*expr, Place::local(temp), body, inference);
+
+                if result_ty.is_void() {
+                    // Void expression (e.g., if-else without tail exprs) - no destination needed
+                    self.lower_expr_for_effect(*expr, body, inference);
+                } else {
+                    // Non-void expression - need a temp to store result (even if unused)
+                    let temp = self.builder.temp(result_ty);
+                    self.lower_expr_to_place(*expr, Place::local(temp), body, inference);
+                }
             }
 
             Stmt::Return(expr) => {

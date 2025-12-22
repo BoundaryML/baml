@@ -5,6 +5,9 @@ on:
     secrets:
       SAM_BAML_ZED_GITHUB_TOKEN:
         required: true
+  push:
+    branches:
+      - sam/sandbox-flow
 
 permissions: {}
 
@@ -15,7 +18,7 @@ jobs:
       - name: Checkout upstream zed extensions
         uses: actions/checkout@v5
         with:
-          repository: zed-industries/extensions
+          repository: BoundaryML/zed-extensions
           ref: main
           token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
 
@@ -40,11 +43,10 @@ jobs:
             | jq '.permissions'
 
           # add fork remote
-          git remote rename origin upstream
-          git remote add boundaryml-fork "https://github.com/BoundaryML/zed-extensions"
+          git remote add upstream "https://github.com/zed-industries/extensions"
           git fetch upstream main
-          git fetch boundaryml-fork main
-          git push boundaryml-fork upstream/main:main
+          git push origin upstream/main:main
+          git checkout --detach upstream/main
 
           # Update baml submodule
           git submodule update --init --recursive extensions/baml
@@ -79,6 +81,7 @@ jobs:
           git add extensions.toml
 
           # set up branch for PR
+          # has to be after the update because we use BAML_EXTENSION_VERSION in the branch name
           export BRANCH_NAME="update-baml-to-${BAML_EXTENSION_VERSION}"
           git checkout -b "${BRANCH_NAME}"
 
@@ -87,8 +90,16 @@ jobs:
           # so we can't use a bot name/email here.
           git config user.name "Sam Lijin"
           git config user.email "sam@boundaryml.com"
-          git commit -m "Update baml extension to ${BAML_EXTENSION_VERSION}"
-          git push boundaryml-fork "${BRANCH_NAME}"
+          git commit -m "$(cat <<EOF
+          Update baml extension to ${BAML_EXTENSION_VERSION}
+
+          Automated sync of [engine/zed] ([workflow logs]).
+
+          [engine/zed]: https://github.com/BoundaryML/baml/tree/canary/engine/zed
+          [workflow logs]: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/
+          EOF
+          )"
+          git push origin "${BRANCH_NAME}"
 
           # open the PR
           gh pr create \

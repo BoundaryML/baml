@@ -269,6 +269,10 @@ tabs:
     display-name: Playground
     icon: fa-solid fa-play
     href: https://promptfiddle.com
+  agents-md:
+    display-name: Agents.md
+    icon: fa-solid fa-robot
+    slug: agents-md
   changelog:
     display-name: Changelog
     icon: fa-regular fa-history
@@ -304,6 +308,9 @@ navigation:
           - page: Cursor Extension
             icon: fa-brands fa-microsoft
             path: 01-guide/01-editors/cursor.mdx
+          - page: Claude Code
+            icon: fa-solid fa-terminal
+            path: 01-guide/01-editors/claude-code.mdx
           - page: Others
             icon: fa-brands fa-microsoft
             path: 01-guide/01-editors/others.mdx
@@ -935,6 +942,11 @@ navigation:
       #     - page: set_tags
       #       path: 01-guide/introduction.mdx
   - tab: playground
+  - tab: agents-md
+    layout:
+      - page: Claude Code
+        icon: fa-solid fa-terminal
+        path: 01-guide/01-editors/claude-code.mdx
   - tab: changelog
     layout:
       - page: Changelog

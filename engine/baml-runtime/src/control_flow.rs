@@ -384,6 +384,7 @@ impl HirTraversalContext {
         let mut graph = ControlFlowVizBuilder::default();
         let root_id = graph.allocate_id();
         let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
+
         let root_lexical = encode_segments(function_name, std::slice::from_ref(&root_segment));
         graph.add_node(Node::root(
             root_id,

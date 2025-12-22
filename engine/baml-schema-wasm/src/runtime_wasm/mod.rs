@@ -1785,7 +1785,7 @@ impl WasmRuntime {
                             function_name: function.name.clone(),
                             span: node.span.clone(),
                             function_type: Some(function.function_type),
-                            node_id: Some(node.log_filter_key.clone()),
+                            node_id: Some(node.id.to_string()),
                             node_label: Some(node.label.clone()),
                             test_name: None,
                         });

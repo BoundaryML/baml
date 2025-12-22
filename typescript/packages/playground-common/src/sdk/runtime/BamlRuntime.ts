@@ -208,19 +208,17 @@ export function buildControlFlowArtifacts(
     ? 'workflow'
     : options.rootType;
 
-  const nodeById = new Map<number, WasmControlFlowNode>();
-  const nodeKeyById = new Map<number, string>();
-  const childrenByParent = new Map<number, WasmControlFlowNode[]>();
+  const nodeById = new Map<string, WasmControlFlowNode>();
+  const childrenByParent = new Map<string, WasmControlFlowNode[]>();
 
   for (const node of nodes) {
-    nodeById.set(node.id, node);
-    // Use the wasm node id (stringified) as the canonical graph node id
-    const key = node.id.toString();
-    nodeKeyById.set(node.id, key);
+    const nodeIdStr = node.id.toString();
+    nodeById.set(nodeIdStr, node);
     if (node.parent_id !== undefined) {
-      const siblings = childrenByParent.get(node.parent_id) ?? [];
+      const parentIdStr = node.parent_id.toString();
+      const siblings = childrenByParent.get(parentIdStr) ?? [];
       siblings.push(node);
-      childrenByParent.set(node.parent_id, siblings);
+      childrenByParent.set(parentIdStr, siblings);
     }
   }
 
@@ -230,9 +228,10 @@ export function buildControlFlowArtifacts(
   }
 
   const toCallGraphNode = (node: WasmControlFlowNode): CallGraphNode => {
-    const children = (childrenByParent.get(node.id) ?? []).map((child) => toCallGraphNode(child));
+    const nodeIdStr = node.id.toString();
+    const children = (childrenByParent.get(nodeIdStr) ?? []).map((child) => toCallGraphNode(child));
     return {
-      id: nodeKeyById.get(node.id)!,
+      id: nodeIdStr,
       type: mapNodeTypeToCallGraphType(node.node_type, normalizedRootType),
       blockType: mapNodeTypeToBlockType(node.node_type),
       annotation: node.label || undefined,
@@ -245,13 +244,13 @@ export function buildControlFlowArtifacts(
   const callGraphDepth = computeCallGraphDepth(callGraph);
 
   const graphNodes: GraphNode[] = nodes.map((node) => {
-    const id = nodeKeyById.get(node.id)!;
+    const nodeIdStr = node.id.toString();
     return {
-      id,
+      id: nodeIdStr,
       type: mapNodeTypeToGraphNodeType(node.node_type, normalizedRootType),
-      label: node.label || id,
+      label: node.label || nodeIdStr,
       functionName: options.rootName,
-      parent: node.parent_id !== undefined ? nodeKeyById.get(node.parent_id) : undefined,
+      parent: node.parent_id?.toString(),
       codeHash: '',
       lastModified: options.timestamp,
       llmClient: node.node_type === WasmControlFlowNodeType.FunctionRoot ? options.llmClient : undefined,
@@ -264,14 +263,11 @@ export function buildControlFlowArtifacts(
   });
 
   const graphEdges: GraphEdge[] = (graph.edges ?? []).flatMap((edge) => {
-    const source = nodeKeyById.get(edge.src);
-    const target = nodeKeyById.get(edge.dst);
-    if (!source || !target) {
-      return [];
-    }
+    const source = edge.src.toString();
+    const target = edge.dst.toString();
 
-    const srcNode = nodeById.get(edge.src);
-    const dstNode = nodeById.get(edge.dst);
+    const srcNode = nodeById.get(source);
+    const dstNode = nodeById.get(target);
     // For conditional structures, the branch group already owns its arm headers via the parent
     // pointer. Emitting an edge from the group to its direct child duplicates that relationship
     // and causes the UI confusion the user reported. Skip only those edges while leaving
