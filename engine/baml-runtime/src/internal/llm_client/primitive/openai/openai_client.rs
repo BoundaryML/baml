@@ -623,6 +623,12 @@ impl OpenAIClient {
         make_openai_client!(client, properties, "openai-responses")
     }
 
+    pub fn new_openrouter(client: &ClientWalker, ctx: &RuntimeContext) -> Result<OpenAIClient> {
+        let properties =
+            properties::resolve_properties(&client.elem().provider, client.options(), ctx)?;
+        make_openai_client!(client, properties, "openrouter")
+    }
+
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<OpenAIClient> {
         let properties =
             properties::resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
@@ -665,6 +671,18 @@ impl OpenAIClient {
         // Override response type for responses API
         properties.client_response_type = internal_llm_client::ResponseType::OpenAIResponses;
         make_openai_client!(client, properties, "openai-responses", dynamic)
+    }
+
+    /// Creates an OpenRouter client from a dynamic client definition (e.g., from Python/TypeScript code).
+    ///
+    /// OpenRouter provides unified access to 300+ AI models through a single API.
+    pub fn dynamic_new_openrouter(
+        client: &ClientProperty,
+        ctx: &RuntimeContext,
+    ) -> Result<OpenAIClient> {
+        let properties =
+            properties::resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
+        make_openai_client!(client, properties, "openrouter", dynamic)
     }
 }
 

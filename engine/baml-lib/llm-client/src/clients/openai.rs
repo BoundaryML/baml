@@ -403,6 +403,48 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         Ok(instance)
     }
 
+    /// Creates an OpenRouter client with sensible defaults.
+    /// - Default base_url: https://openrouter.ai/api/v1
+    /// - Default API key from OPENROUTER_API_KEY environment variable
+    ///
+    /// For app attribution headers (X-Title, HTTP-Referer), use the standard `headers` option:
+    /// ```baml
+    /// client<llm> MyClient {
+    ///   provider openrouter
+    ///   options {
+    ///     model "openai/gpt-4o"
+    ///     headers {
+    ///       "X-Title" "My App"
+    ///       "HTTP-Referer" "https://myapp.com"
+    ///     }
+    ///   }
+    /// }
+    /// ```
+    pub fn create_openrouter(
+        mut properties: PropertyHandler<Meta>,
+    ) -> Result<Self, Vec<Error<Meta>>> {
+        // Default base_url to OpenRouter
+        let base_url = properties.ensure_base_url_with_default(UnresolvedUrl::new_static(
+            "https://openrouter.ai/api/v1",
+        ));
+
+        // Default API key env var to OPENROUTER_API_KEY
+        let api_key = Some(
+            properties
+                .ensure_api_key()
+                .unwrap_or_else(|| StringOr::EnvVar("OPENROUTER_API_KEY".to_string())),
+        );
+
+        let http_config = properties.ensure_http_config("openrouter");
+
+        Self::create_common(
+            properties,
+            Some(either::Either::Left(base_url)),
+            api_key,
+            http_config,
+        )
+    }
+
     fn create_common(
         mut properties: PropertyHandler<Meta>,
         base_url: Option<either::Either<UnresolvedUrl, (StringOr, StringOr)>>,
