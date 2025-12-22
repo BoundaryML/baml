@@ -1,9 +1,8 @@
 //! BamlValue - a dynamically-typed BAML value.
-//!
-//! This module will be implemented in Phase 1.
 
 use std::collections::HashMap;
 
+use crate::error::{BamlTypeName, FullTypeName};
 use crate::types::{Checked, StreamState};
 
 use super::dynamic_types::{DynamicClass, DynamicEnum, DynamicUnion};
@@ -37,4 +36,32 @@ pub enum BamlValue<T: KnownTypes, S: KnownTypes> {
     DynamicClass(DynamicClass<T, S>),
     DynamicEnum(DynamicEnum),
     DynamicUnion(DynamicUnion<T, S>),
+}
+
+/// Implement FullTypeName for BamlValue so it can be used with BamlError::type_check
+impl<T: KnownTypes, S: KnownTypes> FullTypeName for BamlValue<T, S> {
+    /// Get the full type name for error messages.
+    /// Returns descriptive names like:
+    /// - Primitives: "String", "Int", "Float", "Bool", "Null"
+    /// - Containers: "List<?>", "Map<String, ?>" (element types unknown at runtime)
+    /// - Wrappers: "Checked<?>", "StreamState<?>" (inner type requires recursion)
+    /// - Dynamic: "DynamicClass(PersonInfo)", "DynamicEnum(Sentiment)", "DynamicUnion(FooOrBar)"
+    fn full_type_name(&self) -> String {
+        match self {
+            BamlValue::String(_) => String::baml_type_name(),
+            BamlValue::Int(_) => i64::baml_type_name(),
+            BamlValue::Float(_) => f64::baml_type_name(),
+            BamlValue::Bool(_) => bool::baml_type_name(),
+            BamlValue::Null => <()>::baml_type_name(),
+            BamlValue::List(_) => "List<?>".to_string(), // Can't know element type at runtime
+            BamlValue::Map(_) => "Map<String, ?>".to_string(),
+            BamlValue::Known(t) => t.type_name().to_string(),
+            BamlValue::StreamKnown(s) => s.type_name().to_string(),
+            BamlValue::Checked(c) => format!("Checked<{}>", c.value.full_type_name()),
+            BamlValue::StreamState(ss) => format!("StreamState<{}>", ss.value.full_type_name()),
+            BamlValue::DynamicClass(dc) => dc.full_type_name(),
+            BamlValue::DynamicEnum(de) => de.full_type_name(),
+            BamlValue::DynamicUnion(du) => du.full_type_name(),
+        }
+    }
 }
