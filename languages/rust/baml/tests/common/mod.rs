@@ -1,8 +1,10 @@
 //! Shared test utilities and fixtures for baml crate tests.
 
 use baml::__internal::{
-    cffi_value_holder, CffiCheckValue, CffiStreamState, CffiValueChecked, CffiValueHolder,
-    CffiValueList, CffiValueStreamingState,
+    cffi_value_holder, CffiCheckValue, CffiFieldTypeLiteral, CffiLiteralBool, CffiLiteralInt,
+    CffiLiteralString, CffiMapEntry, CffiStreamState, CffiTypeName, CffiValueChecked,
+    CffiValueClass, CffiValueEnum, CffiValueHolder, CffiValueList, CffiValueMap,
+    CffiValueStreamingState, CffiValueUnionVariant,
 };
 
 /// Create a `CffiValueHolder` containing a string value.
@@ -86,3 +88,117 @@ pub fn make_stream_state_holder(inner: CffiValueHolder, state: CffiStreamState) 
         ))),
     }
 }
+
+/// Create a `CffiValueHolder` containing a map value.
+pub fn make_map_holder(entries: Vec<(&str, CffiValueHolder)>) -> CffiValueHolder {
+    let map_entries = entries
+        .into_iter()
+        .map(|(key, value)| CffiMapEntry {
+            key: key.to_string(),
+            value: Some(value),
+        })
+        .collect();
+
+    CffiValueHolder {
+        value: Some(cffi_value_holder::Value::MapValue(CffiValueMap {
+            key_type: None,
+            value_type: None,
+            entries: map_entries,
+        })),
+    }
+}
+
+/// Create a `CffiValueHolder` containing a class value.
+pub fn make_class_holder(name: &str, fields: Vec<(&str, CffiValueHolder)>) -> CffiValueHolder {
+    let field_entries = fields
+        .into_iter()
+        .map(|(key, value)| CffiMapEntry {
+            key: key.to_string(),
+            value: Some(value),
+        })
+        .collect();
+
+    CffiValueHolder {
+        value: Some(cffi_value_holder::Value::ClassValue(CffiValueClass {
+            name: Some(CffiTypeName {
+                namespace: 0,
+                name: name.to_string(),
+            }),
+            fields: field_entries,
+        })),
+    }
+}
+
+/// Create a `CffiValueHolder` containing an enum value.
+pub fn make_enum_holder(enum_name: &str, value: &str) -> CffiValueHolder {
+    CffiValueHolder {
+        value: Some(cffi_value_holder::Value::EnumValue(CffiValueEnum {
+            name: Some(CffiTypeName {
+                namespace: 0,
+                name: enum_name.to_string(),
+            }),
+            value: value.to_string(),
+            is_dynamic: false,
+        })),
+    }
+}
+
+/// Create a `CffiValueHolder` containing a union variant value.
+pub fn make_union_holder(
+    union_name: &str,
+    variant_name: &str,
+    inner: CffiValueHolder,
+) -> CffiValueHolder {
+    CffiValueHolder {
+        value: Some(cffi_value_holder::Value::UnionVariantValue(Box::new(
+            CffiValueUnionVariant {
+                name: Some(CffiTypeName {
+                    namespace: 0,
+                    name: union_name.to_string(),
+                }),
+                is_optional: false,
+                is_single_pattern: false,
+                self_type: None,
+                value_option_name: variant_name.to_string(),
+                value: Some(Box::new(inner)),
+            },
+        ))),
+    }
+}
+
+/// Create a `CffiValueHolder` containing a string literal value.
+pub fn make_literal_string_holder(s: &str) -> CffiValueHolder {
+    CffiValueHolder {
+        value: Some(cffi_value_holder::Value::LiteralValue(CffiFieldTypeLiteral {
+            literal: Some(cffi_field_type_literal::Literal::StringLiteral(
+                CffiLiteralString {
+                    value: s.to_string(),
+                },
+            )),
+        })),
+    }
+}
+
+/// Create a `CffiValueHolder` containing an int literal value.
+pub fn make_literal_int_holder(i: i64) -> CffiValueHolder {
+    CffiValueHolder {
+        value: Some(cffi_value_holder::Value::LiteralValue(CffiFieldTypeLiteral {
+            literal: Some(cffi_field_type_literal::Literal::IntLiteral(CffiLiteralInt {
+                value: i,
+            })),
+        })),
+    }
+}
+
+/// Create a `CffiValueHolder` containing a bool literal value.
+pub fn make_literal_bool_holder(b: bool) -> CffiValueHolder {
+    CffiValueHolder {
+        value: Some(cffi_value_holder::Value::LiteralValue(CffiFieldTypeLiteral {
+            literal: Some(cffi_field_type_literal::Literal::BoolLiteral(
+                CffiLiteralBool { value: b },
+            )),
+        })),
+    }
+}
+
+use baml::__internal::cffi_field_type_literal;
