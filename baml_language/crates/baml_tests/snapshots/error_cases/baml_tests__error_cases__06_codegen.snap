@@ -1,11 +1,33 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 1
-Objects: 2
-Globals: 1
+Functions: 3
+Objects: 6
+Globals: 3
+
+Function BadUnionPattern (arity: 1, kind: Exec):
+     0   LOAD_VAR 1      (x)
+     1   LOAD_VAR 2      (@match_scrut_0)
+     2   POP_REPLACE 1   
+     3   JUMP +4         (to 7)
+     4   LOAD_VAR 2      (@match_scrut_0)
+     5   LOAD_CONST 0    (bad)
+     6   POP_REPLACE 1   
+     7   RETURN          
 
 Function Invalid (arity: 0, kind: Exec):
-     0   RETURN
+     0   RETURN   
+
+Function MixedLiteralAndTyped (arity: 1, kind: Exec):
+     0   LOAD_VAR 1         (x)
+     1   LOAD_VAR 2         (@match_scrut_0)
+     2   LOAD_CONST 0       (42)
+     3   CMP_OP ==          
+     4   JUMP_IF_FALSE +3   (to 7)
+     5   POP 1              
+     6   JUMP +2            (to 8)
+     7   POP 1              
+     8   LOAD_CONST 1       (mixed)
+     9   RETURN
