@@ -838,3 +838,42 @@ function NestedEnumVariantUnions(s: Status) -> string {
         (Status.Active | Status.Pending) | Status.Inactive => "all statuses"
     }
 }
+
+// ============================================================================
+// ERROR SPAN VERIFICATION TESTS
+// These tests verify that error messages point to accurate source locations.
+// Each test is designed to produce errors at specific, verifiable line numbers.
+// ============================================================================
+
+// Span test: Nested match with unreachable arm in inner match
+// The error should point to the exact line of the unreachable arm inside the nested match
+function NestedMatchSpans(x: int, y: bool) -> string {
+    match (x) {
+        0 => match (y) {
+            true => "zero true",
+            false => "zero false",
+            true => "unreachable nested"
+        },
+        _ => "other"
+    }
+}
+
+// Span test: Multiple unreachable arms in the same match
+// Each unreachable arm should get its own error with correct span
+function MultipleUnreachableSpans(s: Status) -> string {
+    match (s) {
+        Status.Active => "active",
+        Status.Active => "duplicate 1",
+        Status.Inactive => "inactive",
+        Status.Active => "duplicate 2",
+        Status.Pending => "pending"
+    }
+}
+
+// Span test: Non-exhaustive match at high line number
+// Verifies spans work correctly for code late in the file (line ~880)
+function HighLineNumberNonExhaustive(s: Status) -> string {
+    match (s) {
+        Status.Active => "active only"
+    }
+}
