@@ -50,7 +50,6 @@ impl BamlError {
             got: got.full_type_name(),
         }
     }
-
 }
 
 /// Trait for types that have a BAML type name.
@@ -132,10 +131,27 @@ impl<T: BamlTypeName> BamlTypeName for crate::types::StreamState<T> {
     }
 }
 
+// Box delegates to inner type
+impl<T: BamlTypeName> BamlTypeName for Box<T> {
+    const BASE_TYPE_NAME: &'static str = T::BASE_TYPE_NAME;
+    fn baml_type_name() -> String {
+        T::baml_type_name()
+    }
+}
+
 // NOTE: BamlValue does NOT implement BamlTypeName because:
 // 1. Its type name is runtime-determined (depends on the actual variant)
 // 2. It would create a circular dependency (error.rs -> codec -> error.rs)
 // Instead, BamlValue implements FullTypeName (instance method) in baml_value.rs
+
+/// Marker type for unknown/dynamic inner types.
+/// Use this when the inner type of a container is not known at compile time.
+/// Example: `Checked<Unknown>` represents "Checked<?>"
+pub struct Unknown;
+
+impl BamlTypeName for Unknown {
+    const BASE_TYPE_NAME: &'static str = "?";
+}
 
 // Slice reference type name (for raw list access)
 impl<T> BamlTypeName for &[T] {

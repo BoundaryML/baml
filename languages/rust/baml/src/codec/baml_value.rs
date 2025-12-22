@@ -2,10 +2,12 @@
 
 use std::collections::HashMap;
 
-use crate::error::{BamlTypeName, FullTypeName};
+use crate::error::{BamlError, BamlTypeName, FullTypeName};
 use crate::types::{Checked, StreamState};
 
 use super::dynamic_types::{DynamicClass, DynamicEnum, DynamicUnion};
+use super::from_baml_value::FromBamlValue;
+use super::from_baml_value_ref::FromBamlValueRef;
 use super::known_types::KnownTypes;
 
 /// A dynamically-typed BAML value, parameterized by two type enums:
@@ -63,5 +65,17 @@ impl<T: KnownTypes, S: KnownTypes> FullTypeName for BamlValue<T, S> {
             BamlValue::DynamicEnum(de) => de.full_type_name(),
             BamlValue::DynamicUnion(du) => du.full_type_name(),
         }
+    }
+}
+
+impl<T: KnownTypes, S: KnownTypes> BamlValue<T, S> {
+    /// Convert this BamlValue to the specified type.
+    pub fn get<V: FromBamlValue<T, S>>(self) -> Result<V, BamlError> {
+        V::from_baml_value(self)
+    }
+
+    /// Borrow this BamlValue as the specified type (zero-copy).
+    pub fn get_ref<'a, V: FromBamlValueRef<'a, T, S>>(&'a self) -> Result<V, BamlError> {
+        V::from_baml_value_ref(self)
     }
 }

@@ -3,8 +3,10 @@
 use std::collections::HashMap;
 
 use super::baml_value::BamlValue;
+use super::from_baml_value::FromBamlValue;
+use super::from_baml_value_ref::FromBamlValueRef;
 use super::known_types::KnownTypes;
-use crate::error::FullTypeName;
+use crate::error::{BamlError, FullTypeName};
 
 /// A fully dynamic class - all fields accessed via .get()
 #[derive(Debug, Clone)]
@@ -40,6 +42,38 @@ impl<T: KnownTypes, S: KnownTypes> DynamicClass<T, S> {
     /// Get the class name (e.g., "PersonInfo", "OrderDetails").
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// Get a field and convert it to the specified type.
+    /// Clones the value.
+    pub fn get<V: FromBamlValue<T, S>>(&self, field_name: &str) -> Result<V, BamlError> {
+        let value = self
+            .fields
+            .get(field_name)
+            .ok_or_else(|| BamlError::internal(format!("missing field '{}'", field_name)))?
+            .clone();
+        V::from_baml_value(value)
+    }
+
+    /// Get a field by reference (zero-copy for primitives and known types).
+    pub fn get_ref<'a, V: FromBamlValueRef<'a, T, S>>(
+        &'a self,
+        field_name: &str,
+    ) -> Result<V, BamlError> {
+        let value = self
+            .fields
+            .get(field_name)
+            .ok_or_else(|| BamlError::internal(format!("missing field '{}'", field_name)))?;
+        V::from_baml_value_ref(value)
+    }
+
+    /// Remove a field and convert it (takes ownership, no clone).
+    pub fn pop<V: FromBamlValue<T, S>>(&mut self, field_name: &str) -> Result<V, BamlError> {
+        let value = self
+            .fields
+            .remove(field_name)
+            .ok_or_else(|| BamlError::internal(format!("missing field '{}'", field_name)))?;
+        V::from_baml_value(value)
     }
 }
 

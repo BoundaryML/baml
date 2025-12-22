@@ -153,3 +153,50 @@ impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S> + BamlTypeName> FromBa
         }
     }
 }
+
+// =============================================================================
+// Wrapper type blanket implementations
+// =============================================================================
+
+use crate::types::{Checked, StreamState, StreamingState};
+
+/// Checked<V> blanket impl - works for any V: FromBamlValue
+impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S>> FromBamlValue<T, S> for Checked<V> {
+    fn from_baml_value(value: BamlValue<T, S>) -> Result<Self, BamlError> {
+        match value {
+            BamlValue::Checked(checked) => {
+                // Extract inner BamlValue, convert to V
+                let inner = V::from_baml_value(*checked.value)?;
+                Ok(Checked {
+                    value: inner,
+                    checks: checked.checks,
+                })
+            }
+            // Allow unwrapped value (no checks = empty checks)
+            other => {
+                let inner = V::from_baml_value(other)?;
+                Ok(Checked {
+                    value: inner,
+                    checks: HashMap::new(),
+                })
+            }
+        }
+    }
+}
+
+/// StreamState<V> blanket impl - works for any V: FromBamlValue
+impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S>> FromBamlValue<T, S> for StreamState<V> {
+    fn from_baml_value(value: BamlValue<T, S>) -> Result<Self, BamlError> {
+        match value {
+            BamlValue::StreamState(ss) => Ok(StreamState {
+                value: V::from_baml_value(*ss.value)?,
+                state: ss.state,
+            }),
+            // Treat unwrapped as Done
+            other => Ok(StreamState {
+                value: V::from_baml_value(other)?,
+                state: StreamingState::Done,
+            }),
+        }
+    }
+}

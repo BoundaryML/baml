@@ -117,3 +117,34 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a Dynami
         }
     }
 }
+
+// =============================================================================
+// Wrapper type FromBamlValueRef implementations
+// =============================================================================
+
+use crate::error::Unknown;
+use crate::types::{Checked, StreamState};
+
+/// Checked ref - returns reference to the Checked wrapper containing BamlValue
+impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
+    for &'a Checked<Box<BamlValue<T, S>>>
+{
+    fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
+        match value {
+            BamlValue::Checked(c) => Ok(c),
+            other => Err(BamlError::type_check::<Checked<Unknown>>(other)),
+        }
+    }
+}
+
+/// StreamState ref - returns reference to the StreamState wrapper containing BamlValue
+impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
+    for &'a StreamState<Box<BamlValue<T, S>>>
+{
+    fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
+        match value {
+            BamlValue::StreamState(ss) => Ok(ss),
+            other => Err(BamlError::type_check::<StreamState<Unknown>>(other)),
+        }
+    }
+}
