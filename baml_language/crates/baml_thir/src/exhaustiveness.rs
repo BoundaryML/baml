@@ -99,6 +99,16 @@ pub enum ValueSet {
     ///
     /// # Example
     /// `200 | 201 | 204` -> `Union([Literal(200), Literal(201), Literal(204)])`
+    ///
+    /// # Note on `OfType` in Unions
+    /// This variant CAN contain multiple `OfType` values with different types.
+    /// This occurs when a typed binding has a union type, e.g.:
+    /// - `x: Success | Failure` creates `Union([OfType("Success"), OfType("Failure")])`
+    ///
+    /// This is intentional and correct. The grammar prevents mixed-type pattern
+    /// unions like `x: int | y: bool` because `:` binds tighter than `|`, so
+    /// `x: int | bool` parses as `x: (int | bool)`. See BEP-002 "Multiple Patterns
+    /// Per Arm" for details.
     Union(Vec<ValueSet>),
 
     /// Matches NO values.
