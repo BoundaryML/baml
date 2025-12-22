@@ -1501,13 +1501,13 @@ impl<'a> Parser<'a> {
     /// Parse a match pattern.
     ///
     /// Grammar (from BEP-002):
-    /// ```text
+    ///
     /// pattern         := binding_pattern | literal_pattern | union_pattern
     /// binding_pattern := IDENT (':' type_expr)?
     /// literal_pattern := 'null' | 'true' | 'false' | INTEGER | FLOAT | STRING
     /// union_pattern   := (literal_pattern | enum_variant) ('|' (literal_pattern | enum_variant))*
     /// enum_variant    := IDENT '.' IDENT
-    /// ```
+    ///
     ///
     /// Note: `_` is parsed as a regular identifier (binding pattern) - semantic
     /// analysis will treat it as a wildcard/discard.
@@ -1530,7 +1530,16 @@ impl<'a> Parser<'a> {
     /// - A literal: null, true, false, integer, float, string
     /// - An enum variant: Ident.Ident
     /// - A binding: ident or ident: Type
+    /// - A parenthesized pattern group: (pattern)
     fn parse_pattern_element(&mut self) {
+        // Handle parenthesized pattern group (for nested unions like `200 | (201 | 202)`)
+        if self.at(TokenKind::LParen) {
+            self.bump(); // (
+            self.parse_match_pattern(); // Recursive - creates nested MATCH_PATTERN
+            self.expect(TokenKind::RParen);
+            return;
+        }
+
         // Check for literals first
         if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
             self.bump();

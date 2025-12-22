@@ -1136,6 +1136,28 @@ impl LoweringContext {
                                 }
                             }
                         }
+                        SyntaxKind::MATCH_PATTERN => {
+                            // Nested pattern group (from parenthesized patterns)
+                            // Flatten the nested pattern into current elements to maintain
+                            // canonical form: (A | B) | C = A | B | C (union associativity)
+                            if let Some(el) = current_element.take() {
+                                elements.push(self.finalize_pattern_element(el));
+                            }
+                            let nested_pat_id = self.lower_match_pattern(&child_node);
+                            // Check if nested pattern is a union and flatten it
+                            let nested_elements: Option<Vec<PatId>> =
+                                match &self.patterns[nested_pat_id] {
+                                    Pattern::Union(sub_elements) => Some(sub_elements.clone()),
+                                    _ => None,
+                                };
+                            if let Some(sub_elements) = nested_elements {
+                                // Flatten: add all sub-elements directly
+                                elements.extend(sub_elements);
+                            } else {
+                                // Single pattern - add as-is
+                                elements.push(nested_pat_id);
+                            }
+                        }
                         _ => {
                             // Handle other nested patterns if needed
                         }

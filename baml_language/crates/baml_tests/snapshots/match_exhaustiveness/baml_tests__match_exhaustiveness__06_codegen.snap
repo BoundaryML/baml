@@ -3,9 +3,9 @@ source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 72
-Objects: 197
-Globals: 72
+Functions: 77
+Objects: 209
+Globals: 77
 
 Function BoolLiteralAfterTypedBool (arity: 1, kind: Exec):
      0    LOAD_VAR 1      (b)
@@ -48,6 +48,29 @@ Function BoolWithCatchAll (arity: 1, kind: Exec):
      8    POP 1              
      9    LOAD_CONST 2       (no)
      10   RETURN             
+
+Function DeeplyNestedLiterals (arity: 1, kind: Exec):
+     0    LOAD_VAR 1         (x)
+     1    LOAD_VAR 2         (@match_scrut_0)
+     2    LOAD_CONST 0       (200)
+     3    CMP_OP ==          
+     4    JUMP_IF_FALSE +3   (to 7)
+     5    POP 1              
+     6    JUMP +13           (to 19)
+     7    POP 1              
+     8    LOAD_VAR 2         (@match_scrut_0)
+     9    LOAD_CONST 1       (201)
+     10   CMP_OP ==          
+     11   JUMP_IF_FALSE +3   (to 14)
+     12   POP 1              
+     13   JUMP +6            (to 19)
+     14   POP 1              
+     15   LOAD_VAR 2         (@match_scrut_0)
+     16   LOAD_CONST 2       (204)
+     17   CMP_OP ==          
+     18   POP 1              
+     19   LOAD_CONST 3       (all success codes)
+     20   RETURN             
 
 Function DuplicateBoolLiteral (arity: 1, kind: Exec):
      0    LOAD_VAR 1         (b)
@@ -643,6 +666,81 @@ Function MixedPatterns (arity: 1, kind: Exec):
      27   LOAD_CONST 5       (negative)
      28   RETURN             
 
+Function NestedEnumVariantUnions (arity: 1, kind: Exec):
+     0   LOAD_VAR 1     (s)
+     1   LOAD_CONST 0   (all statuses)
+     2   RETURN         
+
+Function NestedLiteralUnions (arity: 1, kind: Exec):
+     0    LOAD_VAR 1         (code)
+     1    LOAD_VAR 2         (@match_scrut_0)
+     2    LOAD_CONST 0       (200)
+     3    CMP_OP ==          
+     4    JUMP_IF_FALSE +3   (to 7)
+     5    POP 1              
+     6    JUMP +21           (to 27)
+     7    POP 1              
+     8    LOAD_VAR 2         (@match_scrut_0)
+     9    LOAD_CONST 1       (201)
+     10   CMP_OP ==          
+     11   JUMP_IF_FALSE +3   (to 14)
+     12   POP 1              
+     13   JUMP +14           (to 27)
+     14   POP 1              
+     15   LOAD_VAR 2         (@match_scrut_0)
+     16   LOAD_CONST 2       (202)
+     17   CMP_OP ==          
+     18   JUMP_IF_FALSE +3   (to 21)
+     19   POP 1              
+     20   JUMP +7            (to 27)
+     21   POP 1              
+     22   LOAD_VAR 2         (@match_scrut_0)
+     23   LOAD_CONST 3       (204)
+     24   CMP_OP ==          
+     25   JUMP_IF_FALSE +4   (to 29)
+     26   POP 1              
+     27   LOAD_CONST 4       (success)
+     28   JUMP +39           (to 67)
+     29   POP 1              
+     30   LOAD_VAR 2         (@match_scrut_0)
+     31   LOAD_CONST 5       (400)
+     32   CMP_OP ==          
+     33   JUMP_IF_FALSE +3   (to 36)
+     34   POP 1              
+     35   JUMP +28           (to 63)
+     36   POP 1              
+     37   LOAD_VAR 2         (@match_scrut_0)
+     38   LOAD_CONST 6       (404)
+     39   CMP_OP ==          
+     40   JUMP_IF_FALSE +3   (to 43)
+     41   POP 1              
+     42   JUMP +21           (to 63)
+     43   POP 1              
+     44   LOAD_VAR 2         (@match_scrut_0)
+     45   LOAD_CONST 7       (405)
+     46   CMP_OP ==          
+     47   JUMP_IF_FALSE +3   (to 50)
+     48   POP 1              
+     49   JUMP +14           (to 63)
+     50   POP 1              
+     51   LOAD_VAR 2         (@match_scrut_0)
+     52   LOAD_CONST 8       (406)
+     53   CMP_OP ==          
+     54   JUMP_IF_FALSE +3   (to 57)
+     55   POP 1              
+     56   JUMP +7            (to 63)
+     57   POP 1              
+     58   LOAD_VAR 2         (@match_scrut_0)
+     59   LOAD_CONST 9       (409)
+     60   CMP_OP ==          
+     61   JUMP_IF_FALSE +4   (to 65)
+     62   POP 1              
+     63   LOAD_CONST 10      (client error)
+     64   JUMP +3            (to 67)
+     65   POP 1              
+     66   LOAD_CONST 11      (other)
+     67   RETURN             
+
 Function NestedTypeAlias (arity: 1, kind: Exec):
      0    LOAD_VAR 1          (mr)
      1    LOAD_VAR 2          (@match_scrut_0)
@@ -673,6 +771,21 @@ Function NestedTypeAlias (arity: 1, kind: Exec):
      26   POP 1               
      27   LOAD_CONST 3        (nothing)
      28   RETURN              
+
+Function NestedTypeBindings (arity: 1, kind: Exec):
+     0    LOAD_VAR 1          (r)
+     1    LOAD_VAR 2          (@match_scrut_0)
+     2    LOAD_CONST 0        (0)
+     3    POP_REPLACE 1       
+     4    JUMP +8             (to 12)
+     5    LOAD_VAR 2          (@match_scrut_0)
+     6    LOAD_CONST 1        (<class Failure>)
+     7    CMP_OP instanceof   
+     8    POP 1               
+     9    LOAD_VAR 2          (@match_scrut_0)
+     10   LOAD_CONST 2        (1)
+     11   POP_REPLACE 1       
+     12   RETURN              
 
 Function NonExhaustiveAliasOfLiterals (arity: 1, kind: Exec):
      0   LOAD_VAR 1     (code)
@@ -930,6 +1043,23 @@ Function OverlappingWithBindings (arity: 1, kind: Exec):
      13   LOAD_CONST 1        (remaining)
      14   POP_REPLACE 1       
      15   RETURN              
+
+Function ParenthesizedSingleLiteral (arity: 1, kind: Exec):
+     0    LOAD_VAR 1         (b)
+     1    LOAD_VAR 2         (@match_scrut_0)
+     2    LOAD_CONST 0       (true)
+     3    CMP_OP ==          
+     4    JUMP_IF_FALSE +4   (to 8)
+     5    POP 1              
+     6    LOAD_CONST 1       (yes)
+     7    JUMP +7            (to 14)
+     8    POP 1              
+     9    LOAD_VAR 2         (@match_scrut_0)
+     10   LOAD_CONST 2       (false)
+     11   CMP_OP ==          
+     12   POP 1              
+     13   LOAD_CONST 3       (no)
+     14   RETURN             
 
 Function PartialUnionPatternCoverage (arity: 1, kind: Exec):
      0   LOAD_VAR 1      (r)

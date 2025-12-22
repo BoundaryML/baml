@@ -3642,6 +3642,266 @@ SOURCE_FILE
               QUOTE """
           R_BRACE "}"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NestedTypeBindings"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "r"
+        COLON ":"
+        TYPE_EXPR " Result"
+          WORD "Result"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "r"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "s"
+              COLON ":"
+              TYPE_EXPR
+                WORD "Success"
+                PIPE "|"
+                L_PAREN "("
+                TYPE_EXPR "Failure"
+                  WORD "Failure"
+                R_PAREN ")"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "0"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "f"
+              COLON ":"
+              TYPE_EXPR " Failure"
+                WORD "Failure"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "1"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NestedLiteralUnions"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "code"
+        COLON ":"
+        TYPE_EXPR " int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "code"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN
+              INTEGER_LITERAL "200"
+              PIPE "|"
+              INTEGER_LITERAL "201"
+              PIPE "|"
+              L_PAREN "("
+              MATCH_PATTERN "202 | 204"
+                INTEGER_LITERAL "202"
+                PIPE "|"
+                INTEGER_LITERAL "204"
+              R_PAREN ")"
+            FAT_ARROW "=>"
+            STRING_LITERAL " "success""
+              QUOTE """
+              WORD "success"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN
+              INTEGER_LITERAL "400"
+              PIPE "|"
+              INTEGER_LITERAL "404"
+              PIPE "|"
+              L_PAREN "("
+              MATCH_PATTERN
+                INTEGER_LITERAL "405"
+                PIPE "|"
+                L_PAREN "("
+                MATCH_PATTERN "406 | 409"
+                  INTEGER_LITERAL "406"
+                  PIPE "|"
+                  INTEGER_LITERAL "409"
+                R_PAREN ")"
+              R_PAREN ")"
+            FAT_ARROW "=>"
+            STRING_LITERAL " "client error""
+              QUOTE """
+              KW_CLIENT "client"
+              WORD "error"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "
+        _"
+              WORD "_"
+            FAT_ARROW "=>"
+            STRING_LITERAL " "other""
+              QUOTE """
+              WORD "other"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "DeeplyNestedLiterals"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR " SuccessCode"
+          WORD "SuccessCode"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN
+              L_PAREN "("
+              MATCH_PATTERN "200 | 201"
+                INTEGER_LITERAL "200"
+                PIPE "|"
+                INTEGER_LITERAL "201"
+              R_PAREN ")"
+              PIPE "|"
+              INTEGER_LITERAL "204"
+            FAT_ARROW "=>"
+            STRING_LITERAL " "all success codes""
+              QUOTE """
+              WORD "all"
+              WORD "success"
+              WORD "codes"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ParenthesizedSingleLiteral"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR " bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "b"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN
+              L_PAREN "("
+              MATCH_PATTERN "true"
+                WORD "true"
+              R_PAREN ")"
+            FAT_ARROW "=>"
+            STRING_LITERAL " "yes""
+              QUOTE """
+              WORD "yes"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN
+              L_PAREN "("
+              MATCH_PATTERN "false"
+                WORD "false"
+              R_PAREN ")"
+            FAT_ARROW "=>"
+            STRING_LITERAL " "no""
+              QUOTE """
+              WORD "no"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NestedEnumVariantUnions"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "s"
+        COLON ":"
+        TYPE_EXPR " Status"
+          WORD "Status"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR " string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "s"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN
+              L_PAREN "("
+              MATCH_PATTERN "Status.Active | Status.Pending"
+                WORD "Status"
+                DOT "."
+                WORD "Active"
+                PIPE "|"
+                WORD "Status"
+                DOT "."
+                WORD "Pending"
+              R_PAREN ")"
+              PIPE "|"
+              WORD "Status"
+              DOT "."
+              WORD "Inactive"
+            FAT_ARROW "=>"
+            STRING_LITERAL " "all statuses""
+              QUOTE """
+              WORD "all"
+              WORD "statuses"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
 
 === ERRORS ===
 None

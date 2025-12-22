@@ -3,7 +3,11 @@ source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
+  Function NestedLiteralUnions:
+    Return: String
   Function ExhaustiveEnumWithTypedPattern:
+    Return: String
+  Function ParenthesizedSingleLiteral:
     Return: String
   Function DuplicateEnumVariant:
     Return: String
@@ -123,6 +127,8 @@ expression: output
       - Non-exhaustive match on AlwaysTrue: missing true
   Function ExhaustiveWithNamedCatchAll:
     Return: Int
+  Function NestedTypeBindings:
+    Return: Int
   Function NonExhaustiveAliasOfLiterals:
     Return: String
     Errors:
@@ -139,6 +145,8 @@ expression: output
     Return: String
     Errors:
       - Non-exhaustive match on Status?: missing Status.Pending
+  Function DeeplyNestedLiterals:
+    Return: String
   Function NonExhaustiveFullResultMissingOne:
     Return: String
     Errors:
@@ -186,6 +194,8 @@ expression: output
   Function OverlappingTypedPatterns:
     Return: String
   Function StringLiteralAfterStringType:
+    Return: String
+  Function NestedEnumVariantUnions:
     Return: String
   Function UnionPatternCoversAll:
     Return: String

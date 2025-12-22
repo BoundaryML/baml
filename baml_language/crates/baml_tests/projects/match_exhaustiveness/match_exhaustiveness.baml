@@ -793,3 +793,48 @@ function BoolLiteralAfterTypedBool(b: bool) -> string {
         true => "unreachable"
     }
 }
+
+// ============================================================================
+// NESTED UNION PATTERN TESTS
+// Parenthesized groups in union patterns should flatten correctly
+// Union associativity: (A | B) | C = A | (B | C) = A | B | C
+// ============================================================================
+
+// Exhaustive: nested type bindings with parenthesized union types
+function NestedTypeBindings(r: Result) -> int {
+    match (r) {
+        s: Success | (Failure) => 0,
+        f: Failure => 1
+    }
+}
+
+// Exhaustive: nested literal unions with catch-all
+function NestedLiteralUnions(code: int) -> string {
+    match (code) {
+        200 | 201 | (202 | 204) => "success",
+        400 | 404 | (405 | (406 | 409)) => "client error",
+        _ => "other"
+    }
+}
+
+// Exhaustive: deeply nested literal unions covering all SuccessCode values
+function DeeplyNestedLiterals(x: SuccessCode) -> string {
+    match (x) {
+        (200 | 201) | 204 => "all success codes"
+    }
+}
+
+// Exhaustive: parenthesized single literal (degenerate case)
+function ParenthesizedSingleLiteral(b: bool) -> string {
+    match (b) {
+        (true) => "yes",
+        (false) => "no"
+    }
+}
+
+// Exhaustive: nested enum variant unions
+function NestedEnumVariantUnions(s: Status) -> string {
+    match (s) {
+        (Status.Active | Status.Pending) | Status.Inactive => "all statuses"
+    }
+}

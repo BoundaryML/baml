@@ -3,6 +3,21 @@ source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
+function NestedLiteralUnions {
+  params: [code: Int]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path(["code"])
+      Idx::<Expr>(1): Literal(String("success"))
+      Idx::<Expr>(2): Literal(String("client error"))
+      Idx::<Expr>(3): Literal(String("other"))
+      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(5), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(13), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(14), guard: None, body: Idx::<Expr>(3) }] }
+      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
+    ]
+    root: Idx::<Expr>(5)
+  }
+}
 function ExhaustiveEnumWithTypedPattern {
   params: [s: Path(Path { segments: ["Status"], kind: Plain })]
   return: String
@@ -14,6 +29,20 @@ function ExhaustiveEnumWithTypedPattern {
       Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
     ]
     root: Idx::<Expr>(3)
+  }
+}
+function ParenthesizedSingleLiteral {
+  params: [b: Bool]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path(["b"])
+      Idx::<Expr>(1): Literal(String("yes"))
+      Idx::<Expr>(2): Literal(String("no"))
+      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
+      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
+    ]
+    root: Idx::<Expr>(4)
   }
 }
 function DuplicateEnumVariant {
@@ -593,6 +622,20 @@ function ExhaustiveWithNamedCatchAll {
     root: Idx::<Expr>(6)
   }
 }
+function NestedTypeBindings {
+  params: [r: Path(Path { segments: ["Result"], kind: Plain })]
+  return: Int
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path(["r"])
+      Idx::<Expr>(1): Literal(Int(0))
+      Idx::<Expr>(2): Literal(Int(1))
+      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
+      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
+    ]
+    root: Idx::<Expr>(4)
+  }
+}
 function NonExhaustiveAliasOfLiterals {
   params: [code: Path(Path { segments: ["OkOrCreated"], kind: Plain })]
   return: String
@@ -679,6 +722,19 @@ function NonExhaustiveNullableEnumMissingVariant {
       Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
     ]
     root: Idx::<Expr>(5)
+  }
+}
+function DeeplyNestedLiterals {
+  params: [x: Path(Path { segments: ["SuccessCode"], kind: Plain })]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path(["x"])
+      Idx::<Expr>(1): Literal(String("all success codes"))
+      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(4), guard: None, body: Idx::<Expr>(1) }] }
+      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
+    ]
+    root: Idx::<Expr>(3)
   }
 }
 function NonExhaustiveFullResultMissingOne {
@@ -888,6 +944,19 @@ function StringLiteralAfterStringType {
       Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
     ]
     root: Idx::<Expr>(4)
+  }
+}
+function NestedEnumVariantUnions {
+  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path(["s"])
+      Idx::<Expr>(1): Literal(String("all statuses"))
+      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(4), guard: None, body: Idx::<Expr>(1) }] }
+      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
+    ]
+    root: Idx::<Expr>(3)
   }
 }
 function UnionPatternCoversAll {
