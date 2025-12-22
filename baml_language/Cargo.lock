@@ -433,6 +433,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_lsp_tests"
+version = "0.0.0"
+dependencies = [
+ "baml_db",
+ "baml_diagnostics",
+ "baml_hir",
+ "baml_thir",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "salsa",
+ "syn",
+ "walkdir",
+]
+
+[[package]]
 name = "baml_lsp_types"
 version = "0.0.0"
 dependencies = [

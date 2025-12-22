@@ -200,7 +200,7 @@
     ]
   },
   "scripts": {
-    "dev": "tsup --watch --sourcemap",
+    "dev": "concurrently -n cli,tsup -c blue,green \"cd ../../../baml_language && bacon --headless baml-cli\" \"tsup --watch --sourcemap\"",
     "build": "pnpm run typecheck && tsup",
     "release": "pnpm run typecheck && tsup --minify",
     "vscode:package": "vsce package --no-dependencies",

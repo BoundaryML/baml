@@ -10,6 +10,23 @@ use lsp_types::{TextDocumentItem, Url};
 
 /// Walks up from `file_path` until it finds a directory named `baml_src`.
 ///
+/// # Precedence
+///
+/// 1. `baml_src` - Standard BAML project directory (always takes precedence)
+/// 2. `baml_language` - Internal development fallback (see below)
+///
+/// # Internal Development Support
+///
+/// If no `baml_src` directory is found but the path contains a directory named
+/// `baml_language` anywhere in its ancestry, this function returns the file's
+/// parent directory as the project root. This allows `.baml` files in the
+/// baml_language repository (e.g., test fixtures in `crates/baml_lsp_tests/`)
+/// to be treated as standalone single-file projects for development/testing.
+///
+/// **Note:** This `baml_language` behavior is for internal BAML development only
+/// and should not be relied upon by end users. Users should always place their
+/// BAML files in a `baml_src/` directory.
+///
 /// # Arguments
 ///
 /// * `file_path` - A reference to the file path.
@@ -17,8 +34,10 @@ use lsp_types::{TextDocumentItem, Url};
 /// # Returns
 ///
 /// * `Some(PathBuf)` if a directory with basename "baml_src" is found,
+///   or if the path is within a "baml_language" directory (returns file's parent dir),
 ///   or `None` otherwise.
 pub fn find_top_level_parent(file_path: &Path) -> Option<PathBuf> {
+    // First, check for baml_src (standard project detection - takes precedence)
     let mut current = file_path;
     if let Some(file_name) = current.file_name() {
         if file_name == "baml_src" {
@@ -33,6 +52,22 @@ pub fn find_top_level_parent(file_path: &Path) -> Option<PathBuf> {
         }
         current = parent;
     }
+
+    // Fallback: Check for baml_language directory (internal development only).
+    // If found, treat the file's parent directory as its own single-file project.
+    // This enables LSP features for test fixtures and development files.
+    let mut check_path = file_path;
+    while let Some(parent) = check_path.parent() {
+        if let Some(dir_name) = parent.file_name() {
+            if dir_name == "baml_language" {
+                // Return the file's parent directory as the project root.
+                // This makes each .baml file its own isolated single-file project.
+                return file_path.parent().map(|p| p.to_path_buf());
+            }
+        }
+        check_path = parent;
+    }
+
     None
 }
 
@@ -157,4 +192,71 @@ pub fn convert_to_text_document(file_path: &Path) -> io::Result<TextDocumentItem
         version: 1,
         text: content,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_top_level_parent_baml_src() {
+        // Standard baml_src detection
+        let path = PathBuf::from("/path/to/baml_src/subdir/file.baml");
+        let result = find_top_level_parent(&path);
+        assert_eq!(result, Some(PathBuf::from("/path/to/baml_src")));
+    }
+
+    #[test]
+    fn test_find_top_level_parent_baml_src_direct() {
+        // Path is the baml_src directory itself
+        let path = PathBuf::from("/path/to/baml_src");
+        let result = find_top_level_parent(&path);
+        assert_eq!(result, Some(PathBuf::from("/path/to/baml_src")));
+    }
+
+    #[test]
+    fn test_find_top_level_parent_baml_language() {
+        // baml_language directory should return file's parent (internal dev support)
+        let path = PathBuf::from("/path/to/baml_language/crates/test/file.baml");
+        let result = find_top_level_parent(&path);
+        assert_eq!(
+            result,
+            Some(PathBuf::from("/path/to/baml_language/crates/test"))
+        );
+    }
+
+    #[test]
+    fn test_find_top_level_parent_baml_language_nested() {
+        // Deeply nested in baml_language
+        let path = PathBuf::from(
+            "/home/user/baml_language/crates/baml_lsp_tests/test_files/syntax/class/valid.baml",
+        );
+        let result = find_top_level_parent(&path);
+        assert_eq!(
+            result,
+            Some(PathBuf::from(
+                "/home/user/baml_language/crates/baml_lsp_tests/test_files/syntax/class"
+            ))
+        );
+    }
+
+    #[test]
+    fn test_find_top_level_parent_baml_src_takes_precedence() {
+        // baml_src inside baml_language should prefer baml_src (it takes precedence)
+        let path = PathBuf::from("/path/to/baml_language/examples/baml_src/file.baml");
+        let result = find_top_level_parent(&path);
+        // baml_src is checked first, so it wins
+        assert_eq!(
+            result,
+            Some(PathBuf::from("/path/to/baml_language/examples/baml_src"))
+        );
+    }
+
+    #[test]
+    fn test_find_top_level_parent_no_match() {
+        // No baml_src or baml_language in path
+        let path = PathBuf::from("/random/path/to/file.baml");
+        let result = find_top_level_parent(&path);
+        assert_eq!(result, None);
+    }
 }
