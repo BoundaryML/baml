@@ -348,9 +348,34 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             Ty::Audio => vec![ValueSet::OfType(Name::new("audio"))],
             Ty::Video => vec![ValueSet::OfType(Name::new("video"))],
             Ty::Pdf => vec![ValueSet::OfType(Name::new("pdf"))],
-            Ty::Class(_) => vec![ValueSet::OfType(Name::new("<class>"))],
-            Ty::Enum(_) => vec![ValueSet::OfType(Name::new("<enum>"))],
-            Ty::List(_) => vec![ValueSet::OfType(Name::new("<list>"))],
+
+            // NOTE: Ty::Class and Ty::Enum branches are currently unreachable.
+            // All user-defined types flow through Ty::Named (see lower.rs), not these
+            // resolved ID variants. The ID variants exist for potential future use but
+            // aren't constructed during type inference. Generic names are safe here,
+            // but we add debug_assert to catch if this assumption ever changes.
+            Ty::Class(_) => {
+                debug_assert!(
+                    false,
+                    "Ty::Class reached in exhaustiveness checking - expected Ty::Named. \
+                    If this is intentional, extract the class name from ClassId."
+                );
+                vec![ValueSet::OfType(Name::new("<class>"))]
+            }
+            Ty::Enum(_) => {
+                debug_assert!(
+                    false,
+                    "Ty::Enum reached in exhaustiveness checking - expected Ty::Named. \
+                    If this is intentional, extract the enum name from EnumId."
+                );
+                vec![ValueSet::OfType(Name::new("<enum>"))]
+            }
+
+            // List types: include element type for proper distinction between e.g. int[] vs string[]
+            Ty::List(inner) => vec![ValueSet::OfType(Name::new(&format!("{inner}[]")))],
+
+            // Map types are not yet fully implemented in HIR (see tests/maps.rs).
+            // When they are, this should include key/value types: map<{key}, {value}>
             Ty::Map { .. } => vec![ValueSet::OfType(Name::new("<map>"))],
 
             // Special types
