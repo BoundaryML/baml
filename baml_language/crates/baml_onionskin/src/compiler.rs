@@ -32,6 +32,7 @@ pub(crate) enum CompilerPhase {
     Ast,
     Hir,
     Thir,
+    TypedIr,
     Mir,
     Diagnostics,
     Codegen,
@@ -46,6 +47,7 @@ impl CompilerPhase {
         CompilerPhase::Ast,
         CompilerPhase::Hir,
         CompilerPhase::Thir,
+        CompilerPhase::TypedIr,
         CompilerPhase::Mir,
         CompilerPhase::Diagnostics,
         CompilerPhase::Codegen,
@@ -59,7 +61,8 @@ impl CompilerPhase {
             CompilerPhase::Parser => "Parser (CST)",
             CompilerPhase::Ast => "AST (Typed Nodes)",
             CompilerPhase::Hir => "HIR (High-level IR)",
-            CompilerPhase::Thir => "THIR (Typed IR)",
+            CompilerPhase::Thir => "THIR (Typed HIR)",
+            CompilerPhase::TypedIr => "TypedIR (Expr-only)",
             CompilerPhase::Mir => "MIR (CFG)",
             CompilerPhase::Diagnostics => "Diagnostics",
             CompilerPhase::Codegen => "Codegen (Bytecode)",
@@ -74,7 +77,8 @@ impl CompilerPhase {
             CompilerPhase::Parser => CompilerPhase::Ast,
             CompilerPhase::Ast => CompilerPhase::Hir,
             CompilerPhase::Hir => CompilerPhase::Thir,
-            CompilerPhase::Thir => CompilerPhase::Mir,
+            CompilerPhase::Thir => CompilerPhase::TypedIr,
+            CompilerPhase::TypedIr => CompilerPhase::Mir,
             CompilerPhase::Mir => CompilerPhase::Diagnostics,
             CompilerPhase::Diagnostics => CompilerPhase::Codegen,
             CompilerPhase::Codegen => CompilerPhase::VmRunner,
@@ -90,7 +94,8 @@ impl CompilerPhase {
             CompilerPhase::Ast => CompilerPhase::Parser,
             CompilerPhase::Hir => CompilerPhase::Ast,
             CompilerPhase::Thir => CompilerPhase::Hir,
-            CompilerPhase::Mir => CompilerPhase::Thir,
+            CompilerPhase::TypedIr => CompilerPhase::Thir,
+            CompilerPhase::Mir => CompilerPhase::TypedIr,
             CompilerPhase::Diagnostics => CompilerPhase::Mir,
             CompilerPhase::Codegen => CompilerPhase::Diagnostics,
             CompilerPhase::VmRunner => CompilerPhase::Codegen,
@@ -374,6 +379,7 @@ impl CompilerRunner {
             CompilerPhase::Ast,
             CompilerPhase::Hir,
             CompilerPhase::Thir,
+            CompilerPhase::TypedIr,
             CompilerPhase::Mir,
             CompilerPhase::Diagnostics,
             CompilerPhase::Codegen,
@@ -392,6 +398,7 @@ impl CompilerRunner {
             CompilerPhase::Ast => self.run_ast(),
             CompilerPhase::Hir => self.run_hir(),
             CompilerPhase::Thir => self.run_thir(),
+            CompilerPhase::TypedIr => self.run_typed_ir(),
             CompilerPhase::Mir => self.run_mir(),
             CompilerPhase::Diagnostics => self.run_diagnostics(),
             CompilerPhase::Codegen => self.run_codegen(),
@@ -849,6 +856,95 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Thir, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Thir, output_annotated);
+    }
+
+    fn run_typed_ir(&mut self) {
+        use baml_typed_ir::{lower_from_hir, pretty_print};
+
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Build typing context and class fields for inference
+        let file_list: Vec<_> = self.source_files.values().copied().collect();
+        let globals = build_typing_context_from_files(&self.db, &file_list);
+        let class_fields = build_class_fields_from_files(&self.db, self.project_root);
+
+        // Sort files alphabetically
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(path);
+
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
+
+            // Get HIR items for this file
+            let items_struct = baml_hir::file_items(&self.db, *source_file);
+            let items = items_struct.items(&self.db);
+
+            for item in items {
+                if let ItemId::Function(func_id) = item {
+                    let signature = function_signature(&self.db, *func_id);
+                    let func_name = signature.name.to_string();
+                    let body = function_body(&self.db, *func_id);
+
+                    // Skip non-expression bodies
+                    let baml_hir::FunctionBody::Expr(_) = &*body else {
+                        continue;
+                    };
+
+                    // Run type inference
+                    let inference_result = baml_thir::infer_function(
+                        &self.db,
+                        &signature,
+                        &body,
+                        Some(globals.clone()),
+                        Some(class_fields.clone()),
+                        *func_id,
+                    );
+
+                    // Try to lower to TypedIR
+                    let status = if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    };
+
+                    let header = format!("=== Function: {} ===", func_name);
+                    writeln!(output, "{}", header).ok();
+                    output_annotated.push((header, status));
+
+                    match lower_from_hir(&self.db, &body, &inference_result) {
+                        Ok(typed_ir) => {
+                            // Pretty print the TypedIR
+                            let ir_output = pretty_print(&typed_ir);
+                            for line in ir_output.lines() {
+                                writeln!(output, "{}", line).ok();
+                                output_annotated.push((line.to_string(), status));
+                            }
+                        }
+                        Err(e) => {
+                            // Show error if lowering failed
+                            let error_line = format!("  <lowering failed: {}>", e);
+                            writeln!(output, "{}", error_line).ok();
+                            output_annotated.push((error_line, LineStatus::Recomputed));
+                        }
+                    }
+
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+            }
+
+            writeln!(output).ok();
+            output_annotated.push((String::new(), LineStatus::Unknown));
+        }
+
+        self.phase_outputs.insert(CompilerPhase::TypedIr, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::TypedIr, output_annotated);
     }
 
     fn run_mir(&mut self) {

@@ -206,9 +206,29 @@ pub fn compile_files(db: &dyn baml_mir::Db, files: &[SourceFile]) -> Program {
                             *func_loc,
                         );
 
-                        // Lower to MIR
-                        let mir =
-                            baml_mir::lower_function(&signature, &body, &inference, db, &classes);
+                        // Try TypedIR path first (fails if Missing nodes present)
+                        let mir = match baml_typed_ir::lower_from_hir(db, &body, &inference) {
+                            Ok(typed_ir) => {
+                                // Use the new TypedIR → MIR path
+                                baml_mir::lower_from_typed_ir(
+                                    &signature,
+                                    &typed_ir,
+                                    db,
+                                    &classes,
+                                )
+                            }
+                            Err(_) => {
+                                // Fall back to old HIR path if TypedIR lowering fails
+                                // (e.g., due to Missing nodes)
+                                baml_mir::lower_function(
+                                    &signature,
+                                    &body,
+                                    &inference,
+                                    db,
+                                    &classes,
+                                )
+                            }
+                        };
 
                         // Compile MIR to bytecode
                         let ctx = MirCodegenContext {

@@ -147,6 +147,8 @@ fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
         CompilerPhase::Ast,
         CompilerPhase::Hir,
         CompilerPhase::Thir,
+        CompilerPhase::TypedIr,
+        CompilerPhase::Mir,
         CompilerPhase::Diagnostics,
         CompilerPhase::Codegen,
     ] {

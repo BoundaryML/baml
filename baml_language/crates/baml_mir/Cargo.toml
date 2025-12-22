@@ -10,6 +10,7 @@ rust-version = { workspace = true }
 baml_base = { workspace = true }
 baml_hir = { workspace = true }
 baml_thir = { workspace = true }
+baml_typed_ir = { workspace = true }
 baml_workspace = { workspace = true }
 la-arena = { workspace = true }
 rustc-hash = { workspace = true }
