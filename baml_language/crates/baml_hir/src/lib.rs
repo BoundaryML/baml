@@ -351,8 +351,9 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
             function_def.name().as_ref().map(SyntaxToken::text) == Some(&func_name)
         });
 
-    // Lower the function.
-    function_def.map_or(Arc::new(FunctionBody::Missing), |f| FunctionBody::lower(&f))
+    // Lower the function with file_id for span tracking.
+    let file_id = file.file_id(db);
+    function_def.map_or(Arc::new(FunctionBody::Missing), |f| FunctionBody::lower(&f, file_id))
 }
 
 //
