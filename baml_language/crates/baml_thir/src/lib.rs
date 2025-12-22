@@ -221,6 +221,12 @@ pub fn build_type_aliases_from_project(
             let item_tree = baml_hir::file_item_tree(db, file);
             let alias_data = &item_tree[alias_loc.id(db)];
 
+            // TODO(recursive-aliases): Recursive type aliases like `type A = A | B` are not
+            // validated here. The lowered type will contain `Ty::Named("A")` which causes
+            // infinite recursion in `exhaustiveness::expand_type_to_values`. To fix properly:
+            // 1. Build a dependency graph of alias references
+            // 2. Detect cycles (e.g., via topological sort or Tarjan's SCC)
+            // 3. Report a diagnostic and insert `Ty::Error` for cyclic aliases
             let lowered_ty = lower_type_ref(db, &alias_data.type_ref);
             type_aliases.insert(alias_data.name.clone(), lowered_ty);
         }
