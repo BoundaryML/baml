@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 77
-Objects: 209
-Globals: 77
+Functions: 80
+Objects: 222
+Globals: 80
 
 Function BoolLiteralAfterTypedBool (arity: 1, kind: Exec):
      0    LOAD_VAR 1      (b)
@@ -563,6 +563,11 @@ Function GuardedWithFallback (arity: 1, kind: Exec):
      13   LOAD_CONST 0       (0)
      14   RETURN             
 
+Function HighLineNumberNonExhaustive (arity: 1, kind: Exec):
+     0   LOAD_VAR 1     (s)
+     1   LOAD_CONST 0   (active only)
+     2   RETURN         
+
 Function IntLiteralUnionPattern (arity: 1, kind: Exec):
      0    LOAD_VAR 1         (code)
      1    LOAD_VAR 2         (@match_scrut_0)
@@ -666,6 +671,19 @@ Function MixedPatterns (arity: 1, kind: Exec):
      27   LOAD_CONST 5       (negative)
      28   RETURN             
 
+Function MultipleUnreachableSpans (arity: 1, kind: Exec):
+     0    LOAD_VAR 1     (s)
+     1    LOAD_CONST 0   (active)
+     2    JUMP +8        (to 10)
+     3    LOAD_CONST 1   (duplicate 1)
+     4    JUMP +6        (to 10)
+     5    LOAD_CONST 2   (inactive)
+     6    JUMP +4        (to 10)
+     7    LOAD_CONST 3   (duplicate 2)
+     8    JUMP +2        (to 10)
+     9    LOAD_CONST 4   (pending)
+     10   RETURN         
+
 Function NestedEnumVariantUnions (arity: 1, kind: Exec):
      0   LOAD_VAR 1     (s)
      1   LOAD_CONST 0   (all statuses)
@@ -740,6 +758,41 @@ Function NestedLiteralUnions (arity: 1, kind: Exec):
      65   POP 1              
      66   LOAD_CONST 11      (other)
      67   RETURN             
+
+Function NestedMatchSpans (arity: 2, kind: Exec):
+     0    LOAD_VAR 1          (x)
+     1    LOAD_VAR 3          (@match_scrut_0)
+     2    LOAD_CONST 0        (0)
+     3    CMP_OP ==           
+     4    JUMP_IF_FALSE +26   (to 30)
+     5    POP 1               
+     6    LOAD_VAR 2          (y)
+     7    LOAD_VAR 4          (@match_scrut_1)
+     8    LOAD_CONST 1        (true)
+     9    CMP_OP ==           
+     10   JUMP_IF_FALSE +4    (to 14)
+     11   POP 1               
+     12   LOAD_CONST 2        (zero true)
+     13   JUMP +15            (to 28)
+     14   POP 1               
+     15   LOAD_VAR 4          (@match_scrut_1)
+     16   LOAD_CONST 3        (false)
+     17   CMP_OP ==           
+     18   JUMP_IF_FALSE +4    (to 22)
+     19   POP 1               
+     20   LOAD_CONST 4        (zero false)
+     21   JUMP +7             (to 28)
+     22   POP 1               
+     23   LOAD_VAR 4          (@match_scrut_1)
+     24   LOAD_CONST 1        (true)
+     25   CMP_OP ==           
+     26   POP 1               
+     27   LOAD_CONST 5        (unreachable nested)
+     28   POP_REPLACE 1       
+     29   JUMP +3             (to 32)
+     30   POP 1               
+     31   LOAD_CONST 6        (other)
+     32   RETURN              
 
 Function NestedTypeAlias (arity: 1, kind: Exec):
      0    LOAD_VAR 1          (mr)

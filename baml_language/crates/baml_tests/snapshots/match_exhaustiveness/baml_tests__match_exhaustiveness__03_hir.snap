@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -469,6 +469,23 @@ function IntLiteralUnionPattern {
     root: Idx::<Expr>(4)
   }
 }
+function MultipleUnreachableSpans {
+  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path(["s"])
+      Idx::<Expr>(1): Literal(String("active"))
+      Idx::<Expr>(2): Literal(String("duplicate 1"))
+      Idx::<Expr>(3): Literal(String("inactive"))
+      Idx::<Expr>(4): Literal(String("duplicate 2"))
+      Idx::<Expr>(5): Literal(String("pending"))
+      Idx::<Expr>(6): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(4) }, MatchArm { pattern: Idx::<Pattern>(4), guard: None, body: Idx::<Expr>(5) }] }
+      Idx::<Expr>(7): Block { stmts: [], tail_expr: Some(Idx::<Expr>(6)) }
+    ]
+    root: Idx::<Expr>(7)
+  }
+}
 function ExhaustiveCustomBool {
   params: [b: Path(Path { segments: ["CustomBool"], kind: Plain })]
   return: String
@@ -523,6 +540,24 @@ function ExhaustiveTrueType {
       Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
     ]
     root: Idx::<Expr>(3)
+  }
+}
+function NestedMatchSpans {
+  params: [x: Int, y: Bool]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path(["x"])
+      Idx::<Expr>(1): Path(["y"])
+      Idx::<Expr>(2): Literal(String("zero true"))
+      Idx::<Expr>(3): Literal(String("zero false"))
+      Idx::<Expr>(4): Literal(String("unreachable nested"))
+      Idx::<Expr>(5): Match { scrutinee: Idx::<Expr>(1), arms: [MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(4) }] }
+      Idx::<Expr>(6): Literal(String("other"))
+      Idx::<Expr>(7): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(5) }, MatchArm { pattern: Idx::<Pattern>(4), guard: None, body: Idx::<Expr>(6) }] }
+      Idx::<Expr>(8): Block { stmts: [], tail_expr: Some(Idx::<Expr>(7)) }
+    ]
+    root: Idx::<Expr>(8)
   }
 }
 function NonExhaustiveOptionalMissingValue {
@@ -707,6 +742,19 @@ function GuardedWithFallback {
       Idx::<Expr>(9): Block { stmts: [], tail_expr: Some(Idx::<Expr>(8)) }
     ]
     root: Idx::<Expr>(9)
+  }
+}
+function HighLineNumberNonExhaustive {
+  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
+  return: String
+  body: Expr {
+    exprs: [
+      Idx::<Expr>(0): Path(["s"])
+      Idx::<Expr>(1): Literal(String("active only"))
+      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
+      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
+    ]
+    root: Idx::<Expr>(3)
   }
 }
 function NonExhaustiveNullableEnumMissingVariant {

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -97,6 +97,11 @@ expression: output
       - Non-exhaustive match on bool: missing false
   Function IntLiteralUnionPattern:
     Return: String
+  Function MultipleUnreachableSpans:
+    Return: String
+    Errors:
+      - Unreachable match arm
+      - Unreachable match arm
   Function ExhaustiveCustomBool:
     Return: String
   Function ExhaustiveMixedLiterals:
@@ -107,6 +112,10 @@ expression: output
     Return: String
   Function ExhaustiveTrueType:
     Return: String
+  Function NestedMatchSpans:
+    Return: String
+    Errors:
+      - Unreachable match arm
   Function NonExhaustiveOptionalMissingValue:
     Return: String
     Errors:
@@ -141,6 +150,10 @@ expression: output
     Return: String
   Function GuardedWithFallback:
     Return: Int
+  Function HighLineNumberNonExhaustive:
+    Return: String
+    Errors:
+      - Non-exhaustive match on Status: missing Status.Inactive, Status.Pending
   Function NonExhaustiveNullableEnumMissingVariant:
     Return: String
     Errors:
