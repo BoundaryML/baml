@@ -278,6 +278,19 @@ fn convert_type_error<T: std::fmt::Display>(
         TypeError::NotIndexable { ty, span } => {
             (format!("Type `{ty}` is not indexable"), span, "E0008")
         }
+        TypeError::NonExhaustiveMatch {
+            scrutinee_type,
+            missing_cases,
+            span,
+        } => (
+            format!(
+                "Non-exhaustive match on `{scrutinee_type}`: missing cases {}",
+                missing_cases.join(", ")
+            ),
+            span,
+            "E0012",
+        ),
+        TypeError::UnreachableArm { span } => ("Unreachable match arm".to_string(), span, "E0013"),
     };
 
     let range = span_to_range_with_index(line_index, span);

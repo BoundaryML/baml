@@ -199,6 +199,9 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 let has_else = if else_branch.is_some() { " + else" } else { "" };
                 format!("If{has_else}: {ty}")
             }
+            Expr::Match { arms, .. } => {
+                format!("Match({} arms): {}", arms.len(), ty)
+            }
             Expr::Missing => format!("<missing>: {ty}"),
         }
     }
@@ -278,6 +281,25 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                     self.pop_continuation();
                 }
             }
+            Expr::Match { scrutinee, arms } => {
+                // Render scrutinee
+                let scrut_prefix = self.make_prefix(arms.is_empty());
+                writeln!(self.output, "{scrut_prefix}scrutinee:").ok();
+                self.push_continuation(!arms.is_empty());
+                self.render_expr(*scrutinee, body, result, true);
+                self.pop_continuation();
+
+                // Render each arm
+                for (i, arm) in arms.iter().enumerate() {
+                    let is_last_arm = i == arms.len() - 1;
+                    let arm_prefix = self.make_prefix(is_last_arm);
+                    writeln!(self.output, "{arm_prefix}arm[{i}]:").ok();
+                    self.push_continuation(!is_last_arm);
+                    // Render arm body
+                    self.render_expr(arm.body, body, result, true);
+                    self.pop_continuation();
+                }
+            }
             Expr::Literal(_) | Expr::Path(_) | Expr::Missing => {
                 // Leaf nodes, no children
             }
@@ -304,6 +326,10 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 let pat = &body.patterns[*pattern];
                 let var_name = match pat {
                     Pattern::Binding(name) => name.to_string(),
+                    Pattern::TypedBinding { name, ty } => format!("{name}: {ty:?}"),
+                    Pattern::Literal(lit) => format!("{lit:?}"),
+                    Pattern::EnumVariant { enum_name, variant } => format!("{enum_name}.{variant}"),
+                    Pattern::Union(pats) => format!("union[{}]", pats.len()),
                 };
 
                 let ty_str = if let Some(type_ref) = type_annotation {
@@ -470,6 +496,7 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
         }
         Expr::Block { .. } => "{ ... }".to_string(),
         Expr::If { .. } => "if ... { ... }".to_string(),
+        Expr::Match { arms, .. } => format!("match {{ {} arms }}", arms.len()),
         Expr::Missing => "<missing>".to_string(),
     }
 }
@@ -521,5 +548,14 @@ pub fn short_display(error: &TypeError<Ty<'_>>) -> String {
         TypeError::NotCallable { ty, .. } => format!("{ty} is not callable"),
         TypeError::NotIndexable { ty, .. } => format!("{ty} is not indexable"),
         TypeError::NoSuchField { ty, field, .. } => format!("{ty} has no field {field}"),
+        TypeError::NonExhaustiveMatch {
+            scrutinee_type,
+            missing_cases,
+            ..
+        } => {
+            let missing = missing_cases.join(", ");
+            format!("Non-exhaustive match on {scrutinee_type}: missing {missing}")
+        }
+        TypeError::UnreachableArm { .. } => "Unreachable match arm".to_string(),
     }
 }

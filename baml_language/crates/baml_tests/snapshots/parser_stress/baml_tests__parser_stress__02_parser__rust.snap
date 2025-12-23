@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -70,8 +70,7 @@ SOURCE_FILE
   COLON ":"
   WORD "ident"
   R_PAREN ")"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   L_BRACE "{"
   HASH "#"
   L_BRACKET "["
@@ -1155,7 +1154,7 @@ SOURCE_FILE
   WORD "Self"
   GREATER ">"
   L_BRACE "{"
-  WORD "match"
+  KW_MATCH "match"
   WORD "syntax"
   DOT "."
   WORD "kind"
@@ -1165,8 +1164,7 @@ SOURCE_FILE
   WORD "SyntaxKind"
   DOUBLE_COLON "::"
   WORD "FUNCTION_DEF"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "Some"
   L_PAREN "("
   WORD "Item"
@@ -1183,8 +1181,7 @@ SOURCE_FILE
   WORD "SyntaxKind"
   DOUBLE_COLON "::"
   WORD "CLASS_DEF"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "Some"
   L_PAREN "("
   WORD "Item"
@@ -1201,8 +1198,7 @@ SOURCE_FILE
   WORD "SyntaxKind"
   DOUBLE_COLON "::"
   WORD "ENUM_DEF"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "Some"
   L_PAREN "("
   WORD "Item"
@@ -1219,8 +1215,7 @@ SOURCE_FILE
   WORD "SyntaxKind"
   DOUBLE_COLON "::"
   WORD "CLIENT_DEF"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "Some"
   L_PAREN "("
   WORD "Item"
@@ -1237,8 +1232,7 @@ SOURCE_FILE
   WORD "SyntaxKind"
   DOUBLE_COLON "::"
   WORD "TEST_DEF"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "Some"
   L_PAREN "("
   WORD "Item"
@@ -1255,8 +1249,7 @@ SOURCE_FILE
   WORD "SyntaxKind"
   DOUBLE_COLON "::"
   WORD "RETRY_POLICY_DEF"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "Some"
   L_PAREN "("
   WORD "Item"
@@ -1273,8 +1266,7 @@ SOURCE_FILE
   WORD "SyntaxKind"
   DOUBLE_COLON "::"
   WORD "TEMPLATE_STRING_DEF"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   L_BRACE "{"
   WORD "Some"
   L_PAREN "("
@@ -1292,8 +1284,7 @@ SOURCE_FILE
   WORD "SyntaxKind"
   DOUBLE_COLON "::"
   WORD "TYPE_ALIAS_DEF"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "Some"
   L_PAREN "("
   WORD "Item"
@@ -1308,8 +1299,7 @@ SOURCE_FILE
   R_PAREN ")"
   COMMA ","
   WORD "_"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "None"
   COMMA ","
   R_BRACE "}"
@@ -1324,7 +1314,7 @@ SOURCE_FILE
   AND "&"
   WORD "SyntaxNode"
   L_BRACE "{"
-  WORD "match"
+  KW_MATCH "match"
   WORD "self"
   L_BRACE "{"
   WORD "Item"
@@ -1333,8 +1323,7 @@ SOURCE_FILE
   L_PAREN "("
   WORD "it"
   R_PAREN ")"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "it"
   DOT "."
   WORD "syntax"
@@ -1347,8 +1336,7 @@ SOURCE_FILE
   L_PAREN "("
   WORD "it"
   R_PAREN ")"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "it"
   DOT "."
   WORD "syntax"
@@ -1361,8 +1349,7 @@ SOURCE_FILE
   L_PAREN "("
   WORD "it"
   R_PAREN ")"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "it"
   DOT "."
   WORD "syntax"
@@ -1375,8 +1362,7 @@ SOURCE_FILE
   L_PAREN "("
   WORD "it"
   R_PAREN ")"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "it"
   DOT "."
   WORD "syntax"
@@ -1389,8 +1375,7 @@ SOURCE_FILE
   L_PAREN "("
   WORD "it"
   R_PAREN ")"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "it"
   DOT "."
   WORD "syntax"
@@ -1403,8 +1388,7 @@ SOURCE_FILE
   L_PAREN "("
   WORD "it"
   R_PAREN ")"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "it"
   DOT "."
   WORD "syntax"
@@ -1417,8 +1401,7 @@ SOURCE_FILE
   L_PAREN "("
   WORD "it"
   R_PAREN ")"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "it"
   DOT "."
   WORD "syntax"
@@ -1431,8 +1414,7 @@ SOURCE_FILE
   L_PAREN "("
   WORD "it"
   R_PAREN ")"
-  EQUALS "="
-  GREATER ">"
+  FAT_ARROW "=>"
   WORD "it"
   DOT "."
   WORD "syntax"
@@ -2104,22 +2086,12 @@ Error: Expected top-level declaration, found RParen
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
     ╭─[ 0:21:32 ]
     │
  21 │     ($name:ident, $kind:ident) => {
-    │                                ┬  
-    │                                ╰── Expected top-level declaration, found Equals
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found Greater
-    ╭─[ 0:21:33 ]
-    │
- 21 │     ($name:ident, $kind:ident) => {
-    │                                 ┬  
-    │                                 ╰── Expected top-level declaration, found Greater
+    │                                ─┬  
+    │                                 ╰── Expected top-level declaration, found FatArrow
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -12464,12 +12436,12 @@ Error: Expected top-level declaration, found LBrace
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Match
      ╭─[ 0:220:9 ]
      │
  220 │         match syntax.kind() {
      │         ──┬──  
-     │           ╰──── Expected top-level declaration, found Word
+     │           ╰──── Expected top-level declaration, found Match
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -12564,22 +12536,12 @@ Error: Expected top-level declaration, found Word
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:221:38 ]
      │
  221 │             SyntaxKind::FUNCTION_DEF => Some(Item::Function(FunctionDef { syntax })),
-     │                                      ┬  
-     │                                      ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:221:39 ]
-     │
- 221 │             SyntaxKind::FUNCTION_DEF => Some(Item::Function(FunctionDef { syntax })),
-     │                                       ┬  
-     │                                       ╰── Expected top-level declaration, found Greater
+     │                                      ─┬  
+     │                                       ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -12744,22 +12706,12 @@ Error: Expected top-level declaration, found Word
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:222:35 ]
      │
  222 │             SyntaxKind::CLASS_DEF => Some(Item::Class(ClassDef { syntax })),
-     │                                   ┬  
-     │                                   ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:222:36 ]
-     │
- 222 │             SyntaxKind::CLASS_DEF => Some(Item::Class(ClassDef { syntax })),
-     │                                    ┬  
-     │                                    ╰── Expected top-level declaration, found Greater
+     │                                   ─┬  
+     │                                    ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -12924,22 +12876,12 @@ Error: Expected top-level declaration, found Word
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:223:34 ]
      │
  223 │             SyntaxKind::ENUM_DEF => Some(Item::Enum(EnumDef { syntax })),
-     │                                  ┬  
-     │                                  ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:223:35 ]
-     │
- 223 │             SyntaxKind::ENUM_DEF => Some(Item::Enum(EnumDef { syntax })),
-     │                                   ┬  
-     │                                   ╰── Expected top-level declaration, found Greater
+     │                                  ─┬  
+     │                                   ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -13104,22 +13046,12 @@ Error: Expected top-level declaration, found Word
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:224:36 ]
      │
  224 │             SyntaxKind::CLIENT_DEF => Some(Item::Client(ClientDef { syntax })),
-     │                                    ┬  
-     │                                    ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:224:37 ]
-     │
- 224 │             SyntaxKind::CLIENT_DEF => Some(Item::Client(ClientDef { syntax })),
-     │                                     ┬  
-     │                                     ╰── Expected top-level declaration, found Greater
+     │                                    ─┬  
+     │                                     ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -13284,22 +13216,12 @@ Error: Expected top-level declaration, found Word
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:225:34 ]
      │
  225 │             SyntaxKind::TEST_DEF => Some(Item::Test(TestDef { syntax })),
-     │                                  ┬  
-     │                                  ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:225:35 ]
-     │
- 225 │             SyntaxKind::TEST_DEF => Some(Item::Test(TestDef { syntax })),
-     │                                   ┬  
-     │                                   ╰── Expected top-level declaration, found Greater
+     │                                  ─┬  
+     │                                   ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -13464,22 +13386,12 @@ Error: Expected top-level declaration, found Word
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:226:42 ]
      │
  226 │             SyntaxKind::RETRY_POLICY_DEF => Some(Item::RetryPolicy(RetryPolicyDef { syntax })),
-     │                                          ┬  
-     │                                          ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:226:43 ]
-     │
- 226 │             SyntaxKind::RETRY_POLICY_DEF => Some(Item::RetryPolicy(RetryPolicyDef { syntax })),
-     │                                           ┬  
-     │                                           ╰── Expected top-level declaration, found Greater
+     │                                          ─┬  
+     │                                           ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -13644,22 +13556,12 @@ Error: Expected top-level declaration, found Word
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:227:45 ]
      │
  227 │             SyntaxKind::TEMPLATE_STRING_DEF => {
-     │                                             ┬  
-     │                                             ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:227:46 ]
-     │
- 227 │             SyntaxKind::TEMPLATE_STRING_DEF => {
-     │                                              ┬  
-     │                                              ╰── Expected top-level declaration, found Greater
+     │                                             ─┬  
+     │                                              ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -13834,22 +13736,12 @@ Error: Expected top-level declaration, found Word
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:230:40 ]
      │
  230 │             SyntaxKind::TYPE_ALIAS_DEF => Some(Item::TypeAlias(TypeAliasDef { syntax })),
-     │                                        ┬  
-     │                                        ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:230:41 ]
-     │
- 230 │             SyntaxKind::TYPE_ALIAS_DEF => Some(Item::TypeAlias(TypeAliasDef { syntax })),
-     │                                         ┬  
-     │                                         ╰── Expected top-level declaration, found Greater
+     │                                        ─┬  
+     │                                         ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -13994,22 +13886,12 @@ Error: Expected top-level declaration, found Word
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:231:15 ]
      │
  231 │             _ => None,
-     │               ┬  
-     │               ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:231:16 ]
-     │
- 231 │             _ => None,
-     │                ┬  
-     │                ╰── Expected top-level declaration, found Greater
+     │               ─┬  
+     │                ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -14154,12 +14036,12 @@ Error: Expected top-level declaration, found LBrace
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found Match
      ╭─[ 0:236:9 ]
      │
  236 │         match self {
      │         ──┬──  
-     │           ╰──── Expected top-level declaration, found Word
+     │           ╰──── Expected top-level declaration, found Match
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -14244,22 +14126,12 @@ Error: Expected top-level declaration, found RParen
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:237:32 ]
      │
  237 │             Item::Function(it) => it.syntax(),
-     │                                ┬  
-     │                                ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:237:33 ]
-     │
- 237 │             Item::Function(it) => it.syntax(),
-     │                                 ┬  
-     │                                 ╰── Expected top-level declaration, found Greater
+     │                                ─┬  
+     │                                 ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -14384,22 +14256,12 @@ Error: Expected top-level declaration, found RParen
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:238:29 ]
      │
  238 │             Item::Class(it) => it.syntax(),
-     │                             ┬  
-     │                             ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:238:30 ]
-     │
- 238 │             Item::Class(it) => it.syntax(),
-     │                              ┬  
-     │                              ╰── Expected top-level declaration, found Greater
+     │                             ─┬  
+     │                              ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -14524,22 +14386,12 @@ Error: Expected top-level declaration, found RParen
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:239:28 ]
      │
  239 │             Item::Enum(it) => it.syntax(),
-     │                            ┬  
-     │                            ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:239:29 ]
-     │
- 239 │             Item::Enum(it) => it.syntax(),
-     │                             ┬  
-     │                             ╰── Expected top-level declaration, found Greater
+     │                            ─┬  
+     │                             ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -14664,22 +14516,12 @@ Error: Expected top-level declaration, found RParen
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:240:30 ]
      │
  240 │             Item::Client(it) => it.syntax(),
-     │                              ┬  
-     │                              ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:240:31 ]
-     │
- 240 │             Item::Client(it) => it.syntax(),
-     │                               ┬  
-     │                               ╰── Expected top-level declaration, found Greater
+     │                              ─┬  
+     │                               ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -14804,22 +14646,12 @@ Error: Expected top-level declaration, found RParen
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:241:28 ]
      │
  241 │             Item::Test(it) => it.syntax(),
-     │                            ┬  
-     │                            ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:241:29 ]
-     │
- 241 │             Item::Test(it) => it.syntax(),
-     │                             ┬  
-     │                             ╰── Expected top-level declaration, found Greater
+     │                            ─┬  
+     │                             ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -14944,22 +14776,12 @@ Error: Expected top-level declaration, found RParen
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:242:35 ]
      │
  242 │             Item::RetryPolicy(it) => it.syntax(),
-     │                                   ┬  
-     │                                   ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:242:36 ]
-     │
- 242 │             Item::RetryPolicy(it) => it.syntax(),
-     │                                    ┬  
-     │                                    ╰── Expected top-level declaration, found Greater
+     │                                   ─┬  
+     │                                    ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -15084,22 +14906,12 @@ Error: Expected top-level declaration, found RParen
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:243:38 ]
      │
  243 │             Item::TemplateString(it) => it.syntax(),
-     │                                      ┬  
-     │                                      ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:243:39 ]
-     │
- 243 │             Item::TemplateString(it) => it.syntax(),
-     │                                       ┬  
-     │                                       ╰── Expected top-level declaration, found Greater
+     │                                      ─┬  
+     │                                       ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -15224,22 +15036,12 @@ Error: Expected top-level declaration, found RParen
      │ Note: Error code: E0010
 ─────╯
 
-Error: Expected top-level declaration, found Equals
+Error: Expected top-level declaration, found FatArrow
      ╭─[ 0:244:33 ]
      │
  244 │             Item::TypeAlias(it) => it.syntax(),
-     │                                 ┬  
-     │                                 ╰── Expected top-level declaration, found Equals
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected top-level declaration, found Greater
-     ╭─[ 0:244:34 ]
-     │
- 244 │             Item::TypeAlias(it) => it.syntax(),
-     │                                  ┬  
-     │                                  ╰── Expected top-level declaration, found Greater
+     │                                 ─┬  
+     │                                  ╰── Expected top-level declaration, found FatArrow
      │ 
      │ Note: Error code: E0010
 ─────╯

@@ -124,6 +124,8 @@ Error: very brief description in the form of an Enum Variant
 | E0059  | Validation     | MissingRequiredProperty        | block span                                                 | Required property missing |
 | E0060  | Validation     | ConfigPropertyMissingValue     | property span                                              | Property needs a value |
 | E0061  | Typing         | TypeNotAllowedAsMapKey         | map key span                                               | Invalid map key type |
+| E0062  | Typing         | NonExhaustiveMatch             | match expression span                                      | Match does not cover all cases |
+| E0063  | Typing         | UnreachableMatchArm            | match arm span                                             | Match arm masked by previous patterns |
 
 ## Appendix: Runtime Errors (VM)
 

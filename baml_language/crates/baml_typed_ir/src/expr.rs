@@ -181,6 +181,25 @@ pub enum Expr {
 
     /// Index access: `base[index]`
     Index { base: ExprId, index: ExprId },
+
+    /// Match expression: `match scrutinee { arm1, arm2, ... }`
+    ///
+    /// Pattern matching with exhaustiveness checking.
+    Match {
+        scrutinee: ExprId,
+        arms: Vec<MatchArm>,
+    },
+}
+
+/// A single arm in a match expression.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchArm {
+    /// The pattern to match against.
+    pub pattern: PatId,
+    /// Optional guard: `if condition`
+    pub guard: Option<ExprId>,
+    /// The body expression (result if this arm matches).
+    pub body: ExprId,
 }
 
 /// Literal values.
@@ -248,9 +267,20 @@ pub enum AssignOp {
 /// Binding pattern.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pattern {
-    /// Simple variable binding.
+    /// Simple variable binding: `x`, `user`, `_`
     Binding(Name),
-    // Future: Wildcard, Constructor, etc.
+
+    /// Typed binding pattern: `s: Success`, `n: int`
+    TypedBinding { name: Name, ty: crate::Ty },
+
+    /// Literal pattern: `null`, `true`, `false`, `42`, `3.14`, `"hello"`
+    Literal(Literal),
+
+    /// Enum variant pattern: `Status.Active`
+    EnumVariant { enum_name: Name, variant: Name },
+
+    /// Union pattern: `200 | 201 | 204` or `Status.Active | Status.Pending`
+    Union(Vec<PatId>),
 }
 
 // ============================================================================

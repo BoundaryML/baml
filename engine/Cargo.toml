@@ -185,7 +185,7 @@ tsify = { version = "0.5.6", features = ["js"] }
 
 
 [workspace.package]
-version = "0.215.1"
+version = "0.215.2"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

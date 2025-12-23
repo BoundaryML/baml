@@ -2,7 +2,7 @@
   "name": "baml-extension",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.215.1",
+  "version": "0.215.2",
   "publisher": "Boundary",
   "packageManager": "pnpm@9.12.0",
   "repository": "https://github.com/BoundaryML/baml",
@@ -200,7 +200,7 @@
     ]
   },
   "scripts": {
-    "dev": "tsup --watch --sourcemap",
+    "dev": "concurrently -n cli,tsup -c blue,green \"cd ../../../baml_language && bacon --headless baml-cli\" \"tsup --watch --sourcemap\"",
     "build": "pnpm run typecheck && tsup",
     "release": "pnpm run typecheck && tsup --minify",
     "vscode:package": "vsce package --no-dependencies",

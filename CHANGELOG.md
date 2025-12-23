@@ -2,7 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.215.2](https://github.com/boundaryml/baml/compare/0.215.1..0.215.2) - 2025-12-22
+
+### Features
+- added openrouter first-class support and updated fern docs (#2861) - ([f6de38e](https://github.com/boundaryml/baml/commit/f6de38e6fe29272cfc863d6466d38c086d93fcd5)) - Paulo Rossi Rodrigues
+
+### Fixes
+- 0.215.1 release automation broke
+
 ## [0.215.1](https://github.com/boundaryml/baml/compare/0.215.0..0.215.1) - 2025-12-20
+
+WARNING: this release is incomplete. Release automation was broken for 0.215.1 and not all artifacts were correctly uploaded.
 
 ### Bug Fixes
 - Vertex ai model error (#2836) - ([8482c1d](https://github.com/boundaryml/baml/commit/8482c1d06135b35cbaf3715e7dec5e4a841c3d52)) - aaronvg

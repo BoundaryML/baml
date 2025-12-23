@@ -17,7 +17,9 @@ on:
       - "test-release/*.*"
       - "*.*"
     branches:
-      - bump-version-0.215.1
+      - gofix2
+      - cursor/implement-collector-clear-and-update-docs-7c67
+      - greg/bedrock-pdf-citations
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock
@@ -35,13 +37,241 @@ env:
   TURBO_TEAM: gloo
 
 jobs:
+  determine-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version_string: ${{ steps.set-version.outputs.version }}
+      is_release_tag: ${{ steps.set-version.outputs.is_release_tag }}
+    steps:
+      - name: Set Version Info
+        id: set-version
+        run: |
+          VERSION="0.1.0" # Default version
+          IS_RELEASE="false"
+          REF_NAME="${{ github.ref_name }}"
+          REF_TYPE="${{ github.ref_type }}"
+
+          if [[ "$REF_TYPE" == "branch" ]]; then
+            # If it's a branch, keep the version as the default
+            : # No-op, version remains "canary"
+          elif [[ "$REF_TYPE" == "tag" ]];
+          then
+            # Use sanitized tag name for version initially
+            VERSION=$(echo "$REF_NAME" | sed 's|/|-|g')
+            # Check if it's a release tag matching vX.Y.Z
+            if [[ "$REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              IS_RELEASE="true"
+              # Use the exact tag name for releases
+              VERSION="$REF_NAME"
+            fi
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_release_tag=$IS_RELEASE" >> $GITHUB_OUTPUT
+          echo "Determined version: $VERSION"
+          echo "Is release tag: $IS_RELEASE"
+
+  build-python-release:
+    uses: ./.github/workflows/build-python-release.reusable.yaml
+
+  build-typescript-release:
+    uses: ./.github/workflows/build-typescript-release.reusable.yaml
+
+  build-cli:
+    needs: determine-version
+    uses: ./.github/workflows/build-cli-release.reusable.yaml
+    with:
+      version: ${{ needs.determine-version.outputs.version_string }}
+      package_for_release: true
+
+  build-vscode-reusable:
+    needs: [determine-version, build-cli]
+    uses: ./.github/workflows/build-vscode-release.reusable.yaml
+    with:
+      version: ${{ needs.determine-version.outputs.version_string }}
+      is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+
   build-jetbrains-release:
     uses: ./.github/workflows/build-jetbrains-release.reusable.yaml
 
+  integ-tests:
+    uses: ./.github/workflows/integ-tests.yml
+
+  all-builds:
+    name: Assert all builds passed
+    runs-on: ubuntu-latest
+    needs:
+      - determine-version
+      - build-python-release
+      - build-typescript-release
+      - build-cli
+      - build-vscode-reusable
+      - build-jetbrains-release
+    steps:
+      - run: echo "::do-nothing::" >/dev/null
+
+  publish-to-pypi:
+    environment: release
+    needs: [all-builds]
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+      - name: Verify wheel count
+        run: |
+          set -euo pipefail
+          ls dist/
+          wheel_count=$(ls dist/*.whl 2>/dev/null | wc -l)
+          if [ "$wheel_count" -lt 8 ]; then
+            echo "Error: Expected at least 8 wheels, but found $wheel_count"
+            exit 1
+          fi
+          echo "Found $wheel_count wheels"
+      - name: Publish package to PyPI
+        uses: PyO3/maturin-action@v1
+        with:
+          command: upload
+          args: dist/*
+
+  publish-to-npm:
+    environment: release
+    needs: [all-builds]
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+        
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
+          node-version: latest
+
+      - name: Ensure npm CLI supports trusted publishing
+        run: |
+          set -euo pipefail
+          required_version="11.5.1"
+          current_version="$(npm --version)"
+          if [ "$(printf '%s\n' "$required_version" "$current_version" | sort -V | head -n1)" != "$required_version" ]; then
+            echo "npm $current_version is lower than required $required_version" >&2
+            echo "npm 11.5.1+ is required for trusted publishing because it is the earliest version that can use OIDC auth" >&2
+            exit 1
+          fi
+          echo "npm $current_version satisfies >= $required_version"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bindings-*
+          path: engine/language_client_typescript/artifacts
+
+      - name: Publish to NPM
+        # OIDC is pinned to `release.yml` as the workflow filename for every architecture we release
+        run: pnpm --filter=@boundaryml/baml publish --access public --no-git-checks
+
+  # publish-to-rubygems:
+  #   environment: release
+  #   needs: [all-builds]
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     - uses: rubygems/configure-rubygems-credentials@main
+  #       with:
+  #         # https://rubygems.org/profile/oidc/api_key_roles/rg_oidc_akr_p6x4xz53qtk948na3bgy
+  #         role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bgy
+
+  #     - uses: jdx/mise-action@v2
+
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: gem-*
+  #         path: engine/language_client_ruby/pkg/
+  #         merge-multiple: true
+
+  #     - working-directory: engine/language_client_ruby
+  #       run: |
+  #         set -euxo pipefail
+  #         find pkg
+  #         for i in $(ls pkg/*.gem); do
+  #           gem push $i
+  #         done
+
+  publish-to-open-vsx:
+    environment: release
+    needs: [determine-version, all-builds]
+    runs-on: ubuntu-latest
+    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
+          install_dependencies: false
+          npm-token: ${{ secrets.NPM_TOKEN }}
+      - name: Download VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-vscode-vsix-*
+          path: vsix-artifacts
+          merge-multiple: true
+      - name: List downloaded VSIXs
+        run: ls -l vsix-artifacts/
+      - name: Publish to Open VSX
+        run: npx ovsx publish --packagePath ./vsix-artifacts/*.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+  publish-to-vscode-marketplace:
+    environment: release
+    needs: [determine-version, all-builds]
+    runs-on: ubuntu-latest
+    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
+          install_dependencies: false
+          npm-token: ${{ secrets.NPM_TOKEN }}
+      - name: Download VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-vscode-vsix-*
+          path: vsix-artifacts
+          merge-multiple: true
+      - name: List downloaded VSIXs
+        run: ls -la vsix-artifacts/
+      - name: Publish to VSCode Marketplace
+        run: npx @vscode/vsce publish --packagePath ./vsix-artifacts/*.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCODE_PAT }}
+
   publish-to-jetbrains-marketplace:
     environment: release
-    needs: [build-jetbrains-release]
+    needs: [determine-version, all-builds]
     runs-on: ubuntu-latest
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup Tools
@@ -60,3 +290,66 @@ jobs:
         run: cd ./jetbrains && ./gradlew publishPlugin
         env:
           INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
+
+  publish-to-github:
+    environment: release
+    permissions:
+      contents: write
+    needs: [all-builds, determine-version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all baml-cli artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-cli-*
+          path: cli-artifacts
+          merge-multiple: true
+      - name: Download all libbaml-cffi artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: libbaml-cffi-*
+          path: cffi-artifacts
+          merge-multiple: true
+      - name: Download playground artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: playground-dist-*
+          path: playground-artifacts
+          merge-multiple: true
+      - name: List downloaded artifacts
+        run: |
+          echo "CLI artifacts:"
+          ls -R cli-artifacts/
+          echo "\nCFFI artifacts:"
+          ls -R cffi-artifacts/
+          echo "\nPlayground artifacts:"
+          ls -R playground-artifacts/
+      - name: Prepare changelog
+        run: |
+          touch CHANGELOG.txt
+          if [[ "${{ needs.determine-version.outputs.is_release_tag }}" == "true" ]]; then
+            awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt
+          fi
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ needs.determine-version.outputs.version_string }}
+          tag_name: ${{ needs.determine-version.outputs.version_string }}
+          body_path: CHANGELOG.txt
+          draft: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
+          prerelease: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
+          files: |
+            cli-artifacts/**/*
+            cffi-artifacts/**/*
+            playground-artifacts/playground-dist-*.tar.gz
+            playground-artifacts/playground-dist-*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          generate_release_notes: false
+
+  publish-to-zed-extensions:
+    needs: [all-builds]
+    uses: ./.github/workflows/publish-zed-release.reusable.yaml
+    secrets:
+      SAM_BAML_ZED_GITHUB_TOKEN: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}

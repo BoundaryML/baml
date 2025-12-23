@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use baml_base::Name;
 use baml_hir::FunctionSignature;
 use baml_thir::Ty;
-use baml_typed_ir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, Pattern, UnaryOp};
+use baml_typed_ir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
@@ -202,7 +202,15 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             } => {
                 // Extract the variable name from the pattern first
                 let pat = body.pattern(*pattern);
-                let Pattern::Binding(name) = pat;
+                let name = match pat {
+                    Pattern::Binding(name) => name.clone(),
+                    Pattern::TypedBinding { name, .. } => name.clone(),
+                    // Literal/EnumVariant/Union patterns don't make sense in let bindings,
+                    // but we handle them gracefully
+                    Pattern::Literal(_) | Pattern::EnumVariant { .. } | Pattern::Union(_) => {
+                        panic!("BUG: non-binding pattern in let statement: {pat:?}")
+                    }
+                };
 
                 // Lower the value with the actual variable name
                 let local_ty = Self::lower_typed_ir_ty(var_ty);
@@ -212,7 +220,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 self.lower_expr(*value, Place::local(local), body);
 
                 // Bind the variable
-                self.locals.insert(name.clone(), local);
+                self.locals.insert(name, local);
 
                 // Lower the body - this IS the result
                 // No special "tail expression" handling needed!
@@ -462,6 +470,182 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                         index_local,
                     ))),
                 );
+            }
+
+            Expr::Match { scrutinee, arms } => {
+                // Lower scrutinee to a temp
+                let scrutinee_ty = Self::lower_typed_ir_ty(body.ty(*scrutinee));
+                let scrutinee_local = self.builder.temp(scrutinee_ty.clone());
+                self.lower_expr(*scrutinee, Place::local(scrutinee_local), body);
+
+                // Create join block
+                let join_block = self.builder.create_block();
+
+                // For each arm, create test and body blocks
+                for arm in arms {
+                    let arm_block = self.builder.create_block();
+                    let next_block = self.builder.create_block();
+
+                    // Generate pattern test
+                    self.lower_pattern_test(
+                        arm.pattern,
+                        scrutinee_local,
+                        &scrutinee_ty,
+                        arm_block,
+                        next_block,
+                        body,
+                    );
+
+                    // Arm body
+                    self.builder.set_current_block(arm_block);
+                    if let Some(guard) = arm.guard {
+                        // Create a separate block for the guarded body
+                        let body_block = self.builder.create_block();
+
+                        // Lower guard expression
+                        let guard_local = self.builder.temp(Ty::Bool);
+                        self.lower_expr(guard, Place::local(guard_local), body);
+
+                        // Branch: if guard is true go to body_block, else go to next_block
+                        // Use branch instead of switch for boolean conditions
+                        self.builder.branch(
+                            Operand::copy_local(guard_local),
+                            body_block,
+                            next_block,
+                        );
+
+                        // Continue in body_block
+                        self.builder.set_current_block(body_block);
+                    }
+                    self.lower_expr(arm.body, dest.clone(), body);
+                    self.builder.goto(join_block);
+
+                    self.builder.set_current_block(next_block);
+                }
+
+                // Fallthrough (should be unreachable with exhaustive matching)
+                self.builder.goto(join_block);
+                self.builder.set_current_block(join_block);
+            }
+        }
+    }
+
+    /// Lower a pattern match test, branching to `success_block` if the pattern matches,
+    /// or `fail_block` if it doesn't.
+    fn lower_pattern_test(
+        &mut self,
+        pat_id: PatId,
+        scrutinee_local: Local,
+        scrutinee_ty: &Ty<'db>,
+        success_block: BlockId,
+        fail_block: BlockId,
+        body: &ExprBody,
+    ) {
+        let pat = body.pattern(pat_id);
+        match pat {
+            Pattern::Binding(name) => {
+                // Binding always matches - bind the variable and go to success
+                let local =
+                    self.builder
+                        .declare_local(Some(name.clone()), scrutinee_ty.clone(), None);
+                self.builder.assign(
+                    Place::local(local),
+                    Rvalue::Use(Operand::copy_local(scrutinee_local)),
+                );
+                self.locals.insert(name.clone(), local);
+                self.builder.goto(success_block);
+            }
+            Pattern::TypedBinding { name, ty } => {
+                // TypedBinding checks if scrutinee is an instance of the given type
+                // Convert TypedIR type to THIR type for IsType check
+                let pattern_ty = Self::lower_typed_ir_ty(ty);
+
+                // Emit instanceof check
+                let check_local = self.builder.temp(Ty::Bool);
+                self.builder.assign(
+                    Place::local(check_local),
+                    Rvalue::IsType {
+                        operand: Operand::copy_local(scrutinee_local),
+                        ty: pattern_ty.clone(),
+                    },
+                );
+
+                // Branch on the check result
+                // If type matches, bind the variable and go to success
+                // If not, go to fail block
+                let bind_block = self.builder.create_block();
+                self.builder
+                    .branch(Operand::copy_local(check_local), bind_block, fail_block);
+
+                // In bind block: bind the variable and go to success
+                self.builder.set_current_block(bind_block);
+                let local = self
+                    .builder
+                    .declare_local(Some(name.clone()), pattern_ty, None);
+                self.builder.assign(
+                    Place::local(local),
+                    Rvalue::Use(Operand::copy_local(scrutinee_local)),
+                );
+                self.locals.insert(name.clone(), local);
+                self.builder.goto(success_block);
+            }
+            Pattern::Literal(lit) => {
+                // Compare scrutinee with literal
+                let lit_const = Self::lower_literal(lit);
+                let cmp_local = self.builder.temp(Ty::Bool);
+                self.builder.assign(
+                    Place::local(cmp_local),
+                    Rvalue::BinaryOp {
+                        op: BinOp::Eq,
+                        left: Operand::copy_local(scrutinee_local),
+                        right: Operand::Constant(lit_const),
+                    },
+                );
+                // Use branch instead of switch for boolean conditions
+                // (Switch compares against Int which doesn't match Bool)
+                self.builder
+                    .branch(Operand::copy_local(cmp_local), success_block, fail_block);
+            }
+            Pattern::EnumVariant { enum_name, variant } => {
+                // Compare scrutinee (enum value) with the variant
+                let variant_const = Constant::EnumVariant {
+                    enum_name: enum_name.clone(),
+                    variant: variant.clone(),
+                };
+                let cmp_local = self.builder.temp(Ty::Bool);
+                self.builder.assign(
+                    Place::local(cmp_local),
+                    Rvalue::BinaryOp {
+                        op: BinOp::Eq,
+                        left: Operand::copy_local(scrutinee_local),
+                        right: Operand::Constant(variant_const),
+                    },
+                );
+                // Use branch instead of switch for boolean conditions
+                self.builder
+                    .branch(Operand::copy_local(cmp_local), success_block, fail_block);
+            }
+            Pattern::Union(pats) => {
+                // Union pattern matches if any sub-pattern matches
+                // Try each pattern in order
+                for (i, &sub_pat_id) in pats.iter().enumerate() {
+                    let next_try = if i + 1 < pats.len() {
+                        self.builder.create_block()
+                    } else {
+                        fail_block
+                    };
+                    self.lower_pattern_test(
+                        sub_pat_id,
+                        scrutinee_local,
+                        scrutinee_ty,
+                        success_block,
+                        next_try,
+                        body,
+                    );
+                    if i + 1 < pats.len() {
+                        self.builder.set_current_block(next_try);
+                    }
+                }
             }
         }
     }

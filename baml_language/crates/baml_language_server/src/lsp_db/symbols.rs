@@ -529,6 +529,7 @@ fn format_type_ref(ty: &baml_hir::TypeRef) -> String {
         TypeRef::StringLiteral(s) => format!("\"{}\"", s),
         TypeRef::IntLiteral(i) => i.to_string(),
         TypeRef::FloatLiteral(f) => f.clone(),
+        TypeRef::BoolLiteral(b) => b.to_string(),
         TypeRef::Generic { base, args } => {
             let args_str = args
                 .iter()

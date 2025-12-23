@@ -100,7 +100,8 @@ fn format_type_ref(type_ref: &baml_hir::TypeRef) -> String {
             .join(" | "),
         TypeRef::StringLiteral(s) => format!("\"{}\"", s),
         TypeRef::IntLiteral(n) => n.to_string(),
-        TypeRef::FloatLiteral(s) => s.clone(),
+        TypeRef::FloatLiteral(f) => f.clone(),
+        TypeRef::BoolLiteral(b) => b.to_string(),
         TypeRef::Generic { base, args } => {
             let args_str = args
                 .iter()

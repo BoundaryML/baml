@@ -789,6 +789,9 @@ navigation:
             path: 03-reference/baml/clients/providers/openai-responses.mdx
           - page: "OpenAI from Azure"
             path: 03-reference/baml/clients/providers/azure.mdx
+          - page: "OpenRouter"
+            slug: openrouter
+            path: 03-reference/baml/clients/providers/openrouter.mdx
           - page: "openai-generic"
             path: 03-reference/baml/clients/providers/openai-generic.mdx
           - page: "Microsoft Foundry (openai-generic)"
@@ -818,9 +821,6 @@ navigation:
           - page: "Ollama (openai-generic)"
             slug: ollama
             path: 03-reference/baml/clients/providers/ollama.mdx
-          - page: "OpenRouter (openai-generic)"
-            slug: openrouter
-            path: 03-reference/baml/clients/providers/openrouter.mdx
           - page: "Vercel AI Gateway (openai-generic)"
             slug: vercel-ai-gateway
             path: 03-reference/baml/clients/providers/vercel-ai-gateway.mdx

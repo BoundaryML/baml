@@ -187,6 +187,9 @@ impl crate::OpenAIClientProviderVariant {
             crate::OpenAIClientProviderVariant::Responses => {
                 openai::UnresolvedOpenAI::create_responses(properties)
             }
+            crate::OpenAIClientProviderVariant::OpenRouter => {
+                openai::UnresolvedOpenAI::create_openrouter(properties)
+            }
         }
     }
 }

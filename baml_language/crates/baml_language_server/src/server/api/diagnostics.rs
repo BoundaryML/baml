@@ -217,6 +217,8 @@ pub(super) fn project_diagnostics(
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
+                        None, // type_aliases
+                        None, // enum_variants
                         *func_loc,
                     );
 
@@ -391,6 +393,20 @@ fn type_error_to_diagnostic<T: std::fmt::Display>(
         TypeError::NotIndexable { ty, span } => {
             (format!("Type `{}` is not indexable", ty), span, "E0008")
         }
+        TypeError::NonExhaustiveMatch {
+            scrutinee_type,
+            missing_cases,
+            span,
+        } => (
+            format!(
+                "Non-exhaustive match on `{}`: missing cases {}",
+                scrutinee_type,
+                missing_cases.join(", ")
+            ),
+            span,
+            "E0012",
+        ),
+        TypeError::UnreachableArm { span } => ("Unreachable match arm".to_string(), span, "E0013"),
     };
 
     let (_, source_text, line_index) = file_info.get(&span.file_id)?;
@@ -430,6 +446,8 @@ fn get_type_error_file_id<T>(error: &TypeError<T>) -> FileId {
         TypeError::NotCallable { span, .. } => span.file_id,
         TypeError::NoSuchField { span, .. } => span.file_id,
         TypeError::NotIndexable { span, .. } => span.file_id,
+        TypeError::NonExhaustiveMatch { span, .. } => span.file_id,
+        TypeError::UnreachableArm { span, .. } => span.file_id,
     }
 }
 

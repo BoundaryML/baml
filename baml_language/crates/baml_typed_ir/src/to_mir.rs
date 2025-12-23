@@ -143,8 +143,13 @@ impl<'a> TypedIrToMir<'a> {
 
                 // 2. Bind the variable
                 let pat = self.body.pattern(*pattern);
-                let Pattern::Binding(name) = pat;
-                self.locals.insert(name.to_string(), local);
+                // Only handle simple binding patterns for now - match patterns are handled separately
+                if let Pattern::Binding(name) = pat {
+                    self.locals.insert(name.to_string(), local);
+                } else if let Pattern::TypedBinding { name, .. } = pat {
+                    self.locals.insert(name.to_string(), local);
+                }
+                // Other pattern types (Literal, EnumVariant, Union) don't introduce bindings in let statements
 
                 // 3. Lower the body - this IS the result
                 // No special "tail expression" handling needed!
@@ -326,6 +331,43 @@ impl<'a> TypedIrToMir<'a> {
                 self.lower_expr(*index, Destination::Local(index_local));
 
                 self.emit_index(base_local, index_local, dest);
+                LowerResult::Continue
+            }
+
+            Expr::Match { scrutinee, arms } => {
+                // Lower scrutinee
+                let scrutinee_local = self.alloc_local();
+                self.lower_expr(*scrutinee, Destination::Local(scrutinee_local));
+
+                // Create blocks for each arm and a join block
+                let join_block = self.create_block();
+
+                // For now, we implement match as a series of if-else branches
+                // A more sophisticated implementation would use decision trees
+                for arm in arms {
+                    let arm_block = self.create_block();
+                    let next_block = self.create_block();
+
+                    // Emit pattern match test and branch
+                    // (simplified - real impl would handle all pattern types)
+                    self.emit_branch(scrutinee_local, arm_block, next_block);
+
+                    // Arm body
+                    self.set_current_block(arm_block);
+                    if let Some(guard) = arm.guard {
+                        let guard_local = self.alloc_local();
+                        self.lower_expr(guard, Destination::Local(guard_local));
+                        // Would branch on guard result
+                    }
+                    self.lower_expr(arm.body, dest.clone());
+                    self.emit_goto(join_block);
+
+                    self.set_current_block(next_block);
+                }
+
+                // Fallthrough (shouldn't happen with exhaustive matching)
+                self.emit_goto(join_block);
+                self.set_current_block(join_block);
                 LowerResult::Continue
             }
         }

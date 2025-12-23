@@ -67,6 +67,57 @@ ast_node!(ConfigItem, CONFIG_ITEM);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
+
+impl TypeExpr {
+    /// Check if this is a union type (contains PIPE separators).
+    ///
+    /// Returns `true` for types like `Success | Failure` or `"user" | "assistant"`.
+    pub fn is_union(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::PIPE)
+    }
+
+    /// Get the text parts of this type expression, split by PIPE separators.
+    ///
+    /// For union types like `A | B | C`, returns `["A", "B", "C"]`.
+    /// For non-union types like `string?`, returns `["string?"]`.
+    ///
+    /// Each part is trimmed of surrounding whitespace.
+    pub fn parts(&self) -> Vec<String> {
+        let mut parts = Vec::new();
+        let mut current_part = String::new();
+
+        for child in self.syntax.children_with_tokens() {
+            match child {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::PIPE {
+                        let trimmed = current_part.trim().to_string();
+                        if !trimmed.is_empty() {
+                            parts.push(trimmed);
+                        }
+                        current_part = String::new();
+                    } else {
+                        current_part.push_str(token.text());
+                    }
+                }
+                rowan::NodeOrToken::Node(child_node) => {
+                    // For nested nodes (like TYPE_ARGS), include their full text
+                    current_part.push_str(&child_node.text().to_string());
+                }
+            }
+        }
+
+        // Include the final part
+        let trimmed = current_part.trim().to_string();
+        if !trimmed.is_empty() {
+            parts.push(trimmed);
+        }
+
+        parts
+    }
+}
 ast_node!(BlockAttribute, BLOCK_ATTRIBUTE);
 
 ast_node!(Expr, EXPR);
@@ -80,6 +131,10 @@ ast_node!(BreakStmt, BREAK_STMT);
 ast_node!(ContinueStmt, CONTINUE_STMT);
 ast_node!(PathExpr, PATH_EXPR);
 ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
+ast_node!(MatchExpr, MATCH_EXPR);
+ast_node!(MatchArm, MATCH_ARM);
+ast_node!(MatchPattern, MATCH_PATTERN);
+ast_node!(MatchGuard, MATCH_GUARD);
 
 // Implement accessor methods
 impl SourceFile {
@@ -739,6 +794,7 @@ impl BlockExpr {
                         | SyntaxKind::UNARY_EXPR
                         | SyntaxKind::CALL_EXPR
                         | SyntaxKind::IF_EXPR
+                        | SyntaxKind::MATCH_EXPR
                         | SyntaxKind::BLOCK_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
@@ -798,6 +854,202 @@ impl FieldAccessExpr {
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| token.kind() == SyntaxKind::WORD)
             .last() // The field name is the last WORD token
+    }
+}
+
+impl MatchExpr {
+    /// Get the scrutinee expression (the value being matched).
+    ///
+    /// For `match (expr) { ... }`, returns the expression inside parentheses.
+    pub fn scrutinee(&self) -> Option<SyntaxNode> {
+        // The scrutinee is the first child node (expression between parentheses)
+        self.syntax.children().next()
+    }
+
+    /// Iterate over all match arms.
+    pub fn arms(&self) -> impl Iterator<Item = MatchArm> + '_ {
+        self.syntax.children().filter_map(MatchArm::cast)
+    }
+}
+
+impl MatchArm {
+    /// Get the pattern for this arm.
+    pub fn pattern(&self) -> Option<MatchPattern> {
+        self.syntax.children().find_map(MatchPattern::cast)
+    }
+
+    /// Get the guard expression, if present.
+    ///
+    /// For `pattern if condition => body`, returns the `if condition` part.
+    pub fn guard(&self) -> Option<MatchGuard> {
+        self.syntax.children().find_map(MatchGuard::cast)
+    }
+
+    /// Get the body expression of this arm.
+    ///
+    /// The body is the expression after `=>`. It can be a simple expression
+    /// or a block expression.
+    pub fn body(&self) -> Option<SyntaxNode> {
+        // The body is the last child node that is an expression (not pattern or guard)
+        // Find the fat arrow and return the expression after it
+        let mut found_fat_arrow = false;
+        for element in self.syntax.children_with_tokens() {
+            match element {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::FAT_ARROW {
+                        found_fat_arrow = true;
+                    }
+                }
+                rowan::NodeOrToken::Node(node) => {
+                    if found_fat_arrow {
+                        return Some(node);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Check if the body is a block expression.
+    pub fn has_block_body(&self) -> bool {
+        self.body()
+            .map(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .unwrap_or(false)
+    }
+}
+
+impl MatchPattern {
+    /// Check if this is a union pattern (has `|` separators).
+    pub fn is_union(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|token| token.kind() == SyntaxKind::PIPE)
+    }
+
+    /// Check if this is a typed binding pattern (has `:`).
+    ///
+    /// For patterns like `s: Success`, returns true.
+    pub fn is_typed_binding(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|token| token.kind() == SyntaxKind::COLON)
+    }
+
+    /// Check if this is an enum variant pattern (has `.`).
+    ///
+    /// For patterns like `Status.Active`, returns true.
+    pub fn is_enum_variant(&self) -> bool {
+        // An enum variant has a dot but NOT a colon (typed binding)
+        let has_dot = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|token| token.kind() == SyntaxKind::DOT);
+        has_dot && !self.is_typed_binding()
+    }
+
+    /// Check if this is a wildcard pattern (`_`).
+    pub fn is_wildcard(&self) -> bool {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|t| t.kind() == SyntaxKind::WORD)
+            .collect();
+        tokens.len() == 1 && tokens[0].text() == "_"
+    }
+
+    /// Get the binding name if this is a binding pattern.
+    ///
+    /// For `s: Success`, returns "s".
+    /// For `x`, returns "x".
+    /// For `_`, returns "_".
+    pub fn binding_name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the type expression if this is a typed binding pattern.
+    ///
+    /// For `s: Success`, returns the `Success` type expression.
+    pub fn binding_type(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
+    }
+
+    /// Get all identifiers in this pattern.
+    ///
+    /// For simple patterns, returns one identifier.
+    /// For enum variants like `Status.Active`, returns both identifiers (e.g. "Status", "Active").
+    /// For union patterns, returns identifiers from all branches.
+    pub fn identifiers(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the literal token if this is a literal pattern.
+    ///
+    /// Returns the token for integer, float, or string literals,
+    /// as well as `null`, `true`, `false` keywords (which are parsed as WORD).
+    pub fn literal(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::INTEGER_LITERAL
+                        | SyntaxKind::FLOAT_LITERAL
+                        | SyntaxKind::STRING_LITERAL
+                        | SyntaxKind::RAW_STRING_LITERAL
+                ) || (token.kind() == SyntaxKind::WORD
+                    && matches!(token.text(), "null" | "true" | "false"))
+            })
+    }
+
+    /// Get all pattern elements for union patterns.
+    ///
+    /// For `Success | Failure`, returns iterator over the token groups
+    /// representing each alternative in the union.
+    ///
+    /// Note: This is a simplified view. For complex union patterns,
+    /// you may need to manually iterate `children_with_tokens()` and
+    /// split on `PIPE` tokens.
+    pub fn union_elements(&self) -> Vec<Vec<SyntaxToken>> {
+        let mut elements = Vec::new();
+        let mut current = Vec::new();
+
+        for element in self.syntax.children_with_tokens() {
+            if let Some(token) = element.into_token() {
+                if token.kind() == SyntaxKind::PIPE {
+                    if !current.is_empty() {
+                        elements.push(std::mem::take(&mut current));
+                    }
+                } else if !token.kind().is_trivia() {
+                    current.push(token);
+                }
+            }
+        }
+
+        if !current.is_empty() {
+            elements.push(current);
+        }
+
+        elements
+    }
+}
+
+impl MatchGuard {
+    /// Get the condition expression.
+    ///
+    /// For `if condition`, returns the condition expression.
+    pub fn condition(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
     }
 }
 

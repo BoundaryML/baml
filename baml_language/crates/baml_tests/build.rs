@@ -412,6 +412,8 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
             // Build initial typing context with all function types
             let globals = build_typing_context_from_files(&db, &source_files);
             let class_fields = baml_thir::lower_project_class_fields(&db, root);
+            let type_aliases = baml_thir::build_type_aliases_from_project(&db, root);
+            let enum_variants = baml_thir::build_enum_variants_from_project(&db, root);
 
             // Iterate over files and their functions
             for source_file in &source_files {
@@ -421,7 +423,7 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), *func_id);
+                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases.clone()), Some(enum_variants.clone()), *func_id);
 
                         writeln!(output, "  Function {}:", signature.name).unwrap();
                         writeln!(output, "    Return: {:?}", result.return_type).unwrap();
@@ -510,7 +512,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let inference = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types.clone()), *func_id);
+                        let inference = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types.clone()), None, None, *func_id);
 
                         // Lower to MIR
                         let mir = baml_mir::lower_function(&signature, &body, &inference, &db, &classes);
@@ -579,6 +581,8 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             // Build typing context and run type inference
             let globals = build_typing_context_from_files(&db, &source_files);
             let class_fields = baml_thir::lower_project_class_fields(&db, root);
+            let type_aliases = baml_thir::build_type_aliases_from_project(&db, root);
+            let enum_variants = baml_thir::build_enum_variants_from_project(&db, root);
             for source_file in &source_files {
                 let items_struct = baml_hir::file_items(&db, *source_file);
                 let items = items_struct.items(&db);
@@ -586,7 +590,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), *func_id);
+                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases.clone()), Some(enum_variants.clone()), *func_id);
                         for error in &result.errors {
                             all_errors.push(("type".to_string(), render_type_error(error, &sources, false)));
                         }

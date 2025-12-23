@@ -197,12 +197,24 @@ pub fn compile_files(db: &dyn baml_mir::Db, files: &[SourceFile]) -> Program {
                     }
                     baml_hir::FunctionBody::Expr(_) => {
                         // Run type inference
+                        // Note: type_aliases and enum_variants are not passed here,
+                        // so exhaustiveness checking for type aliases and enums won't work.
+                        // This is acceptable since codegen is for runtime execution,
+                        // and type errors should be caught in the THIR phase.
+                        //
+                        // TODO(codegen-inference): Re-evaluate whether we need full type context.
+                        // Currently this works because:
+                        //   1. Exhaustiveness errors are caught in the THIR/Diagnostics phase
+                        //   2. The core type inference doesn't depend on these maps
+                        //   3. Codegen only uses inference.expr_types and path_segment_types
                         let inference = baml_thir::infer_function(
                             db,
                             &signature,
                             &body,
                             Some(typing_context.clone()),
                             Some(class_field_types.clone()),
+                            None, // type_aliases - not needed for codegen
+                            None, // enum_variants - not needed for codegen
                             *func_loc,
                         );
 

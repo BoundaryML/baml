@@ -75,6 +75,8 @@ pub enum TokenKind {
     Continue,
     #[token("return")]
     Return,
+    #[token("match")]
+    Match,
 
     // Other keywords
     #[token("watch")]
@@ -144,6 +146,8 @@ pub enum TokenKind {
     // Operators (order matters! Longer tokens first)
     #[token("->")]
     Arrow,
+    #[token("=>")]
+    FatArrow,
     #[token("@@")]
     AtAt,
     #[token("@")]

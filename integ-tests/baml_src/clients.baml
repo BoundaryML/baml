@@ -483,3 +483,53 @@ client<llm> AzureO3WithMaxCompletionTokens {
     max_completion_tokens 1000
   }
 }
+
+// Basic OpenRouter client - uses default OPENROUTER_API_KEY env var
+client<llm> OpenRouterDefault {
+  provider openrouter
+  options {
+    model "openai/gpt-4o-mini"
+  }
+}
+
+// OpenRouter client with explicit API key
+client<llm> OpenRouterWithApiKey {
+  provider openrouter
+  options {
+    model "anthropic/claude-3-haiku"
+    api_key env.OPENROUTER_API_KEY
+  }
+}
+
+// OpenRouter client with app attribution headers (using standard headers option)
+client<llm> OpenRouterWithAttribution {
+  provider openrouter
+  options {
+    model "openai/gpt-4o-mini"
+    api_key env.OPENROUTER_API_KEY
+    headers {
+      "X-Title" "BAML Integration Tests"
+      "HTTP-Referer" "https://github.com/boundaryml/baml"
+    }
+  }
+}
+
+// OpenRouter with model variant (nitro = high throughput)
+client<llm> OpenRouterNitro {
+  provider openrouter
+  options {
+    model "meta-llama/llama-3.1-70b-instruct:nitro"
+    api_key env.OPENROUTER_API_KEY
+  }
+}
+
+// OpenRouter with custom temperature
+client<llm> OpenRouterWithTemperature {
+  provider openrouter
+  options {
+    model "google/gemini-2.0-flash-001"
+    api_key env.OPENROUTER_API_KEY
+    temperature 0.7
+    max_tokens 1000
+  }
+}

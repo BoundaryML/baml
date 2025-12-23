@@ -3,12 +3,12 @@
 //! The CST already distinguishes `LLM_FUNCTION_BODY` from `EXPR_FUNCTION_BODY`,
 //! so we just need to lower each type appropriately.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
+use baml_base::{FileId, Span};
 use baml_syntax::TypeExpr;
 use la_arena::{Arena, Idx};
 use rowan::{TextRange, ast::AstNode};
-use rustc_hash::FxHashMap;
 
 use crate::{Name, type_ref::TypeRef};
 
@@ -70,23 +70,51 @@ pub struct ExprBody {
     /// Root expression of the function body (usually a `BLOCK_EXPR`)
     pub root_expr: Option<ExprId>,
 
-    // NEW: Inline source maps
-    pub expr_spans: FxHashMap<ExprId, TextRange>,
-    pub stmt_spans: FxHashMap<StmtId, TextRange>,
-    pub pattern_spans: FxHashMap<PatId, TextRange>,
+    // ========================================================================
+    // Span tracking (for accurate error messages)
+    // ========================================================================
+    /// Spans for expressions
+    pub expr_spans: HashMap<ExprId, Span>,
+
+    /// Spans for statements
+    pub stmt_spans: HashMap<StmtId, Span>,
+
+    /// Spans for patterns
+    pub pattern_spans: HashMap<PatId, Span>,
+
+    /// Spans for match arms: maps match expression ID to its arm spans.
+    /// Each entry is (`arm_span`, `pattern_span`) for each arm in order.
+    pub match_arm_spans: HashMap<ExprId, Vec<MatchArmSpans>>,
+}
+
+/// Span information for a single match arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MatchArmSpans {
+    /// Span of the entire arm (pattern + guard + body)
+    pub arm_span: Span,
+    /// Span of just the pattern
+    pub pattern_span: Span,
 }
 
 impl ExprBody {
-    pub fn expr_span(&self, id: ExprId) -> Option<TextRange> {
-        self.expr_spans.get(&id).copied()
+    /// Get the span of an expression, if available.
+    pub fn get_expr_span(&self, expr_id: ExprId) -> Option<Span> {
+        self.expr_spans.get(&expr_id).copied()
     }
 
-    pub fn stmt_span(&self, id: StmtId) -> Option<TextRange> {
-        self.stmt_spans.get(&id).copied()
+    /// Get the span of a statement, if available.
+    pub fn get_stmt_span(&self, stmt_id: StmtId) -> Option<Span> {
+        self.stmt_spans.get(&stmt_id).copied()
     }
 
-    pub fn pattern_span(&self, id: PatId) -> Option<TextRange> {
-        self.pattern_spans.get(&id).copied()
+    /// Get the span of a pattern, if available.
+    pub fn get_pattern_span(&self, pat_id: PatId) -> Option<Span> {
+        self.pattern_spans.get(&pat_id).copied()
+    }
+
+    /// Get the arm spans for a match expression, if available.
+    pub fn get_match_arm_spans(&self, match_expr_id: ExprId) -> Option<&[MatchArmSpans]> {
+        self.match_arm_spans.get(&match_expr_id).map(Vec::as_slice)
     }
 }
 
@@ -113,6 +141,12 @@ pub enum Expr {
         condition: ExprId,
         then_branch: ExprId,
         else_branch: Option<ExprId>,
+    },
+
+    /// Match expression: `match (scrutinee) { arm1, arm2, ... }`
+    Match {
+        scrutinee: ExprId,
+        arms: Vec<MatchArm>,
     },
 
     /// Binary operation
@@ -240,14 +274,52 @@ pub enum AssignOp {
     Shr,    // >>=
 }
 
-/// The left-hand side of a let binding, or match arm in the future.
+/// Patterns for let bindings and match arms.
 ///
-/// Today only variables can be bound, but in the future we will support
-/// more complex patterns: wildcards, literals, paths, and constructors.
+/// Following BEP-002, patterns can be:
+/// - Simple bindings: `x`, `_` (wildcard is semantically dropped later)
+/// - Typed bindings: `s: Success`
+/// - Literals: `null`, `true`, `42`, `"hello"`
+/// - Enum variants: `Status.Active`
+/// - Unions: `200 | 201` or `Status.Active | Status.Pending`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pattern {
-    /// Binding pattern: `x`, `user`
+    /// Simple binding pattern: `x`, `user`, `_`
+    /// Note: `_` is parsed as a regular identifier; semantic analysis
+    /// treats it as a wildcard/discard.
     Binding(Name),
+
+    /// Typed binding pattern: `s: Success`, `n: int`
+    TypedBinding {
+        name: Name,
+        ty: crate::type_ref::TypeRef,
+    },
+
+    /// Literal pattern: `null`, `true`, `false`, `42`, `3.14`, `"hello"`
+    Literal(Literal),
+
+    /// Enum variant pattern: `Status.Active`
+    EnumVariant { enum_name: Name, variant: Name },
+
+    /// Union pattern: `200 | 201 | 204` or `Status.Active | Status.Pending`
+    /// Only literals and enum variants can be unioned (not arbitrary bindings).
+    Union(Vec<PatId>),
+}
+
+/// A single arm in a match expression.
+///
+/// Grammar: `pattern guard? '=>' arm_body`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchArm {
+    /// The pattern to match against
+    pub pattern: PatId,
+
+    /// Optional guard: `if condition`
+    /// Note: Guards do NOT contribute to exhaustiveness checking.
+    pub guard: Option<ExprId>,
+
+    /// The body expression (result if this arm matches)
+    pub body: ExprId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -298,8 +370,12 @@ impl FunctionBody {
     /// Lower a function body from CST to HIR.
     ///
     /// The CST already tells us if it's LLM or Expr via node type!
-    pub fn lower(func_node: &baml_syntax::ast::FunctionDef) -> Arc<FunctionBody> {
-        // Collect parameter names to add to scope
+    ///
+    /// # Arguments
+    /// - `func_node`: The function definition AST node
+    /// - `file_id`: The file ID for span tracking
+    pub fn lower(func_node: &baml_syntax::ast::FunctionDef, file_id: FileId) -> Arc<FunctionBody> {
+        // Collect parameter names to add to scope so gensym avoids them
         let param_names: Vec<String> = func_node
             .param_list()
             .map(|pl| {
@@ -315,6 +391,7 @@ impl FunctionBody {
         } else if let Some(expr_body) = func_node.expr_body() {
             Arc::new(FunctionBody::Expr(Self::lower_expr_body(
                 &expr_body,
+                file_id,
                 &param_names,
             )))
         } else {
@@ -401,9 +478,10 @@ impl FunctionBody {
 
     fn lower_expr_body(
         expr_body: &baml_syntax::ast::ExprFunctionBody,
+        file_id: FileId,
         param_names: &[String],
     ) -> ExprBody {
-        let mut ctx = LoweringContext::new();
+        let mut ctx = LoweringContext::new(file_id);
 
         // Add function parameters to scope so gensym avoids them
         for name in param_names {
@@ -426,43 +504,73 @@ struct LoweringContext {
     exprs: Arena<Expr>,
     stmts: Arena<Stmt>,
     patterns: Arena<Pattern>,
+    /// File ID for creating spans
+    file_id: FileId,
     /// All names used in this function, for generating unique synthetic variable names.
     names_in_scope: std::collections::HashSet<String>,
 
     // Span tracking
-    expr_spans: FxHashMap<ExprId, TextRange>,
-    stmt_spans: FxHashMap<StmtId, TextRange>,
-    pattern_spans: FxHashMap<PatId, TextRange>,
+    /// Span tracking for expressions
+    expr_spans: HashMap<ExprId, Span>,
+    /// Span tracking for statements
+    stmt_spans: HashMap<StmtId, Span>,
+    /// Span tracking for patterns
+    pattern_spans: HashMap<PatId, Span>,
+    /// Span tracking for match arms (maps match expr ID to arm spans)
+    match_arm_spans: HashMap<ExprId, Vec<MatchArmSpans>>,
+}
+
+/// Helper enum for building pattern elements during lowering.
+/// Used to track partial state while scanning tokens in a pattern.
+enum PatternElement {
+    /// Simple identifier (could become binding or enum start)
+    Ident(Name),
+    /// Seen `EnumName.` - waiting for variant name
+    EnumStart(Name),
+    /// Seen `name:` - waiting for type expression
+    TypedBindingStart(Name),
 }
 
 impl LoweringContext {
-    fn new() -> Self {
+    fn new(file_id: FileId) -> Self {
         Self {
             exprs: Arena::new(),
             stmts: Arena::new(),
             patterns: Arena::new(),
+            file_id,
             names_in_scope: std::collections::HashSet::new(),
-            expr_spans: FxHashMap::default(),
-            stmt_spans: FxHashMap::default(),
-            pattern_spans: FxHashMap::default(),
+            expr_spans: HashMap::new(),
+            stmt_spans: HashMap::new(),
+            pattern_spans: HashMap::new(),
+            match_arm_spans: HashMap::new(),
         }
     }
 
-    fn alloc_expr(&mut self, expr: Expr, span: TextRange) -> ExprId {
+    /// Create a span from a syntax node's text range.
+    fn span_from_node(&self, node: &baml_syntax::SyntaxNode) -> Span {
+        Span::new(self.file_id, node.text_range())
+    }
+
+    /// Create a span from a text range.
+    fn span_from_range(&self, range: TextRange) -> Span {
+        Span::new(self.file_id, range)
+    }
+
+    fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
         let id = self.exprs.alloc(expr);
-        self.expr_spans.insert(id, span);
+        self.expr_spans.insert(id, self.span_from_range(range));
         id
     }
 
-    fn alloc_stmt(&mut self, stmt: Stmt, span: TextRange) -> StmtId {
+    fn alloc_stmt(&mut self, stmt: Stmt, range: TextRange) -> StmtId {
         let id = self.stmts.alloc(stmt);
-        self.stmt_spans.insert(id, span);
+        self.stmt_spans.insert(id, self.span_from_range(range));
         id
     }
 
-    fn alloc_pattern(&mut self, pattern: Pattern, span: TextRange) -> PatId {
+    fn alloc_pattern(&mut self, pattern: Pattern, range: TextRange) -> PatId {
         let id = self.patterns.alloc(pattern);
-        self.pattern_spans.insert(id, span);
+        self.pattern_spans.insert(id, self.span_from_range(range));
         id
     }
 
@@ -475,6 +583,7 @@ impl LoweringContext {
             expr_spans: self.expr_spans,
             stmt_spans: self.stmt_spans,
             pattern_spans: self.pattern_spans,
+            match_arm_spans: self.match_arm_spans,
         }
     }
 
@@ -619,6 +728,7 @@ impl LoweringContext {
             SyntaxKind::UNARY_EXPR => self.lower_unary_expr(node),
             SyntaxKind::CALL_EXPR => self.lower_call_expr(node),
             SyntaxKind::IF_EXPR => self.lower_if_expr(node),
+            SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
             SyntaxKind::BLOCK_EXPR => {
                 if let Some(block) = baml_syntax::ast::BlockExpr::cast(node.clone()) {
                     self.lower_block_expr(&block)
@@ -897,6 +1007,405 @@ impl LoweringContext {
             },
             node.text_range(),
         )
+    }
+
+    /// Lower a match expression from CST to HIR.
+    ///
+    /// `MATCH_EXPR` structure (from parser):
+    /// - Scrutinee expression (could be a `PAREN_EXPR` wrapping the actual expr, or a literal token)
+    /// - One or more `MATCH_ARM` nodes
+    fn lower_match_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
+        use baml_syntax::SyntaxKind;
+
+        let match_span = self.span_from_node(node);
+        let mut scrutinee = None;
+        let mut arms = Vec::new();
+        let mut arm_spans = Vec::new();
+
+        // Use children_with_tokens to handle both node and token children
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    match child.kind() {
+                        SyntaxKind::MATCH_ARM => {
+                            let (arm, spans) = self.lower_match_arm(&child);
+                            arms.push(arm);
+                            arm_spans.push(spans);
+                        }
+                        _ => {
+                            // First non-MATCH_ARM child is the scrutinee (as a node)
+                            if scrutinee.is_none() {
+                                scrutinee = Some(self.lower_expr(&child));
+                            }
+                        }
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    // Handle literal tokens as scrutinee (when scrutinee is a simple value)
+                    if scrutinee.is_none() {
+                        match token.kind() {
+                            SyntaxKind::INTEGER_LITERAL => {
+                                let value = token.text().parse::<i64>().unwrap_or(0);
+                                scrutinee =
+                                    Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))));
+                            }
+                            SyntaxKind::FLOAT_LITERAL => {
+                                let text = token.text().to_string();
+                                scrutinee =
+                                    Some(self.exprs.alloc(Expr::Literal(Literal::Float(text))));
+                            }
+                            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                                let text = token.text().to_string();
+                                let content = if text.starts_with("#\"") && text.ends_with("\"#") {
+                                    text[2..text.len() - 2].to_string()
+                                } else if text.starts_with('"') && text.ends_with('"') {
+                                    text[1..text.len() - 1].to_string()
+                                } else {
+                                    text
+                                };
+                                scrutinee =
+                                    Some(self.exprs.alloc(Expr::Literal(Literal::String(content))));
+                            }
+                            SyntaxKind::WORD => {
+                                let text = token.text();
+                                let expr = match text {
+                                    "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
+                                    "false" => {
+                                        self.exprs.alloc(Expr::Literal(Literal::Bool(false)))
+                                    }
+                                    "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
+                                    _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
+                                };
+                                scrutinee = Some(expr);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        let scrutinee = scrutinee.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+
+        let expr_id = self.exprs.alloc(Expr::Match { scrutinee, arms });
+
+        // Store span information for this match expression
+        self.expr_spans.insert(expr_id, match_span);
+        self.match_arm_spans.insert(expr_id, arm_spans);
+
+        expr_id
+    }
+
+    /// Lower a single match arm from CST to HIR.
+    ///
+    /// `MATCH_ARM` structure (from parser):
+    /// - `MATCH_PATTERN` node
+    /// - Optional `MATCH_GUARD` node (contains 'if' keyword + expression)
+    /// - `FAT_ARROW` token ('=>')
+    /// - Body expression (`BLOCK_EXPR` or other expression, or literal token)
+    ///
+    /// Returns both the lowered arm and its span information.
+    fn lower_match_arm(&mut self, node: &baml_syntax::SyntaxNode) -> (MatchArm, MatchArmSpans) {
+        use baml_syntax::SyntaxKind;
+
+        let arm_span = self.span_from_node(node);
+        let mut pattern = None;
+        let mut pattern_span = None;
+        let mut guard = None;
+        let mut body = None;
+        let mut seen_fat_arrow = false;
+
+        // Use children_with_tokens to handle both node and token children
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    match child.kind() {
+                        SyntaxKind::MATCH_PATTERN => {
+                            pattern_span = Some(self.span_from_node(&child));
+                            pattern = Some(self.lower_match_pattern(&child));
+                        }
+                        SyntaxKind::MATCH_GUARD => {
+                            // MATCH_GUARD contains: KW_IF, then the guard expression
+                            guard = child.children().next().map(|n| self.lower_expr(&n));
+                        }
+                        // Handle string literals as nodes (parser wraps them)
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
+                            if seen_fat_arrow && body.is_none() =>
+                        {
+                            body = Some(self.lower_string_literal(&child));
+                        }
+                        _ => {
+                            // After the fat arrow, the expression node is the body
+                            if seen_fat_arrow && body.is_none() {
+                                body = Some(self.lower_expr(&child));
+                            }
+                        }
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    match token.kind() {
+                        SyntaxKind::FAT_ARROW => {
+                            seen_fat_arrow = true;
+                        }
+                        // Handle literal tokens as body (when body is a simple value)
+                        SyntaxKind::INTEGER_LITERAL if seen_fat_arrow && body.is_none() => {
+                            let value = token.text().parse::<i64>().unwrap_or(0);
+                            body = Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))));
+                        }
+                        SyntaxKind::FLOAT_LITERAL if seen_fat_arrow && body.is_none() => {
+                            let text = token.text().to_string();
+                            body = Some(self.exprs.alloc(Expr::Literal(Literal::Float(text))));
+                        }
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
+                            if seen_fat_arrow && body.is_none() =>
+                        {
+                            let text = token.text().trim();
+                            let content = if text.starts_with("#\"") && text.ends_with("\"#") {
+                                &text[2..text.len() - 2]
+                            } else if text.starts_with('"') && text.ends_with('"') {
+                                &text[1..text.len() - 1]
+                            } else {
+                                text
+                            };
+                            body = Some(
+                                self.exprs
+                                    .alloc(Expr::Literal(Literal::String(content.to_string()))),
+                            );
+                        }
+                        SyntaxKind::WORD if seen_fat_arrow && body.is_none() => {
+                            let text = token.text();
+                            let expr = match text {
+                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
+                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
+                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
+                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
+                            };
+                            body = Some(expr);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        let arm = MatchArm {
+            pattern: pattern
+                .unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(Name::new("_")))),
+            guard,
+            body: body.unwrap_or_else(|| self.exprs.alloc(Expr::Missing)),
+        };
+
+        let spans = MatchArmSpans {
+            arm_span,
+            pattern_span: pattern_span.unwrap_or(arm_span),
+        };
+
+        (arm, spans)
+    }
+
+    /// Lower a match pattern from CST to HIR.
+    ///
+    /// `MATCH_PATTERN` structure (from parser):
+    /// - Pattern elements (identifiers, literals, type expressions)
+    /// - Optional PIPE tokens for union patterns
+    ///
+    /// Pattern forms:
+    /// - Binding: `x`, `_`
+    /// - Typed binding: `s: Success`
+    /// - Literal: `null`, `true`, `42`, `"hello"`
+    /// - Enum variant: `Status.Active`
+    /// - Union: `200 | 201` or `Status.Active | Status.Pending`
+    fn lower_match_pattern(&mut self, node: &baml_syntax::SyntaxNode) -> PatId {
+        use baml_syntax::SyntaxKind;
+
+        // Collect pattern elements separated by PIPE
+        let mut elements: Vec<PatId> = Vec::new();
+        let mut current_element: Option<PatternElement> = None;
+
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(token) => {
+                    match token.kind() {
+                        SyntaxKind::PIPE => {
+                            // Finalize current element and start a new one
+                            if let Some(el) = current_element.take() {
+                                elements.push(self.finalize_pattern_element(el));
+                            }
+                        }
+                        SyntaxKind::WORD => {
+                            let text = token.text().to_string();
+
+                            // First, check if we're completing an enum variant
+                            if let Some(PatternElement::EnumStart(enum_name)) =
+                                current_element.take()
+                            {
+                                // Complete the enum variant: EnumName.Variant
+                                let variant = Name::new(&text);
+                                elements.push(
+                                    self.patterns
+                                        .alloc(Pattern::EnumVariant { enum_name, variant }),
+                                );
+                                continue;
+                            }
+
+                            match text.as_str() {
+                                "true" => {
+                                    if let Some(el) = current_element.take() {
+                                        elements.push(self.finalize_pattern_element(el));
+                                    }
+                                    elements.push(
+                                        self.patterns.alloc(Pattern::Literal(Literal::Bool(true))),
+                                    );
+                                }
+                                "false" => {
+                                    if let Some(el) = current_element.take() {
+                                        elements.push(self.finalize_pattern_element(el));
+                                    }
+                                    elements.push(
+                                        self.patterns.alloc(Pattern::Literal(Literal::Bool(false))),
+                                    );
+                                }
+                                "null" => {
+                                    if let Some(el) = current_element.take() {
+                                        elements.push(self.finalize_pattern_element(el));
+                                    }
+                                    elements
+                                        .push(self.patterns.alloc(Pattern::Literal(Literal::Null)));
+                                }
+                                _ => {
+                                    // Finalize any previous element before starting new one
+                                    if let Some(el) = current_element.take() {
+                                        elements.push(self.finalize_pattern_element(el));
+                                    }
+                                    // Regular identifier - could be binding or start of enum variant
+                                    current_element = Some(PatternElement::Ident(Name::new(&text)));
+                                }
+                            }
+                        }
+                        SyntaxKind::DOT => {
+                            // Transition: Ident.Variant (enum variant pattern)
+                            if let Some(PatternElement::Ident(enum_name)) = current_element.take() {
+                                current_element = Some(PatternElement::EnumStart(enum_name));
+                            }
+                        }
+                        SyntaxKind::COLON => {
+                            // Transition: ident: Type (typed binding pattern)
+                            if let Some(PatternElement::Ident(name)) = current_element.take() {
+                                current_element = Some(PatternElement::TypedBindingStart(name));
+                            }
+                        }
+                        SyntaxKind::INTEGER_LITERAL => {
+                            if let Some(el) = current_element.take() {
+                                elements.push(self.finalize_pattern_element(el));
+                            }
+                            let value = token.text().parse::<i64>().unwrap_or(0);
+                            elements
+                                .push(self.patterns.alloc(Pattern::Literal(Literal::Int(value))));
+                        }
+                        SyntaxKind::FLOAT_LITERAL => {
+                            if let Some(el) = current_element.take() {
+                                elements.push(self.finalize_pattern_element(el));
+                            }
+                            let text = token.text().to_string();
+                            elements
+                                .push(self.patterns.alloc(Pattern::Literal(Literal::Float(text))));
+                        }
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                            if let Some(el) = current_element.take() {
+                                elements.push(self.finalize_pattern_element(el));
+                            }
+                            let text = token.text().to_string();
+                            let content = if text.starts_with("#\"") && text.ends_with("\"#") {
+                                text[2..text.len() - 2].to_string()
+                            } else if text.starts_with('"') && text.ends_with('"') {
+                                text[1..text.len() - 1].to_string()
+                            } else {
+                                text
+                            };
+                            elements.push(
+                                self.patterns
+                                    .alloc(Pattern::Literal(Literal::String(content))),
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                rowan::NodeOrToken::Node(child_node) => {
+                    match child_node.kind() {
+                        SyntaxKind::TYPE_EXPR => {
+                            // Complete typed binding: ident: Type
+                            if let Some(PatternElement::TypedBindingStart(name)) =
+                                current_element.take()
+                            {
+                                if let Some(type_expr) =
+                                    baml_syntax::ast::TypeExpr::cast(child_node)
+                                {
+                                    let ty = crate::type_ref::TypeRef::from_ast(&type_expr);
+                                    elements.push(
+                                        self.patterns.alloc(Pattern::TypedBinding { name, ty }),
+                                    );
+                                } else {
+                                    // Failed to cast - treat as simple binding
+                                    elements.push(self.patterns.alloc(Pattern::Binding(name)));
+                                }
+                            }
+                        }
+                        SyntaxKind::MATCH_PATTERN => {
+                            // Nested pattern group (from parenthesized patterns)
+                            // Flatten the nested pattern into current elements to maintain
+                            // canonical form: (A | B) | C = A | B | C (union associativity)
+                            if let Some(el) = current_element.take() {
+                                elements.push(self.finalize_pattern_element(el));
+                            }
+                            let nested_pat_id = self.lower_match_pattern(&child_node);
+                            // Check if nested pattern is a union and flatten it
+                            let nested_elements: Option<Vec<PatId>> =
+                                match &self.patterns[nested_pat_id] {
+                                    Pattern::Union(sub_elements) => Some(sub_elements.clone()),
+                                    _ => None,
+                                };
+                            if let Some(sub_elements) = nested_elements {
+                                // Flatten: add all sub-elements directly
+                                elements.extend(sub_elements);
+                            } else {
+                                // Single pattern - add as-is
+                                elements.push(nested_pat_id);
+                            }
+                        }
+                        _ => {
+                            // Handle other nested patterns if needed
+                        }
+                    }
+                }
+            }
+        }
+
+        // Finalize any remaining element
+        if let Some(el) = current_element.take() {
+            elements.push(self.finalize_pattern_element(el));
+        }
+
+        // Return based on number of elements
+        match elements.len() {
+            0 => self.patterns.alloc(Pattern::Binding(Name::new("_"))),
+            1 => elements.into_iter().next().unwrap(),
+            _ => self.patterns.alloc(Pattern::Union(elements)),
+        }
+    }
+
+    /// Finalize a partially-built pattern element.
+    fn finalize_pattern_element(&mut self, element: PatternElement) -> PatId {
+        match element {
+            PatternElement::Ident(name) => self.patterns.alloc(Pattern::Binding(name)),
+            PatternElement::EnumStart(enum_name) => {
+                // Incomplete enum variant (missing variant name) - treat as binding
+                self.patterns.alloc(Pattern::Binding(enum_name))
+            }
+            PatternElement::TypedBindingStart(name) => {
+                // Incomplete typed binding (missing type) - treat as simple binding
+                self.patterns.alloc(Pattern::Binding(name))
+            }
+        }
     }
 
     fn lower_call_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {

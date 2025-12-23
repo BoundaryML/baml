@@ -8,7 +8,7 @@
 
 use baml_hir::TypeRef;
 
-use crate::Ty;
+use crate::{LiteralValue, Ty};
 
 /// Lower a `TypeRef` to a Ty.
 ///
@@ -45,7 +45,11 @@ impl TyLowering {
             // Type constructors
             TypeRef::Optional(inner) => {
                 let inner_ty = TyLowering::lower(inner);
-                Ty::Optional(Box::new(inner_ty))
+                // Flatten nested optionals: T?? = T? since (T | null) | null = T | null
+                match inner_ty {
+                    Ty::Optional(_) => inner_ty, // Already optional, don't double-wrap
+                    _ => Ty::Optional(Box::new(inner_ty)),
+                }
             }
 
             TypeRef::List(inner) => {
@@ -67,10 +71,11 @@ impl TyLowering {
                 normalize_union(tys)
             }
 
-            // Literal types - treat as their base type for now
-            TypeRef::StringLiteral(_) => Ty::String,
-            TypeRef::IntLiteral(_) => Ty::Int,
-            TypeRef::FloatLiteral(_) => Ty::Float,
+            // Literal types - preserve the literal values for exhaustiveness checking
+            TypeRef::StringLiteral(s) => Ty::Literal(LiteralValue::String(s.clone())),
+            TypeRef::IntLiteral(i) => Ty::Literal(LiteralValue::Int(*i)),
+            TypeRef::FloatLiteral(f) => Ty::Literal(LiteralValue::Float(f.clone())),
+            TypeRef::BoolLiteral(b) => Ty::Literal(LiteralValue::Bool(*b)),
 
             // Generics - not yet supported
             TypeRef::Generic { .. } => Ty::Unknown,

@@ -1,0 +1,89 @@
+client<llm> Bar {
+  provider baml-openai-chat
+}
+
+function InputNone() -> int {
+  client Bar
+  prompt #"fa"#
+}
+
+function InputSimple(a: string, b: int | bool) -> int {
+  client Bar
+  prompt #"fa"#
+}
+
+class Email {
+    subject string
+    body string
+}
+
+function InputObject(email: Email) -> string {
+  client Bar
+  prompt #" subject line {{ email.subject }} "#
+}
+
+enum Color {
+  RED
+  BLUE
+  GREEN
+}
+
+function InputEnum(color: Color) -> string {
+  client Bar
+  prompt #" color {{ color }} "#
+}
+
+// Try it with wierd spacing and comments
+
+function InputEnum2(
+  color: Color,
+  bar: string, // ok
+
+  // This param is great!
+  foo: string[],
+
+  // But we should do something...
+  baz: (string | int?)[]
+)
+// Err
+->
+// Do something
+string
+
+// Or else
+{
+  client Bar
+  prompt #" color {{ color }} "#
+}
+
+
+function InputImage(img: image) -> string {
+  client Bar
+  prompt #" image {{ img }} "#
+}
+
+test Foo {
+  functions [InputImage]
+  args {
+  }
+}
+
+test Foo {
+  functions [InputEnum]
+  args {
+  }
+}
+
+//----
+//- diagnostics
+// Error: Duplicate test 'Foo'
+//    ╭─[ 0:1:1 ]
+//    │
+//  1 │ client<llm> Bar {
+//    │ │ 
+//    │ ╰─ test 'Foo' defined in functions_v2_tests_valid_tests.baml
+//    │ │ 
+//    │ ╰─ 'Foo' previously defined in functions_v2_tests_valid_tests.baml
+//    │ 
+//    │ Note: Error code: E0011
+// ───╯

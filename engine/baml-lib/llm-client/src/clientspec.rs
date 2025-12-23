@@ -65,6 +65,8 @@ pub enum OpenAIClientProviderVariant {
     Responses,
     /// The generic client provider variant
     Generic,
+    /// The OpenRouter client provider variant
+    OpenRouter,
 }
 
 /// The strategy client provider variant
@@ -97,6 +99,7 @@ impl std::fmt::Display for OpenAIClientProviderVariant {
             OpenAIClientProviderVariant::Azure => write!(f, "azure-openai"),
             OpenAIClientProviderVariant::Responses => write!(f, "openai-responses"),
             OpenAIClientProviderVariant::Generic => write!(f, "openai-generic"),
+            OpenAIClientProviderVariant::OpenRouter => write!(f, "openrouter"),
         }
     }
 }
@@ -125,6 +128,9 @@ impl std::str::FromStr for ClientProvider {
             )),
             "baml-ollama-chat" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Ollama)),
             "ollama" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Ollama)),
+            "openrouter" => Ok(ClientProvider::OpenAI(
+                OpenAIClientProviderVariant::OpenRouter,
+            )),
             "anthropic" => Ok(ClientProvider::Anthropic),
             "baml-anthropic-chat" => Ok(ClientProvider::Anthropic),
             "aws-bedrock" => Ok(ClientProvider::AwsBedrock),
@@ -149,6 +155,7 @@ impl std::str::FromStr for OpenAIClientProviderVariant {
             "azure-openai" => Ok(OpenAIClientProviderVariant::Azure),
             "openai-responses" => Ok(OpenAIClientProviderVariant::Responses),
             "openai-generic" => Ok(OpenAIClientProviderVariant::Generic),
+            "openrouter" => Ok(OpenAIClientProviderVariant::OpenRouter),
             _ => Err(anyhow::anyhow!(
                 "Invalid OpenAI client provider variant: {}",
                 s
@@ -181,6 +188,7 @@ impl ClientProvider {
             "openai-responses",
             "anthropic",
             "ollama",
+            "openrouter",
             "round-robin",
             "fallback",
             "google-ai",
@@ -646,24 +654,6 @@ mod tests {
     }
 
     #[test]
-    fn test_response_type_parsing() {
-        // Test UnresolvedResponseType
-        let unresolved = match "openai-responses" {
-            "openai" => UnresolvedResponseType::OpenAI,
-            "openai-responses" => UnresolvedResponseType::OpenAIResponses,
-            "anthropic" => UnresolvedResponseType::Anthropic,
-            "google" => UnresolvedResponseType::Google,
-            "vertex" => UnresolvedResponseType::Vertex,
-            _ => panic!("Unknown response type"),
-        };
-
-        assert!(matches!(
-            unresolved,
-            UnresolvedResponseType::OpenAIResponses
-        ));
-    }
-
-    #[test]
     fn test_response_type_resolution() {
         use baml_types::GetEnvVar;
 
@@ -708,5 +698,52 @@ mod tests {
 
         let result = OpenAIClientProviderVariant::from_str("invalid-variant");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_openrouter_provider_parsing() {
+        let provider = ClientProvider::from_str("openrouter");
+        assert!(provider.is_ok());
+
+        let provider = provider.unwrap();
+        match provider {
+            ClientProvider::OpenAI(OpenAIClientProviderVariant::OpenRouter) => {
+                // Success!
+            }
+            _ => panic!("Expected OpenRouter variant, got {provider:?}"),
+        }
+    }
+
+    #[test]
+    fn test_openrouter_variant_parsing() {
+        let variant = OpenAIClientProviderVariant::from_str("openrouter");
+        assert!(variant.is_ok());
+        assert_eq!(variant.unwrap(), OpenAIClientProviderVariant::OpenRouter);
+    }
+
+    #[test]
+    fn test_openrouter_display() {
+        let variant = OpenAIClientProviderVariant::OpenRouter;
+        assert_eq!(variant.to_string(), "openrouter");
+    }
+
+    #[test]
+    fn test_openrouter_in_allowed_providers() {
+        let allowed = ClientProvider::allowed_providers();
+        assert!(allowed.contains(&"openrouter"));
+    }
+
+    #[test]
+    fn test_openrouter_roundtrip() {
+        let original = ClientProvider::OpenAI(OpenAIClientProviderVariant::OpenRouter);
+        let string_repr = match &original {
+            ClientProvider::OpenAI(variant) => variant.to_string(),
+            _ => panic!("Expected OpenAI provider"),
+        };
+
+        assert_eq!(string_repr, "openrouter");
+
+        let parsed_back = ClientProvider::from_str(&string_repr).unwrap();
+        assert_eq!(original, parsed_back);
     }
 }

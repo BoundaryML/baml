@@ -77,10 +77,7 @@ impl<'a> PrettyPrinter<'a> {
                 body,
             } => {
                 self.indent(level);
-                let pat = self.body.pattern(*pattern);
-                let pat_name = match pat {
-                    Pattern::Binding(name) => name.to_string(),
-                };
+                let pat_name = self.format_pattern(*pattern);
                 writeln!(self.output, "let {pat_name}: {let_ty} =").unwrap();
                 self.print_expr(*value, level + 1);
                 self.output.push('\n');
@@ -263,6 +260,46 @@ impl<'a> PrettyPrinter<'a> {
                 self.output.push('\n');
                 self.indent(level);
                 self.output.push(']');
+            }
+
+            Expr::Match { scrutinee, arms } => {
+                self.indent(level);
+                writeln!(self.output, "match : {ty}").unwrap();
+                self.print_expr(*scrutinee, level + 1);
+                for arm in arms {
+                    self.output.push('\n');
+                    self.indent(level + 1);
+                    let pat_str = self.format_pattern(arm.pattern);
+                    write!(self.output, "{pat_str}").unwrap();
+                    if let Some(guard) = arm.guard {
+                        self.output.push_str(" if ");
+                        // Print guard inline (simplified)
+                        let guard_expr = self.body.expr(guard);
+                        write!(self.output, "{guard_expr:?}").unwrap();
+                    }
+                    self.output.push_str(" =>\n");
+                    self.print_expr(arm.body, level + 2);
+                }
+            }
+        }
+    }
+
+    fn format_pattern(&self, pat_id: crate::PatId) -> String {
+        let pat = self.body.pattern(pat_id);
+        match pat {
+            Pattern::Binding(name) => name.to_string(),
+            Pattern::TypedBinding { name, ty } => format!("{name}: {ty}"),
+            Pattern::Literal(lit) => match lit {
+                Literal::Int(n) => n.to_string(),
+                Literal::Float(s) => s.clone(),
+                Literal::String(s) => format!("{s:?}"),
+                Literal::Bool(b) => b.to_string(),
+                Literal::Null => "null".to_string(),
+            },
+            Pattern::EnumVariant { enum_name, variant } => format!("{enum_name}.{variant}"),
+            Pattern::Union(pats) => {
+                let parts: Vec<_> = pats.iter().map(|p| self.format_pattern(*p)).collect();
+                parts.join(" | ")
             }
         }
     }

@@ -232,7 +232,7 @@ fn lower_method_signature(
                 } else {
                     param_node
                         .ty()
-                        .map(|t| lower_type_ref(&t))
+                        .map(|t| TypeRef::from_ast(&t))
                         .unwrap_or(TypeRef::Unknown)
                 };
 
@@ -247,7 +247,7 @@ fn lower_method_signature(
     // Extract return type
     let return_type = method_node
         .return_type()
-        .map(|t| lower_type_ref(&t))
+        .map(|t| TypeRef::from_ast(&t))
         .unwrap_or(TypeRef::Unknown);
 
     Arc::new(FunctionSignature {
@@ -353,8 +353,11 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
             function_def.name().as_ref().map(SyntaxToken::text) == Some(&func_name)
         });
 
-    // Lower the function.
-    function_def.map_or(Arc::new(FunctionBody::Missing), |f| FunctionBody::lower(&f))
+    // Lower the function with file_id for span tracking.
+    let file_id = file.file_id(db);
+    function_def.map_or(Arc::new(FunctionBody::Missing), |f| {
+        FunctionBody::lower(&f, file_id)
+    })
 }
 
 //
@@ -508,7 +511,7 @@ fn lower_class(node: &SyntaxNode) -> Option<Class> {
         if let Some(field_name) = field_node.name() {
             let type_ref = field_node
                 .ty()
-                .map(|t| lower_type_ref(&t))
+                .map(|t| TypeRef::from_ast(&t))
                 .unwrap_or(TypeRef::Unknown);
 
             fields.push(crate::Field {
@@ -610,7 +613,7 @@ fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
     // Extract type using AST accessor
     let type_ref = alias
         .ty()
-        .map(|t| lower_type_ref(&t))
+        .map(|t| TypeRef::from_ast(&t))
         .unwrap_or(TypeRef::Unknown);
 
     Some(TypeAlias { name, type_ref })
@@ -665,46 +668,6 @@ fn lower_test(node: &SyntaxNode) -> Option<Test> {
         name,
         function_refs,
     })
-}
-
-/// Lower a type reference from CST.
-///
-/// For now, this is a simplified implementation that extracts just the name.
-/// TODO: Parse complex types (optional, list, union, etc.)
-pub fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
-    // For now, just extract the text representation
-    // This is a simplification - we'll enhance this later
-    let text = node.syntax().text().to_string();
-    let text = text.trim();
-
-    // Handle primitives
-    match text {
-        "int" => TypeRef::Int,
-        "float" => TypeRef::Float,
-        "string" => TypeRef::String,
-        "bool" => TypeRef::Bool,
-        "null" => TypeRef::Null,
-        "image" => TypeRef::Image,
-        "audio" => TypeRef::Audio,
-        "video" => TypeRef::Video,
-        "pdf" => TypeRef::Pdf,
-        _ => {
-            // Check if it ends with '?' (optional)
-            if let Some(inner_text) = text.strip_suffix('?') {
-                let inner = TypeRef::named(inner_text.into());
-                TypeRef::optional(inner)
-            }
-            // Check if it ends with '[]' (list)
-            else if let Some(inner_text) = text.strip_suffix("[]") {
-                let inner = TypeRef::named(inner_text.into());
-                TypeRef::list(inner)
-            }
-            // Otherwise treat as named type
-            else {
-                TypeRef::named(text.into())
-            }
-        }
-    }
 }
 
 //

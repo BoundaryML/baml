@@ -368,6 +368,9 @@ pub enum Rvalue<'db> {
 
     /// Get length of array: `len(_1)`
     Len(Place),
+
+    /// Type check for pattern matching: `is_type(_1, Type)`
+    IsType { operand: Operand<'db>, ty: Ty<'db> },
 }
 
 /// The kind of aggregate being constructed.
@@ -429,6 +432,11 @@ pub enum Constant<'db> {
     Null,
     /// A function reference.
     Function(Name),
+    /// An enum variant value.
+    EnumVariant {
+        enum_name: Name,
+        variant: Name,
+    },
     /// Placeholder for type info when needed.
     #[allow(dead_code)]
     Ty(Ty<'db>),

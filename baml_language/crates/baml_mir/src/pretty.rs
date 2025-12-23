@@ -267,6 +267,11 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue<'_>) -> fmt::Result {
         Rvalue::Len(place) => {
             write!(f, "len({place})")
         }
+        Rvalue::IsType { operand, ty } => {
+            write!(f, "is_type(")?;
+            write_operand(f, operand)?;
+            write!(f, ", {ty:?})")
+        }
     }
 }
 
@@ -286,6 +291,7 @@ fn write_constant(f: &mut impl Write, constant: &Constant<'_>) -> fmt::Result {
         Constant::Bool(b) => write!(f, "const {b}"),
         Constant::Null => write!(f, "const null"),
         Constant::Function(name) => write!(f, "const fn {name}"),
+        Constant::EnumVariant { enum_name, variant } => write!(f, "const {enum_name}.{variant}"),
         Constant::Ty(ty) => write!(f, "const type {ty:?}"),
     }
 }
