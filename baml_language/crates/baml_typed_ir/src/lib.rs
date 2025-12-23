@@ -41,13 +41,11 @@
 mod expr;
 mod lower;
 mod pretty;
-mod to_mir;
 mod ty;
 
 pub use expr::*;
 pub use lower::{LoweringError, lower_from_hir};
 pub use pretty::pretty_print;
-pub use to_mir::TypedIrToMir;
 pub use ty::*;
 
 /// Database trait for `TypedIR` queries.
