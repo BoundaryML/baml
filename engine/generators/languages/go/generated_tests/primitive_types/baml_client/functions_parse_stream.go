@@ -402,8 +402,8 @@ func (*parse_stream) TestTopLevelInt(text string, opts ...CallOptionFunc) (int64
 	return casted, nil
 }
 
-// / Parse version of TestTopLevelNull (Takes in string and returns any)
-func (*parse_stream) TestTopLevelNull(text string, opts ...CallOptionFunc) (any, error) {
+// / Parse version of TestTopLevelNull (Takes in string and returns *interface{})
+func (*parse_stream) TestTopLevelNull(text string, opts ...CallOptionFunc) (*interface{}, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -441,10 +441,10 @@ func (*parse_stream) TestTopLevelNull(text string, opts ...CallOptionFunc) (any,
 
 	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestTopLevelNull", encoded)
 	if err != nil {
-		return nil, err
+		return (*interface{})(nil), err
 	}
 
-	casted := (result).(any)
+	casted := (result).(*interface{})
 
 	return casted, nil
 }

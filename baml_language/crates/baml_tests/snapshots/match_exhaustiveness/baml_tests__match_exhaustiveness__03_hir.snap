@@ -3,1181 +3,619 @@ source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function NestedLiteralUnions {
-  params: [code: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("success"))
-      Idx::<Expr>(2): Literal(String("client error"))
-      Idx::<Expr>(3): Literal(String("other"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(5), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(13), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(14), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function ExhaustiveEnumWithTypedPattern {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("any status"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function ParenthesizedSingleLiteral {
-  params: [b: Bool]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("yes"))
-      Idx::<Expr>(2): Literal(String("no"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function DuplicateEnumVariant {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("first"))
-      Idx::<Expr>(2): Literal(String("second"))
-      Idx::<Expr>(3): Literal(String("inactive"))
-      Idx::<Expr>(4): Literal(String("pending"))
-      Idx::<Expr>(5): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(4) }] }
-      Idx::<Expr>(6): Block { stmts: [], tail_expr: Some(Idx::<Expr>(5)) }
-    ]
-    root: Idx::<Expr>(6)
-  }
-}
-function WrongLiteralTypeBoolWithInt {
-  params: [b: Bool]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("wrong type"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function UnreachableMultiple {
-  params: [x: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("catch all"))
-      Idx::<Expr>(2): Literal(String("unreachable 1"))
-      Idx::<Expr>(3): Literal(String("unreachable 2"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function OverlappingWithBindings {
-  params: [r: Path(Path { segments: ["Result"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["r"])
-      Idx::<Expr>(1): Path(["s", "data"])
-      Idx::<Expr>(2): Literal(String("remaining"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function ExhaustiveNullableEnum {
-  params: [s: Optional(Path(Path { segments: ["Status"], kind: Plain }))]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("active"))
-      Idx::<Expr>(2): Literal(String("inactive"))
-      Idx::<Expr>(3): Literal(String("pending"))
-      Idx::<Expr>(4): Literal(String("no status"))
-      Idx::<Expr>(5): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(4) }] }
-      Idx::<Expr>(6): Block { stmts: [], tail_expr: Some(Idx::<Expr>(5)) }
-    ]
-    root: Idx::<Expr>(6)
-  }
-}
-function NonExhaustiveBoolMissingTrue {
-  params: [b: Bool]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("no"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function ExhaustiveEnumAllVariants {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("active"))
-      Idx::<Expr>(2): Literal(String("inactive"))
-      Idx::<Expr>(3): Literal(String("pending"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function ExhaustiveTypeAlias {
-  params: [r: Path(Path { segments: ["Result"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["r"])
-      Idx::<Expr>(1): Path(["s", "data"])
-      Idx::<Expr>(2): Path(["f", "reason"])
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function EnumVariantAfterTypedEnum {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("any status"))
-      Idx::<Expr>(2): Literal(String("unreachable"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function BoolLiteralAfterTypedBool {
-  params: [b: Bool]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("any bool"))
-      Idx::<Expr>(2): Literal(String("unreachable"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function LiteralUnionWithCatchAll {
-  params: [code: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("success"))
-      Idx::<Expr>(2): Literal(String("client error"))
-      Idx::<Expr>(3): Literal(String("other"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(5), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(6), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function ExhaustiveIntLiterals {
-  params: [code: Path(Path { segments: ["SuccessCode"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("OK"))
-      Idx::<Expr>(2): Literal(String("Created"))
-      Idx::<Expr>(3): Literal(String("No Content"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function ExhaustiveStringLiterals {
-  params: [role: Path(Path { segments: ["Role"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["role"])
-      Idx::<Expr>(1): Literal(String("User"))
-      Idx::<Expr>(2): Literal(String("Assistant"))
-      Idx::<Expr>(3): Literal(String("System"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function ExhaustiveTypeAliasWithCatchAll {
-  params: [r: Path(Path { segments: ["Result"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["r"])
-      Idx::<Expr>(1): Path(["s", "data"])
-      Idx::<Expr>(2): Literal(String("fallback"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function DuplicateIntLiteral {
-  params: [x: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("first one"))
-      Idx::<Expr>(2): Literal(String("second one"))
-      Idx::<Expr>(3): Literal(String("other"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function ExhaustiveClassPlusLiteral {
-  params: [x: Path(Path { segments: ["SuccessOr200"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Path(["s", "data"])
-      Idx::<Expr>(2): Literal(String("http ok"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function ExhaustiveLiteralWithBaseType {
-  params: [x: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("ok"))
-      Idx::<Expr>(2): Literal(String("other"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function NonExhaustiveNullableEnumMissingNull {
-  params: [s: Optional(Path(Path { segments: ["Status"], kind: Plain }))]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("active"))
-      Idx::<Expr>(2): Literal(String("inactive"))
-      Idx::<Expr>(3): Literal(String("pending"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function NonExhaustiveTypeAliasMissingOne {
-  params: [r: Path(Path { segments: ["Result"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["r"])
-      Idx::<Expr>(1): Path(["s", "data"])
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function BoolUnionPattern {
-  params: [b: Bool]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("covered"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function StringLiteralUnionPattern {
-  params: [role: Path(Path { segments: ["Role"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["role"])
-      Idx::<Expr>(1): Literal(String("chat participant"))
-      Idx::<Expr>(2): Literal(String("system"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function ExhaustiveBool {
-  params: [b: Bool]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("yes"))
-      Idx::<Expr>(2): Literal(String("no"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function NonExhaustiveDoubleMaybeMissingNull {
-  params: [dm: Path(Path { segments: ["DoubleMaybe"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["dm"])
-      Idx::<Expr>(1): Path(["s", "data"])
-      Idx::<Expr>(2): Path(["f", "reason"])
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function ExhaustiveDoubleMaybe {
-  params: [dm: Path(Path { segments: ["DoubleMaybe"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["dm"])
-      Idx::<Expr>(1): Path(["s", "data"])
-      Idx::<Expr>(2): Path(["f", "reason"])
-      Idx::<Expr>(3): Literal(String("nothing"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function ExhaustiveOptionalSingleton {
-  params: [code: Path(Path { segments: ["MaybeOk"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("OK"))
-      Idx::<Expr>(2): Literal(String("no code"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function BoolWithCatchAll {
-  params: [b: Bool]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("yes"))
-      Idx::<Expr>(2): Literal(String("no"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function GuardedOnlyNonExhaustive {
-  params: [x: Int]
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Path(["n"])
-      Idx::<Expr>(2): Literal(Int(0))
-      Idx::<Expr>(3): Binary { op: Gt, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
-      Idx::<Expr>(4): Path(["n"])
-      Idx::<Expr>(5): Literal(Int(2))
-      Idx::<Expr>(6): Binary { op: Mul, lhs: Idx::<Expr>(4), rhs: Idx::<Expr>(5) }
-      Idx::<Expr>(7): Path(["n"])
-      Idx::<Expr>(8): Literal(Int(0))
-      Idx::<Expr>(9): Binary { op: Lt, lhs: Idx::<Expr>(7), rhs: Idx::<Expr>(8) }
-      Idx::<Expr>(10): Path(["n"])
-      Idx::<Expr>(11): Missing
-      Idx::<Expr>(12): Unary { op: Neg, expr: Idx::<Expr>(11) }
-      Idx::<Expr>(13): Binary { op: Mul, lhs: Idx::<Expr>(10), rhs: Idx::<Expr>(12) }
-      Idx::<Expr>(14): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: Some(Idx::<Expr>(3)), body: Idx::<Expr>(6) }, MatchArm { pattern: Idx::<Pattern>(1), guard: Some(Idx::<Expr>(9)), body: Idx::<Expr>(13) }] }
-      Idx::<Expr>(15): Block { stmts: [], tail_expr: Some(Idx::<Expr>(14)) }
-    ]
-    root: Idx::<Expr>(15)
-  }
-}
-function NonExhaustiveBoolMissingFalse {
-  params: [b: Bool]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("yes"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function IntLiteralUnionPattern {
-  params: [code: Path(Path { segments: ["SuccessCode"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("success with body"))
-      Idx::<Expr>(2): Literal(String("no content"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function MultipleUnreachableSpans {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("active"))
-      Idx::<Expr>(2): Literal(String("duplicate 1"))
-      Idx::<Expr>(3): Literal(String("inactive"))
-      Idx::<Expr>(4): Literal(String("duplicate 2"))
-      Idx::<Expr>(5): Literal(String("pending"))
-      Idx::<Expr>(6): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(4) }, MatchArm { pattern: Idx::<Pattern>(4), guard: None, body: Idx::<Expr>(5) }] }
-      Idx::<Expr>(7): Block { stmts: [], tail_expr: Some(Idx::<Expr>(6)) }
-    ]
-    root: Idx::<Expr>(7)
-  }
-}
-function ExhaustiveCustomBool {
-  params: [b: Path(Path { segments: ["CustomBool"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("yes"))
-      Idx::<Expr>(2): Literal(String("no"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function ExhaustiveMixedLiterals {
-  params: [x: Path(Path { segments: ["MixedLiterals"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("http ok"))
-      Idx::<Expr>(2): Literal(String("string success"))
-      Idx::<Expr>(3): Literal(String("boolean true"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function PartialUnionPlusCatchAll {
-  params: [r: Path(Path { segments: ["FullResult"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["r"])
-      Idx::<Expr>(1): Literal(String("success or failure"))
-      Idx::<Expr>(2): Literal(String("pending"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function ExhaustiveTrueType {
-  params: [t: Path(Path { segments: ["AlwaysTrue"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["t"])
-      Idx::<Expr>(1): Literal(String("always true"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function NestedMatchSpans {
-  params: [x: Int, y: Bool]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Path(["y"])
-      Idx::<Expr>(2): Literal(String("zero true"))
-      Idx::<Expr>(3): Literal(String("zero false"))
-      Idx::<Expr>(4): Literal(String("unreachable nested"))
-      Idx::<Expr>(5): Match { scrutinee: Idx::<Expr>(1), arms: [MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(4) }] }
-      Idx::<Expr>(6): Literal(String("other"))
-      Idx::<Expr>(7): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(5) }, MatchArm { pattern: Idx::<Pattern>(4), guard: None, body: Idx::<Expr>(6) }] }
-      Idx::<Expr>(8): Block { stmts: [], tail_expr: Some(Idx::<Expr>(7)) }
-    ]
-    root: Idx::<Expr>(8)
-  }
-}
-function NonExhaustiveOptionalMissingValue {
-  params: [code: Path(Path { segments: ["MaybeOk"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("no code"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function EnumVariantUnion {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("actionable"))
-      Idx::<Expr>(2): Literal(String("inactive"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function NestedTypeAlias {
-  params: [mr: Path(Path { segments: ["MaybeResult"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["mr"])
-      Idx::<Expr>(1): Path(["s", "data"])
-      Idx::<Expr>(2): Path(["f", "reason"])
-      Idx::<Expr>(3): Literal(String("nothing"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function ExhaustiveFalseType {
-  params: [f: Path(Path { segments: ["AlwaysFalse"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["f"])
-      Idx::<Expr>(1): Literal(String("always false"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function NonExhaustiveOptionalMissingNull {
-  params: [code: Path(Path { segments: ["MaybeOk"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("OK"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function NonExhaustiveTrueTypeWrongLiteral {
-  params: [t: Path(Path { segments: ["AlwaysTrue"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["t"])
-      Idx::<Expr>(1): Literal(String("wrong!"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function ExhaustiveWithNamedCatchAll {
-  params: [x: Int]
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(Int(100))
-      Idx::<Expr>(2): Path(["other"])
-      Idx::<Expr>(3): Literal(Int(1))
-      Idx::<Expr>(4): Binary { op: Add, lhs: Idx::<Expr>(2), rhs: Idx::<Expr>(3) }
-      Idx::<Expr>(5): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(4) }] }
-      Idx::<Expr>(6): Block { stmts: [], tail_expr: Some(Idx::<Expr>(5)) }
-    ]
-    root: Idx::<Expr>(6)
-  }
-}
-function NestedTypeBindings {
-  params: [r: Path(Path { segments: ["Result"], kind: Plain })]
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["r"])
-      Idx::<Expr>(1): Literal(Int(0))
-      Idx::<Expr>(2): Literal(Int(1))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function NonExhaustiveAliasOfLiterals {
-  params: [code: Path(Path { segments: ["OkOrCreated"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("ok"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function ExhaustiveAliasOfLiterals {
-  params: [code: Path(Path { segments: ["OkOrCreated"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("ok"))
-      Idx::<Expr>(2): Literal(String("created"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function WrongLiteralTypeIntWithString {
-  params: [x: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("wrong type"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function ExhaustiveEnumWithCatchAll {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("active"))
-      Idx::<Expr>(2): Literal(String("other"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function GuardedWithFallback {
-  params: [x: Int]
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Path(["n"])
-      Idx::<Expr>(2): Literal(Int(0))
-      Idx::<Expr>(3): Binary { op: Gt, lhs: Idx::<Expr>(1), rhs: Idx::<Expr>(2) }
-      Idx::<Expr>(4): Path(["n"])
-      Idx::<Expr>(5): Literal(Int(2))
-      Idx::<Expr>(6): Binary { op: Mul, lhs: Idx::<Expr>(4), rhs: Idx::<Expr>(5) }
-      Idx::<Expr>(7): Literal(Int(0))
-      Idx::<Expr>(8): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: Some(Idx::<Expr>(3)), body: Idx::<Expr>(6) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(7) }] }
-      Idx::<Expr>(9): Block { stmts: [], tail_expr: Some(Idx::<Expr>(8)) }
-    ]
-    root: Idx::<Expr>(9)
-  }
-}
-function HighLineNumberNonExhaustive {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("active only"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function NonExhaustiveNullableEnumMissingVariant {
-  params: [s: Optional(Path(Path { segments: ["Status"], kind: Plain }))]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("active"))
-      Idx::<Expr>(2): Literal(String("inactive"))
-      Idx::<Expr>(3): Literal(String("no status"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function DeeplyNestedLiterals {
-  params: [x: Path(Path { segments: ["SuccessCode"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("all success codes"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(4), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function NonExhaustiveFullResultMissingOne {
-  params: [r: Path(Path { segments: ["FullResult"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["r"])
-      Idx::<Expr>(1): Path(["s", "data"])
-      Idx::<Expr>(2): Path(["f", "reason"])
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function ExhaustiveSingletonInt {
-  params: [code: Path(Path { segments: ["HttpOk"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("OK"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function NonExhaustiveClassPlusLiteralMissingLiteral {
-  params: [x: Path(Path { segments: ["SuccessOr200"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Path(["s", "data"])
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function ExhaustiveNullableEnumWithTypedPattern {
-  params: [s: Optional(Path(Path { segments: ["Status"], kind: Plain }))]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("some status"))
-      Idx::<Expr>(2): Literal(String("no status"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function DuplicateStringLiteral {
-  params: [role: Path(Path { segments: ["Role"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["role"])
-      Idx::<Expr>(1): Literal(String("first user"))
-      Idx::<Expr>(2): Literal(String("second user"))
-      Idx::<Expr>(3): Literal(String("assistant"))
-      Idx::<Expr>(4): Literal(String("system"))
-      Idx::<Expr>(5): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(4) }] }
-      Idx::<Expr>(6): Block { stmts: [], tail_expr: Some(Idx::<Expr>(5)) }
-    ]
-    root: Idx::<Expr>(6)
-  }
-}
-function NonExhaustiveEnumMissingOne {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("active"))
-      Idx::<Expr>(2): Literal(String("inactive"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function ExhaustiveOptional {
-  params: [x: Optional(Int)]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("has value"))
-      Idx::<Expr>(2): Literal(String("no value"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function NonExhaustiveCustomBoolMissing {
-  params: [b: Path(Path { segments: ["CustomBool"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("yes"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function NonExhaustiveMixedLiterals {
-  params: [x: Path(Path { segments: ["MixedLiterals"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("http ok"))
-      Idx::<Expr>(2): Literal(String("string success"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function NonExhaustiveClassPlusLiteralMissingClass {
-  params: [x: Path(Path { segments: ["SuccessOr200"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("http ok"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function UnreachableAfterCatchAll {
-  params: [x: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("catch all"))
-      Idx::<Expr>(2): Literal(String("never reached"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function OptionalWithCatchAll {
-  params: [x: Optional(Int)]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("no value"))
-      Idx::<Expr>(2): Literal(String("has value"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function DuplicateBoolLiteral {
-  params: [b: Bool]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["b"])
-      Idx::<Expr>(1): Literal(String("first true"))
-      Idx::<Expr>(2): Literal(String("second true"))
-      Idx::<Expr>(3): Literal(String("false"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function OverlappingTypedPatterns {
-  params: [r: Path(Path { segments: ["Result"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["r"])
-      Idx::<Expr>(1): Literal(String("success"))
-      Idx::<Expr>(2): Literal(String("covers failure only (success already handled)"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function StringLiteralAfterStringType {
-  params: [s: String]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("any string"))
-      Idx::<Expr>(2): Literal(String("unreachable"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function NestedEnumVariantUnions {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("all statuses"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(4), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function UnionPatternCoversAll {
-  params: [r: Path(Path { segments: ["Result"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["r"])
-      Idx::<Expr>(1): Literal(String("covered"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function ExhaustiveWithUnderscore {
-  params: [x: Int]
-  return: Int
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(Int(100))
-      Idx::<Expr>(2): Literal(Int(200))
-      Idx::<Expr>(3): Literal(Int(0))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function PartialUnionPatternCoverage {
-  params: [r: Path(Path { segments: ["FullResult"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["r"])
-      Idx::<Expr>(1): Literal(String("not pending"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function NonExhaustiveStringLiteral {
-  params: [role: Path(Path { segments: ["Role"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["role"])
-      Idx::<Expr>(1): Literal(String("User"))
-      Idx::<Expr>(2): Literal(String("Assistant"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function StringLiteralWithCatchAll {
-  params: [role: Path(Path { segments: ["Role"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["role"])
-      Idx::<Expr>(1): Literal(String("User message"))
-      Idx::<Expr>(2): Literal(String("Assistant message"))
-      Idx::<Expr>(3): Literal(String("Other"))
-      Idx::<Expr>(4): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(3) }] }
-      Idx::<Expr>(5): Block { stmts: [], tail_expr: Some(Idx::<Expr>(4)) }
-    ]
-    root: Idx::<Expr>(5)
-  }
-}
-function NonExhaustiveEnumMissingMultiple {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("active"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
-}
-function MixedPatterns {
-  params: [x: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("zero"))
-      Idx::<Expr>(2): Literal(String("one"))
-      Idx::<Expr>(3): Path(["n"])
-      Idx::<Expr>(4): Literal(Int(0))
-      Idx::<Expr>(5): Binary { op: Gt, lhs: Idx::<Expr>(3), rhs: Idx::<Expr>(4) }
-      Idx::<Expr>(6): Literal(String("positive"))
-      Idx::<Expr>(7): Literal(String("negative"))
-      Idx::<Expr>(8): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }, MatchArm { pattern: Idx::<Pattern>(2), guard: Some(Idx::<Expr>(5)), body: Idx::<Expr>(6) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(7) }] }
-      Idx::<Expr>(9): Block { stmts: [], tail_expr: Some(Idx::<Expr>(8)) }
-    ]
-    root: Idx::<Expr>(9)
-  }
-}
-function NonExhaustiveIntLiteral {
-  params: [code: Path(Path { segments: ["SuccessCode"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["code"])
-      Idx::<Expr>(1): Literal(String("OK"))
-      Idx::<Expr>(2): Literal(String("Created"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function LiteralAfterTypedPattern {
-  params: [x: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("int"))
-      Idx::<Expr>(2): Literal(String("unreachable"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
-function EnumVariantUnionWithCatchAll {
-  params: [s: Path(Path { segments: ["Status"], kind: Plain })]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["s"])
-      Idx::<Expr>(1): Literal(String("actionable"))
-      Idx::<Expr>(2): Literal(String("other"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(3), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
-}
+function NestedLiteralUnions(code: int) -> string {
+      match (code) {
+          200 | 201 | 202 | 204 => "success",
+          400 | 404 | 405 | 406 | 409 => "client error",
+          _ => "other",
+      }
+}
+
+function ExhaustiveEnumWithTypedPattern(s: Status) -> string {
+      match (s) {
+          x: Status => "any status",
+      }
+}
+
+function ParenthesizedSingleLiteral(b: bool) -> string {
+      match (b) {
+          true => "yes",
+          false => "no",
+      }
+}
+
+function DuplicateEnumVariant(s: Status) -> string {
+      match (s) {
+          Status.Active => "first",
+          Status.Active => "second",
+          Status.Inactive => "inactive",
+          Status.Pending => "pending",
+      }
+}
+
+function WrongLiteralTypeBoolWithInt(b: bool) -> string {
+      match (b) {
+          42 => "wrong type",
+      }
+}
+
+function UnreachableMultiple(x: int) -> string {
+      match (x) {
+          _ => "catch all",
+          n: int => "unreachable 1",
+          m: int => "unreachable 2",
+      }
+}
+
+function OverlappingWithBindings(r: Result) -> string {
+      match (r) {
+          s: Success => s.data,
+          x: Success | Failure => "remaining",
+      }
+}
+
+function ExhaustiveNullableEnum(s: Status?) -> string {
+      match (s) {
+          Status.Active => "active",
+          Status.Inactive => "inactive",
+          Status.Pending => "pending",
+          null => "no status",
+      }
+}
+
+function NonExhaustiveBoolMissingTrue(b: bool) -> string {
+      match (b) {
+          false => "no",
+      }
+}
+
+function ExhaustiveEnumAllVariants(s: Status) -> string {
+      match (s) {
+          Status.Active => "active",
+          Status.Inactive => "inactive",
+          Status.Pending => "pending",
+      }
+}
+
+function ExhaustiveTypeAlias(r: Result) -> string {
+      match (r) {
+          s: Success => s.data,
+          f: Failure => f.reason,
+      }
+}
+
+function EnumVariantAfterTypedEnum(s: Status) -> string {
+      match (s) {
+          x: Status => "any status",
+          Status.Active => "unreachable",
+      }
+}
+
+function BoolLiteralAfterTypedBool(b: bool) -> string {
+      match (b) {
+          x: bool => "any bool",
+          true => "unreachable",
+      }
+}
+
+function LiteralUnionWithCatchAll(code: int) -> string {
+      match (code) {
+          200 | 201 => "success",
+          400 | 404 => "client error",
+          _ => "other",
+      }
+}
+
+function ExhaustiveIntLiterals(code: SuccessCode) -> string {
+      match (code) {
+          200 => "OK",
+          201 => "Created",
+          204 => "No Content",
+      }
+}
+
+function ExhaustiveStringLiterals(role: Role) -> string {
+      match (role) {
+          _ => "User",
+          _ => "Assistant",
+          _ => "System",
+      }
+}
+
+function ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
+      match (r) {
+          s: Success => s.data,
+          _ => "fallback",
+      }
+}
+
+function DuplicateIntLiteral(x: int) -> string {
+      match (x) {
+          1 => "first one",
+          1 => "second one",
+          _ => "other",
+      }
+}
+
+function ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
+      match (x) {
+          s: Success => s.data,
+          200 => "http ok",
+      }
+}
+
+function ExhaustiveLiteralWithBaseType(x: int) -> string {
+      match (x) {
+          200 => "ok",
+          n: int => "other",
+      }
+}
+
+function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
+      match (s) {
+          Status.Active => "active",
+          Status.Inactive => "inactive",
+          Status.Pending => "pending",
+      }
+}
+
+function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
+      match (r) {
+          s: Success => s.data,
+      }
+}
+
+function BoolUnionPattern(b: bool) -> string {
+      match (b) {
+          true | false => "covered",
+      }
+}
+
+function StringLiteralUnionPattern(role: Role) -> string {
+      match (role) {
+          _ => "chat participant",
+          _ => "system",
+      }
+}
+
+function ExhaustiveBool(b: bool) -> string {
+      match (b) {
+          true => "yes",
+          false => "no",
+      }
+}
+
+function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
+      match (dm) {
+          s: Success => s.data,
+          f: Failure => f.reason,
+      }
+}
+
+function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
+      match (dm) {
+          s: Success => s.data,
+          f: Failure => f.reason,
+          null => "nothing",
+      }
+}
+
+function ExhaustiveOptionalSingleton(code: MaybeOk) -> string {
+      match (code) {
+          200 => "OK",
+          null => "no code",
+      }
+}
+
+function BoolWithCatchAll(b: bool) -> string {
+      match (b) {
+          true => "yes",
+          _ => "no",
+      }
+}
+
+function GuardedOnlyNonExhaustive(x: int) -> int {
+      match (x) {
+          n: int if n > 0 => n * 2,
+          n: int if n < 0 => n * -<missing>,
+      }
+}
+
+function NonExhaustiveBoolMissingFalse(b: bool) -> string {
+      match (b) {
+          true => "yes",
+      }
+}
+
+function IntLiteralUnionPattern(code: SuccessCode) -> string {
+      match (code) {
+          200 | 201 => "success with body",
+          204 => "no content",
+      }
+}
+
+function MultipleUnreachableSpans(s: Status) -> string {
+      match (s) {
+          Status.Active => "active",
+          Status.Active => "duplicate 1",
+          Status.Inactive => "inactive",
+          Status.Active => "duplicate 2",
+          Status.Pending => "pending",
+      }
+}
+
+function ExhaustiveCustomBool(b: CustomBool) -> string {
+      match (b) {
+          true => "yes",
+          false => "no",
+      }
+}
+
+function ExhaustiveMixedLiterals(x: MixedLiterals) -> string {
+      match (x) {
+          200 => "http ok",
+          _ => "string success",
+          true => "boolean true",
+      }
+}
+
+function PartialUnionPlusCatchAll(r: FullResult) -> string {
+      match (r) {
+          x: Success | Failure => "success or failure",
+          _: Pending => "pending",
+      }
+}
+
+function ExhaustiveTrueType(t: AlwaysTrue) -> string {
+      match (t) {
+          true => "always true",
+      }
+}
+
+function NestedMatchSpans(x: int, y: bool) -> string {
+      match (x) {
+          0 => match (y) {
+              true => "zero true",
+              false => "zero false",
+              true => "unreachable nested",
+          },
+          _ => "other",
+      }
+}
+
+function NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
+      match (code) {
+          null => "no code",
+      }
+}
+
+function EnumVariantUnion(s: Status) -> string {
+      match (s) {
+          Status.Active | Status.Pending => "actionable",
+          Status.Inactive => "inactive",
+      }
+}
+
+function NestedTypeAlias(mr: MaybeResult) -> string {
+      match (mr) {
+          s: Success => s.data,
+          f: Failure => f.reason,
+          null => "nothing",
+      }
+}
+
+function ExhaustiveFalseType(f: AlwaysFalse) -> string {
+      match (f) {
+          false => "always false",
+      }
+}
+
+function NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
+      match (code) {
+          200 => "OK",
+      }
+}
+
+function NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
+      match (t) {
+          false => "wrong!",
+      }
+}
+
+function ExhaustiveWithNamedCatchAll(x: int) -> int {
+      match (x) {
+          1 => 100,
+          other => other + 1,
+      }
+}
+
+function NestedTypeBindings(r: Result) -> int {
+      match (r) {
+          s: Success | (Failure) => 0,
+          f: Failure => 1,
+      }
+}
+
+function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
+      match (code) {
+          200 => "ok",
+      }
+}
+
+function ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
+      match (code) {
+          200 => "ok",
+          201 => "created",
+      }
+}
+
+function WrongLiteralTypeIntWithString(x: int) -> string {
+      match (x) {
+          _ => "wrong type",
+      }
+}
+
+function ExhaustiveEnumWithCatchAll(s: Status) -> string {
+      match (s) {
+          Status.Active => "active",
+          _ => "other",
+      }
+}
+
+function GuardedWithFallback(x: int) -> int {
+      match (x) {
+          n: int if n > 0 => n * 2,
+          _ => 0,
+      }
+}
+
+function HighLineNumberNonExhaustive(s: Status) -> string {
+      match (s) {
+          Status.Active => "active only",
+      }
+}
+
+function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
+      match (s) {
+          Status.Active => "active",
+          Status.Inactive => "inactive",
+          null => "no status",
+      }
+}
+
+function DeeplyNestedLiterals(x: SuccessCode) -> string {
+      match (x) {
+          200 | 201 | 204 => "all success codes",
+      }
+}
+
+function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
+      match (r) {
+          s: Success => s.data,
+          f: Failure => f.reason,
+      }
+}
+
+function ExhaustiveSingletonInt(code: HttpOk) -> string {
+      match (code) {
+          200 => "OK",
+      }
+}
+
+function NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
+      match (x) {
+          s: Success => s.data,
+      }
+}
+
+function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
+      match (s) {
+          x: Status => "some status",
+          null => "no status",
+      }
+}
+
+function DuplicateStringLiteral(role: Role) -> string {
+      match (role) {
+          _ => "first user",
+          _ => "second user",
+          _ => "assistant",
+          _ => "system",
+      }
+}
+
+function NonExhaustiveEnumMissingOne(s: Status) -> string {
+      match (s) {
+          Status.Active => "active",
+          Status.Inactive => "inactive",
+      }
+}
+
+function ExhaustiveOptional(x: int?) -> string {
+      match (x) {
+          n: int => "has value",
+          null => "no value",
+      }
+}
+
+function NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
+      match (b) {
+          true => "yes",
+      }
+}
+
+function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
+      match (x) {
+          200 => "http ok",
+          _ => "string success",
+      }
+}
+
+function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
+      match (x) {
+          200 => "http ok",
+      }
+}
+
+function UnreachableAfterCatchAll(x: int) -> string {
+      match (x) {
+          _ => "catch all",
+          n: int => "never reached",
+      }
+}
+
+function OptionalWithCatchAll(x: int?) -> string {
+      match (x) {
+          null => "no value",
+          _ => "has value",
+      }
+}
+
+function DuplicateBoolLiteral(b: bool) -> string {
+      match (b) {
+          true => "first true",
+          true => "second true",
+          false => "false",
+      }
+}
+
+function OverlappingTypedPatterns(r: Result) -> string {
+      match (r) {
+          _: Success => "success",
+          _: Success | Failure => "covers failure only (success already handled)",
+      }
+}
+
+function StringLiteralAfterStringType(s: string) -> string {
+      match (s) {
+          x: string => "any string",
+          _ => "unreachable",
+      }
+}
+
+function NestedEnumVariantUnions(s: Status) -> string {
+      match (s) {
+          Status.Active | Status.Pending | Status.Inactive => "all statuses",
+      }
+}
+
+function UnionPatternCoversAll(r: Result) -> string {
+      match (r) {
+          x: Success | Failure => "covered",
+      }
+}
+
+function ExhaustiveWithUnderscore(x: int) -> int {
+      match (x) {
+          1 => 100,
+          2 => 200,
+          _ => 0,
+      }
+}
+
+function PartialUnionPatternCoverage(r: FullResult) -> string {
+      match (r) {
+          x: Success | Failure => "not pending",
+      }
+}
+
+function NonExhaustiveStringLiteral(role: Role) -> string {
+      match (role) {
+          _ => "User",
+          _ => "Assistant",
+      }
+}
+
+function StringLiteralWithCatchAll(role: Role) -> string {
+      match (role) {
+          _ => "User message",
+          _ => "Assistant message",
+          _ => "Other",
+      }
+}
+
+function NonExhaustiveEnumMissingMultiple(s: Status) -> string {
+      match (s) {
+          Status.Active => "active",
+      }
+}
+
+function MixedPatterns(x: int) -> string {
+      match (x) {
+          0 => "zero",
+          1 => "one",
+          n: int if n > 0 => "positive",
+          _ => "negative",
+      }
+}
+
+function NonExhaustiveIntLiteral(code: SuccessCode) -> string {
+      match (code) {
+          200 => "OK",
+          201 => "Created",
+      }
+}
+
+function LiteralAfterTypedPattern(x: int) -> string {
+      match (x) {
+          n: int => "int",
+          42 => "unreachable",
+      }
+}
+
+function EnumVariantUnionWithCatchAll(s: Status) -> string {
+      match (s) {
+          Status.Active | Status.Pending => "actionable",
+          _ => "other",
+      }
+}
+
 class Success {
-  data: String
+  data: string
 }
+
 class Pending {
-  eta: Int
+  eta: int
 }
+
 class Failure {
-  reason: String
+  reason: string
 }
+
 enum Status {
-  EnumVariant { name: "Active" }
-  EnumVariant { name: "Inactive" }
-  EnumVariant { name: "Pending" }
+  Active
+  Inactive
+  Pending
 }
-type Result = Union([Path(Path { segments: ["Success"], kind: Plain }), Path(Path { segments: ["Failure"], kind: Plain })])
-type OkOrCreated = Union([Path(Path { segments: ["OkCode"], kind: Plain }), IntLiteral(201)])
-type MaybeOk = Optional(IntLiteral(200))
-type SuccessCode = Union([IntLiteral(200), IntLiteral(201), IntLiteral(204)])
-type AlwaysFalse = BoolLiteral(false)
-type OkCode = IntLiteral(200)
-type MixedLiterals = Union([IntLiteral(200), StringLiteral("success"), BoolLiteral(true)])
-type MaybeResult = Optional(Path(Path { segments: ["Result"], kind: Plain }))
-type CustomBool = Union([BoolLiteral(true), BoolLiteral(false)])
-type Role = Union([StringLiteral("user"), StringLiteral("assistant"), StringLiteral("system")])
-type FullResult = Union([Path(Path { segments: ["Success"], kind: Plain }), Path(Path { segments: ["Failure"], kind: Plain }), Path(Path { segments: ["Pending"], kind: Plain })])
-type SuccessOr200 = Union([Path(Path { segments: ["Success"], kind: Plain }), IntLiteral(200)])
-type HttpCreated = IntLiteral(201)
-type HttpOk = IntLiteral(200)
-type DoubleMaybe = Optional(Path(Path { segments: ["MaybeResult"], kind: Plain }))
-type AlwaysTrue = BoolLiteral(true)
+
+type Result = Success | Failure
+
+type OkOrCreated = OkCode | 201
+
+type MaybeOk = 200?
+
+type SuccessCode = 200 | 201 | 204
+
+type AlwaysFalse = false
+
+type OkCode = 200
+
+type MixedLiterals = 200 | "success" | true
+
+type MaybeResult = Result?
+
+type CustomBool = true | false
+
+type Role = "user" | "assistant" | "system"
+
+type FullResult = Success | Failure | Pending
+
+type SuccessOr200 = Success | 200
+
+type HttpCreated = 201
+
+type HttpOk = 200
+
+type DoubleMaybe = MaybeResult?
+
+type AlwaysTrue = true

@@ -1,5 +1,5 @@
 use baml_runtime::TypeIR;
-use baml_types::{ir_type::UnionConstructor, BamlMediaType, BamlValue};
+use baml_types::{ir_type::UnionConstructor, type_meta, BamlMediaType, BamlValue};
 
 use crate::{
     baml::cffi::{
@@ -7,14 +7,11 @@ use crate::{
         CffiFieldTypeMap, CffiMapEntry, CffiTypeName, CffiTypeNamespace, CffiValueClass,
         CffiValueEnum, CffiValueHolder, CffiValueList, CffiValueMap, CffiValueNull,
     },
-    ctypes::{
-        baml_type_encode::UnionAllowance,
-        utils::{Encode, WithIr},
-    },
+    ctypes::utils::{Encode, UnionAllowance, WithIr},
     raw_ptr_wrapper::RawPtrWrapper,
 };
 
-impl<'a, TypeLookups> Encode<CffiValueHolder> for WithIr<'a, BamlValue, TypeLookups>
+impl<'a, TypeLookups> Encode<CffiValueHolder> for WithIr<'a, BamlValue, TypeLookups, type_meta::IR>
 where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
 {
@@ -38,6 +35,7 @@ where
                                 value,
                                 lookup: self.lookup,
                                 mode: self.mode,
+                                curr_type: value.to_type_ir(),
                             }
                             .encode(),
                         ),
@@ -50,12 +48,14 @@ where
                     value: &(key_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *key_type.clone(),
                 }
                 .encode();
                 let value_type = WithIr {
                     value: &(value_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *value_type.clone(),
                 }
                 .encode();
                 cValue::MapValue(CffiValueMap {
@@ -72,6 +72,7 @@ where
                             value,
                             lookup: self.lookup,
                             mode: self.mode,
+                            curr_type: value.to_type_ir(),
                         }
                         .encode(),
                     );
@@ -83,11 +84,12 @@ where
                     value: &(value_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *value_type.clone(),
                 }
                 .encode();
                 cValue::ListValue(CffiValueList {
-                    value_type: Some(value_type),
-                    values,
+                    item_type: Some(value_type),
+                    items: values,
                 })
             }
             BamlValue::Media(media) => {
@@ -124,6 +126,7 @@ where
                                 value,
                                 lookup: self.lookup,
                                 mode: self.mode,
+                                curr_type: value.to_type_ir(),
                             }
                             .encode(),
                         ),
@@ -132,17 +135,7 @@ where
             }),
         };
 
-        CffiValueHolder {
-            r#type: Some(
-                WithIr {
-                    value: &(&type_ir, UnionAllowance::Disallow),
-                    lookup: self.lookup,
-                    mode: self.mode,
-                }
-                .encode(),
-            ),
-            value: Some(value),
-        }
+        CffiValueHolder { value: Some(value) }
     }
 }
 
@@ -177,7 +170,8 @@ impl ToTypeIR for BamlValue {
     }
 }
 
-impl<'a, TypeLookups> Encode<CffiFieldTypeHolder> for WithIr<'a, BamlValue, TypeLookups>
+impl<'a, TypeLookups> Encode<CffiFieldTypeHolder>
+    for WithIr<'a, BamlValue, TypeLookups, type_meta::IR>
 where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
 {
@@ -191,19 +185,21 @@ where
                     value: &(key_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *key_type.clone(),
                 }
                 .encode();
                 let value_type = WithIr {
                     value: &(value_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *value_type.clone(),
                 }
                 .encode();
                 CffiFieldTypeHolder {
                     r#type: Some(cffi_field_type_holder::Type::MapType(Box::new(
                         CffiFieldTypeMap {
-                            key: Some(Box::new(key_type)),
-                            value: Some(Box::new(value_type)),
+                            key_type: Some(Box::new(key_type)),
+                            value_type: Some(Box::new(value_type)),
                         },
                     ))),
                 }
@@ -216,12 +212,13 @@ where
                     value: &(item_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *item_type.clone(),
                 }
                 .encode();
                 CffiFieldTypeHolder {
                     r#type: Some(cffi_field_type_holder::Type::ListType(Box::new(
                         CffiFieldTypeList {
-                            element: Some(Box::new(item_type)),
+                            item_type: Some(Box::new(item_type)),
                         },
                     ))),
                 }
@@ -230,6 +227,7 @@ where
                 value: &(&other.to_type_ir(), UnionAllowance::Disallow),
                 lookup: self.lookup,
                 mode: self.mode,
+                curr_type: other.to_type_ir(),
             }
             .encode(),
         }

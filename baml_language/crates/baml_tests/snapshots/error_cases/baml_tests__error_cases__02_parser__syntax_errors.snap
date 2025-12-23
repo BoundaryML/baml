@@ -10,7 +10,7 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "field"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     FUNCTION_DEF
       KW_FUNCTION "function"
@@ -20,7 +20,7 @@ SOURCE_FILE
         L_PAREN "("
         R_PAREN ")"
       EXPR_FUNCTION_BODY
-        BLOCK_EXPR " {}"
+        BLOCK_EXPR "{}"
           L_BRACE "{"
           R_BRACE "}"
     FUNCTION_DEF
@@ -31,13 +31,13 @@ SOURCE_FILE
         PARAMETER
           WORD "x"
           COLON ":"
-          TYPE_EXPR " int | bool"
+          TYPE_EXPR "int | bool"
             WORD "int"
             PIPE "|"
             WORD "bool"
         R_PAREN ")"
       ARROW "->"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       EXPR_FUNCTION_BODY
         BLOCK_EXPR
@@ -52,16 +52,16 @@ SOURCE_FILE
               MATCH_PATTERN
                 WORD "a"
                 COLON ":"
-                TYPE_EXPR " int | b"
+                TYPE_EXPR "int | b"
                   WORD "int"
                   PIPE "|"
                   WORD "b"
               COLON ":"
             MATCH_ARM
-              MATCH_PATTERN " bool"
+              MATCH_PATTERN "bool"
                 WORD "bool"
               FAT_ARROW "=>"
-              STRING_LITERAL " "bad""
+              STRING_LITERAL "bad"
                 QUOTE """
                 WORD "bad"
                 QUOTE """
@@ -75,11 +75,11 @@ SOURCE_FILE
         PARAMETER
           WORD "x"
           COLON ":"
-          TYPE_EXPR " int"
+          TYPE_EXPR "int"
             WORD "int"
         R_PAREN ")"
       ARROW "->"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
       EXPR_FUNCTION_BODY
         BLOCK_EXPR
@@ -96,10 +96,10 @@ SOURCE_FILE
                 PIPE "|"
                 WORD "n"
                 COLON ":"
-                TYPE_EXPR " int"
+                TYPE_EXPR "int"
                   WORD "int"
               FAT_ARROW "=>"
-              STRING_LITERAL " "mixed""
+              STRING_LITERAL "mixed"
                 QUOTE """
                 WORD "mixed"
                 QUOTE """

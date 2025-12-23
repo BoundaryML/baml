@@ -16,12 +16,12 @@ fn array_constructor() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // 'a' is Virtual (single-use), inlined at use site:
             vec![
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
-                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -38,6 +38,7 @@ fn return_array_literal() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Stackification with Virtual _0 and fall-through elimination:
             vec![
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),

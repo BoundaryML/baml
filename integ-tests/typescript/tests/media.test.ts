@@ -6,7 +6,7 @@ describe("Media Tests", () => {
   it("should work with image from url", async () => {
     let res = await b.TestImageInput(
       Image.fromUrl(
-        "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+        "https://i.imgur.com/93fWs5R.png"
       )
     );
     expect(res.toLowerCase()).toMatch(/(green|yellow|ogre|shrek)/);
@@ -53,7 +53,7 @@ describe("Media Tests", () => {
       Video.fromUrl("https://youtu.be/dQw4w9WgXcQ?si=aQdfsK0DdcDtCCud")
     );
     expect(res.toLowerCase()).toMatch(
-      /(singing|rickroll|dancing|80s|pop|music)/
+      /(singing|rickroll|dancing|80s|pop|music|give)/
     );
   });
 

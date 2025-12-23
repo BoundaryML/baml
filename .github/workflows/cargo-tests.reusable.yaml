@@ -70,7 +70,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Clippy (wasm)"
-        run: cargo clippy --workspace --exclude baml_onionskin --target wasm32-unknown-unknown --all-features --locked -- -D warnings
+        run: cargo clippy --workspace --exclude baml_onionskin --exclude baml_language_server --exclude baml_cli --target wasm32-unknown-unknown --all-features --locked -- -D warnings
         working-directory: baml_language
 
   cargo-test-linux:
@@ -204,8 +204,8 @@ jobs:
 
       - name: "Build for WASM"
         run: |
-          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_onionskin --no-default-features
-          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_onionskin --no-default-features --release
+          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_onionskin --exclude baml_language_server --exclude baml_cli --no-default-features
+          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_onionskin --exclude baml_language_server --exclude baml_cli --no-default-features --release
         working-directory: baml_language
 
       - name: "Check WASM size"

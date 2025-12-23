@@ -78,19 +78,12 @@ func (e *AliasedEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = AliasedEnum(value)
 }
 
-func (e AliasedEnum) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e AliasedEnum) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("AliasedEnum", string(e), false)
 }
 
 func (e AliasedEnum) BamlTypeName() string {
 	return "AliasedEnum"
-}
-
-func (u AliasedEnum) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "AliasedEnum",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type Category string
@@ -156,19 +149,12 @@ func (e *Category) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = Category(value)
 }
 
-func (e Category) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e Category) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("Category", string(e), false)
 }
 
 func (e Category) BamlTypeName() string {
 	return "Category"
-}
-
-func (u Category) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Category",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type Category2 string
@@ -234,19 +220,12 @@ func (e *Category2) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = Category2(value)
 }
 
-func (e Category2) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e Category2) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("Category2", string(e), false)
 }
 
 func (e Category2) BamlTypeName() string {
 	return "Category2"
-}
-
-func (u Category2) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Category2",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type Category3 string
@@ -312,19 +291,12 @@ func (e *Category3) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = Category3(value)
 }
 
-func (e Category3) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e Category3) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("Category3", string(e), false)
 }
 
 func (e Category3) BamlTypeName() string {
 	return "Category3"
-}
-
-func (u Category3) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Category3",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type Color string
@@ -388,19 +360,12 @@ func (e *Color) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = Color(value)
 }
 
-func (e Color) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e Color) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("Color", string(e), false)
 }
 
 func (e Color) BamlTypeName() string {
 	return "Color"
-}
-
-func (u Color) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Color",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type DataType string
@@ -460,19 +425,12 @@ func (e *DataType) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = DataType(value)
 }
 
-func (e DataType) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e DataType) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("DataType", string(e), false)
 }
 
 func (e DataType) BamlTypeName() string {
 	return "DataType"
-}
-
-func (u DataType) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "DataType",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type DynEnumOne string
@@ -525,19 +483,12 @@ func (e *DynEnumOne) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = DynEnumOne(value)
 }
 
-func (e DynEnumOne) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e DynEnumOne) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("DynEnumOne", string(e), false)
 }
 
 func (e DynEnumOne) BamlTypeName() string {
 	return "DynEnumOne"
-}
-
-func (u DynEnumOne) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "DynEnumOne",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type DynEnumThree string
@@ -593,19 +544,12 @@ func (e *DynEnumThree) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) 
 	*e = DynEnumThree(value)
 }
 
-func (e DynEnumThree) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e DynEnumThree) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("DynEnumThree", string(e), false)
 }
 
 func (e DynEnumThree) BamlTypeName() string {
 	return "DynEnumThree"
-}
-
-func (u DynEnumThree) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "DynEnumThree",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type DynEnumTwo string
@@ -658,19 +602,12 @@ func (e *DynEnumTwo) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = DynEnumTwo(value)
 }
 
-func (e DynEnumTwo) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e DynEnumTwo) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("DynEnumTwo", string(e), false)
 }
 
 func (e DynEnumTwo) BamlTypeName() string {
 	return "DynEnumTwo"
-}
-
-func (u DynEnumTwo) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "DynEnumTwo",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type EnumInClass string
@@ -730,19 +667,12 @@ func (e *EnumInClass) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = EnumInClass(value)
 }
 
-func (e EnumInClass) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e EnumInClass) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("EnumInClass", string(e), false)
 }
 
 func (e EnumInClass) BamlTypeName() string {
 	return "EnumInClass"
-}
-
-func (u EnumInClass) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "EnumInClass",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 // An enum with three values,
@@ -809,19 +739,12 @@ func (e *EnumOutput) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = EnumOutput(value)
 }
 
-func (e EnumOutput) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e EnumOutput) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("EnumOutput", string(e), false)
 }
 
 func (e EnumOutput) BamlTypeName() string {
 	return "EnumOutput"
-}
-
-func (u EnumOutput) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "EnumOutput",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type Hobby string
@@ -879,19 +802,12 @@ func (e *Hobby) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = Hobby(value)
 }
 
-func (e Hobby) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e Hobby) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("Hobby", string(e), false)
 }
 
 func (e Hobby) BamlTypeName() string {
 	return "Hobby"
-}
-
-func (u Hobby) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Hobby",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type MapKey string
@@ -953,19 +869,12 @@ func (e *MapKey) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = MapKey(value)
 }
 
-func (e MapKey) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e MapKey) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("MapKey", string(e), false)
 }
 
 func (e MapKey) BamlTypeName() string {
 	return "MapKey"
-}
-
-func (u MapKey) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "MapKey",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type NamedArgsSingleEnum string
@@ -1025,19 +934,12 @@ func (e *NamedArgsSingleEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.Ty
 	*e = NamedArgsSingleEnum(value)
 }
 
-func (e NamedArgsSingleEnum) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e NamedArgsSingleEnum) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("NamedArgsSingleEnum", string(e), false)
 }
 
 func (e NamedArgsSingleEnum) BamlTypeName() string {
 	return "NamedArgsSingleEnum"
-}
-
-func (u NamedArgsSingleEnum) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "NamedArgsSingleEnum",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type NamedArgsSingleEnumList string
@@ -1097,19 +999,12 @@ func (e *NamedArgsSingleEnumList) Decode(holder *cffi.CFFIValueEnum, typeMap bam
 	*e = NamedArgsSingleEnumList(value)
 }
 
-func (e NamedArgsSingleEnumList) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e NamedArgsSingleEnumList) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("NamedArgsSingleEnumList", string(e), false)
 }
 
 func (e NamedArgsSingleEnumList) BamlTypeName() string {
 	return "NamedArgsSingleEnumList"
-}
-
-func (u NamedArgsSingleEnumList) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "NamedArgsSingleEnumList",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type OptionalTest_CategoryType string
@@ -1171,19 +1066,12 @@ func (e *OptionalTest_CategoryType) Decode(holder *cffi.CFFIValueEnum, typeMap b
 	*e = OptionalTest_CategoryType(value)
 }
 
-func (e OptionalTest_CategoryType) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e OptionalTest_CategoryType) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("OptionalTest_CategoryType", string(e), false)
 }
 
 func (e OptionalTest_CategoryType) BamlTypeName() string {
 	return "OptionalTest_CategoryType"
-}
-
-func (u OptionalTest_CategoryType) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "OptionalTest_CategoryType",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type OrderStatus string
@@ -1247,19 +1135,12 @@ func (e *OrderStatus) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = OrderStatus(value)
 }
 
-func (e OrderStatus) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e OrderStatus) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("OrderStatus", string(e), false)
 }
 
 func (e OrderStatus) BamlTypeName() string {
 	return "OrderStatus"
-}
-
-func (u OrderStatus) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "OrderStatus",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type RenderStatusEnum string
@@ -1315,19 +1196,12 @@ func (e *RenderStatusEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeM
 	*e = RenderStatusEnum(value)
 }
 
-func (e RenderStatusEnum) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e RenderStatusEnum) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("RenderStatusEnum", string(e), false)
 }
 
 func (e RenderStatusEnum) BamlTypeName() string {
 	return "RenderStatusEnum"
-}
-
-func (u RenderStatusEnum) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "RenderStatusEnum",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type RenderTestEnum string
@@ -1383,19 +1257,12 @@ func (e *RenderTestEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap
 	*e = RenderTestEnum(value)
 }
 
-func (e RenderTestEnum) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e RenderTestEnum) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("RenderTestEnum", string(e), false)
 }
 
 func (e RenderTestEnum) BamlTypeName() string {
 	return "RenderTestEnum"
-}
-
-func (u RenderTestEnum) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "RenderTestEnum",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type Tag string
@@ -1457,19 +1324,12 @@ func (e *Tag) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = Tag(value)
 }
 
-func (e Tag) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e Tag) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("Tag", string(e), false)
 }
 
 func (e Tag) BamlTypeName() string {
 	return "Tag"
-}
-
-func (u Tag) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Tag",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 type TestEnum string
@@ -1539,17 +1399,10 @@ func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = TestEnum(value)
 }
 
-func (e TestEnum) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e TestEnum) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("TestEnum", string(e), false)
 }
 
 func (e TestEnum) BamlTypeName() string {
 	return "TestEnum"
-}
-
-func (u TestEnum) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "TestEnum",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }

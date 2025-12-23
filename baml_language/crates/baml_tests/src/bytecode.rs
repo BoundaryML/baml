@@ -62,6 +62,9 @@ impl baml_hir::Db for TestDatabase {}
 #[salsa::db]
 impl baml_thir::Db for TestDatabase {}
 
+#[salsa::db]
+impl baml_mir::Db for TestDatabase {}
+
 impl Default for TestDatabase {
     fn default() -> Self {
         Self::new()

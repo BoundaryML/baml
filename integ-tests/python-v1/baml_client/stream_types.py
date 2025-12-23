@@ -30,10 +30,10 @@ class StreamState(GenericModel, typing.Generic[StreamStateValueT]):
 class AddTodoItem(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    type: str
-    item: typing.Optional[str] = None
-    time: typing.Optional[str] = None
-    description: typing.Optional[str] = None
+    type: typing_extensions.Literal['add_todo_item']
+    item: str
+    time: str
+    description: str
 
 class AddressWithMeta(BaseModel):
     class Config:
@@ -90,7 +90,7 @@ class BookOrder(BaseModel):
 class ClassForNullLiteral(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    a: typing.Optional[str] = None
+    a: typing.Optional[typing_extensions.Literal['hi']] = None
 
 class ClassOptionalOutput(BaseModel):
     class Config:
@@ -113,8 +113,8 @@ class ClassToRecAlias(BaseModel):
 class ClassWithBlockDone(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    i_16_digits: typing.Optional[int] = None
-    s_20_words: typing.Optional[str] = None
+    i_16_digits: int
+    s_20_words: str
 
 class ClassWithImage(BaseModel):
     class Config:
@@ -371,17 +371,17 @@ class LinkedListAliasNode(BaseModel):
 class LiteralClassHello(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    prop: typing.Optional[str] = None
+    prop: typing.Optional[typing_extensions.Literal['hello']] = None
 
 class LiteralClassOne(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    prop: typing.Optional[str] = None
+    prop: typing.Optional[typing_extensions.Literal['one']] = None
 
 class LiteralClassTwo(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    prop: typing.Optional[str] = None
+    prop: typing.Optional[typing_extensions.Literal['two']] = None
 
 class MaintainFieldOrder(BaseModel):
     class Config:
@@ -545,7 +545,7 @@ class ReceiptInfo(BaseModel):
         arbitrary_types_allowed = True
     items: typing.List["ReceiptItem"]
     total_cost: typing.Optional[float] = None
-    venue: typing.Optional[typing.Union[str, str]] = None
+    venue: typing.Optional[typing.Union[typing_extensions.Literal['barisa'], typing_extensions.Literal['ox_burger']]] = None
 
 class ReceiptItem(BaseModel):
     class Config:
@@ -559,7 +559,7 @@ class Recipe(BaseModel):
     class Config:
         arbitrary_types_allowed = True
     ingredients: typing.Dict[str, "Quantity"]
-    recipe_type: typing.Optional[typing.Union[str, str]] = None
+    recipe_type: typing.Optional[typing.Union[typing_extensions.Literal['breakfast'], typing_extensions.Literal['dinner']]] = None
 
 class RecursiveAliasDependency(BaseModel):
     class Config:
@@ -680,7 +680,7 @@ class TestOutputClass(BaseModel):
 class TodoMessageToUser(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    type: str
+    type: typing_extensions.Literal['todo_message_to_user']
     message: typing.Optional[str] = None
 
 class Tree(BaseModel):

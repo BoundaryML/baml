@@ -20,14 +20,14 @@ import type * as types from "../types"
  * BAML stream function. The returned stream yields incremental updates.
  *
 {%- for (name, arg_type) in func.args %}
- * @param { {{arg_type.serialize_type(pkg)}} } {{ name }}{% if arg_type.meta().is_optional() %} (optional){% endif %} - Input parameter.
+ * @param { {{arg_type.serialize_type(pkg)}} } {{ name }}{% if arg_type.is_optional() %} (optional){% endif %} - Input parameter.
 {%- endfor %}
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const {{ func.name }} = async (
   {%- for (name, arg_type) in func.args %}
-  {{ name }}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+  {{ name }}{% if arg_type.is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
   {%- endfor %}
 ): Promise<ReadableStream<Uint8Array>> => {
   const __stream__ = b.stream.{{ func.name }}(

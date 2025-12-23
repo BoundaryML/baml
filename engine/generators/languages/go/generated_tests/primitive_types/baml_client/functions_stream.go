@@ -636,7 +636,7 @@ func (*stream) TestTopLevelInt(ctx context.Context, input string, opts ...CallOp
 }
 
 // / Streaming version of TestTopLevelNull
-func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[any, any], error) {
+func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*interface{}, *interface{}], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -677,11 +677,11 @@ func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[any, any])
+	channel := make(chan StreamValue[*interface{}, *interface{}])
 	go func() {
 		for result := range internal_channel {
 			if result.Error != nil {
-				channel <- StreamValue[any, any]{
+				channel <- StreamValue[*interface{}, *interface{}]{
 					IsError: true,
 					Error:   result.Error,
 				}
@@ -689,14 +689,14 @@ func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallO
 				return
 			}
 			if result.HasData {
-				data := (result.Data).(any)
-				channel <- StreamValue[any, any]{
+				data := (result.Data).(*interface{})
+				channel <- StreamValue[*interface{}, *interface{}]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := (result.StreamData).(any)
-				channel <- StreamValue[any, any]{
+				data := (result.StreamData).(*interface{})
+				channel <- StreamValue[*interface{}, *interface{}]{
 					IsFinal:   false,
 					as_stream: &data,
 				}

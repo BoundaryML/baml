@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -78,67 +77,67 @@ class BamlAsyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-
+    
     async def TestComplexNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ComplexNested:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.TestComplexNested(input=input,
+            stream = self.stream.TestComplexNested(input=input,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestComplexNested", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestComplexNested", args={
                 "input": input,
             })
-            return typing.cast(types.ComplexNested, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.ComplexNested, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestDeeplyNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DeeplyNested:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.TestDeeplyNested(input=input,
+            stream = self.stream.TestDeeplyNested(input=input,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestDeeplyNested", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestDeeplyNested", args={
                 "input": input,
             })
-            return typing.cast(types.DeeplyNested, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.DeeplyNested, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestRecursiveStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveStructure:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.TestRecursiveStructure(input=input,
+            stream = self.stream.TestRecursiveStructure(input=input,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestRecursiveStructure", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestRecursiveStructure", args={
                 "input": input,
             })
-            return typing.cast(types.RecursiveStructure, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.RecursiveStructure, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestSimpleNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SimpleNested:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.TestSimpleNested(input=input,
+            stream = self.stream.TestSimpleNested(input=input,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestSimpleNested", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestSimpleNested", args={
                 "input": input,
             })
-            return typing.cast(types.SimpleNested, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.SimpleNested, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -151,50 +150,50 @@ class BamlStreamClient:
     def TestComplexNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.ComplexNested, types.ComplexNested]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestComplexNested", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestComplexNested", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.ComplexNested, types.ComplexNested](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.ComplexNested, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.ComplexNested, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestDeeplyNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.DeeplyNested, types.DeeplyNested]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestDeeplyNested", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestDeeplyNested", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.DeeplyNested, types.DeeplyNested](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.DeeplyNested, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.DeeplyNested, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestRecursiveStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.RecursiveStructure, types.RecursiveStructure]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestRecursiveStructure", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestRecursiveStructure", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.RecursiveStructure, types.RecursiveStructure](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.RecursiveStructure, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.RecursiveStructure, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestSimpleNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.SimpleNested, types.SimpleNested]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestSimpleNested", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestSimpleNested", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.SimpleNested, types.SimpleNested](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.SimpleNested, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.SimpleNested, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     
 
@@ -207,31 +206,31 @@ class BamlHttpRequestClient:
     async def TestComplexNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestComplexNested", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestComplexNested", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     async def TestDeeplyNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestDeeplyNested", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestDeeplyNested", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     async def TestRecursiveStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestRecursiveStructure", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestRecursiveStructure", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     async def TestSimpleNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestSimpleNested", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestSimpleNested", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -243,31 +242,31 @@ class BamlHttpStreamRequestClient:
     async def TestComplexNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestComplexNested", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestComplexNested", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     async def TestDeeplyNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestDeeplyNested", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestDeeplyNested", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     async def TestRecursiveStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestRecursiveStructure", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestRecursiveStructure", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     async def TestSimpleNested(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestSimpleNested", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestSimpleNested", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     
 
 b = BamlAsyncClient(DoNotUseDirectlyCallManager({}))

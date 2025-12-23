@@ -1,0 +1,20 @@
+flowchart TD
+  subgraph sg0["Main Processing Pipeline"]
+    direction TB
+    n2["Generate Summary"]
+    n3["Create Final Output"]
+    subgraph sg1["Test"]
+      direction TB
+      n0{"Test"}
+      class n0 decisionNode;
+      n1["Generate Title"]
+    end
+  end
+  n0 --> n1
+  n1 --> n2
+  n2 --> n3
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/complex_workflow.baml","start_line":4,"start":4,"end_line":4,"end":13},"n1":{"file_path":"tests/validation_files/headers/complex_workflow.baml","start_line":6,"start":8,"end_line":6,"end":27},"n2":{"file_path":"tests/validation_files/headers/complex_workflow.baml","start_line":12,"start":4,"end_line":12,"end":25},"n3":{"file_path":"tests/validation_files/headers/complex_workflow.baml","start_line":15,"start":4,"end_line":15,"end":28}}
+  click n0 call bamlMermaidNodeClick() "Go to source"
+  click n1 call bamlMermaidNodeClick() "Go to source"
+  click n2 call bamlMermaidNodeClick() "Go to source"
+  click n3 call bamlMermaidNodeClick() "Go to source"

@@ -5,6 +5,7 @@ import '@xyflow/react/dist/style.css';
 import {
   Background,
   BackgroundVariant,
+  ControlButton,
   Controls,
   ReactFlow,
   SelectionMode,
@@ -26,10 +27,11 @@ import { Loader as Spinner } from '@baml/ui/custom/loader';
 import { useGraphSync } from '../../../../features/graph/hooks';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { graphControlsTipDismissedAtom, unifiedSelectionAtom } from '../atoms';
-import { MousePointer2, ZoomIn, X, ChevronLeft } from 'lucide-react';
+import { MousePointer2, ZoomIn, X, ChevronLeft, FlipHorizontal, FlipVertical } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@baml/ui/tooltip';
 import type { NavigationInput } from '../../../../sdk/navigation';
 import { panToNodeIfNeeded } from '../../../../utils/cameraPan';
-import { allNodeStatesAtom, currentGraphAtom, scrollToNodeIdAtom } from '../../../../sdk/atoms/core.atoms';
+import { allNodeStatesAtom, allNodeIterationsAtom, currentGraphAtom, scrollToNodeIdAtom } from '../../../../sdk/atoms/core.atoms';
 
 /**
  * GraphView - ReactFlow graph component for the Graph tab
@@ -49,7 +51,7 @@ export const GraphView = () => {
 
   // SDK hooks
   const { activeWorkflowId } = useActiveWorkflow();
-  const [direction] = useLayoutDirection();
+  const [direction, setDirection] = useLayoutDirection();
   const navigate = useNavigation();
   const [graphTipDismissed, setGraphTipDismissed] = useAtom(
     graphControlsTipDismissedAtom
@@ -57,6 +59,7 @@ export const GraphView = () => {
   const selection = useAtomValue(unifiedSelectionAtom);
   const selectedNodeId = selection.mode === 'workflow' ? selection.selectedNodeId : null;
   const nodeStates = useAtomValue(allNodeStatesAtom);
+  const nodeIterations = useAtomValue(allNodeIterationsAtom);
   const currentGraph = useAtomValue(currentGraphAtom);
   const setScrollToNodeId = useSetAtom(scrollToNodeIdAtom);
 
@@ -111,6 +114,28 @@ export const GraphView = () => {
     );
   }, [nodeStates, setNodes, nodesInitialized]);
 
+  // Update ReactFlow nodes when SDK node iterations change (for loops)
+  useEffect(() => {
+    if (!nodesInitialized) return;
+    if (nodeIterations.size === 0) return;
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        const iteration = nodeIterations.get(node.id) ?? 0;
+        if (iteration !== (node.data.iteration ?? 0)) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              iteration,
+            },
+          };
+        }
+        return node;
+      })
+    );
+  }, [nodeIterations, setNodes, nodesInitialized]);
+
   // set selected node id if it changes
   useEffect(() => {
     if (selectedNodeId && nodesInitialized) {
@@ -121,15 +146,15 @@ export const GraphView = () => {
 
 
       // pan if selected node id changes
-      const node = flowStore.value.getNode(selectedNodeId ?? '');
-      if (!node) {
-        console.error("Node not found. Can't pan to it:", selectedNodeId);
-        return;
-      }
-      console.log('Panning to node:', node.id);
       setTimeout(() => {
-        // TODO: do this on a new useAutolayout as well
-        // so that we only make graph visible post-panning. Except in that case we dont want to animate it out.
+        // Get the node INSIDE the timeout to ensure we have the latest position
+        // after React Flow has finished any layout updates
+        const node = flowStore.value.getNode(selectedNodeId ?? '');
+        if (!node) {
+          console.error("Node not found. Can't pan to it:", selectedNodeId);
+          return;
+        }
+        console.log('Panning to node:', node.id);
         panToNodeIfNeeded(node, flowStore.value);
       }, 10);
 
@@ -169,13 +194,14 @@ export const GraphView = () => {
       return;
     }
 
+    console.log('node clicked', node);
+
     const input: NavigationInput = {
       kind: 'node',
       source: 'graph',
       timestamp: Date.now(),
       workflowId: displayedWorkflowId,
       nodeId: node.id,
-      functionName: node.id, // May or may not be an actual function name
     };
     navigate(input);
 
@@ -229,6 +255,7 @@ export const GraphView = () => {
         onNodeDrag={handleNodeDrag}
         onNodeClick={handleNodeClick}
         panOnScroll
+        zoomOnDoubleClick={false}
         // by making this true note sometimes clicks wont register since it will think you are dragging.
         nodesDraggable={false}
         selectionOnDrag
@@ -245,7 +272,22 @@ export const GraphView = () => {
           variant={BackgroundVariant.Dots}
         />
         <ReactflowInstance />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false}>
+          <TooltipProvider>
+            <Tooltip delayDuration={100}>
+              <TooltipTrigger asChild>
+                <ControlButton
+                  onClick={() => setDirection(direction === 'vertical' ? 'horizontal' : 'vertical')}
+                >
+                  {direction === 'vertical' ? <FlipHorizontal className="w-4 h-4" /> : <FlipVertical className="w-4 h-4" />}
+                </ControlButton>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Switch to {direction === 'vertical' ? 'horizontal' : 'vertical'} layout</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </Controls>
       </ReactFlow>
 
       {indicatorPosition && nodesInitialized && (

@@ -4,44 +4,44 @@ expression: output
 ---
 === TYPE INFERENCE ===
   Function mul_assign:
-    Return: Void
+    Return: Int
   Function assign_in_loop:
-    Return: Void
+    Return: Int
   Function multi_assign:
-    Return: Void
+    Return: Int
   Function sub_assign:
-    Return: Void
+    Return: Int
   Function add_assign:
-    Return: Void
+    Return: Int
   Function simple_assign:
-    Return: Void
+    Return: Int
   Function block_with_tail:
-    Return: Void
+    Return: Int
   Function break_in_for:
-    Return: Void
+    Return: Int
   Function simple_continue:
-    Return: Void
+    Return: Int
   Function continue_with_locals:
-    Return: Void
+    Return: Int
   Function simple_break:
-    Return: Void
+    Return: Int
   Function nested_break:
-    Return: Void
+    Return: Int
   Function continue_in_for:
-    Return: Void
+    Return: Int
   Function break_with_locals:
-    Return: Void
+    Return: Int
   Function c_style_for_loop:
-    Return: Void
+    Return: Int
   Function iterator_style_for_loop:
-    Return: Void
+    Return: Int
   Function nested_for_loop:
-    Return: Void
+    Return: Int
   Function ConditionalLogic:
-    Return: Void
+    Return: String
   Function let_statements:
-    Return: Void
+    Return: Int
   Function simple_while_loop:
-    Return: Void
+    Return: Int
   Function nested_while_loop:
-    Return: Void
+    Return: Int

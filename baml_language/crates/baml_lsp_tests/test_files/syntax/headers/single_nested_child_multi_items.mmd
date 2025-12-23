@@ -1,0 +1,10 @@
+flowchart TD
+  subgraph sg0["Parent"]
+    direction TB
+    n0["First"]
+    n1["Second"]
+  end
+  n0 --> n1
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/single_nested_child_multi_items.baml","start_line":5,"start":8,"end_line":5,"end":18},"n1":{"file_path":"tests/validation_files/headers/single_nested_child_multi_items.baml","start_line":8,"start":8,"end_line":8,"end":19}}
+  click n0 call bamlMermaidNodeClick() "Go to source"
+  click n1 call bamlMermaidNodeClick() "Go to source"

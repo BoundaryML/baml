@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 11
-Objects: 17
-Globals: 11
+Objects: 35
+Globals: 29
 
 Function boolArray (arity: 0, kind: Exec):
      0   LOAD_CONST 0    (true)
@@ -15,7 +15,8 @@ Function boolArray (arity: 0, kind: Exec):
      4   RETURN          
 
 Function boolValues (arity: 0, kind: Exec):
-     0   RETURN   
+     0   LOAD_CONST 0   (null)
+     1   RETURN         
 
 Function floatArray (arity: 0, kind: Exec):
      0   LOAD_CONST 0    (1)
@@ -25,7 +26,8 @@ Function floatArray (arity: 0, kind: Exec):
      4   RETURN          
 
 Function floatValues (arity: 0, kind: Exec):
-     0   RETURN   
+     0   LOAD_CONST 0   (null)
+     1   RETURN         
 
 Function intArray (arity: 0, kind: Exec):
      0   LOAD_CONST 0    (1)
@@ -35,7 +37,8 @@ Function intArray (arity: 0, kind: Exec):
      4   RETURN          
 
 Function intValues (arity: 0, kind: Exec):
-     0   RETURN   
+     0   LOAD_CONST 0   (null)
+     1   RETURN         
 
 Function point (arity: 0, kind: Exec):
      0   ALLOC_INSTANCE 2   (<class Point>)
@@ -80,7 +83,8 @@ Function stringArray (arity: 0, kind: Exec):
      4   RETURN          
 
 Function stringValues (arity: 0, kind: Exec):
-     0   RETURN   
+     0   LOAD_CONST 0   (null)
+     1   RETURN         
 
 Function vec2d (arity: 0, kind: Exec):
      0    ALLOC_INSTANCE 1   (<class Vec2D>)

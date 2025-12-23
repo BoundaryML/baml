@@ -1,0 +1,131 @@
+---
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn array_length() -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: List(Int) // array
+    let _2: Int
+    let _3: Int
+    let _4: Int
+    let _5: Unknown
+    let _6: List(Int)
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _4 = const 3_i64;
+        _1 = [copy _2, copy _3, copy _4];
+        _5 = const null;
+        _6 = copy _1;
+        _0 = call copy _5(copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+}
+
+fn Greeting(self: Named("Baz")) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Named("Baz") // self // param
+    let _2: String
+    let _3: String
+    let _4: String
+    let _5: String
+
+    bb0: {
+        _3 = const "Hello, ";
+        _4 = copy _1.0;
+        _2 = copy _3 + copy _4;
+        _5 = const "!";
+        _0 = copy _2 + copy _5;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn Bar() -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Int // x
+    let _2: Function { params: [Int], ret: Int }
+    let _3: Int
+
+    bb0: {
+        _2 = const fn Foo;
+        _3 = const 1_i64;
+        _1 = call copy _2(copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+}
+
+fn Foo(x: Int) -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Int // x // param
+    let _2: Int
+    let _3: Int
+
+    bb0: {
+        _2 = copy _1;
+        _3 = const 1_i64;
+        _0 = copy _2 + copy _3;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn GreetBaz(n: String) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: String // n // param
+    let _2: Named("Baz") // baz
+    let _3: String
+    let _4: Function { params: [Named("Baz")], ret: String }
+
+    bb0: {
+        _3 = copy _1;
+        _2 = Baz { copy _3 };
+        _4 = copy _2.0;
+        _0 = call copy _4() -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}

@@ -31,11 +31,11 @@ type Union2IntOrListRecursive1 struct {
 
 func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "List__Recursive1":
 		u.variant = "ListRecursive1"
@@ -47,14 +47,14 @@ func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant, t
 	}
 }
 
-func (u Union2IntOrListRecursive1) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2IntOrListRecursive1) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "ListRecursive1":
-		return baml.EncodeUnion(u.BamlEncodeName, "List__Recursive1", *u.variant_ListRecursive1)
+		return baml.EncodeValue(*u.variant_ListRecursive1)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -65,13 +65,6 @@ func (u Union2IntOrListRecursive1) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2IntOrListRecursive1) BamlTypeName() string {
 	return "Union2IntOrListRecursive1"
-}
-
-func (u Union2IntOrListRecursive1) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__List__Recursive1__int",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2IntOrListRecursive1) MarshalJSON() ([]byte, error) {
@@ -178,7 +171,7 @@ type Union3IntOrRecursive1OrString struct {
 
 func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Recursive1":
 		u.variant = "Recursive1"
@@ -186,7 +179,7 @@ func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVarian
 		u.variant_Recursive1 = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
@@ -198,17 +191,17 @@ func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVarian
 	}
 }
 
-func (u Union3IntOrRecursive1OrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union3IntOrRecursive1OrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Recursive1":
-		return baml.EncodeUnion(u.BamlEncodeName, "Recursive1", *u.variant_Recursive1)
+		return baml.EncodeValue(*u.variant_Recursive1)
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -219,13 +212,6 @@ func (u Union3IntOrRecursive1OrString) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union3IntOrRecursive1OrString) BamlTypeName() string {
 	return "Union3IntOrRecursive1OrString"
-}
-
-func (u Union3IntOrRecursive1OrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Recursive1__int__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union3IntOrRecursive1OrString) MarshalJSON() ([]byte, error) {
@@ -381,7 +367,7 @@ type Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString struct {
 
 func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string":
 		u.variant = "String"
@@ -389,11 +375,11 @@ func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Decode(holde
 		u.variant_String = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "float":
 		u.variant = "Float"
-		value := baml.Decode(valueHolder).Interface().(float64)
+		value := baml.Decode(valueHolder).Float()
 		u.variant_Float = &value
 	case "Map__string_JSON":
 		u.variant = "MapStringKeyJSONValue"
@@ -409,23 +395,23 @@ func (u *Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Decode(holde
 	}
 }
 
-func (u Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "Float":
-		return baml.EncodeUnion(u.BamlEncodeName, "float", *u.variant_Float)
+		return baml.EncodeValue(*u.variant_Float)
 
 	case "MapStringKeyJSONValue":
-		return baml.EncodeUnion(u.BamlEncodeName, "Map__string_JSON", *u.variant_MapStringKeyJSONValue)
+		return baml.EncodeValue(*u.variant_MapStringKeyJSONValue)
 
 	case "ListJSON":
-		return baml.EncodeUnion(u.BamlEncodeName, "List__JSON", *u.variant_ListJSON)
+		return baml.EncodeValue(*u.variant_ListJSON)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -436,13 +422,6 @@ func (u Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) Encode() (*cf
 
 func (u Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) BamlTypeName() string {
 	return "Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString"
-}
-
-func (u Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__List__JSON__Map__string_JSON__float__int__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString) MarshalJSON() ([]byte, error) {

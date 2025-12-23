@@ -192,6 +192,47 @@ export const allNodeStatesAtom = atom((get) => {
 });
 
 /**
+ * Node iteration tracking using atomFamily
+ * Tracks which iteration each node is on (for loops)
+ */
+export const nodeIterationAtomFamily = atomFamily((_nodeId: string) =>
+  atom<number>(0)
+);
+
+/**
+ * Registry of all loop paths we've seen
+ * Maps loop path prefix -> current ordinal
+ * Used to detect when a loop restarts
+ */
+export const loopOrdinalsAtom = atom<Map<string, number>>(new Map());
+
+/**
+ * Read-only atom to get all node iterations as a Map
+ */
+export const allNodeIterationsAtom = atom((get) => {
+  const registry = get(nodeRegistryAtom);
+  const iterations = new Map<string, number>();
+  registry.forEach((nodeId) => {
+    iterations.set(nodeId, get(nodeIterationAtomFamily(nodeId)));
+  });
+  return iterations;
+});
+
+/**
+ * Write-only atom to clear all node iterations
+ */
+export const clearAllNodeIterationsAtom = atom(
+  null,
+  (get, set) => {
+    const registry = get(nodeRegistryAtom);
+    registry.forEach((nodeId) => {
+      set(nodeIterationAtomFamily(nodeId), 0);
+    });
+    set(loopOrdinalsAtom, new Map());
+  }
+);
+
+/**
  * Cache entries
  */
 export const cacheAtom = atom<Map<string, CacheEntry>>(new Map());

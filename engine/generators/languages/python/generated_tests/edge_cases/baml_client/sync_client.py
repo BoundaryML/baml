@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -90,91 +89,91 @@ class BamlSyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-
+    
     def TestCircularReference(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.CircularReference:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestCircularReference(input=input,
+            stream = self.stream.TestCircularReference(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestCircularReference", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestCircularReference", args={
                 "input": input,
             })
-            return typing.cast(types.CircularReference, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.CircularReference, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestDeepRecursion(self, depth: int,
         baml_options: BamlCallOptions = {},
     ) -> types.DeepRecursion:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestDeepRecursion(depth=depth,
+            stream = self.stream.TestDeepRecursion(depth=depth,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestDeepRecursion", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestDeepRecursion", args={
                 "depth": depth,
             })
-            return typing.cast(types.DeepRecursion, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.DeepRecursion, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.EmptyCollections:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestEmptyCollections(input=input,
+            stream = self.stream.TestEmptyCollections(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestEmptyCollections", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestEmptyCollections", args={
                 "input": input,
             })
-            return typing.cast(types.EmptyCollections, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.EmptyCollections, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestLargeStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.LargeStructure:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestLargeStructure(input=input,
+            stream = self.stream.TestLargeStructure(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestLargeStructure", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestLargeStructure", args={
                 "input": input,
             })
-            return typing.cast(types.LargeStructure, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.LargeStructure, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestNumberEdgeCases(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.NumberEdgeCases:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestNumberEdgeCases(input=input,
+            stream = self.stream.TestNumberEdgeCases(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestNumberEdgeCases", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestNumberEdgeCases", args={
                 "input": input,
             })
-            return typing.cast(types.NumberEdgeCases, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.NumberEdgeCases, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestSpecialCharacters(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SpecialCharacters:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestSpecialCharacters(input=input,
+            stream = self.stream.TestSpecialCharacters(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestSpecialCharacters", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestSpecialCharacters", args={
                 "input": input,
             })
-            return typing.cast(types.SpecialCharacters, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.SpecialCharacters, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -187,74 +186,74 @@ class BamlStreamClient:
     def TestCircularReference(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.CircularReference, types.CircularReference]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestCircularReference", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestCircularReference", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.CircularReference, types.CircularReference](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.CircularReference, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.CircularReference, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestDeepRecursion(self, depth: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.DeepRecursion, types.DeepRecursion]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestDeepRecursion", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestDeepRecursion", args={
             "depth": depth,
         })
         return baml_py.BamlSyncStream[stream_types.DeepRecursion, types.DeepRecursion](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.DeepRecursion, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.DeepRecursion, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.EmptyCollections, types.EmptyCollections]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestEmptyCollections", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestEmptyCollections", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.EmptyCollections, types.EmptyCollections](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.EmptyCollections, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.EmptyCollections, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestLargeStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.LargeStructure, types.LargeStructure]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestLargeStructure", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestLargeStructure", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.LargeStructure, types.LargeStructure](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.LargeStructure, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.LargeStructure, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestNumberEdgeCases(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.NumberEdgeCases, types.NumberEdgeCases]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestNumberEdgeCases", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestNumberEdgeCases", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.NumberEdgeCases, types.NumberEdgeCases](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.NumberEdgeCases, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.NumberEdgeCases, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestSpecialCharacters(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.SpecialCharacters, types.SpecialCharacters]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestSpecialCharacters", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestSpecialCharacters", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.SpecialCharacters, types.SpecialCharacters](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.SpecialCharacters, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.SpecialCharacters, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     
 
@@ -267,45 +266,45 @@ class BamlHttpRequestClient:
     def TestCircularReference(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestCircularReference", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestCircularReference", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestDeepRecursion(self, depth: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestDeepRecursion", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestDeepRecursion", args={
             "depth": depth,
         }, mode="request")
-        return __result__
+        return result
     def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestEmptyCollections", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestEmptyCollections", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestLargeStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestLargeStructure", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestLargeStructure", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestNumberEdgeCases(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestNumberEdgeCases", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestNumberEdgeCases", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestSpecialCharacters(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSpecialCharacters", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSpecialCharacters", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -317,45 +316,45 @@ class BamlHttpStreamRequestClient:
     def TestCircularReference(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestCircularReference", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestCircularReference", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestDeepRecursion(self, depth: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestDeepRecursion", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestDeepRecursion", args={
             "depth": depth,
         }, mode="stream")
-        return __result__
+        return result
     def TestEmptyCollections(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestEmptyCollections", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestEmptyCollections", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestLargeStructure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestLargeStructure", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestLargeStructure", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestNumberEdgeCases(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestNumberEdgeCases", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestNumberEdgeCases", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestSpecialCharacters(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSpecialCharacters", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSpecialCharacters", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     
 
 b = BamlSyncClient(DoNotUseDirectlyCallManager({}))

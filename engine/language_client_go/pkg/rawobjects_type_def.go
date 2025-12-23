@@ -2,9 +2,11 @@ package baml
 
 import (
 	"fmt"
+	"testing"
 	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
@@ -13,10 +15,9 @@ type typeDef struct {
 	*raw_objects.RawObject
 }
 
-func (t *typeDef) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_TYPE
+func (t *typeDef) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_TYPE
 }
-
 
 func newType(ptr int64, rt unsafe.Pointer) Type {
 	return &typeDef{raw_objects.FromPointer(ptr, rt)}
@@ -76,20 +77,12 @@ func (d *typeDef) Format(f fmt.State, verb rune) {
 func (t *typeDef) InternalBamlSerializer() {
 }
 
-func (t *typeDef) Encode() (*cffi.CFFIValueHolder, error) {
-	return &cffi.CFFIValueHolder{
-		Value: &cffi.CFFIValueHolder_ObjectValue{
-			ObjectValue: &cffi.CFFIValueRawObject{
-				Object: &cffi.CFFIValueRawObject_Type{
-					Type: raw_objects.EncodeRawObject(t),
-				},
-			},
-		},
-		Type: nil,
-	}, nil
+func (t *typeDef) Encode() (*cffi.BamlObjectHandle, error) {
+	return raw_objects.EncodeRawObject(t), nil
 }
 
-func (t *typeDef) Type() (*cffi.CFFIFieldTypeHolder, error) {
-	// not necessary here.
-	return nil, nil
+// write a test that typeDef implements InternalBamlSerializer
+func testTypeDefInternalBamlSerializer(t *testing.T) {
+	var _ serde.InternalBamlSerializer = &typeDef{}
+	var _ Type = &typeDef{}
 }

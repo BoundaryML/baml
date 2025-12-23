@@ -1,0 +1,24 @@
+[package]
+name = "baml_lsp_tests"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+build = "build.rs"
+
+[lib]
+doctest = false
+
+[dependencies]
+baml_db = { workspace = true }
+baml_diagnostics = { workspace = true }
+baml_hir = { workspace = true }
+baml_thir = { workspace = true }
+salsa = { workspace = true }
+
+[build-dependencies]
+walkdir = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+prettyplease = { workspace = true }
+syn = { workspace = true }

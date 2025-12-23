@@ -924,6 +924,12 @@ impl<'a> Parser<'a> {
             return;
         }
 
+        // Check for number literal types
+        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+            self.bump();
+            return;
+        }
+
         if self.at(TokenKind::Word) {
             // Base type name, generic type, or boolean literal (true/false)
             // Note: true/false are Word tokens, and they become BoolLiteral types

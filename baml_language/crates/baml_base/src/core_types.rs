@@ -7,7 +7,7 @@ use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
 
 /// Unique identifier for a source file
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct FileId(u32);
 
 impl FileId {
@@ -27,7 +27,7 @@ impl fmt::Display for FileId {
 }
 
 /// A span in source code, tracking both file and position
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Span {
     pub file_id: FileId,
     pub range: TextRange,

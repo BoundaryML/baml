@@ -451,7 +451,7 @@ async def test_should_work_for_all_outputs():
 async def test_should_work_with_image_url():
     res = await b.TestImageInput(
         img=baml_py.Image.from_url(
-            "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+            "https://i.imgur.com/93fWs5R.png"
         )
     )
     assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
@@ -462,7 +462,7 @@ async def test_should_work_with_image_list():
     res = await b.TestImageListInput(
         imgs=[
             baml_py.Image.from_url(
-                "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
+                "https://i.imgur.com/93fWs5R.png"
             ),
             baml_py.Image.from_url(
                 "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png"
@@ -478,6 +478,7 @@ async def test_should_work_with_vertex():
     assert_that("donkey kong" in res.lower())
 
 
+@pytest.mark.skip("Skipping test_should_work_with_vertex_claude until vertex resourcing is fixed")
 @pytest.mark.asyncio
 async def test_should_work_with_vertex_claude():
     res = await b.TestVertexClaude("donkey kong")
@@ -667,6 +668,7 @@ async def test_anthropic_shorthand_streaming():
     assert len(final) > 0, "Expected non-empty result but got empty."
 
 
+@pytest.mark.skip("Skipping test_vertex_anthropic_streaming until vertex resourcing is fixed")
 @pytest.mark.asyncio
 async def test_vertex_anthropic_streaming():
     res = b.stream.TestVertexClaude(input="Mt Rainier is tall")
@@ -864,11 +866,11 @@ async def test_gemini_models():
     # )
     # assert len(res) > 0, "Expected non-empty result but got empty."
 
-    # Test with gemini-2.0-flash-thinking-exp-1219
+    # Test with gemini-2.5-pro
     client_registry.add_llm_client(
         "GeminiFlashThinking",
         "google-ai",
-        {"model": "gemini-2.0-flash-thinking-exp-1219"},
+        {"model": "gemini-2.5-pro"},
     )
     client_registry.set_primary("GeminiFlashThinking")
     res = await b.TestGemini(

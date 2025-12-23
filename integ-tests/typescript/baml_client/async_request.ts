@@ -3291,6 +3291,31 @@ env?: Record<string, string | undefined>
       }
       }
       
+  async TemplateStringTestEcho(
+  input: string,
+  __baml_options__?: BamlCallOptions<never>
+  ): Promise<HTTPRequest> {
+    try {
+    const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+    const __env__: Record<string, string> = Object.fromEntries(
+      Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return await this.runtime.buildRequest(
+      "TemplateStringTestEcho",
+      {
+      "input": input
+      },
+      this.ctxManager.cloneContext(),
+      __baml_options__?.tb?.__tb(),
+      __baml_options__?.clientRegistry,
+      false,
+      __env__
+      )
+      } catch (error) {
+      throw toBamlError(error);
+      }
+      }
+      
   async TestAbortFallbackChain(
   input: string,
   __baml_options__?: BamlCallOptions<never>
@@ -9935,6 +9960,31 @@ env?: Record<string, string | undefined>
           "TellStory",
           {
           "story": story
+          },
+          this.ctxManager.cloneContext(),
+          __baml_options__?.tb?.__tb(),
+          __baml_options__?.clientRegistry,
+          true,
+          __env__
+          )
+          } catch (error) {
+          throw toBamlError(error);
+          }
+          }
+          
+      async TemplateStringTestEcho(
+      input: string,
+      __baml_options__?: BamlCallOptions<never>
+      ): Promise<HTTPRequest> {
+        try {
+        const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+        const __env__: Record<string, string> = Object.fromEntries(
+          Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+          );
+          return await this.runtime.buildRequest(
+          "TemplateStringTestEcho",
+          {
+          "input": input
           },
           this.ctxManager.cloneContext(),
           __baml_options__?.tb?.__tb(),

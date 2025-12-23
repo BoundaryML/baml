@@ -4,7 +4,7 @@ use super::*;
 use crate::{
     ctypes::{
         object_args_decode::{BamlMethodArguments, BamlObjectConstructorArgs},
-        object_response_encode::BamlObjectResponse,
+        object_response_encode::{BamlObjectResponse, BamlObjectResponseWrapper},
         EncodeToBuffer,
     },
     raw_ptr_wrapper::{CallMethod, RawPtrType},
@@ -40,7 +40,8 @@ pub extern "C" fn call_object_constructor(
     let result = call_object_constructor_impl(encoded_args, length);
 
     let buf_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        result.encode_to_c_buffer(&BasicLookup, baml_types::StreamingMode::NonStreaming)
+        BamlObjectResponseWrapper(result)
+            .encode_to_c_buffer(&BasicLookup, baml_types::StreamingMode::NonStreaming)
     }));
 
     let buf = match buf_result {
@@ -97,7 +98,8 @@ pub extern "C" fn call_object_method(
     let result = call_object_method_impl(runtime, encoded_args, length);
 
     let buf_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        result.encode_to_c_buffer(&BasicLookup, baml_types::StreamingMode::NonStreaming)
+        BamlObjectResponseWrapper(result)
+            .encode_to_c_buffer(&BasicLookup, baml_types::StreamingMode::NonStreaming)
     }));
 
     let buf = match buf_result {

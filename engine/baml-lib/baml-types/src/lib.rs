@@ -31,5 +31,5 @@ pub use media::{BamlMedia, BamlMediaContent, BamlMediaType, MediaBase64, MediaFi
 pub use minijinja::JinjaExpression;
 pub use value_expr::{
     ApiKeyWithProvenance, EvaluationContext, GetEnvVar, Resolvable, ResolvedValue, StringOr,
-    UnresolvedValue,
+    TemplateStringRenderer, UnresolvedValue,
 };

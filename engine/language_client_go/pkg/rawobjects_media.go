@@ -2,9 +2,11 @@ package baml
 
 import (
 	"fmt"
+	"testing"
 	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/raw_objects"
+	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
@@ -32,79 +34,20 @@ type videoHolder struct {
 // mediaHolder implements InternalBamlSerializer
 func (m *mediaHolder) InternalBamlSerializer() {}
 
-func (m *mediaHolder) Encode() (*cffi.CFFIValueHolder, error) {
-	mediaType, err := m.mediaType.cffiType()
-	if err != nil {
-		return nil, err
-	}
-	return &cffi.CFFIValueHolder{
-		Value: &cffi.CFFIValueHolder_ObjectValue{
-			ObjectValue: &cffi.CFFIValueRawObject{
-				Object: &cffi.CFFIValueRawObject_Media{
-					Media: raw_objects.EncodeRawObject(m),
-				},
-			},
-		},
-		Type: &cffi.CFFIFieldTypeHolder{
-			Type: &cffi.CFFIFieldTypeHolder_MediaType{
-				MediaType: &cffi.CFFIFieldTypeMedia{
-					Media: mediaType,
-				},
-			},
-		},
-	}, nil
+func (m *mediaHolder) Encode() (*cffi.BamlObjectHandle, error) {
+	return raw_objects.EncodeRawObject(m), nil
 }
 
-func (m *imageHolder) Type() (*cffi.CFFIFieldTypeHolder, error) {
-	return &cffi.CFFIFieldTypeHolder{
-		Type: &cffi.CFFIFieldTypeHolder_MediaType{
-			MediaType: &cffi.CFFIFieldTypeMedia{
-				Media: cffi.MediaTypeEnum_IMAGE,
-			},
-		},
-	}, nil
-}
-
-func (m *audioHolder) Type() (*cffi.CFFIFieldTypeHolder, error) {
-	return &cffi.CFFIFieldTypeHolder{
-		Type: &cffi.CFFIFieldTypeHolder_MediaType{
-			MediaType: &cffi.CFFIFieldTypeMedia{
-				Media: cffi.MediaTypeEnum_AUDIO,
-			},
-		},
-	}, nil
-}
-
-func (m *pdfHolder) Type() (*cffi.CFFIFieldTypeHolder, error) {
-	return &cffi.CFFIFieldTypeHolder{
-		Type: &cffi.CFFIFieldTypeHolder_MediaType{
-			MediaType: &cffi.CFFIFieldTypeMedia{
-				Media: cffi.MediaTypeEnum_PDF,
-			},
-		},
-	}, nil
-}
-
-func (m *videoHolder) Type() (*cffi.CFFIFieldTypeHolder, error) {
-	return &cffi.CFFIFieldTypeHolder{
-		Type: &cffi.CFFIFieldTypeHolder_MediaType{
-			MediaType: &cffi.CFFIFieldTypeMedia{
-				Media: cffi.MediaTypeEnum_VIDEO,
-			},
-		},
-	}, nil
-}
-
-func (mediaType MediaType) objectType() cffi.CFFIObjectType {
+func (mediaType MediaType) objectType() cffi.BamlObjectType {
 	switch mediaType {
 	case MediaType_Image:
-		return cffi.CFFIObjectType_OBJECT_MEDIA_IMAGE
+		return cffi.BamlObjectType_OBJECT_MEDIA_IMAGE
 	case MediaType_Audio:
-		return cffi.CFFIObjectType_OBJECT_MEDIA_AUDIO
+		return cffi.BamlObjectType_OBJECT_MEDIA_AUDIO
 	case MediaType_PDF:
-		return cffi.CFFIObjectType_OBJECT_MEDIA_PDF
+		return cffi.BamlObjectType_OBJECT_MEDIA_PDF
 	case MediaType_Video:
-		return cffi.CFFIObjectType_OBJECT_MEDIA_VIDEO
+		return cffi.BamlObjectType_OBJECT_MEDIA_VIDEO
 	default:
 		panic(fmt.Sprintf("invalid media type: '%s'", mediaType))
 	}
@@ -125,7 +68,7 @@ func (mediaType MediaType) cffiType() (cffi.MediaTypeEnum, error) {
 	}
 }
 
-func (m *mediaHolder) ObjectType() cffi.CFFIObjectType {
+func (m *mediaHolder) ObjectType() cffi.BamlObjectType {
 	return m.mediaType.objectType()
 }
 
@@ -222,4 +165,10 @@ func newMedia(ptr int64, rt unsafe.Pointer, mediaType MediaType) media {
 	default:
 		panic(fmt.Sprintf("invalid media type: '%s'", mediaType))
 	}
+}
+
+// write a test that imageHolder implements InternalBamlSerializer
+func testImageHolderInternalBamlSerializer(t *testing.T) {
+	var _ serde.InternalBamlSerializer = &imageHolder{}
+	var _ Image = &imageHolder{}
 }

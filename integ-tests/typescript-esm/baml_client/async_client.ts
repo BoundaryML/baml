@@ -6336,6 +6336,54 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             }
             }
             
+        async TemplateStringTestEcho(
+        input: string,
+        __baml_options__?: BamlCallOptions<never>
+        ): Promise<string> {
+          try {
+          const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+          const __signal__ = __options__.signal;
+
+          if (__signal__?.aborted) {
+          throw new BamlAbortError('Operation was aborted', __signal__.reason);
+          }
+
+          // Check if onTick is provided - route through streaming if so
+          if (__options__.onTick) {
+          const __stream__ = this.stream.TemplateStringTestEcho(
+          input,
+          __baml_options__
+          );
+
+          return await __stream__.getFinalResponse();
+          }
+
+          const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+          [__options__.collector]) : [];
+          const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+          const __env__: Record<string, string> = Object.fromEntries(
+            Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+            );
+            const __raw__ = await this.runtime.callFunction(
+            "TemplateStringTestEcho",
+            {
+            "input": input
+            },
+            this.ctxManager.cloneContext(),
+            __options__.tb?.__tb(),
+            __options__.clientRegistry,
+            __collector__,
+            __options__.tags || {},
+            __env__,
+            __signal__,
+            __options__.watchers,
+            )
+            return __raw__.parsed(false) as string
+            } catch (error) {
+            throw toBamlError(error);
+            }
+            }
+            
         async TestAbortFallbackChain(
         input: string,
         __baml_options__?: BamlCallOptions<never>
@@ -21435,6 +21483,72 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 "TellStory",
                 {
                 "story": story
+                },
+                undefined,
+                this.ctxManager.cloneContext(),
+                __options__.tb?.__tb(),
+                __options__.clientRegistry,
+                __collector__,
+                __options__.tags || {},
+                __env__,
+                __signal__,
+                __onTickWrapper__,
+                )
+                return new BamlStream<string, string>(
+                  __raw__,
+                  (a): string => a,
+                  (a): string => a,
+                  this.ctxManager.cloneContext(),
+                  __options__.signal,
+                  )
+                  } catch (error) {
+                  throw toBamlError(error);
+                  }
+                  }
+                  
+            TemplateStringTestEcho(
+            input: string,
+            __baml_options__?: BamlCallOptions<never>
+            ): BamlStream<string, string>
+              {
+              try {
+              const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+              const __signal__ = __options__.signal;
+
+              if (__signal__?.aborted) {
+              throw new BamlAbortError('Operation was aborted', __signal__.reason);
+              }
+
+              let __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector :
+              [__options__.collector]) : [];
+
+              let __onTickWrapper__: (() => void) | undefined;
+
+              // Create collector and wrap onTick if provided
+              if (__options__.onTick) {
+              const __tickCollector__ = new Collector("on-tick-collector");
+              __collector__ = [...__collector__, __tickCollector__];
+
+              __onTickWrapper__ = () => {
+              const __log__ = __tickCollector__.last;
+              if (__log__) {
+              try {
+              __options__.onTick!("Unknown", __log__);
+              } catch (error) {
+              console.error("Error in onTick callback for TemplateStringTestEcho", error);
+              }
+              }
+              };
+              }
+
+              const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+              const __env__: Record<string, string> = Object.fromEntries(
+                Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+                );
+                const __raw__ = this.runtime.streamFunction(
+                "TemplateStringTestEcho",
+                {
+                "input": input
                 },
                 undefined,
                 this.ctxManager.cloneContext(),

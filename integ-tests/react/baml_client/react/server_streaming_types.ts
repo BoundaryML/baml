@@ -185,6 +185,7 @@ export type StreamingServerTypes = {
   SumFromTo: number | null,
   TakeRecAliasDep: RecursiveAliasDependency,
   TellStory: string,
+  TemplateStringTestEcho: string,
   TestAbortFallbackChain: string,
   TestAnthropic: string,
   TestAnthropicShorthand: string,

@@ -14,11 +14,13 @@ use baml_hir::{ClassId, EnumId};
 ///
 /// Used for exhaustiveness checking of literal unions like `200 | 201 | 204`.
 ///
-/// Note: Float values are intentionally excluded because floating-point
+/// Note: Float values are stored as strings because floating-point
 /// equality is problematic (NaN != NaN, -0.0 == 0.0, etc.).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LiteralValue {
     Int(i64),
+    /// Float literal stored as string to avoid f64's lack of Eq/Hash.
+    Float(std::string::String),
     String(std::string::String),
     Bool(bool),
 }
@@ -27,6 +29,7 @@ impl fmt::Display for LiteralValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LiteralValue::Int(v) => write!(f, "{v}"),
+            LiteralValue::Float(v) => write!(f, "{v}"),
             LiteralValue::String(v) => write!(f, "\"{v}\""),
             LiteralValue::Bool(v) => write!(f, "{v}"),
         }
@@ -95,6 +98,11 @@ impl Ty<'_> {
     /// Check if this type is unknown.
     pub fn is_unknown(&self) -> bool {
         matches!(self, Ty::Unknown)
+    }
+
+    /// Check if this type is void.
+    pub fn is_void(&self) -> bool {
+        matches!(self, Ty::Void)
     }
 
     /// Check if this type is uninhabited (has no possible values).

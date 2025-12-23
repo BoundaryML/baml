@@ -13856,11 +13856,23 @@ expression: output
 ───╯
 
   [type] Error: Expected bool, found void
+    ╭─[ 4:8:11 ]
+    │
+  8 │ ╭─▶   while \ {
+    ┆ ┆   
+ 10 │ ├─▶   }
+    │ │         
+    │ ╰───────── Expected bool, found void
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: Expected int, found void
    ╭─[ 0:1:1 ]
    │
  1 │ class StringTorture {
    │ │ 
-   │ ╰─ Expected bool, found void
+   │ ╰─ Expected int, found void
    │ 
    │ Note: Error code: E0001
 ───╯

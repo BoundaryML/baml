@@ -196,9 +196,7 @@ func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOption
 			return types.Checked[int64]{}, result.Error
 		}
 
-		casted := baml.CastChecked(result.Data, func(inner any) int64 {
-			return (inner).(int64)
-		})
+		casted := (result.Data).(types.Checked[int64])
 
 		return casted, nil
 	} else {
@@ -5478,9 +5476,7 @@ func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (types.Che
 			return types.Checked[types.BlockConstraint]{}, result.Error
 		}
 
-		casted := baml.CastChecked(result.Data, func(inner any) types.BlockConstraint {
-			return (inner).(types.BlockConstraint)
-		})
+		casted := (result.Data).(types.Checked[types.BlockConstraint])
 
 		return casted, nil
 	} else {
@@ -6668,9 +6664,7 @@ func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (ty
 			return types.Checked[int64]{}, result.Error
 		}
 
-		casted := baml.CastChecked(result.Data, func(inner any) int64 {
-			return (inner).(int64)
-		})
+		casted := (result.Data).(types.Checked[int64])
 
 		return casted, nil
 	} else {
@@ -7594,9 +7588,7 @@ func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...C
 			return types.Checked[int64]{}, result.Error
 		}
 
-		casted := baml.CastChecked(result.Data, func(inner any) int64 {
-			return (inner).(int64)
-		})
+		casted := (result.Data).(types.Checked[int64])
 
 		return casted, nil
 	} else {
@@ -8591,6 +8583,72 @@ func TellStory(ctx context.Context, story string, opts ...CallOptionFunc) (strin
 		return casted, nil
 	} else {
 		channel, err := bamlRuntime.CallFunctionStream(ctx, "TellStory", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return "", result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("No data returned from stream")
+	}
+}
+
+func TemplateStringTestEcho(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TemplateStringTestEcho", encoded, callOpts.onTick)
+		if err != nil {
+			return "", err
+		}
+
+		if result.Error != nil {
+			return "", result.Error
+		}
+
+		casted := (result.Data).(string)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TemplateStringTestEcho", encoded, callOpts.onTick)
 		if err != nil {
 			return "", err
 		}

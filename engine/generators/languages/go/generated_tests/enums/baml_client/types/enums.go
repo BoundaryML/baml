@@ -88,17 +88,10 @@ func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = TestEnum(value)
 }
 
-func (e TestEnum) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e TestEnum) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("TestEnum", string(e), false)
 }
 
 func (e TestEnum) BamlTypeName() string {
 	return "TestEnum"
-}
-
-func (u TestEnum) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "TestEnum",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }

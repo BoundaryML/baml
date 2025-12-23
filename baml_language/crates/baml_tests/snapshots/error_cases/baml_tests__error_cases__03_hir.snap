@@ -3,42 +3,22 @@ source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function BadUnionPattern {
-  params: [x: Union([Int, Bool])]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Missing
-      Idx::<Expr>(2): Literal(String("bad"))
-      Idx::<Expr>(3): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(0), guard: None, body: Idx::<Expr>(1) }, MatchArm { pattern: Idx::<Pattern>(1), guard: None, body: Idx::<Expr>(2) }] }
-      Idx::<Expr>(4): Block { stmts: [], tail_expr: Some(Idx::<Expr>(3)) }
-    ]
-    root: Idx::<Expr>(4)
-  }
+function BadUnionPattern(x: int | bool) -> string {
+      match (x) {
+          a: int | b => <missing>,
+          bool => "bad",
+      }
 }
-function Invalid {
-  return: Unknown
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Block { stmts: [], tail_expr: None }
-    ]
-    root: Idx::<Expr>(0)
-  }
+
+function Invalid() -> <unknown> {
 }
-function MixedLiteralAndTyped {
-  params: [x: Int]
-  return: String
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Path(["x"])
-      Idx::<Expr>(1): Literal(String("mixed"))
-      Idx::<Expr>(2): Match { scrutinee: Idx::<Expr>(0), arms: [MatchArm { pattern: Idx::<Pattern>(2), guard: None, body: Idx::<Expr>(1) }] }
-      Idx::<Expr>(3): Block { stmts: [], tail_expr: Some(Idx::<Expr>(2)) }
-    ]
-    root: Idx::<Expr>(3)
-  }
+
+function MixedLiteralAndTyped(x: int) -> string {
+      match (x) {
+          42 | n: int => "mixed",
+      }
 }
+
 class Broken {
-  field: Int
+  field: int
 }

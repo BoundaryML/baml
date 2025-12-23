@@ -1,0 +1,21 @@
+[package]
+name = "baml_mir"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+baml_base = { workspace = true }
+baml_hir = { workspace = true }
+baml_thir = { workspace = true }
+baml_workspace = { workspace = true }
+la-arena = { workspace = true }
+rustc-hash = { workspace = true }
+salsa = { workspace = true }
+smol_str = { workspace = true }
+text-size = { workspace = true }
+
+[lints]
+workspace = true

@@ -33,9 +33,9 @@ module BamlClient
   class AddTodoItem < T::Struct
       include Baml::Sorbet::Struct
       const :type, String
-      const :item, T.nilable(String)
-      const :time, T.nilable(String)
-      const :description, T.nilable(String)
+      const :item, String
+      const :time, String
+      const :description, String
   end
 
 
@@ -128,8 +128,8 @@ module BamlClient
 
   class ClassWithBlockDone < T::Struct
       include Baml::Sorbet::Struct
-      const :i_16_digits, T.nilable(Integer)
-      const :s_20_words, T.nilable(String)
+      const :i_16_digits, Integer
+      const :s_20_words, String
   end
 
 

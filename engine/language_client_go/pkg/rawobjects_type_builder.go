@@ -13,8 +13,8 @@ type typeBuilder struct {
 	*raw_objects.RawObject
 }
 
-func (tb *typeBuilder) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_TYPE_BUILDER
+func (tb *typeBuilder) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_TYPE_BUILDER
 }
 
 func newTypeBuilder(ptr int64, rt unsafe.Pointer) TypeBuilder {

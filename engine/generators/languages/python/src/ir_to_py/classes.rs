@@ -44,12 +44,12 @@ pub fn ir_class_to_py_stream<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -
 }
 
 fn ir_field_to_py<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldPy<'a> {
+    let field_ty = field.elem.r#type.elem.to_non_streaming_type(pkg.lookup());
+    let r#type = super::type_to_py(&field_ty, pkg.lookup());
+
     FieldPy {
         name: field.elem.name.clone(),
-        r#type: super::type_to_py(
-            &field.elem.r#type.elem.to_non_streaming_type(pkg.lookup()),
-            pkg.lookup(),
-        ),
+        r#type,
         docstring: field
             .elem
             .docstring
@@ -61,9 +61,11 @@ fn ir_field_to_py<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldPy<'
 
 fn ir_field_to_py_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldPy<'a> {
     let partialized = field.elem.r#type.elem.to_streaming_type(pkg.lookup());
+    let r#type = super::stream_type_to_py(&partialized, pkg.lookup());
+
     FieldPy {
         name: field.elem.name.clone(),
-        r#type: super::stream_type_to_py(&partialized, pkg.lookup()),
+        r#type,
         docstring: field
             .elem
             .docstring
@@ -78,6 +80,7 @@ mod tests {
     use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
 
     use super::*;
+    use crate::r#type::TypePy;
 
     #[test]
     fn test_ir_class_to_py() {
@@ -95,14 +98,10 @@ mod tests {
         let class_py = ir_class_to_py_stream(class, &pkg);
         assert_eq!(class_py.name, "SimpleClass");
         assert_eq!(class_py.fields.len(), 1);
-        assert_eq!(
-            class_py.fields[0]
-                .r#type
-                .meta()
-                .map(|m| m.wrap_stream_state),
-            Some(true)
+        assert!(
+            matches!(class_py.fields[0].r#type, TypePy::StreamState(_)),
+            "Expected StreamState wrapper"
         );
-        println!("{}", class_py.fields[0]);
     }
 
     #[test]
@@ -120,14 +119,12 @@ mod tests {
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
         let class_py = ir_class_to_py_stream(class, &pkg);
         let digits_field = class_py.fields.iter().find(|f| f.name == "digits").unwrap();
-        eprintln!("{digits_field:?}");
-        assert_eq!(
-            digits_field.r#type.meta().map(|m| m.wrap_stream_state),
-            Some(true)
+        assert!(
+            matches!(digits_field.r#type, TypePy::StreamState(_)),
+            "Expected StreamState wrapper"
         );
         assert_eq!(class_py.name, "ChildClass");
         assert_eq!(class_py.fields.len(), 1);
-        println!("{}", class_py.fields[0]);
     }
 
     #[test]

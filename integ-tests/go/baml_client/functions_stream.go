@@ -244,17 +244,13 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 				return
 			}
 			if result.HasData {
-				data := baml.CastChecked(result.Data, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.Data).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := baml.CastChecked(result.StreamData, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.StreamData).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:   false,
 					as_stream: &data,
@@ -6168,17 +6164,13 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 				return
 			}
 			if result.HasData {
-				data := baml.CastChecked(result.Data, func(inner any) types.BlockConstraint {
-					return (inner).(types.BlockConstraint)
-				})
+				data := (result.Data).(types.Checked[types.BlockConstraint])
 				channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := baml.CastChecked(result.StreamData, func(inner any) stream_types.BlockConstraint {
-					return (inner).(stream_types.BlockConstraint)
-				})
+				data := (result.StreamData).(types.Checked[stream_types.BlockConstraint])
 				channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
 					IsFinal:   false,
 					as_stream: &data,
@@ -7504,17 +7496,13 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 				return
 			}
 			if result.HasData {
-				data := baml.CastChecked(result.Data, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.Data).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := baml.CastChecked(result.StreamData, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.StreamData).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:   false,
 					as_stream: &data,
@@ -8544,17 +8532,13 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 				return
 			}
 			if result.HasData {
-				data := baml.CastChecked(result.Data, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.Data).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := baml.CastChecked(result.StreamData, func(inner any) int64 {
-					return (inner).(int64)
-				})
+				data := (result.StreamData).(types.Checked[int64])
 				channel <- StreamValue[types.Checked[int64], types.Checked[int64]]{
 					IsFinal:   false,
 					as_stream: &data,
@@ -9642,6 +9626,80 @@ func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFu
 	}
 
 	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TellStory", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[string, string])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[string, string]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(string)
+				channel <- StreamValue[string, string]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(string)
+				channel <- StreamValue[string, string]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
+	}()
+	return channel, nil
+}
+
+// / Streaming version of TemplateStringTestEcho
+func (*stream) TemplateStringTestEcho(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TemplateStringTestEcho: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "TemplateStringTestEcho", encoded, callOpts.onTick)
 	if err != nil {
 		return nil, err
 	}

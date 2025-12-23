@@ -80,17 +80,10 @@ func (e *Status) Decode(holder *cffi.CFFIValueEnum, typeMap baml.TypeMap) {
 	*e = Status(value)
 }
 
-func (e Status) Encode() (*cffi.CFFIValueHolder, error) {
-	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
+func (e Status) Encode() (*cffi.HostValue, error) {
+	return baml.EncodeEnum("Status", string(e), false)
 }
 
 func (e Status) BamlTypeName() string {
 	return "Status"
-}
-
-func (u Status) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Status",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }

@@ -2542,6 +2542,25 @@ export const TellStory = async (
 };
 
 /**
+ * Executes the streaming variant of the "TemplateStringTestEcho" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TemplateStringTestEcho = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TemplateStringTestEcho(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestAbortFallbackChain" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

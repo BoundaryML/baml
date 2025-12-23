@@ -1,53 +1,59 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 103
-Objects: 1109
-Globals: 103
+Objects: 1127
+Globals: 121
 
 Function BodyTorture (arity: 0, kind: Exec):
      0    LOAD_CONST 0       (null)
-     1    LOAD_VAR 1         (x)
-     2    LOAD_CONST 1       (1)
-     3    BIN_OP +           
-     4    STORE_VAR 1        (x)
-     5    JUMP_IF_FALSE +7   (to 12)
-     6    POP 1              
-     7    LOAD_VAR 1         (x)
-     8    LOAD_CONST 1       (1)
-     9    BIN_OP +           
-     10   STORE_VAR 1        (x)
-     11   JUMP -10           (to 1)
-     12   POP 1              
-     13   RETURN             
+     1    LOAD_CONST 0       (null)
+     2    LOAD_VAR 1         (x)
+     3    LOAD_CONST 1       (1)
+     4    BIN_OP +           
+     5    STORE_VAR 1        (x)
+     6    LOAD_CONST 0       (null)
+     7    JUMP_IF_FALSE +2   (to 9)
+     8    JUMP +3            (to 11)
+     9    LOAD_CONST 0       (null)
+     10   RETURN             
+     11   LOAD_VAR 1         (x)
+     12   LOAD_CONST 1       (1)
+     13   BIN_OP +           
+     14   STORE_VAR 1        (x)
+     15   LOAD_CONST 0       (null)
+     16   STORE_VAR 2        (_6)
+     17   JUMP -15           (to 2)
 
 Function ComplexType (arity: 0, kind: Exec):
   (no bytecode)
 
 Function DeepExpression (arity: 0, kind: Exec):
-     0    LOAD_CONST 0   (1)
-     1    LOAD_CONST 1   (2)
-     2    BIN_OP +       
-     3    LOAD_CONST 2   (3)
-     4    BIN_OP *       
-     5    LOAD_CONST 3   (4)
-     6    BIN_OP -       
-     7    LOAD_CONST 4   (5)
-     8    BIN_OP /       
-     9    LOAD_CONST 5   (6)
-     10   BIN_OP +       
-     11   LOAD_CONST 6   (7)
-     12   BIN_OP *       
-     13   LOAD_CONST 7   (8)
-     14   BIN_OP -       
-     15   LOAD_CONST 8   (9)
-     16   BIN_OP /       
-     17   LOAD_CONST 9   (10)
-     18   BIN_OP +       
-     19   RETURN         
-     20   RETURN         
+     0    LOAD_CONST 0    (null)
+     1    LOAD_CONST 1    (1)
+     2    LOAD_CONST 2    (2)
+     3    BIN_OP +        
+     4    LOAD_CONST 3    (3)
+     5    BIN_OP *        
+     6    LOAD_CONST 4    (4)
+     7    BIN_OP -        
+     8    LOAD_CONST 5    (5)
+     9    BIN_OP /        
+     10   LOAD_CONST 6    (6)
+     11   BIN_OP +        
+     12   LOAD_CONST 7    (7)
+     13   BIN_OP *        
+     14   LOAD_CONST 8    (8)
+     15   BIN_OP -        
+     16   LOAD_CONST 9    (9)
+     17   BIN_OP /        
+     18   LOAD_CONST 10   (10)
+     19   BIN_OP +        
+     20   STORE_VAR 1     (_0)
+     21   LOAD_VAR 1      (_0)
+     22   RETURN          
 
 Function Process1 (arity: 1, kind: Llm):
   (no bytecode)

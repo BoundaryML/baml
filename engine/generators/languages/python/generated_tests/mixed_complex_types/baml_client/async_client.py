@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -78,52 +77,52 @@ class BamlAsyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-
+    
     async def TestKitchenSink(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.KitchenSink:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.TestKitchenSink(input=input,
+            stream = self.stream.TestKitchenSink(input=input,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestKitchenSink", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestKitchenSink", args={
                 "input": input,
             })
-            return typing.cast(types.KitchenSink, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.KitchenSink, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestRecursiveComplexity(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Node:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.TestRecursiveComplexity(input=input,
+            stream = self.stream.TestRecursiveComplexity(input=input,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestRecursiveComplexity", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestRecursiveComplexity", args={
                 "input": input,
             })
-            return typing.cast(types.Node, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.Node, result.cast_to(types, types, stream_types, False, __runtime__))
     async def TestUltraComplex(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.UltraComplex:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.TestUltraComplex(input=input,
+            stream = self.stream.TestUltraComplex(input=input,
                 baml_options=baml_options)
-            return await __stream__.get_final_response()
+            return await stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestUltraComplex", args={
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestUltraComplex", args={
                 "input": input,
             })
-            return typing.cast(types.UltraComplex, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.UltraComplex, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -136,38 +135,38 @@ class BamlStreamClient:
     def TestKitchenSink(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.KitchenSink, types.KitchenSink]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestKitchenSink", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestKitchenSink", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.KitchenSink, types.KitchenSink](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.KitchenSink, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.KitchenSink, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestRecursiveComplexity(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.Node, types.Node]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestRecursiveComplexity", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestRecursiveComplexity", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.Node, types.Node](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.Node, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.Node, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestUltraComplex(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.UltraComplex, types.UltraComplex]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestUltraComplex", args={
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestUltraComplex", args={
             "input": input,
         })
         return baml_py.BamlStream[stream_types.UltraComplex, types.UltraComplex](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.UltraComplex, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.UltraComplex, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     
 
@@ -180,24 +179,24 @@ class BamlHttpRequestClient:
     async def TestKitchenSink(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestKitchenSink", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestKitchenSink", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     async def TestRecursiveComplexity(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestRecursiveComplexity", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestRecursiveComplexity", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     async def TestUltraComplex(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestUltraComplex", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestUltraComplex", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -209,24 +208,24 @@ class BamlHttpStreamRequestClient:
     async def TestKitchenSink(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestKitchenSink", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestKitchenSink", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     async def TestRecursiveComplexity(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestRecursiveComplexity", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestRecursiveComplexity", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     async def TestUltraComplex(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestUltraComplex", args={
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestUltraComplex", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     
 
 b = BamlAsyncClient(DoNotUseDirectlyCallManager({}))

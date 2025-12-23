@@ -36,14 +36,12 @@ pub enum TypeRef {
     },
     Union(Vec<TypeRef>),
 
-    /// Literal (singleton) types for pattern matching.
-    ///
-    /// From a type-theoretic perspective, singleton types require decidable
-    /// equality to support pattern matching and exhaustiveness checking. Floats are
-    /// intentionally excluded because floating-point equality is not decidable
-    /// (NaN != NaN, precision issues like 0.1 + 0.2 != 0.3, etc.).
+    /// Literal types in unions.
     StringLiteral(String),
     IntLiteral(i64),
+    /// Float literal stored as string to avoid f64's lack of Eq/Hash.
+    FloatLiteral(String),
+    /// Boolean literal for pattern matching (true/false as types).
     BoolLiteral(bool),
 
     /// Future: Generic type application.
@@ -96,6 +94,9 @@ impl TypeRef {
     /// - List types: string[]
     /// - Union types: Success | Failure
     /// - String literal types: "user" | "assistant"
+    ///
+    /// NOTE: Type parsing occurs here, which is somewhat brittle for edge cases
+    /// like `int??` or `int[][]`. See canary TODO for future improvements.
     pub fn from_ast(type_expr: &baml_syntax::ast::TypeExpr) -> Self {
         let parts = type_expr.parts();
 

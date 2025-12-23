@@ -20,14 +20,14 @@ import type * as types from "../types"
  * with the specified parameters.
  *
 {%- for (name, arg_type) in func.args %}
- * @param { {{arg_type.serialize_type(pkg)}} } {{ name }}{% if arg_type.meta().is_optional() %} (optional){% endif %} - Input parameter.
+ * @param { {{arg_type.serialize_type(pkg)}} } {{ name }}{% if arg_type.is_optional() %} (optional){% endif %} - Input parameter.
 {%- endfor %}
  *
  * @returns {Promise<{{func.return_type.serialize_type(pkg)}}>} A promise that resolves with the result of the action.
  */
 export const {{ func.name }} = async (
   {%- for (name, arg_type) in func.args %}
-  {{ name }}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+  {{ name }}{% if arg_type.is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
   {%- endfor %}
 ): Promise<{{func.return_type.serialize_type(pkg)}}> => {
   return b.{{ func.name }}(

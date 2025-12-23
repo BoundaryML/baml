@@ -35,7 +35,7 @@ type Union4AudioOrImageOrPDFOrVideo struct {
 
 func (u *Union4AudioOrImageOrPDFOrVideo) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "image":
 		u.variant = "Image"
@@ -59,20 +59,20 @@ func (u *Union4AudioOrImageOrPDFOrVideo) Decode(holder *cffi.CFFIValueUnionVaria
 	}
 }
 
-func (u Union4AudioOrImageOrPDFOrVideo) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union4AudioOrImageOrPDFOrVideo) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Image":
-		return baml.EncodeUnion(u.BamlEncodeName, "image", *u.variant_Image)
+		return baml.EncodeValue(*u.variant_Image)
 
 	case "Audio":
-		return baml.EncodeUnion(u.BamlEncodeName, "audio", *u.variant_Audio)
+		return baml.EncodeValue(*u.variant_Audio)
 
 	case "PDF":
-		return baml.EncodeUnion(u.BamlEncodeName, "pdf", *u.variant_PDF)
+		return baml.EncodeValue(*u.variant_PDF)
 
 	case "Video":
-		return baml.EncodeUnion(u.BamlEncodeName, "video", *u.variant_Video)
+		return baml.EncodeValue(*u.variant_Video)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -83,13 +83,6 @@ func (u Union4AudioOrImageOrPDFOrVideo) Encode() (*cffi.CFFIValueHolder, error) 
 
 func (u Union4AudioOrImageOrPDFOrVideo) BamlTypeName() string {
 	return "Union4AudioOrImageOrPDFOrVideo"
-}
-
-func (u Union4AudioOrImageOrPDFOrVideo) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__audio__image__pdf__video",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union4AudioOrImageOrPDFOrVideo) MarshalJSON() ([]byte, error) {

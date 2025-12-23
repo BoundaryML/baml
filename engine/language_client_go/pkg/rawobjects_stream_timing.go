@@ -15,8 +15,8 @@ func newStreamTiming(ptr int64, rt unsafe.Pointer) StreamTiming {
 	return &streamTiming{&timing{raw_objects.FromPointer(ptr, rt)}}
 }
 
-func (s *streamTiming) objectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_STREAM_TIMING
+func (s *streamTiming) objectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_STREAM_TIMING
 }
 
 func (s *streamTiming) pointer() int64 {

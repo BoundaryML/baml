@@ -49,5 +49,27 @@ function SchemaDescriptions(input: string) -> Schema {
     Return a schema with this format:
 
     {{ctx.output_format}}
+
+    exactly like this:
+    {
+      "prop1": "one",
+      "prop2": {
+        "prop3": "three",
+        "prop4": "four",
+        "prop20": {
+          "prop11": "three",
+          "prop12": "four"
+        }
+      },
+      "prop5": [
+        "hi"
+      ],
+      "prop6": "blah",
+      "nested_attrs": [
+        "nested"
+      ],
+      "parens": "parens1",
+      "other_group": "other"
+    }
   "#
 }

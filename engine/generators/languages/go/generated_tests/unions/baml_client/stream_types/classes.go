@@ -68,7 +68,7 @@ func (c *ExistingSystemComponent) Decode(holder *cffi.CFFIValueClass, typeMap ba
 
 }
 
-func (c ExistingSystemComponent) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ExistingSystemComponent) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -81,18 +81,11 @@ func (c ExistingSystemComponent) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["explanation"] = c.Explanation
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ExistingSystemComponent", fields, nil)
 }
 
 func (c ExistingSystemComponent) BamlTypeName() string {
 	return "ExistingSystemComponent"
-}
-
-func (u ExistingSystemComponent) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ExistingSystemComponent",
-	}
 }
 
 type UseMyUnion struct {
@@ -125,21 +118,14 @@ func (c *UseMyUnion) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c UseMyUnion) Encode() (*cffi.CFFIValueHolder, error) {
+func (c UseMyUnion) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["u"] = c.U
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("UseMyUnion", fields, nil)
 }
 
 func (c UseMyUnion) BamlTypeName() string {
 	return "UseMyUnion"
-}
-
-func (u UseMyUnion) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "UseMyUnion",
-	}
 }

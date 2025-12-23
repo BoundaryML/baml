@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -90,63 +89,63 @@ class BamlSyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-
+    
     def TestComplexUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ComplexUnions:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestComplexUnions(input=input,
+            stream = self.stream.TestComplexUnions(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestComplexUnions", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestComplexUnions", args={
                 "input": input,
             })
-            return typing.cast(types.ComplexUnions, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.ComplexUnions, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestDiscriminatedUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DiscriminatedUnions:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestDiscriminatedUnions(input=input,
+            stream = self.stream.TestDiscriminatedUnions(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestDiscriminatedUnions", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestDiscriminatedUnions", args={
                 "input": input,
             })
-            return typing.cast(types.DiscriminatedUnions, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.DiscriminatedUnions, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestPrimitiveUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.PrimitiveUnions:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestPrimitiveUnions(input=input,
+            stream = self.stream.TestPrimitiveUnions(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestPrimitiveUnions", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestPrimitiveUnions", args={
                 "input": input,
             })
-            return typing.cast(types.PrimitiveUnions, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.PrimitiveUnions, result.cast_to(types, types, stream_types, False, __runtime__))
     def TestUnionArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.UnionArrays:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            __stream__ = self.stream.TestUnionArrays(input=input,
+            stream = self.stream.TestUnionArrays(input=input,
                 baml_options=baml_options)
-            return __stream__.get_final_response()
+            return stream.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestUnionArrays", args={
+            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestUnionArrays", args={
                 "input": input,
             })
-            return typing.cast(types.UnionArrays, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.UnionArrays, result.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -159,50 +158,50 @@ class BamlStreamClient:
     def TestComplexUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.ComplexUnions, types.ComplexUnions]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestComplexUnions", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestComplexUnions", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.ComplexUnions, types.ComplexUnions](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.ComplexUnions, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.ComplexUnions, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestDiscriminatedUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.DiscriminatedUnions, types.DiscriminatedUnions]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestDiscriminatedUnions", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestDiscriminatedUnions", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.DiscriminatedUnions, types.DiscriminatedUnions](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.DiscriminatedUnions, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.DiscriminatedUnions, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestPrimitiveUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.PrimitiveUnions, types.PrimitiveUnions]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestPrimitiveUnions", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestPrimitiveUnions", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.PrimitiveUnions, types.PrimitiveUnions](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.PrimitiveUnions, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.PrimitiveUnions, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     def TestUnionArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.UnionArrays, types.UnionArrays]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestUnionArrays", args={
+        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestUnionArrays", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.UnionArrays, types.UnionArrays](
-          __result__,
+          result,
           lambda x: typing.cast(stream_types.UnionArrays, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.UnionArrays, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
+          ctx,
         )
     
 
@@ -215,31 +214,31 @@ class BamlHttpRequestClient:
     def TestComplexUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestComplexUnions", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestComplexUnions", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestDiscriminatedUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestDiscriminatedUnions", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestDiscriminatedUnions", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestPrimitiveUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestPrimitiveUnions", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestPrimitiveUnions", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     def TestUnionArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestUnionArrays", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestUnionArrays", args={
             "input": input,
         }, mode="request")
-        return __result__
+        return result
     
 
 class BamlHttpStreamRequestClient:
@@ -251,31 +250,31 @@ class BamlHttpStreamRequestClient:
     def TestComplexUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestComplexUnions", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestComplexUnions", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestDiscriminatedUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestDiscriminatedUnions", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestDiscriminatedUnions", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestPrimitiveUnions(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestPrimitiveUnions", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestPrimitiveUnions", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     def TestUnionArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestUnionArrays", args={
+        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestUnionArrays", args={
             "input": input,
         }, mode="stream")
-        return __result__
+        return result
     
 
 b = BamlSyncClient(DoNotUseDirectlyCallManager({}))

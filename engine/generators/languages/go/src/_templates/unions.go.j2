@@ -7,7 +7,7 @@ type {{ name }} struct {
 
 func (u *{{ name }}) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
     valueHolder := holder.Value
-    variantName := holder.VariantName
+    variantName := holder.ValueOptionName
 	switch variantName {
     {% for v in variants -%}
 	    case "{{ v.cffi_name }}":
@@ -21,11 +21,11 @@ func (u *{{ name }}) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.Typ
 }
 
 
-func (u {{ name }}) Encode() (*cffi.CFFIValueHolder, error) {
+func (u {{ name }}) Encode() (*cffi.HostValue, error) {
     switch u.variant {
     {% for v in variants %}
     case "{{ v.name }}":
-        return baml.EncodeUnion(u.BamlEncodeName, "{{ v.cffi_name }}", *u.variant_{{ v.name }})
+        return baml.EncodeValue(*u.variant_{{ v.name }})
     {% endfor %}
     case "":
         return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -36,13 +36,6 @@ func (u {{ name }}) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u {{ name }}) BamlTypeName() string {
     return "{{ name }}"
-}
-
-func (u {{ name }}) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Name:      "{{ cffi_name }}",
-        Namespace: {{ pkg.namespace() }},
-    }
 }
 
 func (u {{ name }}) MarshalJSON() ([]byte, error) {

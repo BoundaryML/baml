@@ -79,13 +79,17 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Stackification with fall-through elimination:
+            // a is user variable, _5 is compiler temporary for if result
             vec![
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("a".to_string()),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(15),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(13),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
@@ -93,13 +97,11 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::Jump(5), // break jumps past if-without-else and loop
-                Instruction::Jump(2), // skip false-path pop
-                Instruction::Pop(1),  // pop condition (false path)
-                Instruction::Jump(-17),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Null),
+                Instruction::StoreVar("_5".to_string()),
+                Instruction::Jump(-15),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
@@ -127,13 +129,17 @@ fn while_loop_with_break() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Stackification with fall-through elimination:
+            // a is user variable, _5 is compiler temporary for if result
             vec![
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("a".to_string()),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(15),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(13),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
@@ -141,13 +147,11 @@ fn while_loop_with_break() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::Jump(5), // break jumps past if-without-else and loop
-                Instruction::Jump(2), // skip false-path pop
-                Instruction::Pop(1),  // pop condition (false path)
-                Instruction::Jump(-17),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Null),
+                Instruction::StoreVar("_5".to_string()),
+                Instruction::Jump(-15),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
@@ -282,26 +286,27 @@ fn continue_nested() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "Nested",
+            // Stackification with fall-through elimination:
+            // _2 is compiler temporary for if result
             vec![
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(15),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::Jump(1),
-                Instruction::Jump(-4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::Jump(3), // continue jumps to loop start
-                Instruction::Jump(2), // skip false-path pop
-                Instruction::Pop(1),  // pop condition (false path)
-                Instruction::Jump(-15),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::Return,
+                Instruction::LoadConst(Value::Bool(false)),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(8),
+                Instruction::LoadConst(Value::Bool(false)),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Null),
+                Instruction::StoreVar("_2".to_string()),
+                Instruction::Jump(-13),
+                Instruction::Jump(-14),
+                Instruction::Jump(-10),
             ],
         )],
     })
@@ -326,28 +331,26 @@ fn break_nested() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "Nested",
+            // Stackification with fall-through elimination:
+            // a is user variable
             vec![
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Int(5)),
+                Instruction::StoreVar("a".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(18),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(11),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(8),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(5),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("a".to_string()),
-                Instruction::Jump(3),
-                Instruction::Jump(-8),
-                Instruction::Pop(1),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("a".to_string()),
-                Instruction::Jump(3),
-                Instruction::Jump(-18),
-                Instruction::Pop(1),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],

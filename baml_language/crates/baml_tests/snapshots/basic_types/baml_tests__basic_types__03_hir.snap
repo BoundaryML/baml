@@ -1,49 +1,56 @@
 ---
-source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
 class FieldAttributes {
-  money: Int
-  currency: String
-  name: String
-  summary: String
-  details: Optional(String)
-  state: String
-  multiple: Optional(String)
+  money: int
+  currency: string
+  name: string
+  summary: string
+  details: string?
+  state: string
+  multiple: string?
 }
+
 class ClassAttributes {
-  name: String
+  name: string
   @@dynamic
 }
-function GetStatus {
-  return: Path(Path { segments: ["Status"], kind: Plain })
-  body: Llm {
-    client: GPT4
-    prompt: "Get status"
-  }
+
+function GetStatus() -> Status {
+  client GPT4
+  prompt #"
+    Get status
+  "#
 }
-function GetUser {
-  params: [id: Int]
-  return: Path(Path { segments: ["User"], kind: Plain })
-  body: Llm {
-    client: GPT4
-    prompt: "Get user {{id}}"
-    interpolations: [id]
-  }
+
+function GetUser(id: int) -> User {
+  client GPT4
+  prompt #"
+    Get user {{id}}
+  "#
 }
+
 class User {
-  id: Int
-  name: String
-  email: String
+  id: int
+  name: string
+  email: string
 }
+
 enum Status {
-  EnumVariant { name: "Active" }
-  EnumVariant { name: "Inactive" }
+  Active
+  Inactive
 }
-type OptionalRoleList = Optional(List(StringLiteral("writer")))
-type RoleList = List(StringLiteral("reader"))
-type OptionalRole = Optional(StringLiteral("admin"))
-type Role = Union([StringLiteral("user"), StringLiteral("assistant"), StringLiteral("system")])
-type OptionalFlag = Optional(BoolLiteral(true))
-type OptionalCode = Optional(IntLiteral(200))
+
+type OptionalRoleList = "writer"[]?
+
+type RoleList = "reader"[]
+
+type OptionalRole = "admin"?
+
+type Role = "user" | "assistant" | "system"
+
+type OptionalFlag = true?
+
+type OptionalCode = 200?

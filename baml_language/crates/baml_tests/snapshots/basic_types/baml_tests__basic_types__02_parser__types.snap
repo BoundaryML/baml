@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -10,26 +10,24 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "id"
-      TYPE_EXPR " int"
+      TYPE_EXPR "int"
         WORD "int"
     FIELD
       WORD "name"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
     FIELD
       WORD "email"
-      TYPE_EXPR " string"
+      TYPE_EXPR "string"
         WORD "string"
     R_BRACE "}"
   ENUM_DEF
     KW_ENUM "enum"
     WORD "Status"
     L_BRACE "{"
-    ENUM_VARIANT "
-    Active"
+    ENUM_VARIANT "Active"
       WORD "Active"
-    ENUM_VARIANT "
-    Inactive"
+    ENUM_VARIANT "Inactive"
       WORD "Inactive"
     R_BRACE "}"
   TYPE_ALIAS_DEF
@@ -37,17 +35,17 @@ SOURCE_FILE
     WORD "Role"
     EQUALS "="
     TYPE_EXPR
-      STRING_LITERAL " "user""
+      STRING_LITERAL "user"
         QUOTE """
         WORD "user"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL " "assistant""
+      STRING_LITERAL "assistant"
         QUOTE """
         WORD "assistant"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL " "system""
+      STRING_LITERAL "system"
         QUOTE """
         WORD "system"
         QUOTE """
@@ -56,7 +54,7 @@ SOURCE_FILE
     WORD "OptionalRole"
     EQUALS "="
     TYPE_EXPR
-      STRING_LITERAL " "admin""
+      STRING_LITERAL "admin"
         QUOTE """
         WORD "admin"
         QUOTE """
@@ -66,7 +64,7 @@ SOURCE_FILE
     WORD "RoleList"
     EQUALS "="
     TYPE_EXPR
-      STRING_LITERAL " "reader""
+      STRING_LITERAL "reader"
         QUOTE """
         WORD "reader"
         QUOTE """
@@ -77,7 +75,7 @@ SOURCE_FILE
     WORD "OptionalRoleList"
     EQUALS "="
     TYPE_EXPR
-      STRING_LITERAL " "writer""
+      STRING_LITERAL "writer"
         QUOTE """
         WORD "writer"
         QUOTE """
@@ -88,14 +86,14 @@ SOURCE_FILE
     WORD "type"
     WORD "OptionalCode"
     EQUALS "="
-    TYPE_EXPR " 200?"
+    TYPE_EXPR "200?"
       INTEGER_LITERAL "200"
       QUESTION "?"
   TYPE_ALIAS_DEF
     WORD "type"
     WORD "OptionalFlag"
     EQUALS "="
-    TYPE_EXPR " true?"
+    TYPE_EXPR "true?"
       WORD "true"
       QUESTION "?"
 

@@ -162,9 +162,7 @@ func (*parse_stream) AliasWithMultipleAttrs(text string, opts ...CallOptionFunc)
 		return types.Checked[int64]{}, err
 	}
 
-	casted := baml.CastChecked(result, func(inner any) int64 {
-		return (inner).(int64)
-	})
+	casted := (result).(types.Checked[int64])
 
 	return casted, nil
 }
@@ -3924,9 +3922,7 @@ func (*parse_stream) MakeBlockConstraint(text string, opts ...CallOptionFunc) (t
 		return types.Checked[stream_types.BlockConstraint]{}, err
 	}
 
-	casted := baml.CastChecked(result, func(inner any) stream_types.BlockConstraint {
-		return (inner).(stream_types.BlockConstraint)
-	})
+	casted := (result).(types.Checked[stream_types.BlockConstraint])
 
 	return casted, nil
 }
@@ -4772,9 +4768,7 @@ func (*parse_stream) PredictAgeBare(text string, opts ...CallOptionFunc) (types.
 		return types.Checked[int64]{}, err
 	}
 
-	casted := baml.CastChecked(result, func(inner any) int64 {
-		return (inner).(int64)
-	})
+	casted := (result).(types.Checked[int64])
 
 	return casted, nil
 }
@@ -5432,9 +5426,7 @@ func (*parse_stream) ReturnAliasWithMergedAttributes(text string, opts ...CallOp
 		return types.Checked[int64]{}, err
 	}
 
-	casted := baml.CastChecked(result, func(inner any) int64 {
-		return (inner).(int64)
-	})
+	casted := (result).(types.Checked[int64])
 
 	return casted, nil
 }
@@ -6135,6 +6127,53 @@ func (*parse_stream) TellStory(text string, opts ...CallOptionFunc) (string, err
 	}
 
 	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TellStory", encoded)
+	if err != nil {
+		return "", err
+	}
+
+	casted := (result).(string)
+
+	return casted, nil
+}
+
+// / Parse version of TemplateStringTestEcho (Takes in string and returns string)
+func (*parse_stream) TemplateStringTestEcho(text string, opts ...CallOptionFunc) (string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TemplateStringTestEcho: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TemplateStringTestEcho", encoded)
 	if err != nil {
 		return "", err
 	}

@@ -590,3 +590,15 @@ baml-cli test --list
 ```
 
 See the [CLI Test Reference](/ref/baml-cli/test) for complete documentation of all available options, filtering capabilities, and output formats.
+
+## Production Builds
+
+When deploying to production, you may want to reduce the size of your generated `baml_client` by excluding test blocks. Use the `--no-tests` flag with the `generate` command:
+
+```bash
+baml-cli generate --no-tests
+```
+
+This strips test blocks from the inlined BAML code in the generated client, reducing bundle size without affecting runtime functionality. Your BAML functions will continue to work normally; only the embedded test definitions are removed.
+
+See the [CLI Generate Reference](/ref/baml-cli/generate) for more details.

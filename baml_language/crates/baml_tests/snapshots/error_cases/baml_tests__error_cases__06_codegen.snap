@@ -4,30 +4,28 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 3
-Objects: 6
-Globals: 3
+Objects: 23
+Globals: 21
 
 Function BadUnionPattern (arity: 1, kind: Exec):
-     0   LOAD_VAR 1      (x)
-     1   LOAD_VAR 2      (@match_scrut_0)
-     2   POP_REPLACE 1   
-     3   JUMP +4         (to 7)
-     4   LOAD_VAR 2      (@match_scrut_0)
-     5   LOAD_CONST 0    (bad)
-     6   POP_REPLACE 1   
-     7   RETURN          
+     0   LOAD_CONST 0   (null)
+     1   LOAD_CONST 0   (null)
+     2   LOAD_VAR 1     (x)
+     3   STORE_VAR 3    (_2)
+     4   LOAD_CONST 0   (null)
+     5   STORE_VAR 2    (_0)
+     6   LOAD_VAR 2     (_0)
+     7   RETURN         
 
 Function Invalid (arity: 0, kind: Exec):
-     0   RETURN   
+     0   LOAD_CONST 0   (null)
+     1   RETURN         
 
 Function MixedLiteralAndTyped (arity: 1, kind: Exec):
      0   LOAD_VAR 1         (x)
-     1   LOAD_VAR 2         (@match_scrut_0)
-     2   LOAD_CONST 0       (42)
-     3   CMP_OP ==          
-     4   JUMP_IF_FALSE +3   (to 7)
-     5   POP 1              
-     6   JUMP +2            (to 8)
-     7   POP 1              
-     8   LOAD_CONST 1       (mixed)
-     9   RETURN
+     1   LOAD_CONST 0       (42)
+     2   CMP_OP ==          
+     3   JUMP_IF_FALSE +2   (to 5)
+     4   JUMP +1            (to 5)
+     5   LOAD_CONST 1       (mixed)
+     6   RETURN

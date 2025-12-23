@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1005,7 +1005,7 @@ dependencies = [
 
 [[package]]
 name = "baml-compiler"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -1024,7 +1024,7 @@ dependencies = [
 
 [[package]]
 name = "baml-derive"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1046,7 +1046,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "baml-compiler",
  "baml-vm",
@@ -1065,7 +1065,7 @@ dependencies = [
 
 [[package]]
 name = "baml-log"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1080,7 +1080,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lsp-types"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1111,7 +1111,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1328,7 +1328,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-compiler",
@@ -1377,7 +1377,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-ids",
@@ -1403,7 +1403,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1431,7 +1431,7 @@ dependencies = [
 
 [[package]]
 name = "baml-viz-events"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -1439,7 +1439,7 @@ dependencies = [
 
 [[package]]
 name = "baml-vm"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-compiler",
@@ -1457,7 +1457,7 @@ dependencies = [
 
 [[package]]
 name = "baml_cffi"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1522,26 +1522,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba62675e8242a4c4e806d12f11d136e626e6c8361d6b829310732241652a178a"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "bindgen"
-version = "0.69.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
-dependencies = [
- "bitflags 2.9.1",
- "cexpr",
- "clang-sys",
- "itertools 0.12.1",
- "lazy_static",
- "lazycell",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash 1.1.0",
- "shlex",
- "syn 2.0.104",
 ]
 
 [[package]]
@@ -1660,7 +1640,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1967,7 +1947,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adeb20693716d7c0ae56f8a744e748b1014d5371431ee2707ff2636f511ad6cc"
 dependencies = [
  "anyhow",
- "bindgen 0.72.1",
+ "bindgen",
  "cc",
  "colored",
  "glob",
@@ -2615,7 +2595,7 @@ dependencies = [
 
 [[package]]
 name = "dir-writer"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -2623,7 +2603,7 @@ dependencies = [
  "filetime",
  "indexmap 2.9.0",
  "internal-baml-core",
- "pathdiff 0.2.3",
+ "pathdiff 0.1.0",
  "serde_json",
  "sugar_path",
  "walkdir",
@@ -3159,7 +3139,7 @@ dependencies = [
 
 [[package]]
 name = "generators-go"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "askama",
@@ -3168,11 +3148,12 @@ dependencies = [
  "internal-baml-core",
  "prettydiff",
  "test-harness",
+ "type_test_spec",
 ]
 
 [[package]]
 name = "generators-lib"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -3190,7 +3171,7 @@ dependencies = [
 
 [[package]]
 name = "generators-openapi"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "askama",
@@ -3209,7 +3190,7 @@ dependencies = [
 
 [[package]]
 name = "generators-python"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "askama",
@@ -3219,11 +3200,12 @@ dependencies = [
  "internal-baml-core",
  "prettydiff",
  "test-harness",
+ "type_test_spec",
 ]
 
 [[package]]
 name = "generators-ruby"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "askama",
@@ -3236,7 +3218,7 @@ dependencies = [
 
 [[package]]
 name = "generators-typescript"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "askama",
@@ -3248,6 +3230,7 @@ dependencies = [
  "prettydiff",
  "regex",
  "test-harness",
+ "type_test_spec",
 ]
 
 [[package]]
@@ -4082,7 +4065,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-ast"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -4104,7 +4087,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-compiler",
@@ -4145,7 +4128,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "colored",
@@ -4158,7 +4141,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "askama",
@@ -4181,7 +4164,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "askama",
@@ -4200,7 +4183,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-derive",
@@ -4226,7 +4209,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "internal-baml-ast",
  "internal-baml-diagnostics",
@@ -4238,7 +4221,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -4438,7 +4421,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -4526,7 +4509,7 @@ dependencies = [
 
 [[package]]
 name = "language-server"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -4589,12 +4572,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
-name = "lazycell"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
-
-[[package]]
 name = "libc"
 version = "0.2.174"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4641,7 +4618,7 @@ checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
 
 [[package]]
 name = "llm-response-parser"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "serde",
@@ -4715,29 +4692,6 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "url",
-]
-
-[[package]]
-name = "magnus"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d87ae53030f3a22e83879e666cb94e58a7bdf31706878a0ba48752994146dab"
-dependencies = [
- "magnus-macros",
- "rb-sys",
- "rb-sys-env 0.1.2",
- "seq-macro",
-]
-
-[[package]]
-name = "magnus-macros"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5968c820e2960565f647819f5928a42d6e874551cab9d88d75e3e0660d7f71e3"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.104",
 ]
 
 [[package]]
@@ -5526,7 +5480,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "playground-server"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -6236,42 +6190,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rb-sys"
-version = "0.9.116"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7059846f68396df83155779c75336ca24567741cb95256e6308c9fcc370e8dad"
-dependencies = [
- "rb-sys-build",
-]
-
-[[package]]
-name = "rb-sys-build"
-version = "0.9.116"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac217510df41b9ffc041573e68d7a02aaff770c49943c7494441c4b224b0ecd0"
-dependencies = [
- "bindgen 0.69.5",
- "lazy_static",
- "proc-macro2",
- "quote",
- "regex",
- "shell-words",
- "syn 2.0.104",
-]
-
-[[package]]
-name = "rb-sys-env"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a35802679f07360454b418a5d1735c89716bde01d35b1560fc953c1415a0b3bb"
-
-[[package]]
-name = "rb-sys-env"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08f8d2924cf136a1315e2b4c7460a39f62ef11ee5d522df9b2750fab55b868b6"
-
-[[package]]
 name = "redox_syscall"
 version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6509,33 +6427,6 @@ dependencies = [
  "rustc_version",
  "syn 2.0.104",
  "unicode-ident",
-]
-
-[[package]]
-name = "ruby_ffi"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "baml-cli",
- "baml-ids",
- "baml-log",
- "baml-runtime",
- "baml-types",
- "base64 0.22.1",
- "env_logger",
- "futures",
- "indexmap 2.9.0",
- "internal-baml-core",
- "jsonish",
- "log",
- "magnus",
- "rb-sys",
- "rb-sys-env 0.2.2",
- "serde",
- "serde_json",
- "serde_magnus",
- "tokio",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -6875,12 +6766,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "seq-macro"
-version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc"
-
-[[package]]
 name = "serde"
 version = "1.0.219"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6944,17 +6829,6 @@ dependencies = [
  "memchr",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "serde_magnus"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b8b945a2dadb221f1c5490cfb411cab6c3821446b8eca50ee07e5a3893ec51"
-dependencies = [
- "magnus",
- "serde",
- "tap",
 ]
 
 [[package]]
@@ -7399,12 +7273,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tap"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
-
-[[package]]
 name = "tar"
 version = "0.4.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7472,7 +7340,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-harness"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -7849,7 +7717,7 @@ dependencies = [
 
 [[package]]
 name = "tools"
-version = "0.214.0"
+version = "0.215.2"
 dependencies = [
  "anyhow",
  "notify-debouncer-full",
@@ -8132,6 +8000,10 @@ dependencies = [
  "thiserror 2.0.12",
  "uuid",
 ]
+
+[[package]]
+name = "type_test_spec"
+version = "0.1.0"
 
 [[package]]
 name = "typed-arena"

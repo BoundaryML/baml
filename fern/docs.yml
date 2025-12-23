@@ -269,6 +269,10 @@ tabs:
     display-name: Playground
     icon: fa-solid fa-play
     href: https://promptfiddle.com
+  agents-md:
+    display-name: Agents.md
+    icon: fa-solid fa-robot
+    slug: agents-md
   changelog:
     display-name: Changelog
     icon: fa-regular fa-history
@@ -304,6 +308,9 @@ navigation:
           - page: Cursor Extension
             icon: fa-brands fa-microsoft
             path: 01-guide/01-editors/cursor.mdx
+          - page: Claude Code
+            icon: fa-solid fa-terminal
+            path: 01-guide/01-editors/claude-code.mdx
           - page: Others
             icon: fa-brands fa-microsoft
             path: 01-guide/01-editors/others.mdx
@@ -782,6 +789,9 @@ navigation:
             path: 03-reference/baml/clients/providers/openai-responses.mdx
           - page: "OpenAI from Azure"
             path: 03-reference/baml/clients/providers/azure.mdx
+          - page: "OpenRouter"
+            slug: openrouter
+            path: 03-reference/baml/clients/providers/openrouter.mdx
           - page: "openai-generic"
             path: 03-reference/baml/clients/providers/openai-generic.mdx
           - page: "Microsoft Foundry (openai-generic)"
@@ -811,9 +821,6 @@ navigation:
           - page: "Ollama (openai-generic)"
             slug: ollama
             path: 03-reference/baml/clients/providers/ollama.mdx
-          - page: "OpenRouter (openai-generic)"
-            slug: openrouter
-            path: 03-reference/baml/clients/providers/openrouter.mdx
           - page: "Vercel AI Gateway (openai-generic)"
             slug: vercel-ai-gateway
             path: 03-reference/baml/clients/providers/vercel-ai-gateway.mdx
@@ -935,6 +942,11 @@ navigation:
       #     - page: set_tags
       #       path: 01-guide/introduction.mdx
   - tab: playground
+  - tab: agents-md
+    layout:
+      - page: Claude Code
+        icon: fa-solid fa-terminal
+        path: 01-guide/01-editors/claude-code.mdx
   - tab: changelog
     layout:
       - page: Changelog

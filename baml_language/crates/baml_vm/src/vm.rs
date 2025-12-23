@@ -641,9 +641,9 @@ impl Vm {
             //         .map(|v| crate::debug::display_value(v, &self.objects))
             //         .collect::<Vec<_>>()
             //         .join(", ");
-            //
+
             //     eprintln!("[{stack}]");
-            //
+
             //     let (instruction, metadata) = crate::debug::display_instruction(
             //         instruction_ptr,
             //         function,
@@ -651,7 +651,7 @@ impl Vm {
             //         &self.objects,
             //         &self.globals,
             //     );
-            //
+
             //     eprintln!("{instruction} {metadata}");
             // }
 

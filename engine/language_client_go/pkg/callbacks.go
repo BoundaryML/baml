@@ -105,7 +105,6 @@ func error_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int
 			callback.channel <- ResultCallback{Error: err}
 		}
 
-
 		close(callback.channel)
 		callbackMutex.Lock()
 		defer callbackMutex.Unlock()
@@ -134,7 +133,8 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 			return
 		}
 
-		decoded_data := serde.Decode(&content_holder, typeMap).Interface()
+		raw_decoded_data, _ := serde.Decode(&content_holder, typeMap)
+		decoded_data := raw_decoded_data.Interface()
 
 		var res ResultCallback
 		if isDone == 1 {

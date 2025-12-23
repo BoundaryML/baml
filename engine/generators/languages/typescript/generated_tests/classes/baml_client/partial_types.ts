@@ -38,6 +38,6 @@ export interface StreamState<T> {
 export namespace partial_types {
     export interface SimpleClass {
       digits?: number | null
-      words?: StreamState<string | null>
+      words: StreamState<string | null>
     }
 }

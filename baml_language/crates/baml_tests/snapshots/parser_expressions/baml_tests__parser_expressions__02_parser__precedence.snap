@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -11,7 +11,7 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR " bool"
+    TYPE_EXPR "bool"
       WORD "bool"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
@@ -64,7 +64,7 @@ SOURCE_FILE
               AND_AND "&&"
               WORD "false"
           SEMICOLON ";"
-        RETURN_STMT "  // Should be true (AND before OR)
+        RETURN_STMT "// Should be true (AND before OR)
 
   return d;"
           KW_RETURN "return"

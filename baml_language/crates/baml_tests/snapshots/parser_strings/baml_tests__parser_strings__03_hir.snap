@@ -1,82 +1,82 @@
 ---
-source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function FormatMessage {
-  params: [name: String]
-  return: String
-  body: Llm {
-    client: GPT4
-    prompt: "\n    Generate a message for \"{{ name }}\"\n    Include quotes like: \"Welcome, '{{ name }}'!\"\n  "
-    interpolations: [name, name]
-  }
+function FormatMessage(name: string) -> string {
+  client GPT4
+  prompt #"
+    
+        Generate a message for "{{ name }}"
+        Include quotes like: "Welcome, '{{ name }}'!"
+      
+  "#
 }
+
 class NestedQuotes {
-  single_in_double: String
-  double_in_single: String
-  She: Path(Path { segments: ["said"], kind: Plain })
-  hello: StringLiteral("')\n  escaped_in_escaped string @alias(")
-  The: Unknown
-  quote: Unknown
-  is: Path(Path { segments: ["here"], kind: Plain })
-  complex_nesting: String
-  really: Unknown
-  complex: Unknown
-  json_like: String
-  key: Unknown
-  value: Unknown
+  single_in_double: string
+  double_in_single: string
+  She: said
+  hello: "')
+  escaped_in_escaped string @alias("
+  The: <unknown>
+  quote: <unknown>
+  is: here
+  complex_nesting: string
+  really: <unknown>
+  complex: <unknown>
+  json_like: string
+  key: <unknown>
+  value: <unknown>
 }
-function ProcessText {
-  params: [input: String]
-  return: String
-  body: Llm {
-    client: GPT4
-    prompt: "\n    Process the following text:\n    {{ input }}\n    \n    Return the processed result.\n  "
-    interpolations: [input]
-  }
+
+function ProcessText(input: string) -> string {
+  client GPT4
+  prompt #"
+    
+        Process the following text:
+        {{ input }}
+        
+        Return the processed result.
+      
+  "#
 }
+
 class RawStrings {
-  simple: String
-  with_quotes: String
-  multi_hash: String
-  multiline: String
+  simple: string
+  with_quotes: string
+  multi_hash: string
+  multiline: string
 }
-function GetRole {
-  return: Union([StringLiteral("admin"), StringLiteral("user"), StringLiteral("guest")])
-  body: Expr {
-    exprs: [
-      Idx::<Expr>(0): Literal(String("user"))
-      Idx::<Expr>(1): Block { stmts: [Idx::<Stmt>(0)], tail_expr: None }
-    ]
-    stmts: [
-      Idx::<Stmt>(0): Return(Some(Idx::<Expr>(0)))
-    ]
-    root: Idx::<Expr>(1)
-  }
+
+function GetRole() -> "admin" | "user" | "guest" {
+      return "user";
 }
+
 class Messages {
-  greeting: String
-  empty: String
-  with_spaces: String
-  with_escapes: String
-  with_quotes: String
-  hello: Unknown
+  greeting: string
+  empty: string
+  with_spaces: string
+  with_escapes: string
+  with_quotes: string
+  hello: <unknown>
 }
+
 class UnicodeStrings {
-  emoji_basic: String
-  emoji_multiple: String
-  emoji_in_text: String
-  chinese: String
-  arabic: String
-  japanese: String
-  russian: String
-  math_symbols: String
-  currency: String
-  arrows: String
-  zero_width: String
-  rtl_override: String
+  emoji_basic: string
+  emoji_multiple: string
+  emoji_in_text: string
+  chinese: string
+  arabic: string
+  japanese: string
+  russian: string
+  math_symbols: string
+  currency: string
+  arrows: string
+  zero_width: string
+  rtl_override: string
 }
+
 client GPT4 {
   provider: unknown
 }

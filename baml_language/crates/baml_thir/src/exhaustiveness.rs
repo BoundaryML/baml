@@ -353,6 +353,9 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             Ty::Null => vec![ValueSet::Literal(Literal::Null)],
             Ty::Literal(value) => match value {
                 LiteralValue::Int(v) => vec![ValueSet::Literal(Literal::Int(*v))],
+                LiteralValue::Float(v) => {
+                    vec![ValueSet::Literal(Literal::Float(v.clone()))]
+                }
                 LiteralValue::String(v) => {
                     vec![ValueSet::Literal(Literal::String(v.clone()))]
                 }
@@ -480,6 +483,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             }
             Ty::Literal(value) => match value {
                 LiteralValue::Int(v) => ValueSet::Literal(Literal::Int(*v)),
+                LiteralValue::Float(v) => ValueSet::Literal(Literal::Float(v.clone())),
                 LiteralValue::String(v) => ValueSet::Literal(Literal::String(v.clone())),
                 LiteralValue::Bool(v) => ValueSet::Literal(Literal::Bool(*v)),
             },

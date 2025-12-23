@@ -1,16 +1,75 @@
-name: sandbox
+name: Sandbox - experimentation only
 
-on:
-  push:
-    branches:
-      - sam/baml-test
+on: push
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  demo-download-artifacts:
+    runs-on: ubuntu-latest
+    env:
+      # Edit this variable to get a better copy-paste-able snippet.
+      WORKFLOW_JOB_URL: "https://github.com/BoundaryML/baml/actions/runs/20328548071"
+    steps:
+      - name: This workflow demonstrates how to download artifacts from a different workflow run: ${{ WORKFLOW_JOB_URL }}
+        run: echo "Parsing ${WORKFLOW_JOB_URL}"
+
+      - name: Parse workflow job URL. Expand this section to find a copy-paste-able snippet for downloading artifacts.
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = (process.env.WORKFLOW_JOB_URL || "").trim();
+            if (!url) {
+              core.setFailed("WORKFLOW_JOB_URL is required");
+              return;
+            }
+            const parsed = new URL(url);
+            if (parsed.hostname.toLowerCase() !== "github.com") {
+              throw new Error(`Unexpected host in ${url}`);
+            }
+            const parts = parsed.pathname.split("/").filter(Boolean);
+            const [owner, repo, actions, runs, runId] = parts;
+            if (actions !== "actions" || runs !== "runs" || !runId) {
+              throw new Error(`URL does not look like a workflow run: ${url}`);
+            }
+            const sourceRepo = `${owner}/${repo}`;
+            core.exportVariable("SANDBOX_SOURCE_REPO", sourceRepo);
+            core.exportVariable("SANDBOX_RUN_ID", runId);
+            core.info(`Parsed repo ${sourceRepo} and run ${runId}`);
+            const snippet = [
+              "      - uses: actions/download-artifact@v4",
+              "        with:",
+              `          repository: ${sourceRepo}`,
+              `          run-id: ${runId}`,
+              "          pattern: '*'",
+              "          path: sandbox-artifacts",
+              "          # github-token must be set to do this - workflows by default are only allowed to access their own artifacts",
+              "          # so to download another workflow run's artifacts upload, we need to explicitly specify a token",
+              "          github-token: $\{\{ secrets.SAM_GITHUB_PUBLIC_READ \}\}"
+            ].join("\n");
+            core.info("Copy/paste this snippet into another workflow job to download the same artifacts:\n" + snippet);
+
+      - name: Download artifacts from another workflow run
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ env.SANDBOX_SOURCE_REPO }}
+          run-id: ${{ env.SANDBOX_RUN_ID }}
+          pattern: '*'
+          path: sandbox-artifacts
+          # github-token must be specified to download artifacts from another run ID
+          github-token: ${{ secrets.SAM_GITHUB_PUBLIC_READONLY }}
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Contents of sandbox-artifacts/ (repo=${SANDBOX_SOURCE_REPO}, run=${SANDBOX_RUN_ID})"
+          ls -lR sandbox-artifacts || echo "No artifacts were downloaded"
+
+  colored-shell-output:
     runs-on: ubuntu-latest
     steps:
       - name: bash output

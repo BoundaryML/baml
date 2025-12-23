@@ -80,7 +80,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
         {% for func in functions %}
         async {{ func.name }}(
         {% for (name, arg_type) in func.args -%}
-        {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+        {{name}}{% if arg_type.is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
         {%- endfor %}
         __baml_options__?: BamlCallOptions<{{ func.event_type_param() }}>
         ): Promise<{{func.return_type.serialize_type(pkg)}}> {
@@ -114,7 +114,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             "{{func.name}}",
             {
             {% for (name, arg_type) in func.args -%}
-            "{{name}}": {{name}}{% if arg_type.meta().is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
+            "{{name}}": {{name}}{% if arg_type.is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
             {%- endfor %}
             },
             this.ctxManager.cloneContext(),
@@ -148,7 +148,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             {% for func in functions %}
             {{ func.name }}(
             {% for (name, arg_type) in func.args -%}
-            {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+            {{name}}{% if arg_type.is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
             {%- endfor %}
             __baml_options__?: BamlCallOptions<{{ func.event_type_param() }}>
             ): BamlStream<{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}>
@@ -191,7 +191,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 "{{func.name}}",
                 {
                 {% for (name, arg_type) in func.args -%}
-                "{{name}}": {{name}}{% if arg_type.meta().is_optional() %} ?? null{% endif %}{% if !loop.last %},{%
+                "{{name}}": {{name}}{% if arg_type.is_optional() %} ?? null{% endif %}{% if !loop.last %},{%
                 endif %}
                 {%- endfor %}
                 },

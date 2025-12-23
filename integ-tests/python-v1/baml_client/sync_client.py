@@ -1911,6 +1911,20 @@ class BamlSyncClient:
                 "story": story,
             })
             return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    def TemplateStringTestEcho(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            __stream__ = self.stream.TemplateStringTestEcho(input=input,
+                baml_options=baml_options)
+            return __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TemplateStringTestEcho", args={
+                "input": input,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestAbortFallbackChain(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -4606,37 +4620,37 @@ class BamlStreamClient:
         )
     def FnOutputLiteralBool(self, input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[bool, typing_extensions.Literal[False]]:
+    ) -> baml_py.BamlSyncStream[typing_extensions.Literal[False], typing_extensions.Literal[False]]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="FnOutputLiteralBool", args={
             "input": input,
         })
-        return baml_py.BamlSyncStream[bool, typing_extensions.Literal[False]](
+        return baml_py.BamlSyncStream[typing_extensions.Literal[False], typing_extensions.Literal[False]](
           __result__,
-          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing_extensions.Literal[False], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing_extensions.Literal[False], x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
     def FnOutputLiteralInt(self, input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[int, typing_extensions.Literal[5]]:
+    ) -> baml_py.BamlSyncStream[typing_extensions.Literal[5], typing_extensions.Literal[5]]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="FnOutputLiteralInt", args={
             "input": input,
         })
-        return baml_py.BamlSyncStream[int, typing_extensions.Literal[5]](
+        return baml_py.BamlSyncStream[typing_extensions.Literal[5], typing_extensions.Literal[5]](
           __result__,
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing_extensions.Literal[5], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing_extensions.Literal[5], x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
     def FnOutputLiteralString(self, input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[str, typing_extensions.Literal['example output']]:
+    ) -> baml_py.BamlSyncStream[typing_extensions.Literal['example output'], typing_extensions.Literal['example output']]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="FnOutputLiteralString", args={
             "input": input,
         })
-        return baml_py.BamlSyncStream[str, typing_extensions.Literal['example output']](
+        return baml_py.BamlSyncStream[typing_extensions.Literal['example output'], typing_extensions.Literal['example output']](
           __result__,
-          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing_extensions.Literal['example output'], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing_extensions.Literal['example output'], x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
@@ -4738,25 +4752,25 @@ class BamlStreamClient:
         )
     def InOutLiteralStringUnionMapKey(self, i1: typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str],i2: typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[typing.Dict[typing.Union[str, str, str, str], str], typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]]:
+    ) -> baml_py.BamlSyncStream[typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="InOutLiteralStringUnionMapKey", args={
             "i1": i1,"i2": i2,
         })
-        return baml_py.BamlSyncStream[typing.Dict[typing.Union[str, str, str, str], str], typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]](
+        return baml_py.BamlSyncStream[typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str]](
           __result__,
-          lambda x: typing.cast(typing.Dict[typing.Union[str, str, str, str], str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Dict[typing.Union[typing_extensions.Literal['one'], typing_extensions.Literal['two'], typing_extensions.Literal['three'], typing_extensions.Literal['four']], str], x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
     def InOutSingleLiteralStringMapKey(self, m: typing.Dict[typing_extensions.Literal['key'], str],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[typing.Dict[str, str], typing.Dict[typing_extensions.Literal['key'], str]]:
+    ) -> baml_py.BamlSyncStream[typing.Dict[typing_extensions.Literal['key'], str], typing.Dict[typing_extensions.Literal['key'], str]]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="InOutSingleLiteralStringMapKey", args={
             "m": m,
         })
-        return baml_py.BamlSyncStream[typing.Dict[str, str], typing.Dict[typing_extensions.Literal['key'], str]](
+        return baml_py.BamlSyncStream[typing.Dict[typing_extensions.Literal['key'], str], typing.Dict[typing_extensions.Literal['key'], str]](
           __result__,
-          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[typing_extensions.Literal['key'], str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Dict[typing_extensions.Literal['key'], str], x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
@@ -4786,13 +4800,13 @@ class BamlStreamClient:
         )
     def LiteralUnionsTest(self, input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[typing.Union[int, bool, str], typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]]:
+    ) -> baml_py.BamlSyncStream[typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="LiteralUnionsTest", args={
             "input": input,
         })
-        return baml_py.BamlSyncStream[typing.Union[int, bool, str], typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]](
+        return baml_py.BamlSyncStream[typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']]](
           __result__,
-          lambda x: typing.cast(typing.Union[int, bool, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.Union[typing_extensions.Literal[1], typing_extensions.Literal[True], typing_extensions.Literal['string output']], x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
@@ -5377,6 +5391,18 @@ class BamlStreamClient:
     ) -> baml_py.BamlSyncStream[str, str]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TellStory", args={
             "story": story,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          __result__,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TemplateStringTestEcho(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TemplateStringTestEcho", args={
+            "input": input,
         })
         return baml_py.BamlSyncStream[str, str](
           __result__,
@@ -7934,6 +7960,13 @@ class BamlHttpRequestClient:
             "story": story,
         }, mode="request")
         return __result__
+    def TemplateStringTestEcho(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TemplateStringTestEcho", args={
+            "input": input,
+        }, mode="request")
+        return __result__
     def TestAbortFallbackChain(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9802,6 +9835,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TellStory", args={
             "story": story,
+        }, mode="stream")
+        return __result__
+    def TemplateStringTestEcho(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TemplateStringTestEcho", args={
+            "input": input,
         }, mode="stream")
         return __result__
     def TestAbortFallbackChain(self, input: str,

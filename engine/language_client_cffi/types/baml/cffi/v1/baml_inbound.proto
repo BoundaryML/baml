@@ -1,0 +1,109 @@
+syntax = "proto3";
+package baml.cffi.v1;
+
+import "baml/cffi/v1/baml_object.proto";
+
+option go_package = "./cffi";
+
+// -----------------------------------------------------------------------------
+// These are all the things that the host languages sends to BAML.
+// -----------------------------------------------------------------------------
+
+// Core value type
+//
+// Things we have chosen to not track:
+// - the type of the value
+// - if the value is optional
+// - if the value is a union variant
+//
+// Reasoning: not every language has these concepts
+// (e.g. python has no way to represent a union variant)
+//
+// Later we can add optional containers with type information for the languages that do
+// support them as that will improve speed of decoding.
+message HostValue {
+  oneof value {
+    // Do not use an explict null value.
+    // An HostValue can have value be missing entirely to signify a null value.
+    // HostNullValue null_value = 1;
+
+    string string_value = 2;
+    int64 int_value = 3;
+    double float_value = 4;
+    bool bool_value = 5;
+    HostListValue list_value = 6;
+    HostMapValue map_value = 7;
+    HostClassValue class_value = 8;
+    HostEnumValue enum_value = 9;
+    BamlObjectHandle handle = 10;
+  }
+}
+
+message HostListValue {
+  repeated HostValue values = 1;
+}
+
+message HostMapValue {
+  repeated HostMapEntry entries = 1;
+}
+
+message HostMapEntry {
+  oneof key {
+    string string_key = 1;
+    int64 int_key = 2;
+    bool bool_key = 3;
+    HostEnumValue enum_key = 5;
+  }
+  HostValue value = 6;
+}
+
+message HostClassValue {
+  string name = 1;
+  // fields with implict/default values can be omitted
+  // this includes null values
+  repeated HostMapEntry fields = 2;
+}
+
+message HostEnumValue {
+  string name = 1;
+  string value = 2;
+}
+
+// -----------------------------------------------------------------------------
+// Function arguments
+// -----------------------------------------------------------------------------
+
+message HostFunctionArguments {
+  // named function arguments
+  repeated HostMapEntry kwargs = 1;
+
+  HostClientRegistry client_registry = 2;
+
+  repeated HostEnvVar env = 3;
+
+  // collectors only
+  repeated BamlObjectHandle collectors = 4;
+
+  // type builder only
+  BamlObjectHandle type_builder = 5;
+
+  // tags
+  repeated HostMapEntry tags = 6;
+}
+
+message HostClientRegistry {
+  optional string primary = 1;
+  repeated HostClientProperty clients = 2;
+}
+
+message HostClientProperty {
+  string name = 1;
+  string provider = 2;
+  optional string retry_policy = 3;
+  repeated HostMapEntry options = 4;
+}
+
+message HostEnvVar {
+  string key = 1;
+  string value = 2;
+}

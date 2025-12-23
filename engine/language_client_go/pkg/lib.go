@@ -1,6 +1,7 @@
 package baml
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
@@ -8,39 +9,25 @@ import (
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
-func EncodeClass(name func() *cffi.CFFITypeName, fields map[string]any, dynamicFields *map[string]any) (*cffi.CFFIValueHolder, error) {
+func EncodeClass(name string, fields map[string]any, dynamicFields *map[string]any) (*cffi.HostValue, error) {
 	return serde.EncodeClass(name, fields, dynamicFields)
 }
 
-func EncodeEnum(name func() *cffi.CFFITypeName, value string, is_dynamic bool) (*cffi.CFFIValueHolder, error) {
+func EncodeEnum(name string, value string, is_dynamic bool) (*cffi.HostValue, error) {
 	return serde.EncodeEnum(name, value, is_dynamic)
 }
 
-func EncodeUnion(name func() *cffi.CFFITypeName, variant string, value any) (*cffi.CFFIValueHolder, error) {
-	return serde.EncodeUnion(name, variant, value)
+func EncodeValue(value any) (*cffi.HostValue, error) {
+	return serde.EncodeValue(value)
 }
 
 func Decode(holder *cffi.CFFIValueHolder) reflect.Value {
-	return serde.Decode(holder, typeMap)
+	raw_decoded_data, goType := serde.Decode(holder, typeMap)
+	fmt.Printf("-> Decoded: goType=%v, raw_decoded_data=%v\n", goType, raw_decoded_data)
+	return raw_decoded_data
 }
 
-func DecodeStreamingState[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *cffi.CFFIValueHolder) T) shared.StreamState[T] {
-	return serde.DecodeStreamingState(holder, decodeFunc)
-}
-
-func DecodeChecked[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *cffi.CFFIValueHolder) T) shared.Checked[T] {
-	return serde.DecodeChecked(holder, decodeFunc)
-}
-
-func CastChecked[T any](value any, castFunc func(inner any) T) shared.Checked[T] {
-	return serde.CastChecked(value, castFunc)
-}
-
-func CastStreamState[T any](value any, castFunc func(inner any) T) shared.StreamState[T] {
-	return serde.CastStreamState(value, castFunc)
-}
-
-func BAMLTESTINGONLY_InternalEncode(value any) (*cffi.CFFIValueHolder, error) {
+func BAMLTESTINGONLY_InternalEncode(value any) (*cffi.HostValue, error) {
 	return serde.EncodeValue(value)
 }
 

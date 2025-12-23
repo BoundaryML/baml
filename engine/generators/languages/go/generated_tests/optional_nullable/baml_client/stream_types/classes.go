@@ -60,7 +60,7 @@ func (c *ComplexOptional) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 }
 
-func (c ComplexOptional) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ComplexOptional) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["data"] = c.Data
@@ -69,18 +69,11 @@ func (c ComplexOptional) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["mapping"] = c.Mapping
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ComplexOptional", fields, nil)
 }
 
 func (c ComplexOptional) BamlTypeName() string {
 	return "ComplexOptional"
-}
-
-func (u ComplexOptional) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ComplexOptional",
-	}
 }
 
 type MixedOptionalNullable struct {
@@ -149,7 +142,7 @@ func (c *MixedOptionalNullable) Decode(holder *cffi.CFFIValueClass, typeMap baml
 
 }
 
-func (c MixedOptionalNullable) Encode() (*cffi.CFFIValueHolder, error) {
+func (c MixedOptionalNullable) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -172,18 +165,11 @@ func (c MixedOptionalNullable) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["tertiaryUser"] = c.TertiaryUser
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("MixedOptionalNullable", fields, nil)
 }
 
 func (c MixedOptionalNullable) BamlTypeName() string {
 	return "MixedOptionalNullable"
-}
-
-func (u MixedOptionalNullable) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "MixedOptionalNullable",
-	}
 }
 
 type NullableTypes struct {
@@ -236,7 +222,7 @@ func (c *NullableTypes) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 
 }
 
-func (c NullableTypes) Encode() (*cffi.CFFIValueHolder, error) {
+func (c NullableTypes) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["nullableString"] = c.NullableString
@@ -251,18 +237,11 @@ func (c NullableTypes) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["nullableObject"] = c.NullableObject
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("NullableTypes", fields, nil)
 }
 
 func (c NullableTypes) BamlTypeName() string {
 	return "NullableTypes"
-}
-
-func (u NullableTypes) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "NullableTypes",
-	}
 }
 
 type OptionalData struct {
@@ -303,7 +282,7 @@ func (c *OptionalData) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 
 }
 
-func (c OptionalData) Encode() (*cffi.CFFIValueHolder, error) {
+func (c OptionalData) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["value"] = c.Value
@@ -312,18 +291,11 @@ func (c OptionalData) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["enabled"] = c.Enabled
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("OptionalData", fields, nil)
 }
 
 func (c OptionalData) BamlTypeName() string {
 	return "OptionalData"
-}
-
-func (u OptionalData) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "OptionalData",
-	}
 }
 
 type OptionalFields struct {
@@ -384,7 +356,7 @@ func (c *OptionalFields) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 
 }
 
-func (c OptionalFields) Encode() (*cffi.CFFIValueHolder, error) {
+func (c OptionalFields) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["requiredString"] = c.RequiredString
@@ -403,18 +375,11 @@ func (c OptionalFields) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["optionalMap"] = c.OptionalMap
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("OptionalFields", fields, nil)
 }
 
 func (c OptionalFields) BamlTypeName() string {
 	return "OptionalFields"
-}
-
-func (u OptionalFields) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "OptionalFields",
-	}
 }
 
 type OptionalItem struct {
@@ -459,7 +424,7 @@ func (c *OptionalItem) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 
 }
 
-func (c OptionalItem) Encode() (*cffi.CFFIValueHolder, error) {
+func (c OptionalItem) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -470,18 +435,11 @@ func (c OptionalItem) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["metadata"] = c.Metadata
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("OptionalItem", fields, nil)
 }
 
 func (c OptionalItem) BamlTypeName() string {
 	return "OptionalItem"
-}
-
-func (u OptionalItem) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "OptionalItem",
-	}
 }
 
 type OptionalValue struct {
@@ -518,25 +476,18 @@ func (c *OptionalValue) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 
 }
 
-func (c OptionalValue) Encode() (*cffi.CFFIValueHolder, error) {
+func (c OptionalValue) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["data"] = c.Data
 
 	fields["optional"] = c.Optional
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("OptionalValue", fields, nil)
 }
 
 func (c OptionalValue) BamlTypeName() string {
 	return "OptionalValue"
-}
-
-func (u OptionalValue) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "OptionalValue",
-	}
 }
 
 type Product struct {
@@ -577,7 +528,7 @@ func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Product) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Product) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -586,18 +537,11 @@ func (c Product) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["price"] = c.Price
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Product", fields, nil)
 }
 
 func (c Product) BamlTypeName() string {
 	return "Product"
-}
-
-func (u Product) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Product",
-	}
 }
 
 type UnionWithNull struct {
@@ -642,7 +586,7 @@ func (c *UnionWithNull) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 
 }
 
-func (c UnionWithNull) Encode() (*cffi.CFFIValueHolder, error) {
+func (c UnionWithNull) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["simpleUnion"] = c.SimpleUnion
@@ -653,18 +597,11 @@ func (c UnionWithNull) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["complexUnion"] = c.ComplexUnion
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("UnionWithNull", fields, nil)
 }
 
 func (c UnionWithNull) BamlTypeName() string {
 	return "UnionWithNull"
-}
-
-func (u UnionWithNull) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "UnionWithNull",
-	}
 }
 
 type User struct {
@@ -709,7 +646,7 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c User) Encode() (*cffi.CFFIValueHolder, error) {
+func (c User) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -720,16 +657,9 @@ func (c User) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["phone"] = c.Phone
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("User", fields, nil)
 }
 
 func (c User) BamlTypeName() string {
 	return "User"
-}
-
-func (u User) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "User",
-	}
 }

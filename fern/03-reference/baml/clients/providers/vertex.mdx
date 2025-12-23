@@ -176,6 +176,31 @@ https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/location
 
 </Accordion>
 
+<Accordion title='Model not found errors'>
+
+If you encounter an error like:
+
+```
+[modelname] was not found or your project does not have access to it. Please ensure you are using a valid model version.
+```
+
+Try setting `location: global` in your client options:
+
+```baml BAML
+client<llm> MyClient {
+  provider vertex-ai
+  options {
+    model gemini-2.5-pro
+    location global
+    project_id my-project-id
+  }
+}
+```
+
+Some models may only be available in specific regions or through the global endpoint.
+
+</Accordion>
+
 ## BAML-specific request `options`
 These unique parameters (aka `options`) modify the API request sent to the provider.
 

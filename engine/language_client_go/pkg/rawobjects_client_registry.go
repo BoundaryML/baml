@@ -35,14 +35,14 @@ func (c *ClientRegistry) SetPrimaryClient(name string) {
 	c.primary = &name
 }
 
-func encodeClientRegistry(clientRegistryVal *ClientRegistry) (*cffi.CFFIClientRegistry, error) {
-	clientOffsets := make([]*cffi.CFFIClientProperty, 0, len(clientRegistryVal.clients))
+func encodeClientRegistry(clientRegistryVal *ClientRegistry) (*cffi.HostClientRegistry, error) {
+	clientOffsets := make([]*cffi.HostClientProperty, 0, len(clientRegistryVal.clients))
 	for name, client := range clientRegistryVal.clients {
 		options, err := serde.EncodeMapEntries(client.options, "client options")
 		if err != nil {
 			return nil, fmt.Errorf("encoding client options: %w", err)
 		}
-		clientOffsets = append(clientOffsets, &cffi.CFFIClientProperty{
+		clientOffsets = append(clientOffsets, &cffi.HostClientProperty{
 			Name:        name,
 			Provider:    client.provider,
 			RetryPolicy: client.retryPolicy,
@@ -50,7 +50,7 @@ func encodeClientRegistry(clientRegistryVal *ClientRegistry) (*cffi.CFFIClientRe
 		})
 	}
 
-	clients := cffi.CFFIClientRegistry{
+	clients := cffi.HostClientRegistry{
 		Clients: clientOffsets,
 		Primary: clientRegistryVal.primary,
 	}

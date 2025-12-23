@@ -22,6 +22,7 @@ fn class_constructor() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // 'p' is Virtual (single-use), inlined at use site:
             vec![
                 Instruction::AllocInstance(Value::class("Point")),
                 Instruction::Copy(0),
@@ -30,7 +31,6 @@ fn class_constructor() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreField(1),
-                Instruction::LoadVar("p".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -52,6 +52,7 @@ fn class_constructor_return_directly() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Stackification with Virtual _0 and fall-through elimination:
             vec![
                 Instruction::AllocInstance(Value::class("Point")),
                 Instruction::Copy(0),
@@ -135,16 +136,18 @@ fn nested_class_construction() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Stackification with fall-through elimination:
+            // o is assigned but never read (dead store)
             vec![
-                // Outer constructor
+                Instruction::LoadConst(Value::Null),
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
-                // Nested Inner construction
                 Instruction::AllocInstance(Value::class("Inner")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(42)),
-                Instruction::StoreField(0), // Inner.value = 42
-                Instruction::StoreField(0), // Outer.inner = Inner
+                Instruction::StoreField(0),
+                Instruction::StoreField(0),
+                Instruction::StoreVar("o".to_string()),
                 Instruction::LoadConst(Value::Int(42)),
                 Instruction::Return,
             ],
@@ -175,22 +178,24 @@ fn nested_class_with_multiple_fields() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Stackification with fall-through elimination:
+            // o is assigned but never read (dead store)
             vec![
-                // Outer constructor
+                Instruction::LoadConst(Value::Null),
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
-                // Nested Inner construction
                 Instruction::AllocInstance(Value::class("Inner")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(10)),
-                Instruction::StoreField(0), // x = 10
+                Instruction::StoreField(0),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(20)),
-                Instruction::StoreField(1), // y = 20
-                Instruction::StoreField(0), // Outer.inner = Inner
+                Instruction::StoreField(1),
+                Instruction::StoreField(0),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(30)),
-                Instruction::StoreField(1), // Outer.value = 30
+                Instruction::StoreField(1),
+                Instruction::StoreVar("o".to_string()),
                 Instruction::LoadConst(Value::Int(30)),
                 Instruction::Return,
             ],
@@ -216,19 +221,17 @@ fn nested_field_read() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // 'o' is Virtual (single-use), inlined at use site:
             vec![
-                // Create Outer { inner: Inner { value: 42 } }
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
                 Instruction::AllocInstance(Value::class("Inner")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(42)),
-                Instruction::StoreField(0), // Inner.value = 42
-                Instruction::StoreField(0), // Outer.inner = Inner
-                // o.inner.value
-                Instruction::LoadVar("o".to_string()),
-                Instruction::LoadField(0), // o.inner
-                Instruction::LoadField(0), // inner.value
+                Instruction::StoreField(0),
+                Instruction::StoreField(0),
+                Instruction::LoadField(0),
+                Instruction::LoadField(0),
                 Instruction::Return,
             ],
         )],
@@ -571,25 +574,22 @@ fn nested_object_construction() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // 'o' is Virtual (single-use), inlined at use site:
             vec![
-                // Outer constructor
-                Instruction::AllocInstance(Value::class("Outer")), // Outer
-                Instruction::Copy(0),                              // Copy Outer instance
-                // Nested Inner construction
-                Instruction::AllocInstance(Value::class("Inner")), // Inner
-                Instruction::Copy(0),                              // Copy Inner instance
-                Instruction::LoadConst(Value::Int(10)),            // 10
-                Instruction::StoreField(0),                        // x = 10
-                Instruction::Copy(0),                              // Copy Inner instance again
-                Instruction::LoadConst(Value::Int(20)),            // 20
-                Instruction::StoreField(1),                        // y = 20
-                Instruction::StoreField(0),                        // Outer.inner = Inner
-                Instruction::Copy(0),                              // Copy Outer instance
-                Instruction::LoadConst(Value::Int(30)),            // 30
-                Instruction::StoreField(1),                        // Outer.value = 30
-                // o.value
-                Instruction::LoadVar("o".to_string()), // o
-                Instruction::LoadField(1),             // value
+                Instruction::AllocInstance(Value::class("Outer")),
+                Instruction::Copy(0),
+                Instruction::AllocInstance(Value::class("Inner")),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(10)),
+                Instruction::StoreField(0),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(20)),
+                Instruction::StoreField(1),
+                Instruction::StoreField(0),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(30)),
+                Instruction::StoreField(1),
+                Instruction::LoadField(1),
                 Instruction::Return,
             ],
         )],

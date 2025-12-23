@@ -12,21 +12,28 @@
 
 use std::collections::HashMap;
 
-use baml_base::{Name, SourceFile, Span};
+use baml_base::{FileId, Name, SourceFile, Span};
 use baml_diagnostics::compiler_error::TypeError;
 use baml_hir::{
-    ExprBody, ExprId, FunctionBody, FunctionSignature, Pattern, StmtId, project_class_fields,
+    ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId,
+    project_class_fields,
 };
 use baml_workspace::Project;
 
+pub mod builtins;
 mod exhaustiveness;
 mod lower;
 pub mod pretty;
 mod types;
 
+pub use builtins::{
+    Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
+    method_return_type, substitute,
+};
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::lower_type_ref;
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
+use text_size::TextRange;
 pub use types::*;
 
 // ============================================================================
@@ -326,8 +333,13 @@ pub struct TypeContext<'db> {
     expr_types: HashMap<ExprId, Ty<'db>>,
     /// For multi-segment paths, the type of each segment.
     path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
+    /// Types of all return statements encountered during inference.
+    /// Used to validate that all return paths match the declared return type.
+    return_types: Vec<(Ty<'db>, Span)>,
     /// Accumulated type errors.
     errors: Vec<TypeError<Ty<'db>>>,
+    /// The current file being typechecked
+    file_id: FileId,
 }
 
 impl<'db> TypeContext<'db> {
@@ -335,7 +347,7 @@ impl<'db> TypeContext<'db> {
     ///
     /// The initial scope typically contains top-level function types, allowing
     /// function calls to be properly typed. Pass an empty `HashMap` for no globals.
-    pub fn new(db: &'db dyn Db, globals: HashMap<Name, Ty<'db>>) -> Self {
+    pub fn new(db: &'db dyn Db, globals: HashMap<Name, Ty<'db>>, file_id: FileId) -> Self {
         TypeContext {
             db,
             scopes: vec![globals],
@@ -344,7 +356,9 @@ impl<'db> TypeContext<'db> {
             enum_variants: HashMap::new(),
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
+            return_types: Vec::new(),
             errors: Vec::new(),
+            file_id,
         }
     }
 
@@ -353,6 +367,7 @@ impl<'db> TypeContext<'db> {
         db: &'db dyn Db,
         globals: HashMap<Name, Ty<'db>>,
         class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
+        file_id: FileId,
     ) -> Self {
         TypeContext {
             db,
@@ -362,7 +377,9 @@ impl<'db> TypeContext<'db> {
             enum_variants: HashMap::new(),
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
+            return_types: Vec::new(),
             errors: Vec::new(),
+            file_id,
         }
     }
 
@@ -373,6 +390,7 @@ impl<'db> TypeContext<'db> {
         class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
         type_aliases: HashMap<Name, Ty<'db>>,
         enum_variants: HashMap<Name, Vec<Name>>,
+        file_id: FileId,
     ) -> Self {
         TypeContext {
             db,
@@ -382,8 +400,15 @@ impl<'db> TypeContext<'db> {
             enum_variants,
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
+            return_types: Vec::new(),
             errors: Vec::new(),
+            file_id,
         }
+    }
+
+    /// Record a return type encountered during inference.
+    pub fn record_return(&mut self, ty: Ty<'db>, span: Span) {
+        self.return_types.push((ty, span));
     }
 
     /// Look up a type alias definition.
@@ -453,6 +478,15 @@ impl<'db> TypeContext<'db> {
         self.db
     }
 
+    pub fn build_span(&self, range: TextRange) -> Span {
+        Span::new(self.file_id, range)
+    }
+
+    pub fn build_span_default(&self, range: &Option<TextRange>) -> Span {
+        // todo: probably this should be an error? it should be an invariant that
+        // all exprs have valid spans
+        range.map(|s| self.build_span(s)).unwrap_or_default()
+    }
     /// Resolve a path to determine what it refers to.
     ///
     /// This is the core path resolution logic that determines whether a path like
@@ -526,13 +560,16 @@ pub fn infer_function_body<'db>(
     class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
     type_aliases: Option<HashMap<Name, Ty<'db>>>,
     enum_variants: Option<HashMap<Name, Vec<Name>>>,
+    function_loc: FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
+    let file_id = function_loc.file(db).file_id(db);
     let mut ctx = TypeContext::with_type_info(
         db,
         globals.unwrap_or_default(),
         class_fields.unwrap_or_default(),
         type_aliases.unwrap_or_default(),
         enum_variants.unwrap_or_default(),
+        file_id,
     );
 
     // Add parameters to the current scope (on top of globals)
@@ -540,8 +577,8 @@ pub fn infer_function_body<'db>(
         ctx.define(name.clone(), ty.clone());
     }
 
-    // Type check the body
-    let return_type = match body {
+    // Type check the body and get the trailing expression type
+    let trailing_expr_type = match body {
         FunctionBody::Expr(expr_body) => {
             if let Some(root_expr) = expr_body.root_expr {
                 infer_expr(&mut ctx, root_expr, expr_body)
@@ -556,14 +593,50 @@ pub fn infer_function_body<'db>(
         FunctionBody::Missing => Ty::Unknown,
     };
 
-    // Check return type matches (if we have span info, we'd report errors here)
-    if !return_type.is_subtype_of(expected_return)
-        && !return_type.is_unknown()
+    // Check all return statement types against expected return type
+    for (return_ty, span) in &ctx.return_types {
+        if !return_ty.is_subtype_of(expected_return)
+            && !return_ty.is_unknown()
+            && !expected_return.is_unknown()
+        {
+            ctx.errors.push(TypeError::TypeMismatch {
+                expected: expected_return.clone(),
+                found: return_ty.clone(),
+                span: *span,
+            });
+        }
+    }
+
+    // Check trailing expression type against expected return type
+    // A trailing expression is an implicit return, so it must match
+    // BUT only if there are no explicit return statements (those are checked separately)
+    if ctx.return_types.is_empty()
+        && !trailing_expr_type.is_subtype_of(expected_return)
+        && !trailing_expr_type.is_unknown()
         && !expected_return.is_unknown()
     {
-        // We'd need the span of the function body for this error
-        // For now, we skip this check
+        // TODO: we actually want the span of the last expression here.
+        let error = TypeError::TypeMismatch {
+            expected: expected_return.clone(),
+            found: trailing_expr_type.clone(),
+            span: Span::default(),
+        };
+        ctx.push_error(error);
     }
+
+    // Determine the inferred return type:
+    // - If there are explicit return statements, use the expected type (we already validated them)
+    // - If there's a trailing expression (not Void), use its type
+    // - Otherwise, use Void
+    let return_type = if !ctx.return_types.is_empty() {
+        // If there are return statements, the function returns what they return
+        // (we've already checked they match expected_return)
+        expected_return.clone()
+    } else if !trailing_expr_type.is_void() {
+        trailing_expr_type
+    } else {
+        Ty::Void
+    };
 
     InferenceResult {
         return_type,
@@ -593,6 +666,7 @@ pub fn infer_function<'db>(
     class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
     type_aliases: Option<HashMap<Name, Ty<'db>>>,
     enum_variants: Option<HashMap<Name, Vec<Name>>>,
+    function_loc: FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
     // Convert parameter TypeRefs to Tys
     let param_types: HashMap<Name, Ty<'db>> = signature
@@ -617,6 +691,7 @@ pub fn infer_function<'db>(
         class_fields,
         type_aliases,
         enum_variants,
+        function_loc,
     )
 }
 
@@ -627,10 +702,7 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
     let expr = &body.exprs[expr_id];
 
     // Create a placeholder span for errors (ideally we'd track spans in ExprBody)
-    let span = Span::new(
-        baml_base::FileId::new(0),
-        text_size::TextRange::empty(0.into()),
-    );
+    let span = body.get_expr_span(expr_id).unwrap_or_default();
 
     let ty = match expr {
         Expr::Literal(lit) => infer_literal(lit),
@@ -651,8 +723,33 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
                     Ty::Unknown
                 }
             } else {
-                // Multi-segment path: first segment is variable, rest are field accesses
-                // TODO: Add proper resolution for enum variants and module paths
+                // Multi-segment path: could be:
+                // 1. A builtin function (e.g., baml.Array.length)
+                // 2. A variable followed by field accesses (e.g., obj.field)
+
+                // First, check if this is a builtin function path
+                let full_path = segments
+                    .iter()
+                    .map(smol_str::SmolStr::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                if let Some(def) = builtins::lookup_builtin_by_path(&full_path) {
+                    // It's a builtin function - return its function type
+                    let mut param_types: Vec<Ty<'db>> = Vec::new();
+                    if let Some(ref receiver_pattern) = def.receiver {
+                        param_types.push(builtins::substitute_unknown(receiver_pattern));
+                    }
+                    for (_, pattern) in &def.params {
+                        param_types.push(builtins::substitute_unknown(pattern));
+                    }
+                    let return_type = builtins::substitute_unknown(&def.returns);
+                    return Ty::Function {
+                        params: param_types,
+                        ret: Box::new(return_type),
+                    };
+                }
+
+                // Otherwise, treat as variable + field accesses
                 let first = &segments[0];
                 let mut ty = if let Some(t) = ctx.lookup(first) {
                     t.clone()
@@ -709,38 +806,66 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
                     (callee_ty, effective_args)
                 }
                 Expr::Path(segments) if segments.len() >= 2 => {
-                    // Method call via Path: `receiver.method(args)`
-                    // For multi-segment paths like `baz.Greeting()`, the first segment(s)
-                    // form the receiver and the last segment is the method name.
-                    //
-                    // We infer the receiver type from all segments except the last,
-                    // then look up the method on that type.
-                    let receiver_segments = &segments[..segments.len() - 1];
-
-                    // Infer receiver type (could be single var or nested field access)
-                    let receiver_ty = if receiver_segments.len() == 1 {
-                        // Simple receiver: `baz.method()`
-                        ctx.lookup(&receiver_segments[0])
-                            .cloned()
-                            .unwrap_or(Ty::Unknown)
-                    } else {
-                        // Nested receiver: `obj.field.method()`
-                        let first = &receiver_segments[0];
-                        let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
-                        for field in &receiver_segments[1..] {
-                            ty = infer_field_access(ctx, &ty, field, span);
+                    // First, check if this is a direct builtin function call
+                    // (e.g., baml.Array.length(arr))
+                    let full_path = segments
+                        .iter()
+                        .map(smol_str::SmolStr::as_str)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    if let Some(def) = builtins::lookup_builtin_by_path(&full_path) {
+                        // It's a builtin function - build function type from definition
+                        // For methods called as functions, receiver is the first argument
+                        let mut param_types: Vec<Ty<'db>> = Vec::new();
+                        if let Some(ref receiver_pattern) = def.receiver {
+                            param_types.push(builtins::substitute_unknown(receiver_pattern));
                         }
-                        ty
-                    };
+                        for (_, pattern) in &def.params {
+                            param_types.push(builtins::substitute_unknown(pattern));
+                        }
+                        let return_type = builtins::substitute_unknown(&def.returns);
 
-                    let callee_ty = infer_expr(ctx, *callee, body);
+                        let callee_ty = Ty::Function {
+                            params: param_types,
+                            ret: Box::new(return_type),
+                        };
+                        let arg_types: Vec<Ty<'db>> =
+                            args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
+                        (callee_ty, arg_types)
+                    } else {
+                        // Method call via Path: `receiver.method(args)`
+                        // For multi-segment paths like `baz.Greeting()`, the first segment(s)
+                        // form the receiver and the last segment is the method name.
+                        //
+                        // We infer the receiver type from all segments except the last,
+                        // then look up the method on that type.
+                        let receiver_segments = &segments[..segments.len() - 1];
 
-                    // Build effective args: [receiver_type, ...explicit_args]
-                    let mut effective_args = vec![receiver_ty];
-                    for arg in args {
-                        effective_args.push(infer_expr(ctx, *arg, body));
+                        // Infer receiver type (could be single var or nested field access)
+                        let receiver_ty = if receiver_segments.len() == 1 {
+                            // Simple receiver: `baz.method()`
+                            ctx.lookup(&receiver_segments[0])
+                                .cloned()
+                                .unwrap_or(Ty::Unknown)
+                        } else {
+                            // Nested receiver: `obj.field.method()`
+                            let first = &receiver_segments[0];
+                            let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
+                            for field in &receiver_segments[1..] {
+                                ty = infer_field_access(ctx, &ty, field, span);
+                            }
+                            ty
+                        };
+
+                        let callee_ty = infer_expr(ctx, *callee, body);
+
+                        // Build effective args: [receiver_type, ...explicit_args]
+                        let mut effective_args = vec![receiver_ty];
+                        for arg in args {
+                            effective_args.push(infer_expr(ctx, *arg, body));
+                        }
+                        (callee_ty, effective_args)
                     }
-                    (callee_ty, effective_args)
                 }
                 _ => {
                     // Regular function call (single-segment Path or other expression)
@@ -1232,30 +1357,15 @@ fn infer_unary_op<'db>(
 /// Infer the type of a field access.
 ///
 /// For class types, this handles both field access and method access.
-/// Methods are desugared to top-level functions with simple names (not namespaced),
-/// so we look them up directly in the global context.
+/// For primitive types (arrays, strings, maps), this handles builtin methods.
 fn infer_field_access<'db>(
     ctx: &mut TypeContext<'db>,
     base: &Ty<'db>,
     field: &Name,
     span: Span,
 ) -> Ty<'db> {
+    // First, try class field lookup for named types
     let found_field = match base {
-        // Ty::Named(class_name) => {
-        //     // Try to look up as a method (methods are top-level functions with simple names)
-        //     if let Some(method_ty) = ctx.lookup(field) {
-        //         return method_ty.clone();
-        //     }
-
-        //     // Try to look up as a field in the class
-        //     if let Some(field_ty) = ctx.lookup_class_field(class_name, field) {
-        //         return field_ty.clone();
-        //     }
-
-        //     // Field/method not found
-        //     Some(Ty::Unknown)
-        // }
-        // Ty::Named(class_name) => ctx.lookup_class_field(class_name, field).cloned(),
         Ty::Named(class_name) => ctx
             .lookup(field)
             .or(ctx.lookup_class_field(class_name, field))
@@ -1268,18 +1378,41 @@ fn infer_field_access<'db>(
                 .find(|(name, _)| name == field)
                 .map(|(_, type_ref)| lower_type_ref(ctx.db(), type_ref))
         }
-        Ty::Unknown => None,
+        Ty::Unknown => return Ty::Unknown,
         _ => None,
     };
 
-    found_field.unwrap_or_else(|| {
-        ctx.push_error(TypeError::NoSuchField {
-            ty: base.clone(),
-            field: field.to_string(),
-            span,
-        });
-        Ty::Unknown
-    })
+    if let Some(ty) = found_field {
+        return ty;
+    }
+
+    // Try builtin method lookup
+    if let Some((def, bindings)) = builtins::lookup_method(base, field.as_str()) {
+        // Build the function type from the builtin definition.
+        // If this is a method (has a receiver), include the receiver type as the first param
+        // since the Call handler will pass the receiver as the first argument.
+        let mut param_types: Vec<Ty<'db>> = Vec::new();
+        if def.receiver.is_some() {
+            param_types.push(base.clone());
+        }
+        for (_, pattern) in &def.params {
+            param_types.push(builtins::substitute(pattern, &bindings));
+        }
+        let return_type = builtins::substitute(&def.returns, &bindings);
+
+        return Ty::Function {
+            params: param_types,
+            ret: Box::new(return_type),
+        };
+    }
+
+    // Field/method not found
+    ctx.push_error(TypeError::NoSuchField {
+        ty: base.clone(),
+        field: field.to_string(),
+        span,
+    });
+    Ty::Unknown
 }
 
 /// Infer the type of an index access.
@@ -1344,6 +1477,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         Stmt::Let {
             pattern,
             type_annotation,
+            type_span,
             initializer,
         } => {
             let ty = if let Some(init) = initializer {
@@ -1351,12 +1485,12 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
 
                 // If there's a type annotation, check it matches
                 if let Some(annot) = type_annotation {
+                    // TODO: currently type_span and type_annotations are separate `Option`s
+                    // turn it into one tuple.
+                    // this unwrap is safe because if type_ann is populated, so is type_span
+                    let span = ctx.build_span_default(type_span);
                     let annot_ty = lower_type_ref(ctx.db(), annot);
                     if !init_ty.is_subtype_of(&annot_ty) {
-                        let span = Span::new(
-                            baml_base::FileId::new(0),
-                            text_size::TextRange::empty(0.into()),
-                        );
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: annot_ty.clone(),
                             found: init_ty,
@@ -1395,22 +1529,27 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         }
 
         Stmt::Return(expr) => {
-            if let Some(e) = expr {
-                infer_expr(ctx, *e, body);
-            }
-            // TODO: Check return type matches function signature
+            let span = Span::new(
+                baml_base::FileId::new(0),
+                text_size::TextRange::empty(0.into()),
+            );
+            let return_ty = if let Some(e) = expr {
+                infer_expr(ctx, *e, body)
+            } else {
+                Ty::Void
+            };
+            ctx.record_return(return_ty, span);
         }
 
         Stmt::While {
             condition,
             body: while_body,
+            after,
+            origin: _, // origin is used for diagnostics, not type checking
         } => {
             let cond_ty = infer_expr(ctx, *condition, body);
             if !cond_ty.is_subtype_of(&Ty::Bool) {
-                let span = Span::new(
-                    baml_base::FileId::new(0),
-                    text_size::TextRange::empty(0.into()),
-                );
+                let span = body.get_expr_span(*condition).unwrap_or_default();
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: Ty::Bool,
                     found: cond_ty,
@@ -1418,75 +1557,10 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
                 });
             }
             infer_expr(ctx, *while_body, body);
-        }
-
-        Stmt::ForIn {
-            pattern,
-            iterator,
-            body: for_body,
-        } => {
-            let iter_ty = infer_expr(ctx, *iterator, body);
-
-            // Extract element type from iterator
-            let elem_ty = match &iter_ty {
-                Ty::List(elem) => (**elem).clone(),
-                _ => Ty::Unknown,
-            };
-
-            ctx.push_scope();
-
-            // Bind the loop variable
-            let pat = &body.patterns[*pattern];
-            match pat {
-                Pattern::Binding(name) => {
-                    ctx.define(name.clone(), elem_ty);
-                }
-                Pattern::TypedBinding { name, ty: _ } => {
-                    // TODO: Check declared type matches element type
-                    ctx.define(name.clone(), elem_ty);
-                }
-                Pattern::Literal(_) | Pattern::EnumVariant { .. } | Pattern::Union(_) => {
-                    // These patterns don't make sense in for-in loops
-                }
+            // Type-check the after statement (for desugared C-style for loops)
+            if let Some(after_stmt) = after {
+                check_stmt(ctx, *after_stmt, body);
             }
-
-            infer_expr(ctx, *for_body, body);
-            ctx.pop_scope();
-        }
-
-        Stmt::ForCStyle {
-            initializer,
-            condition,
-            update,
-            body: for_body,
-        } => {
-            ctx.push_scope();
-
-            if let Some(init_stmt) = initializer {
-                check_stmt(ctx, *init_stmt, body);
-            }
-
-            if let Some(cond) = condition {
-                let cond_ty = infer_expr(ctx, *cond, body);
-                if !cond_ty.is_subtype_of(&Ty::Bool) {
-                    let span = Span::new(
-                        baml_base::FileId::new(0),
-                        text_size::TextRange::empty(0.into()),
-                    );
-                    ctx.push_error(TypeError::TypeMismatch {
-                        expected: Ty::Bool,
-                        found: cond_ty,
-                        span,
-                    });
-                }
-            }
-
-            if let Some(upd) = update {
-                check_stmt(ctx, *upd, body);
-            }
-
-            infer_expr(ctx, *for_body, body);
-            ctx.pop_scope();
         }
 
         Stmt::Break | Stmt::Continue => {

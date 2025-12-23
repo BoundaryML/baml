@@ -74,6 +74,7 @@ impl TyLowering {
             // Literal types - preserve the literal values for exhaustiveness checking
             TypeRef::StringLiteral(s) => Ty::Literal(LiteralValue::String(s.clone())),
             TypeRef::IntLiteral(i) => Ty::Literal(LiteralValue::Int(*i)),
+            TypeRef::FloatLiteral(f) => Ty::Literal(LiteralValue::Float(f.clone())),
             TypeRef::BoolLiteral(b) => Ty::Literal(LiteralValue::Bool(*b)),
 
             // Generics - not yet supported
