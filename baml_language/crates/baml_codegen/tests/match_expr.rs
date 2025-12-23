@@ -4,7 +4,7 @@
 //! The new MIR-based pipeline produces functionally equivalent but structurally
 //! different bytecode (using explicit locals instead of stack manipulation).
 //! These tests are ignored until they can be rewritten for the MIR format.
-//! Match functionality is tested through snapshot tests in baml_tests.
+//! Match functionality is tested through snapshot tests in `baml_tests`.
 
 use baml_tests::{
     codegen::{Program, assert_compiles},

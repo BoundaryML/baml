@@ -89,7 +89,7 @@ impl TypeRef {
     ///
     /// This properly handles complex types including:
     /// - Primitives: int, string, bool, etc.
-    /// - Named types: User, MyClass
+    /// - Named types: User, `MyClass`
     /// - Optional types: string?
     /// - List types: string[]
     /// - Union types: Success | Failure
@@ -131,15 +131,13 @@ impl TypeRef {
         }
 
         // Check for array type (e.g., "int[]")
-        if text.ends_with("[]") {
-            let inner_text = &text[..text.len() - 2];
+        if let Some(inner_text) = text.strip_suffix("[]") {
             let inner = Self::from_type_text(inner_text);
             return TypeRef::List(Box::new(inner));
         }
 
         // Check for optional type (e.g., "int?")
-        if text.ends_with('?') {
-            let inner_text = &text[..text.len() - 1];
+        if let Some(inner_text) = text.strip_suffix('?') {
             let inner = Self::from_type_text(inner_text);
             return TypeRef::Optional(Box::new(inner));
         }

@@ -18,8 +18,7 @@ use std::collections::HashMap;
 
 use baml_base::Name;
 use baml_hir::{
-    BinaryOp, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, MatchArm, PatId, Pattern,
-    StmtId,
+    BinaryOp, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, MatchArm, Pattern, StmtId,
 };
 use baml_thir::{InferenceResult, Ty};
 
@@ -337,7 +336,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             }
 
             Expr::Match { scrutinee, arms } => {
-                self.lower_match(*scrutinee, arms, dest, body, inference);
+                self.lower_match(*scrutinee, arms, &dest, body, inference);
             }
 
             Expr::Call { callee, args } => {
@@ -689,7 +688,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         &mut self,
         scrutinee: ExprId,
         arms: &[MatchArm],
-        dest: Place,
+        dest: &Place,
         body: &ExprBody,
         inference: &InferenceResult<'db>,
     ) {
@@ -717,15 +716,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             };
 
             // Generate pattern check - branches to arm_block if match, next_check otherwise
-            self.lower_pattern_check(
-                pattern,
-                arm.pattern,
-                scrut_local,
-                &scrut_ty,
-                arm_block,
-                next_check,
-                body,
-            );
+            self.lower_pattern_check(pattern, scrut_local, arm_block, next_check, body);
 
             // Generate arm body
             self.builder.set_current_block(arm_block);
@@ -788,15 +779,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 exit_block
             };
 
-            self.lower_pattern_check(
-                pattern,
-                arm.pattern,
-                scrut_local,
-                &scrut_ty,
-                arm_block,
-                next_check,
-                body,
-            );
+            self.lower_pattern_check(pattern, scrut_local, arm_block, next_check, body);
 
             self.builder.set_current_block(arm_block);
             self.bind_pattern_local(pattern, scrut_local, &scrut_ty);
@@ -825,14 +808,12 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         self.builder.set_current_block(exit_block);
     }
 
-    /// Lower a pattern check, branching to match_block if pattern matches,
-    /// or next_block if it doesn't.
+    /// Lower a pattern check, branching to `match_block` if pattern matches,
+    /// or `next_block` if it doesn't.
     fn lower_pattern_check(
         &mut self,
         pattern: &Pattern,
-        _pat_id: PatId,
         scrut_local: Local,
-        scrut_ty: &Ty<'db>,
         match_block: BlockId,
         next_block: BlockId,
         body: &ExprBody,
@@ -845,7 +826,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             Pattern::TypedBinding { name: _, ty } => {
                 // Type check - instanceof style
-                let type_name = self.extract_type_name(ty);
+                let type_name = Self::extract_type_name(ty);
                 if let Some(class_name) = type_name {
                     // Simple type comparison for now
                     // In a full implementation, this would do proper instanceof checking
@@ -867,8 +848,8 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             Pattern::Literal(lit) => {
                 // Equality check
-                let lit_constant = self.lower_literal_for_match(lit);
-                let lit_local = self.builder.temp(self.literal_ty(lit));
+                let lit_constant = Self::lower_literal_for_match(lit);
+                let lit_local = self.builder.temp(Self::literal_ty(lit));
                 self.builder.assign(
                     Place::local(lit_local),
                     Rvalue::Use(Operand::Constant(lit_constant)),
@@ -891,7 +872,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             Pattern::EnumVariant { enum_name, variant } => {
                 // For enum variants, we check discriminant or use instanceof
                 // For now, treat as string comparison of variant name
-                let variant_str = format!("{}.{}", enum_name, variant);
+                let variant_str = format!("{enum_name}.{variant}");
                 let variant_local = self.builder.temp(Ty::String);
                 self.builder.assign(
                     Place::local(variant_local),
@@ -933,15 +914,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                     };
 
                     self.builder.set_current_block(current_block);
-                    self.lower_pattern_check(
-                        sub_pattern,
-                        sub_pat_id,
-                        scrut_local,
-                        scrut_ty,
-                        match_block,
-                        sub_next,
-                        body,
-                    );
+                    self.lower_pattern_check(sub_pattern, scrut_local, match_block, sub_next, body);
 
                     if j + 1 < sub_patterns.len() {
                         current_block = sub_next;
@@ -968,8 +941,8 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         let _ = scrut_ty;
     }
 
-    /// Extract the type name from a TypeRef for pattern matching.
-    fn extract_type_name(&self, ty: &baml_hir::TypeRef) -> Option<Name> {
+    /// Extract the type name from a `TypeRef` for pattern matching.
+    fn extract_type_name(ty: &baml_hir::TypeRef) -> Option<Name> {
         match ty {
             baml_hir::TypeRef::Path(path) => path.last_segment().cloned(),
             _ => None,
@@ -977,7 +950,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Lower a literal to a MIR constant for pattern matching.
-    fn lower_literal_for_match(&self, lit: &Literal) -> Constant<'db> {
+    fn lower_literal_for_match(lit: &Literal) -> Constant<'db> {
         match lit {
             Literal::Int(n) => Constant::Int(*n),
             Literal::Float(s) => Constant::Float(s.parse::<f64>().unwrap_or(0.0)),
@@ -988,7 +961,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Get the type of a literal.
-    fn literal_ty(&self, lit: &Literal) -> Ty<'db> {
+    fn literal_ty(lit: &Literal) -> Ty<'db> {
         match lit {
             Literal::Int(_) => Ty::Int,
             Literal::Float(_) => Ty::Float,

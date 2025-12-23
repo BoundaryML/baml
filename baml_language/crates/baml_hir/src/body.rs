@@ -3,8 +3,7 @@
 //! The CST already distinguishes `LLM_FUNCTION_BODY` from `EXPR_FUNCTION_BODY`,
 //! so we just need to lower each type appropriately.
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use baml_base::{FileId, Span};
 use baml_syntax::TypeExpr;
@@ -84,7 +83,7 @@ pub struct ExprBody {
     pub pattern_spans: HashMap<PatId, Span>,
 
     /// Spans for match arms: maps match expression ID to its arm spans.
-    /// Each entry is (arm_span, pattern_span) for each arm in order.
+    /// Each entry is (`arm_span`, `pattern_span`) for each arm in order.
     pub match_arm_spans: HashMap<ExprId, Vec<MatchArmSpans>>,
 }
 
@@ -1012,9 +1011,9 @@ impl LoweringContext {
 
     /// Lower a match expression from CST to HIR.
     ///
-    /// MATCH_EXPR structure (from parser):
-    /// - Scrutinee expression (could be a PAREN_EXPR wrapping the actual expr, or a literal token)
-    /// - One or more MATCH_ARM nodes
+    /// `MATCH_EXPR` structure (from parser):
+    /// - Scrutinee expression (could be a `PAREN_EXPR` wrapping the actual expr, or a literal token)
+    /// - One or more `MATCH_ARM` nodes
     fn lower_match_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
         use baml_syntax::SyntaxKind;
 
@@ -1099,11 +1098,11 @@ impl LoweringContext {
 
     /// Lower a single match arm from CST to HIR.
     ///
-    /// MATCH_ARM structure (from parser):
-    /// - MATCH_PATTERN node
-    /// - Optional MATCH_GUARD node (contains 'if' keyword + expression)
-    /// - FAT_ARROW token ('=>')
-    /// - Body expression (BLOCK_EXPR or other expression, or literal token)
+    /// `MATCH_ARM` structure (from parser):
+    /// - `MATCH_PATTERN` node
+    /// - Optional `MATCH_GUARD` node (contains 'if' keyword + expression)
+    /// - `FAT_ARROW` token ('=>')
+    /// - Body expression (`BLOCK_EXPR` or other expression, or literal token)
     ///
     /// Returns both the lowered arm and its span information.
     fn lower_match_arm(&mut self, node: &baml_syntax::SyntaxNode) -> (MatchArm, MatchArmSpans) {
@@ -1206,7 +1205,7 @@ impl LoweringContext {
 
     /// Lower a match pattern from CST to HIR.
     ///
-    /// MATCH_PATTERN structure (from parser):
+    /// `MATCH_PATTERN` structure (from parser):
     /// - Pattern elements (identifiers, literals, type expressions)
     /// - Optional PIPE tokens for union patterns
     ///

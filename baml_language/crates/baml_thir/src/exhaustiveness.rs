@@ -11,7 +11,7 @@
 //!
 //! ## Key Concepts
 //!
-//! - **ValueSet**: Represents a set of runtime values a pattern can match
+//! - **`ValueSet`**: Represents a set of runtime values a pattern can match
 //! - **Finite types**: Enums and booleans have enumerable value sets
 //! - **Infinite types**: int, string, classes have infinite value sets
 //!   (only exhaustive via catch-all or type pattern)
@@ -44,7 +44,7 @@ use crate::{Db, LiteralValue, Ty, lower_type_ref};
 /// Represents a set of runtime values that a pattern can match.
 ///
 /// This is the core abstraction for exhaustiveness checking. Unlike types
-/// (which describe what values CAN exist), ValueSet describes what values
+/// (which describe what values CAN exist), `ValueSet` describes what values
 /// a pattern WILL match at runtime.
 ///
 /// # Conceptual Model
@@ -136,7 +136,8 @@ impl std::fmt::Display for ValueSet {
                 Literal::Null => write!(f, "null"),
             },
             ValueSet::Union(sets) => {
-                let parts: Vec<String> = sets.iter().map(|s| s.to_string()).collect();
+                let parts: Vec<String> =
+                    sets.iter().map(std::string::ToString::to_string).collect();
                 write!(f, "{}", parts.join(" | "))
             }
             ValueSet::Empty => write!(f, "∅"),
@@ -156,10 +157,10 @@ pub struct ExhaustivenessChecker<'a, 'db> {
     /// Database for type resolution
     db: &'db dyn Db,
 
-    /// Enum definitions: enum_name -> [variant_names]
+    /// Enum definitions: `enum_name` -> [`variant_names`]
     enum_variants: &'a HashMap<Name, Vec<Name>>,
 
-    /// Type alias definitions: alias_name -> underlying_type
+    /// Type alias definitions: `alias_name` -> `underlying_type`
     type_aliases: &'a HashMap<Name, Ty<'db>>,
 }
 
@@ -226,7 +227,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             }
 
             // Check if this arm's values are already fully covered
-            if !has_guard && self.is_fully_covered(&value_set, &covered, &required) {
+            if !has_guard && Self::is_fully_covered(&value_set, &covered) {
                 unreachable_arms.push(arm_idx);
                 // Don't skip - we still add to coverage for accurate error messages
             }
@@ -236,7 +237,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
                 match &value_set {
                     ValueSet::All => {
                         has_catch_all = true;
-                        covered = required.clone(); // Everything is now covered
+                        covered.clone_from(&required); // Everything is now covered
                     }
                     ValueSet::Empty => {
                         // Guarded patterns don't contribute
@@ -252,7 +253,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
         let uncovered = if has_catch_all {
             Vec::new()
         } else {
-            self.find_uncovered(&required, &covered)
+            Self::find_uncovered(&required, &covered)
         };
 
         ExhaustivenessResult {
@@ -394,7 +395,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             }
 
             // List types: include element type for proper distinction between e.g. int[] vs string[]
-            Ty::List(inner) => vec![ValueSet::OfType(Name::new(&format!("{inner}[]")))],
+            Ty::List(inner) => vec![ValueSet::OfType(Name::new(format!("{inner}[]")))],
 
             // Map types are not yet fully implemented in HIR (see tests/maps.rs).
             // When they are, this should include key/value types: map<{key}, {value}>
@@ -429,7 +430,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             // Typed binding: matches all values of that type
             Pattern::TypedBinding { ty, .. } => {
                 let lowered_ty = lower_type_ref(self.db, ty);
-                self.ty_to_value_set(&lowered_ty)
+                Self::ty_to_value_set(&lowered_ty)
             }
 
             // Literal: matches exactly that value
@@ -461,11 +462,10 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
     }
 
     /// Convert a type to a value set (for typed bindings).
-    fn ty_to_value_set(&self, ty: &Ty<'db>) -> ValueSet {
+    fn ty_to_value_set(ty: &Ty<'db>) -> ValueSet {
         match ty {
             Ty::Union(members) => {
-                let sub_sets: Vec<ValueSet> =
-                    members.iter().map(|m| self.ty_to_value_set(m)).collect();
+                let sub_sets: Vec<ValueSet> = members.iter().map(Self::ty_to_value_set).collect();
                 if sub_sets.len() == 1 {
                     sub_sets.into_iter().next().unwrap()
                 } else {
@@ -473,7 +473,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
                 }
             }
             Ty::Optional(inner) => {
-                let inner_set = self.ty_to_value_set(inner);
+                let inner_set = Self::ty_to_value_set(inner);
                 ValueSet::Union(vec![inner_set, ValueSet::Literal(Literal::Null)])
             }
             Ty::Named(name) => {
@@ -492,7 +492,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             Ty::Float => ValueSet::OfType(Name::new("float")),
             Ty::String => ValueSet::OfType(Name::new("string")),
             Ty::Null => ValueSet::Literal(Literal::Null),
-            _ => ValueSet::OfType(Name::new(&ty.to_string())),
+            _ => ValueSet::OfType(Name::new(ty.to_string())),
         }
     }
 
@@ -501,13 +501,8 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
     // ========================================================================
 
     /// Check if a value set is fully covered by existing coverage.
-    fn is_fully_covered(
-        &self,
-        value_set: &ValueSet,
-        covered: &[ValueSet],
-        _required: &[ValueSet],
-    ) -> bool {
-        is_value_set_covered(value_set, covered, self.enum_variants)
+    fn is_fully_covered(value_set: &ValueSet, covered: &[ValueSet]) -> bool {
+        is_value_set_covered(value_set, covered)
     }
 
     /// Add a value set to the coverage list.
@@ -516,10 +511,10 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
     }
 
     /// Find value sets that are not covered.
-    fn find_uncovered(&self, required: &[ValueSet], covered: &[ValueSet]) -> Vec<ValueSet> {
+    fn find_uncovered(required: &[ValueSet], covered: &[ValueSet]) -> Vec<ValueSet> {
         required
             .iter()
-            .filter(|req| !self.is_fully_covered(req, covered, required))
+            .filter(|req| !Self::is_fully_covered(req, covered))
             .cloned()
             .collect()
     }
@@ -533,11 +528,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
 ///
 /// This is a free function that can be used by both `ExhaustivenessChecker`
 /// and test mocks without duplicating logic.
-fn is_value_set_covered(
-    value_set: &ValueSet,
-    covered: &[ValueSet],
-    enum_variants: &HashMap<Name, Vec<Name>>,
-) -> bool {
+fn is_value_set_covered(value_set: &ValueSet, covered: &[ValueSet]) -> bool {
     match value_set {
         ValueSet::All => {
             // Catch-all is never "already covered" - it's the ultimate cover
@@ -573,8 +564,7 @@ fn is_value_set_covered(
                             enum_name: enum_name.clone(),
                             variant_name: variant_name.clone(),
                         },
-                        &[s.clone()],
-                        enum_variants,
+                        std::slice::from_ref(s),
                     )
                 }),
                 _ => false,
@@ -587,19 +577,14 @@ fn is_value_set_covered(
                 ValueSet::OfType(name) => literal_has_type(lit, name),
                 ValueSet::Literal(covered_lit) => covered_lit == lit,
                 ValueSet::Union(subs) => subs.iter().any(|s| {
-                    is_value_set_covered(
-                        &ValueSet::Literal(lit.clone()),
-                        &[s.clone()],
-                        enum_variants,
-                    )
+                    is_value_set_covered(&ValueSet::Literal(lit.clone()), std::slice::from_ref(s))
                 }),
                 _ => false,
             })
         }
         ValueSet::Union(subs) => {
             // Union is covered if ALL sub-sets are covered
-            subs.iter()
-                .all(|s| is_value_set_covered(s, covered, enum_variants))
+            subs.iter().all(|s| is_value_set_covered(s, covered))
         }
     }
 }
@@ -699,7 +684,7 @@ mod tests {
     // Coverage Tests - Testing is_value_set_covered and add_to_coverage
     // ========================================================================
 
-    /// Helper to create an enum_variants map for tests.
+    /// Helper to create an `enum_variants` map for tests.
     fn enum_variants_with(name: &str, variants: &[&str]) -> HashMap<Name, Vec<Name>> {
         let mut map = HashMap::new();
         map.insert(
@@ -711,18 +696,15 @@ mod tests {
 
     #[test]
     fn test_coverage_of_type_matches_same_type() {
-        let enum_variants = HashMap::new();
         let covered = vec![ValueSet::OfType(make_name("Success"))];
 
         assert!(is_value_set_covered(
             &ValueSet::OfType(make_name("Success")),
             &covered,
-            &enum_variants
         ));
         assert!(!is_value_set_covered(
             &ValueSet::OfType(make_name("Failure")),
             &covered,
-            &enum_variants
         ));
     }
 
@@ -732,9 +714,7 @@ mod tests {
         // Match arms: s: Success, f: Failure
         // Required: [OfType("Success"), OfType("Failure")]
         // Covered after processing: [OfType("Success"), OfType("Failure")]
-        let enum_variants = HashMap::new();
-
-        let required = vec![
+        let required = [
             ValueSet::OfType(make_name("Success")),
             ValueSet::OfType(make_name("Failure")),
         ];
@@ -745,20 +725,19 @@ mod tests {
         ];
 
         // Both should be covered
-        assert!(is_value_set_covered(&required[0], &covered, &enum_variants));
-        assert!(is_value_set_covered(&required[1], &covered, &enum_variants));
+        assert!(is_value_set_covered(&required[0], &covered));
+        assert!(is_value_set_covered(&required[1], &covered));
 
         // Find uncovered - should be empty
         let uncovered: Vec<_> = required
             .iter()
-            .filter(|req| !is_value_set_covered(req, &covered, &enum_variants))
+            .filter(|req| !is_value_set_covered(req, &covered))
             .cloned()
             .collect();
 
         assert!(
             uncovered.is_empty(),
-            "Expected no uncovered cases, got: {:?}",
-            uncovered
+            "Expected no uncovered cases, got: {uncovered:?}"
         );
     }
 
@@ -813,37 +792,31 @@ mod tests {
 
     #[test]
     fn test_literal_covered_by_base_type() {
-        let enum_variants = HashMap::new();
         let covered = vec![ValueSet::OfType(make_name("int"))];
 
         // A literal 42 should be covered by "int" type pattern
         assert!(is_value_set_covered(
             &ValueSet::Literal(Literal::Int(42)),
             &covered,
-            &enum_variants
         ));
         // But not a string literal
         assert!(!is_value_set_covered(
             &ValueSet::Literal(Literal::String("hello".to_string())),
             &covered,
-            &enum_variants
         ));
     }
 
     #[test]
     fn test_catch_all_covers_everything() {
-        let enum_variants = HashMap::new();
         let covered = vec![ValueSet::All];
 
         assert!(is_value_set_covered(
             &ValueSet::OfType(make_name("Success")),
             &covered,
-            &enum_variants
         ));
         assert!(is_value_set_covered(
             &ValueSet::Literal(Literal::Int(42)),
             &covered,
-            &enum_variants
         ));
         assert!(is_value_set_covered(
             &ValueSet::EnumVariant {
@@ -851,7 +824,6 @@ mod tests {
                 variant_name: make_name("Active"),
             },
             &covered,
-            &enum_variants
         ));
     }
 }

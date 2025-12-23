@@ -551,6 +551,7 @@ impl<'db> TypeContext<'db> {
 ///
 /// Note: In a full implementation, this would be a Salsa tracked function.
 /// For now, it's a regular function that takes the body directly.
+#[allow(clippy::too_many_arguments)]
 pub fn infer_function_body<'db>(
     db: &'db dyn Db,
     body: &FunctionBody,
@@ -658,6 +659,7 @@ pub fn infer_function_body<'db>(
 ///
 /// The `type_aliases` and `enum_variants` parameters enable proper exhaustiveness
 /// checking for match expressions involving type aliases and enum types.
+#[allow(clippy::too_many_arguments)]
 pub fn infer_function<'db>(
     db: &'db dyn Db,
     signature: &FunctionSignature,
@@ -1196,7 +1198,11 @@ fn check_match_exhaustiveness<'db>(
 
     // Report non-exhaustive match (points to the match expression itself)
     if !result.is_exhaustive {
-        let missing_cases: Vec<String> = result.uncovered.iter().map(|v| v.to_string()).collect();
+        let missing_cases: Vec<String> = result
+            .uncovered
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
 
         ctx.push_error(TypeError::NonExhaustiveMatch {
             scrutinee_type: scrutinee_ty.clone(),
