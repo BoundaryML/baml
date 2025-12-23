@@ -90,7 +90,7 @@ impl<'a> TypedIrToMir<'a> {
             // === Literals ===
             // Clean: just emit the constant
             Expr::Literal(lit) => {
-                let value = self.lower_literal(lit);
+                let value = Self::lower_literal(lit);
                 self.emit_assign(dest, value);
                 LowerResult::Continue
             }
@@ -302,7 +302,11 @@ impl<'a> TypedIrToMir<'a> {
                         (name.to_string(), local)
                     })
                     .collect();
-                self.emit_object(type_name.as_ref().map(std::string::ToString::to_string), field_vals, dest);
+                self.emit_object(
+                    type_name.as_ref().map(std::string::ToString::to_string),
+                    field_vals,
+                    dest,
+                );
                 LowerResult::Continue
             }
 
@@ -336,7 +340,7 @@ impl<'a> TypedIrToMir<'a> {
         local
     }
 
-    fn lower_literal(&self, lit: &Literal) -> MirValue {
+    fn lower_literal(lit: &Literal) -> MirValue {
         match lit {
             Literal::Int(n) => MirValue::Int(*n),
             Literal::Float(s) => MirValue::Float(s.clone()),
@@ -346,11 +350,13 @@ impl<'a> TypedIrToMir<'a> {
         }
     }
 
+    #[allow(clippy::unused_self)]
     fn lower_path(&mut self, _segments: &[Name], _dest: Destination) -> LowerResult {
         // Would handle field access chains
         LowerResult::Continue
     }
 
+    #[allow(clippy::unused_self)]
     fn lower_lvalue(&mut self, _expr: ExprId) -> MirPlace {
         // Would lower to MIR place
         MirPlace::Local(0)
@@ -418,6 +424,7 @@ impl<'a> TypedIrToMir<'a> {
         self.set_current_block(exit_block);
     }
 
+    #[allow(clippy::unused_self)]
     fn lower_short_circuit(
         &mut self,
         _op: BinaryOp,
@@ -430,13 +437,22 @@ impl<'a> TypedIrToMir<'a> {
     }
 
     // Stub methods for MIR emission
+    // These are placeholders that will be implemented when we integrate with the real MIR builder.
+    #[allow(clippy::unused_self)]
     fn emit_assign(&mut self, _dest: Destination, _value: MirValue) {}
+    #[allow(clippy::unused_self)]
     fn emit_assign_place(&mut self, _place: MirPlace, _value: MirValue) {}
+    #[allow(clippy::unused_self)]
     fn emit_binop(&mut self, _op: AssignOp, _lhs: usize, _rhs: usize, _dest: usize) {}
+    #[allow(clippy::unused_self)]
     fn emit_binop_to_dest(&mut self, _op: BinaryOp, _lhs: usize, _rhs: usize, _dest: Destination) {}
+    #[allow(clippy::unused_self)]
     fn emit_unary_to_dest(&mut self, _op: UnaryOp, _operand: usize, _dest: Destination) {}
+    #[allow(clippy::unused_self)]
     fn emit_call(&mut self, _callee: usize, _args: Vec<usize>, _dest: Destination) {}
+    #[allow(clippy::unused_self)]
     fn emit_array(&mut self, _elems: Vec<usize>, _dest: Destination) {}
+    #[allow(clippy::unused_self)]
     fn emit_object(
         &mut self,
         _ty: Option<String>,
@@ -444,14 +460,21 @@ impl<'a> TypedIrToMir<'a> {
         _dest: Destination,
     ) {
     }
+    #[allow(clippy::unused_self)]
     fn emit_field_access(&mut self, _base: usize, _field: String, _dest: Destination) {}
+    #[allow(clippy::unused_self)]
     fn emit_index(&mut self, _base: usize, _index: usize, _dest: Destination) {}
+    #[allow(clippy::unused_self)]
     fn emit_return(&mut self) {}
+    #[allow(clippy::unused_self)]
     fn emit_goto(&mut self, _block: usize) {}
+    #[allow(clippy::unused_self)]
     fn emit_branch(&mut self, _cond: usize, _then: usize, _else: usize) {}
+    #[allow(clippy::unused_self)]
     fn create_block(&mut self) -> usize {
         0
     }
+    #[allow(clippy::unused_self)]
     fn set_current_block(&mut self, _block: usize) {}
 }
 

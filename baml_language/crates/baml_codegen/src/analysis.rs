@@ -55,6 +55,8 @@ pub(crate) enum LocalClassification {
     Real,
     /// Single-use temporary that can be inlined.
     Virtual,
+    /// Dead local - defined but never used, can be eliminated.
+    Dead,
 }
 
 /// Dominator tree.
@@ -496,7 +498,7 @@ fn collect_uses_in_terminator<'db>(
 // Local Classification
 // ============================================================================
 
-/// Classify each local as Virtual or Real.
+/// Classify each local as Virtual, Real, or Dead.
 fn classify_locals<'db>(
     mir: &MirFunction<'db>,
     def_use: &HashMap<Local, LocalDefUse<'db>>,
@@ -509,9 +511,16 @@ fn classify_locals<'db>(
         let local = Local(idx);
         let du = &def_use[&local];
 
+        let local_decl = mir.local(local);
         let classification = if idx > 0 && idx <= mir.arity {
             // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
+        } else if idx != 0 && du.uses.is_empty() && local_decl.name.is_none() {
+            // Dead compiler temp - defined but never used (skip _0 which is implicitly used by return)
+            // NOTE: To also eliminate dead user variables (e.g., `let x = 5;` where x is never read),
+            // remove the `&& local_decl.name.is_none()` check above. Currently we preserve user
+            // variables for debugging/semantics even if unused.
+            LocalClassification::Dead
         } else if can_be_virtual(local, du, dominators, mir, def_use, predecessors) {
             LocalClassification::Virtual
         } else {

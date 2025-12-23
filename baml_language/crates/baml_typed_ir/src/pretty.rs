@@ -3,6 +3,8 @@
 //! This module provides human-readable output of the `TypedIR` tree,
 //! useful for debugging and testing.
 
+use std::fmt::Write;
+
 use crate::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, Pattern, UnaryOp};
 
 /// Pretty print an expression body.
@@ -39,13 +41,13 @@ impl<'a> PrettyPrinter<'a> {
             Expr::Literal(lit) => {
                 self.indent(level);
                 match lit {
-                    Literal::Int(n) => self.output.push_str(&format!("{n}")),
+                    Literal::Int(n) => write!(self.output, "{n}").unwrap(),
                     Literal::Float(s) => self.output.push_str(s),
-                    Literal::String(s) => self.output.push_str(&format!("{s:?}")),
-                    Literal::Bool(b) => self.output.push_str(&format!("{b}")),
+                    Literal::String(s) => write!(self.output, "{s:?}").unwrap(),
+                    Literal::Bool(b) => write!(self.output, "{b}").unwrap(),
                     Literal::Null => self.output.push_str("null"),
                 }
-                self.output.push_str(&format!(" : {ty}"));
+                write!(self.output, " : {ty}").unwrap();
             }
 
             Expr::Unit => {
@@ -55,14 +57,17 @@ impl<'a> PrettyPrinter<'a> {
 
             Expr::Var(name) => {
                 self.indent(level);
-                self.output.push_str(&format!("{name} : {ty}"));
+                write!(self.output, "{name} : {ty}").unwrap();
             }
 
             Expr::Path(segments) => {
                 self.indent(level);
-                let path: Vec<_> = segments.iter().map(std::string::ToString::to_string).collect();
+                let path: Vec<_> = segments
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect();
                 self.output.push_str(&path.join("."));
-                self.output.push_str(&format!(" : {ty}"));
+                write!(self.output, " : {ty}").unwrap();
             }
 
             Expr::Let {
@@ -76,8 +81,7 @@ impl<'a> PrettyPrinter<'a> {
                 let pat_name = match pat {
                     Pattern::Binding(name) => name.to_string(),
                 };
-                self.output
-                    .push_str(&format!("let {pat_name}: {let_ty} =\n"));
+                writeln!(self.output, "let {pat_name}: {let_ty} =").unwrap();
                 self.print_expr(*value, level + 1);
                 self.output.push('\n');
                 self.indent(level);
@@ -164,7 +168,7 @@ impl<'a> PrettyPrinter<'a> {
                     AssignOp::Shl => "<<=",
                     AssignOp::Shr => ">>=",
                 };
-                self.output.push_str(&format!("assign-op {op_str}\n"));
+                writeln!(self.output, "assign-op {op_str}").unwrap();
                 self.print_expr(*target, level + 1);
                 self.output.push('\n');
                 self.print_expr(*value, level + 1);
@@ -192,7 +196,7 @@ impl<'a> PrettyPrinter<'a> {
                     BinaryOp::Shl => "<<",
                     BinaryOp::Shr => ">>",
                 };
-                self.output.push_str(&format!("({op_str}) : {ty}\n"));
+                writeln!(self.output, "({op_str}) : {ty}").unwrap();
                 self.print_expr(*lhs, level + 1);
                 self.output.push('\n');
                 self.print_expr(*rhs, level + 1);
@@ -204,13 +208,13 @@ impl<'a> PrettyPrinter<'a> {
                     UnaryOp::Not => "!",
                     UnaryOp::Neg => "-",
                 };
-                self.output.push_str(&format!("({op_str}) : {ty}\n"));
+                writeln!(self.output, "({op_str}) : {ty}").unwrap();
                 self.print_expr(*operand, level + 1);
             }
 
             Expr::Call { callee, args } => {
                 self.indent(level);
-                self.output.push_str(&format!("call : {ty}\n"));
+                writeln!(self.output, "call : {ty}").unwrap();
                 self.print_expr(*callee, level + 1);
                 for arg in args {
                     self.output.push('\n');
@@ -220,7 +224,7 @@ impl<'a> PrettyPrinter<'a> {
 
             Expr::Array { elements } => {
                 self.indent(level);
-                self.output.push_str(&format!("array : {ty}"));
+                write!(self.output, "array : {ty}").unwrap();
                 for elem in elements {
                     self.output.push('\n');
                     self.print_expr(*elem, level + 1);
@@ -233,24 +237,24 @@ impl<'a> PrettyPrinter<'a> {
                     .as_ref()
                     .map(std::string::ToString::to_string)
                     .unwrap_or_else(|| "anon".to_string());
-                self.output.push_str(&format!("object {name} : {ty}"));
+                write!(self.output, "object {name} : {ty}").unwrap();
                 for (field_name, value) in fields {
                     self.output.push('\n');
                     self.indent(level + 1);
-                    self.output.push_str(&format!("{field_name}:\n"));
+                    writeln!(self.output, "{field_name}:").unwrap();
                     self.print_expr(*value, level + 2);
                 }
             }
 
             Expr::FieldAccess { base, field } => {
                 self.indent(level);
-                self.output.push_str(&format!(".{field} : {ty}\n"));
+                writeln!(self.output, ".{field} : {ty}").unwrap();
                 self.print_expr(*base, level + 1);
             }
 
             Expr::Index { base, index } => {
                 self.indent(level);
-                self.output.push_str(&format!("index : {ty}\n"));
+                writeln!(self.output, "index : {ty}").unwrap();
                 self.print_expr(*base, level + 1);
                 self.output.push('\n');
                 self.indent(level);

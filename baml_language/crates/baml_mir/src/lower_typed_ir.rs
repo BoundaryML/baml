@@ -86,7 +86,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         self.builder = MirBuilder::new(signature.name.to_string(), signature.params.len());
 
         // _0: return place
-        let ret_ty = self.lower_typed_ir_ty(body.ty(body.root));
+        let ret_ty = Self::lower_typed_ir_ty(body.ty(body.root));
         let ret = self.builder.declare_local(None, ret_ty, None);
         assert_eq!(ret, Local(0));
 
@@ -129,7 +129,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         match expr {
             // ========== Literals ==========
             Expr::Literal(lit) => {
-                let constant = self.lower_literal(lit);
+                let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
             }
@@ -154,9 +154,14 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             }
 
             Expr::Path(segments) => {
-                // Note: Multi-segment paths should have been converted to nested FieldAccess
-                // during HIR → TypedIR lowering. If we get here with multi-segment paths,
-                // something went wrong in the lowering pipeline.
+                // Note: Multi-segment paths that are local variable field accesses should have
+                // been converted to nested FieldAccess during HIR → TypedIR lowering.
+                // TODO: Multi-segment paths that reach here are non-local paths like builtin functions
+                // (e.g., baml.Array.length) which need special handling.
+                //
+                // TODO: This is a workaround for the lack of proper module/namespace support.
+                // When we have proper modules, builtin paths should be resolved earlier in the
+                // pipeline and represented differently (not as Expr::Path).
                 if segments.len() == 1 {
                     // Simple variable reference
                     let name = &segments[0];
@@ -171,10 +176,18 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                         );
                     }
                 } else {
-                    // Multi-segment paths should not reach here - they should be FieldAccess nodes.
-                    // This is a bug in the lowering pipeline if we get here.
-                    panic!(
-                        "BUG: Multi-segment path {segments:?} should have been converted to FieldAccess"
+                    // Multi-segment path that's not a field access chain (e.g., baml.Array.length).
+                    // TODO: This is a hack - we're treating these as builtin function references
+                    // by joining segments into a dotted path. Proper module resolution should
+                    // handle this case earlier in the pipeline.
+                    let full_path = segments
+                        .iter()
+                        .map(smol_str::SmolStr::as_str)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Constant(Constant::Function(Name::new(full_path)))),
                     );
                 }
             }
@@ -192,7 +205,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 let Pattern::Binding(name) = pat;
 
                 // Lower the value with the actual variable name
-                let local_ty = self.lower_typed_ir_ty(var_ty);
+                let local_ty = Self::lower_typed_ir_ty(var_ty);
                 let local = self
                     .builder
                     .declare_local(Some(name.clone()), local_ty, None);
@@ -208,7 +221,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             Expr::Seq { first, second } => {
                 // Lower first for effect (result discarded)
-                let first_ty = self.lower_typed_ir_ty(body.ty(*first));
+                let first_ty = Self::lower_typed_ir_ty(body.ty(*first));
                 let temp = self.builder.temp(first_ty);
                 self.lower_expr(*first, Place::local(temp), body);
 
@@ -271,7 +284,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             // ========== Assignment ==========
             Expr::Assign { target, value } => {
-                let value_ty = self.lower_typed_ir_ty(body.ty(*value));
+                let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
                 let value_local = self.builder.temp(value_ty);
                 self.lower_expr(*value, Place::local(value_local), body);
 
@@ -288,7 +301,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 let target_place = self.lower_lvalue(*target, body);
 
                 // Load current value
-                let current_ty = self.lower_typed_ir_ty(body.ty(*target));
+                let current_ty = Self::lower_typed_ir_ty(body.ty(*target));
                 let current_local = self.builder.temp(current_ty.clone());
                 self.builder.assign(
                     Place::local(current_local),
@@ -296,12 +309,12 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 );
 
                 // Load rhs
-                let rhs_ty = self.lower_typed_ir_ty(body.ty(*value));
+                let rhs_ty = Self::lower_typed_ir_ty(body.ty(*value));
                 let rhs_local = self.builder.temp(rhs_ty);
                 self.lower_expr(*value, Place::local(rhs_local), body);
 
                 // Compute new value
-                let mir_op = self.convert_assign_op(*op);
+                let mir_op = Self::convert_assign_op(*op);
                 let result_local = self.builder.temp(current_ty);
                 self.builder.assign(
                     Place::local(result_local),
@@ -338,7 +351,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             }
 
             Expr::Unary { op, operand } => {
-                let operand_ty = self.lower_typed_ir_ty(body.ty(*operand));
+                let operand_ty = Self::lower_typed_ir_ty(body.ty(*operand));
                 let operand_local = self.builder.temp(operand_ty);
                 self.lower_expr(*operand, Place::local(operand_local), body);
 
@@ -366,7 +379,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 let elem_operands: Vec<Operand<'db>> = elements
                     .iter()
                     .map(|&elem| {
-                        let elem_ty = self.lower_typed_ir_ty(body.ty(elem));
+                        let elem_ty = Self::lower_typed_ir_ty(body.ty(elem));
                         let elem_local = self.builder.temp(elem_ty);
                         self.lower_expr(elem, Place::local(elem_local), body);
                         Operand::copy_local(elem_local)
@@ -380,7 +393,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 let field_operands: Vec<Operand<'db>> = fields
                     .iter()
                     .map(|(_, value)| {
-                        let value_ty = self.lower_typed_ir_ty(body.ty(*value));
+                        let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
                         let value_local = self.builder.temp(value_ty);
                         self.lower_expr(*value, Place::local(value_local), body);
                         Operand::copy_local(value_local)
@@ -404,24 +417,38 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             // ========== Access ==========
             Expr::FieldAccess { base, field } => {
-                let base_ty = self.lower_typed_ir_ty(body.ty(*base));
-                let base_local = self.builder.temp(base_ty.clone());
-                self.lower_expr(*base, Place::local(base_local), body);
+                let result_ty = body.ty(expr_id);
 
-                // Look up field index
-                let field_idx = self.field_index_for_type_and_name(&base_ty, field);
+                // Check if this is a method reference (result type is a function)
+                // vs an actual field access (result type is the field's type)
+                if matches!(result_ty, baml_typed_ir::Ty::Function { .. }) {
+                    // Method reference - emit as a function constant
+                    // The method name is just the field name (methods are desugared to top-level functions)
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Constant(Constant::Function(field.clone()))),
+                    );
+                } else {
+                    // Actual field access
+                    let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
+                    let base_local = self.builder.temp(base_ty.clone());
+                    self.lower_expr(*base, Place::local(base_local), body);
 
-                self.builder.assign(
-                    dest,
-                    Rvalue::Use(Operand::Copy(Place::field(
-                        Place::local(base_local),
-                        field_idx,
-                    ))),
-                );
+                    // Look up field index
+                    let field_idx = self.field_index_for_type_and_name(&base_ty, field);
+
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Copy(Place::field(
+                            Place::local(base_local),
+                            field_idx,
+                        ))),
+                    );
+                }
             }
 
             Expr::Index { base, index } => {
-                let base_ty = self.lower_typed_ir_ty(body.ty(*base));
+                let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
                 let base_local = self.builder.temp(base_ty);
                 self.lower_expr(*base, Place::local(base_local), body);
 
@@ -440,7 +467,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Lower a literal to a constant.
-    fn lower_literal(&self, lit: &Literal) -> Constant<'db> {
+    fn lower_literal(lit: &Literal) -> Constant<'db> {
         match lit {
             Literal::Int(n) => Constant::Int(*n),
             Literal::Float(s) => Constant::Float(s.parse().unwrap_or(0.0)),
@@ -459,8 +486,8 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         dest: Place,
         body: &ExprBody,
     ) {
-        let lhs_ty = self.lower_typed_ir_ty(body.ty(lhs));
-        let rhs_ty = self.lower_typed_ir_ty(body.ty(rhs));
+        let lhs_ty = Self::lower_typed_ir_ty(body.ty(lhs));
+        let rhs_ty = Self::lower_typed_ir_ty(body.ty(rhs));
 
         let lhs_local = self.builder.temp(lhs_ty);
         self.lower_expr(lhs, Place::local(lhs_local), body);
@@ -468,7 +495,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         let rhs_local = self.builder.temp(rhs_ty);
         self.lower_expr(rhs, Place::local(rhs_local), body);
 
-        let mir_op = self.convert_binop(op);
+        let mir_op = Self::convert_binop(op);
 
         self.builder.assign(
             dest,
@@ -480,7 +507,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         );
     }
 
-    fn convert_binop(&self, op: BinaryOp) -> BinOp {
+    fn convert_binop(op: BinaryOp) -> BinOp {
         match op {
             BinaryOp::Add => BinOp::Add,
             BinaryOp::Sub => BinOp::Sub,
@@ -504,7 +531,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         }
     }
 
-    fn convert_assign_op(&self, op: AssignOp) -> BinOp {
+    fn convert_assign_op(op: AssignOp) -> BinOp {
         match op {
             AssignOp::Add => BinOp::Add,
             AssignOp::Sub => BinOp::Sub,
@@ -667,7 +694,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         // Check if this is a method call (callee is FieldAccess)
         if let Expr::FieldAccess { base, field } = callee_expr {
             let base_ty = body.ty(*base);
-            let thir_base_ty = self.lower_typed_ir_ty(base_ty);
+            let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
 
             if let Some((def, _)) =
                 baml_thir::builtins::lookup_method(&thir_base_ty, field.as_str())
@@ -678,7 +705,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
                 let mut all_args = vec![Operand::copy_local(receiver_local)];
                 for &arg in args {
-                    let arg_ty = self.lower_typed_ir_ty(body.ty(arg));
+                    let arg_ty = Self::lower_typed_ir_ty(body.ty(arg));
                     let arg_local = self.builder.temp(arg_ty);
                     self.lower_expr(arg, Place::local(arg_local), body);
                     all_args.push(Operand::copy_local(arg_local));
@@ -700,14 +727,14 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         }
 
         // Regular function call
-        let callee_ty = self.lower_typed_ir_ty(body.ty(callee));
+        let callee_ty = Self::lower_typed_ir_ty(body.ty(callee));
         let callee_local = self.builder.temp(callee_ty);
         self.lower_expr(callee, Place::local(callee_local), body);
 
         let arg_operands: Vec<Operand<'db>> = args
             .iter()
             .map(|&arg| {
-                let arg_ty = self.lower_typed_ir_ty(body.ty(arg));
+                let arg_ty = Self::lower_typed_ir_ty(body.ty(arg));
                 let arg_local = self.builder.temp(arg_ty);
                 self.lower_expr(arg, Place::local(arg_local), body);
                 Operand::copy_local(arg_local)
@@ -758,7 +785,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             Expr::FieldAccess { base, field } => {
                 let base_place = self.lower_lvalue(*base, body);
-                let base_ty = self.lower_typed_ir_ty(body.ty(*base));
+                let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
                 let field_idx = self.field_index_for_type_and_name(&base_ty, field);
                 Place::field(base_place, field_idx)
             }
@@ -802,9 +829,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             );
         }
 
-        panic!(
-            "BUG: Cannot extract class name from type {ty:?} for field access `{field}`"
-        );
+        panic!("BUG: Cannot extract class name from type {ty:?} for field access `{field}`");
     }
 
     /// Extract class name from a Ty.
@@ -822,7 +847,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Convert a `TypedIR` type to a THIR type for MIR locals.
-    fn lower_typed_ir_ty(&self, ty: &baml_typed_ir::Ty) -> Ty<'db> {
+    fn lower_typed_ir_ty(ty: &baml_typed_ir::Ty) -> Ty<'db> {
         match ty {
             baml_typed_ir::Ty::Int => Ty::Int,
             baml_typed_ir::Ty::Float => Ty::Float,
@@ -837,19 +862,19 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 Ty::Named(name.clone())
             }
             baml_typed_ir::Ty::Optional(inner) => {
-                Ty::Optional(Box::new(self.lower_typed_ir_ty(inner)))
+                Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner)))
             }
-            baml_typed_ir::Ty::List(inner) => Ty::List(Box::new(self.lower_typed_ir_ty(inner))),
+            baml_typed_ir::Ty::List(inner) => Ty::List(Box::new(Self::lower_typed_ir_ty(inner))),
             baml_typed_ir::Ty::Map { key, value } => Ty::Map {
-                key: Box::new(self.lower_typed_ir_ty(key)),
-                value: Box::new(self.lower_typed_ir_ty(value)),
+                key: Box::new(Self::lower_typed_ir_ty(key)),
+                value: Box::new(Self::lower_typed_ir_ty(value)),
             },
             baml_typed_ir::Ty::Union(types) => {
-                Ty::Union(types.iter().map(|t| self.lower_typed_ir_ty(t)).collect())
+                Ty::Union(types.iter().map(Self::lower_typed_ir_ty).collect())
             }
             baml_typed_ir::Ty::Function { params, ret } => Ty::Function {
-                params: params.iter().map(|t| self.lower_typed_ir_ty(t)).collect(),
-                ret: Box::new(self.lower_typed_ir_ty(ret)),
+                params: params.iter().map(Self::lower_typed_ir_ty).collect(),
+                ret: Box::new(Self::lower_typed_ir_ty(ret)),
             },
             baml_typed_ir::Ty::Unknown => Ty::Unknown,
             baml_typed_ir::Ty::Error => Ty::Error,
