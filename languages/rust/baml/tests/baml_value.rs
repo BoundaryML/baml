@@ -73,7 +73,9 @@ mod decode_primitives {
     fn string_unicode() {
         let holder = make_string_holder("Hello \u{1F600} World \u{4E2D}\u{6587}");
         let result: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
-        assert!(matches!(result, BamlValue::String(s) if s == "Hello \u{1F600} World \u{4E2D}\u{6587}"));
+        assert!(
+            matches!(result, BamlValue::String(s) if s == "Hello \u{1F600} World \u{4E2D}\u{6587}")
+        );
     }
 
     #[test]
@@ -352,7 +354,10 @@ mod decode_dynamic_types {
         let inner_class = make_class_holder("Address", vec![("city", make_string_holder("NYC"))]);
         let holder = make_class_holder(
             "Person",
-            vec![("name", make_string_holder("Bob")), ("address", inner_class)],
+            vec![
+                ("name", make_string_holder("Bob")),
+                ("address", inner_class),
+            ],
         );
         let result: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
         if let BamlValue::DynamicClass(dc) = result {
@@ -825,14 +830,14 @@ mod decode_containers_extended {
 
     #[test]
     fn map_with_nested_map() {
-        let inner_map = make_map_holder(vec![
-            ("nested_key", make_string_holder("nested_value")),
-        ]);
+        let inner_map = make_map_holder(vec![("nested_key", make_string_holder("nested_value"))]);
         let holder = make_map_holder(vec![("outer_key", inner_map)]);
         let result: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
         if let BamlValue::Map(outer) = result {
             if let Some(BamlValue::Map(inner)) = outer.get("outer_key") {
-                assert!(matches!(inner.get("nested_key"), Some(BamlValue::String(s)) if s == "nested_value"));
+                assert!(
+                    matches!(inner.get("nested_key"), Some(BamlValue::String(s)) if s == "nested_value")
+                );
             } else {
                 panic!("expected inner Map");
             }
@@ -1056,10 +1061,7 @@ mod from_baml_value {
 
     #[test]
     fn extract_hashmap() {
-        let holder = make_map_holder(vec![
-            ("a", make_int_holder(1)),
-            ("b", make_int_holder(2)),
-        ]);
+        let holder = make_map_holder(vec![("a", make_int_holder(1)), ("b", make_int_holder(2))]);
         let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
         let map: HashMap<String, i64> = value.get().unwrap();
         assert_eq!(map.get("a"), Some(&1));
@@ -1262,7 +1264,11 @@ mod dynamic_class_accessors {
             "Container",
             vec![(
                 "items",
-                make_list_holder(vec![make_int_holder(1), make_int_holder(2), make_int_holder(3)]),
+                make_list_holder(vec![
+                    make_int_holder(1),
+                    make_int_holder(2),
+                    make_int_holder(3),
+                ]),
             )],
         );
         let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
