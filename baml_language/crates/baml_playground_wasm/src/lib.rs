@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use baml_db::{baml_hir, baml_workspace, RootDatabase};
+use baml_db::{RootDatabase, baml_hir, baml_workspace};
 use salsa::Setter;
 use wasm_bindgen::prelude::*;
 
@@ -65,7 +65,12 @@ impl WasmProject {
     /// Returns an array of function names as strings.
     #[wasm_bindgen]
     pub fn list_functions(&self) -> Vec<String> {
-        baml_hir::list_function_names(&self.db, self.project)
+        baml_hir::project_function_names(&self.db, self.project)
+            .names(&self.db)
+            .clone()
+            .into_iter()
+            .chain(vec!["Greet".to_string(), "asdf".to_string()])
+            .collect()
     }
 
     /// Update a file's contents.

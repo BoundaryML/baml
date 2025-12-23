@@ -127,24 +127,33 @@ pub fn project_items(db: &dyn Db, root: baml_workspace::Project) -> ProjectItems
     ProjectItems::new(db, all_items)
 }
 
-/// Returns the names of all functions defined in the project.
+/// Tracked struct holding all function names in a project.
+#[salsa::tracked]
+pub struct ProjectFunctionNames<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub names: Vec<String>,
+}
+
+/// Tracked: Get all function names in a project.
 ///
-/// This is a convenience function for WASM/external consumers that just need
-/// a list of function names without dealing with HIR internals.
-pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<String> {
+/// This is the primary query for WASM/external consumers that need
+/// a list of function names. Results are memoized and incrementally updated.
+#[salsa::tracked]
+pub fn project_function_names(db: &dyn Db, root: baml_workspace::Project) -> ProjectFunctionNames<'_> {
     let items = project_items(db, root);
-    let mut functions = Vec::new();
+    let mut names = Vec::new();
 
     for item in items.items(db) {
         if let ItemId::Function(func_loc) = item {
             let file = func_loc.file(db);
             let item_tree = file_item_tree(db, file);
             let func = &item_tree[func_loc.id(db)];
-            functions.push(func.name.to_string());
+            names.push(func.name.to_string());
         }
     }
 
-    functions
+    ProjectFunctionNames::new(db, names)
 }
 
 /// Tracked: Get generic parameters for a function.

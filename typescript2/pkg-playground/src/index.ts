@@ -11,6 +11,7 @@ export {
   useBamlPlayground,
 } from './BamlPlaygroundProvider';
 export { FunctionList } from './FunctionList';
+export { BamlEditor } from './BamlEditor';
 
 // Re-export atoms for direct access
 export {
