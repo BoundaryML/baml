@@ -35,7 +35,7 @@ use std::collections::HashMap;
 use baml_base::Name;
 use baml_hir::{ExprBody, Literal, MatchArm, Pattern};
 
-use crate::{Db, SingletonValue, Ty, lower_type_ref};
+use crate::{Db, LiteralValue, Ty, lower_type_ref};
 
 // ============================================================================
 // ValueSet: The Core Abstraction
@@ -349,22 +349,14 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
                 ValueSet::Literal(Literal::Bool(false)),
             ],
 
-            // Null is a singleton
+            // Singleton types (types containing exactly one value)
             Ty::Null => vec![ValueSet::Literal(Literal::Null)],
-
-            // Singleton types (literal types like `200` in `200 | 201`)
-            Ty::Singleton(value) => match value {
-                SingletonValue::Int(v) => vec![ValueSet::Literal(Literal::Int(*v))],
-                SingletonValue::String(v) => {
+            Ty::Literal(value) => match value {
+                LiteralValue::Int(v) => vec![ValueSet::Literal(Literal::Int(*v))],
+                LiteralValue::String(v) => {
                     vec![ValueSet::Literal(Literal::String(v.clone()))]
                 }
-                SingletonValue::Bool(v) => vec![ValueSet::Literal(Literal::Bool(*v))],
-                SingletonValue::EnumVariant(enum_name, variant_name) => {
-                    vec![ValueSet::EnumVariant {
-                        enum_name: enum_name.clone(),
-                        variant_name: variant_name.clone(),
-                    }]
-                }
+                LiteralValue::Bool(v) => vec![ValueSet::Literal(Literal::Bool(*v))],
             },
 
             // Infinite types: int, float, string, classes, etc.
@@ -486,14 +478,10 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
                 // The coverage check will handle expansion
                 ValueSet::OfType(name.clone())
             }
-            Ty::Singleton(value) => match value {
-                SingletonValue::Int(v) => ValueSet::Literal(Literal::Int(*v)),
-                SingletonValue::String(v) => ValueSet::Literal(Literal::String(v.clone())),
-                SingletonValue::Bool(v) => ValueSet::Literal(Literal::Bool(*v)),
-                SingletonValue::EnumVariant(enum_name, variant_name) => ValueSet::EnumVariant {
-                    enum_name: enum_name.clone(),
-                    variant_name: variant_name.clone(),
-                },
+            Ty::Literal(value) => match value {
+                LiteralValue::Int(v) => ValueSet::Literal(Literal::Int(*v)),
+                LiteralValue::String(v) => ValueSet::Literal(Literal::String(v.clone())),
+                LiteralValue::Bool(v) => ValueSet::Literal(Literal::Bool(*v)),
             },
             Ty::Bool => ValueSet::OfType(Name::new("bool")),
             Ty::Int => ValueSet::OfType(Name::new("int")),

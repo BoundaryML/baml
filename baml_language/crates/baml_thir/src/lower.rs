@@ -8,7 +8,7 @@
 
 use baml_hir::TypeRef;
 
-use crate::{SingletonValue, Ty};
+use crate::{LiteralValue, Ty};
 
 /// Lower a `TypeRef` to a Ty.
 ///
@@ -71,10 +71,10 @@ impl TyLowering {
                 normalize_union(tys)
             }
 
-            // Singleton types - preserve the literal values for exhaustiveness checking
-            TypeRef::StringLiteral(s) => Ty::Singleton(SingletonValue::String(s.clone())),
-            TypeRef::IntLiteral(i) => Ty::Singleton(SingletonValue::Int(*i)),
-            TypeRef::BoolLiteral(b) => Ty::Singleton(SingletonValue::Bool(*b)),
+            // Literal types - preserve the literal values for exhaustiveness checking
+            TypeRef::StringLiteral(s) => Ty::Literal(LiteralValue::String(s.clone())),
+            TypeRef::IntLiteral(i) => Ty::Literal(LiteralValue::Int(*i)),
+            TypeRef::BoolLiteral(b) => Ty::Literal(LiteralValue::Bool(*b)),
 
             // Generics - not yet supported
             TypeRef::Generic { .. } => Ty::Unknown,
