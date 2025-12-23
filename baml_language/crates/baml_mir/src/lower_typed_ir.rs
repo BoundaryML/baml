@@ -154,9 +154,14 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             }
 
             Expr::Path(segments) => {
-                // Note: Multi-segment paths should have been converted to nested FieldAccess
-                // during HIR → TypedIR lowering. If we get here with multi-segment paths,
-                // something went wrong in the lowering pipeline.
+                // Note: Multi-segment paths that are local variable field accesses should have
+                // been converted to nested FieldAccess during HIR → TypedIR lowering.
+                // Multi-segment paths that reach here are non-local paths like builtin functions
+                // (e.g., baml.Array.length) which need special handling.
+                //
+                // TODO: This is a workaround for the lack of proper module/namespace support.
+                // When we have proper modules, builtin paths should be resolved earlier in the
+                // pipeline and represented differently (not as Expr::Path).
                 if segments.len() == 1 {
                     // Simple variable reference
                     let name = &segments[0];
@@ -171,10 +176,18 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                         );
                     }
                 } else {
-                    // Multi-segment paths should not reach here - they should be FieldAccess nodes.
-                    // This is a bug in the lowering pipeline if we get here.
-                    panic!(
-                        "BUG: Multi-segment path {segments:?} should have been converted to FieldAccess"
+                    // Multi-segment path that's not a field access chain (e.g., baml.Array.length).
+                    // TODO: This is a hack - we're treating these as builtin function references
+                    // by joining segments into a dotted path. Proper module resolution should
+                    // handle this case earlier in the pipeline.
+                    let full_path = segments
+                        .iter()
+                        .map(smol_str::SmolStr::as_str)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Constant(Constant::Function(Name::new(full_path)))),
                     );
                 }
             }
@@ -404,20 +417,34 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             // ========== Access ==========
             Expr::FieldAccess { base, field } => {
-                let base_ty = self.lower_typed_ir_ty(body.ty(*base));
-                let base_local = self.builder.temp(base_ty.clone());
-                self.lower_expr(*base, Place::local(base_local), body);
+                let result_ty = body.ty(expr_id);
 
-                // Look up field index
-                let field_idx = self.field_index_for_type_and_name(&base_ty, field);
+                // Check if this is a method reference (result type is a function)
+                // vs an actual field access (result type is the field's type)
+                if matches!(result_ty, baml_typed_ir::Ty::Function { .. }) {
+                    // Method reference - emit as a function constant
+                    // The method name is just the field name (methods are desugared to top-level functions)
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Constant(Constant::Function(field.clone()))),
+                    );
+                } else {
+                    // Actual field access
+                    let base_ty = self.lower_typed_ir_ty(body.ty(*base));
+                    let base_local = self.builder.temp(base_ty.clone());
+                    self.lower_expr(*base, Place::local(base_local), body);
 
-                self.builder.assign(
-                    dest,
-                    Rvalue::Use(Operand::Copy(Place::field(
-                        Place::local(base_local),
-                        field_idx,
-                    ))),
-                );
+                    // Look up field index
+                    let field_idx = self.field_index_for_type_and_name(&base_ty, field);
+
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Copy(Place::field(
+                            Place::local(base_local),
+                            field_idx,
+                        ))),
+                    );
+                }
             }
 
             Expr::Index { base, index } => {
@@ -802,9 +829,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             );
         }
 
-        panic!(
-            "BUG: Cannot extract class name from type {ty:?} for field access `{field}`"
-        );
+        panic!("BUG: Cannot extract class name from type {ty:?} for field access `{field}`");
     }
 
     /// Extract class name from a Ty.

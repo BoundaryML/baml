@@ -199,20 +199,11 @@ impl<'db> LoweringContext<'db> {
             HirExpr::Path(segments) => {
                 if segments.len() == 1 {
                     Ok(self.builder.alloc(Expr::Var(segments[0].clone()), ty, span))
-                } else {
-                    // Convert multi-segment Path to nested FieldAccess for proper type tracking.
-                    // Use path_segment_types from inference to get the base type at each step.
+                } else if let Some(segment_types) = self.inference.path_segment_types.get(&hir_id) {
+                    // Local variable with field accesses (e.g., obj.field.subfield)
+                    // Convert to nested FieldAccess for proper type tracking.
                     // segment_types[0] = type of first segment (variable)
                     // segment_types[i] = type after i-th field access
-                    let segment_types = self
-                        .inference
-                        .path_segment_types
-                        .get(&hir_id)
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "BUG: path_segment_types missing for multi-segment path {segments:?}"
-                            )
-                        });
 
                     // Start with the variable (first segment)
                     let first_ty = segment_types
@@ -228,7 +219,8 @@ impl<'db> LoweringContext<'db> {
                     // Build nested FieldAccess for remaining segments
                     for (i, field) in segments[1..].iter().enumerate() {
                         // Type after this field access is segment_types[i+1]
-                        let result_ty = segment_types.get(i + 1)
+                        let result_ty = segment_types
+                            .get(i + 1)
                             .map(|t| self.lower_ty(t))
                             .unwrap_or_else(|| {
                                 panic!(
@@ -247,6 +239,15 @@ impl<'db> LoweringContext<'db> {
                     }
 
                     Ok(current)
+                } else {
+                    // Non-local path (e.g., builtin function like baml.Array.length, enum variant)
+                    // Keep as Expr::Path - will be resolved during MIR lowering.
+                    //
+                    // TODO: The type here may be incorrect for generic builtins like baml.Array.length
+                    // which should have type `fn(Array<T>) -> int` but generics are currently hacked
+                    // and not properly implemented. When real generics are added, this will need
+                    // proper type instantiation.
+                    Ok(self.builder.alloc(Expr::Path(segments.clone()), ty, span))
                 }
             }
 

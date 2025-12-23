@@ -60,7 +60,10 @@ impl<'a> PrettyPrinter<'a> {
 
             Expr::Path(segments) => {
                 self.indent(level);
-                let path: Vec<_> = segments.iter().map(std::string::ToString::to_string).collect();
+                let path: Vec<_> = segments
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect();
                 self.output.push_str(&path.join("."));
                 self.output.push_str(&format!(" : {ty}"));
             }

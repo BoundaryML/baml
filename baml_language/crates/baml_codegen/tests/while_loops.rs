@@ -79,17 +79,16 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Stackification with fall-through elimination:
-            // a is user variable, _5 is compiler temporary for if result
+            // Stackification with dead store elimination:
+            // a is user variable, dead compiler temps (_5 for if result) are eliminated
             vec![
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("a".to_string()),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(13),
+                Instruction::JumpIfFalse(11),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
@@ -98,10 +97,8 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::JumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_5".to_string()),
-                Instruction::Jump(-15),
+                Instruction::Jump(2),
+                Instruction::Jump(-13),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
@@ -129,17 +126,16 @@ fn while_loop_with_break() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Stackification with fall-through elimination:
-            // a is user variable, _5 is compiler temporary for if result
+            // Stackification with dead store elimination:
+            // a is user variable, dead compiler temps (_5 for if result) are eliminated
             vec![
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("a".to_string()),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(13),
+                Instruction::JumpIfFalse(11),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
@@ -148,10 +144,8 @@ fn while_loop_with_break() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::JumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_5".to_string()),
-                Instruction::Jump(-15),
+                Instruction::Jump(2),
+                Instruction::Jump(-13),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
@@ -286,11 +280,9 @@ fn continue_nested() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "Nested",
-            // Stackification with fall-through elimination:
-            // _2 is compiler temporary for if result
+            // Stackification with dead store elimination:
+            // Dead compiler temps (_2 for if result) are eliminated
             vec![
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::JumpIfFalse(2),
                 Instruction::Jump(3),
@@ -298,15 +290,13 @@ fn continue_nested() -> anyhow::Result<()> {
                 Instruction::Return,
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::JumpIfFalse(2),
-                Instruction::Jump(8),
+                Instruction::Jump(6),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::JumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Null),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::Jump(-13),
-                Instruction::Jump(-14),
-                Instruction::Jump(-10),
+                Instruction::Jump(2),
+                Instruction::Jump(-11),
+                Instruction::Jump(-12),
+                Instruction::Jump(-8),
             ],
         )],
     })
@@ -331,11 +321,9 @@ fn break_nested() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "Nested",
-            // Stackification with fall-through elimination:
-            // a is user variable
+            // Stackification with dead store elimination:
+            // a is user variable, dead compiler temps are eliminated
             vec![
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::StoreVar("a".to_string()),

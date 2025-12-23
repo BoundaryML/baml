@@ -302,7 +302,11 @@ impl<'a> TypedIrToMir<'a> {
                         (name.to_string(), local)
                     })
                     .collect();
-                self.emit_object(type_name.as_ref().map(std::string::ToString::to_string), field_vals, dest);
+                self.emit_object(
+                    type_name.as_ref().map(std::string::ToString::to_string),
+                    field_vals,
+                    dest,
+                );
                 LowerResult::Continue
             }
 
