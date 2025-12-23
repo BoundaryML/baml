@@ -1,0 +1,15 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "dev": {
+      "dependsOn": ["pkg-playground#build:wasm"],
+      "persistent": true,
+      "cache": false
+    },
+    "build": {
+      "dependsOn": ["pkg-playground#build"],
+      "outputs": [".next/**"]
+    }
+  }
+}

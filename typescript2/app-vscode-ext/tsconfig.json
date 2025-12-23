@@ -1,13 +1,17 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["vite/client"],
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "isolatedModules": true,
+    "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@baml/playground-common": ["../pkg-playground/src"],
-      "@baml/playground-common/*": ["../pkg-playground/src/*"]
+      "@/*": ["src/*"],
+      "pkg-playground": ["../pkg-playground/src"],
+      "pkg-playground/*": ["../pkg-playground/src/*"]
     }
   },
-  "include": ["src/**/*", "vite.config.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src", "src/**/*", "vite-env.d.ts"],
+  "exclude": ["dist", "build", "node_modules"]
 }

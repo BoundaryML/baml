@@ -1,0 +1,17 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build:wasm": {
+      "inputs": [
+        "../../engine/baml-runtime-wasm/src/lib.rs"
+      ],
+      "outputs": ["wasm/**"],
+      "cache": false
+    },
+    "build": {
+      "dependsOn": ["build:wasm"],
+      "outputs": ["dist/**"]
+    }
+  }
+}

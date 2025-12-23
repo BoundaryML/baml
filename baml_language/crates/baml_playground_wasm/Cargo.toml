@@ -1,35 +1,18 @@
 [package]
-name = "baml_playground_wasm"
-version = { workspace = true }
-publish = false
-authors = { workspace = true }
-edition = { workspace = true }
-rust-version = { workspace = true }
-homepage = { workspace = true }
-documentation = { workspace = true }
-repository = { workspace = true }
-license = { workspace = true }
+name = "baml-runtime-wasm"
+version = "0.1.0"
+edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[lints]
-workspace = true
-
 [dependencies]
-# Compiler crates
-baml_db = { workspace = true }
-salsa = { workspace = true }
-
-# WASM dependencies
+convert_case = "0.6"
 wasm-bindgen = "0.2"
-serde-wasm-bindgen = "0.6"
-console_error_panic_hook = "0.1"
-js-sys = "0.3"
+console_error_panic_hook = { version = "0.1", optional = true }
+wee_alloc = { version = "0.4", optional = true }
 
-# Serialization
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-
-[dev-dependencies]
-wasm-bindgen-test = "0.3"
+[features]
+default = []
+console_error_panic = ["console_error_panic_hook"]
+small_allocator = ["wee_alloc"]
