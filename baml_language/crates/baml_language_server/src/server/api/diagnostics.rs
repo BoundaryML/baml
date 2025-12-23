@@ -406,11 +406,7 @@ fn type_error_to_diagnostic<T: std::fmt::Display>(
             span,
             "E0012",
         ),
-        TypeError::UnreachableArm { span } => (
-            "Unreachable match arm".to_string(),
-            span,
-            "E0013",
-        ),
+        TypeError::UnreachableArm { span } => ("Unreachable match arm".to_string(), span, "E0013"),
     };
 
     let (_, source_text, line_index) = file_info.get(&span.file_id)?;

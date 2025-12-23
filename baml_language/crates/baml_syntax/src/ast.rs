@@ -983,7 +983,7 @@ impl MatchPattern {
     /// Get all identifiers in this pattern.
     ///
     /// For simple patterns, returns one identifier.
-    /// For enum variants like `Status.Active`, returns ["Status", "Active"].
+    /// For enum variants like `Status.Active`, returns both identifiers (e.g. "Status", "Active").
     /// For union patterns, returns identifiers from all branches.
     pub fn identifiers(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax

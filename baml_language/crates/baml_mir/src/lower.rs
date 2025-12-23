@@ -17,7 +17,10 @@
 use std::collections::HashMap;
 
 use baml_base::Name;
-use baml_hir::{BinaryOp, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, MatchArm, PatId, Pattern, StmtId};
+use baml_hir::{
+    BinaryOp, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, MatchArm, PatId, Pattern,
+    StmtId,
+};
 use baml_thir::{InferenceResult, Ty};
 
 use crate::{
@@ -714,7 +717,15 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             };
 
             // Generate pattern check - branches to arm_block if match, next_check otherwise
-            self.lower_pattern_check(pattern, arm.pattern, scrut_local, &scrut_ty, arm_block, next_check, body);
+            self.lower_pattern_check(
+                pattern,
+                arm.pattern,
+                scrut_local,
+                &scrut_ty,
+                arm_block,
+                next_check,
+                body,
+            );
 
             // Generate arm body
             self.builder.set_current_block(arm_block);
@@ -777,7 +788,15 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 exit_block
             };
 
-            self.lower_pattern_check(pattern, arm.pattern, scrut_local, &scrut_ty, arm_block, next_check, body);
+            self.lower_pattern_check(
+                pattern,
+                arm.pattern,
+                scrut_local,
+                &scrut_ty,
+                arm_block,
+                next_check,
+                body,
+            );
 
             self.builder.set_current_block(arm_block);
             self.bind_pattern_local(pattern, scrut_local, &scrut_ty);
@@ -914,7 +933,15 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                     };
 
                     self.builder.set_current_block(current_block);
-                    self.lower_pattern_check(sub_pattern, sub_pat_id, scrut_local, scrut_ty, match_block, sub_next, body);
+                    self.lower_pattern_check(
+                        sub_pattern,
+                        sub_pat_id,
+                        scrut_local,
+                        scrut_ty,
+                        match_block,
+                        sub_next,
+                        body,
+                    );
 
                     if j + 1 < sub_patterns.len() {
                         current_block = sub_next;

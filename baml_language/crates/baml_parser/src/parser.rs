@@ -1508,12 +1508,13 @@ impl<'a> Parser<'a> {
     ///
     /// Grammar (from BEP-002):
     ///
+    /// ```text
     /// pattern         := binding_pattern | literal_pattern | union_pattern
     /// binding_pattern := IDENT (':' type_expr)?
     /// literal_pattern := 'null' | 'true' | 'false' | INTEGER | FLOAT | STRING
     /// union_pattern   := (literal_pattern | enum_variant) ('|' (literal_pattern | enum_variant))*
     /// enum_variant    := IDENT '.' IDENT
-    ///
+    /// ```
     ///
     /// Note: `_` is parsed as a regular identifier (binding pattern) - semantic
     /// analysis will treat it as a wildcard/discard.

@@ -370,10 +370,7 @@ pub enum Rvalue<'db> {
     Len(Place),
 
     /// Type check for pattern matching: `is_type(_1, Type)`
-    IsType {
-        operand: Operand<'db>,
-        ty: Ty<'db>,
-    },
+    IsType { operand: Operand<'db>, ty: Ty<'db> },
 }
 
 /// The kind of aggregate being constructed.
