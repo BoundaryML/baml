@@ -1,4 +1,4 @@
-//! Lowering from HIR + THIR type information to TypedIR.
+//! Lowering from HIR + THIR type information to `TypedIR`.
 //!
 //! This module converts the HIR expression tree (with THIR type annotations)
 //! into our unified expression-based IR where everything is an expression.
@@ -7,7 +7,7 @@
 //!
 //! Lowering is fallible - it returns `Result<ExprBody, LoweringError>`.
 //! Any `Missing` nodes in the HIR will cause lowering to fail. This is
-//! intentional: TypedIR represents only valid, complete programs suitable
+//! intentional: `TypedIR` represents only valid, complete programs suitable
 //! for code generation.
 //!
 //! # Weaving Strategy (inspired by xiaolong)
@@ -27,9 +27,9 @@ use la_arena::Arena;
 use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
-use crate::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, Pattern, PatId, Ty, UnaryOp};
+use crate::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, Ty, UnaryOp};
 
-/// Error that occurs when lowering HIR to TypedIR.
+/// Error that occurs when lowering HIR to `TypedIR`.
 #[derive(Debug, Clone)]
 pub enum LoweringError {
     /// Encountered a Missing expression node.
@@ -48,14 +48,14 @@ impl std::fmt::Display for LoweringError {
             LoweringError::MissingExpression { span } => {
                 write!(f, "missing expression")?;
                 if let Some(s) = span {
-                    write!(f, " at {:?}", s)?;
+                    write!(f, " at {s:?}")?;
                 }
                 Ok(())
             }
             LoweringError::MissingStatement { span } => {
                 write!(f, "missing statement")?;
                 if let Some(s) = span {
-                    write!(f, " at {:?}", s)?;
+                    write!(f, " at {s:?}")?;
                 }
                 Ok(())
             }
@@ -67,7 +67,7 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
-/// Lower a function body from HIR to TypedIR.
+/// Lower a function body from HIR to `TypedIR`.
 ///
 /// Returns `Err` if the HIR contains any `Missing` nodes or is otherwise
 /// not suitable for code generation.
@@ -95,7 +95,7 @@ pub fn lower_from_hir<'db>(
 /// Sentinel value for dangling Let scopes (body not yet filled in).
 const DANGLING_SCOPE: u32 = u32::MAX;
 
-/// Builder for constructing ExprBody.
+/// Builder for constructing `ExprBody`.
 struct ExprBodyBuilder {
     exprs: Arena<Expr>,
     patterns: Arena<Pattern>,
@@ -145,7 +145,7 @@ impl ExprBodyBuilder {
     }
 }
 
-/// Context for lowering HIR to TypedIR.
+/// Context for lowering HIR to `TypedIR`.
 struct LoweringContext<'db> {
     db: &'db dyn baml_thir::Db,
     inference: &'db InferenceResult<'db>,
@@ -168,7 +168,7 @@ impl<'db> LoweringContext<'db> {
         Ok(self.builder.finish(root))
     }
 
-    /// Lower an HIR expression to TypedIR.
+    /// Lower an HIR expression to `TypedIR`.
     fn lower_expr(
         &mut self,
         hir_id: HirExprId,
@@ -191,7 +191,9 @@ impl<'db> LoweringContext<'db> {
             HirExpr::Missing => Err(LoweringError::MissingExpression { span }),
 
             HirExpr::Literal(lit) => {
-                Ok(self.builder.alloc(Expr::Literal(Literal::from(lit)), ty, span))
+                Ok(self
+                    .builder
+                    .alloc(Expr::Literal(Literal::from(lit)), ty, span))
             }
 
             HirExpr::Path(segments) => {
@@ -202,28 +204,26 @@ impl<'db> LoweringContext<'db> {
                     // Use path_segment_types from inference to get the base type at each step.
                     // segment_types[0] = type of first segment (variable)
                     // segment_types[i] = type after i-th field access
-                    let segment_types = self.inference.path_segment_types.get(&hir_id)
+                    let segment_types = self
+                        .inference
+                        .path_segment_types
+                        .get(&hir_id)
                         .unwrap_or_else(|| {
                             panic!(
-                                "BUG: path_segment_types missing for multi-segment path {:?}",
-                                segments
+                                "BUG: path_segment_types missing for multi-segment path {segments:?}"
                             )
                         });
 
                     // Start with the variable (first segment)
-                    let first_ty = segment_types.first()
+                    let first_ty = segment_types
+                        .first()
                         .map(|t| self.lower_ty(t))
                         .unwrap_or_else(|| {
-                            panic!(
-                                "BUG: path_segment_types is empty for path {:?}",
-                                segments
-                            )
+                            panic!("BUG: path_segment_types is empty for path {segments:?}")
                         });
-                    let mut current = self.builder.alloc(
-                        Expr::Var(segments[0].clone()),
-                        first_ty,
-                        span,
-                    );
+                    let mut current =
+                        self.builder
+                            .alloc(Expr::Var(segments[0].clone()), first_ty, span);
 
                     // Build nested FieldAccess for remaining segments
                     for (i, field) in segments[1..].iter().enumerate() {
@@ -344,7 +344,9 @@ impl<'db> LoweringContext<'db> {
                 for e in elements {
                     elem_ids.push(self.lower_expr(*e, hir_body)?);
                 }
-                Ok(self.builder.alloc(Expr::Array { elements: elem_ids }, ty, span))
+                Ok(self
+                    .builder
+                    .alloc(Expr::Array { elements: elem_ids }, ty, span))
             }
 
             HirExpr::Object { type_name, fields } => {
@@ -470,7 +472,7 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Translate a statement to a TypedIR expression.
+    /// Translate a statement to a `TypedIR` expression.
     fn translate_stmt(
         &mut self,
         stmt_id: HirStmtId,
@@ -602,7 +604,7 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Lower a THIR type to TypedIR type, resolving all IDs.
+    /// Lower a THIR type to `TypedIR` type, resolving all IDs.
     fn lower_ty(&self, thir_ty: &baml_thir::Ty<'db>) -> Ty {
         match thir_ty {
             baml_thir::Ty::Int => Ty::Int,
@@ -655,7 +657,7 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Lower an HIR TypeRef to TypedIR type.
+    /// Lower an HIR `TypeRef` to `TypedIR` type.
     fn lower_type_ref(&self, type_ref: &baml_hir::TypeRef) -> Ty {
         let thir_ty = baml_thir::lower_type_ref(self.db, type_ref);
         self.lower_ty(&thir_ty)
@@ -666,12 +668,12 @@ impl<'db> LoweringContext<'db> {
 // Dangling scope helpers
 // ============================================================================
 
-/// Create an ExprId that represents a dangling (unfilled) scope.
+/// Create an `ExprId` that represents a dangling (unfilled) scope.
 fn dangling_expr_id() -> ExprId {
     ExprId::from_raw(la_arena::RawIdx::from_u32(DANGLING_SCOPE))
 }
 
-/// Check if an ExprId is dangling.
+/// Check if an `ExprId` is dangling.
 fn is_dangling(id: ExprId) -> bool {
     id.into_raw().into_u32() == DANGLING_SCOPE
 }

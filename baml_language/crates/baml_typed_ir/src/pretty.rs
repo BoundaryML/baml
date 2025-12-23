@@ -1,6 +1,6 @@
-//! Pretty printing for TypedIR expressions.
+//! Pretty printing for `TypedIR` expressions.
 //!
-//! This module provides human-readable output of the TypedIR tree,
+//! This module provides human-readable output of the `TypedIR` tree,
 //! useful for debugging and testing.
 
 use crate::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, Pattern, UnaryOp};
@@ -60,7 +60,7 @@ impl<'a> PrettyPrinter<'a> {
 
             Expr::Path(segments) => {
                 self.indent(level);
-                let path: Vec<_> = segments.iter().map(|s| s.to_string()).collect();
+                let path: Vec<_> = segments.iter().map(std::string::ToString::to_string).collect();
                 self.output.push_str(&path.join("."));
                 self.output.push_str(&format!(" : {ty}"));
             }
@@ -76,9 +76,10 @@ impl<'a> PrettyPrinter<'a> {
                 let pat_name = match pat {
                     Pattern::Binding(name) => name.to_string(),
                 };
-                self.output.push_str(&format!("let {pat_name}: {let_ty} =\n"));
+                self.output
+                    .push_str(&format!("let {pat_name}: {let_ty} =\n"));
                 self.print_expr(*value, level + 1);
-                self.output.push_str("\n");
+                self.output.push('\n');
                 self.indent(level);
                 self.output.push_str("in\n");
                 self.print_expr(*body, level + 1);
@@ -98,12 +99,12 @@ impl<'a> PrettyPrinter<'a> {
                 self.indent(level);
                 self.output.push_str("if\n");
                 self.print_expr(*condition, level + 1);
-                self.output.push_str("\n");
+                self.output.push('\n');
                 self.indent(level);
                 self.output.push_str("then\n");
                 self.print_expr(*then_branch, level + 1);
                 if let Some(else_b) = else_branch {
-                    self.output.push_str("\n");
+                    self.output.push('\n');
                     self.indent(level);
                     self.output.push_str("else\n");
                     self.print_expr(*else_b, level + 1);
@@ -114,7 +115,7 @@ impl<'a> PrettyPrinter<'a> {
                 self.indent(level);
                 self.output.push_str("while\n");
                 self.print_expr(*condition, level + 1);
-                self.output.push_str("\n");
+                self.output.push('\n');
                 self.indent(level);
                 self.output.push_str("do\n");
                 self.print_expr(*body, level + 1);
@@ -143,7 +144,7 @@ impl<'a> PrettyPrinter<'a> {
                 self.indent(level);
                 self.output.push_str("assign\n");
                 self.print_expr(*target, level + 1);
-                self.output.push_str("\n");
+                self.output.push('\n');
                 self.indent(level);
                 self.output.push_str(":=\n");
                 self.print_expr(*value, level + 1);
@@ -230,7 +231,7 @@ impl<'a> PrettyPrinter<'a> {
                 self.indent(level);
                 let name = type_name
                     .as_ref()
-                    .map(|n| n.to_string())
+                    .map(std::string::ToString::to_string)
                     .unwrap_or_else(|| "anon".to_string());
                 self.output.push_str(&format!("object {name} : {ty}"));
                 for (field_name, value) in fields {

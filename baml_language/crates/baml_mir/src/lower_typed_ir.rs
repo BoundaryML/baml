@@ -1,7 +1,7 @@
-//! Lowering from TypedIR to MIR.
+//! Lowering from `TypedIR` to MIR.
 //!
-//! This module converts the expression-only TypedIR representation into
-//! the CFG-based MIR. Because TypedIR has no statements (everything is an
+//! This module converts the expression-only `TypedIR` representation into
+//! the CFG-based MIR. Because `TypedIR` has no statements (everything is an
 //! expression), this lowering is much simpler than HIR → MIR lowering.
 //!
 //! # Key Simplifications
@@ -10,7 +10,7 @@
 //! - Single `lower_expr` method (no `lower_stmt` or `lower_expr_for_effect`)
 //! - `Let { value, body }` handles scoping naturally
 //! - `Seq { first, second }` handles sequencing
-//! - Types are embedded in the IR (no HashMap lookup)
+//! - Types are embedded in the IR (no `HashMap` lookup)
 //! - No `Block { stmts, tail_expr }` or tail expression handling
 //! - No `Missing` nodes to handle
 
@@ -26,9 +26,9 @@ use crate::{
     Rvalue, UnaryOp as MirUnaryOp,
 };
 
-/// Lower a function from TypedIR to MIR.
+/// Lower a function from `TypedIR` to MIR.
 ///
-/// This is the main entry point for TypedIR → MIR lowering.
+/// This is the main entry point for `TypedIR` → MIR lowering.
 pub fn lower_from_typed_ir<'db>(
     signature: &FunctionSignature,
     typed_body: &ExprBody,
@@ -40,7 +40,7 @@ pub fn lower_from_typed_ir<'db>(
     ctx.finish()
 }
 
-/// Context for lowering TypedIR to MIR.
+/// Context for lowering `TypedIR` to MIR.
 struct LoweringContext<'db, 'ctx> {
     #[allow(dead_code)]
     db: &'db dyn crate::Db,
@@ -120,7 +120,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
     /// Lower an expression, storing the result in `dest`.
     ///
-    /// This is the core of TypedIR lowering. Unlike HIR lowering which needs
+    /// This is the core of `TypedIR` lowering. Unlike HIR lowering which needs
     /// separate `lower_expr_to_place` and `lower_stmt`, here we have just one method.
     fn lower_expr(&mut self, expr_id: ExprId, dest: Place, body: &ExprBody) {
         let expr = body.expr(expr_id);
@@ -174,8 +174,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                     // Multi-segment paths should not reach here - they should be FieldAccess nodes.
                     // This is a bug in the lowering pipeline if we get here.
                     panic!(
-                        "BUG: Multi-segment path {:?} should have been converted to FieldAccess",
-                        segments
+                        "BUG: Multi-segment path {segments:?} should have been converted to FieldAccess"
                     );
                 }
             }
@@ -188,14 +187,18 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 value,
                 body: let_body,
             } => {
-                // Lower the value
+                // Extract the variable name from the pattern first
+                let pat = body.pattern(*pattern);
+                let Pattern::Binding(name) = pat;
+
+                // Lower the value with the actual variable name
                 let local_ty = self.lower_typed_ir_ty(var_ty);
-                let local = self.builder.declare_local(None, local_ty, None);
+                let local = self
+                    .builder
+                    .declare_local(Some(name.clone()), local_ty, None);
                 self.lower_expr(*value, Place::local(local), body);
 
                 // Bind the variable
-                let pat = body.pattern(*pattern);
-                let Pattern::Binding(name) = pat;
                 self.locals.insert(name.clone(), local);
 
                 // Lower the body - this IS the result
@@ -227,7 +230,10 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 self.lower_if(*condition, *then_branch, *else_branch, dest, body);
             }
 
-            Expr::While { condition, body: loop_body } => {
+            Expr::While {
+                condition,
+                body: loop_body,
+            } => {
                 self.lower_while(*condition, *loop_body, body);
                 // While returns Unit
                 self.builder
@@ -514,13 +520,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Lower short-circuit AND: `a && b`
-    fn lower_short_circuit_and(
-        &mut self,
-        lhs: ExprId,
-        rhs: ExprId,
-        dest: Place,
-        body: &ExprBody,
-    ) {
+    fn lower_short_circuit_and(&mut self, lhs: ExprId, rhs: ExprId, dest: Place, body: &ExprBody) {
         let lhs_local = self.builder.temp(Ty::Bool);
         self.lower_expr(lhs, Place::local(lhs_local), body);
 
@@ -548,13 +548,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Lower short-circuit OR: `a || b`
-    fn lower_short_circuit_or(
-        &mut self,
-        lhs: ExprId,
-        rhs: ExprId,
-        dest: Place,
-        body: &ExprBody,
-    ) {
+    fn lower_short_circuit_or(&mut self, lhs: ExprId, rhs: ExprId, dest: Place, body: &ExprBody) {
         let lhs_local = self.builder.temp(Ty::Bool);
         self.lower_expr(lhs, Place::local(lhs_local), body);
 
@@ -742,7 +736,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 if let Some(&local) = self.locals.get(name) {
                     Place::local(local)
                 } else {
-                    panic!("BUG: Variable `{}` not found in lvalue context", name);
+                    panic!("BUG: Variable `{name}` not found in lvalue context");
                 }
             }
 
@@ -751,15 +745,14 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 if let Some(&local) = self.locals.get(name) {
                     Place::local(local)
                 } else {
-                    panic!("BUG: Variable `{}` not found in lvalue context", name);
+                    panic!("BUG: Variable `{name}` not found in lvalue context");
                 }
             }
 
             Expr::Path(segments) => {
                 // Multi-segment paths should have been converted to FieldAccess.
                 panic!(
-                    "BUG: Multi-segment path {:?} should have been converted to FieldAccess",
-                    segments
+                    "BUG: Multi-segment path {segments:?} should have been converted to FieldAccess"
                 );
             }
 
@@ -810,8 +803,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         }
 
         panic!(
-            "BUG: Cannot extract class name from type {:?} for field access `{}`",
-            ty, field
+            "BUG: Cannot extract class name from type {ty:?} for field access `{field}`"
         );
     }
 
@@ -829,7 +821,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         }
     }
 
-    /// Convert a TypedIR type to a THIR type for MIR locals.
+    /// Convert a `TypedIR` type to a THIR type for MIR locals.
     fn lower_typed_ir_ty(&self, ty: &baml_typed_ir::Ty) -> Ty<'db> {
         match ty {
             baml_typed_ir::Ty::Int => Ty::Int,

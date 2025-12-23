@@ -210,22 +210,13 @@ pub fn compile_files(db: &dyn baml_mir::Db, files: &[SourceFile]) -> Program {
                         let mir = match baml_typed_ir::lower_from_hir(db, &body, &inference) {
                             Ok(typed_ir) => {
                                 // Use the new TypedIR → MIR path
-                                baml_mir::lower_from_typed_ir(
-                                    &signature,
-                                    &typed_ir,
-                                    db,
-                                    &classes,
-                                )
+                                baml_mir::lower_from_typed_ir(&signature, &typed_ir, db, &classes)
                             }
                             Err(_) => {
                                 // Fall back to old HIR path if TypedIR lowering fails
                                 // (e.g., due to Missing nodes)
                                 baml_mir::lower_function(
-                                    &signature,
-                                    &body,
-                                    &inference,
-                                    db,
-                                    &classes,
+                                    &signature, &body, &inference, db, &classes,
                                 )
                             }
                         };

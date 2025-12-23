@@ -1,11 +1,11 @@
-//! Demonstration: Lowering TypedIR to MIR.
+//! Demonstration: Lowering `TypedIR` to MIR.
 //!
 //! This module shows how much cleaner MIR lowering is when starting from
-//! TypedIR's expression-only representation compared to HIR's statement/expression split.
+//! `TypedIR`'s expression-only representation compared to HIR's statement/expression split.
 //!
 //! # Comparison with HIR -> MIR lowering
 //!
-//! ## HIR -> MIR (current approach in baml_mir/src/lower.rs)
+//! ## HIR -> MIR (current approach in `baml_mir/src/lower.rs`)
 //!
 //! The HIR lowering requires:
 //! - Separate `lower_expr_to_place` and `lower_stmt` methods
@@ -16,9 +16,9 @@
 //! - `lower_expr_for_effect` helper for void-typed expressions
 //! - Complex handling for the statement/expression boundary
 //!
-//! ## TypedIR -> MIR (this approach)
+//! ## `TypedIR` -> MIR (this approach)
 //!
-//! With TypedIR, we have a single `lower_expr` method that handles everything:
+//! With `TypedIR`, we have a single `lower_expr` method that handles everything:
 //! - `Let { value, body }` → lower value, create local, lower body
 //! - `Seq { first, second }` → lower first, lower second, return second
 //! - `While`, `If`, etc. → just lower the sub-expressions
@@ -36,19 +36,20 @@
 use std::collections::HashMap;
 
 use baml_base::Name;
+
 use crate::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, Pattern, UnaryOp};
 
 // Re-export MIR types we'd use (in a real impl, these would come from baml_mir)
 // For now, we just define the lowering structure to demonstrate the pattern.
 
-/// Demonstration of how clean TypedIR -> MIR lowering is.
+/// Demonstration of how clean `TypedIR` -> MIR lowering is.
 ///
-/// Compare this to the 600+ line `lower.rs` in baml_mir which must handle
+/// Compare this to the 600+ line `lower.rs` in `baml_mir` which must handle
 /// the statement/expression split, tail expressions, and separate paths
 /// for effect-only lowering.
 pub struct TypedIrToMir<'a> {
     body: &'a ExprBody,
-    /// Maps TypedIR variable names to MIR locals.
+    /// Maps `TypedIR` variable names to MIR locals.
     locals: HashMap<String, usize>,
     /// Next local index to allocate.
     next_local: usize,
@@ -80,7 +81,7 @@ impl<'a> TypedIrToMir<'a> {
     /// - `lower_expr_for_effect` (handles void expressions)
     /// - Special `Block` handling with tail expression logic
     ///
-    /// With TypedIR, it's all just `lower_expr`. The structure is uniform.
+    /// With `TypedIR`, it's all just `lower_expr`. The structure is uniform.
     pub fn lower_expr(&mut self, id: ExprId, dest: Destination) -> LowerResult {
         let expr = self.body.expr(id);
         let _ty = self.body.ty(id); // Available for type-directed lowering
@@ -167,14 +168,11 @@ impl<'a> TypedIrToMir<'a> {
             // === Control Flow ===
             // These are also cleaner because If/While are expressions
             // that return values, not statements that need special handling.
-
             Expr::If {
                 condition,
                 then_branch,
                 else_branch,
-            } => {
-                self.lower_if(*condition, *then_branch, *else_branch, dest)
-            }
+            } => self.lower_if(*condition, *then_branch, *else_branch, dest),
 
             Expr::While { condition, body } => {
                 self.lower_while(*condition, *body);
@@ -304,7 +302,7 @@ impl<'a> TypedIrToMir<'a> {
                         (name.to_string(), local)
                     })
                     .collect();
-                self.emit_object(type_name.as_ref().map(|n| n.to_string()), field_vals, dest);
+                self.emit_object(type_name.as_ref().map(std::string::ToString::to_string), field_vals, dest);
                 LowerResult::Continue
             }
 
@@ -439,13 +437,21 @@ impl<'a> TypedIrToMir<'a> {
     fn emit_unary_to_dest(&mut self, _op: UnaryOp, _operand: usize, _dest: Destination) {}
     fn emit_call(&mut self, _callee: usize, _args: Vec<usize>, _dest: Destination) {}
     fn emit_array(&mut self, _elems: Vec<usize>, _dest: Destination) {}
-    fn emit_object(&mut self, _ty: Option<String>, _fields: Vec<(String, usize)>, _dest: Destination) {}
+    fn emit_object(
+        &mut self,
+        _ty: Option<String>,
+        _fields: Vec<(String, usize)>,
+        _dest: Destination,
+    ) {
+    }
     fn emit_field_access(&mut self, _base: usize, _field: String, _dest: Destination) {}
     fn emit_index(&mut self, _base: usize, _index: usize, _dest: Destination) {}
     fn emit_return(&mut self) {}
     fn emit_goto(&mut self, _block: usize) {}
     fn emit_branch(&mut self, _cond: usize, _then: usize, _else: usize) {}
-    fn create_block(&mut self) -> usize { 0 }
+    fn create_block(&mut self) -> usize {
+        0
+    }
     fn set_current_block(&mut self, _block: usize) {}
 }
 

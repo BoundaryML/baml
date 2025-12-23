@@ -1,4 +1,4 @@
-//! Type system for TypedIR.
+//! Type system for `TypedIR`.
 //!
 //! Types are fully resolved - no unresolved references. Class and Enum IDs
 //! from THIR are resolved to their names during lowering.

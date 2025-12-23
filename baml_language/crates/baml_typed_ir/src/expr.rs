@@ -5,7 +5,7 @@
 //!
 //! # No Missing Nodes
 //!
-//! Unlike HIR which has `Missing` variants for LSP error recovery, TypedIR
+//! Unlike HIR which has `Missing` variants for LSP error recovery, `TypedIR`
 //! represents only **valid, complete programs**. If the HIR contains any
 //! `Missing` nodes, lowering will fail. This is the gate between
 //! "LSP-compatible IR" and "codegen-ready IR".
@@ -40,7 +40,9 @@ pub struct ExprBody {
 impl ExprBody {
     /// Get the type of an expression.
     pub fn ty(&self, id: ExprId) -> &Ty {
-        self.expr_types.get(&id).expect("all expressions have types")
+        self.expr_types
+            .get(&id)
+            .expect("all expressions have types")
     }
 
     /// Get the span of an expression.
@@ -76,7 +78,7 @@ impl ExprBody {
 ///
 /// # No Error Recovery
 ///
-/// There is no `Missing` variant. TypedIR only represents valid programs.
+/// There is no `Missing` variant. `TypedIR` only represents valid programs.
 /// If the source has errors, lowering from HIR will fail.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
@@ -110,10 +112,7 @@ pub enum Expr {
     ///
     /// A block like `{ stmt1; stmt2; expr }` becomes:
     /// `Seq(stmt1, Seq(stmt2, expr))`
-    Seq {
-        first: ExprId,
-        second: ExprId,
-    },
+    Seq { first: ExprId, second: ExprId },
 
     // ========== Control Flow ==========
     /// If expression: `if cond { then } else { else_ }`
@@ -129,10 +128,7 @@ pub enum Expr {
     /// While loop: `while cond { body }`
     ///
     /// Returns Unit after loop terminates.
-    While {
-        condition: ExprId,
-        body: ExprId,
-    },
+    While { condition: ExprId, body: ExprId },
 
     /// Return from function. Diverges (type is Never).
     Return(Option<ExprId>),
@@ -145,10 +141,7 @@ pub enum Expr {
 
     // ========== Assignment ==========
     /// Simple assignment: `target = value`. Returns Unit.
-    Assign {
-        target: ExprId,
-        value: ExprId,
-    },
+    Assign { target: ExprId, value: ExprId },
 
     /// Compound assignment: `target op= value`. Returns Unit.
     AssignOp {
@@ -166,23 +159,15 @@ pub enum Expr {
     },
 
     /// Unary operation.
-    Unary {
-        op: UnaryOp,
-        operand: ExprId,
-    },
+    Unary { op: UnaryOp, operand: ExprId },
 
     // ========== Function Calls ==========
     /// Function call: `callee(args...)`
-    Call {
-        callee: ExprId,
-        args: Vec<ExprId>,
-    },
+    Call { callee: ExprId, args: Vec<ExprId> },
 
     // ========== Data Structures ==========
     /// Array literal: `[elem1, elem2, ...]`
-    Array {
-        elements: Vec<ExprId>,
-    },
+    Array { elements: Vec<ExprId> },
 
     /// Object/struct literal: `TypeName { field1: value1, ... }`
     Object {
@@ -192,16 +177,10 @@ pub enum Expr {
 
     // ========== Access ==========
     /// Field access: `base.field`
-    FieldAccess {
-        base: ExprId,
-        field: Name,
-    },
+    FieldAccess { base: ExprId, field: Name },
 
     /// Index access: `base[index]`
-    Index {
-        base: ExprId,
-        index: ExprId,
-    },
+    Index { base: ExprId, index: ExprId },
 }
 
 /// Literal values.
