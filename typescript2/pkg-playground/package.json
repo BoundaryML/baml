@@ -4,10 +4,9 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": {
-    ".": "./src/index.ts",
-    "./*": "./src/*.tsx"
-  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:wasm": "wasm-pack build ../../baml_language/crates/baml_playground_wasm --target web --out-dir ../../typescript2/pkg-playground/wasm --release",

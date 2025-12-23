@@ -1,6 +1,6 @@
 'use client';
 
-import { useWasmReady, useWasmError, useFunctions } from './BamlPlaygroundProvider';
+import { useWasmReady, useWasmError, useFunctions } from './hooks';
 
 interface FunctionListProps {
   /** Called when a function is selected */

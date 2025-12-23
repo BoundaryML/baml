@@ -69,7 +69,7 @@ impl WasmProject {
             .names(&self.db)
             .clone()
             .into_iter()
-            .chain(vec!["Greet".to_string(), "asdf".to_string()])
+            .chain(vec!["Greet".to_string(), "hello1".to_string()])
             .collect()
     }
 

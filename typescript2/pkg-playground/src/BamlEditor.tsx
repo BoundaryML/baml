@@ -1,7 +1,7 @@
 'use client';
 
 import { useAtomValue } from 'jotai';
-import { useWasmReady, useUpdateFile } from './BamlPlaygroundProvider';
+import { useWasmReady, useUpdateFile } from './hooks';
 import { filesAtom } from './atoms';
 
 interface BamlEditorProps {

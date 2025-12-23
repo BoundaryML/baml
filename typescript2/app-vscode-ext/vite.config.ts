@@ -17,11 +17,7 @@ export default defineConfig({
   server: {
     port: 5173,
   },
-  build: {
-    outDir: 'dist',
-    sourcemap: true,
-  },
   define: {
-    __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),
+    __DEV__: process.env.NODE_ENV !== 'production',
   },
 });

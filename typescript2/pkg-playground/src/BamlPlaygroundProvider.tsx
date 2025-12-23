@@ -1,15 +1,10 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
-import { useSetAtom, useAtomValue } from 'jotai';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useSetAtom } from 'jotai';
 import initWasm, { WasmProject } from 'baml-playground-wasm';
-import {
-  wasmReadyAtom,
-  wasmErrorAtom,
-  projectAtom,
-  functionsAtom,
-  filesAtom,
-} from './atoms';
+import { filesAtom } from './atoms';
+import { BamlContext } from './context';
 
 interface BamlPlaygroundProviderProps {
   /** Initial files to load (path -> content) */
@@ -22,32 +17,30 @@ interface BamlPlaygroundProviderProps {
 
 /**
  * Provider component that initializes the BAML WASM module.
- * Uses jotai atoms for state management - no context needed.
+ * Uses useRef for the project instance to avoid unnecessary re-renders.
  */
 export function BamlPlaygroundProvider({
   initialFiles = {},
   rootDir = 'baml_src',
   children,
 }: BamlPlaygroundProviderProps) {
-  const setReady = useSetAtom(wasmReadyAtom);
-  const setError = useSetAtom(wasmErrorAtom);
-  const setProject = useSetAtom(projectAtom);
-  const setFunctions = useSetAtom(functionsAtom);
+  const projectRef = useRef<WasmProject | null>(null);
+  const initialFilesRef = useRef(initialFiles);
+  const [isReady, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const setFiles = useSetAtom(filesAtom);
 
   useEffect(() => {
     let cancelled = false;
-    let currentProject: WasmProject | null = null;
 
     async function init() {
       try {
         await initWasm();
         if (cancelled) return;
 
-        currentProject = new WasmProject(rootDir, initialFiles);
-        setProject(currentProject);
-        setFunctions(currentProject.list_functions());
-        setFiles(initialFiles);
+        const project = new WasmProject(rootDir, initialFilesRef.current);
+        projectRef.current = project;
+        setFiles(initialFilesRef.current);
         setReady(true);
       } catch (e) {
         if (cancelled) return;
@@ -59,64 +52,14 @@ export function BamlPlaygroundProvider({
 
     return () => {
       cancelled = true;
-      currentProject?.free();
+      projectRef.current?.free();
+      projectRef.current = null;
     };
   }, []);
 
-  return <>{children}</>;
-}
-
-/**
- * Hook to access WASM ready state.
- */
-export function useWasmReady() {
-  return useAtomValue(wasmReadyAtom);
-}
-
-/**
- * Hook to access WASM error state.
- */
-export function useWasmError() {
-  return useAtomValue(wasmErrorAtom);
-}
-
-/**
- * Hook to access the list of functions.
- */
-export function useFunctions() {
-  return useAtomValue(functionsAtom);
-}
-
-/**
- * Hook to update a file and refresh the function list.
- */
-export function useUpdateFile() {
-  const project = useAtomValue(projectAtom);
-  const setFunctions = useSetAtom(functionsAtom);
-  const setFiles = useSetAtom(filesAtom);
-
-  return (path: string, content: string) => {
-    if (!project) return;
-    project.update_file(path, content);
-    setFunctions(project.list_functions());
-    setFiles((prev) => ({ ...prev, [path]: content }));
-  };
-}
-
-/**
- * Hook to get and set the selected function.
- */
-export { selectedFunctionAtom } from './atoms';
-
-/**
- * Convenience hook that combines all playground state.
- * For more granular updates, use the individual hooks.
- */
-export function useBamlPlayground() {
-  const isReady = useWasmReady();
-  const error = useWasmError();
-  const functions = useFunctions();
-  const updateFile = useUpdateFile();
-
-  return { isReady, error, functions, updateFile };
+  return (
+    <BamlContext.Provider value={{ projectRef, isReady, error }}>
+      {children}
+    </BamlContext.Provider>
+  );
 }

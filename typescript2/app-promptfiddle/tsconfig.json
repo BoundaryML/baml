@@ -13,6 +13,11 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@baml/playground-common": ["../pkg-playground/src"],
+      "@baml/playground-common/*": ["../pkg-playground/src/*"]
+    },
     "plugins": [
       {
         "name": "next"
