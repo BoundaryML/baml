@@ -127,6 +127,26 @@ pub fn project_items(db: &dyn Db, root: baml_workspace::Project) -> ProjectItems
     ProjectItems::new(db, all_items)
 }
 
+/// Returns the names of all functions defined in the project.
+///
+/// This is a convenience function for WASM/external consumers that just need
+/// a list of function names without dealing with HIR internals.
+pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<String> {
+    let items = project_items(db, root);
+    let mut functions = Vec::new();
+
+    for item in items.items(db) {
+        if let ItemId::Function(func_loc) = item {
+            let file = func_loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let func = &item_tree[func_loc.id(db)];
+            functions.push(func.name.to_string());
+        }
+    }
+
+    functions
+}
+
 /// Tracked: Get generic parameters for a function.
 ///
 /// This is queried separately from `ItemTree` for incrementality - changes to
