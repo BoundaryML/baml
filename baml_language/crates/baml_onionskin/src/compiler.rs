@@ -20,7 +20,7 @@ use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
-use baml_thir::{build_class_fields_from_files, build_typing_context_from_files};
+use baml_thir::{class_field_types, enum_variants, type_aliases, typing_context};
 use regex::Regex;
 use rowan::{GreenNode, NodeCache, ast::AstNode};
 use salsa::{Event, EventKind, Setter};
@@ -766,12 +766,11 @@ impl CompilerRunner {
         let mut interactive_state = ThirInteractiveState::default();
 
         // Build initial typing context with all function types
-        let file_list: Vec<_> = self.source_files.values().copied().collect();
-        let globals = build_typing_context_from_files(&self.db, &file_list);
-        let class_fields = build_class_fields_from_files(&self.db, self.project_root);
-        let type_aliases = baml_thir::build_type_aliases_from_project(&self.db, self.project_root);
-        let enum_variants =
-            baml_thir::build_enum_variants_from_project(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root);
+        let class_fields = class_field_types(&self.db, self.project_root);
+        let type_aliases_map = type_aliases(&self.db, self.project_root);
+        let enum_variants_map = enum_variants(&self.db, self.project_root);
+        let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -802,15 +801,15 @@ impl CompilerRunner {
                     let func_name = signature.name.to_string();
                     let body = function_body(&self.db, *func_id);
 
-                    // Run type inference with global function types
+                    // Run type inference with global function types and type validation
                     let inference_result = baml_thir::infer_function(
                         &self.db,
                         &signature,
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
-                        Some(type_aliases.clone()),
-                        Some(enum_variants.clone()),
+                        Some(type_aliases_map.clone()),
+                        Some(enum_variants_data.clone()),
                         *func_id,
                     );
 
@@ -870,12 +869,11 @@ impl CompilerRunner {
         let mut output_annotated = Vec::new();
 
         // Build typing context and class fields for inference
-        let file_list: Vec<_> = self.source_files.values().copied().collect();
-        let globals = build_typing_context_from_files(&self.db, &file_list);
-        let class_fields = build_class_fields_from_files(&self.db, self.project_root);
-        let type_aliases = baml_thir::build_type_aliases_from_project(&self.db, self.project_root);
-        let enum_variants =
-            baml_thir::build_enum_variants_from_project(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root);
+        let class_fields = class_field_types(&self.db, self.project_root);
+        let type_aliases_map = type_aliases(&self.db, self.project_root);
+        let enum_variants_map = enum_variants(&self.db, self.project_root);
+        let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -910,8 +908,8 @@ impl CompilerRunner {
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
-                        Some(type_aliases.clone()),
-                        Some(enum_variants.clone()),
+                        Some(type_aliases_map.clone()),
+                        Some(enum_variants_data.clone()),
                         *func_id,
                     );
 
@@ -963,8 +961,8 @@ impl CompilerRunner {
 
         // Build typing context and class fields map for MIR lowering
         let file_list: Vec<_> = self.source_files.values().copied().collect();
-        let globals = build_typing_context_from_files(&self.db, &file_list);
-        let class_field_types = build_class_fields_from_files(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root);
+        let class_field_types_map = class_field_types(&self.db, self.project_root);
 
         // Build classes map (class name -> field name -> field index) for MIR lowering
         let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
@@ -1012,7 +1010,7 @@ impl CompilerRunner {
                         &signature,
                         &body,
                         Some(globals.clone()),
-                        Some(class_field_types.clone()),
+                        Some(class_field_types_map.clone()),
                         None, // type_aliases
                         None, // enum_variants
                         *func_id,

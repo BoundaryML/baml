@@ -67,8 +67,11 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     }
 
     // Collect type errors
-    let globals = baml_thir::build_typing_context_from_files(&db, &source_files);
-    let class_fields = baml_thir::lower_project_class_fields(&db, root);
+    let globals = baml_thir::typing_context(&db, root);
+    let class_fields = baml_thir::class_field_types(&db, root);
+    let type_aliases = baml_thir::type_aliases(&db, root);
+    let enum_variants_map = baml_thir::enum_variants(&db, root);
+    let enum_variants = enum_variants_map.enums(&db).clone();
 
     for source_file in &source_files {
         let items_struct = file_items(&db, *source_file);
@@ -83,8 +86,8 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
                     &body,
                     Some(globals.clone()),
                     Some(class_fields.clone()),
-                    None, // type_aliases
-                    None, // enum_variants
+                    Some(type_aliases.clone()),
+                    Some(enum_variants.clone()),
                     *func_id,
                 );
                 for error in &result.errors {

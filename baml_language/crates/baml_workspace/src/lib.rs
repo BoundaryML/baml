@@ -1,6 +1,14 @@
 //! Workspace and project management.
 //!
 //! Handles discovering BAML files in a project directory and managing the project structure.
+//!
+//! This crate provides:
+//! - File discovery (`discover_baml_files`)
+//! - Project root tracking (`Project` Salsa input)
+//! - Source file utilities
+//!
+//! Note: The `Db` trait hierarchy starts in `baml_hir`, not here, because lexer and
+//! parser only need `salsa::Database` and don't require project context.
 
 use std::path::PathBuf;
 

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -582,13 +582,3 @@ expression: output
   [parse] Error: Expected top-level declaration, found Hash
 
   [parse] Error: Expected top-level declaration, found RBrace
-
-  [type] Error: Expected "admin" | "user" | "guest", found string
-   ╭─[ 0:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected "admin" | "user" | "guest", found string
-   │ 
-   │ Note: Error code: E0001
-───╯

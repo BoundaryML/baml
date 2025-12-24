@@ -49,12 +49,12 @@ function FooBar(arg) -> bar {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected bar, found void
+// Error: Unknown type bar
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function Foo() -> {
 //    │ │ 
-//    │ ╰─ Expected bar, found void
+//    │ ╰─ Unknown type bar
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0002
 // ───╯

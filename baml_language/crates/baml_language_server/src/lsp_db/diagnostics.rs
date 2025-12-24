@@ -55,7 +55,7 @@ impl LspDatabase {
         }
 
         // Collect name resolution errors if we have a project
-        if let Some(project) = self.project {
+        if let Some(project) = self.project() {
             let name_errors = validate_duplicate_names(&self.db, project);
 
             for error in name_errors {

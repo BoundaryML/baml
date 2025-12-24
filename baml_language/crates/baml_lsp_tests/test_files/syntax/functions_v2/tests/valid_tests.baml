@@ -87,3 +87,14 @@ test Foo {
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
+// Error: Unknown type // Do something
+// string
+//    ╭─[ 0:1:1 ]
+//    │
+//  1 │ client<llm> Bar {
+//    │ │ 
+//    │ ╰─ Unknown type // Do something
+// string
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯

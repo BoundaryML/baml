@@ -12,12 +12,9 @@
 
 use std::collections::HashMap;
 
-use baml_base::{FileId, Name, SourceFile, Span};
+use baml_base::{FileId, Name, Span};
 use baml_diagnostics::compiler_error::TypeError;
-use baml_hir::{
-    ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId,
-    project_class_fields,
-};
+use baml_hir::{ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId};
 use baml_workspace::Project;
 
 pub mod builtins;
@@ -31,7 +28,7 @@ pub use builtins::{
     method_return_type, substitute,
 };
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
-pub use lower::lower_type_ref;
+pub use lower::{TypeLoweringContext, lower_type_ref, lower_type_ref_validated};
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 use text_size::TextRange;
 pub use types::*;
@@ -89,34 +86,74 @@ pub enum ResolvedPath {
 pub trait Db: baml_hir::Db {}
 
 // ============================================================================
-// Typing Context Construction
+// Tracked Struct for Enum Variants (no Ty<'db>, so this works)
 // ============================================================================
 
-/// Build typing context from a list of source files.
+/// Tracked struct holding enum variants (enum name -> variant names).
+/// This works because it doesn't contain `Ty<'db>`.
+#[salsa::tracked]
+pub struct EnumVariantsMap<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub enums: HashMap<Name, Vec<Name>>,
+}
+
+// ============================================================================
+// THIR Queries
+// ============================================================================
+
+/// Query: Get enum variants for a project.
 ///
-/// This maps function names to their arrow types, e.g.:
+/// Maps enum names to their variant names, e.g.:
+/// `Status` -> `[Active, Inactive, Pending]`
+///
+/// This is a proper Salsa query because it doesn't return `Ty<'db>`.
+#[salsa::tracked]
+pub fn enum_variants(db: &dyn Db, project: Project) -> EnumVariantsMap<'_> {
+    let items = baml_hir::project_items(db, project);
+    let mut enums = HashMap::new();
+
+    for item in items.items(db) {
+        if let baml_hir::ItemId::Enum(enum_loc) = item {
+            let file = enum_loc.file(db);
+            let item_tree = baml_hir::file_item_tree(db, file);
+            let enum_data = &item_tree[enum_loc.id(db)];
+
+            let variants: Vec<Name> = enum_data.variants.iter().map(|v| v.name.clone()).collect();
+            enums.insert(enum_data.name.clone(), variants);
+        }
+    }
+
+    EnumVariantsMap::new(db, enums)
+}
+
+// ============================================================================
+// Non-Salsa Helper Functions
+// ============================================================================
+//
+// These functions return `Ty<'db>` which cannot be stored in Salsa tracked
+// structs because `Ty` is not interned. To make these proper Salsa queries,
+// we would need to intern `Ty` (make it `#[salsa::interned]`).
+//
+// For now, these are computed on-demand. The underlying HIR queries they
+// depend on (project_items, project_class_fields, etc.) ARE cached by Salsa.
+
+/// Get the typing context for a project.
+///
+/// Maps function names to their arrow types, e.g.:
 /// `Foo` -> `(int) -> int` for `function Foo(x: int) -> int`
-///
-/// This is used as the starting scope when type-checking function bodies,
-/// allowing function calls to be properly typed.
-///
-/// Note: This is not a Salsa query because it returns `Ty<'db>` which contains
-/// lifetime-parameterized data. Callers should cache the result if needed.
-pub fn build_typing_context_from_files<'db>(
-    db: &'db dyn Db,
-    files: &[SourceFile],
-) -> HashMap<Name, Ty<'db>> {
+pub fn typing_context<'db>(db: &'db dyn Db, project: Project) -> HashMap<Name, Ty<'db>> {
+    let files = baml_workspace::project_files(db, project);
     let mut context = HashMap::new();
 
     for file in files {
-        let items_struct = baml_hir::file_items(db, *file);
+        let items_struct = baml_hir::file_items(db, file);
         let items = items_struct.items(db);
 
         for item in items {
             if let baml_hir::ItemId::Function(func_loc) = item {
                 let signature = baml_hir::function_signature(db, *func_loc);
 
-                // Build the arrow type: (param_types) -> return_type
                 let param_types: Vec<Ty<'db>> = signature
                     .params
                     .iter()
@@ -138,62 +175,12 @@ pub fn build_typing_context_from_files<'db>(
     context
 }
 
-/// Build class fields map from source files.
+/// Get class field types for a project.
 ///
-/// This maps class names to their field types, e.g.:
+/// Maps class names to their field types, e.g.:
 /// `Baz` -> { `name` -> `String` }
-///
-/// Used for field access type checking.
-///
-/// This function lowers HIR `TypeRefs` to THIR `Ty`s. It iterates through
-/// the provided files and uses the Salsa-tracked `baml_hir::class_fields` query
-/// for each class, providing better incrementality than the old implementation.
-///
-/// Note: Once `baml_workspace::project_files` is implemented, this can be
-/// replaced with a simpler version that uses `baml_hir::project_class_fields`.
-pub fn build_class_fields_from_files(
-    db: &dyn Db,
-    project: Project,
-) -> HashMap<Name, HashMap<Name, Ty<'_>>> {
-    let class_fields = project_class_fields(db, project);
-
-    class_fields
-        .classes(db)
-        .iter()
-        .map(|(class_name, class_fields)| {
-            (
-                class_name.clone(),
-                class_fields
-                    .iter()
-                    .map(|(field_name, field_type)| {
-                        (field_name.clone(), lower_type_ref(db, field_type))
-                    })
-                    .collect(),
-            )
-        })
-        .collect()
-}
-
-/// Build class fields map for a project using Salsa queries.
-///
-/// This maps class names to their field types, e.g.:
-/// `Baz` -> { `name` -> `String` }
-///
-/// Used for field access type checking.
-///
-/// This function uses the Salsa-tracked `baml_hir::project_class_fields` query
-/// for maximum incrementality, then lowers HIR `TypeRefs` to THIR `Ty`s.
-///
-/// This is the preferred API - it properly uses the Salsa query system.
-///
-/// TODO: How do we make this incremental/cached? It seems like the
-/// `ClassId` and `EnumId` inside `Ty`, which are salsa references, make it
-/// impossible to track `Ty`.
-pub fn lower_project_class_fields(
-    db: &dyn Db,
-    root: baml_workspace::Project,
-) -> HashMap<Name, HashMap<Name, Ty<'_>>> {
-    let hir_fields = baml_hir::project_class_fields(db, root);
+pub fn class_field_types(db: &dyn Db, project: Project) -> HashMap<Name, HashMap<Name, Ty<'_>>> {
+    let hir_fields = baml_hir::project_class_fields(db, project);
 
     hir_fields
         .classes(db)
@@ -208,19 +195,13 @@ pub fn lower_project_class_fields(
         .collect()
 }
 
-/// Build type alias definitions from a project.
+/// Get type alias definitions for a project.
 ///
-/// This maps type alias names to their resolved types, e.g.:
+/// Maps type alias names to their resolved types, e.g.:
 /// `Result` -> `Success | Failure`
-///
-/// Used for exhaustiveness checking - type aliases are expanded to their
-/// underlying types when checking match coverage.
-pub fn build_type_aliases_from_project(
-    db: &dyn Db,
-    root: baml_workspace::Project,
-) -> HashMap<Name, Ty<'_>> {
-    let items = baml_hir::project_items(db, root);
-    let mut type_aliases = HashMap::new();
+pub fn type_aliases(db: &dyn Db, project: Project) -> HashMap<Name, Ty<'_>> {
+    let items = baml_hir::project_items(db, project);
+    let mut aliases = HashMap::new();
 
     for item in items.items(db) {
         if let baml_hir::ItemId::TypeAlias(alias_loc) = item {
@@ -228,69 +209,12 @@ pub fn build_type_aliases_from_project(
             let item_tree = baml_hir::file_item_tree(db, file);
             let alias_data = &item_tree[alias_loc.id(db)];
 
-            // TODO(recursive-type-aliases): Recursive type aliases are not validated here.
-            //
-            // Examples of problematic aliases:
-            //   - Direct cycle: `type A = A | B`
-            //   - Indirect cycle: `type A = B`, `type B = A`
-            //   - Structural recursion: `type Tree = { val: int, children: Tree[] }`
-            //
-            // The lowered type will contain `Ty::Named("A")` which causes infinite
-            // recursion in `exhaustiveness::expand_type_to_values`.
-            //
-            // The legacy compiler solved this with Tarjan's SCC algorithm:
-            //   - PR #1163: Implement Type Aliases
-            //   - PR #1207: Allow structural recursion in type aliases
-            //   - PR #1416: Recurse into recursive type alias unions
-            //
-            // To fix properly:
-            //   1. Build a dependency graph of alias references (which aliases reference which)
-            //   2. Run Tarjan's SCC to find cycles
-            //   3. Distinguish structural recursion (valid: behind Option/List) from
-            //      non-structural (invalid: direct or union cycles)
-            //   4. Report diagnostics for invalid cycles, insert `Ty::Error`
-            //   5. Store resolved aliases so downstream phases don't re-resolve
-            //
-            // Reference: engine/baml-lib/parser-database/src/tarjan.rs
-            //
-            // NOTE: This function (`build_type_aliases_from_project`) should eventually
-            // become a Salsa query for caching, as resolved aliases are needed by:
-            // bytecode generation, target language codegen, prompt rendering, and
-            // exhaustiveness checking.
             let lowered_ty = lower_type_ref(db, &alias_data.type_ref);
-            type_aliases.insert(alias_data.name.clone(), lowered_ty);
+            aliases.insert(alias_data.name.clone(), lowered_ty);
         }
     }
 
-    type_aliases
-}
-
-/// Build enum variant definitions from a project.
-///
-/// This maps enum names to their variant names, e.g.:
-/// `Status` -> `[Active, Inactive, Pending]`
-///
-/// Used for exhaustiveness checking - when matching on an enum type,
-/// all variants must be covered (unless there's a catch-all).
-pub fn build_enum_variants_from_project(
-    db: &dyn Db,
-    root: baml_workspace::Project,
-) -> HashMap<Name, Vec<Name>> {
-    let items = baml_hir::project_items(db, root);
-    let mut enum_variants = HashMap::new();
-
-    for item in items.items(db) {
-        if let baml_hir::ItemId::Enum(enum_loc) = item {
-            let file = enum_loc.file(db);
-            let item_tree = baml_hir::file_item_tree(db, file);
-            let enum_data = &item_tree[enum_loc.id(db)];
-
-            let variants: Vec<Name> = enum_data.variants.iter().map(|v| v.name.clone()).collect();
-            enum_variants.insert(enum_data.name.clone(), variants);
-        }
-    }
-
-    enum_variants
+    aliases
 }
 
 // ============================================================================
@@ -650,15 +574,13 @@ pub fn infer_function_body<'db>(
 
 /// Infer types for a function given its signature and body.
 ///
-/// This is the entry point for type inference from the test suite.
-/// It takes pre-fetched signature and body data, allowing the caller (`baml_db`)
-/// to handle the Salsa queries for fetching this data.
+/// This queries the database for known type names and validates that all type
+/// references in the signature refer to types that exist. Unknown types will
+/// produce errors and be replaced with `Ty::Error` to suppress downstream
+/// type mismatches.
 ///
 /// The `globals` parameter provides types for top-level functions, allowing
 /// function calls to be properly typed. Pass `None` if no global context is needed.
-///
-/// The `type_aliases` and `enum_variants` parameters enable proper exhaustiveness
-/// checking for match expressions involving type aliases and enum types.
 #[allow(clippy::too_many_arguments)]
 pub fn infer_function<'db>(
     db: &'db dyn Db,
@@ -670,21 +592,37 @@ pub fn infer_function<'db>(
     enum_variants: Option<HashMap<Name, Vec<Name>>>,
     function_loc: FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
-    // Convert parameter TypeRefs to Tys
+    // Query known type names from the project (Salsa-cached)
+    let project = db.project();
+    let known_type_names = baml_hir::project_type_names(db, project);
+    let known_types: std::collections::HashSet<_> =
+        known_type_names.names(db).iter().cloned().collect();
+
+    let file_id = function_loc.file(db).file_id(db);
+    // Use a placeholder span for now - ideally we'd have spans on TypeRef
+    let placeholder_span = Span::new(file_id, TextRange::empty(0.into()));
+
+    let mut type_errors: Vec<TypeError<Ty<'db>>> = Vec::new();
+
+    // Convert parameter TypeRefs to Tys with validation
     let param_types: HashMap<Name, Ty<'db>> = signature
         .params
         .iter()
         .map(|param| {
-            let ty = lower_type_ref(db, &param.type_ref);
+            let (ty, errors) =
+                lower_type_ref_validated(&param.type_ref, &known_types, placeholder_span);
+            type_errors.extend(errors);
             (param.name.clone(), ty)
         })
         .collect();
 
-    // Convert return type
-    let expected_return = lower_type_ref(db, &signature.return_type);
+    // Convert return type with validation
+    let (expected_return, errors) =
+        lower_type_ref_validated(&signature.return_type, &known_types, placeholder_span);
+    type_errors.extend(errors);
 
     // Delegate to the body inference function
-    infer_function_body(
+    let mut result = infer_function_body(
         db,
         body,
         param_types,
@@ -694,7 +632,14 @@ pub fn infer_function<'db>(
         type_aliases,
         enum_variants,
         function_loc,
-    )
+    );
+
+    // Prepend type lowering errors to the result
+    // (they should appear before type checking errors)
+    type_errors.extend(result.errors);
+    result.errors = type_errors;
+
+    result
 }
 
 /// Infer the type of an expression (synthesize mode).

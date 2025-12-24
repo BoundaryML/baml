@@ -100,7 +100,7 @@ impl LspDatabase {
         let name_to_find = Name::new(name);
 
         // If we have a project, search all project items
-        if let Some(project) = self.project {
+        if let Some(project) = self.project() {
             let items = project_items(&self.db, project);
 
             for item in items.items(&self.db) {
@@ -326,7 +326,7 @@ impl LspDatabase {
     pub fn list_functions(&self) -> Vec<SymbolLocation> {
         let mut functions = Vec::new();
 
-        if let Some(project) = self.project {
+        if let Some(project) = self.project() {
             let items = project_items(&self.db, project);
             for item in items.items(&self.db) {
                 if let ItemId::Function(func_loc) = item {
@@ -356,7 +356,7 @@ impl LspDatabase {
     pub fn list_classes(&self) -> Vec<SymbolLocation> {
         let mut classes = Vec::new();
 
-        if let Some(project) = self.project {
+        if let Some(project) = self.project() {
             let items = project_items(&self.db, project);
             for item in items.items(&self.db) {
                 if let ItemId::Class(class_loc) = item {
@@ -386,7 +386,7 @@ impl LspDatabase {
     pub fn list_enums(&self) -> Vec<SymbolLocation> {
         let mut enums = Vec::new();
 
-        if let Some(project) = self.project {
+        if let Some(project) = self.project() {
             let items = project_items(&self.db, project);
             for item in items.items(&self.db) {
                 if let ItemId::Enum(enum_loc) = item {
@@ -419,7 +419,7 @@ impl LspDatabase {
         match symbol.kind {
             SymbolKind::Function => {
                 // Try to get function signature
-                if let Some(project) = self.project {
+                if let Some(project) = self.project() {
                     let items = project_items(&self.db, project);
                     for item in items.items(&self.db) {
                         if let ItemId::Function(func_loc) = item {
@@ -438,7 +438,7 @@ impl LspDatabase {
             }
             SymbolKind::Class => {
                 // Get class fields for hover
-                if let Some(project) = self.project {
+                if let Some(project) = self.project() {
                     let items = project_items(&self.db, project);
                     for item in items.items(&self.db) {
                         if let ItemId::Class(class_loc) = item {
@@ -455,7 +455,7 @@ impl LspDatabase {
                 format!("class {}", symbol.name)
             }
             SymbolKind::Enum => {
-                if let Some(project) = self.project {
+                if let Some(project) = self.project() {
                     let items = project_items(&self.db, project);
                     for item in items.items(&self.db) {
                         if let ItemId::Enum(enum_loc) = item {

@@ -384,3 +384,14 @@ function InputImage(img: image) -> string {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: Unknown type // Do something
+// string
+//    ╭─[ 0:1:1 ]
+//    │
+//  1 │ function InputNone() -> int {
+//    │ │ 
+//    │ ╰─ Unknown type // Do something
+// string
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯

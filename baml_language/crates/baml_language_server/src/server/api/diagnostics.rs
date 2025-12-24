@@ -197,8 +197,11 @@ pub(super) fn project_diagnostics(
     }
 
     // 3. Gather type errors from function inference
-    let globals = baml_thir::build_typing_context_from_files(db, &source_files);
-    let class_fields = baml_thir::build_class_fields_from_files(db, project_root);
+    let globals = baml_thir::typing_context(db, project_root);
+    let class_fields = baml_thir::class_field_types(db, project_root);
+    let type_aliases = baml_thir::type_aliases(db, project_root);
+    let enum_variants_map = baml_thir::enum_variants(db, project_root);
+    let enum_variants = enum_variants_map.enums(db).clone();
 
     for source_file in &source_files {
         let items_struct = baml_hir::file_items(db, *source_file);
@@ -217,8 +220,8 @@ pub(super) fn project_diagnostics(
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
-                        None, // type_aliases
-                        None, // enum_variants
+                        Some(type_aliases.clone()),
+                        Some(enum_variants.clone()),
                         *func_loc,
                     );
 

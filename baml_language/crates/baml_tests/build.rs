@@ -226,7 +226,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_mir;
             use baml_db::baml_codegen;
             use baml_hir::{function_body, function_signature};
-            use baml_thir::{build_typing_context_from_files};
+            use baml_thir::{typing_context, class_field_types, type_aliases, enum_variants};
             use baml_thir::pretty::short_display;
             use baml_diagnostics::{render_name_error, render_parse_error, render_type_error};
             use std::collections::HashMap;
@@ -410,10 +410,11 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
             writeln!(output, "=== TYPE INFERENCE ===").unwrap();
 
             // Build initial typing context with all function types
-            let globals = build_typing_context_from_files(&db, &source_files);
-            let class_fields = baml_thir::lower_project_class_fields(&db, root);
-            let type_aliases = baml_thir::build_type_aliases_from_project(&db, root);
-            let enum_variants = baml_thir::build_enum_variants_from_project(&db, root);
+            let globals = typing_context(&db, root);
+            let class_fields = class_field_types(&db, root);
+            let type_aliases_map = type_aliases(&db, root);
+            let enum_variants_map = enum_variants(&db, root);
+            let enum_variants_data = enum_variants_map.enums(&db).clone();
 
             // Iterate over files and their functions
             for source_file in &source_files {
@@ -423,7 +424,7 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases.clone()), Some(enum_variants.clone()), *func_id);
+                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
 
                         writeln!(output, "  Function {}:", signature.name).unwrap();
                         writeln!(output, "    Return: {:?}", result.return_type).unwrap();
@@ -483,8 +484,8 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
             writeln!(output, "=== MIR ===").unwrap();
 
             // Build initial typing context with all function types
-            let globals = build_typing_context_from_files(&db, &source_files);
-            let class_field_types = baml_thir::lower_project_class_fields(&db, root);
+            let globals = typing_context(&db, root);
+            let class_field_types_map = class_field_types(&db, root);
 
             // Build class field indices map (class name -> field name -> field index)
             let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
@@ -512,7 +513,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let inference = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types.clone()), None, None, *func_id);
+                        let inference = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
 
                         // Lower to MIR
                         let mir = baml_mir::lower_function(&signature, &body, &inference, &db, &classes);
@@ -579,10 +580,12 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             }
 
             // Build typing context and run type inference
-            let globals = build_typing_context_from_files(&db, &source_files);
-            let class_fields = baml_thir::lower_project_class_fields(&db, root);
-            let type_aliases = baml_thir::build_type_aliases_from_project(&db, root);
-            let enum_variants = baml_thir::build_enum_variants_from_project(&db, root);
+            let globals = typing_context(&db, root);
+            let class_fields = class_field_types(&db, root);
+            let type_aliases_map = type_aliases(&db, root);
+            let enum_variants_map = enum_variants(&db, root);
+            let enum_variants_data = enum_variants_map.enums(&db).clone();
+
             for source_file in &source_files {
                 let items_struct = baml_hir::file_items(&db, *source_file);
                 let items = items_struct.items(&db);
@@ -590,7 +593,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases.clone()), Some(enum_variants.clone()), *func_id);
+                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
                         for error in &result.errors {
                             all_errors.push(("type".to_string(), render_type_error(error, &sources, false)));
                         }
@@ -642,10 +645,13 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
         #[test]
         fn test_06_codegen() {
             let mut db = RootDatabase::new();
-            let _root = db.set_project_root(std::path::PathBuf::from("."));
+            let root = db.set_project_root(std::path::PathBuf::from("."));
             let mut source_files = Vec::new();
 
             #file_loaders
+
+            // Update project root with the list of files for proper Salsa tracking
+            root.set_files(&mut db).to(source_files.clone());
 
             let program = baml_codegen::compile_files(&db, &source_files);
 

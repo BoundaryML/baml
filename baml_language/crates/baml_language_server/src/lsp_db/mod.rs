@@ -23,10 +23,8 @@ use baml_db::{FileId, RootDatabase, Setter, SourceFile, baml_workspace::Project}
 /// - Position/span conversion
 #[derive(Clone)]
 pub struct LspDatabase {
-    /// The underlying Salsa database.
+    /// The underlying Salsa database (includes the project).
     db: RootDatabase,
-    /// The project root, if set.
-    project: Option<Project>,
     /// Maps file paths to their SourceFile handles.
     file_map: HashMap<PathBuf, SourceFile>,
     /// Maps FileId to file path for reverse lookup.
@@ -38,7 +36,6 @@ impl LspDatabase {
     pub fn new() -> Self {
         Self {
             db: RootDatabase::new(),
-            project: None,
             file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
         }
@@ -54,9 +51,9 @@ impl LspDatabase {
         &mut self.db
     }
 
-    /// Get the project root, if set.
+    /// Get the project, if set.
     pub fn project(&self) -> Option<Project> {
-        self.project
+        self.db.project
     }
 
     /// Add or update a file in the database.
@@ -81,7 +78,7 @@ impl LspDatabase {
             self.file_id_to_path.insert(file_id, canonical_path);
 
             // Update project files list if project is set
-            if let Some(project) = self.project {
+            if let Some(project) = self.db.project {
                 let mut files: Vec<SourceFile> = project.files(&self.db).clone();
                 files.push(file);
                 project.set_files(&mut self.db).to(files);
@@ -103,7 +100,7 @@ impl LspDatabase {
             self.file_id_to_path.remove(&file_id);
 
             // Remove from project files list
-            if let Some(project) = self.project {
+            if let Some(project) = self.db.project {
                 let files: Vec<SourceFile> = project
                     .files(&self.db)
                     .iter()
@@ -130,8 +127,9 @@ impl LspDatabase {
             .map(|(_, f)| *f)
             .collect();
 
+        // Create and set the project on the underlying RootDatabase
         let project = Project::new(&self.db, canonical_root, existing_files);
-        self.project = Some(project);
+        self.db.project = Some(project);
     }
 
     /// Get all files currently in the database.
@@ -168,7 +166,7 @@ impl std::fmt::Debug for LspDatabase {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LspDatabase")
             .field("file_count", &self.file_map.len())
-            .field("has_project", &self.project.is_some())
+            .field("has_project", &self.db.project.is_some())
             .finish_non_exhaustive()
     }
 }

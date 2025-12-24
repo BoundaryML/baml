@@ -1,0 +1,50 @@
+---
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn Bar(x: Error) -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Error // x // param
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn Foo() -> Int {
+    // Locals:
+    let _0: Int // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn Baz() -> Null {
+    // Locals:
+    let _0: Null // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}

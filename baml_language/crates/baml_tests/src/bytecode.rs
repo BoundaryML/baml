@@ -51,13 +51,18 @@ pub use crate::vm::{
 pub struct TestDatabase {
     storage: salsa::Storage<Self>,
     next_file_id: Arc<AtomicU32>,
+    project: Option<baml_workspace::Project>,
 }
 
 #[salsa::db]
 impl salsa::Database for TestDatabase {}
 
 #[salsa::db]
-impl baml_hir::Db for TestDatabase {}
+impl baml_hir::Db for TestDatabase {
+    fn project(&self) -> baml_workspace::Project {
+        self.project.expect("project must be set before querying")
+    }
+}
 
 #[salsa::db]
 impl baml_thir::Db for TestDatabase {}
@@ -77,6 +82,7 @@ impl TestDatabase {
         Self {
             storage: salsa::Storage::default(),
             next_file_id: Arc::new(AtomicU32::new(0)),
+            project: None,
         }
     }
 
@@ -88,6 +94,12 @@ impl TestDatabase {
         );
         SourceFile::new(self, text.into(), path.into(), file_id)
     }
+
+    /// Set the project with the given files.
+    pub fn set_project(&mut self, files: Vec<SourceFile>) {
+        let project = baml_workspace::Project::new(self, PathBuf::new(), files);
+        self.project = Some(project);
+    }
 }
 
 //
@@ -98,6 +110,7 @@ impl TestDatabase {
 pub fn compile_source(source: &str) -> VmProgram {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
+    db.set_project(vec![file]);
     baml_codegen::compile_files(&db, &[file])
 }
 

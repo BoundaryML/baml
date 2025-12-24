@@ -702,3 +702,12 @@ test IncompleteSyntax {
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
+// Error: Unknown type Resume
+//    ╭─[ 0:1:1 ]
+//    │
+//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
+//    │ │ 
+//    │ ╰─ Unknown type Resume
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯

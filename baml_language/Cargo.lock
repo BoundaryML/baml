@@ -542,6 +542,7 @@ dependencies = [
  "baml_mir",
  "baml_thir",
  "baml_vm",
+ "baml_workspace",
  "codspeed-divan-compat",
  "indexmap 2.12.0",
  "insta",

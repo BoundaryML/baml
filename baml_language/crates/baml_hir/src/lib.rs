@@ -52,13 +52,22 @@ pub use type_ref::*;
 
 /// Database trait for HIR queries.
 ///
-/// This trait is implemented by the root database and provides access
-/// to all HIR-related Salsa queries and interned types.
+/// This is the base trait for the BAML compiler's Db hierarchy.
+/// It provides access to the project being compiled and is extended by
+/// downstream crates (`baml_thir::Db`, `baml_mir::Db`, etc.) to add
+/// phase-specific queries.
 ///
-/// For now, this just extends `salsa::Database`. In the future, we can add
-/// dependencies on other crate Db traits when they're implemented.
+/// The Db trait hierarchy starts here because this is the first compiler
+/// phase that needs project context. Earlier phases (lexer, parser) only
+/// need `salsa::Database` for interning/tracking.
 #[salsa::db]
-pub trait Db: salsa::Database {}
+pub trait Db: salsa::Database {
+    /// Returns the project being analyzed.
+    ///
+    /// The project contains all source files (both user files and dependencies)
+    /// and is the root input for all queries.
+    fn project(&self) -> baml_workspace::Project;
+}
 
 //
 // ───────────────────────────────────────────────────── TRACKED STRUCTS ─────
@@ -322,6 +331,53 @@ pub fn project_class_fields(db: &dyn Db, root: baml_workspace::Project) -> Proje
     }
 
     ProjectClassFields::new(db, classes)
+}
+
+/// Tracked struct holding all known type names in a project.
+///
+/// This includes classes, enums, and type aliases - any name that can be
+/// used in a type position.
+#[salsa::tracked]
+pub struct ProjectTypeNames<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub names: Vec<Name>,
+}
+
+/// Returns all known type names in a project.
+///
+/// This includes classes, enums, and type aliases. Used during type lowering
+/// to validate that named types actually exist.
+#[salsa::tracked]
+pub fn project_type_names(db: &dyn Db, root: baml_workspace::Project) -> ProjectTypeNames<'_> {
+    let items = project_items(db, root);
+    let mut names = Vec::new();
+
+    for item in items.items(db) {
+        match item {
+            ItemId::Class(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let class = &item_tree[loc.id(db)];
+                names.push(class.name.clone());
+            }
+            ItemId::Enum(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let enum_def = &item_tree[loc.id(db)];
+                names.push(enum_def.name.clone());
+            }
+            ItemId::TypeAlias(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let alias = &item_tree[loc.id(db)];
+                names.push(alias.name.clone());
+            }
+            _ => {}
+        }
+    }
+
+    ProjectTypeNames::new(db, names)
 }
 
 /// Returns the body of a function (LLM prompt or expression IR).

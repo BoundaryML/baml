@@ -18,6 +18,7 @@ baml_hir = { workspace = true }
 baml_mir = { workspace = true }
 baml_thir = { workspace = true }
 baml_vm = { workspace = true }
+baml_workspace = { workspace = true }
 salsa = { workspace = true }
 
 anyhow = { workspace = true }

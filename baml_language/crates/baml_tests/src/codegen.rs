@@ -176,6 +176,7 @@ type CompileResult = (Vec<(String, CompiledFunction)>, HashMap<String, usize>);
 fn compile_source(source: &str) -> CompileResult {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
+    db.set_project(vec![file]);
 
     // Use the production compile_files function
     let program = baml_codegen::compile_files(&db, &[file]);

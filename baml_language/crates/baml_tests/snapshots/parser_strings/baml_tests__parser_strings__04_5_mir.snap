@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -43,9 +43,9 @@ fn ProcessText(input: String) -> String {
 
 }
 
-fn GetRole() -> Union([Literal(String("admin")), Literal(String("user")), Literal(String("guest"))]) {
+fn GetRole() -> String {
     // Locals:
-    let _0: Union([Literal(String("admin")), Literal(String("user")), Literal(String("guest"))]) // return
+    let _0: String // return
 
     bb0: {
         _0 = const "user";

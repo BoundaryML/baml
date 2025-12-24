@@ -48,15 +48,15 @@ pub use baml_vm::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, Program, UnaryOp, Value,
 };
-use baml_workspace::Project;
 
 /// Generate bytecode for all functions in a project.
 ///
 /// This is the main entry point for project-wide code generation.
 /// It collects all functions from HIR, type-checks them via THIR,
 /// lowers to MIR, and compiles to bytecode.
-pub fn generate_project_bytecode(db: &dyn baml_mir::Db, root: Project) -> Program {
-    let files = baml_workspace::project_files(db, root);
+pub fn generate_project_bytecode(db: &dyn baml_mir::Db) -> Program {
+    let project = db.project();
+    let files = baml_workspace::project_files(db, project);
     compile_files(db, &files)
 }
 
