@@ -4,6 +4,14 @@ title: Client Registry
 
 If you need to modify the model / parameters for an LLM client at runtime, you can modify the `ClientRegistry` for any specified function.
 
+<Tip>
+**Quick Override**: If you just need to change which client a function uses, you can use the simpler [`client` option](/ref/baml_client/client-option) instead of creating a full `ClientRegistry`:
+
+```python
+result = await b.ExtractResume("...", baml_options={"client": "GPT4"})
+```
+</Tip>
+
 <Tabs>
 
 <Tab title="Python" language="python">

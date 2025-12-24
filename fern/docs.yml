@@ -714,6 +714,9 @@ navigation:
             path: 03-reference/baml_client/typebuilder.mdx
           - page: ClientRegistry
             path: 01-guide/05-baml-advanced/client-registry.mdx
+          - page: client Option
+            path: 03-reference/baml_client/client-option.mdx
+            slug: client-option
           - page: OnTick
             path: 03-reference/baml_client/ontick.mdx
           - page: Multimodal
