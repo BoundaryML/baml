@@ -293,6 +293,7 @@ dependencies = [
 name = "baml-runtime-wasm"
 version = "0.1.0"
 dependencies = [
+ "baml_db",
  "console_error_panic_hook",
  "convert_case",
  "wasm-bindgen",

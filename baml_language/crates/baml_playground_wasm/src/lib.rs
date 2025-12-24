@@ -1,4 +1,6 @@
-use convert_case::{Case, Casing};
+use std::path::PathBuf;
+
+use baml_db::{RootDatabase, SourceFile, baml_hir, baml_workspace};
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "console_error_panic")]
@@ -8,114 +10,83 @@ extern crate console_error_panic_hook;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+pub mod sam_sandbox;
+
 #[wasm_bindgen(start)]
 pub fn start() {
     #[cfg(feature = "console_error_panic")]
     console_error_panic_hook::set_once();
 }
 
-/// A set of string casing variants generated from a BAML source input.
-#[wasm_bindgen]
-pub struct CasingVariants {
-    original: String,
-    lower: String,
-    upper: String,
-    camel: String,
-    pascal: String,
-    upper_snake: String,
-    snake: String,
-    kebab: String,
-    title: String,
-}
-
-#[wasm_bindgen]
-impl CasingVariants {
-    #[wasm_bindgen(getter)]
-    pub fn original(&self) -> String {
-        self.original.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn lower(&self) -> String {
-        self.lower.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn upper(&self) -> String {
-        self.upper.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn camel(&self) -> String {
-        self.camel.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn pascal(&self) -> String {
-        self.pascal.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn snake(&self) -> String {
-        "hot reload v1".to_string()
-        //self.snake.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn upper_snake(&self) -> String {
-        self.upper_snake.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn kebab(&self) -> String {
-        self.kebab.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn title(&self) -> String {
-        self.title.clone()
-    }
-}
-
-impl CasingVariants {
-    fn new(src: &str) -> Self {
-        Self {
-            original: src.to_string(),
-            lower: src.to_case(Case::Lower),
-            upper: src.to_case(Case::Upper),
-            camel: src.to_case(Case::Camel),
-            pascal: src.to_case(Case::Pascal),
-            snake: src.to_case(Case::Snake),
-            upper_snake: src.to_case(Case::UpperSnake),
-            kebab: src.to_case(Case::Kebab),
-            title: src.to_case(Case::Title),
-        }
-    }
-}
-
 /// A basic runtime wrapper around BAML source content.
 #[wasm_bindgen]
 pub struct BamlRuntime {
     baml_src: String,
+    db: RootDatabase,
+    project: baml_workspace::Project,
+    source_file: Option<SourceFile>,
 }
 
 #[wasm_bindgen]
 impl BamlRuntime {
     #[wasm_bindgen(constructor)]
     pub fn new(baml_src: String) -> BamlRuntime {
-        BamlRuntime { baml_src }
+        use baml_db::Setter;
+
+        let mut db = RootDatabase::new();
+
+        // Create a project with a virtual file path
+        let project = db.set_project_root(PathBuf::from("/baml_src"));
+
+        // Add the source file to the database
+        let source_file = db.add_file("/baml_src/main.baml", &baml_src);
+
+        // Wire up the project to include this file
+        project.set_files(&mut db).to(vec![source_file]);
+
+        BamlRuntime {
+            baml_src,
+            db,
+            project,
+            source_file: Some(source_file),
+        }
     }
 
     /// Renders the stored BAML source into a set of naming-case variants.
     #[wasm_bindgen]
-    pub fn render(&self) -> CasingVariants {
-        CasingVariants::new(&self.baml_src)
+    pub fn render(&self) -> sam_sandbox::CasingVariants {
+        sam_sandbox::CasingVariants::new(&self.baml_src)
     }
 
     /// Allows updating the stored BAML source for subsequent renders.
+    ///
+    /// This uses Salsa's incremental computation - only queries affected
+    /// by the text change will be recomputed on subsequent calls.
     #[wasm_bindgen]
     pub fn set_source(&mut self, baml_src: String) {
-        self.baml_src = baml_src;
+        use baml_db::Setter;
+
+        self.baml_src = baml_src.clone();
+
+        // Update the source file in the Salsa database
+        // This marks dependent queries as potentially stale
+        if let Some(source_file) = self.source_file {
+            source_file.set_text(&mut self.db).to(baml_src);
+        }
+    }
+
+    /// Returns the names of all functions defined in the BAML project.
+    ///
+    /// This uses Salsa's `project_function_names` tracked query, which:
+    /// 1. Depends on `project_items` → `file_items` → `file_item_tree`
+    /// 2. Is memoized - subsequent calls return cached results if source unchanged
+    /// 3. Only recomputes when function signatures change (not body edits)
+    #[wasm_bindgen]
+    pub fn function_names(&self) -> Vec<String> {
+        let names_struct = baml_hir::project_function_names(&self.db, self.project);
+        let mut foo = names_struct.names(&self.db).clone();
+        foo.push("injected-hot-reload2".to_string());
+        foo
     }
 
     /// Convenience helper returning the raw BAML source currently stored.

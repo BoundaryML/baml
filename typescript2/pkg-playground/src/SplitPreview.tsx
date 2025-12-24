@@ -118,11 +118,45 @@ const extractVariants = (result: CasingVariants): RenderedVariants => {
   }
 };
 
+const functionNamesHeaderStyles: CSSProperties = {
+  padding: '0.75rem 1rem',
+  fontWeight: 600,
+  borderBottom: '1px solid rgba(15, 23, 42, 0.08)',
+  borderTop: '1px solid rgba(15, 23, 42, 0.08)',
+  background: '#f8fafc'
+};
+
+const functionNamesContainerStyles: CSSProperties = {
+  padding: '1rem',
+  background: '#1e293b',
+  color: '#e2e8f0',
+  minHeight: '120px'
+};
+
+const functionNameItemStyles: CSSProperties = {
+  display: 'inline-block',
+  margin: '0.25rem',
+  padding: '0.5rem 0.75rem',
+  borderRadius: '0.375rem',
+  background: 'rgba(56, 189, 248, 0.15)',
+  border: '1px solid rgba(56, 189, 248, 0.3)',
+  fontFamily: '"Fira Code", "SFMono-Regular", Consolas, monospace',
+  fontSize: '0.85rem',
+  color: '#38bdf8'
+};
+
+const emptyFunctionsStyles: CSSProperties = {
+  color: '#64748b',
+  fontStyle: 'italic',
+  fontSize: '0.9rem'
+};
+
 export const SplitPreview: FC = () => {
   const { code, setCode } = usePlayground();
   const runtimeRef = useRef<BamlRuntime | null>(null);
   const latestCodeRef = useRef<string>(code);
   const [rendered, setRendered] = useState<RenderedVariants | null>(null);
+  const [functionNames, setFunctionNames] = useState<string[]>([]);
   const [isReady, setReady] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,6 +169,15 @@ export const SplitPreview: FC = () => {
 
     runtimeRef.current.set_source(code);
     setRendered(extractVariants(runtimeRef.current.render()));
+
+    // Get function names from the Salsa-backed query
+    try {
+      const names = runtimeRef.current.function_names();
+      setFunctionNames(names);
+    } catch (e) {
+      console.error('Failed to get function names:', e);
+      setFunctionNames([]);
+    }
   }, [code, isReady]);
 
   useEffect(() => {
@@ -148,6 +191,16 @@ export const SplitPreview: FC = () => {
         const runtime = new BamlRuntime(latestCodeRef.current);
         runtimeRef.current = runtime;
         setRendered(extractVariants(runtime.render()));
+
+        // Get initial function names
+        try {
+          const names = runtime.function_names();
+          setFunctionNames(names);
+        } catch (e) {
+          console.error('Failed to get function names:', e);
+          setFunctionNames([]);
+        }
+
         setReady(true);
       })
       .catch((cause: unknown) => {
@@ -180,11 +233,29 @@ export const SplitPreview: FC = () => {
           value={code}
           onChange={onChange}
           style={textareaStyles}
-          placeholder="Start typing TypeScript here"
+          placeholder="Start typing BAML here, e.g.:&#10;&#10;function MyFunction(input: string) -> string {&#10;  // function body&#10;}"
         />
       </article>
       <article style={panelStyles}>
-        <header style={headerStyles}>Preview</header>
+        {/* Function Names Section - Salsa-backed query results */}
+        <header style={headerStyles}>Functions (via Salsa)</header>
+        <div style={functionNamesContainerStyles}>
+          {error ? (
+            <span style={emptyFunctionsStyles}>Unable to parse functions</span>
+          ) : functionNames.length > 0 ? (
+            functionNames.map((name) => (
+              <span key={name} style={functionNameItemStyles}>
+                {name}()
+              </span>
+            ))
+          ) : (
+            <span style={emptyFunctionsStyles}>
+              No functions defined. Try adding: function MyFunc(x: int) -&gt; string
+            </span>
+          )}
+        </div>
+
+        <header style={functionNamesHeaderStyles}>Casing Variants</header>
         <div style={variantsGridStyles}>
           {error ? (
             <pre style={variantValueStyles}>{`// Failed to load BAML runtime\n${error}`}</pre>
