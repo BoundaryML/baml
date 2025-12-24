@@ -16,6 +16,16 @@ export default defineConfig({
   server: {
     port: 5173
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Use consistent names for the output files so the VSCode extension can find them
+        entryFileNames: 'assets/index.js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name].[ext]'
+      }
+    }
+  },
   define: {
     __DEV__: process.env.NODE_ENV !== 'production'
   }
