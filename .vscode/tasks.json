@@ -2,6 +2,54 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Build VS Code Extension (v2)",
+      "type": "shell",
+      "command": "pnpm build",
+      "options": {
+        "cwd": "${workspaceFolder}/typescript2/app-vscode-ext"
+      },
+      "group": "build",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Watch VS Code Extension (v2)",
+      "type": "shell",
+      "command": "pnpm dev",
+      "options": {
+        "cwd": "${workspaceFolder}/typescript2/app-vscode-ext"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^CLI Building",
+          "endsPattern": "Build success"
+        }
+      }
+    },
+    {
+      "label": "Watch Webview (v2)",
+      "type": "shell",
+      "command": "pnpm dev",
+      "options": {
+        "cwd": "${workspaceFolder}/typescript2/app-vscode-webview"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE",
+          "endsPattern": "ready in"
+        }
+      }
+    },
+    {
       "label": "npm: build-vscode",
       "type": "npm",
       "script": "build",

@@ -67,6 +67,7 @@ jobs:
             ':baml_language/**' \
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
+            ':.github/workflows/wasm-pack-tests.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -191,6 +192,15 @@ jobs:
       run_all: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
     secrets: inherit
 
+  wasm-pack-tests:
+    name: "WASM Pack Tests"
+    needs: determine_changes
+    uses: ./.github/workflows/wasm-pack-tests.reusable.yaml
+    with:
+      code_changed: ${{ needs.determine_changes.outputs.code }}
+      run_all: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
+    secrets: inherit
+
   beps:
     name: "BEPs"
     needs: determine_changes
@@ -268,6 +278,7 @@ jobs:
     if: always()
     needs:
       - cargo-tests
+      - wasm-pack-tests
       - beps
       - docs
       - benchmarks-instrumented
@@ -276,6 +287,11 @@ jobs:
         run: |
           if [[ "${{ needs.cargo-tests.result }}" != "success" && "${{ needs.cargo-tests.result }}" != "skipped" ]]; then
             echo "::error::Cargo tests failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.wasm-pack-tests.result }}" != "success" && "${{ needs.wasm-pack-tests.result }}" != "skipped" ]]; then
+            echo "::error::WASM pack tests failed"
             exit 1
           fi
 
