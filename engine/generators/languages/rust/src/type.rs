@@ -119,6 +119,79 @@ impl TypeRust {
             TypeRust::Any { .. } => "Any".to_string(),
         }
     }
+
+    /// Returns the Rust zero/default value for this type.
+    pub fn zero_value(&self, pkg: &CurrentRenderPackage) -> String {
+        match self {
+            TypeRust::Null => "()".to_string(),
+            TypeRust::String(_) => "String::new()".to_string(),
+            TypeRust::Int(_) => "0".to_string(),
+            TypeRust::Float => "0.0".to_string(),
+            TypeRust::Bool(_) => "false".to_string(),
+            TypeRust::Optional(_) => "None".to_string(),
+            TypeRust::List(_) => "Vec::new()".to_string(),
+            TypeRust::Map(_, _) => "std::collections::HashMap::new()".to_string(),
+            TypeRust::Class { name, package, .. } => {
+                format!("{}{}::default()", package.relative_from(pkg), name)
+            }
+            TypeRust::Enum { name, package, .. } => {
+                format!("{}{}::default()", package.relative_from(pkg), name)
+            }
+            TypeRust::Union { name, package } => {
+                format!("{}{}::default()", package.relative_from(pkg), name)
+            }
+            TypeRust::TypeAlias { name, package } => {
+                format!("{}{}::default()", package.relative_from(pkg), name)
+            }
+            TypeRust::Checked(inner) => {
+                format!("baml::Checked::new({})", inner.zero_value(pkg))
+            }
+            TypeRust::StreamState(inner) => {
+                format!("baml::StreamState::new({})", inner.zero_value(pkg))
+            }
+            TypeRust::Media(_) => "Default::default()".to_string(),
+            TypeRust::Any { .. } => "serde_json::Value::Null".to_string(),
+        }
+    }
+
+    /// Returns true if this type is Optional.
+    pub fn is_optional(&self) -> bool {
+        matches!(self, TypeRust::Optional(_))
+    }
+
+    /// Returns the inner type if this is a wrapper (Optional, List, Checked, StreamState).
+    pub fn inner_type(&self) -> Option<&TypeRust> {
+        match self {
+            TypeRust::Optional(inner) => Some(inner),
+            TypeRust::List(inner) => Some(inner),
+            TypeRust::Checked(inner) => Some(inner),
+            TypeRust::StreamState(inner) => Some(inner),
+            _ => None,
+        }
+    }
+
+    /// Returns true if this type is a primitive (String, Int, Float, Bool, Null).
+    pub fn is_primitive(&self) -> bool {
+        matches!(
+            self,
+            TypeRust::Null
+                | TypeRust::String(_)
+                | TypeRust::Int(_)
+                | TypeRust::Float
+                | TypeRust::Bool(_)
+        )
+    }
+
+    /// Returns true if this is a String type (with or without literal).
+    pub fn is_string(&self) -> bool {
+        matches!(self, TypeRust::String(_))
+    }
+
+    /// Generates code to decode a BamlValue into this type.
+    /// `param` is the variable name holding the BamlValue.
+    pub fn decode_from_value(&self, param: &str, pkg: &CurrentRenderPackage) -> String {
+        format!("{}.get::<{}>()?", param, self.serialize_type(pkg))
+    }
 }
 
 pub trait SerializeType {

@@ -62,8 +62,16 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
         let _ = std::fs::remove_dir_all(&test_dir);
 
         // copy language-specific sources + baml_src link
-        utils::copy_dir_flat(&dir.join(L::test_name()), &test_dir)?;
+        let lang_dir = dir.join(L::test_name());
+        if lang_dir.exists() {
+            utils::copy_dir_flat(&lang_dir, &test_dir)?;
+        }
         utils::create_symlink(&dir.join("baml_src"), &test_dir.join("baml_src"))?;
+
+        // Generate test harness files for Rust (Cargo.toml and main.rs)
+        if L::test_name() == "rust" {
+            utils::generate_rust_test_harness(&test_dir, project_name.to_string_lossy().as_ref())?;
+        }
 
         let ir = make_test_ir_from_dir(&dir.join("baml_src"))?;
 
@@ -118,6 +126,15 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                     }
                     "python" => vec!["ruff check --fix".to_string()],
                     "typescript" => vec![],
+                    "rust" => {
+                        vec![
+                            format!(
+                                "rustfmt baml_client/*.rs 2>/dev/null || true && BAML_LIBRARY_PATH={} cargo check",
+                                get_dylib_path()?.display()
+                            )
+                            .to_string(),
+                        ]
+                    }
                     // "ruby" => vec!["bundle install".to_string(), "srb init".to_string(), "srb tc --typed=strict".to_string()],
                     _ => vec![],
                 },
@@ -191,6 +208,15 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                 }
                 "python" => vec!["ruff check --fix".to_string()],
                 "typescript" => vec![],
+                "rust" => {
+                    vec![
+                        format!(
+                            "rustfmt baml_client/*.rs 2>/dev/null || true && BAML_LIBRARY_PATH={} cargo check",
+                            get_dylib_path()?.display()
+                        )
+                        .to_string(),
+                    ]
+                }
                 // "ruby" => vec!["bundle install".to_string(), "srb init".to_string(), "srb tc --typed=strict".to_string()],
                 _ => vec![],
             },
@@ -217,20 +243,29 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
         }
 
         if also_run_tests {
-            if let baml_types::GeneratorOutputType::Go = args.client_type {
-                // let mut cmd = Command::new(format!("./{}", self.project_name));
-                let mut cmd = Command::new("go");
-                cmd.args(vec!["test", "-v"]);
-                cmd.current_dir(&self.src_dir);
-                let dylib_path = get_cargo_root()?.join("target/debug/libbaml_cffi.dylib");
-                let so_path = get_cargo_root()?.join("target/debug/libbaml_cffi.so");
-                let cargo_target_dir = if dylib_path.exists() {
-                    dylib_path
-                } else {
-                    so_path
-                };
-                cmd.env("BAML_LIBRARY_PATH", cargo_target_dir);
-                run_and_stream(&mut cmd)?;
+            let dylib_path = get_dylib_path()?;
+
+            match args.client_type {
+                baml_types::GeneratorOutputType::Go => {
+                    let mut cmd = Command::new("go");
+                    cmd.args(vec!["test", "-v"]);
+                    cmd.current_dir(&self.src_dir);
+                    cmd.env("BAML_LIBRARY_PATH", &dylib_path);
+                    run_and_stream(&mut cmd)?;
+                }
+                baml_types::GeneratorOutputType::Rust => {
+                    let mut cmd = Command::new("cargo");
+                    cmd.args(vec!["test", "-v"]);
+                    cmd.current_dir(&self.src_dir);
+                    cmd.env("BAML_LIBRARY_PATH", &dylib_path);
+                    run_and_stream(&mut cmd)?;
+                }
+                _ => {
+                    eprintln!(
+                        "RUN_GENERATOR_TESTS=1 is set but test runner not implemented for {:?}",
+                        args.client_type
+                    );
+                }
             }
         } else {
             eprintln!("Not running! Set RUN_GENERATOR_TESTS=1 to run tests");
@@ -379,6 +414,53 @@ mod utils {
             let entry = entry?;
             create_symlink(&entry.path(), &dest.join(entry.file_name()))?;
         }
+        Ok(())
+    }
+
+    /// Generate Rust test harness files (Cargo.toml and main.rs) for a test directory.
+    pub fn generate_rust_test_harness(test_dir: &Path, project_name: &str) -> Result<(), anyhow::Error> {
+        // Generate Cargo.toml
+        let cargo_toml = format!(
+            r#"[package]
+name = "{project_name}"
+version = "0.1.0"
+edition = "2021"
+
+# Empty workspace table to exclude from parent workspace
+[workspace]
+
+[dependencies]
+baml = {{ path = "../../../../../../languages/rust/baml", features = ["dev"] }}
+serde_json = "1"
+
+[[bin]]
+name = "{project_name}"
+path = "main.rs"
+"#
+        );
+        std::fs::write(test_dir.join("Cargo.toml"), cargo_toml)?;
+
+        // Generate main.rs
+        let main_rs = r#"// Test file for generated BAML client
+// This will be compiled against the generated baml_client module
+
+mod baml_client;
+
+fn main() {
+    println!("Test - baml_client module loaded successfully!");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_baml_client_compiles() {
+        // This test verifies the generated code compiles
+        println!("baml_client module compiles successfully");
+    }
+}
+"#;
+        std::fs::write(test_dir.join("main.rs"), main_rs)?;
+
         Ok(())
     }
 }

@@ -75,6 +75,13 @@ impl<T: KnownTypes, S: KnownTypes> DynamicClass<T, S> {
             .ok_or_else(|| BamlError::internal(format!("missing field '{}'", field_name)))?;
         V::from_baml_value(value)
     }
+
+    /// Consume this DynamicClass and return the remaining fields.
+    /// Useful for `@@dynamic` classes: pop known fields first, then call this
+    /// to get remaining dynamic fields.
+    pub fn into_fields(self) -> HashMap<String, BamlValue<T, S>> {
+        self.fields
+    }
 }
 
 /// A dynamic enum - name and value as strings
