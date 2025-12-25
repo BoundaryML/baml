@@ -35,10 +35,10 @@ async def run():
         "api_key": os.environ.get('OPENAI_API_KEY')
     })
     
-    # Sets MyAmazingClient as the primary client
+    # Sets MyAmazingClient as the client to use (no fallback to other clients)
     cr.set_primary('MyAmazingClient')
 
-    # ExtractResume will now use MyAmazingClient as the calling client
+    # ExtractResume will now use only MyAmazingClient
     res = await b.ExtractResume("...", { "client_registry": cr })
 ```
 
@@ -63,10 +63,10 @@ async function run() {
         api_key: process.env.OPENAI_API_KEY
     })
     
-    // Sets MyAmazingClient as the primary client
+    // Sets MyAmazingClient as the client to use (no fallback to other clients)
     cr.setPrimary('MyAmazingClient')
 
-    // ExtractResume will now use MyAmazingClient as the calling client
+    // ExtractResume will now use only MyAmazingClient
     const res = await b.ExtractResume("...", { clientRegistry: cr })
 }
 ```
@@ -101,10 +101,10 @@ def run
     }
   )
 
-  # Sets MyAmazingClient as the primary client
+  # Sets MyAmazingClient as the client to use (no fallback to other clients)
   cr.set_primary('MyAmazingClient')
 
-  # ExtractResume will now use MyAmazingClient as the calling client
+  # ExtractResume will now use only MyAmazingClient
   res = Baml.Client.extract_resume(input: '...', baml_options: { client_registry: cr })
 end
 
@@ -151,10 +151,10 @@ func main() {
         panic(fmt.Sprintf("Failed to add responses client: %v", err))
     }
     
-    // Sets MyAmazingClient as the primary client
+    // Sets MyAmazingClient as the client to use (no fallback to other clients)
     cr.SetPrimary("MyAmazingClient")
-    
-    // ExtractResume will now use MyAmazingClient as the calling client
+
+    // ExtractResume will now use only MyAmazingClient
     res, err := baml.ExtractResume(ctx, "...", b.WithClientRegistry(cr))
     if err != nil {
         panic(fmt.Sprintf("Failed to extract resume: %v", err))
@@ -243,7 +243,11 @@ The name of a retry policy that is already defined in a .baml file. See [Retry P
 </ParamField>
 
 ### set_primary / setPrimary
-This sets the client for the function to use. (i.e. replaces the `client` property in a function)
+This sets the **only** client that the function will use, completely replacing the `client` property defined in the .baml function.
+
+<Note>
+Despite the name "primary", there is **no fallback** to a secondary client. The function will use only the specified client. If the client fails, the function call fails - there is no automatic retry with a different client.
+</Note>
 
 <ParamField
     path="name"

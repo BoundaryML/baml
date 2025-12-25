@@ -6,7 +6,7 @@ title: client Option
 Added in 0.216.0
 </Info>
 
-The `client` option provides a simple way to override which LLM client a function uses at runtime. It's a shorthand for creating a `ClientRegistry` and calling `set_primary()`.
+The `client` option provides a simple way to override which LLM client a function uses at runtime. It's a shorthand for creating a `ClientRegistry` and calling `set_primary()`. The specified client will be the **only** client used (no fallback to other clients).
 
 ## Quick Start
 
