@@ -32,7 +32,8 @@ pub fn ir_type_alias_to_rust(
     };
     TypeAliasRust {
         name: alias.elem.name.clone(),
-        type_: ir_to_rust::type_to_rust(&non_streaming, &lookup),
+        // Type aliases don't participate in class cycles directly
+        type_: ir_to_rust::type_to_rust(&non_streaming, &lookup, None),
         docstring: alias
             .elem
             .docstring
@@ -54,7 +55,8 @@ pub fn ir_type_alias_to_rust_stream(
     };
     TypeAliasRust {
         name: alias.elem.name.clone(),
-        type_: ir_to_rust::stream_type_to_rust(&partialized, &lookup),
+        // Type aliases don't participate in class cycles directly
+        type_: ir_to_rust::stream_type_to_rust(&partialized, &lookup, None),
         docstring: alias
             .elem
             .docstring

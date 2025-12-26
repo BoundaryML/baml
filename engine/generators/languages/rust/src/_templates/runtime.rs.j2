@@ -1,2 +1,53 @@
-{# runtime.rs.j2 - Runtime template #}
-{# Content will be added in Phase 4 #}
+//! Runtime initialization and function options.
+//!
+//! Full implementation coming in Phase 9.
+
+use std::collections::HashMap;
+
+/// Options for BAML function calls.
+#[derive(Debug, Default, Clone)]
+pub struct FunctionOptions {
+    pub(crate) env: Option<HashMap<String, String>>,
+    pub(crate) tags: Option<HashMap<String, String>>,
+    pub(crate) type_builder: Option<super::type_builder::TypeBuilder>,
+}
+
+impl FunctionOptions {
+    /// Create new empty function options.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set environment variables for this call.
+    pub fn with_env(mut self, env: HashMap<String, String>) -> Self {
+        self.env = Some(env);
+        self
+    }
+
+    /// Add a single environment variable.
+    pub fn with_env_var(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env
+            .get_or_insert_with(HashMap::new)
+            .insert(key.into(), value.into());
+        self
+    }
+
+    /// Add a tag to this call.
+    pub fn with_tag(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.tags
+            .get_or_insert_with(HashMap::new)
+            .insert(key.into(), value.into());
+        self
+    }
+
+    /// Set the type builder for dynamic types.
+    pub fn with_type_builder(mut self, tb: &super::type_builder::TypeBuilder) -> Self {
+        self.type_builder = Some(tb.clone());
+        self
+    }
+}
+
+/// Placeholder - full runtime integration in Phase 9.
+pub fn get_runtime() -> &'static () {
+    &()
+}

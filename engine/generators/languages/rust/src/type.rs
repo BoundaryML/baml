@@ -48,6 +48,8 @@ pub enum TypeRust {
     Optional(Box<TypeRust>),
     Checked(Box<TypeRust>),
     StreamState(Box<TypeRust>),
+    /// Heap-allocated wrapper for recursive types (breaks infinite size)
+    Boxed(Box<TypeRust>),
 }
 
 fn safe_name(name: &str) -> String {
@@ -68,6 +70,10 @@ impl TypeRust {
         TypeRust::StreamState(Box::new(self))
     }
 
+    pub fn make_boxed(self) -> Self {
+        TypeRust::Boxed(Box::new(self))
+    }
+
     pub fn flatten_unions(self) -> Vec<TypeRust> {
         match self {
             TypeRust::Union { .. } => {
@@ -76,6 +82,7 @@ impl TypeRust {
             TypeRust::Optional(inner) => inner.flatten_unions(),
             TypeRust::Checked(inner) => inner.flatten_unions(),
             TypeRust::StreamState(inner) => inner.flatten_unions(),
+            TypeRust::Boxed(inner) => inner.flatten_unions(),
             _ => vec![],
         }
     }
@@ -90,6 +97,8 @@ impl TypeRust {
             TypeRust::StreamState(inner) => {
                 format!("StreamState{}", inner.default_name_within_union())
             }
+            // Box is transparent for naming - it's just an implementation detail for recursion
+            TypeRust::Boxed(inner) => inner.default_name_within_union(),
             // Base types
             TypeRust::String(val) => val.as_ref().map_or("String".to_string(), |v| {
                 let safe_name = safe_name(v);
@@ -149,6 +158,9 @@ impl TypeRust {
             TypeRust::StreamState(inner) => {
                 format!("baml::StreamState::new({})", inner.zero_value(pkg))
             }
+            TypeRust::Boxed(inner) => {
+                format!("Box::new({})", inner.zero_value(pkg))
+            }
             TypeRust::Media(_) => "Default::default()".to_string(),
             TypeRust::Any { .. } => "serde_json::Value::Null".to_string(),
         }
@@ -159,13 +171,14 @@ impl TypeRust {
         matches!(self, TypeRust::Optional(_))
     }
 
-    /// Returns the inner type if this is a wrapper (Optional, List, Checked, StreamState).
+    /// Returns the inner type if this is a wrapper (Optional, List, Checked, StreamState, Boxed).
     pub fn inner_type(&self) -> Option<&TypeRust> {
         match self {
             TypeRust::Optional(inner) => Some(inner),
             TypeRust::List(inner) => Some(inner),
             TypeRust::Checked(inner) => Some(inner),
             TypeRust::StreamState(inner) => Some(inner),
+            TypeRust::Boxed(inner) => Some(inner),
             _ => None,
         }
     }
@@ -214,6 +227,7 @@ impl SerializeType for TypeRust {
                 Package::stream_state().relative_from(pkg),
                 inner.serialize_type(pkg)
             ),
+            TypeRust::Boxed(inner) => format!("Box<{}>", inner.serialize_type(pkg)),
             // Primitive types
             TypeRust::String(..) => "String".to_string(),
             TypeRust::Int(..) => "i64".to_string(),

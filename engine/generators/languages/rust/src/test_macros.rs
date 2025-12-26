@@ -50,9 +50,12 @@ macro_rules! test_rs_type {
                 .expect(&format!("Class '{}' not found", class_name))
                 .item;
 
+            // No recursive cycles for test isolation
+            let cycles = vec![];
+
             // Test non-streaming
             pkg.set("baml_client.types");
-            let class_rust = ir_class_to_rust(class, &pkg);
+            let class_rust = ir_class_to_rust(class, &pkg, &cycles);
             let field = class_rust
                 .fields
                 .iter()
@@ -71,7 +74,7 @@ macro_rules! test_rs_type {
 
             // Test streaming
             pkg.set("baml_client.stream_types");
-            let class_rust_stream = ir_class_to_rust_stream(class, &pkg);
+            let class_rust_stream = ir_class_to_rust_stream(class, &pkg, &cycles);
             let field = class_rust_stream
                 .fields
                 .iter()

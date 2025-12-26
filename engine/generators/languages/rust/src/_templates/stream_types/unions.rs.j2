@@ -1,2 +1,18 @@
-{# stream_types/unions.rs.j2 - Streaming unions template #}
-{# Content will be added in Phase 6 #}
+//! Generated streaming union types.
+//!
+//! Full implementation coming in Phase 6.
+
+use std::collections::HashMap;
+use crate::baml_client::types;
+use crate::baml_client::types::*;
+
+{% for union_ in unions %}
+/// Streaming variant of {{ union_.name }}.
+#[derive(Debug, Clone)]
+pub enum {{ union_.name }} {
+{% for variant in union_.variants %}
+    {{ variant.name }}(Option<{{ variant.type_str }}>),
+{% endfor %}
+}
+
+{% endfor %}

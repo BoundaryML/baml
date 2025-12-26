@@ -1,2 +1,11 @@
-{# types/type_aliases.rs.j2 - Type aliases template #}
-{# Content will be added in Phase 5 #}
+//! Generated type aliases.
+
+use std::collections::HashMap;
+use super::*;
+{% for alias in type_aliases %}
+
+{% if alias.docstring.is_some() %}
+/// {{ alias.docstring.as_ref().unwrap() }}
+{% endif %}
+pub type {{ alias.name }} = {{ alias.type_str }};
+{% endfor %}

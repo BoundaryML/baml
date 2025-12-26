@@ -13,6 +13,7 @@ macro_rules! define_raw_object_wrapper {
         $name:ident => $object_type:ident
     ) => {
         $(#[$meta])*
+        #[derive(Clone)]
         pub struct $name {
             raw: RawObject,
         }
@@ -59,6 +60,7 @@ pub use type_builder::{
 };
 
 use std::ffi::c_void;
+use std::sync::Arc;
 
 use prost::Message;
 
@@ -72,19 +74,36 @@ use crate::proto::baml_cffi_v1::{
     invocation_response, invocation_response_success,
 };
 
-/// A handle to a FFI-backed BAML object.
+/// Inner data for a FFI-backed BAML object.
 ///
-/// This is the base type for Media, Collector, TypeBuilder, etc.
-/// It wraps a raw pointer managed by the Rust runtime.
-pub(crate) struct RawObject {
+/// Wrapped in Arc to enable cheap cloning while preserving single-drop semantics.
+struct RawObjectInner {
     ptr: i64,
     runtime: *const c_void,
     object_type: BamlObjectType,
 }
 
 // Safety: The underlying Rust runtime is thread-safe
-unsafe impl Send for RawObject {}
-unsafe impl Sync for RawObject {}
+unsafe impl Send for RawObjectInner {}
+unsafe impl Sync for RawObjectInner {}
+
+/// A handle to a FFI-backed BAML object.
+///
+/// This is the base type for Media, Collector, TypeBuilder, etc.
+/// It wraps a raw pointer managed by the Rust runtime.
+/// Uses Arc internally to enable cloning while ensuring the destructor
+/// is only called once when the last reference is dropped.
+pub(crate) struct RawObject {
+    inner: Arc<RawObjectInner>,
+}
+
+impl Clone for RawObject {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
 
 impl RawObject {
     /// Create from an existing FFI pointer
@@ -94,9 +113,11 @@ impl RawObject {
         object_type: BamlObjectType,
     ) -> Self {
         Self {
-            ptr,
-            runtime,
-            object_type,
+            inner: Arc::new(RawObjectInner {
+                ptr,
+                runtime,
+                object_type,
+            }),
         }
     }
 
@@ -144,9 +165,11 @@ impl RawObject {
                 };
                 let ptr = extract_ptr_from_handle(&handle)?;
                 Ok(Self {
-                    ptr,
-                    runtime,
-                    object_type,
+                    inner: Arc::new(RawObjectInner {
+                        ptr,
+                        runtime,
+                        object_type,
+                    }),
                 })
             }
             Some(invocation_response::Response::Error(e)) => Err(BamlError::internal(e)),
@@ -183,7 +206,7 @@ impl RawObject {
                 baml_unreachable!(
                     "FFI method call '{}' on {:?} failed: {}",
                     method_name,
-                    self.object_type,
+                    self.object_type(),
                     e
                 )
             })
@@ -286,8 +309,9 @@ impl RawObject {
             .encode(&mut buf)
             .map_err(|e| BamlError::internal(format!("failed to encode method call: {e}")))?;
 
-        let response_buf =
-            unsafe { ffi::call_object_method(self.runtime, buf.as_ptr().cast::<i8>(), buf.len()) };
+        let response_buf = unsafe {
+            ffi::call_object_method(self.inner.runtime, buf.as_ptr().cast::<i8>(), buf.len())
+        };
 
         // Decode response
         let response_bytes = unsafe {
@@ -308,30 +332,34 @@ impl RawObject {
 
     /// Encode to `BamlObjectHandle` for passing to function calls
     pub(crate) fn encode(&self) -> BamlObjectHandle {
-        encode_raw_object_handle(self.ptr, self.object_type)
+        encode_raw_object_handle(self.inner.ptr, self.inner.object_type)
     }
 
     /// Get the object type
     pub(crate) fn object_type(&self) -> BamlObjectType {
-        self.object_type
+        self.inner.object_type
     }
 
     /// Get the raw pointer
     pub(crate) fn ptr(&self) -> i64 {
-        self.ptr
+        self.inner.ptr
     }
 
     /// Get the runtime pointer
     pub(crate) fn runtime(&self) -> *const c_void {
-        self.runtime
+        self.inner.runtime
     }
 }
 
 impl Drop for RawObject {
     fn drop(&mut self) {
-        // Call destructor via FFI
-        // Ignore errors during drop - we can't do much about them
-        let _ = self.try_call_method::<(), _>("~destructor", ());
+        // Only call destructor if this is the last reference
+        // This ensures the FFI destructor is called exactly once
+        if Arc::strong_count(&self.inner) == 1 {
+            // Call destructor via FFI
+            // Ignore errors during drop - we can't do much about them
+            let _ = self.try_call_method::<(), _>("~destructor", ());
+        }
     }
 }
 

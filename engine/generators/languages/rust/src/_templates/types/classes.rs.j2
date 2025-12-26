@@ -1,2 +1,19 @@
-{# types/classes.rs.j2 - Generated classes template #}
-{# Content will be added in Phase 5 #}
+//! Generated class types.
+
+use std::collections::HashMap;
+use super::*;
+{% for class in classes %}
+
+{% if class.docstring.is_some() %}
+/// {{ class.docstring.as_ref().unwrap() }}
+{% endif %}
+#[derive(Debug, Clone, Default)]
+pub struct {{ class.name }} {
+{% for field in class.fields %}
+{% if field.docstring.is_some() %}
+    /// {{ field.docstring.as_ref().unwrap() }}
+{% endif %}
+    pub {{ field.name }}: {{ field.type_str }},
+{% endfor %}
+}
+{% endfor %}

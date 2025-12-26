@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use baml_types::{
     baml_value::TypeLookups,
     ir_type::{TypeNonStreaming, TypeStreaming},
@@ -15,9 +17,13 @@ pub mod functions;
 pub mod type_aliases;
 pub mod unions;
 
-pub(crate) fn stream_type_to_rust(field: &TypeStreaming, lookup: &impl TypeLookups) -> TypeRust {
+pub(crate) fn stream_type_to_rust(
+    field: &TypeStreaming,
+    lookup: &impl TypeLookups,
+    containing_cycle: Option<&HashSet<String>>,
+) -> TypeRust {
     use TypeStreaming as T;
-    let recursive_fn = |field| stream_type_to_rust(field, lookup);
+    let recursive_fn = |field| stream_type_to_rust(field, lookup, containing_cycle);
 
     // Check if this field has check constraints
     let field_has_checks = field
@@ -49,14 +55,25 @@ pub(crate) fn stream_type_to_rust(field: &TypeStreaming, lookup: &impl TypeLooku
             dynamic,
             meta: cls_meta,
             ..
-        } => TypeRust::Class {
-            package: match cls_meta.streaming_behavior.done {
-                true => types_pkg.clone(),
-                false => stream_pkg.clone(),
-            },
-            name: name.clone(),
-            dynamic: *dynamic,
-        },
+        } => {
+            let class_type = TypeRust::Class {
+                package: match cls_meta.streaming_behavior.done {
+                    true => types_pkg.clone(),
+                    false => stream_pkg.clone(),
+                },
+                name: name.clone(),
+                dynamic: *dynamic,
+            };
+            // Box if this class is in the same cycle as the containing class
+            if containing_cycle
+                .map(|c| c.contains(name))
+                .unwrap_or(false)
+            {
+                class_type.make_boxed()
+            } else {
+                class_type
+            }
+        }
         T::List(type_generic, _) => TypeRust::List(Box::new(recursive_fn(type_generic))),
         T::Map(type_generic, type_generic1, _) => TypeRust::Map(
             Box::new(recursive_fn(type_generic)),
@@ -199,9 +216,13 @@ pub(crate) fn stream_type_to_rust(field: &TypeStreaming, lookup: &impl TypeLooku
     }
 }
 
-pub(crate) fn type_to_rust(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -> TypeRust {
+pub(crate) fn type_to_rust(
+    field: &TypeNonStreaming,
+    lookup: &impl TypeLookups,
+    containing_cycle: Option<&HashSet<String>>,
+) -> TypeRust {
     use TypeNonStreaming as T;
-    let recursive_fn = |field| type_to_rust(field, _lookup);
+    let recursive_fn = |field| type_to_rust(field, lookup, containing_cycle);
 
     // Check if this field has check constraints
     let field_has_checks = field
@@ -224,11 +245,22 @@ pub(crate) fn type_to_rust(field: &TypeNonStreaming, _lookup: &impl TypeLookups)
             baml_types::LiteralValue::Int(val) => TypeRust::Int(Some(*val)),
             baml_types::LiteralValue::Bool(val) => TypeRust::Bool(Some(*val)),
         },
-        T::Class { name, dynamic, .. } => TypeRust::Class {
-            package: type_pkg.clone(),
-            name: name.clone(),
-            dynamic: *dynamic,
-        },
+        T::Class { name, dynamic, .. } => {
+            let class_type = TypeRust::Class {
+                package: type_pkg.clone(),
+                name: name.clone(),
+                dynamic: *dynamic,
+            };
+            // Box if this class is in the same cycle as the containing class
+            if containing_cycle
+                .map(|c| c.contains(name))
+                .unwrap_or(false)
+            {
+                class_type.make_boxed()
+            } else {
+                class_type
+            }
+        }
         T::List(type_generic, _) => TypeRust::List(Box::new(recursive_fn(type_generic))),
         T::Map(type_generic, type_generic1, _) => TypeRust::Map(
             Box::new(recursive_fn(type_generic)),
@@ -241,7 +273,7 @@ pub(crate) fn type_to_rust(field: &TypeNonStreaming, _lookup: &impl TypeLookups)
             reason: "arrow types are not supported in Rust generator".to_string(),
         },
         T::RecursiveTypeAlias { name, .. } => {
-            if _lookup.expand_recursive_type(name).is_err() {
+            if lookup.expand_recursive_type(name).is_err() {
                 TypeRust::Any {
                     reason: format!("Recursive type alias {name} is not supported in Rust"),
                 }

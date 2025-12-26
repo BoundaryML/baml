@@ -74,6 +74,18 @@ macro_rules! define_media_type {
                 self.raw.call_method("as_base64", ())
             }
         }
+
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(stringify!($name)).finish_non_exhaustive()
+            }
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                unreachable!("Media types cannot be default-constructed; they require a runtime")
+            }
+        }
     };
 }
 

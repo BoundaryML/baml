@@ -1,11 +1,23 @@
+use std::collections::HashSet;
+
 use internal_baml_core::ir::{Class, Field};
 
 use crate::{
     generated_types::{ClassRust, FieldRust},
     package::CurrentRenderPackage,
+    utils::escape_keyword,
+    RecursiveCycles,
 };
 
-pub fn ir_class_to_rust(class: &Class, pkg: &CurrentRenderPackage) -> ClassRust {
+pub fn ir_class_to_rust(
+    class: &Class,
+    pkg: &CurrentRenderPackage,
+    cycles: &RecursiveCycles,
+) -> ClassRust {
+    let class_name = &class.elem.name;
+    // Find which cycle this class belongs to (if any)
+    let containing_cycle = cycles.iter().find(|c| c.contains(class_name));
+
     ClassRust {
         name: class.elem.name.clone(),
         docstring: class
@@ -18,12 +30,20 @@ pub fn ir_class_to_rust(class: &Class, pkg: &CurrentRenderPackage) -> ClassRust 
             .elem
             .static_fields
             .iter()
-            .map(|field| ir_field_to_rust(field, pkg))
+            .map(|field| ir_field_to_rust(field, pkg, containing_cycle))
             .collect(),
     }
 }
 
-pub fn ir_class_to_rust_stream(class: &Class, pkg: &CurrentRenderPackage) -> ClassRust {
+pub fn ir_class_to_rust_stream(
+    class: &Class,
+    pkg: &CurrentRenderPackage,
+    cycles: &RecursiveCycles,
+) -> ClassRust {
+    let class_name = &class.elem.name;
+    // Find which cycle this class belongs to (if any)
+    let containing_cycle = cycles.iter().find(|c| c.contains(class_name));
+
     ClassRust {
         name: class.elem.name.clone(),
         docstring: class
@@ -36,17 +56,21 @@ pub fn ir_class_to_rust_stream(class: &Class, pkg: &CurrentRenderPackage) -> Cla
             .elem
             .static_fields
             .iter()
-            .map(|field| ir_field_to_rust_stream(field, pkg))
+            .map(|field| ir_field_to_rust_stream(field, pkg, containing_cycle))
             .collect(),
     }
 }
 
-fn ir_field_to_rust(field: &Field, pkg: &CurrentRenderPackage) -> FieldRust {
+fn ir_field_to_rust(
+    field: &Field,
+    pkg: &CurrentRenderPackage,
+    containing_cycle: Option<&HashSet<String>>,
+) -> FieldRust {
     let non_streaming = field.elem.r#type.elem.to_non_streaming_type(pkg.lookup());
-    let rust_type = super::type_to_rust(&non_streaming, pkg.lookup());
+    let rust_type = super::type_to_rust(&non_streaming, pkg.lookup(), containing_cycle);
 
     FieldRust {
-        name: field.elem.name.clone(),
+        name: escape_keyword(&field.elem.name),
         r#type: rust_type,
         docstring: field
             .elem
@@ -56,12 +80,16 @@ fn ir_field_to_rust(field: &Field, pkg: &CurrentRenderPackage) -> FieldRust {
     }
 }
 
-fn ir_field_to_rust_stream(field: &Field, pkg: &CurrentRenderPackage) -> FieldRust {
+fn ir_field_to_rust_stream(
+    field: &Field,
+    pkg: &CurrentRenderPackage,
+    containing_cycle: Option<&HashSet<String>>,
+) -> FieldRust {
     let partialized = field.elem.r#type.elem.to_streaming_type(pkg.lookup());
-    let rust_type = super::stream_type_to_rust(&partialized, pkg.lookup());
+    let rust_type = super::stream_type_to_rust(&partialized, pkg.lookup(), containing_cycle);
 
     FieldRust {
-        name: field.elem.name.clone(),
+        name: escape_keyword(&field.elem.name),
         r#type: rust_type,
         docstring: field
             .elem
@@ -91,7 +119,8 @@ mod tests {
         let ir = std::sync::Arc::new(ir);
         let class = ir.find_class("SimpleClass").unwrap().item;
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
-        let class_rust = ir_class_to_rust_stream(class, &pkg);
+        let cycles = vec![]; // No recursive cycles in this test
+        let class_rust = ir_class_to_rust_stream(class, &pkg, &cycles);
         assert_eq!(class_rust.name, "SimpleClass");
         assert_eq!(class_rust.fields.len(), 1);
         assert!(matches!(class_rust.fields[0].r#type, TypeRust::StreamState(_)));
@@ -110,7 +139,8 @@ mod tests {
         let ir = std::sync::Arc::new(ir);
         let class = ir.find_class("ChildClass").unwrap().item;
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
-        let class_rust = ir_class_to_rust_stream(class, &pkg);
+        let cycles = vec![]; // No recursive cycles in this test
+        let class_rust = ir_class_to_rust_stream(class, &pkg, &cycles);
         let digits_field = class_rust.fields.iter().find(|f| f.name == "digits").unwrap();
         assert!(matches!(digits_field.r#type, TypeRust::StreamState(_)));
         assert_eq!(class_rust.name, "ChildClass");
@@ -131,7 +161,8 @@ mod tests {
         let ir = std::sync::Arc::new(ir);
         let class = ir.find_class("Foo").unwrap().item;
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
-        let class_rust = ir_class_to_rust_stream(class, &pkg);
+        let cycles = vec![]; // No recursive cycles in this test
+        let class_rust = ir_class_to_rust_stream(class, &pkg, &cycles);
         assert_eq!(class_rust.fields[0].docstring, Some("ds".to_string()));
     }
 }

@@ -1,2 +1,20 @@
-{# stream_types/classes.rs.j2 - Streaming classes template #}
-{# Content will be added in Phase 6 #}
+//! Generated streaming class types.
+//!
+//! These types are used during streaming to hold partial results.
+//! Field types are already wrapped appropriately (Option, StreamState, etc.)
+//! by the stream_type_to_rust conversion.
+
+use std::collections::HashMap;
+use crate::baml_client::types;
+use crate::baml_client::types::*;
+
+{% for class in classes %}
+/// Streaming variant of {{ class.name }}.
+#[derive(Debug, Clone, Default)]
+pub struct {{ class.name }} {
+{% for field in class.fields %}
+    pub {{ field.name }}: {{ field.type_str }},
+{% endfor %}
+}
+
+{% endfor %}

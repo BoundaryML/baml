@@ -11,6 +11,15 @@ pub struct Checked<T> {
     pub checks: HashMap<String, Check>,
 }
 
+impl<T: Default> Default for Checked<T> {
+    fn default() -> Self {
+        Self {
+            value: T::default(),
+            checks: HashMap::new(),
+        }
+    }
+}
+
 /// Individual check result
 #[derive(Debug, Clone)]
 pub struct Check {
@@ -94,6 +103,22 @@ pub enum StreamingState {
     Pending,
     Started,
     Done,
+}
+
+impl<T> StreamState<T> {
+    /// Create a new StreamState with the given value in Pending state.
+    pub fn new(value: T) -> Self {
+        Self {
+            value,
+            state: StreamingState::Pending,
+        }
+    }
+}
+
+impl<T: Default> Default for StreamState<T> {
+    fn default() -> Self {
+        Self::new(T::default())
+    }
 }
 
 impl<T: BamlDecode> BamlDecode for StreamState<T> {

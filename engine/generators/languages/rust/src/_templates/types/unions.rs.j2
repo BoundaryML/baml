@@ -1,2 +1,26 @@
-{# types/unions.rs.j2 - Generated unions template #}
-{# Content will be added in Phase 5 #}
+//! Generated union types.
+
+use std::collections::HashMap;
+use super::*;
+{% for u in unions %}
+
+{% if u.docstring.is_some() %}
+/// {{ u.docstring.as_ref().unwrap() }}
+{% endif %}
+#[derive(Debug, Clone)]
+pub enum {{ u.name }} {
+{% for variant in u.variants %}
+    {{ variant.name }}({{ variant.type_str }}),
+{% endfor %}
+}
+
+impl Default for {{ u.name }} {
+    fn default() -> Self {
+{% for variant in u.variants %}
+{% if loop.first %}
+        Self::{{ variant.name }}(Default::default())
+{% endif %}
+{% endfor %}
+    }
+}
+{% endfor %}

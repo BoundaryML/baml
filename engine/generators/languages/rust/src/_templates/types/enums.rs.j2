@@ -1,2 +1,16 @@
-{# types/enums.rs.j2 - Generated enums template #}
-{# Content will be added in Phase 5 #}
+//! Generated enum types.
+{% for enum_ in enums %}
+
+{% if enum_.docstring.is_some() %}
+/// {{ enum_.docstring.as_ref().unwrap() }}
+{% endif %}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum {{ enum_.name }} {
+{% for (value, docstring) in enum_.values %}
+{% if docstring.is_some() %}
+    /// {{ docstring.as_ref().unwrap() }}
+{% endif %}
+    {{ value }},
+{% endfor %}
+}
+{% endfor %}

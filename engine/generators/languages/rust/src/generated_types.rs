@@ -1,4 +1,5 @@
-use crate::r#type::TypeRust;
+use crate::package::CurrentRenderPackage;
+use crate::r#type::{SerializeType, TypeRust};
 
 #[derive(Debug)]
 pub struct ClassRust {
@@ -23,6 +24,15 @@ pub struct EnumRust {
     pub dynamic: bool,
 }
 
+impl EnumRust {
+    pub fn first_value(&self) -> &str {
+        self.values
+            .first()
+            .map(|(v, _)| v.as_str())
+            .unwrap_or("Unknown")
+    }
+}
+
 #[derive(Debug)]
 pub struct UnionRust {
     pub name: String,
@@ -44,4 +54,112 @@ pub struct TypeAliasRust {
     pub name: String,
     pub type_: TypeRust,
     pub docstring: Option<String>,
+}
+
+// Rendered versions with pre-computed type strings for templates
+
+#[derive(Debug)]
+pub struct ClassRustRendered {
+    pub name: String,
+    pub docstring: Option<String>,
+    pub fields: Vec<FieldRustRendered>,
+    pub dynamic: bool,
+}
+
+impl ClassRustRendered {
+    pub fn from_class(class: &ClassRust, pkg: &CurrentRenderPackage) -> Self {
+        Self {
+            name: class.name.clone(),
+            docstring: class.docstring.clone(),
+            fields: class
+                .fields
+                .iter()
+                .map(|f| FieldRustRendered::from_field(f, pkg))
+                .collect(),
+            dynamic: class.dynamic,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct FieldRustRendered {
+    pub name: String,
+    pub docstring: Option<String>,
+    pub type_str: String,
+}
+
+impl FieldRustRendered {
+    pub fn from_field(field: &FieldRust, pkg: &CurrentRenderPackage) -> Self {
+        Self {
+            name: field.name.clone(),
+            docstring: field.docstring.clone(),
+            type_str: field.r#type.serialize_type(pkg),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct UnionRustRendered {
+    pub name: String,
+    pub cffi_name: String,
+    pub docstring: Option<String>,
+    pub variants: Vec<VariantRustRendered>,
+}
+
+impl UnionRustRendered {
+    pub fn from_union(union_rust: &UnionRust, pkg: &CurrentRenderPackage) -> Self {
+        Self {
+            name: union_rust.name.clone(),
+            cffi_name: union_rust.cffi_name.clone(),
+            docstring: union_rust.docstring.clone(),
+            variants: union_rust
+                .variants
+                .iter()
+                .map(|v| VariantRustRendered::from_variant(v, pkg))
+                .collect(),
+        }
+    }
+
+    pub fn first_variant_name(&self) -> &str {
+        self.variants
+            .first()
+            .map(|v| v.name.as_str())
+            .unwrap_or("Unknown")
+    }
+}
+
+#[derive(Debug)]
+pub struct VariantRustRendered {
+    pub name: String,
+    pub cffi_name: String,
+    pub literal_repr: Option<String>,
+    pub type_str: String,
+}
+
+impl VariantRustRendered {
+    pub fn from_variant(variant: &VariantRust, pkg: &CurrentRenderPackage) -> Self {
+        Self {
+            name: variant.name.clone(),
+            cffi_name: variant.cffi_name.clone(),
+            literal_repr: variant.literal_repr.clone(),
+            type_str: variant.type_.serialize_type(pkg),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct TypeAliasRustRendered {
+    pub name: String,
+    pub type_str: String,
+    pub docstring: Option<String>,
+}
+
+impl TypeAliasRustRendered {
+    pub fn from_alias(alias: &TypeAliasRust, pkg: &CurrentRenderPackage) -> Self {
+        Self {
+            name: alias.name.clone(),
+            type_str: alias.type_.serialize_type(pkg),
+            docstring: alias.docstring.clone(),
+        }
+    }
 }
