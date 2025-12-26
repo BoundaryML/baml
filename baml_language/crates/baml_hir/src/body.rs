@@ -741,12 +741,14 @@ impl LoweringContext {
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
             SyntaxKind::PAREN_EXPR => {
                 // Unwrap parentheses - just lower the inner expression
-                // First try to find a child node
+                // First try to find a child node (for complex expressions like `(1 + 2)`)
                 if let Some(inner) = node.children().next() {
                     self.lower_expr(&inner)
                 } else {
-                    // No child nodes - try to find a literal token (true/false/null/int)
-                    self.try_lower_literal_token(node)
+                    // No child nodes - the parentheses contain only tokens.
+                    // This happens for simple expressions like `(b)` where `b` is a variable.
+                    // Look for tokens and handle both literals and variable references.
+                    self.try_lower_paren_token_content(node)
                         .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()))
                 }
             }
@@ -1958,6 +1960,53 @@ impl LoweringContext {
             }
             _ => None,
         }
+    }
+
+    /// Try to lower token content inside a parenthesized expression.
+    ///
+    /// This handles the case where `PAREN_EXPR` contains only tokens (no child nodes),
+    /// such as `(b)` where `b` is a variable reference, or `(42)` where 42 is a literal.
+    fn try_lower_paren_token_content(&mut self, node: &baml_syntax::SyntaxNode) -> Option<ExprId> {
+        use baml_syntax::SyntaxKind;
+
+        // Look for tokens inside the parentheses (skip L_PAREN and R_PAREN)
+        for elem in node.children_with_tokens() {
+            if let Some(token) = elem.into_token() {
+                let span = token.text_range();
+                match token.kind() {
+                    SyntaxKind::WORD => {
+                        let text = token.text();
+                        // Check if this is a literal (true/false/null)
+                        return match text {
+                            "true" => {
+                                Some(self.alloc_expr(Expr::Literal(Literal::Bool(true)), span))
+                            }
+                            "false" => {
+                                Some(self.alloc_expr(Expr::Literal(Literal::Bool(false)), span))
+                            }
+                            "null" => Some(self.alloc_expr(Expr::Literal(Literal::Null), span)),
+                            // Otherwise it's a variable reference
+                            _ => Some(self.alloc_expr(Expr::Path(vec![Name::new(text)]), span)),
+                        };
+                    }
+                    SyntaxKind::INTEGER_LITERAL => {
+                        let text = token.text();
+                        let value = text.parse::<i64>().unwrap_or(0);
+                        return Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
+                    }
+                    SyntaxKind::FLOAT_LITERAL => {
+                        let text = token.text();
+                        return Some(
+                            self.alloc_expr(Expr::Literal(Literal::Float(text.to_string())), span),
+                        );
+                    }
+                    // Skip parentheses and whitespace
+                    SyntaxKind::L_PAREN | SyntaxKind::R_PAREN | SyntaxKind::WHITESPACE => {}
+                    _ => {}
+                }
+            }
+        }
+        None
     }
 
     fn lower_let_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {

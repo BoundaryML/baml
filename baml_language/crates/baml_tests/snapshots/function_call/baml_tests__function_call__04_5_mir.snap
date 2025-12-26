@@ -61,6 +61,37 @@ fn Greeting(self: Named("Baz")) -> String {
 
 }
 
+fn param_in_if_statement(b: Bool) -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Bool // b // param
+    let _2: Bool
+
+    bb0: {
+        _2 = copy _1;
+        branch copy _2 -> [bb2, bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = const 1_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const 2_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+}
+
 fn Bar() -> Int {
     // Locals:
     let _0: Int // return

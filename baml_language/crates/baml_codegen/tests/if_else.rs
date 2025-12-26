@@ -939,7 +939,6 @@ fn block_expr() -> anyhow::Result<()> {
 // ============================================================================
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn if_else_assignment_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -957,18 +956,22 @@ fn if_else_assignment_with_locals() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // MIR-based codegen with local pre-allocation
             vec![
+                // Pre-allocate i
+                Instruction::LoadConst(Value::Null),
+                // Check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(6),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::LoadVar("a".to_string()),
-                Instruction::PopReplace(1),
-                Instruction::Jump(5),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(4),
+                // Else branch: i = 2
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::LoadVar("a".to_string()),
-                Instruction::PopReplace(1),
+                Instruction::StoreVar("i".to_string()),
+                Instruction::Jump(3),
+                // Then branch: i = 1
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("i".to_string()),
+                // Return i
                 Instruction::LoadVar("i".to_string()),
                 Instruction::Return,
             ],
@@ -977,7 +980,6 @@ fn if_else_assignment_with_locals() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn if_else_normal_statement() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -1003,28 +1005,40 @@ fn if_else_normal_statement() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // MIR-based codegen with local pre-allocation
+            // Locals: _0 (unused), b (param), x (else), y (else), x (then), y (then)
+            // Note: a=1 is inlined as literal return value
             vec![
-                Instruction::LoadConst(Value::Int(1)),
+                // Pre-allocate locals for both branches
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                // Check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(10),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::LoadGlobal(Value::function("identity")),
-                Instruction::LoadVar("x".to_string()),
-                Instruction::Call(1),
-                Instruction::Pop(1),
-                Instruction::Pop(2),
-                Instruction::Jump(9),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(10),
+                // Else branch: x = 3, y = 4, identity(y)
                 Instruction::LoadConst(Value::Int(3)),
+                Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(4)),
+                Instruction::StoreVar("y".to_string()),
                 Instruction::LoadGlobal(Value::function("identity")),
                 Instruction::LoadVar("y".to_string()),
                 Instruction::Call(1),
-                Instruction::Pop(1),
-                Instruction::Pop(2),
-                Instruction::LoadVar("a".to_string()),
+                Instruction::Pop(1), // discard unused call result
+                Instruction::Jump(9),
+                // Then branch: x = 1, y = 2, identity(x)
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreVar("y".to_string()),
+                Instruction::LoadGlobal(Value::function("identity")),
+                Instruction::LoadVar("x".to_string()),
+                Instruction::Call(1),
+                Instruction::Pop(1), // discard unused call result
+                // Return a (inlined as 1)
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::Return,
             ],
         )],
@@ -1032,7 +1046,6 @@ fn if_else_normal_statement() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -1051,26 +1064,31 @@ fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // MIR-based codegen with local pre-allocation
             vec![
+                // Pre-allocate _0 (return value)
+                Instruction::LoadConst(Value::Null),
+                // Check condition a
                 Instruction::LoadVar("a".to_string()),
-                Instruction::JumpIfFalse(6),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::LoadVar("x".to_string()),
-                Instruction::PopReplace(1),
-                Instruction::Jump(13),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(10),
+                // Else: check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(6),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::LoadVar("y".to_string()),
-                Instruction::PopReplace(1),
-                Instruction::Jump(5),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(4),
+                // Else else: _0 = 3
                 Instruction::LoadConst(Value::Int(3)),
-                Instruction::LoadVar("z".to_string()),
-                Instruction::PopReplace(1),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::Jump(3),
+                // Else if true: _0 = 2
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::Jump(3),
+                // If true: _0 = 1
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("_0".to_string()),
+                // Return _0
+                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -1078,7 +1096,6 @@ fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn else_if_assignment() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -1096,20 +1113,30 @@ fn else_if_assignment() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // MIR-based codegen with local pre-allocation
             vec![
+                // Pre-allocate result
+                Instruction::LoadConst(Value::Null),
+                // Check condition a
                 Instruction::LoadVar("a".to_string()),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::Jump(9),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(10),
+                // Else: check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::Jump(3),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(4),
+                // Else else: result = 3
                 Instruction::LoadConst(Value::Int(3)),
+                Instruction::StoreVar("result".to_string()),
+                Instruction::Jump(3),
+                // Else if true: result = 2
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreVar("result".to_string()),
+                Instruction::Jump(3),
+                // If true: result = 1
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("result".to_string()),
+                // Return result
                 Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
@@ -1118,7 +1145,6 @@ fn else_if_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn else_if_assignment_with_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -1139,26 +1165,30 @@ fn else_if_assignment_with_locals() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // MIR-based codegen with local pre-allocation
             vec![
+                // Pre-allocate result
+                Instruction::LoadConst(Value::Null),
+                // Check condition a
                 Instruction::LoadVar("a".to_string()),
-                Instruction::JumpIfFalse(6),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::LoadVar("x".to_string()),
-                Instruction::PopReplace(1),
-                Instruction::Jump(13),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(10),
+                // Else: check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(6),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::LoadVar("y".to_string()),
-                Instruction::PopReplace(1),
-                Instruction::Jump(5),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(4),
+                // Else else: result = 3
                 Instruction::LoadConst(Value::Int(3)),
-                Instruction::LoadVar("z".to_string()),
-                Instruction::PopReplace(1),
+                Instruction::StoreVar("result".to_string()),
+                Instruction::Jump(3),
+                // Else if true: result = 2
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreVar("result".to_string()),
+                Instruction::Jump(3),
+                // If true: result = 1
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("result".to_string()),
+                // Return result
                 Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
@@ -1167,7 +1197,6 @@ fn else_if_assignment_with_locals() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment statements not yet in HIR"]
 fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -1189,24 +1218,30 @@ fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // MIR-based codegen with local pre-allocation
             vec![
+                // Pre-allocate a
+                Instruction::LoadConst(Value::Null),
+                // a = 1
                 Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("a".to_string()),
+                // a = 2 + 3 (b and c are inlined)
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::LoadConst(Value::Int(3)),
-                Instruction::LoadVar("b".to_string()),
-                Instruction::LoadVar("c".to_string()),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("a".to_string()),
+                // if (a == 5)
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(5),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(2),
+                // If false: skip to return
+                Instruction::Jump(3),
+                // If true: a = 10
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::StoreVar("a".to_string()),
-                Instruction::Jump(2),
-                Instruction::Pop(1),
-                Instruction::Pop(2),
+                // Return a
                 Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
@@ -1215,7 +1250,6 @@ fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn return_with_stack() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -1248,46 +1282,65 @@ fn return_with_stack() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "WithStack",
+            // MIR-based codegen with local pre-allocation
             vec![
-                Instruction::LoadConst(Value::Int(1)), // 1
-                Instruction::LoadVar("a".to_string()), // a
-                Instruction::LoadConst(Value::Int(0)), // 0
+                // Pre-allocate locals: _0, a, c, b
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                // a = 1
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("a".to_string()),
+                // if (a == 0)
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(5), // to 9
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(0)), // 0
-                Instruction::Return,
-                Instruction::Jump(2), // to 10
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)), // 1
-                Instruction::LoadVar("a".to_string()), // a
-                Instruction::LoadVar("b".to_string()), // b
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(31),
+                // if (a != 1) - inlined b=1 check
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::NotEq),
-                Instruction::JumpIfFalse(5), // to 19
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(0)), // 0
-                Instruction::Return,
-                Instruction::Jump(2), // to 20
-                Instruction::Pop(1),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(2)), // 2
-                Instruction::LoadConst(Value::Int(3)), // 3
-                Instruction::LoadVar("b".to_string()), // b
-                Instruction::LoadVar("c".to_string()), // c
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(22),
+                // c = 2
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreVar("c".to_string()),
+                // b = 3
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::StoreVar("b".to_string()),
+                // while (b != c)
+                Instruction::LoadVar("b".to_string()),
+                Instruction::LoadVar("c".to_string()),
                 Instruction::CmpOp(CmpOp::NotEq),
-                Instruction::JumpIfFalse(10), // to 36
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Bool(true)), // true
-                Instruction::JumpIfFalse(5),               // to 34
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(0)), // 0
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(5),
+                // Loop exit: return 7
+                Instruction::LoadConst(Value::Int(7)),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
-                Instruction::Jump(2), // to 35
-                Instruction::Pop(1),
-                Instruction::Jump(-12), // to 23
-                Instruction::Pop(1),
-                Instruction::Pop(2),
-                Instruction::LoadConst(Value::Int(7)), // 7
+                // Loop body: if (true)
+                Instruction::LoadConst(Value::Bool(true)),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(2),
+                // Jump back to while
+                Instruction::Jump(-12),
+                // return 0 (from inner if true)
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::LoadVar("_0".to_string()),
+                Instruction::Return,
+                // return 0 (from a != b check)
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::LoadVar("_0".to_string()),
+                Instruction::Return,
+                // return 0 (from a == 0 check)
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -1295,7 +1348,6 @@ fn return_with_stack() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn if_else_return_expr() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -1306,13 +1358,24 @@ fn if_else_return_expr() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
+                // Pre-allocate _0 (return value)
+                Instruction::LoadConst(Value::Null),
+                // Load condition: parameter b from slot 1
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::Jump(3),
-                Instruction::Pop(1),
+                // Branch: if false, jump +2 (to else branch at index 4)
+                Instruction::JumpIfFalse(2),
+                // True path: jump over else to then branch (at index 7)
+                Instruction::Jump(4),
+                // Else branch: load 2, store to _0
                 Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreVar("_0".to_string()),
+                // Jump to exit (at index 9)
+                Instruction::Jump(3),
+                // Then branch: load 1, store to _0
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("_0".to_string()),
+                // Exit: load _0 and return
+                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -1320,8 +1383,9 @@ fn if_else_return_expr() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn if_else_return_expr_with_locals() -> anyhow::Result<()> {
+    // Note: The MIR optimizer performs copy propagation, so `let a = 1; a`
+    // is optimized to just `1`. The local variable `a` is virtualized away.
     assert_compiles(Program {
         source: "
             function main(b: bool) -> int {
@@ -1337,17 +1401,24 @@ fn if_else_return_expr_with_locals() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
+                // Pre-allocate _0 (return value)
+                Instruction::LoadConst(Value::Null),
+                // Load condition: parameter b from slot 1
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(6),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::LoadVar("a".to_string()),
-                Instruction::PopReplace(1),
-                Instruction::Jump(5),
-                Instruction::Pop(1),
+                // Branch: if false, jump +2 (to else branch at index 4)
+                Instruction::JumpIfFalse(2),
+                // True path: jump over else to then branch (at index 7)
+                Instruction::Jump(4),
+                // Else branch: load 2, store to _0 (let a = 2; a optimized away)
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::LoadVar("a".to_string()),
-                Instruction::PopReplace(1),
+                Instruction::StoreVar("_0".to_string()),
+                // Jump to exit (at index 9)
+                Instruction::Jump(3),
+                // Then branch: load 1, store to _0 (let a = 1; a optimized away)
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("_0".to_string()),
+                // Exit: load _0 and return
+                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -1355,7 +1426,6 @@ fn if_else_return_expr_with_locals() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn if_else_assignment() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -1366,14 +1436,22 @@ fn if_else_assignment() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // MIR-based codegen with local pre-allocation
             vec![
+                // Pre-allocate i
+                Instruction::LoadConst(Value::Null),
+                // Check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::Jump(3),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(4),
+                // Else branch: i = 2
                 Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreVar("i".to_string()),
+                Instruction::Jump(3),
+                // Then branch: i = 1
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("i".to_string()),
+                // Return i
                 Instruction::LoadVar("i".to_string()),
                 Instruction::Return,
             ],
@@ -1382,7 +1460,6 @@ fn if_else_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn else_if_return_expr() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -1398,20 +1475,31 @@ fn else_if_return_expr() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // MIR-based codegen with local pre-allocation
             vec![
+                // Pre-allocate _0 (return value)
+                Instruction::LoadConst(Value::Null),
+                // Check condition a
                 Instruction::LoadVar("a".to_string()),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::Jump(9),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(10),
+                // Else: check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::Jump(3),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(4),
+                // Else else: _0 = 3
                 Instruction::LoadConst(Value::Int(3)),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::Jump(3),
+                // Else if true: _0 = 2
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::Jump(3),
+                // If true: _0 = 1
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("_0".to_string()),
+                // Return _0
+                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -1423,7 +1511,6 @@ fn else_if_return_expr() -> anyhow::Result<()> {
 // ============================================================================
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn early_return() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -1435,19 +1522,27 @@ fn early_return() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "EarlyReturn",
+            // MIR-based codegen with local pre-allocation
             vec![
+                // Pre-allocate _0 (return value)
+                Instruction::LoadConst(Value::Null),
+                // if (x == 42)
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(42)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(5),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::Return,
-                Instruction::Jump(2),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(7),
+                // Default return: x + 5
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::BinOp(BinOp::Add),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::LoadVar("_0".to_string()),
+                Instruction::Return,
+                // Early return: return 1
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],

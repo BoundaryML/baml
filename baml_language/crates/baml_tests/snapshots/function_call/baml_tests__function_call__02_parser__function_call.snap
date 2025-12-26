@@ -131,6 +131,39 @@ SOURCE_FILE
               QUOTE """
           R_BRACE "}"
     R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "param_in_if_statement"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR "(b)"
+            L_PAREN "("
+            WORD "b"
+            R_PAREN ")"
+          BLOCK_EXPR "{ 1 }"
+            L_BRACE "{"
+            INTEGER_LITERAL "1"
+            R_BRACE "}"
+          KW_ELSE "else"
+          BLOCK_EXPR "{ 2 }"
+            L_BRACE "{"
+            INTEGER_LITERAL "2"
+            R_BRACE "}"
+        R_BRACE "}"
 
 === ERRORS ===
 None

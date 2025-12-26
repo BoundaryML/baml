@@ -447,8 +447,13 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     fn emit_store_place(&mut self, place: &Place, mir: &MirFunction<'db>) {
         match place {
             Place::Local(local) => {
-                let slot = self.local_slots[local];
-                self.emit(Instruction::StoreVar(slot));
+                // Check if this local has a slot (Real locals do, Virtual/Dead don't)
+                if let Some(&slot) = self.local_slots.get(local) {
+                    self.emit(Instruction::StoreVar(slot));
+                } else {
+                    // Virtual or Dead local - just pop the value
+                    self.emit(Instruction::Pop(1));
+                }
             }
             Place::Field { base, field } => {
                 // Stack has: [value]

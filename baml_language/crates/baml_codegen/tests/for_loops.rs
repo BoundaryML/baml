@@ -11,7 +11,6 @@ use baml_vm::{BinOp, CmpOp};
 // ============================================================================
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn for_loop_sum() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -27,42 +26,61 @@ fn for_loop_sum() -> anyhow::Result<()> {
             "#,
         expected: vec![(
             "Sum",
+            // MIR-based codegen with local pre-allocation:
+            // Locals: _0 (return), xs (param), result, _iter, _len, _i, x
             vec![
+                // Pre-allocate all locals
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("result".to_string()),
+                // _iter = xs
                 Instruction::LoadVar("xs".to_string()),
+                Instruction::StoreVar("_iter".to_string()),
+                // _len = baml.Array.length(_iter)
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
                 Instruction::LoadVar("_iter".to_string()),
                 Instruction::Call(1),
+                Instruction::StoreVar("_len".to_string()),
+                // _i = 0
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("_i".to_string()),
+                // Loop condition: _i < _len
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(15),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(3),
+                // Loop exit: load result and return
+                Instruction::LoadVar("result".to_string()),
+                Instruction::Return,
+                // Loop body: x = _iter[_i]
                 Instruction::LoadVar("_iter".to_string()),
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
+                Instruction::StoreVar("x".to_string()),
+                // _i = _i + 1
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("_i".to_string()),
+                // result = result + x
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("result".to_string()),
-                Instruction::Pop(1),
-                Instruction::Jump(-17),
-                Instruction::Pop(1),
-                Instruction::Pop(3),
-                Instruction::LoadVar("result".to_string()),
-                Instruction::Return,
+                // Jump back to loop condition
+                Instruction::Jump(-19),
             ],
         )],
     })
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn for_with_break() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -81,42 +99,58 @@ fn for_with_break() -> anyhow::Result<()> {
             "#,
         expected: vec![(
             "ForWithBreak",
+            // MIR-based codegen with local pre-allocation
             vec![
+                // Pre-allocate all locals
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("result".to_string()),
+                // _iter = xs
                 Instruction::LoadVar("xs".to_string()),
+                Instruction::StoreVar("_iter".to_string()),
+                // _len = baml.Array.length(_iter)
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
                 Instruction::LoadVar("_iter".to_string()),
                 Instruction::Call(1),
+                Instruction::StoreVar("_len".to_string()),
+                // _i = 0
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("_i".to_string()),
+                // Loop condition: _i < _len
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(24),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(19),
+                // Loop body: x = _iter[_i]
                 Instruction::LoadVar("_iter".to_string()),
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
+                Instruction::StoreVar("x".to_string()),
+                // _i = _i + 1
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("_i".to_string()),
+                // if (x > 10)
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Gt),
-                Instruction::JumpIfFalse(5),
-                Instruction::Pop(1),
-                Instruction::Pop(1),
-                Instruction::Jump(10),
-                Instruction::Jump(2),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                // break - jump to loop exit
+                Instruction::Jump(6),
+                // result += x
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("result".to_string()),
-                Instruction::Pop(1),
-                Instruction::Jump(-26),
-                Instruction::Pop(1),
-                Instruction::Pop(3),
+                // Jump back to loop condition
+                Instruction::Jump(-21),
+                // Loop exit: load result and return
                 Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
             ],
@@ -125,7 +159,6 @@ fn for_with_break() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn for_with_continue() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -144,51 +177,69 @@ fn for_with_continue() -> anyhow::Result<()> {
             "#,
         expected: vec![(
             "ForWithContinue",
+            // MIR-based codegen with local pre-allocation
             vec![
+                // Pre-allocate all locals
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("result".to_string()),
+                // _iter = xs
                 Instruction::LoadVar("xs".to_string()),
+                Instruction::StoreVar("_iter".to_string()),
+                // _len = baml.Array.length(_iter)
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
                 Instruction::LoadVar("_iter".to_string()),
                 Instruction::Call(1),
+                Instruction::StoreVar("_len".to_string()),
+                // _i = 0
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("_i".to_string()),
+                // Loop condition: _i < _len
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(24),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(3),
+                // Loop exit: load result and return
+                Instruction::LoadVar("result".to_string()),
+                Instruction::Return,
+                // Loop body: x = _iter[_i]
                 Instruction::LoadVar("_iter".to_string()),
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
+                Instruction::StoreVar("x".to_string()),
+                // _i = _i + 1
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("_i".to_string()),
+                // if (x > 10)
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Gt),
-                Instruction::JumpIfFalse(5),
-                Instruction::Pop(1),
-                Instruction::Pop(1),
-                Instruction::Jump(8),
-                Instruction::Jump(2),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                // continue - jump to loop condition
+                Instruction::Jump(6),
+                // result += x
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("result".to_string()),
-                Instruction::Pop(1),
-                Instruction::Jump(-26),
-                Instruction::Pop(1),
-                Instruction::Pop(3),
-                Instruction::LoadVar("result".to_string()),
-                Instruction::Return,
+                // Jump back to loop condition
+                Instruction::Jump(-24),
+                // Unreachable continue fallthrough
+                Instruction::Jump(-25),
             ],
         )],
     })
 }
 
 #[test]
-#[ignore = "function parameters not yet tracked in HIR"]
 fn for_nested() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -207,58 +258,90 @@ fn for_nested() -> anyhow::Result<()> {
             "#,
         expected: vec![(
             "NestedFor",
+            // MIR-based codegen with local pre-allocation
+            // Locals: _0, as, bs, result, _iter, _len, _i, a, _iter1, _len1, _i1, b
             vec![
+                // Pre-allocate all locals (9 nulls)
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("result".to_string()),
+                // Outer loop: _iter = as
                 Instruction::LoadVar("as".to_string()),
+                Instruction::StoreVar("_iter".to_string()),
+                // _len = baml.Array.length(_iter)
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
                 Instruction::LoadVar("_iter".to_string()),
                 Instruction::Call(1),
+                Instruction::StoreVar("_len".to_string()),
+                // _i = 0
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("_i".to_string()),
+                // Outer loop condition: _i < _len
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(38),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(3),
+                // Outer loop exit: load result and return
+                Instruction::LoadVar("result".to_string()),
+                Instruction::Return,
+                // Outer loop body: a = _iter[_i]
                 Instruction::LoadVar("_iter".to_string()),
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
+                Instruction::StoreVar("a".to_string()),
+                // _i = _i + 1
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("_i".to_string()),
+                // Inner loop: _iter1 = bs
                 Instruction::LoadVar("bs".to_string()),
+                Instruction::StoreVar("_iter1".to_string()),
+                // _len1 = baml.Array.length(_iter1)
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
                 Instruction::LoadVar("_iter1".to_string()),
                 Instruction::Call(1),
+                Instruction::StoreVar("_len1".to_string()),
+                // _i1 = 0
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("_i1".to_string()),
+                // Inner loop condition: _i1 < _len1
                 Instruction::LoadVar("_i1".to_string()),
                 Instruction::LoadVar("_len1".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(17),
-                Instruction::Pop(1),
+                Instruction::JumpIfFalse(2),
+                Instruction::Jump(2),
+                // Inner loop exit: jump back to outer loop condition
+                Instruction::Jump(-28),
+                // Inner loop body: b = _iter1[_i1]
                 Instruction::LoadVar("_iter1".to_string()),
                 Instruction::LoadVar("_i1".to_string()),
                 Instruction::LoadArrayElement,
+                Instruction::StoreVar("b".to_string()),
+                // _i1 = _i1 + 1
                 Instruction::LoadVar("_i1".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("_i1".to_string()),
+                // result = result + (a * b)
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadVar("b".to_string()),
                 Instruction::BinOp(BinOp::Mul),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("result".to_string()),
-                Instruction::Pop(1),
-                Instruction::Jump(-19),
-                Instruction::Pop(1),
-                Instruction::Pop(3),
-                Instruction::Pop(1),
-                Instruction::Jump(-40),
-                Instruction::Pop(1),
-                Instruction::Pop(3),
-                Instruction::LoadVar("result".to_string()),
-                Instruction::Return,
+                // Jump back to inner loop condition
+                Instruction::Jump(-20),
             ],
         )],
     })

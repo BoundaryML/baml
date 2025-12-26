@@ -7,6 +7,8 @@ expression: output
     Return: Int
   Function Greeting:
     Return: String
+  Function param_in_if_statement:
+    Return: Int
   Function Bar:
     Return: Int
   Function Foo:
