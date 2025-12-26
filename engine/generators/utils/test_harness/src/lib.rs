@@ -68,11 +68,6 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
         }
         utils::create_symlink(&dir.join("baml_src"), &test_dir.join("baml_src"))?;
 
-        // Generate test harness files for Rust (Cargo.toml and main.rs)
-        if L::test_name() == "rust" {
-            utils::generate_rust_test_harness(&test_dir, project_name.to_string_lossy().as_ref())?;
-        }
-
         let ir = make_test_ir_from_dir(&dir.join("baml_src"))?;
 
         Ok(Self {
@@ -417,50 +412,4 @@ mod utils {
         Ok(())
     }
 
-    /// Generate Rust test harness files (Cargo.toml and main.rs) for a test directory.
-    pub fn generate_rust_test_harness(test_dir: &Path, project_name: &str) -> Result<(), anyhow::Error> {
-        // Generate Cargo.toml
-        let cargo_toml = format!(
-            r#"[package]
-name = "{project_name}"
-version = "0.1.0"
-edition = "2021"
-
-# Empty workspace table to exclude from parent workspace
-[workspace]
-
-[dependencies]
-baml = {{ path = "../../../../../../languages/rust/baml", features = ["dev"] }}
-serde_json = "1"
-
-[[bin]]
-name = "{project_name}"
-path = "main.rs"
-"#
-        );
-        std::fs::write(test_dir.join("Cargo.toml"), cargo_toml)?;
-
-        // Generate main.rs
-        let main_rs = r#"// Test file for generated BAML client
-// This will be compiled against the generated baml_client module
-
-mod baml_client;
-
-fn main() {
-    println!("Test - baml_client module loaded successfully!");
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_baml_client_compiles() {
-        // This test verifies the generated code compiles
-        println!("baml_client module compiles successfully");
-    }
-}
-"#;
-        std::fs::write(test_dir.join("main.rs"), main_rs)?;
-
-        Ok(())
-    }
 }
