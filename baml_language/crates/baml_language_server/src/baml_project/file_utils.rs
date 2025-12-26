@@ -236,7 +236,9 @@ mod tests {
         let result = find_top_level_parent(&path);
         assert_eq!(
             result,
-            Some(PathBuf::from("/path/to/baml_language/crates/test/file.baml"))
+            Some(PathBuf::from(
+                "/path/to/baml_language/crates/test/file.baml"
+            ))
         );
     }
 
