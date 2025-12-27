@@ -28,14 +28,14 @@ async def run():
         "temperature": 0.7,
         "api_key": os.environ.get('OPENAI_API_KEY')
     })
-    
+
     # Creates a client using the OpenAI Responses API
     cr.add_llm_client(name='MyResponsesClient', provider='openai-responses', options={
         "model": "gpt-4.1",
         "api_key": os.environ.get('OPENAI_API_KEY')
     })
-    
-    # Sets MyAmazingClient as the primary client
+
+    # Sets MyAmazingClient as the client
     cr.set_primary('MyAmazingClient')
 
     # ExtractResume will now use MyAmazingClient as the calling client
@@ -56,14 +56,14 @@ async function run() {
         temperature: 0.7,
         api_key: process.env.OPENAI_API_KEY
     })
-    
+
     // Creates a client using the OpenAI Responses API
     cr.addLlmClient('MyResponsesClient', 'openai-responses', {
         model: "gpt-4.1",
         api_key: process.env.OPENAI_API_KEY
     })
-    
-    // Sets MyAmazingClient as the primary client
+
+    // Sets MyAmazingClient as the client
     cr.setPrimary('MyAmazingClient')
 
     // ExtractResume will now use MyAmazingClient as the calling client
@@ -101,7 +101,7 @@ def run
     }
   )
 
-  # Sets MyAmazingClient as the primary client
+  # Sets MyAmazingClient as the client
   cr.set_primary('MyAmazingClient')
 
   # ExtractResume will now use MyAmazingClient as the calling client
@@ -122,16 +122,16 @@ import (
     "context"
     "fmt"
     "os"
-    
+
     "github.com/boundaryml/baml"
 )
 
 func main() {
     ctx := context.Background()
-    
+
     // Create a client registry
     cr := baml.NewClientRegistry()
-    
+
     // Creates a new client
     err := cr.AddLLMClient("MyAmazingClient", "openai", map[string]interface{}{
         "model":       "gpt-5-mini",
@@ -141,7 +141,7 @@ func main() {
     if err != nil {
         panic(fmt.Sprintf("Failed to add client: %v", err))
     }
-    
+
     // Creates a client using the OpenAI Responses API
     err = cr.AddLLMClient("MyResponsesClient", "openai-responses", map[string]interface{}{
         "model":   "gpt-4.1",
@@ -150,16 +150,16 @@ func main() {
     if err != nil {
         panic(fmt.Sprintf("Failed to add responses client: %v", err))
     }
-    
-    // Sets MyAmazingClient as the primary client
+
+    // Sets MyAmazingClient as the client
     cr.SetPrimary("MyAmazingClient")
-    
+
     // ExtractResume will now use MyAmazingClient as the calling client
     res, err := baml.ExtractResume(ctx, "...", b.WithClientRegistry(cr))
     if err != nil {
         panic(fmt.Sprintf("Failed to extract resume: %v", err))
     }
-    
+
     fmt.Printf("Result: %+v\n", res)
 }
 ```
@@ -211,6 +211,79 @@ curl -X POST http://localhost:2024/call/ExtractResume \
 
 </Tabs>
 
+### The `set_primary` Method
+
+The `set_primary` method can be called with either one of the clients added to
+the `ClientRegistry` at runtime using `add_llm_client` or a client defined in
+BAML files.
+
+<Warning>
+`set_primary` simply selects a client from all the available clients in the `ClientRegistry`,
+but it does not mean there will be a "secondary" client used anywhere.
+</Warning>
+
+You can, however, define a fallback client and then use `ClientRegistry` to set
+that client as the calling client for BAML functions. Here's a simple example:
+
+```baml example.baml
+function ExtractResume(input: string) -> Resume {
+  client "openai/gpt-5-mini" // Uses GPT-5 Mini by default
+  prompt #"
+    Extract from this content: {{ resume }}
+
+    {{ ctx.output_format }}
+  "#
+}
+
+// This client uses GPT-5 first and if it fails it will use Opus 4 as a fallback.
+client<llm> GptOpusFallback {
+  provider fallback
+  options {
+    strategy ["openai/gpt-5", "anthropic/claude-opus-4-1-20250805"]
+  }
+}
+```
+
+Then, in your code, you can use the `ClientRegistry` to set the `GptOpusFallback` at
+runtime, which will try to use GPT 5 and if it fails Opus 4:
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+cr = ClientRegistry()
+cr.set_primary("GptOpusFallback")
+res = await b.ExtractResume("...", { "client_registry": cr })
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+const cr = new ClientRegistry()
+cr.setPrimary("GptOpusFallback")
+const res = await b.ExtractResume("...", { clientRegistry: cr })
+```
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
+cr = Baml::ClientRegistry.new
+cr.set_primary("GptOpusFallback")
+res = Baml.Client.extract_resume(input: "...", baml_options: { client_registry: cr })
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+cr := baml.NewClientRegistry()
+cr.SetPrimary("GptOpusFallback")
+res, err := b.ExtractResume(ctx, "...", b.WithClientRegistry(cr))
+```
+</Tab>
+
+</Tabs>
+
+Now the calling client will be `GptOpusFallback`, **nothing else**.
+
 ## ClientRegistry Interface
 
 <Tip>
@@ -244,6 +317,14 @@ The name of a retry policy that is already defined in a .baml file. See [Retry P
 
 ### set_primary / setPrimary
 This sets the client for the function to use. (i.e. replaces the `client` property in a function)
+
+<Warning>
+The name "primary" does not imply that there will be a "secondary" or fallback
+client used anywhere. It simply means that you choose one client from all the
+available clients in your `ClientRegistry`.
+
+See [The `set_primary` Method](#the-set_primary-method) section for more details.
+</Warning>
 
 <ParamField
     path="name"
