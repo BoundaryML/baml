@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct BooleanLiterals {
     pub alwaysTrue: bool,
 
@@ -17,7 +18,7 @@ pub struct BooleanLiterals {
     pub eitherBool: Union2BoolKFalseOrBoolKTrue,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ComplexLiterals {
     pub state: Union4KarchivedOrKdeletedOrKdraftOrKpublished,
 
@@ -30,7 +31,7 @@ pub struct ComplexLiterals {
     pub codes: Vec<Union3IntK200OrIntK404OrIntK500>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct IntegerLiterals {
     pub priority: Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5,
 
@@ -39,7 +40,7 @@ pub struct IntegerLiterals {
     pub maxRetries: Union4IntK0OrIntK1OrIntK3OrIntK5,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MixedLiterals {
     pub id: i64,
 
@@ -52,7 +53,7 @@ pub struct MixedLiterals {
     pub apiVersion: Union3Kv1OrKv2OrKv3,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct StringLiterals {
     pub status: Union3KactiveOrKinactiveOrKpending,
 

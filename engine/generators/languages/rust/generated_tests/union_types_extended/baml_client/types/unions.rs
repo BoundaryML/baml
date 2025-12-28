@@ -6,11 +6,12 @@
 //! Generated union types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
 /// Generated from: (bool | string)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2BoolOrString {
     Bool(bool),
 
@@ -24,8 +25,8 @@ impl Default for Union2BoolOrString {
 }
 
 /// Generated from: (DataResponse | ErrorResponse)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2DataResponseOrErrorResponse {
     DataResponse(DataResponse),
 
@@ -39,8 +40,8 @@ impl Default for Union2DataResponseOrErrorResponse {
 }
 
 /// Generated from: (int | float)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2FloatOrInt {
     Int(i64),
 
@@ -54,8 +55,8 @@ impl Default for Union2FloatOrInt {
 }
 
 /// Generated from: (string | float)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2FloatOrString {
     String(String),
 
@@ -69,8 +70,8 @@ impl Default for Union2FloatOrString {
 }
 
 /// Generated from: (string | int)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2IntOrString {
     String(String),
 
@@ -84,8 +85,8 @@ impl Default for Union2IntOrString {
 }
 
 /// Generated from: (string | int[])
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2ListIntOrString {
     String(String),
 
@@ -99,8 +100,8 @@ impl Default for Union2ListIntOrString {
 }
 
 /// Generated from: (User | Product)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2ProductOrUser {
     User(User),
 
@@ -114,8 +115,8 @@ impl Default for Union2ProductOrUser {
 }
 
 /// Generated from: (string | RecursiveUnion)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2RecursiveUnionOrString {
     String(String),
 
@@ -129,8 +130,8 @@ impl Default for Union2RecursiveUnionOrString {
 }
 
 /// Generated from: (User | Product | Admin)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3AdminOrProductOrUser {
     User(User),
 
@@ -146,8 +147,8 @@ impl Default for Union3AdminOrProductOrUser {
 }
 
 /// Generated from: (ApiSuccess | ApiError | ApiPending)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3ApiErrorOrApiPendingOrApiSuccess {
     ApiSuccess(ApiSuccess),
 
@@ -163,8 +164,8 @@ impl Default for Union3ApiErrorOrApiPendingOrApiSuccess {
 }
 
 /// Generated from: (Dog | Cat | Bird)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3BirdOrCatOrDog {
     Dog(Dog),
 
@@ -180,8 +181,8 @@ impl Default for Union3BirdOrCatOrDog {
 }
 
 /// Generated from: (Circle | Rectangle | Triangle)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3CircleOrRectangleOrTriangle {
     Circle(Circle),
 
@@ -197,8 +198,8 @@ impl Default for Union3CircleOrRectangleOrTriangle {
 }
 
 /// Generated from: (Success | Warning | Error)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3ErrorOrSuccessOrWarning {
     Success(Success),
 
@@ -214,8 +215,8 @@ impl Default for Union3ErrorOrSuccessOrWarning {
 }
 
 /// Generated from: (string | int | float)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3FloatOrIntOrString {
     String(String),
 
@@ -231,8 +232,8 @@ impl Default for Union3FloatOrIntOrString {
 }
 
 /// Generated from: (string | int | RecursiveUnion)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3IntOrRecursiveUnionOrString {
     String(String),
 
@@ -248,8 +249,8 @@ impl Default for Union3IntOrRecursiveUnionOrString {
 }
 
 /// Generated from: (string | int | float | bool)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union4BoolOrFloatOrIntOrString {
     String(String),
 

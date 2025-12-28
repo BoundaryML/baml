@@ -6,11 +6,12 @@
 //! Generated union types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
 /// Generated from: (Condition | SimpleCondition)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2ConditionOrSimpleCondition {
     Condition(Box<Condition>),
 
@@ -24,8 +25,8 @@ impl Default for Union2ConditionOrSimpleCondition {
 }
 
 /// Generated from: (Success | Error)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2ErrorOrSuccess {
     Success(Success),
 
@@ -39,8 +40,8 @@ impl Default for Union2ErrorOrSuccess {
 }
 
 /// Generated from: ("leaf" | "branch")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2KbranchOrKleaf {
     Kleaf(String),
 
@@ -54,8 +55,8 @@ impl Default for Union2KbranchOrKleaf {
 }
 
 /// Generated from: ("success" | "error")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2KerrorOrKsuccess {
     Ksuccess(String),
 
@@ -69,8 +70,8 @@ impl Default for Union2KerrorOrKsuccess {
 }
 
 /// Generated from: (string | int | bool)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3BoolOrIntOrString {
     String(String),
 
@@ -86,8 +87,8 @@ impl Default for Union3BoolOrIntOrString {
 }
 
 /// Generated from: (string | int | DataObject)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3DataObjectOrIntOrString {
     String(String),
 
@@ -103,8 +104,8 @@ impl Default for Union3DataObjectOrIntOrString {
 }
 
 /// Generated from: (string | int | float)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3FloatOrIntOrString {
     String(String),
 
@@ -120,8 +121,8 @@ impl Default for Union3FloatOrIntOrString {
 }
 
 /// Generated from: ("and" | "or" | "not")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KandOrKnotOrKor {
     Kand(String),
 
@@ -137,8 +138,8 @@ impl Default for Union3KandOrKnotOrKor {
 }
 
 /// Generated from: ("draft" | "published" | "archived")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KarchivedOrKdraftOrKpublished {
     Kdraft(String),
 
@@ -154,8 +155,8 @@ impl Default for Union3KarchivedOrKdraftOrKpublished {
 }
 
 /// Generated from: ("image" | "audio" | "document")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KaudioOrKdocumentOrKimage {
     Kimage(String),
 
@@ -171,8 +172,8 @@ impl Default for Union3KaudioOrKdocumentOrKimage {
 }
 
 /// Generated from: ("flex" | "grid" | "stack")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KflexOrKgridOrKstack {
     Kflex(String),
 
@@ -188,8 +189,8 @@ impl Default for Union3KflexOrKgridOrKstack {
 }
 
 /// Generated from: ("plain" | "markdown" | "html")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KhtmlOrKmarkdownOrKplain {
     Kplain(String),
 
@@ -205,8 +206,8 @@ impl Default for Union3KhtmlOrKmarkdownOrKplain {
 }
 
 /// Generated from: (string | int | float | bool)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union4BoolOrFloatOrIntOrString {
     String(String),
 
@@ -224,8 +225,8 @@ impl Default for Union4BoolOrFloatOrIntOrString {
 }
 
 /// Generated from: (string | int | Node[] | map<string, Node>)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
     String(String),
 
@@ -243,8 +244,8 @@ impl Default for Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
 }
 
 /// Generated from: ("button" | "text" | "image" | "container")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union4KbuttonOrKcontainerOrKimageOrKtext {
     Kbutton(String),
 
@@ -262,8 +263,8 @@ impl Default for Union4KbuttonOrKcontainerOrKimageOrKtext {
 }
 
 /// Generated from: (1 | 2 | 3 | 4 | 5)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     IntK1(i64),
 
@@ -283,8 +284,8 @@ impl Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
 }
 
 /// Generated from: ("eq" | "ne" | "gt" | "lt" | "contains")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union5KcontainsOrKeqOrKgtOrKltOrKne {
     Keq(String),
 

@@ -1,13 +1,18 @@
+{% if unions.is_empty() %}
+// No unions defined
+{% else %}
 //! Generated union types.
 
 use std::collections::HashMap;
+use baml::{BamlEncode, BamlDecode};
 use super::*;
 {% for u in unions %}
 
-{% if u.docstring.is_some() %}
-/// {{ u.docstring.as_ref().unwrap() }}
-{% endif %}
-#[derive(Debug, Clone)]
+{% if let Some(docstring) = u.docstring -%}
+{{ crate::utils::prefix_lines(docstring, "/// ") }}
+{%- endif %}
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum {{ u.name }} {
 {% for variant in u.variants %}
     {{ variant.name }}({{ variant.type_str }}),
@@ -16,11 +21,12 @@ pub enum {{ u.name }} {
 
 impl Default for {{ u.name }} {
     fn default() -> Self {
-{% for variant in u.variants %}
-{% if loop.first %}
-        Self::{{ variant.name }}(Default::default())
-{% endif %}
-{% endfor %}
+        {% if u.variants.is_empty() %}
+          panic!("{{ u.name }} has no variants")
+        {% else %}
+            Self::{{ u.variants[0].name }}(Default::default())
+        {% endif %}
     }
 }
 {% endfor %}
+{% endif %}

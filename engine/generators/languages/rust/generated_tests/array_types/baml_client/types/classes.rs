@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ArrayWithConstraints {
     pub nonEmptyStrings: Vec<String>,
 
@@ -17,7 +18,7 @@ pub struct ArrayWithConstraints {
     pub positiveFloats: Vec<f64>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MixedArrays {
     pub primitiveArray: Vec<Union4BoolOrFloatOrIntOrString>,
 
@@ -30,7 +31,7 @@ pub struct MixedArrays {
     pub complexMixed: Vec<Union3ProductOrTagOrUser>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NestedArrays {
     pub matrix: Vec<Vec<i64>>,
 
@@ -39,7 +40,7 @@ pub struct NestedArrays {
     pub threeDimensional: Vec<Vec<Vec<f64>>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ObjectArrays {
     pub users: Vec<User>,
 
@@ -48,7 +49,7 @@ pub struct ObjectArrays {
     pub tags: Vec<Tag>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Product {
     pub id: i64,
 
@@ -61,7 +62,7 @@ pub struct Product {
     pub inStock: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SimpleArrays {
     pub strings: Vec<String>,
 
@@ -72,7 +73,7 @@ pub struct SimpleArrays {
     pub booleans: Vec<bool>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Tag {
     pub id: i64,
 
@@ -81,7 +82,7 @@ pub struct Tag {
     pub color: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
 

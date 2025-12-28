@@ -22,6 +22,8 @@ pub fn baml_crate_path() -> TokenStream {
 pub struct ContainerAttrs {
     /// The BAML type name (defaults to Rust type name)
     pub name: Option<String>,
+    /// Whether this enum represents a BAML union type
+    pub union: bool,
 }
 
 /// Field-level attributes
@@ -54,6 +56,9 @@ impl ContainerAttrs {
                 if meta.path.is_ident("name") {
                     let value: LitStr = meta.value()?.parse()?;
                     result.name = Some(value.value());
+                    Ok(())
+                } else if meta.path.is_ident("union") {
+                    result.union = true;
                     Ok(())
                 } else {
                     Err(meta.error("unrecognized baml attribute"))

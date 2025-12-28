@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use crate::codec::BamlDecode;
+use crate::codec::{BamlDecode, BamlEncode};
 use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{cffi_value_holder, CffiStreamState, CffiValueHolder};
+use crate::proto::baml_cffi_v1::{
+    cffi_value_holder, CffiStreamState, CffiValueHolder, HostValue,
+};
 
 /// Result of a @check constraint
 #[derive(Debug, Clone)]
@@ -70,6 +72,14 @@ impl<T: BamlDecode> BamlDecode for Checked<T> {
                 other.is_some()
             ))),
         }
+    }
+}
+
+impl<T: BamlEncode> BamlEncode for Checked<T> {
+    fn baml_encode(&self) -> HostValue {
+        // Encode Checked<T> by encoding just the inner value.
+        // The checks metadata is typically computed by the runtime, not sent as input.
+        self.value.baml_encode()
     }
 }
 

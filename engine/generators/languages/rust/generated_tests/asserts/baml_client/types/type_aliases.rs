@@ -3,7 +3,4 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated type aliases.
-
-use super::*;
-use std::collections::HashMap;
+// No type aliases defined

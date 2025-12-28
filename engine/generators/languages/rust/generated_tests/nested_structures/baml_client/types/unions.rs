@@ -6,11 +6,12 @@
 //! Generated union types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
 /// Generated from: ("light" | "dark")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2KdarkOrKlight {
     Klight(String),
 
@@ -24,8 +25,8 @@ impl Default for Union2KdarkOrKlight {
 }
 
 /// Generated from: ("grid" | "list")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2KgridOrKlist {
     Kgrid(String),
 
@@ -39,8 +40,8 @@ impl Default for Union2KgridOrKlist {
 }
 
 /// Generated from: (string | int | bool)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3BoolOrIntOrString {
     String(String),
 
@@ -56,8 +57,8 @@ impl Default for Union3BoolOrIntOrString {
 }
 
 /// Generated from: ("immediate" | "daily" | "weekly")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KdailyOrKimmediateOrKweekly {
     Kimmediate(String),
 
@@ -73,8 +74,8 @@ impl Default for Union3KdailyOrKimmediateOrKweekly {
 }
 
 /// Generated from: ("todo" | "in_progress" | "done")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KdoneOrKin_progressOrKtodo {
     Ktodo(String),
 
@@ -90,8 +91,8 @@ impl Default for Union3KdoneOrKin_progressOrKtodo {
 }
 
 /// Generated from: ("public" | "private" | "friends")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KfriendsOrKprivateOrKpublic {
     Kpublic(String),
 
@@ -107,8 +108,8 @@ impl Default for Union3KfriendsOrKprivateOrKpublic {
 }
 
 /// Generated from: ("low" | "medium" | "high")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KhighOrKlowOrKmedium {
     Klow(String),
 
@@ -124,8 +125,8 @@ impl Default for Union3KhighOrKlowOrKmedium {
 }
 
 /// Generated from: ("planning" | "active" | "completed" | "cancelled")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union4KactiveOrKcancelledOrKcompletedOrKplanning {
     Kplanning(String),
 
@@ -143,8 +144,8 @@ impl Default for Union4KactiveOrKcancelledOrKcompletedOrKplanning {
 }
 
 /// Generated from: ("small" | "medium" | "large" | "enterprise")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union4KenterpriseOrKlargeOrKmediumOrKsmall {
     Ksmall(String),
 

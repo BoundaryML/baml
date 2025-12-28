@@ -67,6 +67,12 @@ impl<T: BamlDecode> BamlDecode for Option<T> {
     }
 }
 
+impl<T: BamlDecode> BamlDecode for Box<T> {
+    fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        Ok(Box::new(T::baml_decode(holder)?))
+    }
+}
+
 impl<V: BamlDecode> BamlDecode for HashMap<String, V> {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
         match &holder.value {
@@ -109,6 +115,12 @@ impl<T: BamlEncode> BamlEncode for Option<T> {
             Some(v) => v.baml_encode(),
             None => HostValue { value: None },
         }
+    }
+}
+
+impl<T: BamlEncode> BamlEncode for Box<T> {
+    fn baml_encode(&self) -> HostValue {
+        self.as_ref().baml_encode()
     }
 }
 

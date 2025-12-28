@@ -6,11 +6,12 @@
 //! Generated union types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
 /// Generated from: (string | int | null)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2IntOrString {
     String(String),
 
@@ -24,8 +25,8 @@ impl Default for Union2IntOrString {
 }
 
 /// Generated from: (User | Product | null)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2ProductOrUser {
     User(User),
 

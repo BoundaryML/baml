@@ -6,11 +6,12 @@
 //! Generated union types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
 /// Generated from: (true | false)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2BoolKFalseOrBoolKTrue {
     BoolKTrue(bool),
 
@@ -24,8 +25,8 @@ impl Default for Union2BoolKFalseOrBoolKTrue {
 }
 
 /// Generated from: (1 | 2 | 3)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3IntK1OrIntK2OrIntK3 {
     IntK1(i64),
 
@@ -41,8 +42,8 @@ impl Default for Union3IntK1OrIntK2OrIntK3 {
 }
 
 /// Generated from: (200 | 404 | 500)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3IntK200OrIntK404OrIntK500 {
     IntK200(i64),
 
@@ -58,8 +59,8 @@ impl Default for Union3IntK200OrIntK404OrIntK500 {
 }
 
 /// Generated from: ("active" | "inactive" | "pending")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KactiveOrKinactiveOrKpending {
     Kactive(String),
 
@@ -75,8 +76,8 @@ impl Default for Union3KactiveOrKinactiveOrKpending {
 }
 
 /// Generated from: ("user" | "admin" | "guest")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KadminOrKguestOrKuser {
     Kuser(String),
 
@@ -92,8 +93,8 @@ impl Default for Union3KadminOrKguestOrKuser {
 }
 
 /// Generated from: ("dev" | "staging" | "prod")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KdevOrKprodOrKstaging {
     Kdev(String),
 
@@ -109,8 +110,8 @@ impl Default for Union3KdevOrKprodOrKstaging {
 }
 
 /// Generated from: ("success" | "error" | "timeout")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3KerrorOrKsuccessOrKtimeout {
     Ksuccess(String),
 
@@ -126,8 +127,8 @@ impl Default for Union3KerrorOrKsuccessOrKtimeout {
 }
 
 /// Generated from: ("v1" | "v2" | "v3")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3Kv1OrKv2OrKv3 {
     Kv1(String),
 
@@ -143,8 +144,8 @@ impl Default for Union3Kv1OrKv2OrKv3 {
 }
 
 /// Generated from: (0 | 1 | 3 | 5)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union4IntK0OrIntK1OrIntK3OrIntK5 {
     IntK0(i64),
 
@@ -162,8 +163,8 @@ impl Default for Union4IntK0OrIntK1OrIntK3OrIntK5 {
 }
 
 /// Generated from: ("GET" | "POST" | "PUT" | "DELETE")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union4KDELETEOrKGETOrKPOSTOrKPUT {
     KGET(String),
 
@@ -181,8 +182,8 @@ impl Default for Union4KDELETEOrKGETOrKPOSTOrKPUT {
 }
 
 /// Generated from: ("draft" | "published" | "archived" | "deleted")
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union4KarchivedOrKdeletedOrKdraftOrKpublished {
     Kdraft(String),
 
@@ -200,8 +201,8 @@ impl Default for Union4KarchivedOrKdeletedOrKdraftOrKpublished {
 }
 
 /// Generated from: (1 | 2 | 3 | 4 | 5)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     IntK1(i64),
 
@@ -221,8 +222,8 @@ impl Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
 }
 
 /// Generated from: (200 | 201 | 400 | 404 | 500)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
     IntK200(i64),
 
@@ -242,8 +243,8 @@ impl Default for Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
 }
 
 /// Generated from: (0 | 1 | 2 | 3 | 5 | 8 | 13)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
     IntK0(i64),
 

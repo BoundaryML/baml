@@ -3,4 +3,4 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated enum types.
+// No enums defined

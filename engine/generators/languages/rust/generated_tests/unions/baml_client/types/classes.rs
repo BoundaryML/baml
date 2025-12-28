@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ExistingSystemComponent {
     pub id: i64,
 
@@ -21,7 +22,7 @@ pub struct ExistingSystemComponent {
     pub explanation: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct UseMyUnion {
     pub u: Option<Union3IntOrRecursive1OrString>,
 }

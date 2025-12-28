@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Example {
     pub r#type: String,
 
@@ -17,7 +18,7 @@ pub struct Example {
     pub b: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Example2 {
     pub r#type: String,
 

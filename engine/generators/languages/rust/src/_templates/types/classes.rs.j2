@@ -1,13 +1,17 @@
+{% if classes.is_empty() %}
+// No classes defined
+{% else %}
 //! Generated class types.
 
 use std::collections::HashMap;
+use baml::{BamlEncode, BamlDecode};
 use super::*;
 {% for class in classes %}
 
-{% if class.docstring.is_some() %}
-/// {{ class.docstring.as_ref().unwrap() }}
-{% endif %}
-#[derive(Debug, Clone, Default)]
+{% if let Some(docstring) = class.docstring -%}
+{{ crate::utils::prefix_lines(docstring, "/// ") }}
+{%- endif %}
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct {{ class.name }} {
 {% for field in class.fields %}
 {% if field.docstring.is_some() %}
@@ -17,3 +21,4 @@ pub struct {{ class.name }} {
 {% endfor %}
 }
 {% endfor %}
+{% endif %}

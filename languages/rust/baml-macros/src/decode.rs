@@ -19,7 +19,9 @@ pub fn derive_decode(input: DeriveInput) -> Result<TokenStream> {
         Data::Struct(data) => {
             derive_struct_decode(type_name, &baml_name, &data.fields, &baml_crate)
         }
-        Data::Enum(data) => derive_enum_decode(type_name, &baml_name, data, &baml_crate),
+        Data::Enum(data) => {
+            derive_enum_decode(type_name, &baml_name, data, &baml_crate, container_attrs.union)
+        }
         Data::Union(_) => Err(syn::Error::new_spanned(
             &input,
             "BamlDecode cannot be derived for unions",
@@ -79,10 +81,33 @@ fn derive_struct_decode(
                 })
             }
         }
+
+        impl #baml_crate::BamlDecode for #type_name {
+            fn baml_decode(
+                holder: &#baml_crate::__internal::CffiValueHolder
+            ) -> ::core::result::Result<Self, #baml_crate::BamlError> {
+                #baml_crate::__internal::decode_class::<Self>(holder)
+            }
+        }
     })
 }
 
 fn derive_enum_decode(
+    type_name: &syn::Ident,
+    baml_name: &str,
+    data: &syn::DataEnum,
+    baml_crate: &TokenStream,
+    is_union: bool,
+) -> Result<TokenStream> {
+    if is_union {
+        derive_union_decode(type_name, data, baml_crate)
+    } else {
+        derive_baml_enum_decode(type_name, baml_name, data, baml_crate)
+    }
+}
+
+/// Generate BamlEnum impl for regular BAML enums (unit variants only)
+fn derive_baml_enum_decode(
     type_name: &syn::Ident,
     baml_name: &str,
     data: &syn::DataEnum,
@@ -97,7 +122,6 @@ fn derive_enum_decode(
             .name
             .unwrap_or_else(|| variant_name.to_string());
 
-        // Only support unit variants for now
         match &variant.fields {
             Fields::Unit => {
                 variant_arms.push(quote! {
@@ -107,7 +131,7 @@ fn derive_enum_decode(
             _ => {
                 return Err(syn::Error::new_spanned(
                     variant,
-                    "BamlDecode for enums only supports unit variants",
+                    "BamlDecode for enums only supports unit variants (use #[baml(union)] for union types)",
                 ));
             }
         }
@@ -124,6 +148,56 @@ fn derive_enum_decode(
                         format!("unknown variant '{}' for enum {}", other, #baml_name)
                     ))
                 }
+            }
+        }
+    })
+}
+
+/// Generate BamlDecode impl for BAML union types (single-field tuple variants)
+fn derive_union_decode(
+    type_name: &syn::Ident,
+    data: &syn::DataEnum,
+    baml_crate: &TokenStream,
+) -> Result<TokenStream> {
+    let mut decode_attempts = Vec::new();
+
+    for variant in &data.variants {
+        let variant_name = &variant.ident;
+
+        match &variant.fields {
+            Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                let field_type = &fields.unnamed.first().unwrap().ty;
+                decode_attempts.push(quote! {
+                    if let Ok(v) = <#field_type as #baml_crate::BamlDecode>::baml_decode(inner) {
+                        return Ok(Self::#variant_name(v));
+                    }
+                });
+            }
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    variant,
+                    "BamlDecode for union types only supports single-field tuple variants",
+                ));
+            }
+        }
+    }
+
+    let type_name_str = type_name.to_string();
+
+    Ok(quote! {
+        impl #baml_crate::BamlDecode for #type_name {
+            fn baml_decode(
+                holder: &#baml_crate::__internal::CffiValueHolder
+            ) -> ::core::result::Result<Self, #baml_crate::BamlError> {
+                // Extract the inner value from UnionVariantValue
+                let inner = #baml_crate::__internal::extract_union_variant(holder)?;
+
+                // Try each variant type in order
+                #(#decode_attempts)*
+
+                Err(#baml_crate::BamlError::internal(
+                    format!("failed to decode any variant of union {}", #type_name_str)
+                ))
             }
         }
     })

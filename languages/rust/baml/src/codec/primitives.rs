@@ -121,6 +121,13 @@ impl BamlEncode for bool {
     }
 }
 
+/// Unit type encodes to null (for void method parameters)
+impl BamlEncode for () {
+    fn baml_encode(&self) -> HostValue {
+        HostValue { value: None }
+    }
+}
+
 /// Blanket impl for references to encodable types
 impl<T: BamlEncode> BamlEncode for &T {
     fn baml_encode(&self) -> HostValue {

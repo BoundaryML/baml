@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ComplexMaps {
     pub userMap: HashMap<String, User>,
 
@@ -21,7 +22,7 @@ pub struct ComplexMaps {
     pub mapArray: Vec<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Config {
     pub url: String,
 
@@ -30,7 +31,7 @@ pub struct Config {
     pub debug: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct EdgeCaseMaps {
     pub emptyMap: HashMap<String, String>,
 
@@ -41,7 +42,7 @@ pub struct EdgeCaseMaps {
     pub unionValues: HashMap<String, Union3BoolOrIntOrString>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MixedKeyMaps {
     pub stringIntMap: HashMap<String, i64>,
 
@@ -52,7 +53,7 @@ pub struct MixedKeyMaps {
     pub literalMap: HashMap<String, Config>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NestedMaps {
     pub simple: HashMap<String, String>,
 
@@ -65,7 +66,7 @@ pub struct NestedMaps {
     pub mapOfMaps: HashMap<String, HashMap<String, f64>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Product {
     pub id: i64,
 
@@ -76,7 +77,7 @@ pub struct Product {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SimpleMaps {
     pub stringToString: HashMap<String, String>,
 
@@ -89,7 +90,7 @@ pub struct SimpleMaps {
     pub intToString: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
 

@@ -5,7 +5,9 @@
 
 //! Generated enum types.
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+use baml::{BamlDecode, BamlEncode};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
 pub enum Status {
     ACTIVE,
 

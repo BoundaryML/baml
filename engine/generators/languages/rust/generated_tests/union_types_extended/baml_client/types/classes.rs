@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Admin {
     pub id: i64,
 
@@ -19,7 +20,7 @@ pub struct Admin {
     pub r#type: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ApiError {
     pub status: String,
 
@@ -28,7 +29,7 @@ pub struct ApiError {
     pub code: i64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ApiPending {
     pub status: String,
 
@@ -37,14 +38,14 @@ pub struct ApiPending {
     pub eta: Option<i64>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ApiSuccess {
     pub status: String,
 
     pub data: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Bird {
     pub species: String,
 
@@ -53,7 +54,7 @@ pub struct Bird {
     pub wingspan: Option<f64>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Cat {
     pub species: String,
 
@@ -62,14 +63,14 @@ pub struct Cat {
     pub lives: i64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Circle {
     pub shape: String,
 
     pub radius: f64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ComplexUnions {
     pub userOrProduct: Union2ProductOrUser,
 
@@ -82,7 +83,7 @@ pub struct ComplexUnions {
     pub multiTypeResult: Union3ErrorOrSuccessOrWarning,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DataResponse {
     pub data: String,
 
@@ -91,7 +92,7 @@ pub struct DataResponse {
     pub status: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DiscriminatedUnions {
     pub shape: Union3CircleOrRectangleOrTriangle,
 
@@ -100,7 +101,7 @@ pub struct DiscriminatedUnions {
     pub response: Union3ApiErrorOrApiPendingOrApiSuccess,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Dog {
     pub species: String,
 
@@ -109,7 +110,7 @@ pub struct Dog {
     pub goodBoy: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Error {
     pub r#type: String,
 
@@ -120,7 +121,7 @@ pub struct Error {
     pub details: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ErrorResponse {
     pub error: String,
 
@@ -129,7 +130,7 @@ pub struct ErrorResponse {
     pub status: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct PrimitiveUnions {
     pub stringOrInt: Union2IntOrString,
 
@@ -142,7 +143,7 @@ pub struct PrimitiveUnions {
     pub anyPrimitive: Union4BoolOrFloatOrIntOrString,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Product {
     pub id: i64,
 
@@ -153,7 +154,7 @@ pub struct Product {
     pub r#type: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Rectangle {
     pub shape: String,
 
@@ -162,21 +163,21 @@ pub struct Rectangle {
     pub height: f64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct RecursiveUnion {
     pub value: Union3IntOrRecursiveUnionOrString,
 
     pub children: Vec<Union2RecursiveUnionOrString>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Result {
     pub value: Union3FloatOrIntOrString,
 
     pub metadata: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Success {
     pub r#type: String,
 
@@ -185,7 +186,7 @@ pub struct Success {
     pub data: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Triangle {
     pub shape: String,
 
@@ -194,7 +195,7 @@ pub struct Triangle {
     pub height: f64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct UnionArrays {
     pub mixedArray: Vec<Union2IntOrString>,
 
@@ -205,7 +206,7 @@ pub struct UnionArrays {
     pub nestedUnionArray: Vec<Union2ListIntOrString>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
 
@@ -214,7 +215,7 @@ pub struct User {
     pub r#type: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Warning {
     pub r#type: String,
 

@@ -28,22 +28,8 @@ pub(crate) fn variant_name(v: &cffi_value_holder::Value) -> &'static str {
     }
 }
 
-// =============================================================================
-// BamlClass -> BamlDecode blanket impl
-// =============================================================================
-
-impl<T: BamlClass> BamlDecode for T {
-    fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
-        match &holder.value {
-            Some(cffi_value_holder::Value::ClassValue(class)) => T::from_class_value(class),
-            other => Err(BamlError::internal(format!(
-                "expected class {}, got {:?}",
-                T::TYPE_NAME,
-                other.as_ref().map(variant_name)
-            ))),
-        }
-    }
-}
+// Note: BamlClass types get BamlDecode implemented by the derive macro directly.
+// This avoids blanket impl conflicts with container types like Box<T>.
 
 // Note: BamlEnum doesn't auto-impl BamlDecode because enums need special handling
 // in generated code to support both regular and dynamic enums

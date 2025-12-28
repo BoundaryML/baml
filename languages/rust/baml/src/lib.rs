@@ -75,6 +75,59 @@ pub use baml_macros::{BamlDecode, BamlEncode};
 pub mod __internal {
     pub use crate::ffi::callbacks;
     pub use crate::proto::baml_cffi_v1::*;
+
+    use crate::codec::BamlClass;
+    use crate::error::BamlError;
+
+    /// Decode a class from a CffiValueHolder.
+    /// Used by derive macros to implement BamlDecode for structs.
+    pub fn decode_class<T: BamlClass>(holder: &CffiValueHolder) -> Result<T, BamlError> {
+        match &holder.value {
+            Some(cffi_value_holder::Value::ClassValue(class)) => T::from_class_value(class),
+            other => Err(BamlError::internal(format!(
+                "expected class {}, got {:?}",
+                T::TYPE_NAME,
+                other.as_ref().map(variant_name)
+            ))),
+        }
+    }
+
+    /// Extract the inner value from a UnionVariantValue.
+    /// Returns an error if the holder is not a UnionVariantValue.
+    pub fn extract_union_variant(
+        holder: &CffiValueHolder,
+    ) -> Result<&CffiValueHolder, BamlError> {
+        match &holder.value {
+            Some(cffi_value_holder::Value::UnionVariantValue(union)) => union
+                .value
+                .as_ref()
+                .map(|b| b.as_ref())
+                .ok_or_else(|| BamlError::internal("union variant missing inner value")),
+            other => Err(BamlError::internal(format!(
+                "expected union variant, got {:?}",
+                other.as_ref().map(variant_name)
+            ))),
+        }
+    }
+
+    fn variant_name(v: &cffi_value_holder::Value) -> &'static str {
+        match v {
+            cffi_value_holder::Value::NullValue(_) => "null",
+            cffi_value_holder::Value::StringValue(_) => "string",
+            cffi_value_holder::Value::IntValue(_) => "int",
+            cffi_value_holder::Value::FloatValue(_) => "float",
+            cffi_value_holder::Value::BoolValue(_) => "bool",
+            cffi_value_holder::Value::ClassValue(_) => "class",
+            cffi_value_holder::Value::EnumValue(_) => "enum",
+            cffi_value_holder::Value::LiteralValue(_) => "literal",
+            cffi_value_holder::Value::ObjectValue(_) => "object",
+            cffi_value_holder::Value::ListValue(_) => "list",
+            cffi_value_holder::Value::MapValue(_) => "map",
+            cffi_value_holder::Value::UnionVariantValue(_) => "union",
+            cffi_value_holder::Value::CheckedValue(_) => "checked",
+            cffi_value_holder::Value::StreamingStateValue(_) => "streaming_state",
+        }
+    }
 }
 
 /// Call baml-cli with the given arguments

@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ComplexOptional {
     pub data: Option<OptionalData>,
 
@@ -17,7 +18,7 @@ pub struct ComplexOptional {
     pub mapping: HashMap<String, Option<OptionalValue>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MixedOptionalNullable {
     pub id: i64,
 
@@ -40,7 +41,7 @@ pub struct MixedOptionalNullable {
     pub tertiaryUser: Option<User>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NullableTypes {
     pub nullableString: Option<String>,
 
@@ -55,7 +56,7 @@ pub struct NullableTypes {
     pub nullableObject: Option<User>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OptionalData {
     pub value: String,
 
@@ -64,7 +65,7 @@ pub struct OptionalData {
     pub enabled: Option<bool>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OptionalFields {
     pub requiredString: String,
 
@@ -83,7 +84,7 @@ pub struct OptionalFields {
     pub optionalMap: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OptionalItem {
     pub id: i64,
 
@@ -94,14 +95,14 @@ pub struct OptionalItem {
     pub metadata: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OptionalValue {
     pub data: Option<Union2IntOrString>,
 
     pub optional: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Product {
     pub id: i64,
 
@@ -110,7 +111,7 @@ pub struct Product {
     pub price: Option<f64>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct UnionWithNull {
     pub simpleUnion: Union2IntOrString,
 
@@ -121,7 +122,7 @@ pub struct UnionWithNull {
     pub complexUnion: Option<Union2ProductOrUser>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
 

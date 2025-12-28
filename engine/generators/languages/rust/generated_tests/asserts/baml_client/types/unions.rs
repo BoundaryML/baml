@@ -3,7 +3,4 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated union types.
-
-use super::*;
-use std::collections::HashMap;
+// No unions defined

@@ -6,23 +6,24 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MediaAnalysisResult {
     pub topics: Vec<String>,
 
     pub analysisText: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MediaArrayAnalysisResult {
     pub analysisText: String,
 
     pub mediaCount: i64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MediaMapAnalysisResult {
     pub analysisText: String,
 
@@ -31,7 +32,7 @@ pub struct MediaMapAnalysisResult {
     pub keys: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MixedMediaAnalysisResult {
     pub title: String,
 
@@ -50,7 +51,7 @@ pub struct MixedMediaAnalysisResult {
     pub metadataKeys: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OptionalMediaAnalysisResult {
     pub analysisText: String,
 

@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Action {
     pub r#type: String,
 
@@ -17,7 +18,7 @@ pub struct Action {
     pub async_: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Asset {
     pub id: i64,
 
@@ -28,7 +29,7 @@ pub struct Asset {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct AssetMetadata {
     pub filename: String,
 
@@ -41,7 +42,7 @@ pub struct AssetMetadata {
     pub checksum: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ButtonWidget {
     pub label: String,
 
@@ -50,7 +51,7 @@ pub struct ButtonWidget {
     pub style: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ComplexData {
     pub primary: PrimaryData,
 
@@ -59,14 +60,14 @@ pub struct ComplexData {
     pub tertiary: Option<TertiaryData>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Condition {
     pub r#type: Union3KandOrKnotOrKor,
 
     pub conditions: Vec<Union2ConditionOrSimpleCondition>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Configuration {
     pub version: String,
 
@@ -77,7 +78,7 @@ pub struct Configuration {
     pub rules: Vec<Rule>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ContainerWidget {
     pub layout: Union3KflexOrKgridOrKstack,
 
@@ -86,21 +87,21 @@ pub struct ContainerWidget {
     pub style: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DataObject {
     pub r#type: String,
 
     pub value: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Dimensions {
     pub width: i64,
 
     pub height: i64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Environment {
     pub name: String,
 
@@ -111,7 +112,7 @@ pub struct Environment {
     pub secrets: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Error {
     pub r#type: String,
 
@@ -120,7 +121,7 @@ pub struct Error {
     pub code: i64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ErrorDetail {
     pub code: String,
 
@@ -129,7 +130,7 @@ pub struct ErrorDetail {
     pub details: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Feature {
     pub name: String,
 
@@ -140,14 +141,14 @@ pub struct Feature {
     pub dependencies: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ImageWidget {
     pub alt: String,
 
     pub dimensions: Dimensions,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Item {
     pub id: i64,
 
@@ -158,7 +159,7 @@ pub struct Item {
     pub attributes: HashMap<String, Union4BoolOrFloatOrIntOrString>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct KitchenSink {
     pub id: i64,
 
@@ -199,7 +200,7 @@ pub struct KitchenSink {
     pub config: Configuration,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Node {
     pub id: i64,
 
@@ -210,7 +211,7 @@ pub struct Node {
     pub metadata: Option<NodeMetadata>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NodeMetadata {
     pub created: String,
 
@@ -221,7 +222,7 @@ pub struct NodeMetadata {
     pub attributes: HashMap<String, Option<Union3BoolOrIntOrString>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct PrimaryData {
     pub values: Vec<Union3FloatOrIntOrString>,
 
@@ -230,7 +231,7 @@ pub struct PrimaryData {
     pub flags: Vec<bool>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Record {
     pub id: i64,
 
@@ -239,7 +240,7 @@ pub struct Record {
     pub related: Option<Vec<Box<Record>>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ResponseMetadata {
     pub timestamp: String,
 
@@ -250,7 +251,7 @@ pub struct ResponseMetadata {
     pub retries: i64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Rule {
     pub id: i64,
 
@@ -263,14 +264,14 @@ pub struct Rule {
     pub priority: i64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SecondaryData {
     pub records: Vec<Record>,
 
     pub index: HashMap<String, Record>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Setting {
     pub key: String,
 
@@ -279,7 +280,7 @@ pub struct Setting {
     pub metadata: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SimpleCondition {
     pub field: String,
 
@@ -288,14 +289,14 @@ pub struct SimpleCondition {
     pub value: Union4BoolOrFloatOrIntOrString,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Success {
     pub r#type: String,
 
     pub data: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct TertiaryData {
     pub raw: String,
 
@@ -304,7 +305,7 @@ pub struct TertiaryData {
     pub valid: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct TextWidget {
     pub content: String,
 
@@ -313,7 +314,7 @@ pub struct TextWidget {
     pub style: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct UltraComplex {
     pub tree: Node,
 
@@ -326,7 +327,7 @@ pub struct UltraComplex {
     pub assets: Vec<Asset>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
 
@@ -335,7 +336,7 @@ pub struct User {
     pub settings: HashMap<String, Setting>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct UserProfile {
     pub name: String,
 
@@ -346,7 +347,7 @@ pub struct UserProfile {
     pub links: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct UserResponse {
     pub status: Union2KerrorOrKsuccess,
 
@@ -357,7 +358,7 @@ pub struct UserResponse {
     pub metadata: ResponseMetadata,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Variant {
     pub sku: String,
 
@@ -368,7 +369,7 @@ pub struct Variant {
     pub options: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Widget {
     pub r#type: Union4KbuttonOrKcontainerOrKimageOrKtext,
 

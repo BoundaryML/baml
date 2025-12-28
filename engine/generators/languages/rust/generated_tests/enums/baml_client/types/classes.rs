@@ -3,7 +3,4 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated class types.
-
-use super::*;
-use std::collections::HashMap;
+// No classes defined

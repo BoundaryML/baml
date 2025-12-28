@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Address {
     pub street: String,
 
@@ -23,7 +24,7 @@ pub struct Address {
     pub coordinates: Option<Coordinates>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Approval {
     pub approver: String,
 
@@ -34,7 +35,7 @@ pub struct Approval {
     pub notes: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Budget {
     pub total: f64,
 
@@ -45,7 +46,7 @@ pub struct Budget {
     pub approvals: Vec<Approval>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Company {
     pub id: i64,
 
@@ -58,7 +59,7 @@ pub struct Company {
     pub metadata: Box<CompanyMetadata>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct CompanyMetadata {
     pub founded: String,
 
@@ -71,7 +72,7 @@ pub struct CompanyMetadata {
     pub partnerships: Option<Vec<Box<Company>>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ComplexNested {
     pub company: Company,
 
@@ -80,7 +81,7 @@ pub struct ComplexNested {
     pub projects: Vec<Project>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Contact {
     pub name: String,
 
@@ -91,19 +92,19 @@ pub struct Contact {
     pub email: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Coordinates {
     pub latitude: f64,
 
     pub longitude: f64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DeeplyNested {
     pub level1: Level1,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Department {
     pub id: i64,
 
@@ -118,7 +119,7 @@ pub struct Department {
     pub projects: Vec<Project>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DisplaySettings {
     pub fontSize: i64,
 
@@ -127,7 +128,7 @@ pub struct DisplaySettings {
     pub layout: Union2KgridOrKlist,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Employee {
     pub id: i64,
 
@@ -146,35 +147,35 @@ pub struct Employee {
     pub emergencyContact: Option<Contact>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Level1 {
     pub data: String,
 
     pub level2: Level2,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Level2 {
     pub data: String,
 
     pub level3: Level3,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Level3 {
     pub data: String,
 
     pub level4: Level4,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Level4 {
     pub data: String,
 
     pub level5: Level5,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Level5 {
     pub data: String,
 
@@ -183,7 +184,7 @@ pub struct Level5 {
     pub mapping: HashMap<String, i64>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Metadata {
     pub createdAt: String,
 
@@ -196,7 +197,7 @@ pub struct Metadata {
     pub attributes: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Milestone {
     pub id: i64,
 
@@ -209,7 +210,7 @@ pub struct Milestone {
     pub tasks: Vec<Task>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NotificationSettings {
     pub email: bool,
 
@@ -220,7 +221,7 @@ pub struct NotificationSettings {
     pub frequency: Union3KdailyOrKimmediateOrKweekly,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Preferences {
     pub theme: Union2KdarkOrKlight,
 
@@ -229,7 +230,7 @@ pub struct Preferences {
     pub notifications: NotificationSettings,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct PrivacySettings {
     pub profileVisibility: Union3KfriendsOrKprivateOrKpublic,
 
@@ -238,7 +239,7 @@ pub struct PrivacySettings {
     pub showPhone: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Profile {
     pub bio: String,
 
@@ -249,7 +250,7 @@ pub struct Profile {
     pub preferences: Preferences,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Project {
     pub id: i64,
 
@@ -266,7 +267,7 @@ pub struct Project {
     pub budget: Budget,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct RecursiveStructure {
     pub id: i64,
 
@@ -279,7 +280,7 @@ pub struct RecursiveStructure {
     pub metadata: HashMap<String, Union3BoolOrIntOrString>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SimpleNested {
     pub user: User,
 
@@ -288,7 +289,7 @@ pub struct SimpleNested {
     pub metadata: Metadata,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SocialLinks {
     pub twitter: Option<String>,
 
@@ -299,7 +300,7 @@ pub struct SocialLinks {
     pub website: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Task {
     pub id: i64,
 
@@ -316,7 +317,7 @@ pub struct Task {
     pub subtasks: Option<Vec<Box<Task>>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
 
@@ -327,7 +328,7 @@ pub struct User {
     pub settings: UserSettings,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct UserSettings {
     pub privacy: PrivacySettings,
 

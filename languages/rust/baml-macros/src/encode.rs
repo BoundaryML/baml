@@ -19,7 +19,9 @@ pub fn derive_encode(input: DeriveInput) -> Result<TokenStream> {
         Data::Struct(data) => {
             derive_struct_encode(type_name, &baml_name, &data.fields, &baml_crate)
         }
-        Data::Enum(data) => derive_enum_encode(type_name, &baml_name, data, &baml_crate),
+        Data::Enum(data) => {
+            derive_enum_encode(type_name, &baml_name, data, &baml_crate, container_attrs.union)
+        }
         Data::Union(_) => Err(syn::Error::new_spanned(
             &input,
             "BamlEncode cannot be derived for unions",
@@ -76,6 +78,7 @@ fn derive_enum_encode(
     baml_name: &str,
     data: &syn::DataEnum,
     baml_crate: &TokenStream,
+    is_union: bool,
 ) -> Result<TokenStream> {
     let mut variant_arms = Vec::new();
 
@@ -86,17 +89,22 @@ fn derive_enum_encode(
             .name
             .unwrap_or_else(|| variant_name.to_string());
 
-        // Only support unit variants for now
         match &variant.fields {
             Fields::Unit => {
                 variant_arms.push(quote! {
                     Self::#variant_name => #baml_crate::encode_enum(#baml_name, #baml_variant_name)
                 });
             }
+            Fields::Unnamed(fields) if is_union && fields.unnamed.len() == 1 => {
+                // For union types, encode the inner value directly
+                variant_arms.push(quote! {
+                    Self::#variant_name(v) => #baml_crate::BamlEncode::baml_encode(v)
+                });
+            }
             _ => {
                 return Err(syn::Error::new_spanned(
                     variant,
-                    "BamlEncode for enums only supports unit variants",
+                    "BamlEncode for enums only supports unit variants (or single-field tuple variants with #[baml(union)])",
                 ));
             }
         }

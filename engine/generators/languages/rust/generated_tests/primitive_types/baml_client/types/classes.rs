@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MixedPrimitives {
     pub name: String,
 
@@ -29,7 +30,7 @@ pub struct MixedPrimitives {
     pub flags: Vec<bool>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct PrimitiveArrays {
     pub stringArray: Vec<String>,
 
@@ -40,7 +41,7 @@ pub struct PrimitiveArrays {
     pub boolArray: Vec<bool>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct PrimitiveMaps {
     pub stringMap: HashMap<String, String>,
 
@@ -51,7 +52,7 @@ pub struct PrimitiveMaps {
     pub boolMap: HashMap<String, bool>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct PrimitiveTypes {
     pub stringField: String,
 

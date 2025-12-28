@@ -6,11 +6,12 @@
 //! Generated union types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
 /// Generated from: (int | Recursive1[])
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union2IntOrListRecursive1 {
     Int(i64),
 
@@ -24,8 +25,8 @@ impl Default for Union2IntOrListRecursive1 {
 }
 
 /// Generated from: (Recursive1 | int | string | null)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union3IntOrRecursive1OrString {
     Recursive1(Recursive1),
 
@@ -41,8 +42,8 @@ impl Default for Union3IntOrRecursive1OrString {
 }
 
 /// Generated from: (string | int | float | map<string, JSON> | JSON[] | null)
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(union)]
 pub enum Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
     String(String),
 

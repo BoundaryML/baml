@@ -124,7 +124,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                     "rust" => {
                         vec![
                             format!(
-                                "rustfmt baml_client/*.rs 2>/dev/null || true && BAML_LIBRARY_PATH={} cargo check",
+                                "rustfmt baml_client/*.rs 2>/dev/null || true && BAML_LIBRARY_PATH={} RUSTFLAGS=-Awarnings cargo check",
                                 get_dylib_path()?.display()
                             )
                             .to_string(),
@@ -206,7 +206,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                 "rust" => {
                     vec![
                         format!(
-                            "rustfmt baml_client/*.rs 2>/dev/null || true && BAML_LIBRARY_PATH={} cargo check",
+                            "rustfmt baml_client/*.rs 2>/dev/null || true && BAML_LIBRARY_PATH={} RUSTFLAGS=-Awarnings cargo check",
                             get_dylib_path()?.display()
                         )
                         .to_string(),
@@ -253,6 +253,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                     cmd.args(vec!["test", "-v"]);
                     cmd.current_dir(&self.src_dir);
                     cmd.env("BAML_LIBRARY_PATH", &dylib_path);
+                    cmd.env("RUSTFLAGS", "-Awarnings");
                     run_and_stream(&mut cmd)?;
                 }
                 _ => {
@@ -411,5 +412,4 @@ mod utils {
         }
         Ok(())
     }
-
 }

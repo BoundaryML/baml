@@ -6,9 +6,10 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct AllNullable {
     pub nullString: Option<String>,
 
@@ -23,7 +24,7 @@ pub struct AllNullable {
     pub nullObject: Option<User>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct BooleanEdgeCases {
     pub explicitTrue: bool,
 
@@ -36,7 +37,7 @@ pub struct BooleanEdgeCases {
     pub mixedBoolArray: Vec<bool>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct CircularReference {
     pub id: i64,
 
@@ -49,14 +50,14 @@ pub struct CircularReference {
     pub relatedItems: Vec<Box<CircularReference>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DeepRecursion {
     pub value: String,
 
     pub next: Option<Box<DeepRecursion>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct EmptyCollections {
     pub emptyStringArray: Vec<String>,
 
@@ -69,12 +70,12 @@ pub struct EmptyCollections {
     pub emptyNestedArray: Vec<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct InnerNullable {
     pub value: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct LargeStructure {
     pub field1: String,
 
@@ -137,7 +138,7 @@ pub struct LargeStructure {
     pub map5: HashMap<String, User>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MixedEdgeCases {
     pub emptyString: String,
 
@@ -152,12 +153,12 @@ pub struct MixedEdgeCases {
     pub optionalEverything: Option<OptionalEverything>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NestedNullable {
     pub outer: Option<OuterNullable>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NullEdgeCases {
     pub allNull: AllNullable,
 
@@ -166,7 +167,7 @@ pub struct NullEdgeCases {
     pub nestedNull: NestedNullable,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NumberEdgeCases {
     pub zero: i64,
 
@@ -189,7 +190,7 @@ pub struct NumberEdgeCases {
     pub notANumber: Option<f64>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OptionalEverything {
     pub optString: Option<String>,
 
@@ -206,12 +207,12 @@ pub struct OptionalEverything {
     pub optObject: Option<User>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OuterNullable {
     pub inner: Option<InnerNullable>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SomeNullable {
     pub presentString: Option<String>,
 
@@ -222,7 +223,7 @@ pub struct SomeNullable {
     pub nullInt: Option<i64>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SpecialCharacters {
     pub normalText: String,
 
@@ -241,14 +242,14 @@ pub struct SpecialCharacters {
     pub withMixedSpecial: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
 
     pub name: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct VeryLongStrings {
     pub shortString: String,
 

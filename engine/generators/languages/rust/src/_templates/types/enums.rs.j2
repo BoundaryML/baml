@@ -1,16 +1,22 @@
+{% if enums.is_empty() %}
+// No enums defined
+{% else %}
 //! Generated enum types.
+
+use baml::{BamlEncode, BamlDecode};
 {% for enum_ in enums %}
 
-{% if enum_.docstring.is_some() %}
-/// {{ enum_.docstring.as_ref().unwrap() }}
-{% endif %}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+{% if let Some(docstring) = enum_.docstring -%}
+{{ crate::utils::prefix_lines(docstring, "/// ") }}
+{%- endif %}
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
 pub enum {{ enum_.name }} {
 {% for (value, docstring) in enum_.values %}
-{% if docstring.is_some() %}
-    /// {{ docstring.as_ref().unwrap() }}
-{% endif %}
+{% if let Some(docstring) = docstring -%}
+    {{ crate::utils::prefix_lines(docstring, "/// ") }}
+{%- endif %}
     {{ value }},
 {% endfor %}
 }
 {% endfor %}
+{% endif %}

@@ -6,23 +6,24 @@
 //! Generated class types.
 
 use super::*;
+use baml::{BamlDecode, BamlEncode};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ClassWithBlockDone {
     pub i_16_digits: i64,
 
     pub s_20_words: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ClassWithoutDone {
     pub i_16_digits: i64,
 
     pub s_20_words: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SemanticContainer {
     pub sixteen_digit_number: i64,
 
@@ -41,7 +42,7 @@ pub struct SemanticContainer {
     pub final_string: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SmallThing {
     pub i_16_digits: i64,
 

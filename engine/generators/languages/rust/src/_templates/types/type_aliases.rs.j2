@@ -1,3 +1,6 @@
+{% if type_aliases.is_empty() %}
+// No type aliases defined
+{% else %}
 //! Generated type aliases.
 
 use std::collections::HashMap;
@@ -9,3 +12,4 @@ use super::*;
 {% endif %}
 pub type {{ alias.name }} = {{ alias.type_str }};
 {% endfor %}
+{% endif %}

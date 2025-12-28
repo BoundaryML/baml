@@ -86,6 +86,19 @@ macro_rules! define_media_type {
                 unreachable!("Media types cannot be default-constructed; they require a runtime")
             }
         }
+
+        impl $crate::BamlDecode for $name {
+            fn baml_decode(
+                _holder: &$crate::__internal::CffiValueHolder
+            ) -> ::core::result::Result<Self, $crate::BamlError> {
+                // Media types come as ObjectValue which requires runtime context to decode.
+                // This path shouldn't be hit in normal usage - media decoding goes through
+                // the runtime's object handle mechanism instead.
+                Err($crate::BamlError::internal(
+                    concat!("Cannot decode ", stringify!($name), " without runtime context")
+                ))
+            }
+        }
     };
 }
 
