@@ -239,7 +239,6 @@ fn nested_field_read() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field assignment not yet in HIR"]
 fn field_assignment_simple() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -519,7 +518,6 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
 // ============================================================================
 
 #[test]
-#[ignore = "field assignment not yet in HIR"]
 fn field_assignment_compound_add() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -536,8 +534,8 @@ fn field_assignment_compound_add() -> anyhow::Result<()> {
             "incrementCounter",
             vec![
                 // c.value += 10
-                Instruction::LoadVar("c".to_string()), // Load c
-                Instruction::Copy(0),                  // Duplicate c reference
+                Instruction::LoadVar("c".to_string()), // Load c for store target
+                Instruction::LoadVar("c".to_string()), // Load c for read
                 Instruction::LoadField(0),             // Load c.value
                 Instruction::LoadConst(Value::Int(10)), // Load 10
                 Instruction::BinOp(BinOp::Add),        // Add
@@ -597,7 +595,6 @@ fn nested_object_construction() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field assignment not yet in HIR"]
 fn nested_field_assignment() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -632,7 +629,6 @@ fn nested_field_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field assignment not yet in HIR"]
 fn nested_field_assignment_compound() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -652,9 +648,10 @@ fn nested_field_assignment_compound() -> anyhow::Result<()> {
             "incrementNestedValue",
             vec![
                 // o.inner.value += 10
-                Instruction::LoadVar("o".to_string()), // Load o
-                Instruction::LoadField(0),             // Load o.inner (returns Inner object)
-                Instruction::Copy(0),                  // Duplicate inner reference
+                Instruction::LoadVar("o".to_string()), // Load o for store target
+                Instruction::LoadField(0),             // Load o.inner for store target
+                Instruction::LoadVar("o".to_string()), // Load o for read
+                Instruction::LoadField(0),             // Load o.inner for read
                 Instruction::LoadField(0),             // Load inner.value
                 Instruction::LoadConst(Value::Int(10)), // Load 10
                 Instruction::BinOp(BinOp::Add),        // Add

@@ -310,6 +310,15 @@ fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'d
                         }
                     }
 
+                    // For field/index stores, the base local is also used (we need to load it
+                    // to store the field value). This ensures the base isn't classified as Virtual.
+                    match destination {
+                        Place::Field { base, .. } | Place::Index { base, .. } => {
+                            collect_uses_in_place(base, block.id, stmt_idx, &mut def_use);
+                        }
+                        Place::Local(_) => {}
+                    }
+
                     // Record uses in the rvalue
                     collect_uses_in_rvalue(value, block.id, stmt_idx, &mut def_use);
                 }

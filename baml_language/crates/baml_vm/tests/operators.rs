@@ -136,7 +136,7 @@ fn basic_bit_shift_right() -> anyhow::Result<()> {
 
 // Unary operators
 #[test]
-#[ignore = "assignment/unary not yet implemented"]
+#[ignore = "unary operators not yet implemented"]
 fn unary_neg() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -150,7 +150,7 @@ fn unary_neg() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment/unary not yet implemented"]
+#[ignore = "unary operators not yet implemented"]
 fn unary_not() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -271,7 +271,6 @@ fn basic_or() -> anyhow::Result<()> {
 
 // Assignment operators
 #[test]
-#[ignore = "assignment/unary not yet implemented"]
 fn basic_assign_add() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -287,7 +286,6 @@ fn basic_assign_add() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment/unary not yet implemented"]
 fn basic_assign_sub() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -303,7 +301,6 @@ fn basic_assign_sub() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment/unary not yet implemented"]
 fn basic_assign_mul() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -319,7 +316,6 @@ fn basic_assign_mul() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment/unary not yet implemented"]
 fn basic_assign_div() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -335,7 +331,6 @@ fn basic_assign_div() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment/unary not yet implemented"]
 fn basic_assign_mod() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -351,7 +346,6 @@ fn basic_assign_mod() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment/unary not yet implemented"]
 fn basic_assign_bit_and() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -367,7 +361,6 @@ fn basic_assign_bit_and() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment/unary not yet implemented"]
 fn basic_assign_bit_or() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -383,7 +376,6 @@ fn basic_assign_bit_or() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment/unary not yet implemented"]
 fn basic_assign_bit_xor() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
