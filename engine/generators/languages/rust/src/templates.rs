@@ -7,6 +7,7 @@ use crate::generated_types::{
     ClassRustRendered, EnumRust, TypeAliasRustRendered, UnionRustRendered,
 };
 use crate::package::CurrentRenderPackage;
+use crate::r#type::SerializeType;
 
 /// Source map template - embeds BAML source files
 #[derive(Template)]

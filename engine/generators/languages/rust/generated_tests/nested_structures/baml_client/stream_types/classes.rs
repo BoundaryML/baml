@@ -48,7 +48,7 @@ pub struct Budget {
 
     pub spent: Option<f64>,
 
-    pub categories: HashMap<String, f64>,
+    pub categories: std::collections::HashMap<String, f64>,
 
     pub approvals: Vec<Approval>,
 }
@@ -202,7 +202,7 @@ pub struct Level5 {
 
     pub items: Vec<String>,
 
-    pub mapping: HashMap<String, i64>,
+    pub mapping: std::collections::HashMap<String, i64>,
 }
 
 /// Streaming variant of Metadata.
@@ -216,7 +216,7 @@ pub struct Metadata {
 
     pub tags: Vec<String>,
 
-    pub attributes: HashMap<String, String>,
+    pub attributes: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of Milestone.
@@ -306,7 +306,7 @@ pub struct RecursiveStructure {
 
     pub parent: Option<Box<RecursiveStructure>>,
 
-    pub metadata: HashMap<String, types::Union3BoolOrIntOrString>,
+    pub metadata: std::collections::HashMap<String, types::Union3BoolOrIntOrString>,
 }
 
 /// Streaming variant of SimpleNested.
@@ -368,5 +368,5 @@ pub struct UserSettings {
 
     pub display: Option<DisplaySettings>,
 
-    pub advanced: HashMap<String, String>,
+    pub advanced: std::collections::HashMap<String, String>,
 }

@@ -24,6 +24,12 @@ impl Default for Union2IntOrString {
     }
 }
 
+impl AsRef<Union2IntOrString> for Union2IntOrString {
+    fn as_ref(&self) -> &Union2IntOrString {
+        self
+    }
+}
+
 /// Generated from: (User | Product | null)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -36,5 +42,11 @@ pub enum Union2ProductOrUser {
 impl Default for Union2ProductOrUser {
     fn default() -> Self {
         Self::User(Default::default())
+    }
+}
+
+impl AsRef<Union2ProductOrUser> for Union2ProductOrUser {
+    fn as_ref(&self) -> &Union2ProductOrUser {
+        self
     }
 }

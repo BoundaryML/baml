@@ -23,3 +23,9 @@ impl Default for Union2ExampleOrExample2 {
         Self::Example(Default::default())
     }
 }
+
+impl AsRef<Union2ExampleOrExample2> for Union2ExampleOrExample2 {
+    fn as_ref(&self) -> &Union2ExampleOrExample2 {
+        self
+    }
+}

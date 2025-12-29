@@ -20,7 +20,7 @@ pub struct ComplexOptional {
 
     pub items: Vec<OptionalItem>,
 
-    pub mapping: HashMap<String, Option<OptionalValue>>,
+    pub mapping: std::collections::HashMap<String, Option<OptionalValue>>,
 }
 
 /// Streaming variant of MixedOptionalNullable.
@@ -90,7 +90,7 @@ pub struct OptionalFields {
 
     pub optionalArray: Option<Vec<String>>,
 
-    pub optionalMap: Option<HashMap<String, String>>,
+    pub optionalMap: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Streaming variant of OptionalItem.
@@ -102,7 +102,7 @@ pub struct OptionalItem {
 
     pub description: Option<String>,
 
-    pub metadata: Option<HashMap<String, String>>,
+    pub metadata: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Streaming variant of OptionalValue.

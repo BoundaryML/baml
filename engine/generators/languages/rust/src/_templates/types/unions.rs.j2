@@ -28,5 +28,11 @@ impl Default for {{ u.name }} {
         {% endif %}
     }
 }
+
+impl AsRef<{{ u.name }}> for {{ u.name }} {
+    fn as_ref(&self) -> &{{ u.name }} {
+        self
+    }
+}
 {% endfor %}
 {% endif %}

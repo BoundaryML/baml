@@ -13,3 +13,9 @@ use std::collections::HashMap;
 pub struct UseMyUnion {
     pub u: Option<Union3IntOrRecursive1OrString>,
 }
+
+impl AsRef<UseMyUnion> for UseMyUnion {
+    fn as_ref(&self) -> &UseMyUnion {
+        self
+    }
+}

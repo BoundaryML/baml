@@ -25,3 +25,9 @@ impl Default for Union3BoolOrIntOrString {
         Self::String(Default::default())
     }
 }
+
+impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
+    fn as_ref(&self) -> &Union3BoolOrIntOrString {
+        self
+    }
+}

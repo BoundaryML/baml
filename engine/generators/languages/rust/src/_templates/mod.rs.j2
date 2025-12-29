@@ -5,21 +5,20 @@
 
 mod baml_source_map;
 mod runtime;
-pub mod functions;
+mod functions;
 pub mod types;
 pub mod stream_types;
 pub mod type_builder;
 
-pub use runtime::{get_runtime, FunctionOptions};
-pub use types::Types;
-pub use stream_types::StreamTypes;
-pub use type_builder::TypeBuilder;
-
-// Re-export for convenience
-pub use types::*;
+use runtime::{get_runtime, FunctionOptions};
+use types::Types;
+use stream_types::StreamTypes;
+use type_builder::TypeBuilder;
 
 /// Re-export error type for convenience.
 pub type Error = baml::BamlError;
 
 /// The dynamic value type for this project.
 pub type BamlValue = baml::BamlValue<Types, StreamTypes>;
+
+pub use functions::sync::B;

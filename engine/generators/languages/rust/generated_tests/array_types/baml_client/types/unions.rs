@@ -26,6 +26,12 @@ impl Default for Union3BoolOrIntOrString {
     }
 }
 
+impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
+    fn as_ref(&self) -> &Union3BoolOrIntOrString {
+        self
+    }
+}
+
 /// Generated from: (User | Product | Tag)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -40,6 +46,12 @@ pub enum Union3ProductOrTagOrUser {
 impl Default for Union3ProductOrTagOrUser {
     fn default() -> Self {
         Self::User(Default::default())
+    }
+}
+
+impl AsRef<Union3ProductOrTagOrUser> for Union3ProductOrTagOrUser {
+    fn as_ref(&self) -> &Union3ProductOrTagOrUser {
+        self
     }
 }
 
@@ -59,5 +71,11 @@ pub enum Union4BoolOrFloatOrIntOrString {
 impl Default for Union4BoolOrFloatOrIntOrString {
     fn default() -> Self {
         Self::String(Default::default())
+    }
+}
+
+impl AsRef<Union4BoolOrFloatOrIntOrString> for Union4BoolOrFloatOrIntOrString {
+    fn as_ref(&self) -> &Union4BoolOrFloatOrIntOrString {
+        self
     }
 }

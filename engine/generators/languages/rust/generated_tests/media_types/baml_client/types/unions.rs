@@ -27,3 +27,9 @@ impl Default for Union4AudioOrImageOrPDFOrVideo {
         Self::Image(Default::default())
     }
 }
+
+impl AsRef<Union4AudioOrImageOrPDFOrVideo> for Union4AudioOrImageOrPDFOrVideo {
+    fn as_ref(&self) -> &Union4AudioOrImageOrPDFOrVideo {
+        self
+    }
+}

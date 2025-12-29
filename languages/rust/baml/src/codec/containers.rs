@@ -139,12 +139,12 @@ impl<V: BamlEncode> BamlEncode for HashMap<String, V> {
     }
 }
 
-/// Impl for slices of references
-impl<T: BamlEncode> BamlEncode for &[&T] {
+/// Impl for slices
+impl<T: BamlEncode> BamlEncode for &[T] {
     fn baml_encode(&self) -> HostValue {
         HostValue {
             value: Some(host_value::Value::ListValue(HostListValue {
-                values: self.iter().map(|v| v.baml_encode()).collect(),
+                values: self.iter().map(BamlEncode::baml_encode).collect(),
             })),
         }
     }

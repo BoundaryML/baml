@@ -18,6 +18,12 @@ pub struct BooleanLiterals {
     pub eitherBool: Union2BoolKFalseOrBoolKTrue,
 }
 
+impl AsRef<BooleanLiterals> for BooleanLiterals {
+    fn as_ref(&self) -> &BooleanLiterals {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ComplexLiterals {
     pub state: Union4KarchivedOrKdeletedOrKdraftOrKpublished,
@@ -31,6 +37,12 @@ pub struct ComplexLiterals {
     pub codes: Vec<Union3IntK200OrIntK404OrIntK500>,
 }
 
+impl AsRef<ComplexLiterals> for ComplexLiterals {
+    fn as_ref(&self) -> &ComplexLiterals {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct IntegerLiterals {
     pub priority: Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5,
@@ -38,6 +50,12 @@ pub struct IntegerLiterals {
     pub httpStatus: Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500,
 
     pub maxRetries: Union4IntK0OrIntK1OrIntK3OrIntK5,
+}
+
+impl AsRef<IntegerLiterals> for IntegerLiterals {
+    fn as_ref(&self) -> &IntegerLiterals {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -53,6 +71,12 @@ pub struct MixedLiterals {
     pub apiVersion: Union3Kv1OrKv2OrKv3,
 }
 
+impl AsRef<MixedLiterals> for MixedLiterals {
+    fn as_ref(&self) -> &MixedLiterals {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct StringLiterals {
     pub status: Union3KactiveOrKinactiveOrKpending,
@@ -60,4 +84,10 @@ pub struct StringLiterals {
     pub environment: Union3KdevOrKprodOrKstaging,
 
     pub method: Union4KDELETEOrKGETOrKPOSTOrKPUT,
+}
+
+impl AsRef<StringLiterals> for StringLiterals {
+    fn as_ref(&self) -> &StringLiterals {
+        self
+    }
 }

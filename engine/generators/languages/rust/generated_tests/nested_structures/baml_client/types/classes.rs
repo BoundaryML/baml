@@ -24,6 +24,12 @@ pub struct Address {
     pub coordinates: Option<Coordinates>,
 }
 
+impl AsRef<Address> for Address {
+    fn as_ref(&self) -> &Address {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Approval {
     pub approver: String,
@@ -35,15 +41,27 @@ pub struct Approval {
     pub notes: Option<String>,
 }
 
+impl AsRef<Approval> for Approval {
+    fn as_ref(&self) -> &Approval {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Budget {
     pub total: f64,
 
     pub spent: f64,
 
-    pub categories: HashMap<String, f64>,
+    pub categories: std::collections::HashMap<String, f64>,
 
     pub approvals: Vec<Approval>,
+}
+
+impl AsRef<Budget> for Budget {
+    fn as_ref(&self) -> &Budget {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -59,6 +77,12 @@ pub struct Company {
     pub metadata: Box<CompanyMetadata>,
 }
 
+impl AsRef<Company> for Company {
+    fn as_ref(&self) -> &Company {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct CompanyMetadata {
     pub founded: String,
@@ -72,6 +96,12 @@ pub struct CompanyMetadata {
     pub partnerships: Option<Vec<Box<Company>>>,
 }
 
+impl AsRef<CompanyMetadata> for CompanyMetadata {
+    fn as_ref(&self) -> &CompanyMetadata {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ComplexNested {
     pub company: Company,
@@ -79,6 +109,12 @@ pub struct ComplexNested {
     pub employees: Vec<Employee>,
 
     pub projects: Vec<Project>,
+}
+
+impl AsRef<ComplexNested> for ComplexNested {
+    fn as_ref(&self) -> &ComplexNested {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -92,6 +128,12 @@ pub struct Contact {
     pub email: Option<String>,
 }
 
+impl AsRef<Contact> for Contact {
+    fn as_ref(&self) -> &Contact {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Coordinates {
     pub latitude: f64,
@@ -99,9 +141,21 @@ pub struct Coordinates {
     pub longitude: f64,
 }
 
+impl AsRef<Coordinates> for Coordinates {
+    fn as_ref(&self) -> &Coordinates {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DeeplyNested {
     pub level1: Level1,
+}
+
+impl AsRef<DeeplyNested> for DeeplyNested {
+    fn as_ref(&self) -> &DeeplyNested {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -119,6 +173,12 @@ pub struct Department {
     pub projects: Vec<Project>,
 }
 
+impl AsRef<Department> for Department {
+    fn as_ref(&self) -> &Department {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DisplaySettings {
     pub fontSize: i64,
@@ -126,6 +186,12 @@ pub struct DisplaySettings {
     pub colorScheme: String,
 
     pub layout: Union2KgridOrKlist,
+}
+
+impl AsRef<DisplaySettings> for DisplaySettings {
+    fn as_ref(&self) -> &DisplaySettings {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -147,11 +213,23 @@ pub struct Employee {
     pub emergencyContact: Option<Contact>,
 }
 
+impl AsRef<Employee> for Employee {
+    fn as_ref(&self) -> &Employee {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Level1 {
     pub data: String,
 
     pub level2: Level2,
+}
+
+impl AsRef<Level1> for Level1 {
+    fn as_ref(&self) -> &Level1 {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -161,11 +239,23 @@ pub struct Level2 {
     pub level3: Level3,
 }
 
+impl AsRef<Level2> for Level2 {
+    fn as_ref(&self) -> &Level2 {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Level3 {
     pub data: String,
 
     pub level4: Level4,
+}
+
+impl AsRef<Level3> for Level3 {
+    fn as_ref(&self) -> &Level3 {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -175,13 +265,25 @@ pub struct Level4 {
     pub level5: Level5,
 }
 
+impl AsRef<Level4> for Level4 {
+    fn as_ref(&self) -> &Level4 {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Level5 {
     pub data: String,
 
     pub items: Vec<String>,
 
-    pub mapping: HashMap<String, i64>,
+    pub mapping: std::collections::HashMap<String, i64>,
+}
+
+impl AsRef<Level5> for Level5 {
+    fn as_ref(&self) -> &Level5 {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -194,7 +296,13 @@ pub struct Metadata {
 
     pub tags: Vec<String>,
 
-    pub attributes: HashMap<String, String>,
+    pub attributes: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<Metadata> for Metadata {
+    fn as_ref(&self) -> &Metadata {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -210,6 +318,12 @@ pub struct Milestone {
     pub tasks: Vec<Task>,
 }
 
+impl AsRef<Milestone> for Milestone {
+    fn as_ref(&self) -> &Milestone {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NotificationSettings {
     pub email: bool,
@@ -221,6 +335,12 @@ pub struct NotificationSettings {
     pub frequency: Union3KdailyOrKimmediateOrKweekly,
 }
 
+impl AsRef<NotificationSettings> for NotificationSettings {
+    fn as_ref(&self) -> &NotificationSettings {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Preferences {
     pub theme: Union2KdarkOrKlight,
@@ -228,6 +348,12 @@ pub struct Preferences {
     pub language: String,
 
     pub notifications: NotificationSettings,
+}
+
+impl AsRef<Preferences> for Preferences {
+    fn as_ref(&self) -> &Preferences {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -239,6 +365,12 @@ pub struct PrivacySettings {
     pub showPhone: bool,
 }
 
+impl AsRef<PrivacySettings> for PrivacySettings {
+    fn as_ref(&self) -> &PrivacySettings {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Profile {
     pub bio: String,
@@ -248,6 +380,12 @@ pub struct Profile {
     pub social: SocialLinks,
 
     pub preferences: Preferences,
+}
+
+impl AsRef<Profile> for Profile {
+    fn as_ref(&self) -> &Profile {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -267,6 +405,12 @@ pub struct Project {
     pub budget: Budget,
 }
 
+impl AsRef<Project> for Project {
+    fn as_ref(&self) -> &Project {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct RecursiveStructure {
     pub id: i64,
@@ -277,7 +421,13 @@ pub struct RecursiveStructure {
 
     pub parent: Option<Box<RecursiveStructure>>,
 
-    pub metadata: HashMap<String, Union3BoolOrIntOrString>,
+    pub metadata: std::collections::HashMap<String, Union3BoolOrIntOrString>,
+}
+
+impl AsRef<RecursiveStructure> for RecursiveStructure {
+    fn as_ref(&self) -> &RecursiveStructure {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -289,6 +439,12 @@ pub struct SimpleNested {
     pub metadata: Metadata,
 }
 
+impl AsRef<SimpleNested> for SimpleNested {
+    fn as_ref(&self) -> &SimpleNested {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SocialLinks {
     pub twitter: Option<String>,
@@ -298,6 +454,12 @@ pub struct SocialLinks {
     pub linkedin: Option<String>,
 
     pub website: Option<String>,
+}
+
+impl AsRef<SocialLinks> for SocialLinks {
+    fn as_ref(&self) -> &SocialLinks {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -317,6 +479,12 @@ pub struct Task {
     pub subtasks: Option<Vec<Box<Task>>>,
 }
 
+impl AsRef<Task> for Task {
+    fn as_ref(&self) -> &Task {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
@@ -328,11 +496,23 @@ pub struct User {
     pub settings: UserSettings,
 }
 
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct UserSettings {
     pub privacy: PrivacySettings,
 
     pub display: DisplaySettings,
 
-    pub advanced: HashMap<String, String>,
+    pub advanced: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<UserSettings> for UserSettings {
+    fn as_ref(&self) -> &UserSettings {
+        self
+    }
 }

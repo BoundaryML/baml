@@ -24,6 +24,12 @@ impl Default for Union2IntOrListRecursive1 {
     }
 }
 
+impl AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
+    fn as_ref(&self) -> &Union2IntOrListRecursive1 {
+        self
+    }
+}
+
 /// Generated from: ("service" | "resource")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -36,6 +42,12 @@ pub enum Union2KresourceOrKservice {
 impl Default for Union2KresourceOrKservice {
     fn default() -> Self {
         Self::Kservice(Default::default())
+    }
+}
+
+impl AsRef<Union2KresourceOrKservice> for Union2KresourceOrKservice {
+    fn as_ref(&self) -> &Union2KresourceOrKservice {
+        self
     }
 }
 
@@ -53,5 +65,11 @@ pub enum Union3IntOrRecursive1OrString {
 impl Default for Union3IntOrRecursive1OrString {
     fn default() -> Self {
         Self::Recursive1(Default::default())
+    }
+}
+
+impl AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
+    fn as_ref(&self) -> &Union3IntOrRecursive1OrString {
+        self
     }
 }

@@ -4,5 +4,48 @@
 // Learn more at https://docs.boundaryml.com
 
 //! Synchronous BAML function calls.
-//!
-//! Full implementation coming in Phase 7.
+
+use crate::baml_client::{
+    runtime::{get_runtime, FunctionOptions},
+    types,
+};
+use baml::{BamlEncode, BamlError};
+
+pub struct BamlClient {
+    options: Option<FunctionOptions>,
+}
+
+pub static B: BamlClient = BamlClient { options: None };
+
+/// Generates a BAML function with N parameters.
+macro_rules! baml_function {
+    ($name:ident($($param:ident : $ptype:ty),* $(,)?) -> $ret:ty) => {
+        pub fn $name(&self, $($param: $ptype),*) -> Result<$ret, BamlError> {
+            let args = self.options.as_ref().map(|o| o.to_baml_args()).unwrap_or_default()
+                $(.arg(stringify!($param), $param.baml_encode()))*;
+            let result: $ret = get_runtime().call_function(stringify!($name), &args)?;
+            Ok(result)
+        }
+    };
+}
+
+#[allow(dead_code, non_snake_case)]
+impl BamlClient {
+    pub fn with_options<F>(&self, options_fn: F) -> Self
+    where
+        F: Fn(FunctionOptions) -> FunctionOptions,
+    {
+        let options = options_fn(self.options.as_ref().map(|o| o.clone()).unwrap_or_default());
+        BamlClient {
+            options: Some(options),
+        }
+    }
+
+    baml_function!(TestComplexNested(input: impl AsRef<str> + BamlEncode, ) -> types::ComplexNested);
+
+    baml_function!(TestDeeplyNested(input: impl AsRef<str> + BamlEncode, ) -> types::DeeplyNested);
+
+    baml_function!(TestRecursiveStructure(input: impl AsRef<str> + BamlEncode, ) -> types::RecursiveStructure);
+
+    baml_function!(TestSimpleNested(input: impl AsRef<str> + BamlEncode, ) -> types::SimpleNested);
+}

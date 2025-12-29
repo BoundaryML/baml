@@ -50,13 +50,13 @@ pub struct PrimitiveArrays {
 /// Streaming variant of PrimitiveMaps.
 #[derive(Debug, Clone, Default)]
 pub struct PrimitiveMaps {
-    pub stringMap: HashMap<String, String>,
+    pub stringMap: std::collections::HashMap<String, String>,
 
-    pub intMap: HashMap<String, i64>,
+    pub intMap: std::collections::HashMap<String, i64>,
 
-    pub floatMap: HashMap<String, f64>,
+    pub floatMap: std::collections::HashMap<String, f64>,
 
-    pub boolMap: HashMap<String, bool>,
+    pub boolMap: std::collections::HashMap<String, bool>,
 }
 
 /// Streaming variant of PrimitiveTypes.

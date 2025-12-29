@@ -18,6 +18,12 @@ pub struct ArrayWithConstraints {
     pub positiveFloats: Vec<f64>,
 }
 
+impl AsRef<ArrayWithConstraints> for ArrayWithConstraints {
+    fn as_ref(&self) -> &ArrayWithConstraints {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MixedArrays {
     pub primitiveArray: Vec<Union4BoolOrFloatOrIntOrString>,
@@ -31,6 +37,12 @@ pub struct MixedArrays {
     pub complexMixed: Vec<Union3ProductOrTagOrUser>,
 }
 
+impl AsRef<MixedArrays> for MixedArrays {
+    fn as_ref(&self) -> &MixedArrays {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NestedArrays {
     pub matrix: Vec<Vec<i64>>,
@@ -40,6 +52,12 @@ pub struct NestedArrays {
     pub threeDimensional: Vec<Vec<Vec<f64>>>,
 }
 
+impl AsRef<NestedArrays> for NestedArrays {
+    fn as_ref(&self) -> &NestedArrays {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ObjectArrays {
     pub users: Vec<User>,
@@ -47,6 +65,12 @@ pub struct ObjectArrays {
     pub products: Vec<Product>,
 
     pub tags: Vec<Tag>,
+}
+
+impl AsRef<ObjectArrays> for ObjectArrays {
+    fn as_ref(&self) -> &ObjectArrays {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -62,6 +86,12 @@ pub struct Product {
     pub inStock: bool,
 }
 
+impl AsRef<Product> for Product {
+    fn as_ref(&self) -> &Product {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SimpleArrays {
     pub strings: Vec<String>,
@@ -73,6 +103,12 @@ pub struct SimpleArrays {
     pub booleans: Vec<bool>,
 }
 
+impl AsRef<SimpleArrays> for SimpleArrays {
+    fn as_ref(&self) -> &SimpleArrays {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Tag {
     pub id: i64,
@@ -80,6 +116,12 @@ pub struct Tag {
     pub name: String,
 
     pub color: String,
+}
+
+impl AsRef<Tag> for Tag {
+    fn as_ref(&self) -> &Tag {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -91,4 +133,10 @@ pub struct User {
     pub email: String,
 
     pub isActive: bool,
+}
+
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
 }

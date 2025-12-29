@@ -18,5 +18,11 @@ pub enum {{ enum_.name }} {
     {{ value }},
 {% endfor %}
 }
+
+impl AsRef<{{ enum_.name }}> for {{ enum_.name }} {
+    fn as_ref(&self) -> &{{ enum_.name }} {
+        self
+    }
+}
 {% endfor %}
 {% endif %}

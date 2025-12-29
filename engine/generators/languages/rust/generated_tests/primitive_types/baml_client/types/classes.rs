@@ -30,6 +30,12 @@ pub struct MixedPrimitives {
     pub flags: Vec<bool>,
 }
 
+impl AsRef<MixedPrimitives> for MixedPrimitives {
+    fn as_ref(&self) -> &MixedPrimitives {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct PrimitiveArrays {
     pub stringArray: Vec<String>,
@@ -41,15 +47,27 @@ pub struct PrimitiveArrays {
     pub boolArray: Vec<bool>,
 }
 
+impl AsRef<PrimitiveArrays> for PrimitiveArrays {
+    fn as_ref(&self) -> &PrimitiveArrays {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct PrimitiveMaps {
-    pub stringMap: HashMap<String, String>,
+    pub stringMap: std::collections::HashMap<String, String>,
 
-    pub intMap: HashMap<String, i64>,
+    pub intMap: std::collections::HashMap<String, i64>,
 
-    pub floatMap: HashMap<String, f64>,
+    pub floatMap: std::collections::HashMap<String, f64>,
 
-    pub boolMap: HashMap<String, bool>,
+    pub boolMap: std::collections::HashMap<String, bool>,
+}
+
+impl AsRef<PrimitiveMaps> for PrimitiveMaps {
+    fn as_ref(&self) -> &PrimitiveMaps {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -63,4 +81,10 @@ pub struct PrimitiveTypes {
     pub boolField: bool,
 
     pub nullField: (),
+}
+
+impl AsRef<PrimitiveTypes> for PrimitiveTypes {
+    fn as_ref(&self) -> &PrimitiveTypes {
+        self
+    }
 }

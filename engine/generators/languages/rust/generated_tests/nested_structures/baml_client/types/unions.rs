@@ -24,6 +24,12 @@ impl Default for Union2KdarkOrKlight {
     }
 }
 
+impl AsRef<Union2KdarkOrKlight> for Union2KdarkOrKlight {
+    fn as_ref(&self) -> &Union2KdarkOrKlight {
+        self
+    }
+}
+
 /// Generated from: ("grid" | "list")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -36,6 +42,12 @@ pub enum Union2KgridOrKlist {
 impl Default for Union2KgridOrKlist {
     fn default() -> Self {
         Self::Kgrid(Default::default())
+    }
+}
+
+impl AsRef<Union2KgridOrKlist> for Union2KgridOrKlist {
+    fn as_ref(&self) -> &Union2KgridOrKlist {
+        self
     }
 }
 
@@ -56,6 +68,12 @@ impl Default for Union3BoolOrIntOrString {
     }
 }
 
+impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
+    fn as_ref(&self) -> &Union3BoolOrIntOrString {
+        self
+    }
+}
+
 /// Generated from: ("immediate" | "daily" | "weekly")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -70,6 +88,12 @@ pub enum Union3KdailyOrKimmediateOrKweekly {
 impl Default for Union3KdailyOrKimmediateOrKweekly {
     fn default() -> Self {
         Self::Kimmediate(Default::default())
+    }
+}
+
+impl AsRef<Union3KdailyOrKimmediateOrKweekly> for Union3KdailyOrKimmediateOrKweekly {
+    fn as_ref(&self) -> &Union3KdailyOrKimmediateOrKweekly {
+        self
     }
 }
 
@@ -90,6 +114,12 @@ impl Default for Union3KdoneOrKin_progressOrKtodo {
     }
 }
 
+impl AsRef<Union3KdoneOrKin_progressOrKtodo> for Union3KdoneOrKin_progressOrKtodo {
+    fn as_ref(&self) -> &Union3KdoneOrKin_progressOrKtodo {
+        self
+    }
+}
+
 /// Generated from: ("public" | "private" | "friends")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -107,6 +137,12 @@ impl Default for Union3KfriendsOrKprivateOrKpublic {
     }
 }
 
+impl AsRef<Union3KfriendsOrKprivateOrKpublic> for Union3KfriendsOrKprivateOrKpublic {
+    fn as_ref(&self) -> &Union3KfriendsOrKprivateOrKpublic {
+        self
+    }
+}
+
 /// Generated from: ("low" | "medium" | "high")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -121,6 +157,12 @@ pub enum Union3KhighOrKlowOrKmedium {
 impl Default for Union3KhighOrKlowOrKmedium {
     fn default() -> Self {
         Self::Klow(Default::default())
+    }
+}
+
+impl AsRef<Union3KhighOrKlowOrKmedium> for Union3KhighOrKlowOrKmedium {
+    fn as_ref(&self) -> &Union3KhighOrKlowOrKmedium {
+        self
     }
 }
 
@@ -143,6 +185,14 @@ impl Default for Union4KactiveOrKcancelledOrKcompletedOrKplanning {
     }
 }
 
+impl AsRef<Union4KactiveOrKcancelledOrKcompletedOrKplanning>
+    for Union4KactiveOrKcancelledOrKcompletedOrKplanning
+{
+    fn as_ref(&self) -> &Union4KactiveOrKcancelledOrKcompletedOrKplanning {
+        self
+    }
+}
+
 /// Generated from: ("small" | "medium" | "large" | "enterprise")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -159,5 +209,13 @@ pub enum Union4KenterpriseOrKlargeOrKmediumOrKsmall {
 impl Default for Union4KenterpriseOrKlargeOrKmediumOrKsmall {
     fn default() -> Self {
         Self::Ksmall(Default::default())
+    }
+}
+
+impl AsRef<Union4KenterpriseOrKlargeOrKmediumOrKsmall>
+    for Union4KenterpriseOrKlargeOrKmediumOrKsmall
+{
+    fn as_ref(&self) -> &Union4KenterpriseOrKlargeOrKmediumOrKsmall {
+        self
     }
 }

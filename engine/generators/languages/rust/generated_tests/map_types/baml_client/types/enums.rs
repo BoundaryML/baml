@@ -15,3 +15,9 @@ pub enum Status {
 
     PENDING,
 }
+
+impl AsRef<Status> for Status {
+    fn as_ref(&self) -> &Status {
+        self
+    }
+}

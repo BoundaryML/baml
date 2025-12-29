@@ -13,9 +13,15 @@ use std::collections::HashMap;
 pub struct Action {
     pub r#type: String,
 
-    pub parameters: HashMap<String, Union3BoolOrIntOrString>,
+    pub parameters: std::collections::HashMap<String, Union3BoolOrIntOrString>,
 
     pub async_: bool,
+}
+
+impl AsRef<Action> for Action {
+    fn as_ref(&self) -> &Action {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -27,6 +33,12 @@ pub struct Asset {
     pub metadata: AssetMetadata,
 
     pub tags: Vec<String>,
+}
+
+impl AsRef<Asset> for Asset {
+    fn as_ref(&self) -> &Asset {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -42,13 +54,25 @@ pub struct AssetMetadata {
     pub checksum: String,
 }
 
+impl AsRef<AssetMetadata> for AssetMetadata {
+    fn as_ref(&self) -> &AssetMetadata {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ButtonWidget {
     pub label: String,
 
     pub action: String,
 
-    pub style: HashMap<String, String>,
+    pub style: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<ButtonWidget> for ButtonWidget {
+    fn as_ref(&self) -> &ButtonWidget {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -60,11 +84,23 @@ pub struct ComplexData {
     pub tertiary: Option<TertiaryData>,
 }
 
+impl AsRef<ComplexData> for ComplexData {
+    fn as_ref(&self) -> &ComplexData {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Condition {
     pub r#type: Union3KandOrKnotOrKor,
 
     pub conditions: Vec<Union2ConditionOrSimpleCondition>,
+}
+
+impl AsRef<Condition> for Condition {
+    fn as_ref(&self) -> &Condition {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -73,9 +109,15 @@ pub struct Configuration {
 
     pub features: Vec<Feature>,
 
-    pub environments: HashMap<String, Environment>,
+    pub environments: std::collections::HashMap<String, Environment>,
 
     pub rules: Vec<Rule>,
+}
+
+impl AsRef<Configuration> for Configuration {
+    fn as_ref(&self) -> &Configuration {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -84,14 +126,26 @@ pub struct ContainerWidget {
 
     pub children: Vec<Box<Widget>>,
 
-    pub style: HashMap<String, String>,
+    pub style: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<ContainerWidget> for ContainerWidget {
+    fn as_ref(&self) -> &ContainerWidget {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DataObject {
     pub r#type: String,
 
-    pub value: HashMap<String, String>,
+    pub value: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<DataObject> for DataObject {
+    fn as_ref(&self) -> &DataObject {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -101,15 +155,27 @@ pub struct Dimensions {
     pub height: i64,
 }
 
+impl AsRef<Dimensions> for Dimensions {
+    fn as_ref(&self) -> &Dimensions {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Environment {
     pub name: String,
 
     pub url: String,
 
-    pub variables: HashMap<String, String>,
+    pub variables: std::collections::HashMap<String, String>,
 
-    pub secrets: Option<HashMap<String, String>>,
+    pub secrets: Option<std::collections::HashMap<String, String>>,
+}
+
+impl AsRef<Environment> for Environment {
+    fn as_ref(&self) -> &Environment {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -121,13 +187,25 @@ pub struct Error {
     pub code: i64,
 }
 
+impl AsRef<Error> for Error {
+    fn as_ref(&self) -> &Error {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ErrorDetail {
     pub code: String,
 
     pub message: String,
 
-    pub details: Option<HashMap<String, String>>,
+    pub details: Option<std::collections::HashMap<String, String>>,
+}
+
+impl AsRef<ErrorDetail> for ErrorDetail {
+    fn as_ref(&self) -> &ErrorDetail {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -136,9 +214,15 @@ pub struct Feature {
 
     pub enabled: bool,
 
-    pub config: Option<HashMap<String, Union3BoolOrIntOrString>>,
+    pub config: Option<std::collections::HashMap<String, Union3BoolOrIntOrString>>,
 
     pub dependencies: Vec<String>,
+}
+
+impl AsRef<Feature> for Feature {
+    fn as_ref(&self) -> &Feature {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -146,6 +230,12 @@ pub struct ImageWidget {
     pub alt: String,
 
     pub dimensions: Dimensions,
+}
+
+impl AsRef<ImageWidget> for ImageWidget {
+    fn as_ref(&self) -> &ImageWidget {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -156,7 +246,13 @@ pub struct Item {
 
     pub variants: Vec<Variant>,
 
-    pub attributes: HashMap<String, Union4BoolOrFloatOrIntOrString>,
+    pub attributes: std::collections::HashMap<String, Union4BoolOrFloatOrIntOrString>,
+}
+
+impl AsRef<Item> for Item {
+    fn as_ref(&self) -> &Item {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -181,9 +277,9 @@ pub struct KitchenSink {
 
     pub matrix: Vec<Vec<i64>>,
 
-    pub metadata: HashMap<String, String>,
+    pub metadata: std::collections::HashMap<String, String>,
 
-    pub scores: HashMap<String, f64>,
+    pub scores: std::collections::HashMap<String, f64>,
 
     pub description: Option<String>,
 
@@ -200,6 +296,12 @@ pub struct KitchenSink {
     pub config: Configuration,
 }
 
+impl AsRef<KitchenSink> for KitchenSink {
+    fn as_ref(&self) -> &KitchenSink {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Node {
     pub id: i64,
@@ -211,6 +313,12 @@ pub struct Node {
     pub metadata: Option<NodeMetadata>,
 }
 
+impl AsRef<Node> for Node {
+    fn as_ref(&self) -> &Node {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NodeMetadata {
     pub created: String,
@@ -219,25 +327,43 @@ pub struct NodeMetadata {
 
     pub tags: Vec<String>,
 
-    pub attributes: HashMap<String, Option<Union3BoolOrIntOrString>>,
+    pub attributes: std::collections::HashMap<String, Option<Union3BoolOrIntOrString>>,
+}
+
+impl AsRef<NodeMetadata> for NodeMetadata {
+    fn as_ref(&self) -> &NodeMetadata {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct PrimaryData {
     pub values: Vec<Union3FloatOrIntOrString>,
 
-    pub mappings: HashMap<String, HashMap<String, String>>,
+    pub mappings: std::collections::HashMap<String, std::collections::HashMap<String, String>>,
 
     pub flags: Vec<bool>,
+}
+
+impl AsRef<PrimaryData> for PrimaryData {
+    fn as_ref(&self) -> &PrimaryData {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Record {
     pub id: i64,
 
-    pub data: HashMap<String, Option<Union3BoolOrIntOrString>>,
+    pub data: std::collections::HashMap<String, Option<Union3BoolOrIntOrString>>,
 
     pub related: Option<Vec<Box<Record>>>,
+}
+
+impl AsRef<Record> for Record {
+    fn as_ref(&self) -> &Record {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -249,6 +375,12 @@ pub struct ResponseMetadata {
     pub duration: i64,
 
     pub retries: i64,
+}
+
+impl AsRef<ResponseMetadata> for ResponseMetadata {
+    fn as_ref(&self) -> &ResponseMetadata {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -264,11 +396,23 @@ pub struct Rule {
     pub priority: i64,
 }
 
+impl AsRef<Rule> for Rule {
+    fn as_ref(&self) -> &Rule {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SecondaryData {
     pub records: Vec<Record>,
 
-    pub index: HashMap<String, Record>,
+    pub index: std::collections::HashMap<String, Record>,
+}
+
+impl AsRef<SecondaryData> for SecondaryData {
+    fn as_ref(&self) -> &SecondaryData {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -277,7 +421,13 @@ pub struct Setting {
 
     pub value: Union3BoolOrIntOrString,
 
-    pub metadata: Option<HashMap<String, String>>,
+    pub metadata: Option<std::collections::HashMap<String, String>>,
+}
+
+impl AsRef<Setting> for Setting {
+    fn as_ref(&self) -> &Setting {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -289,20 +439,38 @@ pub struct SimpleCondition {
     pub value: Union4BoolOrFloatOrIntOrString,
 }
 
+impl AsRef<SimpleCondition> for SimpleCondition {
+    fn as_ref(&self) -> &SimpleCondition {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Success {
     pub r#type: String,
 
-    pub data: HashMap<String, String>,
+    pub data: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<Success> for Success {
+    fn as_ref(&self) -> &Success {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct TertiaryData {
     pub raw: String,
 
-    pub parsed: Option<HashMap<String, String>>,
+    pub parsed: Option<std::collections::HashMap<String, String>>,
 
     pub valid: bool,
+}
+
+impl AsRef<TertiaryData> for TertiaryData {
+    fn as_ref(&self) -> &TertiaryData {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -311,7 +479,13 @@ pub struct TextWidget {
 
     pub format: Union3KhtmlOrKmarkdownOrKplain,
 
-    pub style: HashMap<String, String>,
+    pub style: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<TextWidget> for TextWidget {
+    fn as_ref(&self) -> &TextWidget {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -327,13 +501,25 @@ pub struct UltraComplex {
     pub assets: Vec<Asset>,
 }
 
+impl AsRef<UltraComplex> for UltraComplex {
+    fn as_ref(&self) -> &UltraComplex {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
 
     pub profile: UserProfile,
 
-    pub settings: HashMap<String, Setting>,
+    pub settings: std::collections::HashMap<String, Setting>,
+}
+
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -347,6 +533,12 @@ pub struct UserProfile {
     pub links: Vec<String>,
 }
 
+impl AsRef<UserProfile> for UserProfile {
+    fn as_ref(&self) -> &UserProfile {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct UserResponse {
     pub status: Union2KerrorOrKsuccess,
@@ -358,6 +550,12 @@ pub struct UserResponse {
     pub metadata: ResponseMetadata,
 }
 
+impl AsRef<UserResponse> for UserResponse {
+    fn as_ref(&self) -> &UserResponse {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Variant {
     pub sku: String,
@@ -366,7 +564,13 @@ pub struct Variant {
 
     pub stock: i64,
 
-    pub options: HashMap<String, String>,
+    pub options: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<Variant> for Variant {
+    fn as_ref(&self) -> &Variant {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -380,4 +584,10 @@ pub struct Widget {
     pub img: Option<ImageWidget>,
 
     pub container: Option<Box<ContainerWidget>>,
+}
+
+impl AsRef<Widget> for Widget {
+    fn as_ref(&self) -> &Widget {
+        self
+    }
 }

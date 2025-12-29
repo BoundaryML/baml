@@ -20,5 +20,11 @@ pub struct {{ class.name }} {
     pub {{ field.name }}: {{ field.type_str }},
 {% endfor %}
 }
+
+impl AsRef<{{ class.name }}> for {{ class.name }} {
+    fn as_ref(&self) -> &{{ class.name }} {
+        self
+    }
+}
 {% endfor %}
 {% endif %}

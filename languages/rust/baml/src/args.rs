@@ -1,6 +1,6 @@
 use prost::Message;
 
-use crate::codec::BamlEncode;
+use crate::codec::{BamlEncode, HostValue};
 use crate::error::BamlError;
 use crate::proto::baml_cffi_v1::{
     host_map_entry, BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry,
@@ -23,10 +23,10 @@ impl FunctionArgs {
     }
 
     /// Add a keyword argument
-    pub fn arg<V: BamlEncode>(mut self, name: &str, value: V) -> Self {
+    pub fn arg(mut self, name: &str, value: HostValue) -> Self {
         self.kwargs.push(HostMapEntry {
             key: Some(host_map_entry::Key::StringKey(name.to_string())),
-            value: Some(value.baml_encode()),
+            value: Some(value),
         });
         self
     }

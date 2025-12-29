@@ -24,6 +24,12 @@ pub struct AllNullable {
     pub nullObject: Option<User>,
 }
 
+impl AsRef<AllNullable> for AllNullable {
+    fn as_ref(&self) -> &AllNullable {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct BooleanEdgeCases {
     pub explicitTrue: bool,
@@ -35,6 +41,12 @@ pub struct BooleanEdgeCases {
     pub arrayOfFalse: Vec<bool>,
 
     pub mixedBoolArray: Vec<bool>,
+}
+
+impl AsRef<BooleanEdgeCases> for BooleanEdgeCases {
+    fn as_ref(&self) -> &BooleanEdgeCases {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -50,11 +62,23 @@ pub struct CircularReference {
     pub relatedItems: Vec<Box<CircularReference>>,
 }
 
+impl AsRef<CircularReference> for CircularReference {
+    fn as_ref(&self) -> &CircularReference {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DeepRecursion {
     pub value: String,
 
     pub next: Option<Box<DeepRecursion>>,
+}
+
+impl AsRef<DeepRecursion> for DeepRecursion {
+    fn as_ref(&self) -> &DeepRecursion {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -65,14 +89,26 @@ pub struct EmptyCollections {
 
     pub emptyObjectArray: Vec<User>,
 
-    pub emptyMap: HashMap<String, String>,
+    pub emptyMap: std::collections::HashMap<String, String>,
 
     pub emptyNestedArray: Vec<Vec<String>>,
+}
+
+impl AsRef<EmptyCollections> for EmptyCollections {
+    fn as_ref(&self) -> &EmptyCollections {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct InnerNullable {
     pub value: Option<String>,
+}
+
+impl AsRef<InnerNullable> for InnerNullable {
+    fn as_ref(&self) -> &InnerNullable {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -127,15 +163,21 @@ pub struct LargeStructure {
 
     pub array5: Vec<User>,
 
-    pub map1: HashMap<String, String>,
+    pub map1: std::collections::HashMap<String, String>,
 
-    pub map2: HashMap<String, i64>,
+    pub map2: std::collections::HashMap<String, i64>,
 
-    pub map3: HashMap<String, f64>,
+    pub map3: std::collections::HashMap<String, f64>,
 
-    pub map4: HashMap<String, bool>,
+    pub map4: std::collections::HashMap<String, bool>,
 
-    pub map5: HashMap<String, User>,
+    pub map5: std::collections::HashMap<String, User>,
+}
+
+impl AsRef<LargeStructure> for LargeStructure {
+    fn as_ref(&self) -> &LargeStructure {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -146,16 +188,31 @@ pub struct MixedEdgeCases {
 
     pub veryLongArray: Vec<String>,
 
-    pub deeplyNestedMap: HashMap<String, HashMap<String, HashMap<String, String>>>,
+    pub deeplyNestedMap: std::collections::HashMap<
+        String,
+        std::collections::HashMap<String, std::collections::HashMap<String, String>>,
+    >,
 
     pub mixedTypeArray: Vec<Option<Union3BoolOrIntOrString>>,
 
     pub optionalEverything: Option<OptionalEverything>,
 }
 
+impl AsRef<MixedEdgeCases> for MixedEdgeCases {
+    fn as_ref(&self) -> &MixedEdgeCases {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NestedNullable {
     pub outer: Option<OuterNullable>,
+}
+
+impl AsRef<NestedNullable> for NestedNullable {
+    fn as_ref(&self) -> &NestedNullable {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -165,6 +222,12 @@ pub struct NullEdgeCases {
     pub someNull: SomeNullable,
 
     pub nestedNull: NestedNullable,
+}
+
+impl AsRef<NullEdgeCases> for NullEdgeCases {
+    fn as_ref(&self) -> &NullEdgeCases {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -190,6 +253,12 @@ pub struct NumberEdgeCases {
     pub notANumber: Option<f64>,
 }
 
+impl AsRef<NumberEdgeCases> for NumberEdgeCases {
+    fn as_ref(&self) -> &NumberEdgeCases {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OptionalEverything {
     pub optString: Option<String>,
@@ -202,14 +271,26 @@ pub struct OptionalEverything {
 
     pub optArray: Option<Vec<String>>,
 
-    pub optMap: Option<HashMap<String, String>>,
+    pub optMap: Option<std::collections::HashMap<String, String>>,
 
     pub optObject: Option<User>,
+}
+
+impl AsRef<OptionalEverything> for OptionalEverything {
+    fn as_ref(&self) -> &OptionalEverything {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OuterNullable {
     pub inner: Option<InnerNullable>,
+}
+
+impl AsRef<OuterNullable> for OuterNullable {
+    fn as_ref(&self) -> &OuterNullable {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -221,6 +302,12 @@ pub struct SomeNullable {
     pub presentInt: Option<i64>,
 
     pub nullInt: Option<i64>,
+}
+
+impl AsRef<SomeNullable> for SomeNullable {
+    fn as_ref(&self) -> &SomeNullable {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -242,11 +329,23 @@ pub struct SpecialCharacters {
     pub withMixedSpecial: String,
 }
 
+impl AsRef<SpecialCharacters> for SpecialCharacters {
+    fn as_ref(&self) -> &SpecialCharacters {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
 
     pub name: String,
+}
+
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -260,4 +359,10 @@ pub struct VeryLongStrings {
     pub veryLongString: String,
 
     pub extremelyLongString: String,
+}
+
+impl AsRef<VeryLongStrings> for VeryLongStrings {
+    fn as_ref(&self) -> &VeryLongStrings {
+        self
+    }
 }

@@ -24,6 +24,12 @@ impl Default for Union2IntOrListRecursive1 {
     }
 }
 
+impl AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
+    fn as_ref(&self) -> &Union2IntOrListRecursive1 {
+        self
+    }
+}
+
 /// Generated from: (Recursive1 | int | string | null)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -41,6 +47,12 @@ impl Default for Union3IntOrRecursive1OrString {
     }
 }
 
+impl AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
+    fn as_ref(&self) -> &Union3IntOrRecursive1OrString {
+        self
+    }
+}
+
 /// Generated from: (string | int | float | map<string, JSON> | JSON[] | null)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -51,7 +63,7 @@ pub enum Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
 
     Float(f64),
 
-    MapStringKeyJSONValue(HashMap<String, JSON>),
+    MapStringKeyJSONValue(std::collections::HashMap<String, JSON>),
 
     ListJSON(Vec<JSON>),
 }
@@ -59,5 +71,13 @@ pub enum Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
 impl Default for Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
     fn default() -> Self {
         Self::String(Default::default())
+    }
+}
+
+impl AsRef<Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString>
+    for Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString
+{
+    fn as_ref(&self) -> &Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
+        self
     }
 }

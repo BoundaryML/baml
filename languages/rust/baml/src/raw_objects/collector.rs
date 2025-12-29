@@ -135,6 +135,12 @@ define_raw_object_wrapper! {
     Collector => ObjectCollector
 }
 
+impl std::fmt::Debug for Collector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Collector(name={})", self.name())
+    }
+}
+
 impl Collector {
     /// Create a new collector with the given name
     pub fn new(runtime: *const c_void, name: &str) -> Self {

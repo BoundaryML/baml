@@ -46,5 +46,5 @@ pub enum Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
 
     ListNode(Option<Vec<Node>>),
 
-    MapStringKeyNodeValue(Option<HashMap<String, Node>>),
+    MapStringKeyNodeValue(Option<std::collections::HashMap<String, Node>>),
 }

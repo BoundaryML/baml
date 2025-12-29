@@ -24,6 +24,12 @@ impl Default for Union2ConditionOrSimpleCondition {
     }
 }
 
+impl AsRef<Union2ConditionOrSimpleCondition> for Union2ConditionOrSimpleCondition {
+    fn as_ref(&self) -> &Union2ConditionOrSimpleCondition {
+        self
+    }
+}
+
 /// Generated from: (Success | Error)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -36,6 +42,12 @@ pub enum Union2ErrorOrSuccess {
 impl Default for Union2ErrorOrSuccess {
     fn default() -> Self {
         Self::Success(Default::default())
+    }
+}
+
+impl AsRef<Union2ErrorOrSuccess> for Union2ErrorOrSuccess {
+    fn as_ref(&self) -> &Union2ErrorOrSuccess {
+        self
     }
 }
 
@@ -54,6 +66,12 @@ impl Default for Union2KbranchOrKleaf {
     }
 }
 
+impl AsRef<Union2KbranchOrKleaf> for Union2KbranchOrKleaf {
+    fn as_ref(&self) -> &Union2KbranchOrKleaf {
+        self
+    }
+}
+
 /// Generated from: ("success" | "error")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -66,6 +84,12 @@ pub enum Union2KerrorOrKsuccess {
 impl Default for Union2KerrorOrKsuccess {
     fn default() -> Self {
         Self::Ksuccess(Default::default())
+    }
+}
+
+impl AsRef<Union2KerrorOrKsuccess> for Union2KerrorOrKsuccess {
+    fn as_ref(&self) -> &Union2KerrorOrKsuccess {
+        self
     }
 }
 
@@ -86,6 +110,12 @@ impl Default for Union3BoolOrIntOrString {
     }
 }
 
+impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
+    fn as_ref(&self) -> &Union3BoolOrIntOrString {
+        self
+    }
+}
+
 /// Generated from: (string | int | DataObject)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -100,6 +130,12 @@ pub enum Union3DataObjectOrIntOrString {
 impl Default for Union3DataObjectOrIntOrString {
     fn default() -> Self {
         Self::String(Default::default())
+    }
+}
+
+impl AsRef<Union3DataObjectOrIntOrString> for Union3DataObjectOrIntOrString {
+    fn as_ref(&self) -> &Union3DataObjectOrIntOrString {
+        self
     }
 }
 
@@ -120,6 +156,12 @@ impl Default for Union3FloatOrIntOrString {
     }
 }
 
+impl AsRef<Union3FloatOrIntOrString> for Union3FloatOrIntOrString {
+    fn as_ref(&self) -> &Union3FloatOrIntOrString {
+        self
+    }
+}
+
 /// Generated from: ("and" | "or" | "not")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -134,6 +176,12 @@ pub enum Union3KandOrKnotOrKor {
 impl Default for Union3KandOrKnotOrKor {
     fn default() -> Self {
         Self::Kand(Default::default())
+    }
+}
+
+impl AsRef<Union3KandOrKnotOrKor> for Union3KandOrKnotOrKor {
+    fn as_ref(&self) -> &Union3KandOrKnotOrKor {
+        self
     }
 }
 
@@ -154,6 +202,12 @@ impl Default for Union3KarchivedOrKdraftOrKpublished {
     }
 }
 
+impl AsRef<Union3KarchivedOrKdraftOrKpublished> for Union3KarchivedOrKdraftOrKpublished {
+    fn as_ref(&self) -> &Union3KarchivedOrKdraftOrKpublished {
+        self
+    }
+}
+
 /// Generated from: ("image" | "audio" | "document")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -168,6 +222,12 @@ pub enum Union3KaudioOrKdocumentOrKimage {
 impl Default for Union3KaudioOrKdocumentOrKimage {
     fn default() -> Self {
         Self::Kimage(Default::default())
+    }
+}
+
+impl AsRef<Union3KaudioOrKdocumentOrKimage> for Union3KaudioOrKdocumentOrKimage {
+    fn as_ref(&self) -> &Union3KaudioOrKdocumentOrKimage {
+        self
     }
 }
 
@@ -188,6 +248,12 @@ impl Default for Union3KflexOrKgridOrKstack {
     }
 }
 
+impl AsRef<Union3KflexOrKgridOrKstack> for Union3KflexOrKgridOrKstack {
+    fn as_ref(&self) -> &Union3KflexOrKgridOrKstack {
+        self
+    }
+}
+
 /// Generated from: ("plain" | "markdown" | "html")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -202,6 +268,12 @@ pub enum Union3KhtmlOrKmarkdownOrKplain {
 impl Default for Union3KhtmlOrKmarkdownOrKplain {
     fn default() -> Self {
         Self::Kplain(Default::default())
+    }
+}
+
+impl AsRef<Union3KhtmlOrKmarkdownOrKplain> for Union3KhtmlOrKmarkdownOrKplain {
+    fn as_ref(&self) -> &Union3KhtmlOrKmarkdownOrKplain {
+        self
     }
 }
 
@@ -224,6 +296,12 @@ impl Default for Union4BoolOrFloatOrIntOrString {
     }
 }
 
+impl AsRef<Union4BoolOrFloatOrIntOrString> for Union4BoolOrFloatOrIntOrString {
+    fn as_ref(&self) -> &Union4BoolOrFloatOrIntOrString {
+        self
+    }
+}
+
 /// Generated from: (string | int | Node[] | map<string, Node>)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -234,12 +312,20 @@ pub enum Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
 
     ListNode(Vec<Node>),
 
-    MapStringKeyNodeValue(HashMap<String, Node>),
+    MapStringKeyNodeValue(std::collections::HashMap<String, Node>),
 }
 
 impl Default for Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
     fn default() -> Self {
         Self::String(Default::default())
+    }
+}
+
+impl AsRef<Union4IntOrListNodeOrMapStringKeyNodeValueOrString>
+    for Union4IntOrListNodeOrMapStringKeyNodeValueOrString
+{
+    fn as_ref(&self) -> &Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
+        self
     }
 }
 
@@ -259,6 +345,12 @@ pub enum Union4KbuttonOrKcontainerOrKimageOrKtext {
 impl Default for Union4KbuttonOrKcontainerOrKimageOrKtext {
     fn default() -> Self {
         Self::Kbutton(Default::default())
+    }
+}
+
+impl AsRef<Union4KbuttonOrKcontainerOrKimageOrKtext> for Union4KbuttonOrKcontainerOrKimageOrKtext {
+    fn as_ref(&self) -> &Union4KbuttonOrKcontainerOrKimageOrKtext {
+        self
     }
 }
 
@@ -283,6 +375,12 @@ impl Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     }
 }
 
+impl AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5> for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
+    fn as_ref(&self) -> &Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
+        self
+    }
+}
+
 /// Generated from: ("eq" | "ne" | "gt" | "lt" | "contains")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -301,5 +399,11 @@ pub enum Union5KcontainsOrKeqOrKgtOrKltOrKne {
 impl Default for Union5KcontainsOrKeqOrKgtOrKltOrKne {
     fn default() -> Self {
         Self::Keq(Default::default())
+    }
+}
+
+impl AsRef<Union5KcontainsOrKeqOrKgtOrKltOrKne> for Union5KcontainsOrKeqOrKgtOrKltOrKne {
+    fn as_ref(&self) -> &Union5KcontainsOrKeqOrKgtOrKltOrKne {
+        self
     }
 }

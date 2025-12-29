@@ -50,7 +50,7 @@ pub struct ApiPending {
 pub struct ApiSuccess {
     pub status: Option<String>,
 
-    pub data: HashMap<String, String>,
+    pub data: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of Bird.
@@ -196,7 +196,7 @@ pub struct RecursiveUnion {
 pub struct Result {
     pub value: Option<types::Union3FloatOrIntOrString>,
 
-    pub metadata: HashMap<String, String>,
+    pub metadata: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of Success.
@@ -206,7 +206,7 @@ pub struct Success {
 
     pub message: Option<String>,
 
-    pub data: HashMap<String, String>,
+    pub data: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of Triangle.

@@ -15,3 +15,9 @@ pub struct Person {
 
     pub age: i64,
 }
+
+impl AsRef<Person> for Person {
+    fn as_ref(&self) -> &Person {
+        self
+    }
+}

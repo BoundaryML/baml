@@ -1,20 +1,21 @@
 //! Runtime initialization and function options.
-//!
-//! Full implementation coming in Phase 9.
 
 use std::collections::HashMap;
+
+use crate::baml_client::baml_source_map::get_baml_files;
+use std::sync::OnceLock;
 
 /// Options for BAML function calls.
 #[derive(Debug, Default, Clone)]
 pub struct FunctionOptions {
-    pub(crate) env: Option<HashMap<String, String>>,
-    pub(crate) tags: Option<HashMap<String, String>>,
-    pub(crate) type_builder: Option<super::type_builder::TypeBuilder>,
+    env: Option<HashMap<String, String>>,
+    tags: Option<HashMap<String, String>>,
+    type_builder: Option<super::type_builder::TypeBuilder>,
+    collectors: Option<Vec<baml::Collector>>,
 }
 
 impl FunctionOptions {
-    /// Create new empty function options.
-    pub fn new() -> Self {
+    pub fn reset(self) -> Self {
         Self::default()
     }
 
@@ -45,9 +46,41 @@ impl FunctionOptions {
         self.type_builder = Some(tb.clone());
         self
     }
+
+    pub(super) fn to_baml_args(&self) -> baml::FunctionArgs {
+        let mut args = baml::FunctionArgs::new();
+        if let Some(env) = &self.env {
+            for (key, value) in env {
+                args = args.with_env(key, value);
+            }
+        }
+        if let Some(tags) = &self.tags {
+            for (key, value) in tags {
+                args = args.with_tag(key, value);
+            }
+        }
+        if let Some(type_builder) = &self.type_builder {
+            // TODO
+        }
+        if let Some(collectors) = &self.collectors {
+            for collector in collectors {
+                args = args.with_collector(collector);
+            }
+        }
+        args
+    }
 }
 
+static RUNTIME: OnceLock<baml::BamlRuntime> = OnceLock::new();
+
 /// Placeholder - full runtime integration in Phase 9.
-pub fn get_runtime() -> &'static () {
-    &()
+pub(super) fn get_runtime() -> &'static baml::BamlRuntime {
+    RUNTIME.get_or_init(|| {
+        baml::BamlRuntime::new(
+            std::env::current_dir().unwrap().to_str().unwrap(),
+            get_baml_files().clone(),
+            std::env::vars().collect(),
+        )
+        .unwrap()
+    })
 }

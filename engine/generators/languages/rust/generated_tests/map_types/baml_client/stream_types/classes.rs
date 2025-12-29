@@ -16,15 +16,15 @@ use std::collections::HashMap;
 /// Streaming variant of ComplexMaps.
 #[derive(Debug, Clone, Default)]
 pub struct ComplexMaps {
-    pub userMap: HashMap<String, User>,
+    pub userMap: std::collections::HashMap<String, User>,
 
-    pub productMap: HashMap<String, Product>,
+    pub productMap: std::collections::HashMap<String, Product>,
 
-    pub nestedMap: HashMap<String, HashMap<String, String>>,
+    pub nestedMap: std::collections::HashMap<String, std::collections::HashMap<String, String>>,
 
-    pub arrayMap: HashMap<String, Vec<i64>>,
+    pub arrayMap: std::collections::HashMap<String, Vec<i64>>,
 
-    pub mapArray: Vec<HashMap<String, String>>,
+    pub mapArray: Vec<std::collections::HashMap<String, String>>,
 }
 
 /// Streaming variant of Config.
@@ -40,39 +40,42 @@ pub struct Config {
 /// Streaming variant of EdgeCaseMaps.
 #[derive(Debug, Clone, Default)]
 pub struct EdgeCaseMaps {
-    pub emptyMap: HashMap<String, String>,
+    pub emptyMap: std::collections::HashMap<String, String>,
 
-    pub nullableValues: HashMap<String, Option<String>>,
+    pub nullableValues: std::collections::HashMap<String, Option<String>>,
 
-    pub optionalValues: HashMap<String, Option<String>>,
+    pub optionalValues: std::collections::HashMap<String, Option<String>>,
 
-    pub unionValues: HashMap<String, types::Union3BoolOrIntOrString>,
+    pub unionValues: std::collections::HashMap<String, types::Union3BoolOrIntOrString>,
 }
 
 /// Streaming variant of MixedKeyMaps.
 #[derive(Debug, Clone, Default)]
 pub struct MixedKeyMaps {
-    pub stringIntMap: HashMap<String, i64>,
+    pub stringIntMap: std::collections::HashMap<String, i64>,
 
-    pub intStringMap: HashMap<String, String>,
+    pub intStringMap: std::collections::HashMap<String, String>,
 
-    pub enumMap: HashMap<String, String>,
+    pub enumMap: std::collections::HashMap<String, String>,
 
-    pub literalMap: HashMap<String, Config>,
+    pub literalMap: std::collections::HashMap<String, Config>,
 }
 
 /// Streaming variant of NestedMaps.
 #[derive(Debug, Clone, Default)]
 pub struct NestedMaps {
-    pub simple: HashMap<String, String>,
+    pub simple: std::collections::HashMap<String, String>,
 
-    pub oneLevelNested: HashMap<String, HashMap<String, i64>>,
+    pub oneLevelNested: std::collections::HashMap<String, std::collections::HashMap<String, i64>>,
 
-    pub twoLevelNested: HashMap<String, HashMap<String, HashMap<String, bool>>>,
+    pub twoLevelNested: std::collections::HashMap<
+        String,
+        std::collections::HashMap<String, std::collections::HashMap<String, bool>>,
+    >,
 
-    pub mapOfArrays: HashMap<String, Vec<String>>,
+    pub mapOfArrays: std::collections::HashMap<String, Vec<String>>,
 
-    pub mapOfMaps: HashMap<String, HashMap<String, f64>>,
+    pub mapOfMaps: std::collections::HashMap<String, std::collections::HashMap<String, f64>>,
 }
 
 /// Streaming variant of Product.
@@ -90,15 +93,15 @@ pub struct Product {
 /// Streaming variant of SimpleMaps.
 #[derive(Debug, Clone, Default)]
 pub struct SimpleMaps {
-    pub stringToString: HashMap<String, String>,
+    pub stringToString: std::collections::HashMap<String, String>,
 
-    pub stringToInt: HashMap<String, i64>,
+    pub stringToInt: std::collections::HashMap<String, i64>,
 
-    pub stringToFloat: HashMap<String, f64>,
+    pub stringToFloat: std::collections::HashMap<String, f64>,
 
-    pub stringToBool: HashMap<String, bool>,
+    pub stringToBool: std::collections::HashMap<String, bool>,
 
-    pub intToString: HashMap<String, String>,
+    pub intToString: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of User.

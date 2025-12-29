@@ -209,6 +209,7 @@ impl TypeRust {
 
 pub trait SerializeType {
     fn serialize_type(&self, pkg: &CurrentRenderPackage) -> String;
+    fn serialize_type_as_parameter(&self, pkg: &CurrentRenderPackage) -> String;
 }
 
 impl SerializeType for TypeRust {
@@ -251,11 +252,35 @@ impl SerializeType for TypeRust {
             TypeRust::List(inner) => format!("Vec<{}>", inner.serialize_type(pkg)),
             TypeRust::Map(key, value) => {
                 format!(
-                    "HashMap<{}, {}>",
+                    "std::collections::HashMap<{}, {}>",
                     key.serialize_type(pkg),
                     value.serialize_type(pkg)
                 )
             }
+            TypeRust::Any { .. } => "serde_json::Value".to_string(),
+        }
+    }
+
+    fn serialize_type_as_parameter(&self, pkg: &CurrentRenderPackage) -> String {
+        match self {
+            TypeRust::Null => "()".to_string(),
+            TypeRust::Optional(inner) => {
+                format!("Option<{}>", inner.serialize_type_as_parameter(pkg))
+            }
+            TypeRust::String(..) => "impl AsRef<str> + BamlEncode".to_string(),
+            TypeRust::List(inner) => format!("&[{}]", inner.serialize_type(pkg)),
+            TypeRust::Checked(_) => format!("&{}", self.serialize_type(pkg)),
+            TypeRust::StreamState(_) => format!("&{}", self.serialize_type(pkg)),
+            TypeRust::Int(..) => "i64".to_string(),
+            TypeRust::Float => "f64".to_string(),
+            TypeRust::Bool(..) => "bool".to_string(),
+            TypeRust::Boxed(inner) => format!("{}", inner.serialize_type_as_parameter(pkg)),
+            TypeRust::Media(media) => media.serialize_type_as_parameter(pkg),
+            TypeRust::Class { .. }
+            | TypeRust::TypeAlias { .. }
+            | TypeRust::Union { .. }
+            | TypeRust::Enum { .. }
+            | TypeRust::Map(..) => format!("&{}", self.serialize_type(pkg)),
             TypeRust::Any { .. } => "serde_json::Value".to_string(),
         }
     }
@@ -269,5 +294,9 @@ impl SerializeType for MediaTypeRust {
             MediaTypeRust::Pdf => format!("{}Pdf", Package::types().relative_from(pkg)),
             MediaTypeRust::Video => format!("{}Video", Package::types().relative_from(pkg)),
         }
+    }
+
+    fn serialize_type_as_parameter(&self, pkg: &CurrentRenderPackage) -> String {
+        format!("&{}", self.serialize_type(pkg))
     }
 }

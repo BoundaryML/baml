@@ -10,9 +10,7 @@
 mod parse;
 mod parse_stream;
 mod stream;
-mod sync;
-
-pub use sync::*;
+pub mod sync;
 
 /// Streaming function namespace.
 pub mod stream_ns {

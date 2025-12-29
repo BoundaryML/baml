@@ -43,24 +43,34 @@ use std::ffi::CString;
 // Public API - re-exported through baml_client
 pub use args::FunctionArgs;
 pub use codec::{
-    decode_enum, decode_field, decode_optional_field, encode_class, encode_enum, BamlClass,
-    BamlDecode, BamlEncode, BamlEnum,
+    BamlClass, BamlDecode, BamlEncode, BamlEnum, decode_enum, decode_field, decode_optional_field,
+    encode_class, encode_enum,
 };
 // New dynamic type exports
 pub use codec::{
-    BamlValue, DynamicClass, DynamicEnum, DynamicUnion, FromBamlValue, FromBamlValueRef,
-    KnownTypes,
+    BamlValue, DynamicClass, DynamicEnum, DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes,
 };
 pub use error::BamlError;
 pub use raw_objects::{
-    // Collector types
-    Collector, FunctionLog, LogType, Usage,
     // Media types
-    Audio, Image, Pdf, Video,
+    Audio,
     // TypeBuilder types
-    ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder, TypeDef,
+    ClassBuilder,
+    ClassPropertyBuilder,
+    // Collector types
+    Collector,
+    EnumBuilder,
+    EnumValueBuilder,
+    FunctionLog,
+    Image,
+    LogType,
+    Pdf,
+    TypeBuilder,
+    TypeDef,
+    Usage,
+    Video,
 };
-pub use runtime::BamlRuntime;
+pub use runtime::{BamlRuntime, StaticRuntimeType};
 pub use stream::{StreamEvent, StreamResult};
 pub use types::{Check, CheckStatus, Checked, StreamState, StreamingState};
 
@@ -94,9 +104,7 @@ pub mod __internal {
 
     /// Extract the inner value from a UnionVariantValue.
     /// Returns an error if the holder is not a UnionVariantValue.
-    pub fn extract_union_variant(
-        holder: &CffiValueHolder,
-    ) -> Result<&CffiValueHolder, BamlError> {
+    pub fn extract_union_variant(holder: &CffiValueHolder) -> Result<&CffiValueHolder, BamlError> {
         match &holder.value {
             Some(cffi_value_holder::Value::UnionVariantValue(union)) => union
                 .value
@@ -155,9 +163,5 @@ pub fn version() -> String {
     if ptr.is_null() {
         return "unknown".to_string();
     }
-    unsafe {
-        std::ffi::CStr::from_ptr(ptr)
-            .to_string_lossy()
-            .into_owned()
-    }
+    unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() }
 }

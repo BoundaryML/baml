@@ -18,6 +18,12 @@ pub struct Example {
     pub b: String,
 }
 
+impl AsRef<Example> for Example {
+    fn as_ref(&self) -> &Example {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Example2 {
     pub r#type: String,
@@ -27,4 +33,10 @@ pub struct Example2 {
     pub element: String,
 
     pub element2: String,
+}
+
+impl AsRef<Example2> for Example2 {
+    fn as_ref(&self) -> &Example2 {
+        self
+    }
 }

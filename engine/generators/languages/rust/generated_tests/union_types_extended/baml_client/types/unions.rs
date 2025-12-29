@@ -24,6 +24,12 @@ impl Default for Union2BoolOrString {
     }
 }
 
+impl AsRef<Union2BoolOrString> for Union2BoolOrString {
+    fn as_ref(&self) -> &Union2BoolOrString {
+        self
+    }
+}
+
 /// Generated from: (DataResponse | ErrorResponse)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -36,6 +42,12 @@ pub enum Union2DataResponseOrErrorResponse {
 impl Default for Union2DataResponseOrErrorResponse {
     fn default() -> Self {
         Self::DataResponse(Default::default())
+    }
+}
+
+impl AsRef<Union2DataResponseOrErrorResponse> for Union2DataResponseOrErrorResponse {
+    fn as_ref(&self) -> &Union2DataResponseOrErrorResponse {
+        self
     }
 }
 
@@ -54,6 +66,12 @@ impl Default for Union2FloatOrInt {
     }
 }
 
+impl AsRef<Union2FloatOrInt> for Union2FloatOrInt {
+    fn as_ref(&self) -> &Union2FloatOrInt {
+        self
+    }
+}
+
 /// Generated from: (string | float)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -66,6 +84,12 @@ pub enum Union2FloatOrString {
 impl Default for Union2FloatOrString {
     fn default() -> Self {
         Self::String(Default::default())
+    }
+}
+
+impl AsRef<Union2FloatOrString> for Union2FloatOrString {
+    fn as_ref(&self) -> &Union2FloatOrString {
+        self
     }
 }
 
@@ -84,6 +108,12 @@ impl Default for Union2IntOrString {
     }
 }
 
+impl AsRef<Union2IntOrString> for Union2IntOrString {
+    fn as_ref(&self) -> &Union2IntOrString {
+        self
+    }
+}
+
 /// Generated from: (string | int[])
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -96,6 +126,12 @@ pub enum Union2ListIntOrString {
 impl Default for Union2ListIntOrString {
     fn default() -> Self {
         Self::String(Default::default())
+    }
+}
+
+impl AsRef<Union2ListIntOrString> for Union2ListIntOrString {
+    fn as_ref(&self) -> &Union2ListIntOrString {
+        self
     }
 }
 
@@ -114,6 +150,12 @@ impl Default for Union2ProductOrUser {
     }
 }
 
+impl AsRef<Union2ProductOrUser> for Union2ProductOrUser {
+    fn as_ref(&self) -> &Union2ProductOrUser {
+        self
+    }
+}
+
 /// Generated from: (string | RecursiveUnion)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -126,6 +168,12 @@ pub enum Union2RecursiveUnionOrString {
 impl Default for Union2RecursiveUnionOrString {
     fn default() -> Self {
         Self::String(Default::default())
+    }
+}
+
+impl AsRef<Union2RecursiveUnionOrString> for Union2RecursiveUnionOrString {
+    fn as_ref(&self) -> &Union2RecursiveUnionOrString {
+        self
     }
 }
 
@@ -146,6 +194,12 @@ impl Default for Union3AdminOrProductOrUser {
     }
 }
 
+impl AsRef<Union3AdminOrProductOrUser> for Union3AdminOrProductOrUser {
+    fn as_ref(&self) -> &Union3AdminOrProductOrUser {
+        self
+    }
+}
+
 /// Generated from: (ApiSuccess | ApiError | ApiPending)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -160,6 +214,12 @@ pub enum Union3ApiErrorOrApiPendingOrApiSuccess {
 impl Default for Union3ApiErrorOrApiPendingOrApiSuccess {
     fn default() -> Self {
         Self::ApiSuccess(Default::default())
+    }
+}
+
+impl AsRef<Union3ApiErrorOrApiPendingOrApiSuccess> for Union3ApiErrorOrApiPendingOrApiSuccess {
+    fn as_ref(&self) -> &Union3ApiErrorOrApiPendingOrApiSuccess {
+        self
     }
 }
 
@@ -180,6 +240,12 @@ impl Default for Union3BirdOrCatOrDog {
     }
 }
 
+impl AsRef<Union3BirdOrCatOrDog> for Union3BirdOrCatOrDog {
+    fn as_ref(&self) -> &Union3BirdOrCatOrDog {
+        self
+    }
+}
+
 /// Generated from: (Circle | Rectangle | Triangle)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -194,6 +260,12 @@ pub enum Union3CircleOrRectangleOrTriangle {
 impl Default for Union3CircleOrRectangleOrTriangle {
     fn default() -> Self {
         Self::Circle(Default::default())
+    }
+}
+
+impl AsRef<Union3CircleOrRectangleOrTriangle> for Union3CircleOrRectangleOrTriangle {
+    fn as_ref(&self) -> &Union3CircleOrRectangleOrTriangle {
+        self
     }
 }
 
@@ -214,6 +286,12 @@ impl Default for Union3ErrorOrSuccessOrWarning {
     }
 }
 
+impl AsRef<Union3ErrorOrSuccessOrWarning> for Union3ErrorOrSuccessOrWarning {
+    fn as_ref(&self) -> &Union3ErrorOrSuccessOrWarning {
+        self
+    }
+}
+
 /// Generated from: (string | int | float)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -228,6 +306,12 @@ pub enum Union3FloatOrIntOrString {
 impl Default for Union3FloatOrIntOrString {
     fn default() -> Self {
         Self::String(Default::default())
+    }
+}
+
+impl AsRef<Union3FloatOrIntOrString> for Union3FloatOrIntOrString {
+    fn as_ref(&self) -> &Union3FloatOrIntOrString {
+        self
     }
 }
 
@@ -248,6 +332,12 @@ impl Default for Union3IntOrRecursiveUnionOrString {
     }
 }
 
+impl AsRef<Union3IntOrRecursiveUnionOrString> for Union3IntOrRecursiveUnionOrString {
+    fn as_ref(&self) -> &Union3IntOrRecursiveUnionOrString {
+        self
+    }
+}
+
 /// Generated from: (string | int | float | bool)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
@@ -264,5 +354,11 @@ pub enum Union4BoolOrFloatOrIntOrString {
 impl Default for Union4BoolOrFloatOrIntOrString {
     fn default() -> Self {
         Self::String(Default::default())
+    }
+}
+
+impl AsRef<Union4BoolOrFloatOrIntOrString> for Union4BoolOrFloatOrIntOrString {
+    fn as_ref(&self) -> &Union4BoolOrFloatOrIntOrString {
+        self
     }
 }

@@ -16,11 +16,23 @@ pub struct ClassWithBlockDone {
     pub s_20_words: String,
 }
 
+impl AsRef<ClassWithBlockDone> for ClassWithBlockDone {
+    fn as_ref(&self) -> &ClassWithBlockDone {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ClassWithoutDone {
     pub i_16_digits: i64,
 
     pub s_20_words: String,
+}
+
+impl AsRef<ClassWithoutDone> for ClassWithoutDone {
+    fn as_ref(&self) -> &ClassWithoutDone {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -42,9 +54,21 @@ pub struct SemanticContainer {
     pub final_string: String,
 }
 
+impl AsRef<SemanticContainer> for SemanticContainer {
+    fn as_ref(&self) -> &SemanticContainer {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SmallThing {
     pub i_16_digits: i64,
 
     pub i_8_digits: i64,
+}
+
+impl AsRef<SmallThing> for SmallThing {
+    fn as_ref(&self) -> &SmallThing {
+        self
+    }
 }

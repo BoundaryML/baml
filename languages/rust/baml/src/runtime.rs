@@ -1,3 +1,4 @@
+#[allow(unsafe_code)]
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_void};
 
@@ -19,6 +20,8 @@ pub struct BamlRuntime {
 // Safety: The runtime is thread-safe internally (protected by Rust's runtime)
 unsafe impl Send for BamlRuntime {}
 unsafe impl Sync for BamlRuntime {}
+
+pub type StaticRuntimeType = once_cell::sync::Lazy<BamlRuntime>;
 
 impl BamlRuntime {
     /// Create a new runtime from embedded BAML source files

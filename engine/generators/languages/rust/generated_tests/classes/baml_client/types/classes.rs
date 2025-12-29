@@ -15,3 +15,9 @@ pub struct SimpleClass {
 
     pub words: String,
 }
+
+impl AsRef<SimpleClass> for SimpleClass {
+    fn as_ref(&self) -> &SimpleClass {
+        self
+    }
+}

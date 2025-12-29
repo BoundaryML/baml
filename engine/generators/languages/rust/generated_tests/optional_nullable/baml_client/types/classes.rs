@@ -15,7 +15,13 @@ pub struct ComplexOptional {
 
     pub items: Vec<OptionalItem>,
 
-    pub mapping: HashMap<String, Option<OptionalValue>>,
+    pub mapping: std::collections::HashMap<String, Option<OptionalValue>>,
+}
+
+impl AsRef<ComplexOptional> for ComplexOptional {
+    fn as_ref(&self) -> &ComplexOptional {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -41,6 +47,12 @@ pub struct MixedOptionalNullable {
     pub tertiaryUser: Option<User>,
 }
 
+impl AsRef<MixedOptionalNullable> for MixedOptionalNullable {
+    fn as_ref(&self) -> &MixedOptionalNullable {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NullableTypes {
     pub nullableString: Option<String>,
@@ -56,6 +68,12 @@ pub struct NullableTypes {
     pub nullableObject: Option<User>,
 }
 
+impl AsRef<NullableTypes> for NullableTypes {
+    fn as_ref(&self) -> &NullableTypes {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OptionalData {
     pub value: String,
@@ -63,6 +81,12 @@ pub struct OptionalData {
     pub count: Option<i64>,
 
     pub enabled: Option<bool>,
+}
+
+impl AsRef<OptionalData> for OptionalData {
+    fn as_ref(&self) -> &OptionalData {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -81,7 +105,13 @@ pub struct OptionalFields {
 
     pub optionalArray: Option<Vec<String>>,
 
-    pub optionalMap: Option<HashMap<String, String>>,
+    pub optionalMap: Option<std::collections::HashMap<String, String>>,
+}
+
+impl AsRef<OptionalFields> for OptionalFields {
+    fn as_ref(&self) -> &OptionalFields {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -92,7 +122,13 @@ pub struct OptionalItem {
 
     pub description: Option<String>,
 
-    pub metadata: Option<HashMap<String, String>>,
+    pub metadata: Option<std::collections::HashMap<String, String>>,
+}
+
+impl AsRef<OptionalItem> for OptionalItem {
+    fn as_ref(&self) -> &OptionalItem {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -102,6 +138,12 @@ pub struct OptionalValue {
     pub optional: Option<String>,
 }
 
+impl AsRef<OptionalValue> for OptionalValue {
+    fn as_ref(&self) -> &OptionalValue {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Product {
     pub id: i64,
@@ -109,6 +151,12 @@ pub struct Product {
     pub name: String,
 
     pub price: Option<f64>,
+}
+
+impl AsRef<Product> for Product {
+    fn as_ref(&self) -> &Product {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -122,6 +170,12 @@ pub struct UnionWithNull {
     pub complexUnion: Option<Union2ProductOrUser>,
 }
 
+impl AsRef<UnionWithNull> for UnionWithNull {
+    fn as_ref(&self) -> &UnionWithNull {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
@@ -131,4 +185,10 @@ pub struct User {
     pub email: Option<String>,
 
     pub phone: Option<String>,
+}
+
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
 }

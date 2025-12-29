@@ -16,11 +16,23 @@ pub struct MediaAnalysisResult {
     pub analysisText: String,
 }
 
+impl AsRef<MediaAnalysisResult> for MediaAnalysisResult {
+    fn as_ref(&self) -> &MediaAnalysisResult {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MediaArrayAnalysisResult {
     pub analysisText: String,
 
     pub mediaCount: i64,
+}
+
+impl AsRef<MediaArrayAnalysisResult> for MediaArrayAnalysisResult {
+    fn as_ref(&self) -> &MediaArrayAnalysisResult {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -30,6 +42,12 @@ pub struct MediaMapAnalysisResult {
     pub keyCount: i64,
 
     pub keys: Vec<String>,
+}
+
+impl AsRef<MediaMapAnalysisResult> for MediaMapAnalysisResult {
+    fn as_ref(&self) -> &MediaMapAnalysisResult {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -51,6 +69,12 @@ pub struct MixedMediaAnalysisResult {
     pub metadataKeys: Vec<String>,
 }
 
+impl AsRef<MixedMediaAnalysisResult> for MixedMediaAnalysisResult {
+    fn as_ref(&self) -> &MixedMediaAnalysisResult {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct OptionalMediaAnalysisResult {
     pub analysisText: String,
@@ -58,4 +82,10 @@ pub struct OptionalMediaAnalysisResult {
     pub providedMediaTypes: Vec<String>,
 
     pub missingMediaTypes: Vec<String>,
+}
+
+impl AsRef<OptionalMediaAnalysisResult> for OptionalMediaAnalysisResult {
+    fn as_ref(&self) -> &OptionalMediaAnalysisResult {
+        self
+    }
 }

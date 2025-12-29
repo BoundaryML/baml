@@ -74,7 +74,7 @@ pub struct EmptyCollections {
 
     pub emptyObjectArray: Vec<User>,
 
-    pub emptyMap: HashMap<String, String>,
+    pub emptyMap: std::collections::HashMap<String, String>,
 
     pub emptyNestedArray: Vec<Vec<String>>,
 }
@@ -138,15 +138,15 @@ pub struct LargeStructure {
 
     pub array5: Vec<User>,
 
-    pub map1: HashMap<String, String>,
+    pub map1: std::collections::HashMap<String, String>,
 
-    pub map2: HashMap<String, i64>,
+    pub map2: std::collections::HashMap<String, i64>,
 
-    pub map3: HashMap<String, f64>,
+    pub map3: std::collections::HashMap<String, f64>,
 
-    pub map4: HashMap<String, bool>,
+    pub map4: std::collections::HashMap<String, bool>,
 
-    pub map5: HashMap<String, User>,
+    pub map5: std::collections::HashMap<String, User>,
 }
 
 /// Streaming variant of MixedEdgeCases.
@@ -158,7 +158,10 @@ pub struct MixedEdgeCases {
 
     pub veryLongArray: Vec<String>,
 
-    pub deeplyNestedMap: HashMap<String, HashMap<String, HashMap<String, String>>>,
+    pub deeplyNestedMap: std::collections::HashMap<
+        String,
+        std::collections::HashMap<String, std::collections::HashMap<String, String>>,
+    >,
 
     pub mixedTypeArray: Vec<Option<types::Union3BoolOrIntOrString>>,
 
@@ -218,7 +221,7 @@ pub struct OptionalEverything {
 
     pub optArray: Option<Vec<String>>,
 
-    pub optMap: Option<HashMap<String, String>>,
+    pub optMap: Option<std::collections::HashMap<String, String>>,
 
     pub optObject: Option<User>,
 }

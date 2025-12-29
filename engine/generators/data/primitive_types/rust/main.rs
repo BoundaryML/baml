@@ -3,7 +3,12 @@
 
 mod baml_client;
 
+use baml_client::B as b;
+
 fn main() {
+    let resul = b.TestEmptyCollections("input").unwrap();
+    b.with_options(|ops| ops.with_tag("key", "value")).TestEmptyCollections("input".to_string()).unwrap();
+
     println!("Test - baml_client module loaded successfully!");
 }
 

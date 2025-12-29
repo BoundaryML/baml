@@ -18,7 +18,7 @@ use std::collections::HashMap;
 pub struct Action {
     pub r#type: Option<String>,
 
-    pub parameters: HashMap<String, types::Union3BoolOrIntOrString>,
+    pub parameters: std::collections::HashMap<String, types::Union3BoolOrIntOrString>,
 
     pub async_: Option<bool>,
 }
@@ -56,7 +56,7 @@ pub struct ButtonWidget {
 
     pub action: Option<String>,
 
-    pub style: HashMap<String, String>,
+    pub style: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of ComplexData.
@@ -84,7 +84,7 @@ pub struct Configuration {
 
     pub features: Vec<Feature>,
 
-    pub environments: HashMap<String, Environment>,
+    pub environments: std::collections::HashMap<String, Environment>,
 
     pub rules: Vec<Rule>,
 }
@@ -96,7 +96,7 @@ pub struct ContainerWidget {
 
     pub children: Vec<Box<Widget>>,
 
-    pub style: HashMap<String, String>,
+    pub style: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of DataObject.
@@ -104,7 +104,7 @@ pub struct ContainerWidget {
 pub struct DataObject {
     pub r#type: Option<String>,
 
-    pub value: HashMap<String, String>,
+    pub value: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of Dimensions.
@@ -122,9 +122,9 @@ pub struct Environment {
 
     pub url: Option<String>,
 
-    pub variables: HashMap<String, String>,
+    pub variables: std::collections::HashMap<String, String>,
 
-    pub secrets: Option<HashMap<String, String>>,
+    pub secrets: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Streaming variant of Error.
@@ -144,7 +144,7 @@ pub struct ErrorDetail {
 
     pub message: Option<String>,
 
-    pub details: Option<HashMap<String, String>>,
+    pub details: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Streaming variant of Feature.
@@ -154,7 +154,7 @@ pub struct Feature {
 
     pub enabled: Option<bool>,
 
-    pub config: Option<HashMap<String, types::Union3BoolOrIntOrString>>,
+    pub config: Option<std::collections::HashMap<String, types::Union3BoolOrIntOrString>>,
 
     pub dependencies: Vec<String>,
 }
@@ -176,7 +176,7 @@ pub struct Item {
 
     pub variants: Vec<Variant>,
 
-    pub attributes: HashMap<String, types::Union4BoolOrFloatOrIntOrString>,
+    pub attributes: std::collections::HashMap<String, types::Union4BoolOrFloatOrIntOrString>,
 }
 
 /// Streaming variant of KitchenSink.
@@ -202,9 +202,9 @@ pub struct KitchenSink {
 
     pub matrix: Vec<Vec<i64>>,
 
-    pub metadata: HashMap<String, String>,
+    pub metadata: std::collections::HashMap<String, String>,
 
-    pub scores: HashMap<String, f64>,
+    pub scores: std::collections::HashMap<String, f64>,
 
     pub description: Option<String>,
 
@@ -242,7 +242,7 @@ pub struct NodeMetadata {
 
     pub tags: Vec<String>,
 
-    pub attributes: HashMap<String, Option<types::Union3BoolOrIntOrString>>,
+    pub attributes: std::collections::HashMap<String, Option<types::Union3BoolOrIntOrString>>,
 }
 
 /// Streaming variant of PrimaryData.
@@ -250,7 +250,7 @@ pub struct NodeMetadata {
 pub struct PrimaryData {
     pub values: Vec<types::Union3FloatOrIntOrString>,
 
-    pub mappings: HashMap<String, HashMap<String, String>>,
+    pub mappings: std::collections::HashMap<String, std::collections::HashMap<String, String>>,
 
     pub flags: Vec<bool>,
 }
@@ -260,7 +260,7 @@ pub struct PrimaryData {
 pub struct Record {
     pub id: Option<i64>,
 
-    pub data: HashMap<String, Option<types::Union3BoolOrIntOrString>>,
+    pub data: std::collections::HashMap<String, Option<types::Union3BoolOrIntOrString>>,
 
     pub related: Option<Vec<Box<Record>>>,
 }
@@ -296,7 +296,7 @@ pub struct Rule {
 pub struct SecondaryData {
     pub records: Vec<Record>,
 
-    pub index: HashMap<String, Record>,
+    pub index: std::collections::HashMap<String, Record>,
 }
 
 /// Streaming variant of Setting.
@@ -306,7 +306,7 @@ pub struct Setting {
 
     pub value: Option<types::Union3BoolOrIntOrString>,
 
-    pub metadata: Option<HashMap<String, String>>,
+    pub metadata: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Streaming variant of SimpleCondition.
@@ -324,7 +324,7 @@ pub struct SimpleCondition {
 pub struct Success {
     pub r#type: Option<String>,
 
-    pub data: HashMap<String, String>,
+    pub data: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of TertiaryData.
@@ -332,7 +332,7 @@ pub struct Success {
 pub struct TertiaryData {
     pub raw: Option<String>,
 
-    pub parsed: Option<HashMap<String, String>>,
+    pub parsed: Option<std::collections::HashMap<String, String>>,
 
     pub valid: Option<bool>,
 }
@@ -344,7 +344,7 @@ pub struct TextWidget {
 
     pub format: Option<types::Union3KhtmlOrKmarkdownOrKplain>,
 
-    pub style: HashMap<String, String>,
+    pub style: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of UltraComplex.
@@ -368,7 +368,7 @@ pub struct User {
 
     pub profile: Option<UserProfile>,
 
-    pub settings: HashMap<String, Setting>,
+    pub settings: std::collections::HashMap<String, Setting>,
 }
 
 /// Streaming variant of UserProfile.
@@ -404,7 +404,7 @@ pub struct Variant {
 
     pub stock: Option<i64>,
 
-    pub options: HashMap<String, String>,
+    pub options: std::collections::HashMap<String, String>,
 }
 
 /// Streaming variant of Widget.

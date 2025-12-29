@@ -20,6 +20,12 @@ pub struct Admin {
     pub r#type: String,
 }
 
+impl AsRef<Admin> for Admin {
+    fn as_ref(&self) -> &Admin {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ApiError {
     pub status: String,
@@ -27,6 +33,12 @@ pub struct ApiError {
     pub message: String,
 
     pub code: i64,
+}
+
+impl AsRef<ApiError> for ApiError {
+    fn as_ref(&self) -> &ApiError {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -38,11 +50,23 @@ pub struct ApiPending {
     pub eta: Option<i64>,
 }
 
+impl AsRef<ApiPending> for ApiPending {
+    fn as_ref(&self) -> &ApiPending {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ApiSuccess {
     pub status: String,
 
-    pub data: HashMap<String, String>,
+    pub data: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<ApiSuccess> for ApiSuccess {
+    fn as_ref(&self) -> &ApiSuccess {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -54,6 +78,12 @@ pub struct Bird {
     pub wingspan: Option<f64>,
 }
 
+impl AsRef<Bird> for Bird {
+    fn as_ref(&self) -> &Bird {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Cat {
     pub species: String,
@@ -63,11 +93,23 @@ pub struct Cat {
     pub lives: i64,
 }
 
+impl AsRef<Cat> for Cat {
+    fn as_ref(&self) -> &Cat {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Circle {
     pub shape: String,
 
     pub radius: f64,
+}
+
+impl AsRef<Circle> for Circle {
+    fn as_ref(&self) -> &Circle {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -83,6 +125,12 @@ pub struct ComplexUnions {
     pub multiTypeResult: Union3ErrorOrSuccessOrWarning,
 }
 
+impl AsRef<ComplexUnions> for ComplexUnions {
+    fn as_ref(&self) -> &ComplexUnions {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DataResponse {
     pub data: String,
@@ -90,6 +138,12 @@ pub struct DataResponse {
     pub timestamp: i64,
 
     pub status: String,
+}
+
+impl AsRef<DataResponse> for DataResponse {
+    fn as_ref(&self) -> &DataResponse {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -101,6 +155,12 @@ pub struct DiscriminatedUnions {
     pub response: Union3ApiErrorOrApiPendingOrApiSuccess,
 }
 
+impl AsRef<DiscriminatedUnions> for DiscriminatedUnions {
+    fn as_ref(&self) -> &DiscriminatedUnions {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Dog {
     pub species: String,
@@ -108,6 +168,12 @@ pub struct Dog {
     pub breed: String,
 
     pub goodBoy: bool,
+}
+
+impl AsRef<Dog> for Dog {
+    fn as_ref(&self) -> &Dog {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -121,6 +187,12 @@ pub struct Error {
     pub details: Option<String>,
 }
 
+impl AsRef<Error> for Error {
+    fn as_ref(&self) -> &Error {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ErrorResponse {
     pub error: String,
@@ -128,6 +200,12 @@ pub struct ErrorResponse {
     pub code: i64,
 
     pub status: String,
+}
+
+impl AsRef<ErrorResponse> for ErrorResponse {
+    fn as_ref(&self) -> &ErrorResponse {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -143,6 +221,12 @@ pub struct PrimitiveUnions {
     pub anyPrimitive: Union4BoolOrFloatOrIntOrString,
 }
 
+impl AsRef<PrimitiveUnions> for PrimitiveUnions {
+    fn as_ref(&self) -> &PrimitiveUnions {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Product {
     pub id: i64,
@@ -154,6 +238,12 @@ pub struct Product {
     pub r#type: String,
 }
 
+impl AsRef<Product> for Product {
+    fn as_ref(&self) -> &Product {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Rectangle {
     pub shape: String,
@@ -163,6 +253,12 @@ pub struct Rectangle {
     pub height: f64,
 }
 
+impl AsRef<Rectangle> for Rectangle {
+    fn as_ref(&self) -> &Rectangle {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct RecursiveUnion {
     pub value: Union3IntOrRecursiveUnionOrString,
@@ -170,11 +266,23 @@ pub struct RecursiveUnion {
     pub children: Vec<Union2RecursiveUnionOrString>,
 }
 
+impl AsRef<RecursiveUnion> for RecursiveUnion {
+    fn as_ref(&self) -> &RecursiveUnion {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Result {
     pub value: Union3FloatOrIntOrString,
 
-    pub metadata: HashMap<String, String>,
+    pub metadata: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<Result> for Result {
+    fn as_ref(&self) -> &Result {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -183,7 +291,13 @@ pub struct Success {
 
     pub message: String,
 
-    pub data: HashMap<String, String>,
+    pub data: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<Success> for Success {
+    fn as_ref(&self) -> &Success {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -193,6 +307,12 @@ pub struct Triangle {
     pub base: f64,
 
     pub height: f64,
+}
+
+impl AsRef<Triangle> for Triangle {
+    fn as_ref(&self) -> &Triangle {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -206,6 +326,12 @@ pub struct UnionArrays {
     pub nestedUnionArray: Vec<Union2ListIntOrString>,
 }
 
+impl AsRef<UnionArrays> for UnionArrays {
+    fn as_ref(&self) -> &UnionArrays {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct User {
     pub id: i64,
@@ -215,6 +341,12 @@ pub struct User {
     pub r#type: String,
 }
 
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Warning {
     pub r#type: String,
@@ -222,4 +354,10 @@ pub struct Warning {
     pub message: String,
 
     pub level: i64,
+}
+
+impl AsRef<Warning> for Warning {
+    fn as_ref(&self) -> &Warning {
+        self
+    }
 }

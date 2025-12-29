@@ -23,3 +23,9 @@ pub enum TestEnum {
 
     Bored,
 }
+
+impl AsRef<TestEnum> for TestEnum {
+    fn as_ref(&self) -> &TestEnum {
+        self
+    }
+}

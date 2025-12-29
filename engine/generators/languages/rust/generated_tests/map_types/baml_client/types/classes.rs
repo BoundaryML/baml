@@ -11,15 +11,21 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct ComplexMaps {
-    pub userMap: HashMap<String, User>,
+    pub userMap: std::collections::HashMap<String, User>,
 
-    pub productMap: HashMap<String, Product>,
+    pub productMap: std::collections::HashMap<String, Product>,
 
-    pub nestedMap: HashMap<String, HashMap<String, String>>,
+    pub nestedMap: std::collections::HashMap<String, std::collections::HashMap<String, String>>,
 
-    pub arrayMap: HashMap<String, Vec<i64>>,
+    pub arrayMap: std::collections::HashMap<String, Vec<i64>>,
 
-    pub mapArray: Vec<HashMap<String, String>>,
+    pub mapArray: Vec<std::collections::HashMap<String, String>>,
+}
+
+impl AsRef<ComplexMaps> for ComplexMaps {
+    fn as_ref(&self) -> &ComplexMaps {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -31,39 +37,66 @@ pub struct Config {
     pub debug: bool,
 }
 
+impl AsRef<Config> for Config {
+    fn as_ref(&self) -> &Config {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct EdgeCaseMaps {
-    pub emptyMap: HashMap<String, String>,
+    pub emptyMap: std::collections::HashMap<String, String>,
 
-    pub nullableValues: HashMap<String, Option<String>>,
+    pub nullableValues: std::collections::HashMap<String, Option<String>>,
 
-    pub optionalValues: HashMap<String, Option<String>>,
+    pub optionalValues: std::collections::HashMap<String, Option<String>>,
 
-    pub unionValues: HashMap<String, Union3BoolOrIntOrString>,
+    pub unionValues: std::collections::HashMap<String, Union3BoolOrIntOrString>,
+}
+
+impl AsRef<EdgeCaseMaps> for EdgeCaseMaps {
+    fn as_ref(&self) -> &EdgeCaseMaps {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct MixedKeyMaps {
-    pub stringIntMap: HashMap<String, i64>,
+    pub stringIntMap: std::collections::HashMap<String, i64>,
 
-    pub intStringMap: HashMap<String, String>,
+    pub intStringMap: std::collections::HashMap<String, String>,
 
-    pub enumMap: HashMap<String, String>,
+    pub enumMap: std::collections::HashMap<String, String>,
 
-    pub literalMap: HashMap<String, Config>,
+    pub literalMap: std::collections::HashMap<String, Config>,
+}
+
+impl AsRef<MixedKeyMaps> for MixedKeyMaps {
+    fn as_ref(&self) -> &MixedKeyMaps {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct NestedMaps {
-    pub simple: HashMap<String, String>,
+    pub simple: std::collections::HashMap<String, String>,
 
-    pub oneLevelNested: HashMap<String, HashMap<String, i64>>,
+    pub oneLevelNested: std::collections::HashMap<String, std::collections::HashMap<String, i64>>,
 
-    pub twoLevelNested: HashMap<String, HashMap<String, HashMap<String, bool>>>,
+    pub twoLevelNested: std::collections::HashMap<
+        String,
+        std::collections::HashMap<String, std::collections::HashMap<String, bool>>,
+    >,
 
-    pub mapOfArrays: HashMap<String, Vec<String>>,
+    pub mapOfArrays: std::collections::HashMap<String, Vec<String>>,
 
-    pub mapOfMaps: HashMap<String, HashMap<String, f64>>,
+    pub mapOfMaps: std::collections::HashMap<String, std::collections::HashMap<String, f64>>,
+}
+
+impl AsRef<NestedMaps> for NestedMaps {
+    fn as_ref(&self) -> &NestedMaps {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -77,17 +110,29 @@ pub struct Product {
     pub tags: Vec<String>,
 }
 
+impl AsRef<Product> for Product {
+    fn as_ref(&self) -> &Product {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct SimpleMaps {
-    pub stringToString: HashMap<String, String>,
+    pub stringToString: std::collections::HashMap<String, String>,
 
-    pub stringToInt: HashMap<String, i64>,
+    pub stringToInt: std::collections::HashMap<String, i64>,
 
-    pub stringToFloat: HashMap<String, f64>,
+    pub stringToFloat: std::collections::HashMap<String, f64>,
 
-    pub stringToBool: HashMap<String, bool>,
+    pub stringToBool: std::collections::HashMap<String, bool>,
 
-    pub intToString: HashMap<String, String>,
+    pub intToString: std::collections::HashMap<String, String>,
+}
+
+impl AsRef<SimpleMaps> for SimpleMaps {
+    fn as_ref(&self) -> &SimpleMaps {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
@@ -99,4 +144,10 @@ pub struct User {
     pub email: String,
 
     pub active: bool,
+}
+
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
 }

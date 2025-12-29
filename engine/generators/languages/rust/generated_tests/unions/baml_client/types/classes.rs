@@ -22,7 +22,19 @@ pub struct ExistingSystemComponent {
     pub explanation: String,
 }
 
+impl AsRef<ExistingSystemComponent> for ExistingSystemComponent {
+    fn as_ref(&self) -> &ExistingSystemComponent {
+        self
+    }
+}
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct UseMyUnion {
     pub u: Option<Union3IntOrRecursive1OrString>,
+}
+
+impl AsRef<UseMyUnion> for UseMyUnion {
+    fn as_ref(&self) -> &UseMyUnion {
+        self
+    }
 }

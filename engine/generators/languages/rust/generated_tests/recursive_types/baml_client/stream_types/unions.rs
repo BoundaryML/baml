@@ -38,7 +38,7 @@ pub enum Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
 
     Float(Option<f64>),
 
-    MapStringKeyJSONValue(Option<HashMap<String, JSON>>),
+    MapStringKeyJSONValue(Option<std::collections::HashMap<String, JSON>>),
 
     ListJSON(Option<Vec<JSON>>),
 }

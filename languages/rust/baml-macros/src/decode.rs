@@ -150,6 +150,14 @@ fn derive_baml_enum_decode(
                 }
             }
         }
+
+        impl #baml_crate::BamlDecode for #type_name {
+            fn baml_decode(
+                holder: &#baml_crate::__internal::CffiValueHolder
+            ) -> ::core::result::Result<Self, #baml_crate::BamlError> {
+                #baml_crate::decode_enum::<Self>(holder)
+            }
+        }
     })
 }
 
