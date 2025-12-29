@@ -59,7 +59,7 @@ macro_rules! test_rs_type {
             let field = class_rust
                 .fields
                 .iter()
-                .find(|f| f.name == field_name)
+                .find(|f| f.name() == field_name)
                 .expect(&format!(
                     "Field '{}' not found in class '{}'",
                     field_name, class_name
@@ -78,7 +78,7 @@ macro_rules! test_rs_type {
             let field = class_rust_stream
                 .fields
                 .iter()
-                .find(|f| f.name == field_name)
+                .find(|f| f.name() == field_name)
                 .expect(&format!(
                     "Field '{}' not found in streaming class '{}'",
                     field_name, class_name

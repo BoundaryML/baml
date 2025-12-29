@@ -11,9 +11,34 @@ pub struct ClassRust {
 
 #[derive(Debug)]
 pub struct FieldRust {
-    pub name: String,
+    name: String,
+    cffi_name: Option<String>,
     pub docstring: Option<String>,
     pub r#type: TypeRust,
+}
+
+impl FieldRust {
+    pub fn new(name: &str, docstring: Option<String>, r#type: TypeRust) -> Self {
+        let safe_name = crate::utils::escape_keyword(&name);
+        Self {
+            cffi_name: if name == safe_name {
+                None
+            } else {
+                Some(name.to_string())
+            },
+            name: safe_name,
+            docstring,
+            r#type,
+        }
+    }
+
+    pub fn cffi_name(&self) -> Option<&str> {
+        self.cffi_name.as_deref()
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 #[derive(Debug)]
@@ -84,6 +109,7 @@ impl ClassRustRendered {
 #[derive(Debug)]
 pub struct FieldRustRendered {
     pub name: String,
+    pub cffi_name: Option<String>,
     pub docstring: Option<String>,
     pub type_str: String,
 }
@@ -92,6 +118,7 @@ impl FieldRustRendered {
     pub fn from_field(field: &FieldRust, pkg: &CurrentRenderPackage) -> Self {
         Self {
             name: field.name.clone(),
+            cffi_name: field.cffi_name.clone(),
             docstring: field.docstring.clone(),
             type_str: field.r#type.serialize_type(pkg),
         }

@@ -27,3 +27,12 @@ pub type Error = baml::BamlError;
 pub type BamlValue = baml::BamlValue<Types, StreamTypes>;
 
 pub use functions::sync::B;
+
+// Re-export media factory functions
+pub use runtime::{
+    new_audio_from_base64, new_audio_from_url, new_image_from_base64, new_image_from_url,
+    new_pdf_from_base64, new_pdf_from_url, new_video_from_base64, new_video_from_url,
+};
+
+// Re-export collector factory function
+pub use runtime::new_collector;

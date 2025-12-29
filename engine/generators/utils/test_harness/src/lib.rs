@@ -252,6 +252,11 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                     let mut cmd = Command::new("cargo");
                     cmd.args(vec!["test", "-v"]);
                     cmd.current_dir(&self.src_dir);
+                    cmd.env(
+                        "OPENAI_API_KEY",
+                        std::env::var("OPENAI_API_KEY")
+                            .unwrap_or_else(|_| "$OPENAI_API_KEY_NOT_SET".to_string()),
+                    );
                     cmd.env("BAML_LIBRARY_PATH", &dylib_path);
                     cmd.env("RUSTFLAGS", "-Awarnings");
                     run_and_stream(&mut cmd)?;

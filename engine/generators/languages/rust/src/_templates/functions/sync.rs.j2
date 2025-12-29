@@ -14,7 +14,7 @@ pub static B: BamlClient = BamlClient { options: None };
 macro_rules! baml_function {
     ($name:ident($($param:ident : $ptype:ty),* $(,)?) -> $ret:ty) => {
         pub fn $name(&self, $($param: $ptype),*) -> Result<$ret, BamlError> {
-            let args = self.options.as_ref().map(|o| o.to_baml_args()).unwrap_or_default()
+            let args = self.options.as_ref().unwrap_or(&FunctionOptions::default()).to_baml_args()
                 $(.arg(stringify!($param), $param.baml_encode()))*;
             let result: $ret = get_runtime().call_function(stringify!($name), &args)?;
             Ok(result)

@@ -15,6 +15,7 @@ pub struct ExistingSystemComponent {
 
     pub name: String,
 
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub category: Union2KresourceOrKservice,

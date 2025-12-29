@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Action {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub parameters: std::collections::HashMap<String, Union3BoolOrIntOrString>,
@@ -28,6 +29,7 @@ impl AsRef<Action> for Action {
 pub struct Asset {
     pub id: i64,
 
+    #[baml(name = "type")]
     pub r#type: Union3KaudioOrKdocumentOrKimage,
 
     pub metadata: AssetMetadata,
@@ -92,6 +94,7 @@ impl AsRef<ComplexData> for ComplexData {
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Condition {
+    #[baml(name = "type")]
     pub r#type: Union3KandOrKnotOrKor,
 
     pub conditions: Vec<Union2ConditionOrSimpleCondition>,
@@ -137,6 +140,7 @@ impl AsRef<ContainerWidget> for ContainerWidget {
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct DataObject {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub value: std::collections::HashMap<String, String>,
@@ -180,6 +184,7 @@ impl AsRef<Environment> for Environment {
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Error {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub message: String,
@@ -306,6 +311,7 @@ impl AsRef<KitchenSink> for KitchenSink {
 pub struct Node {
     pub id: i64,
 
+    #[baml(name = "type")]
     pub r#type: Union2KbranchOrKleaf,
 
     pub value: Union4IntOrListNodeOrMapStringKeyNodeValueOrString,
@@ -447,6 +453,7 @@ impl AsRef<SimpleCondition> for SimpleCondition {
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Success {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub data: std::collections::HashMap<String, String>,
@@ -575,6 +582,7 @@ impl AsRef<Variant> for Variant {
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Widget {
+    #[baml(name = "type")]
     pub r#type: Union4KbuttonOrKcontainerOrKimageOrKtext,
 
     pub button: Option<ButtonWidget>,

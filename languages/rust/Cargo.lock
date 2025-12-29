@@ -28,6 +28,7 @@ dependencies = [
  "baml-ffi-x86_64-unknown-linux-gnu",
  "baml-macros",
  "libc",
+ "once_cell",
  "prost",
  "prost-build",
  "serde_json",

@@ -52,13 +52,27 @@ impl FunctionOptions {
         self
     }
 
+    /// Add a collector to gather telemetry from this call.
+    pub fn with_collector(mut self, collector: &baml::Collector) -> Self {
+        self.collectors
+            .get_or_insert_with(Vec::new)
+            .push(collector.clone());
+        self
+    }
+
     pub(super) fn to_baml_args(&self) -> baml::FunctionArgs {
         let mut args = baml::FunctionArgs::new();
+        for (env, values) in std::env::vars() {
+            // First, add all environment variables from the system.
+            args = args.with_env(env.as_str(), values.as_str());
+        }
         if let Some(env) = &self.env {
+            // Then, add all environment variables from the function options.
             for (key, value) in env {
                 args = args.with_env(key, value);
             }
         }
+
         if let Some(tags) = &self.tags {
             for (key, value) in tags {
                 args = args.with_tag(key, value);
@@ -88,4 +102,57 @@ pub(super) fn get_runtime() -> &'static baml::BamlRuntime {
         )
         .unwrap()
     })
+}
+
+// =============================================================================
+// Media Factory Functions
+// =============================================================================
+
+/// Create an Image from a URL.
+pub fn new_image_from_url(url: &str, mime_type: Option<&str>) -> baml::Image {
+    get_runtime().new_image_from_url(url, mime_type)
+}
+
+/// Create an Image from base64-encoded data.
+pub fn new_image_from_base64(base64: &str, mime_type: Option<&str>) -> baml::Image {
+    get_runtime().new_image_from_base64(base64, mime_type)
+}
+
+/// Create Audio from a URL.
+pub fn new_audio_from_url(url: &str, mime_type: Option<&str>) -> baml::Audio {
+    get_runtime().new_audio_from_url(url, mime_type)
+}
+
+/// Create Audio from base64-encoded data.
+pub fn new_audio_from_base64(base64: &str, mime_type: Option<&str>) -> baml::Audio {
+    get_runtime().new_audio_from_base64(base64, mime_type)
+}
+
+/// Create a PDF from a URL.
+pub fn new_pdf_from_url(url: &str, mime_type: Option<&str>) -> baml::Pdf {
+    get_runtime().new_pdf_from_url(url, mime_type)
+}
+
+/// Create a PDF from base64-encoded data.
+pub fn new_pdf_from_base64(base64: &str, mime_type: Option<&str>) -> baml::Pdf {
+    get_runtime().new_pdf_from_base64(base64, mime_type)
+}
+
+/// Create a Video from a URL.
+pub fn new_video_from_url(url: &str, mime_type: Option<&str>) -> baml::Video {
+    get_runtime().new_video_from_url(url, mime_type)
+}
+
+/// Create a Video from base64-encoded data.
+pub fn new_video_from_base64(base64: &str, mime_type: Option<&str>) -> baml::Video {
+    get_runtime().new_video_from_base64(base64, mime_type)
+}
+
+// =============================================================================
+// Collector Factory Functions
+// =============================================================================
+
+/// Create a new collector for gathering telemetry from function calls.
+pub fn new_collector(name: &str) -> baml::Collector {
+    get_runtime().new_collector(name)
 }

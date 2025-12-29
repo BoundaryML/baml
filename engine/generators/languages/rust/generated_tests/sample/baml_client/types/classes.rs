@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Example {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub a: Checked<i64>,
@@ -26,6 +27,7 @@ impl AsRef<Example> for Example {
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Example2 {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub item: Example,

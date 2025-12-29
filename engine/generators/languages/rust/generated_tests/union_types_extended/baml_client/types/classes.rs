@@ -17,6 +17,7 @@ pub struct Admin {
 
     pub permissions: Vec<String>,
 
+    #[baml(name = "type")]
     pub r#type: String,
 }
 
@@ -178,6 +179,7 @@ impl AsRef<Dog> for Dog {
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Error {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub message: String,
@@ -235,6 +237,7 @@ pub struct Product {
 
     pub price: f64,
 
+    #[baml(name = "type")]
     pub r#type: String,
 }
 
@@ -287,6 +290,7 @@ impl AsRef<Result> for Result {
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Success {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub message: String,
@@ -338,6 +342,7 @@ pub struct User {
 
     pub name: String,
 
+    #[baml(name = "type")]
     pub r#type: String,
 }
 
@@ -349,6 +354,7 @@ impl AsRef<User> for User {
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 pub struct Warning {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub message: String,

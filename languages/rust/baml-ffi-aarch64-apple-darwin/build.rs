@@ -13,6 +13,8 @@ fn main() {
     // During development, the library might not be built yet
     let lib_path = lib_dir.join("libbaml_cffi.a");
     if lib_path.exists() {
+        // tell cargo to rerun this build script if the library changes
+        println!("cargo:rerun-if-changed={}", lib_path.display());
         println!("cargo:rustc-link-search=native={}", lib_dir.display());
         println!("cargo:rustc-link-lib=static=baml_cffi");
     } else {

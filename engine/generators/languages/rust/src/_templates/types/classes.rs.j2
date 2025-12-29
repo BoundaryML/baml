@@ -17,6 +17,9 @@ pub struct {{ class.name }} {
 {% if field.docstring.is_some() %}
     /// {{ field.docstring.as_ref().unwrap() }}
 {% endif %}
+{% if let Some(cffi_name) = field.cffi_name %}
+    #[baml(name = "{{ cffi_name }}")]
+{% endif %}
     pub {{ field.name }}: {{ field.type_str }},
 {% endfor %}
 }

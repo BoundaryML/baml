@@ -62,6 +62,7 @@ impl AsRef<IntegerLiterals> for IntegerLiterals {
 pub struct MixedLiterals {
     pub id: i64,
 
+    #[baml(name = "type")]
     pub r#type: Union3KadminOrKguestOrKuser,
 
     pub level: Union3IntK1OrIntK2OrIntK3,
