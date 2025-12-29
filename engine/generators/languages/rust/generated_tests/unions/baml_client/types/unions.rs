@@ -13,8 +13,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2IntOrListRecursive1 {
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "List__Recursive1")]
     ListRecursive1(Vec<Recursive1>),
 }
 
@@ -34,8 +36,10 @@ impl AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2KresourceOrKservice {
+    #[baml(name = "string_service")]
     Kservice(String),
 
+    #[baml(name = "string_resource")]
     Kresource(String),
 }
 
@@ -55,10 +59,13 @@ impl AsRef<Union2KresourceOrKservice> for Union2KresourceOrKservice {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3IntOrRecursive1OrString {
+    #[baml(name = "Recursive1")]
     Recursive1(Recursive1),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "string")]
     String(String),
 }
 

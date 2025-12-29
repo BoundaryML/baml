@@ -15,6 +15,7 @@ use super::*;
 #[baml(union)]
 pub enum {{ u.name }} {
 {% for variant in u.variants %}
+    #[baml(name = "{{ variant.cffi_name }}")]
     {{ variant.name }}({{ variant.type_str }}),
 {% endfor %}
 }

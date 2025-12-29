@@ -5,8 +5,8 @@ use std::collections::HashMap;
 
 use crate::error::BamlError;
 use crate::proto::baml_cffi_v1::{
-    cffi_value_holder, host_map_entry, host_value, CffiValueHolder, HostListValue, HostMapEntry,
-    HostMapValue, HostValue,
+    CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
+    host_map_entry, host_value,
 };
 
 use super::helpers::variant_name;
@@ -58,11 +58,43 @@ impl<T: BamlDecode> BamlDecode for Vec<T> {
 
 impl<T: BamlDecode> BamlDecode for Option<T> {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
-        // First unwrap any single-pattern union wrappers
-        let holder = unwrap_single_pattern_union(holder);
         match &holder.value {
-            Some(cffi_value_holder::Value::NullValue(_)) | None => Ok(None),
-            _ => Ok(Some(T::baml_decode(&holder)?)),
+            Some(cffi_value_holder::Value::UnionVariantValue(union)) => {
+                // Check variant name - "null" means None
+                if union.value_option_name == "null" {
+                    return Ok(None);
+                }
+
+                // For Option<Union> types: is_optional=true AND is_single_pattern=false
+                // The runtime encodes these as a single flattened UnionVariantValue where:
+                //   - value_option_name is the union variant (e.g., "bool", "int", "string")
+                //   - value is the primitive/inner value
+                // We need to pass the ENTIRE holder to the inner union decoder so it can
+                // extract the variant name and decode properly.
+                if union.is_optional && !union.is_single_pattern {
+                    return Ok(Some(T::baml_decode(holder)?));
+                }
+
+                // For other cases (is_single_pattern=true for optional non-union types),
+                // extract the inner value and decode it.
+                let inner = union
+                    .value
+                    .as_ref()
+                    .map(|b| b.as_ref())
+                    .ok_or_else(|| BamlError::internal(format!(
+                        "Option: union variant missing inner value (name={:?}, variant={}, is_single_pattern={})",
+                        union.name.as_ref().map(|n| &n.name),
+                        union.value_option_name,
+                        union.is_single_pattern,
+                    )))?;
+
+                // Decode the inner value as T
+                Ok(Some(T::baml_decode(inner)?))
+            }
+            other => Err(BamlError::internal(format!(
+                "expected Option<T>, got {:?}",
+                other.as_ref().map(variant_name)
+            ))),
         }
     }
 }

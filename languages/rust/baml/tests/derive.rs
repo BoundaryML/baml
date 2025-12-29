@@ -287,8 +287,11 @@ mod decode {
         #[derive(Debug, Clone, PartialEq, BamlDecode)]
         #[baml(union)]
         enum PrimitiveUnion {
+            #[baml(name = "string")]
             String(String),
+            #[baml(name = "int")]
             Int(i64),
+            #[baml(name = "bool")]
             Bool(bool),
         }
 
@@ -302,7 +305,9 @@ mod decode {
         #[derive(Debug, Clone, PartialEq, BamlDecode)]
         #[baml(union)]
         enum PersonOrString {
+            #[baml(name = "Person")]
             Person(Person),
+            #[baml(name = "string")]
             String(String),
         }
 
@@ -310,7 +315,7 @@ mod decode {
         fn decodes_string_variant_from_union() {
             let holder = make_union_holder(
                 "PrimitiveUnion",
-                "String",
+                "string",
                 make_string_holder("hello"),
             );
 
@@ -322,7 +327,7 @@ mod decode {
         fn decodes_int_variant_from_union() {
             let holder = make_union_holder(
                 "PrimitiveUnion",
-                "Int",
+                "int",
                 make_int_holder(42),
             );
 
@@ -334,7 +339,7 @@ mod decode {
         fn decodes_bool_variant_from_union() {
             let holder = make_union_holder(
                 "PrimitiveUnion",
-                "Bool",
+                "bool",
                 make_bool_holder(true),
             );
 
@@ -364,7 +369,7 @@ mod decode {
         fn decodes_string_variant_in_mixed_union() {
             let holder = make_union_holder(
                 "PersonOrString",
-                "String",
+                "string",
                 make_string_holder("just a string"),
             );
 
@@ -400,7 +405,9 @@ mod combined {
     #[derive(Debug, Clone, PartialEq, BamlEncode, BamlDecode)]
     #[baml(union)]
     enum StringOrInt {
+        #[baml(name = "string")]
         String(String),
+        #[baml(name = "int")]
         Int(i64),
     }
 
@@ -414,7 +421,9 @@ mod combined {
     #[derive(Debug, Clone, PartialEq, BamlEncode, BamlDecode)]
     #[baml(union)]
     enum UserOrString {
+        #[baml(name = "User")]
         User(User),
+        #[baml(name = "string")]
         String(String),
     }
 
@@ -422,7 +431,9 @@ mod combined {
     #[derive(Debug, Clone, PartialEq, BamlEncode, BamlDecode)]
     #[baml(union)]
     enum RecursiveUnion {
+        #[baml(name = "string")]
         Leaf(String),
+        #[baml(name = "RecursiveUnion")]
         Node(Box<RecursiveUnion>),
     }
 
@@ -434,7 +445,7 @@ mod combined {
         assert!(matches!(encoded.value, Some(host_value::Value::StringValue(_))));
 
         // Verify decode works (with runtime-style UnionVariantValue wrapper)
-        let holder = make_union_holder("StringOrInt", "String", make_string_holder("test"));
+        let holder = make_union_holder("StringOrInt", "string", make_string_holder("test"));
         let decoded = StringOrInt::baml_decode(&holder).unwrap();
         assert_eq!(decoded, StringOrInt::String("test".to_string()));
     }
@@ -478,12 +489,12 @@ mod combined {
         // Test decoding a nested structure
         let inner_holder = make_union_holder(
             "RecursiveUnion",
-            "Leaf",
+            "string",
             make_string_holder("inner"),
         );
         let outer_holder = make_union_holder(
             "RecursiveUnion",
-            "Node",
+            "RecursiveUnion",
             inner_holder,
         );
 

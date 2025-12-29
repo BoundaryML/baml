@@ -13,8 +13,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2ConditionOrSimpleCondition {
+    #[baml(name = "Condition")]
     Condition(Box<Condition>),
 
+    #[baml(name = "SimpleCondition")]
     SimpleCondition(SimpleCondition),
 }
 
@@ -34,8 +36,10 @@ impl AsRef<Union2ConditionOrSimpleCondition> for Union2ConditionOrSimpleConditio
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2ErrorOrSuccess {
+    #[baml(name = "Success")]
     Success(Success),
 
+    #[baml(name = "Error")]
     Error(Error),
 }
 
@@ -55,8 +59,10 @@ impl AsRef<Union2ErrorOrSuccess> for Union2ErrorOrSuccess {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2KbranchOrKleaf {
+    #[baml(name = "string_leaf")]
     Kleaf(String),
 
+    #[baml(name = "string_branch")]
     Kbranch(String),
 }
 
@@ -76,8 +82,10 @@ impl AsRef<Union2KbranchOrKleaf> for Union2KbranchOrKleaf {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2KerrorOrKsuccess {
+    #[baml(name = "string_success")]
     Ksuccess(String),
 
+    #[baml(name = "string_error")]
     Kerror(String),
 }
 
@@ -97,10 +105,13 @@ impl AsRef<Union2KerrorOrKsuccess> for Union2KerrorOrKsuccess {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3BoolOrIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "bool")]
     Bool(bool),
 }
 
@@ -120,10 +131,13 @@ impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3DataObjectOrIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "DataObject")]
     DataObject(DataObject),
 }
 
@@ -143,10 +157,13 @@ impl AsRef<Union3DataObjectOrIntOrString> for Union3DataObjectOrIntOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3FloatOrIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "float")]
     Float(f64),
 }
 
@@ -166,10 +183,13 @@ impl AsRef<Union3FloatOrIntOrString> for Union3FloatOrIntOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KandOrKnotOrKor {
+    #[baml(name = "string_and")]
     Kand(String),
 
+    #[baml(name = "string_or")]
     Kor(String),
 
+    #[baml(name = "string_not")]
     Knot(String),
 }
 
@@ -189,10 +209,13 @@ impl AsRef<Union3KandOrKnotOrKor> for Union3KandOrKnotOrKor {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KarchivedOrKdraftOrKpublished {
+    #[baml(name = "string_draft")]
     Kdraft(String),
 
+    #[baml(name = "string_published")]
     Kpublished(String),
 
+    #[baml(name = "string_archived")]
     Karchived(String),
 }
 
@@ -212,10 +235,13 @@ impl AsRef<Union3KarchivedOrKdraftOrKpublished> for Union3KarchivedOrKdraftOrKpu
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KaudioOrKdocumentOrKimage {
+    #[baml(name = "string_image")]
     Kimage(String),
 
+    #[baml(name = "string_audio")]
     Kaudio(String),
 
+    #[baml(name = "string_document")]
     Kdocument(String),
 }
 
@@ -235,10 +261,13 @@ impl AsRef<Union3KaudioOrKdocumentOrKimage> for Union3KaudioOrKdocumentOrKimage 
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KflexOrKgridOrKstack {
+    #[baml(name = "string_flex")]
     Kflex(String),
 
+    #[baml(name = "string_grid")]
     Kgrid(String),
 
+    #[baml(name = "string_stack")]
     Kstack(String),
 }
 
@@ -258,10 +287,13 @@ impl AsRef<Union3KflexOrKgridOrKstack> for Union3KflexOrKgridOrKstack {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KhtmlOrKmarkdownOrKplain {
+    #[baml(name = "string_plain")]
     Kplain(String),
 
+    #[baml(name = "string_markdown")]
     Kmarkdown(String),
 
+    #[baml(name = "string_html")]
     Khtml(String),
 }
 
@@ -281,12 +313,16 @@ impl AsRef<Union3KhtmlOrKmarkdownOrKplain> for Union3KhtmlOrKmarkdownOrKplain {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4BoolOrFloatOrIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "float")]
     Float(f64),
 
+    #[baml(name = "bool")]
     Bool(bool),
 }
 
@@ -306,12 +342,16 @@ impl AsRef<Union4BoolOrFloatOrIntOrString> for Union4BoolOrFloatOrIntOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "List__Node")]
     ListNode(Vec<Node>),
 
+    #[baml(name = "Map__string_Node")]
     MapStringKeyNodeValue(std::collections::HashMap<String, Node>),
 }
 
@@ -333,12 +373,16 @@ impl AsRef<Union4IntOrListNodeOrMapStringKeyNodeValueOrString>
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4KbuttonOrKcontainerOrKimageOrKtext {
+    #[baml(name = "string_button")]
     Kbutton(String),
 
+    #[baml(name = "string_text")]
     Ktext(String),
 
+    #[baml(name = "string_image")]
     Kimage(String),
 
+    #[baml(name = "string_container")]
     Kcontainer(String),
 }
 
@@ -358,14 +402,19 @@ impl AsRef<Union4KbuttonOrKcontainerOrKimageOrKtext> for Union4KbuttonOrKcontain
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
+    #[baml(name = "int_1")]
     IntK1(i64),
 
+    #[baml(name = "int_2")]
     IntK2(i64),
 
+    #[baml(name = "int_3")]
     IntK3(i64),
 
+    #[baml(name = "int_4")]
     IntK4(i64),
 
+    #[baml(name = "int_5")]
     IntK5(i64),
 }
 
@@ -385,14 +434,19 @@ impl AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5> for Union5IntK1OrIntK2OrIntK
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union5KcontainsOrKeqOrKgtOrKltOrKne {
+    #[baml(name = "string_eq")]
     Keq(String),
 
+    #[baml(name = "string_ne")]
     Kne(String),
 
+    #[baml(name = "string_gt")]
     Kgt(String),
 
+    #[baml(name = "string_lt")]
     Klt(String),
 
+    #[baml(name = "string_contains")]
     Kcontains(String),
 }
 

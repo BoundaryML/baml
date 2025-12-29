@@ -13,8 +13,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2IntOrListRecursive1 {
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "List__Recursive1")]
     ListRecursive1(Vec<Recursive1>),
 }
 
@@ -34,10 +36,13 @@ impl AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3IntOrRecursive1OrString {
+    #[baml(name = "Recursive1")]
     Recursive1(Recursive1),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "string")]
     String(String),
 }
 
@@ -57,14 +62,19 @@ impl AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "float")]
     Float(f64),
 
+    #[baml(name = "Map__string_JSON")]
     MapStringKeyJSONValue(std::collections::HashMap<String, JSON>),
 
+    #[baml(name = "List__JSON")]
     ListJSON(Vec<JSON>),
 }
 

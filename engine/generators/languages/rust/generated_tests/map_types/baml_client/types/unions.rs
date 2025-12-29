@@ -13,10 +13,13 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3BoolOrIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "bool")]
     Bool(bool),
 }
 

@@ -43,7 +43,7 @@ use std::ffi::CString;
 // Public API - re-exported through baml_client
 pub use args::FunctionArgs;
 pub use codec::{
-    BamlClass, BamlDecode, BamlEncode, BamlEnum, decode_enum, decode_field, decode_optional_field,
+    BamlClass, BamlDecode, BamlEncode, BamlEnum, decode_enum, decode_field,
     encode_class, encode_enum,
 };
 // New dynamic type exports
@@ -102,18 +102,25 @@ pub mod __internal {
         }
     }
 
-    /// Extract the inner value from a UnionVariantValue.
-    /// Returns an error if the holder is not a UnionVariantValue.
-    pub fn extract_union_variant(holder: &CffiValueHolder) -> Result<&CffiValueHolder, BamlError> {
+    /// Extract the inner value and variant name from a UnionVariantValue.
+    /// Returns (variant_name, inner_value) or an error if the holder is not a UnionVariantValue.
+    pub fn extract_union_variant_with_name<'a>(
+        type_name: &str,
+        holder: &'a CffiValueHolder,
+    ) -> Result<(&'a str, &'a CffiValueHolder), BamlError> {
         match &holder.value {
-            Some(cffi_value_holder::Value::UnionVariantValue(union)) => union
-                .value
-                .as_ref()
-                .map(|b| b.as_ref())
-                .ok_or_else(|| BamlError::internal("union variant missing inner value")),
-            other => Err(BamlError::internal(format!(
-                "expected union variant, got {:?}",
-                other.as_ref().map(variant_name)
+            Some(cffi_value_holder::Value::UnionVariantValue(union)) => {
+                let inner = union
+                    .value
+                    .as_ref()
+                    .map(|b| b.as_ref())
+                    .ok_or_else(|| BamlError::internal("union variant missing inner value"))?;
+                Ok((union.value_option_name.as_str(), inner))
+            }
+            _ => Err(BamlError::internal(format!(
+                "expected union variant of type {}, got {:?}",
+                type_name,
+                holder
             ))),
         }
     }
@@ -154,14 +161,17 @@ pub fn invoke_cli(args: &[&str]) -> i32 {
         .chain(std::iter::once(std::ptr::null())) // null terminator
         .collect();
 
+    #[allow(unsafe_code)]
     unsafe { ffi::invoke_runtime_cli(c_arg_ptrs.as_ptr()) }
 }
 
 /// Get the BAML library version
 pub fn version() -> String {
+    #[allow(unsafe_code)]
     let ptr = unsafe { ffi::version() };
     if ptr.is_null() {
         return "unknown".to_string();
     }
+    #[allow(unsafe_code)]
     unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() }
 }

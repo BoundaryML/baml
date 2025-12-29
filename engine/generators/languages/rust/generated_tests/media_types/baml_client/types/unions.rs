@@ -13,12 +13,16 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4AudioOrImageOrPDFOrVideo {
+    #[baml(name = "image")]
     Image(Image),
 
+    #[baml(name = "audio")]
     Audio(Audio),
 
+    #[baml(name = "pdf")]
     PDF(Pdf),
 
+    #[baml(name = "video")]
     Video(Video),
 }
 

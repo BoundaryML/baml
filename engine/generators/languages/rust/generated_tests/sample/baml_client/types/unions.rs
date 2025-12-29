@@ -13,8 +13,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2ExampleOrExample2 {
+    #[baml(name = "Example")]
     Example(Example),
 
+    #[baml(name = "Example2")]
     Example2(Example2),
 }
 

@@ -13,8 +13,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2BoolOrString {
+    #[baml(name = "bool")]
     Bool(bool),
 
+    #[baml(name = "string")]
     String(String),
 }
 
@@ -34,8 +36,10 @@ impl AsRef<Union2BoolOrString> for Union2BoolOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2DataResponseOrErrorResponse {
+    #[baml(name = "DataResponse")]
     DataResponse(DataResponse),
 
+    #[baml(name = "ErrorResponse")]
     ErrorResponse(ErrorResponse),
 }
 
@@ -55,8 +59,10 @@ impl AsRef<Union2DataResponseOrErrorResponse> for Union2DataResponseOrErrorRespo
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2FloatOrInt {
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "float")]
     Float(f64),
 }
 
@@ -76,8 +82,10 @@ impl AsRef<Union2FloatOrInt> for Union2FloatOrInt {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2FloatOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "float")]
     Float(f64),
 }
 
@@ -97,8 +105,10 @@ impl AsRef<Union2FloatOrString> for Union2FloatOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2IntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 }
 
@@ -118,8 +128,10 @@ impl AsRef<Union2IntOrString> for Union2IntOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2ListIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "List__int")]
     ListInt(Vec<i64>),
 }
 
@@ -139,8 +151,10 @@ impl AsRef<Union2ListIntOrString> for Union2ListIntOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2ProductOrUser {
+    #[baml(name = "User")]
     User(User),
 
+    #[baml(name = "Product")]
     Product(Product),
 }
 
@@ -160,8 +174,10 @@ impl AsRef<Union2ProductOrUser> for Union2ProductOrUser {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2RecursiveUnionOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "RecursiveUnion")]
     RecursiveUnion(Box<RecursiveUnion>),
 }
 
@@ -181,10 +197,13 @@ impl AsRef<Union2RecursiveUnionOrString> for Union2RecursiveUnionOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3AdminOrProductOrUser {
+    #[baml(name = "User")]
     User(User),
 
+    #[baml(name = "Product")]
     Product(Product),
 
+    #[baml(name = "Admin")]
     Admin(Admin),
 }
 
@@ -204,10 +223,13 @@ impl AsRef<Union3AdminOrProductOrUser> for Union3AdminOrProductOrUser {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3ApiErrorOrApiPendingOrApiSuccess {
+    #[baml(name = "ApiSuccess")]
     ApiSuccess(ApiSuccess),
 
+    #[baml(name = "ApiError")]
     ApiError(ApiError),
 
+    #[baml(name = "ApiPending")]
     ApiPending(ApiPending),
 }
 
@@ -227,10 +249,13 @@ impl AsRef<Union3ApiErrorOrApiPendingOrApiSuccess> for Union3ApiErrorOrApiPendin
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3BirdOrCatOrDog {
+    #[baml(name = "Dog")]
     Dog(Dog),
 
+    #[baml(name = "Cat")]
     Cat(Cat),
 
+    #[baml(name = "Bird")]
     Bird(Bird),
 }
 
@@ -250,10 +275,13 @@ impl AsRef<Union3BirdOrCatOrDog> for Union3BirdOrCatOrDog {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3CircleOrRectangleOrTriangle {
+    #[baml(name = "Circle")]
     Circle(Circle),
 
+    #[baml(name = "Rectangle")]
     Rectangle(Rectangle),
 
+    #[baml(name = "Triangle")]
     Triangle(Triangle),
 }
 
@@ -273,10 +301,13 @@ impl AsRef<Union3CircleOrRectangleOrTriangle> for Union3CircleOrRectangleOrTrian
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3ErrorOrSuccessOrWarning {
+    #[baml(name = "Success")]
     Success(Success),
 
+    #[baml(name = "Warning")]
     Warning(Warning),
 
+    #[baml(name = "Error")]
     Error(Error),
 }
 
@@ -296,10 +327,13 @@ impl AsRef<Union3ErrorOrSuccessOrWarning> for Union3ErrorOrSuccessOrWarning {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3FloatOrIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "float")]
     Float(f64),
 }
 
@@ -319,10 +353,13 @@ impl AsRef<Union3FloatOrIntOrString> for Union3FloatOrIntOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3IntOrRecursiveUnionOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "RecursiveUnion")]
     RecursiveUnion(Box<RecursiveUnion>),
 }
 
@@ -342,12 +379,16 @@ impl AsRef<Union3IntOrRecursiveUnionOrString> for Union3IntOrRecursiveUnionOrStr
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4BoolOrFloatOrIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "float")]
     Float(f64),
 
+    #[baml(name = "bool")]
     Bool(bool),
 }
 

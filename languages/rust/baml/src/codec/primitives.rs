@@ -1,7 +1,8 @@
 //! Primitive type BamlDecode and BamlEncode implementations.
 
+use crate::__internal::{cffi_field_type_literal};
 use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{cffi_value_holder, host_value, CffiValueHolder, HostValue};
+use crate::proto::baml_cffi_v1::{CffiValueHolder, HostValue, cffi_value_holder, host_value};
 
 use super::helpers::variant_name;
 use super::traits::{BamlDecode, BamlEncode};
@@ -14,6 +15,13 @@ impl BamlDecode for String {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
         match &holder.value {
             Some(cffi_value_holder::Value::StringValue(s)) => Ok(s.clone()),
+            Some(cffi_value_holder::Value::LiteralValue(l)) => match &l.literal {
+                Some(cffi_field_type_literal::Literal::StringLiteral(s)) => Ok(s.value.clone()),
+                _ => Err(BamlError::internal(format!(
+                    "expected string, got {:?}",
+                    holder.value.as_ref().map(variant_name)
+                ))),
+            },
             other => Err(BamlError::internal(format!(
                 "expected string, got {:?}",
                 other.as_ref().map(variant_name)
@@ -26,6 +34,13 @@ impl BamlDecode for i64 {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
         match &holder.value {
             Some(cffi_value_holder::Value::IntValue(i)) => Ok(*i),
+            Some(cffi_value_holder::Value::LiteralValue(l)) => match &l.literal {
+                Some(cffi_field_type_literal::Literal::IntLiteral(i)) => Ok(i.value),
+                _ => Err(BamlError::internal(format!(
+                    "expected int, got {:?}",
+                    holder.value.as_ref().map(variant_name)
+                ))),
+            },
             other => Err(BamlError::internal(format!(
                 "expected int, got {:?}",
                 other.as_ref().map(variant_name)
@@ -50,6 +65,13 @@ impl BamlDecode for bool {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
         match &holder.value {
             Some(cffi_value_holder::Value::BoolValue(b)) => Ok(*b),
+            Some(cffi_value_holder::Value::LiteralValue(l)) => match &l.literal {
+                Some(cffi_field_type_literal::Literal::BoolLiteral(b)) => Ok(b.value),
+                _ => Err(BamlError::internal(format!(
+                    "expected bool, got {:?}",
+                    holder.value.as_ref().map(variant_name)
+                ))),
+            },
             other => Err(BamlError::internal(format!(
                 "expected bool, got {:?}",
                 other.as_ref().map(variant_name)

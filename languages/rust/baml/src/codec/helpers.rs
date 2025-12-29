@@ -82,7 +82,13 @@ pub fn decode_field<T: BamlDecode>(
     for entry in fields {
         if entry.key == field_name {
             return match &entry.value {
-                Some(holder) => T::baml_decode(holder),
+                Some(holder) => match T::baml_decode(holder) {
+                    Ok(value) => Ok(value),
+                    Err(e) => Err(BamlError::internal(format!(
+                        "error decoding field '{}': {}",
+                        field_name, e
+                    ))),
+                },
                 None => Err(BamlError::internal(format!(
                     "field '{}' has no value",
                     field_name
@@ -94,23 +100,4 @@ pub fn decode_field<T: BamlDecode>(
         "missing field '{}'",
         field_name
     )))
-}
-
-/// Helper for decoding an optional field from a class's fields map
-pub fn decode_optional_field<T: BamlDecode>(
-    fields: &[CffiMapEntry],
-    field_name: &str,
-) -> Result<Option<T>, BamlError> {
-    for entry in fields {
-        if entry.key == field_name {
-            return match &entry.value {
-                Some(holder) => match &holder.value {
-                    Some(cffi_value_holder::Value::NullValue(_)) | None => Ok(None),
-                    _ => Ok(Some(T::baml_decode(holder)?)),
-                },
-                None => Ok(None),
-            };
-        }
-    }
-    Ok(None)
 }

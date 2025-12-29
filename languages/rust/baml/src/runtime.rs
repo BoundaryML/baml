@@ -18,7 +18,9 @@ pub struct BamlRuntime {
 }
 
 // Safety: The runtime is thread-safe internally (protected by Rust's runtime)
+#[allow(unsafe_code)]
 unsafe impl Send for BamlRuntime {}
+#[allow(unsafe_code)]
 unsafe impl Sync for BamlRuntime {}
 
 pub type StaticRuntimeType = once_cell::sync::Lazy<BamlRuntime>;
@@ -49,6 +51,7 @@ impl BamlRuntime {
         let env_cstr = CString::new(env_json)
             .map_err(|_| BamlError::internal("invalid env json (contains null byte)"))?;
 
+        #[allow(unsafe_code)]
         let ptr = unsafe {
             ffi::create_baml_runtime(dir_cstr.as_ptr(), files_cstr.as_ptr(), env_cstr.as_ptr())
         };
@@ -72,6 +75,7 @@ impl BamlRuntime {
 
         let (id, receiver) = callbacks::create_callback();
 
+        #[allow(unsafe_code)]
         let error_ptr = unsafe {
             ffi::call_function_from_c(
                 self.ptr,
@@ -85,6 +89,7 @@ impl BamlRuntime {
         // Check for immediate error
         if !error_ptr.is_null() {
             callbacks::remove_callback(id);
+            #[allow(unsafe_code)]
             let error_msg = unsafe {
                 let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
                 cstr.to_string_lossy().into_owned()
@@ -97,6 +102,7 @@ impl BamlRuntime {
             Ok(callbacks::CallbackResult::Final(data)) => {
                 let holder = CffiValueHolder::decode(&data[..])
                     .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
+                println!("holder: {:?}", holder);
                 T::baml_decode(&holder)
             }
             Ok(callbacks::CallbackResult::Partial(_)) => Err(BamlError::internal(
@@ -123,6 +129,7 @@ impl BamlRuntime {
 
         let (id, receiver) = callbacks::create_callback();
 
+        #[allow(unsafe_code)]
         let error_ptr = unsafe {
             ffi::call_function_stream_from_c(
                 self.ptr,
@@ -135,6 +142,7 @@ impl BamlRuntime {
 
         if !error_ptr.is_null() {
             callbacks::remove_callback(id);
+            #[allow(unsafe_code)]
             let error_msg = unsafe {
                 let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
                 cstr.to_string_lossy().into_owned()
@@ -220,6 +228,7 @@ impl BamlRuntime {
 
 impl Drop for BamlRuntime {
     fn drop(&mut self) {
+        #[allow(unsafe_code)]
         unsafe {
             ffi::destroy_baml_runtime(self.ptr);
         }

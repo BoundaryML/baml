@@ -13,8 +13,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2IntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 }
 
@@ -34,8 +36,10 @@ impl AsRef<Union2IntOrString> for Union2IntOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2ProductOrUser {
+    #[baml(name = "User")]
     User(User),
 
+    #[baml(name = "Product")]
     Product(Product),
 }
 

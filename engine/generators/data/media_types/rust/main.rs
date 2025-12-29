@@ -3,8 +3,8 @@
 
 mod baml_client;
 
-use baml_client::B;
 use baml_client::types::*;
+use baml_client::B;
 
 fn main() {
     println!("Test - baml_client module loaded successfully!");
@@ -21,7 +21,7 @@ mod tests {
     fn test_image_input() {
         // Create an image from URL
         let image_media = new_image_from_url(
-            "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
+            "https://drive.google.com/uc?id=1NhoSIIHYveygPytfCroGaAHwJ5agD5a6",
             None,
         );
 
@@ -44,10 +44,8 @@ mod tests {
     #[ignore] // TODO: Requires ClientRegistry support for specifying audio-capable model
     fn test_audio_input() {
         // Create audio from URL
-        let audio_media = new_audio_from_url(
-            "https://download.samplelib.com/mp3/sample-3s.mp3",
-            None,
-        );
+        let audio_media =
+            new_audio_from_url("https://download.samplelib.com/mp3/sample-3s.mp3", None);
 
         // Wrap in union type
         let media_union = Union4AudioOrImageOrPDFOrVideo::Audio(audio_media);
@@ -72,7 +70,7 @@ mod tests {
     fn test_pdf_input() {
         // Create PDF from URL
         let pdf_media = new_pdf_from_url(
-            "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+            "https://example-files.online-convert.com/document/pdf/example.pdf",
             None,
         );
 
@@ -95,10 +93,7 @@ mod tests {
     #[ignore] // TODO: Requires ClientRegistry support for specifying video-capable model
     fn test_video_input() {
         // Create video from URL (YouTube)
-        let video_media = new_video_from_url(
-            "https://www.youtube.com/watch?v=1O0yazhqaxs",
-            None,
-        );
+        let video_media = new_video_from_url("https://www.youtube.com/watch?v=1O0yazhqaxs", None);
 
         // Wrap in union type
         let media_union = Union4AudioOrImageOrPDFOrVideo::Video(video_media);
@@ -123,7 +118,7 @@ mod tests {
     fn test_image_array_input() {
         // Create two images from URLs
         let image1 = new_image_from_url(
-            "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
+            "https://drive.google.com/uc?id=1NhoSIIHYveygPytfCroGaAHwJ5agD5a6",
             None,
         );
 

@@ -13,10 +13,13 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3BoolOrIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "bool")]
     Bool(bool),
 }
 
@@ -36,10 +39,13 @@ impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3ProductOrTagOrUser {
+    #[baml(name = "User")]
     User(User),
 
+    #[baml(name = "Product")]
     Product(Product),
 
+    #[baml(name = "Tag")]
     Tag(Tag),
 }
 
@@ -59,12 +65,16 @@ impl AsRef<Union3ProductOrTagOrUser> for Union3ProductOrTagOrUser {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4BoolOrFloatOrIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "float")]
     Float(f64),
 
+    #[baml(name = "bool")]
     Bool(bool),
 }
 

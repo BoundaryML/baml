@@ -13,8 +13,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2KdarkOrKlight {
+    #[baml(name = "string_light")]
     Klight(String),
 
+    #[baml(name = "string_dark")]
     Kdark(String),
 }
 
@@ -34,8 +36,10 @@ impl AsRef<Union2KdarkOrKlight> for Union2KdarkOrKlight {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2KgridOrKlist {
+    #[baml(name = "string_grid")]
     Kgrid(String),
 
+    #[baml(name = "string_list")]
     Klist(String),
 }
 
@@ -55,10 +59,13 @@ impl AsRef<Union2KgridOrKlist> for Union2KgridOrKlist {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3BoolOrIntOrString {
+    #[baml(name = "string")]
     String(String),
 
+    #[baml(name = "int")]
     Int(i64),
 
+    #[baml(name = "bool")]
     Bool(bool),
 }
 
@@ -78,10 +85,13 @@ impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KdailyOrKimmediateOrKweekly {
+    #[baml(name = "string_immediate")]
     Kimmediate(String),
 
+    #[baml(name = "string_daily")]
     Kdaily(String),
 
+    #[baml(name = "string_weekly")]
     Kweekly(String),
 }
 
@@ -101,10 +111,13 @@ impl AsRef<Union3KdailyOrKimmediateOrKweekly> for Union3KdailyOrKimmediateOrKwee
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KdoneOrKin_progressOrKtodo {
+    #[baml(name = "string_todo")]
     Ktodo(String),
 
+    #[baml(name = "string_in_progress")]
     Kin_progress(String),
 
+    #[baml(name = "string_done")]
     Kdone(String),
 }
 
@@ -124,10 +137,13 @@ impl AsRef<Union3KdoneOrKin_progressOrKtodo> for Union3KdoneOrKin_progressOrKtod
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KfriendsOrKprivateOrKpublic {
+    #[baml(name = "string_public")]
     Kpublic(String),
 
+    #[baml(name = "string_private")]
     Kprivate(String),
 
+    #[baml(name = "string_friends")]
     Kfriends(String),
 }
 
@@ -147,10 +163,13 @@ impl AsRef<Union3KfriendsOrKprivateOrKpublic> for Union3KfriendsOrKprivateOrKpub
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KhighOrKlowOrKmedium {
+    #[baml(name = "string_low")]
     Klow(String),
 
+    #[baml(name = "string_medium")]
     Kmedium(String),
 
+    #[baml(name = "string_high")]
     Khigh(String),
 }
 
@@ -170,12 +189,16 @@ impl AsRef<Union3KhighOrKlowOrKmedium> for Union3KhighOrKlowOrKmedium {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4KactiveOrKcancelledOrKcompletedOrKplanning {
+    #[baml(name = "string_planning")]
     Kplanning(String),
 
+    #[baml(name = "string_active")]
     Kactive(String),
 
+    #[baml(name = "string_completed")]
     Kcompleted(String),
 
+    #[baml(name = "string_cancelled")]
     Kcancelled(String),
 }
 
@@ -197,12 +220,16 @@ impl AsRef<Union4KactiveOrKcancelledOrKcompletedOrKplanning>
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4KenterpriseOrKlargeOrKmediumOrKsmall {
+    #[baml(name = "string_small")]
     Ksmall(String),
 
+    #[baml(name = "string_medium")]
     Kmedium(String),
 
+    #[baml(name = "string_large")]
     Klarge(String),
 
+    #[baml(name = "string_enterprise")]
     Kenterprise(String),
 }
 

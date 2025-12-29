@@ -13,8 +13,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2BoolKFalseOrBoolKTrue {
+    #[baml(name = "bool_true")]
     BoolKTrue(bool),
 
+    #[baml(name = "bool_false")]
     BoolKFalse(bool),
 }
 
@@ -34,10 +36,13 @@ impl AsRef<Union2BoolKFalseOrBoolKTrue> for Union2BoolKFalseOrBoolKTrue {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3IntK1OrIntK2OrIntK3 {
+    #[baml(name = "int_1")]
     IntK1(i64),
 
+    #[baml(name = "int_2")]
     IntK2(i64),
 
+    #[baml(name = "int_3")]
     IntK3(i64),
 }
 
@@ -57,10 +62,13 @@ impl AsRef<Union3IntK1OrIntK2OrIntK3> for Union3IntK1OrIntK2OrIntK3 {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3IntK200OrIntK404OrIntK500 {
+    #[baml(name = "int_200")]
     IntK200(i64),
 
+    #[baml(name = "int_404")]
     IntK404(i64),
 
+    #[baml(name = "int_500")]
     IntK500(i64),
 }
 
@@ -80,10 +88,13 @@ impl AsRef<Union3IntK200OrIntK404OrIntK500> for Union3IntK200OrIntK404OrIntK500 
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KactiveOrKinactiveOrKpending {
+    #[baml(name = "string_active")]
     Kactive(String),
 
+    #[baml(name = "string_inactive")]
     Kinactive(String),
 
+    #[baml(name = "string_pending")]
     Kpending(String),
 }
 
@@ -103,10 +114,13 @@ impl AsRef<Union3KactiveOrKinactiveOrKpending> for Union3KactiveOrKinactiveOrKpe
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KadminOrKguestOrKuser {
+    #[baml(name = "string_user")]
     Kuser(String),
 
+    #[baml(name = "string_admin")]
     Kadmin(String),
 
+    #[baml(name = "string_guest")]
     Kguest(String),
 }
 
@@ -126,10 +140,13 @@ impl AsRef<Union3KadminOrKguestOrKuser> for Union3KadminOrKguestOrKuser {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KdevOrKprodOrKstaging {
+    #[baml(name = "string_dev")]
     Kdev(String),
 
+    #[baml(name = "string_staging")]
     Kstaging(String),
 
+    #[baml(name = "string_prod")]
     Kprod(String),
 }
 
@@ -149,10 +166,13 @@ impl AsRef<Union3KdevOrKprodOrKstaging> for Union3KdevOrKprodOrKstaging {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3KerrorOrKsuccessOrKtimeout {
+    #[baml(name = "string_success")]
     Ksuccess(String),
 
+    #[baml(name = "string_error")]
     Kerror(String),
 
+    #[baml(name = "string_timeout")]
     Ktimeout(String),
 }
 
@@ -172,10 +192,13 @@ impl AsRef<Union3KerrorOrKsuccessOrKtimeout> for Union3KerrorOrKsuccessOrKtimeou
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union3Kv1OrKv2OrKv3 {
+    #[baml(name = "string_v1")]
     Kv1(String),
 
+    #[baml(name = "string_v2")]
     Kv2(String),
 
+    #[baml(name = "string_v3")]
     Kv3(String),
 }
 
@@ -195,12 +218,16 @@ impl AsRef<Union3Kv1OrKv2OrKv3> for Union3Kv1OrKv2OrKv3 {
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4IntK0OrIntK1OrIntK3OrIntK5 {
+    #[baml(name = "int_0")]
     IntK0(i64),
 
+    #[baml(name = "int_1")]
     IntK1(i64),
 
+    #[baml(name = "int_3")]
     IntK3(i64),
 
+    #[baml(name = "int_5")]
     IntK5(i64),
 }
 
@@ -220,12 +247,16 @@ impl AsRef<Union4IntK0OrIntK1OrIntK3OrIntK5> for Union4IntK0OrIntK1OrIntK3OrIntK
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4KDELETEOrKGETOrKPOSTOrKPUT {
+    #[baml(name = "string_GET")]
     KGET(String),
 
+    #[baml(name = "string_POST")]
     KPOST(String),
 
+    #[baml(name = "string_PUT")]
     KPUT(String),
 
+    #[baml(name = "string_DELETE")]
     KDELETE(String),
 }
 
@@ -245,12 +276,16 @@ impl AsRef<Union4KDELETEOrKGETOrKPOSTOrKPUT> for Union4KDELETEOrKGETOrKPOSTOrKPU
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union4KarchivedOrKdeletedOrKdraftOrKpublished {
+    #[baml(name = "string_draft")]
     Kdraft(String),
 
+    #[baml(name = "string_published")]
     Kpublished(String),
 
+    #[baml(name = "string_archived")]
     Karchived(String),
 
+    #[baml(name = "string_deleted")]
     Kdeleted(String),
 }
 
@@ -272,14 +307,19 @@ impl AsRef<Union4KarchivedOrKdeletedOrKdraftOrKpublished>
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
+    #[baml(name = "int_1")]
     IntK1(i64),
 
+    #[baml(name = "int_2")]
     IntK2(i64),
 
+    #[baml(name = "int_3")]
     IntK3(i64),
 
+    #[baml(name = "int_4")]
     IntK4(i64),
 
+    #[baml(name = "int_5")]
     IntK5(i64),
 }
 
@@ -299,14 +339,19 @@ impl AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5> for Union5IntK1OrIntK2OrIntK
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
+    #[baml(name = "int_200")]
     IntK200(i64),
 
+    #[baml(name = "int_201")]
     IntK201(i64),
 
+    #[baml(name = "int_400")]
     IntK400(i64),
 
+    #[baml(name = "int_404")]
     IntK404(i64),
 
+    #[baml(name = "int_500")]
     IntK500(i64),
 }
 
@@ -328,18 +373,25 @@ impl AsRef<Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500>
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
+    #[baml(name = "int_0")]
     IntK0(i64),
 
+    #[baml(name = "int_1")]
     IntK1(i64),
 
+    #[baml(name = "int_2")]
     IntK2(i64),
 
+    #[baml(name = "int_3")]
     IntK3(i64),
 
+    #[baml(name = "int_5")]
     IntK5(i64),
 
+    #[baml(name = "int_8")]
     IntK8(i64),
 
+    #[baml(name = "int_13")]
     IntK13(i64),
 }
 

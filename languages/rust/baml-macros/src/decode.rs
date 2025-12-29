@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, Result, Type};
 
-use crate::shared::{baml_crate_path, ContainerAttrs, FieldAttrs, VariantAttrs};
+use crate::shared::{ContainerAttrs, FieldAttrs, VariantAttrs, baml_crate_path};
 
 pub fn derive_decode(input: DeriveInput) -> Result<TokenStream> {
     let container_attrs = ContainerAttrs::from_attrs(&input.attrs)?;
@@ -19,9 +19,13 @@ pub fn derive_decode(input: DeriveInput) -> Result<TokenStream> {
         Data::Struct(data) => {
             derive_struct_decode(type_name, &baml_name, &data.fields, &baml_crate)
         }
-        Data::Enum(data) => {
-            derive_enum_decode(type_name, &baml_name, data, &baml_crate, container_attrs.union)
-        }
+        Data::Enum(data) => derive_enum_decode(
+            type_name,
+            &baml_name,
+            data,
+            &baml_crate,
+            container_attrs.union,
+        ),
         Data::Union(_) => Err(syn::Error::new_spanned(
             &input,
             "BamlDecode cannot be derived for unions",
@@ -47,21 +51,13 @@ fn derive_struct_decode(
     for field in &named_fields.named {
         let field_attrs = FieldAttrs::from_attrs(&field.attrs)?;
         let field_name = field.ident.as_ref().unwrap();
-        let baml_field_name = field_attrs
-            .name
-            .unwrap_or_else(|| field_name.to_string());
+        let baml_field_name = field_attrs.name.unwrap_or_else(|| field_name.to_string());
 
         // Check if this is an Option type
         let is_optional = is_option_type(&field.ty);
 
-        let decode_expr = if is_optional {
-            quote! {
-                #baml_crate::decode_optional_field(&class.fields, #baml_field_name)?
-            }
-        } else {
-            quote! {
-                #baml_crate::decode_field(&class.fields, #baml_field_name)?
-            }
+        let decode_expr = quote! {
+            #baml_crate::decode_field(&class.fields, #baml_field_name)?
         };
 
         field_decodings.push(quote! {
@@ -167,17 +163,28 @@ fn derive_union_decode(
     data: &syn::DataEnum,
     baml_crate: &TokenStream,
 ) -> Result<TokenStream> {
-    let mut decode_attempts = Vec::new();
+    let mut variant_arms = Vec::new();
 
     for variant in &data.variants {
+        let variant_attrs = VariantAttrs::from_attrs(&variant.attrs)?;
         let variant_name = &variant.ident;
+
+        // Get the BAML union variant name from #[baml(name = "...")] attribute
+        // This is required for unions - the code generator must provide it
+        let baml_variant_name = variant_attrs.name.ok_or_else(|| {
+            syn::Error::new_spanned(
+                variant,
+                "union variants require #[baml(name = \"...\")] to specify the BAML variant name",
+            )
+        })?;
 
         match &variant.fields {
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
                 let field_type = &fields.unnamed.first().unwrap().ty;
-                decode_attempts.push(quote! {
-                    if let Ok(v) = <#field_type as #baml_crate::BamlDecode>::baml_decode(inner) {
-                        return Ok(Self::#variant_name(v));
+                variant_arms.push(quote! {
+                    #baml_variant_name => {
+                        let v = <#field_type as #baml_crate::BamlDecode>::baml_decode(inner)?;
+                        Ok(Self::#variant_name(v))
                     }
                 });
             }
@@ -197,15 +204,16 @@ fn derive_union_decode(
             fn baml_decode(
                 holder: &#baml_crate::__internal::CffiValueHolder
             ) -> ::core::result::Result<Self, #baml_crate::BamlError> {
-                // Extract the inner value from UnionVariantValue
-                let inner = #baml_crate::__internal::extract_union_variant(holder)?;
+                // Extract the variant name and inner value from UnionVariantValue
+                let (variant_name, inner) = #baml_crate::__internal::extract_union_variant_with_name(#type_name_str, holder)?;
 
-                // Try each variant type in order
-                #(#decode_attempts)*
-
-                Err(#baml_crate::BamlError::internal(
-                    format!("failed to decode any variant of union {}", #type_name_str)
-                ))
+                // Match on the variant name to decode the correct type
+                match variant_name {
+                    #(#variant_arms,)*
+                    other => Err(#baml_crate::BamlError::internal(
+                        format!("unknown variant '{}' for union {}", other, #type_name_str)
+                    ))
+                }
             }
         }
     })
