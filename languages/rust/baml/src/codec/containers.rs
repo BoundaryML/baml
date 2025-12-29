@@ -91,10 +91,13 @@ impl<T: BamlDecode> BamlDecode for Option<T> {
                 // Decode the inner value as T
                 Ok(Some(T::baml_decode(inner)?))
             }
-            other => Err(BamlError::internal(format!(
-                "expected Option<T>, got {:?}",
-                other.as_ref().map(variant_name)
-            ))),
+            other => match T::baml_decode(holder) {
+                Ok(value) => Ok(Some(value)),
+                Err(e) => Err(BamlError::internal(format!(
+                    "expected Option<T>, got {:?}",
+                    other.as_ref().map(variant_name)
+                ))),
+            },
         }
     }
 }
