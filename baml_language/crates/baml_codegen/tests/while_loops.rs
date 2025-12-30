@@ -369,3 +369,117 @@ fn break_nested() -> anyhow::Result<()> {
         )],
     })
 }
+
+/// Test break with variable conditions to verify bytecode generation.
+///
+/// Key observation: The compiler detects that `break` is unconditional at the
+/// end of each loop body, so it eliminates:
+/// 1. Explicit jump instructions for `break` (uses fall-through instead)
+/// 2. Loop-back jumps (dead code since break always executes)
+///
+/// This is NOT constant folding - it happens with variable conditions too.
+#[test]
+fn break_nested_with_variable_conditions() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function Nested(x: bool, y: bool) -> int {
+                let a = 5;
+                while (x) {
+                    while (y) {
+                        a = a + 1;
+                        break;
+                    }
+                    a = a + 1;
+                    break;
+                }
+                a
+            }
+        "#,
+        expected: vec![(
+            "Nested",
+            vec![
+                // let a = 5
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Int(5)),
+                Instruction::StoreVar("a".to_string()),
+                // outer while (x) - condition check
+                Instruction::LoadVar("x".to_string()),
+                Instruction::PopJumpIfFalse(11), // if false, jump to return (idx 15)
+                // inner while (y) - condition check
+                Instruction::LoadVar("y".to_string()),
+                Instruction::PopJumpIfFalse(5), // if false, jump to outer body (idx 11)
+                // inner body: a = a + 1; break (no explicit break jump - falls through!)
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::BinOp(BinOp::Add),
+                Instruction::StoreVar("a".to_string()),
+                // outer body after inner: a = a + 1; break (no explicit break jump!)
+                Instruction::LoadVar("a".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::BinOp(BinOp::Add),
+                Instruction::StoreVar("a".to_string()),
+                // after outer loop: return a (no loop-back jumps exist!)
+                Instruction::LoadVar("a".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+/// Test a loop that should actually iterate (conditional break, not unconditional).
+/// This verifies that loop-back jumps ARE generated when needed.
+///
+/// Key difference from unconditional break:
+/// - Unconditional break at end of loop body → no loop-back jump (dead code)
+/// - Conditional break inside if-statement → loop-back jump IS generated
+#[test]
+fn while_loop_with_conditional_break() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function CountDown(n: int) -> int {
+                let result = 0;
+                while (true) {
+                    result = result + n;
+                    n = n - 1;
+                    if (n == 0) {
+                        break;
+                    }
+                }
+                result
+            }
+        "#,
+        expected: vec![(
+            "CountDown",
+            vec![
+                // let result = 0
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("result".to_string()),
+                // while (true) - condition
+                Instruction::LoadConst(Value::Bool(true)),
+                Instruction::PopJumpIfFalse(15), // if false, jump to return (idx 19)
+                // loop body: result = result + n
+                Instruction::LoadVar("result".to_string()),
+                Instruction::LoadVar("n".to_string()),
+                Instruction::BinOp(BinOp::Add),
+                Instruction::StoreVar("result".to_string()),
+                // n = n - 1
+                Instruction::LoadVar("n".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::BinOp(BinOp::Sub),
+                Instruction::StoreVar("n".to_string()),
+                // if (n == 0)
+                Instruction::LoadVar("n".to_string()),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(2), // if false (n != 0), jump to loop-back
+                Instruction::Jump(2),           // if true (n == 0), jump to break/exit
+                // else path: LOOP-BACK JUMP (this is the key difference!)
+                Instruction::Jump(-15), // back to while condition (idx 3)
+                // after loop: return result
+                Instruction::LoadVar("result".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
