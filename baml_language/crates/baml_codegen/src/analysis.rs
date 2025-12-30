@@ -57,6 +57,10 @@ pub(crate) enum LocalClassification {
     Real,
     /// Single-use temporary that can be inlined.
     Virtual,
+    /// Phi-like local: assigned in each predecessor of a join block, used once at join.
+    /// At def sites: emit rvalue but NOT store (leave on stack).
+    /// At use site: don't emit `LoadVar` (value already on stack from predecessor).
+    PhiLike,
     /// Dead local - defined but never used, can be eliminated.
     Dead,
 }
@@ -578,15 +582,14 @@ fn collect_uses_in_terminator<'db>(
 // Local Classification
 // ============================================================================
 
-/// Classify each local as Virtual, Real, or Dead.
+/// Classify each local as Virtual, Real, `PhiLike`, or Dead.
 fn classify_locals<'db>(
     mir: &MirFunction<'db>,
     def_use: &HashMap<Local, LocalDefUse<'db>>,
     dominators: &Dominators,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
 ) -> HashMap<Local, LocalClassification> {
-    // NOTE: all_defs collection reserved for future phi-like optimization
-    // let all_defs = collect_all_definitions(mir);
+    let all_defs = collect_all_definitions(mir);
 
     let mut classifications = HashMap::new();
 
@@ -606,12 +609,11 @@ fn classify_locals<'db>(
             LocalClassification::Dead
         } else if can_be_virtual(local, du, dominators, mir, def_use, predecessors) {
             LocalClassification::Virtual
-        // NOTE: Phi-like optimization disabled for now. It requires special handling:
-        // - At def sites: emit rvalue but NOT StoreVar
-        // - At use site: don't emit LoadVar (value already on stack)
-        // This is different from Virtual (which inlines the rvalue at use site).
-        // } else if is_phi_like(local, du, mir, predecessors, &all_defs) {
-        //     LocalClassification::PhiLike  // needs new classification and emission logic
+        } else if is_phi_like(local, du, mir, predecessors, &all_defs) {
+            // Phi-like: assigned in each predecessor, used once at join point.
+            // At def sites: emit rvalue but NOT StoreVar (leave on stack).
+            // At use site: don't emit LoadVar (value already on stack).
+            LocalClassification::PhiLike
         } else {
             LocalClassification::Real
         };
@@ -626,7 +628,6 @@ fn classify_locals<'db>(
 ///
 /// Unlike `def_use` which only tracks the "last" definition, this tracks ALL
 /// assignments to each local across all blocks.
-#[allow(dead_code)] // Reserved for future phi-like optimization
 fn collect_all_definitions(mir: &MirFunction<'_>) -> HashMap<Local, Vec<(BlockId, usize)>> {
     let mut all_defs: HashMap<Local, Vec<(BlockId, usize)>> = HashMap::new();
 
@@ -651,11 +652,10 @@ fn collect_all_definitions(mir: &MirFunction<'_>) -> HashMap<Local, Vec<(BlockId
 /// Check if a local is "phi-like": assigned in each predecessor of a join block,
 /// used exactly once at that join block.
 ///
-/// Phi-like locals can be treated as Virtual because:
+/// Phi-like locals can skip Store/Load because:
 /// - Each predecessor leaves the value on the stack
 /// - At the join point, the value is already on top of the stack
 /// - No need for explicit Store/Load through a named variable
-#[allow(dead_code)] // Reserved for future phi-like optimization
 fn is_phi_like(
     local: Local,
     du: &LocalDefUse<'_>,

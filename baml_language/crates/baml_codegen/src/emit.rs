@@ -133,8 +133,10 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                     next_slot += 1;
                     slots_to_allocate += 1;
                 }
-                LocalClassification::Virtual | LocalClassification::Dead => {
-                    // Virtual and dead locals don't get slots!
+                LocalClassification::Virtual
+                | LocalClassification::PhiLike
+                | LocalClassification::Dead => {
+                    // Virtual, phi-like, and dead locals don't get slots!
                 }
             }
         }
@@ -224,11 +226,17 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     fn emit_statement(&mut self, kind: &StatementKind<'db>, mir: &MirFunction<'db>) {
         match kind {
             StatementKind::Assign { destination, value } => {
-                // Check if this is an assignment to a Virtual or Dead local
+                // Check if this is an assignment to a Virtual, PhiLike, or Dead local
                 if let Place::Local(local) = destination {
                     match self.analysis.classifications[local] {
                         LocalClassification::Virtual => {
                             // Skip! This will be inlined at use site
+                            return;
+                        }
+                        LocalClassification::PhiLike => {
+                            // Emit rvalue (leaves value on stack) but NOT the store.
+                            // The value stays on the stack until the join point uses it.
+                            self.emit_rvalue_pull(value, mir);
                             return;
                         }
                         LocalClassification::Dead => {
@@ -295,19 +303,26 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             Place::Local(local) => {
                 let classification = self.analysis.classifications[local];
 
-                if classification == LocalClassification::Virtual {
-                    // PULL: emit the definition's rvalue inline
-                    // Clone the rvalue to avoid borrow checker issues
-                    let rvalue = self.analysis.def_use[local]
-                        .def
-                        .as_ref()
-                        .map(|def| def.rvalue.clone())
-                        .unwrap_or_else(|| panic!("virtual local {local} without definition"));
-                    self.emit_rvalue_pull(&rvalue, mir);
-                } else {
-                    // Real local: emit LoadVar
-                    let slot = self.local_slots[local];
-                    self.emit(Instruction::LoadVar(slot));
+                match classification {
+                    LocalClassification::Virtual => {
+                        // PULL: emit the definition's rvalue inline
+                        // Clone the rvalue to avoid borrow checker issues
+                        let rvalue = self.analysis.def_use[local]
+                            .def
+                            .as_ref()
+                            .map(|def| def.rvalue.clone())
+                            .unwrap_or_else(|| panic!("virtual local {local} without definition"));
+                        self.emit_rvalue_pull(&rvalue, mir);
+                    }
+                    LocalClassification::PhiLike => {
+                        // PhiLike: value is already on the stack from the predecessor block.
+                        // Don't emit any instruction - the value is there waiting for us.
+                    }
+                    _ => {
+                        // Real/Parameter local: emit LoadVar
+                        let slot = self.local_slots[local];
+                        self.emit(Instruction::LoadVar(slot));
+                    }
                 }
             }
             Place::Field { base, field } => {
@@ -485,12 +500,22 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     fn emit_store_place(&mut self, place: &Place, _mir: &MirFunction<'db>) {
         match place {
             Place::Local(local) => {
-                // Check if this local has a slot (Real locals do, Virtual/Dead don't)
-                if let Some(&slot) = self.local_slots.get(local) {
-                    self.emit(Instruction::StoreVar(slot));
-                } else {
-                    // Virtual or Dead local - just pop the value
-                    self.emit(Instruction::Pop(1));
+                let classification = self.analysis.classifications[local];
+                match classification {
+                    LocalClassification::Parameter | LocalClassification::Real => {
+                        // Real locals get stored to their slot
+                        let slot = self.local_slots[local];
+                        self.emit(Instruction::StoreVar(slot));
+                    }
+                    LocalClassification::PhiLike => {
+                        // PhiLike: keep value on stack (no-op)
+                        // Note: This case shouldn't occur because phi-like locals
+                        // require Goto terminators, not Call/Await.
+                    }
+                    LocalClassification::Virtual | LocalClassification::Dead => {
+                        // Virtual or Dead local - just pop the value
+                        self.emit(Instruction::Pop(1));
+                    }
                 }
             }
             // Field/Index stores from terminators (Call/Await destinations) are not
