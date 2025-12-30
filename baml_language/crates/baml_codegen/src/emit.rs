@@ -176,14 +176,29 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
 
     /// Emit a jump to target, unless it's a fall-through to the next block.
     ///
+    /// Applies jump threading: if the target is an empty goto-only block,
+    /// jump directly to its final destination instead.
+    ///
     /// Returns true if a jump was emitted, false if it was elided.
     fn emit_jump_unless_fallthrough(&mut self, target: BlockId) -> bool {
-        if self.next_block == Some(target) {
-            // Target is the next block - no jump needed, just fall through
+        // Apply jump threading: resolve through redirect map
+        let resolved_target = self.analysis.resolve_jump_target(target);
+
+        // Check if we can fall through:
+        // 1. Next block IS the resolved target, OR
+        // 2. Next block is an empty block that resolves to our target
+        //    (fall through to it, and it will take us there)
+        let can_fall_through = self.next_block.is_some_and(|next| {
+            let resolved_next = self.analysis.resolve_jump_target(next);
+            resolved_target == next || resolved_target == resolved_next
+        });
+
+        if can_fall_through {
+            // No jump needed - fall through will get us there
             false
         } else {
             let jump_idx = self.emit(Instruction::Jump(0));
-            self.pending_jumps.push((jump_idx, target));
+            self.pending_jumps.push((jump_idx, resolved_target));
             true
         }
     }
@@ -506,8 +521,10 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             } => {
                 self.emit_operand_pull(condition, mir);
                 // PopJumpIfFalse to else_block (pops condition from stack)
+                // Apply jump threading to resolve through empty blocks
+                let resolved_else = self.analysis.resolve_jump_target(*else_block);
                 let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
-                self.pending_jumps.push((else_jump, *else_block));
+                self.pending_jumps.push((else_jump, resolved_else));
                 // Jump to then_block (may be elided if it's next)
                 self.emit_jump_unless_fallthrough(*then_block);
             }

@@ -50,7 +50,8 @@ fn while_loop_gcd() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::BinOp(BinOp::Sub),
                 Instruction::StoreVar("b".to_string()),
-                Instruction::Jump(5),
+                // Jump threading: direct jump back to loop condition (was Jump(5) -> Jump(-21))
+                Instruction::Jump(-16),
                 // Then branch: a = a - b
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadVar("b".to_string()),
@@ -272,15 +273,14 @@ fn continue_factorial() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::PopJumpIfFalse(2),
-                // continue - jump to loop condition
-                Instruction::Jump(4),
+                // continue - jump threading: direct to loop condition (was Jump(4) -> Jump(-21))
+                Instruction::Jump(-17),
                 // else: should_continue = false
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::StoreVar("should_continue".to_string()),
                 // Jump back to loop condition
                 Instruction::Jump(-20),
-                // Unreachable continue fallthrough
-                Instruction::Jump(-21),
+                // Note: unreachable continue fallthrough eliminated by jump threading
             ],
         )],
     })
@@ -304,8 +304,9 @@ fn continue_nested() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "Nested",
-            // Stackification with dead store elimination:
-            // Dead compiler temps (_2 for if result) are eliminated
+            // Jump threading eliminates intermediate jumps:
+            // - Inner continue jumps directly to inner condition
+            // - Outer continue jumps directly to outer condition
             vec![
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
@@ -314,13 +315,12 @@ fn continue_nested() -> anyhow::Result<()> {
                 Instruction::Return,
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(6),
+                Instruction::Jump(-2), // inner continue: direct to inner condition
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(-11),
-                Instruction::Jump(-12),
-                Instruction::Jump(-8),
+                Instruction::Jump(-10), // outer continue: direct to outer condition
+                Instruction::Jump(-11), // outer loop back
+                Instruction::Jump(-7),  // inner loop back
             ],
         )],
     })

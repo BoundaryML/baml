@@ -412,7 +412,7 @@ Function simple_continue (arity: 0, kind: Exec):
      0   LOAD_CONST 0           (null)
      1   LOAD_CONST 1           (true)
      2   POP_JUMP_IF_FALSE +2   (to 4)
-     3   JUMP +5                (to 8)
+     3   JUMP -2                (to 1)
      4   LOAD_CONST 2           (0)
      5   STORE_VAR 1            (_0)
      6   LOAD_VAR 1             (_0)

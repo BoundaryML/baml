@@ -114,7 +114,7 @@ Function TestPrecedence (arity: 0, kind: Exec):
      25   JUMP +4                (to 29)
      26   LOAD_CONST 6           (false)
      27   STORE_VAR 4            (d)
-     28   JUMP +3                (to 31)
+     28   JUMP +6                (to 34)
      29   LOAD_CONST 6           (false)
      30   STORE_VAR 4            (d)
      31   JUMP +3                (to 34)

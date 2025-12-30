@@ -223,8 +223,8 @@ fn for_with_continue() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Gt),
                 Instruction::PopJumpIfFalse(2),
-                // continue - jump to loop condition
-                Instruction::Jump(6),
+                // continue - jump threading: direct to loop condition (was Jump(6) -> Jump(-25))
+                Instruction::Jump(-19),
                 // result += x
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadVar("x".to_string()),
@@ -232,8 +232,7 @@ fn for_with_continue() -> anyhow::Result<()> {
                 Instruction::StoreVar("result".to_string()),
                 // Jump back to loop condition
                 Instruction::Jump(-24),
-                // Unreachable continue fallthrough
-                Instruction::Jump(-25),
+                // Note: unreachable continue fallthrough eliminated by jump threading
             ],
         )],
     })

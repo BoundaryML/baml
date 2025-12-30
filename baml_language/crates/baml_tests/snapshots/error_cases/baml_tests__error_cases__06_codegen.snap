@@ -31,7 +31,7 @@ Function MixedLiteralAndTyped (arity: 1, kind: Exec):
      9    JUMP +8                (to 17)
      10   LOAD_VAR 3             (_2)
      11   LOAD_CONST 2           (false)
-     12   POP_JUMP_IF_FALSE +2   (to 14)
+     12   POP_JUMP_IF_FALSE +7   (to 19)
      13   JUMP +2                (to 15)
      14   JUMP +5                (to 19)
      15   LOAD_VAR 3             (_2)

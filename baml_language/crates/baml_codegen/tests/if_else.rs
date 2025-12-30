@@ -305,7 +305,7 @@ fn else_if_chain() -> anyhow::Result<()> {
             //     Instruction::LoadConst(Value::Int(3)),
             //     Instruction::Return,
             // ],
-            // Stackification with fall-through elimination:
+            // Stackification with jump threading:
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(false)),
@@ -316,7 +316,8 @@ fn else_if_chain() -> anyhow::Result<()> {
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(3),
+                // Jump threading: direct to return (was Jump(3) -> through intermediate)
+                Instruction::Jump(6),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("_0".to_string()),
                 Instruction::Jump(3),
@@ -368,7 +369,7 @@ fn else_if_with_comparisons() -> anyhow::Result<()> {
             //     Instruction::LoadConst(Value::Int(2)),
             //     Instruction::Return,
             // ],
-            // Stackification with fall-through elimination:
+            // Stackification with jump threading:
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
@@ -386,7 +387,8 @@ fn else_if_with_comparisons() -> anyhow::Result<()> {
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(3),
+                // Jump threading: direct to return (was Jump(3))
+                Instruction::Jump(6),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("_0".to_string()),
                 Instruction::Jump(3),
@@ -1079,7 +1081,8 @@ fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
                 // Else else: _0 = 3
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(3),
+                // Jump threading: direct to return (was Jump(3))
+                Instruction::Jump(6),
                 // Else if true: _0 = 2
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("_0".to_string()),
@@ -1128,7 +1131,8 @@ fn else_if_assignment() -> anyhow::Result<()> {
                 // Else else: result = 3
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::StoreVar("result".to_string()),
-                Instruction::Jump(3),
+                // Jump threading: direct to return (was Jump(3))
+                Instruction::Jump(6),
                 // Else if true: result = 2
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("result".to_string()),
@@ -1180,7 +1184,8 @@ fn else_if_assignment_with_locals() -> anyhow::Result<()> {
                 // Else else: result = 3
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::StoreVar("result".to_string()),
-                Instruction::Jump(3),
+                // Jump threading: direct to return (was Jump(3))
+                Instruction::Jump(6),
                 // Else if true: result = 2
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("result".to_string()),
@@ -1490,7 +1495,8 @@ fn else_if_return_expr() -> anyhow::Result<()> {
                 // Else else: _0 = 3
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(3),
+                // Jump threading: direct to return (was Jump(3))
+                Instruction::Jump(6),
                 // Else if true: _0 = 2
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("_0".to_string()),
