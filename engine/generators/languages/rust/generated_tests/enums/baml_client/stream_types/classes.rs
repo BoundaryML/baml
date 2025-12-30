@@ -3,12 +3,4 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated streaming class types.
-//!
-//! These types are used during streaming to hold partial results.
-//! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
-
-use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+// No classes defined

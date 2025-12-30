@@ -7,7 +7,6 @@
 
 use super::*;
 use baml::{BamlDecode, BamlEncode};
-use std::collections::HashMap;
 
 /// Generated from: (true | false)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
@@ -20,15 +19,15 @@ pub enum Union2BoolKFalseOrBoolKTrue {
     BoolKFalse(bool),
 }
 
-impl Default for Union2BoolKFalseOrBoolKTrue {
-    fn default() -> Self {
-        Self::BoolKTrue(Default::default())
-    }
-}
-
 impl AsRef<Union2BoolKFalseOrBoolKTrue> for Union2BoolKFalseOrBoolKTrue {
     fn as_ref(&self) -> &Union2BoolKFalseOrBoolKTrue {
         self
+    }
+}
+
+impl Default for Union2BoolKFalseOrBoolKTrue {
+    fn default() -> Self {
+        Self::BoolKTrue(Default::default())
     }
 }
 
@@ -46,15 +45,15 @@ pub enum Union3IntK1OrIntK2OrIntK3 {
     IntK3(i64),
 }
 
-impl Default for Union3IntK1OrIntK2OrIntK3 {
-    fn default() -> Self {
-        Self::IntK1(Default::default())
-    }
-}
-
 impl AsRef<Union3IntK1OrIntK2OrIntK3> for Union3IntK1OrIntK2OrIntK3 {
     fn as_ref(&self) -> &Union3IntK1OrIntK2OrIntK3 {
         self
+    }
+}
+
+impl Default for Union3IntK1OrIntK2OrIntK3 {
+    fn default() -> Self {
+        Self::IntK1(Default::default())
     }
 }
 
@@ -72,15 +71,15 @@ pub enum Union3IntK200OrIntK404OrIntK500 {
     IntK500(i64),
 }
 
-impl Default for Union3IntK200OrIntK404OrIntK500 {
-    fn default() -> Self {
-        Self::IntK200(Default::default())
-    }
-}
-
 impl AsRef<Union3IntK200OrIntK404OrIntK500> for Union3IntK200OrIntK404OrIntK500 {
     fn as_ref(&self) -> &Union3IntK200OrIntK404OrIntK500 {
         self
+    }
+}
+
+impl Default for Union3IntK200OrIntK404OrIntK500 {
+    fn default() -> Self {
+        Self::IntK200(Default::default())
     }
 }
 
@@ -98,15 +97,15 @@ pub enum Union3KactiveOrKinactiveOrKpending {
     Kpending(String),
 }
 
-impl Default for Union3KactiveOrKinactiveOrKpending {
-    fn default() -> Self {
-        Self::Kactive(Default::default())
-    }
-}
-
 impl AsRef<Union3KactiveOrKinactiveOrKpending> for Union3KactiveOrKinactiveOrKpending {
     fn as_ref(&self) -> &Union3KactiveOrKinactiveOrKpending {
         self
+    }
+}
+
+impl Default for Union3KactiveOrKinactiveOrKpending {
+    fn default() -> Self {
+        Self::Kactive(Default::default())
     }
 }
 
@@ -124,15 +123,15 @@ pub enum Union3KadminOrKguestOrKuser {
     Kguest(String),
 }
 
-impl Default for Union3KadminOrKguestOrKuser {
-    fn default() -> Self {
-        Self::Kuser(Default::default())
-    }
-}
-
 impl AsRef<Union3KadminOrKguestOrKuser> for Union3KadminOrKguestOrKuser {
     fn as_ref(&self) -> &Union3KadminOrKguestOrKuser {
         self
+    }
+}
+
+impl Default for Union3KadminOrKguestOrKuser {
+    fn default() -> Self {
+        Self::Kuser(Default::default())
     }
 }
 
@@ -150,15 +149,15 @@ pub enum Union3KdevOrKprodOrKstaging {
     Kprod(String),
 }
 
-impl Default for Union3KdevOrKprodOrKstaging {
-    fn default() -> Self {
-        Self::Kdev(Default::default())
-    }
-}
-
 impl AsRef<Union3KdevOrKprodOrKstaging> for Union3KdevOrKprodOrKstaging {
     fn as_ref(&self) -> &Union3KdevOrKprodOrKstaging {
         self
+    }
+}
+
+impl Default for Union3KdevOrKprodOrKstaging {
+    fn default() -> Self {
+        Self::Kdev(Default::default())
     }
 }
 
@@ -176,15 +175,15 @@ pub enum Union3KerrorOrKsuccessOrKtimeout {
     Ktimeout(String),
 }
 
-impl Default for Union3KerrorOrKsuccessOrKtimeout {
-    fn default() -> Self {
-        Self::Ksuccess(Default::default())
-    }
-}
-
 impl AsRef<Union3KerrorOrKsuccessOrKtimeout> for Union3KerrorOrKsuccessOrKtimeout {
     fn as_ref(&self) -> &Union3KerrorOrKsuccessOrKtimeout {
         self
+    }
+}
+
+impl Default for Union3KerrorOrKsuccessOrKtimeout {
+    fn default() -> Self {
+        Self::Ksuccess(Default::default())
     }
 }
 
@@ -202,15 +201,15 @@ pub enum Union3Kv1OrKv2OrKv3 {
     Kv3(String),
 }
 
-impl Default for Union3Kv1OrKv2OrKv3 {
-    fn default() -> Self {
-        Self::Kv1(Default::default())
-    }
-}
-
 impl AsRef<Union3Kv1OrKv2OrKv3> for Union3Kv1OrKv2OrKv3 {
     fn as_ref(&self) -> &Union3Kv1OrKv2OrKv3 {
         self
+    }
+}
+
+impl Default for Union3Kv1OrKv2OrKv3 {
+    fn default() -> Self {
+        Self::Kv1(Default::default())
     }
 }
 
@@ -231,15 +230,15 @@ pub enum Union4IntK0OrIntK1OrIntK3OrIntK5 {
     IntK5(i64),
 }
 
-impl Default for Union4IntK0OrIntK1OrIntK3OrIntK5 {
-    fn default() -> Self {
-        Self::IntK0(Default::default())
-    }
-}
-
 impl AsRef<Union4IntK0OrIntK1OrIntK3OrIntK5> for Union4IntK0OrIntK1OrIntK3OrIntK5 {
     fn as_ref(&self) -> &Union4IntK0OrIntK1OrIntK3OrIntK5 {
         self
+    }
+}
+
+impl Default for Union4IntK0OrIntK1OrIntK3OrIntK5 {
+    fn default() -> Self {
+        Self::IntK0(Default::default())
     }
 }
 
@@ -260,15 +259,15 @@ pub enum Union4KDELETEOrKGETOrKPOSTOrKPUT {
     KDELETE(String),
 }
 
-impl Default for Union4KDELETEOrKGETOrKPOSTOrKPUT {
-    fn default() -> Self {
-        Self::KGET(Default::default())
-    }
-}
-
 impl AsRef<Union4KDELETEOrKGETOrKPOSTOrKPUT> for Union4KDELETEOrKGETOrKPOSTOrKPUT {
     fn as_ref(&self) -> &Union4KDELETEOrKGETOrKPOSTOrKPUT {
         self
+    }
+}
+
+impl Default for Union4KDELETEOrKGETOrKPOSTOrKPUT {
+    fn default() -> Self {
+        Self::KGET(Default::default())
     }
 }
 
@@ -289,17 +288,17 @@ pub enum Union4KarchivedOrKdeletedOrKdraftOrKpublished {
     Kdeleted(String),
 }
 
-impl Default for Union4KarchivedOrKdeletedOrKdraftOrKpublished {
-    fn default() -> Self {
-        Self::Kdraft(Default::default())
-    }
-}
-
 impl AsRef<Union4KarchivedOrKdeletedOrKdraftOrKpublished>
     for Union4KarchivedOrKdeletedOrKdraftOrKpublished
 {
     fn as_ref(&self) -> &Union4KarchivedOrKdeletedOrKdraftOrKpublished {
         self
+    }
+}
+
+impl Default for Union4KarchivedOrKdeletedOrKdraftOrKpublished {
+    fn default() -> Self {
+        Self::Kdraft(Default::default())
     }
 }
 
@@ -323,15 +322,15 @@ pub enum Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     IntK5(i64),
 }
 
-impl Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
-    fn default() -> Self {
-        Self::IntK1(Default::default())
-    }
-}
-
 impl AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5> for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     fn as_ref(&self) -> &Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
         self
+    }
+}
+
+impl Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
+    fn default() -> Self {
+        Self::IntK1(Default::default())
     }
 }
 
@@ -355,17 +354,17 @@ pub enum Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
     IntK500(i64),
 }
 
-impl Default for Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
-    fn default() -> Self {
-        Self::IntK200(Default::default())
-    }
-}
-
 impl AsRef<Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500>
     for Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500
 {
     fn as_ref(&self) -> &Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
         self
+    }
+}
+
+impl Default for Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
+    fn default() -> Self {
+        Self::IntK200(Default::default())
     }
 }
 
@@ -395,16 +394,16 @@ pub enum Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
     IntK13(i64),
 }
 
-impl Default for Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
-    fn default() -> Self {
-        Self::IntK0(Default::default())
-    }
-}
-
 impl AsRef<Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8>
     for Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8
 {
     fn as_ref(&self) -> &Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
         self
+    }
+}
+
+impl Default for Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
+    fn default() -> Self {
+        Self::IntK0(Default::default())
     }
 }

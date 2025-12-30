@@ -7,7 +7,6 @@
 
 use super::*;
 use baml::{BamlDecode, BamlEncode};
-use std::collections::HashMap;
 
 /// Generated from: (Example | Example2)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
@@ -20,14 +19,14 @@ pub enum Union2ExampleOrExample2 {
     Example2(Example2),
 }
 
-impl Default for Union2ExampleOrExample2 {
-    fn default() -> Self {
-        Self::Example(Default::default())
-    }
-}
-
 impl AsRef<Union2ExampleOrExample2> for Union2ExampleOrExample2 {
     fn as_ref(&self) -> &Union2ExampleOrExample2 {
         self
+    }
+}
+
+impl Default for Union2ExampleOrExample2 {
+    fn default() -> Self {
+        Self::Example(Default::default())
     }
 }

@@ -4,19 +4,33 @@
 // Learn more at https://docs.boundaryml.com
 
 //! Generated streaming union types.
-//!
-//! Full implementation coming in Phase 6.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of Union3ProductOrTagOrUser.
-#[derive(Debug, Clone)]
+/// Generated from: (Streaming.User | Streaming.Product | Streaming.Tag)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union3ProductOrTagOrUser {
-    User(Option<User>),
+    #[baml(name = "User")]
+    User(User),
 
-    Product(Option<Product>),
+    #[baml(name = "Product")]
+    Product(Product),
 
-    Tag(Option<Tag>),
+    #[baml(name = "Tag")]
+    Tag(Tag),
+}
+
+impl AsRef<Union3ProductOrTagOrUser> for Union3ProductOrTagOrUser {
+    fn as_ref(&self) -> &Union3ProductOrTagOrUser {
+        self
+    }
+}
+
+impl Default for Union3ProductOrTagOrUser {
+    fn default() -> Self {
+        Self::User(Default::default())
+    }
 }

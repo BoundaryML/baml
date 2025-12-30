@@ -10,7 +10,7 @@ use crate::error::BamlError;
 use crate::ffi::{self, callbacks};
 use crate::proto::baml_cffi_v1::CffiValueHolder;
 use crate::raw_objects::{Audio, Collector, Image, Pdf, TypeBuilder, Video};
-use crate::stream::StreamResult;
+use crate::stream::StreamingCall;
 
 /// Handle to the BAML runtime
 pub struct BamlRuntime {
@@ -114,11 +114,11 @@ impl BamlRuntime {
     }
 
     /// Call a function with streaming results
-    pub fn call_function_stream<TPartial, TFinal>(
+    pub fn call_function_stream<TPartial, TFinal: Clone>(
         &self,
         name: &str,
         args: &FunctionArgs,
-    ) -> Result<StreamResult<TPartial, TFinal>, BamlError>
+    ) -> Result<StreamingCall<TPartial, TFinal>, BamlError>
     where
         TPartial: BamlDecode + Send + 'static,
         TFinal: BamlDecode + Send + 'static,
@@ -150,7 +150,7 @@ impl BamlRuntime {
             return Err(BamlError::internal(error_msg));
         }
 
-        Ok(StreamResult::new(receiver))
+        Ok(StreamingCall::new(id, receiver))
     }
 
     /// Parse raw LLM output into typed result

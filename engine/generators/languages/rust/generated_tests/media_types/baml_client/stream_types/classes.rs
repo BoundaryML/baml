@@ -7,30 +7,38 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of MediaAnalysisResult.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct MediaAnalysisResult {
     pub topics: Vec<String>,
 
     pub analysisText: Option<String>,
 }
 
-/// Streaming variant of MediaArrayAnalysisResult.
-#[derive(Debug, Clone, Default)]
+impl AsRef<MediaAnalysisResult> for MediaAnalysisResult {
+    fn as_ref(&self) -> &MediaAnalysisResult {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct MediaArrayAnalysisResult {
     pub analysisText: Option<String>,
 
     pub mediaCount: Option<i64>,
 }
 
-/// Streaming variant of MediaMapAnalysisResult.
-#[derive(Debug, Clone, Default)]
+impl AsRef<MediaArrayAnalysisResult> for MediaArrayAnalysisResult {
+    fn as_ref(&self) -> &MediaArrayAnalysisResult {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct MediaMapAnalysisResult {
     pub analysisText: Option<String>,
 
@@ -39,8 +47,13 @@ pub struct MediaMapAnalysisResult {
     pub keys: Vec<String>,
 }
 
-/// Streaming variant of MixedMediaAnalysisResult.
-#[derive(Debug, Clone, Default)]
+impl AsRef<MediaMapAnalysisResult> for MediaMapAnalysisResult {
+    fn as_ref(&self) -> &MediaMapAnalysisResult {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct MixedMediaAnalysisResult {
     pub title: Option<String>,
 
@@ -59,12 +72,23 @@ pub struct MixedMediaAnalysisResult {
     pub metadataKeys: Vec<String>,
 }
 
-/// Streaming variant of OptionalMediaAnalysisResult.
-#[derive(Debug, Clone, Default)]
+impl AsRef<MixedMediaAnalysisResult> for MixedMediaAnalysisResult {
+    fn as_ref(&self) -> &MixedMediaAnalysisResult {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct OptionalMediaAnalysisResult {
     pub analysisText: Option<String>,
 
     pub providedMediaTypes: Vec<String>,
 
     pub missingMediaTypes: Vec<String>,
+}
+
+impl AsRef<OptionalMediaAnalysisResult> for OptionalMediaAnalysisResult {
+    fn as_ref(&self) -> &OptionalMediaAnalysisResult {
+        self
+    }
 }

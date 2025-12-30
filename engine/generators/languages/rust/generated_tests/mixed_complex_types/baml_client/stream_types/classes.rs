@@ -7,15 +7,14 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of Action.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Action {
+    #[baml(name = "type")]
     pub r#type: Option<String>,
 
     pub parameters: std::collections::HashMap<String, types::Union3BoolOrIntOrString>,
@@ -23,11 +22,17 @@ pub struct Action {
     pub async_: Option<bool>,
 }
 
-/// Streaming variant of Asset.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Action> for Action {
+    fn as_ref(&self) -> &Action {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Asset {
     pub id: Option<i64>,
 
+    #[baml(name = "type")]
     pub r#type: Option<types::Union3KaudioOrKdocumentOrKimage>,
 
     pub metadata: Option<AssetMetadata>,
@@ -35,8 +40,13 @@ pub struct Asset {
     pub tags: Vec<String>,
 }
 
-/// Streaming variant of AssetMetadata.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Asset> for Asset {
+    fn as_ref(&self) -> &Asset {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct AssetMetadata {
     pub filename: Option<String>,
 
@@ -49,8 +59,13 @@ pub struct AssetMetadata {
     pub checksum: Option<String>,
 }
 
-/// Streaming variant of ButtonWidget.
-#[derive(Debug, Clone, Default)]
+impl AsRef<AssetMetadata> for AssetMetadata {
+    fn as_ref(&self) -> &AssetMetadata {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ButtonWidget {
     pub label: Option<String>,
 
@@ -59,8 +74,13 @@ pub struct ButtonWidget {
     pub style: std::collections::HashMap<String, String>,
 }
 
-/// Streaming variant of ComplexData.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ButtonWidget> for ButtonWidget {
+    fn as_ref(&self) -> &ButtonWidget {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ComplexData {
     pub primary: Option<PrimaryData>,
 
@@ -69,16 +89,27 @@ pub struct ComplexData {
     pub tertiary: Option<TertiaryData>,
 }
 
-/// Streaming variant of Condition.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ComplexData> for ComplexData {
+    fn as_ref(&self) -> &ComplexData {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Condition {
+    #[baml(name = "type")]
     pub r#type: Option<types::Union3KandOrKnotOrKor>,
 
     pub conditions: Vec<Union2ConditionOrSimpleCondition>,
 }
 
-/// Streaming variant of Configuration.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Condition> for Condition {
+    fn as_ref(&self) -> &Condition {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Configuration {
     pub version: Option<String>,
 
@@ -89,8 +120,13 @@ pub struct Configuration {
     pub rules: Vec<Rule>,
 }
 
-/// Streaming variant of ContainerWidget.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Configuration> for Configuration {
+    fn as_ref(&self) -> &Configuration {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ContainerWidget {
     pub layout: Option<types::Union3KflexOrKgridOrKstack>,
 
@@ -99,24 +135,40 @@ pub struct ContainerWidget {
     pub style: std::collections::HashMap<String, String>,
 }
 
-/// Streaming variant of DataObject.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ContainerWidget> for ContainerWidget {
+    fn as_ref(&self) -> &ContainerWidget {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct DataObject {
+    #[baml(name = "type")]
     pub r#type: Option<String>,
 
     pub value: std::collections::HashMap<String, String>,
 }
 
-/// Streaming variant of Dimensions.
-#[derive(Debug, Clone, Default)]
+impl AsRef<DataObject> for DataObject {
+    fn as_ref(&self) -> &DataObject {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Dimensions {
     pub width: Option<i64>,
 
     pub height: Option<i64>,
 }
 
-/// Streaming variant of Environment.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Dimensions> for Dimensions {
+    fn as_ref(&self) -> &Dimensions {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Environment {
     pub name: Option<String>,
 
@@ -127,9 +179,15 @@ pub struct Environment {
     pub secrets: Option<std::collections::HashMap<String, String>>,
 }
 
-/// Streaming variant of Error.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Environment> for Environment {
+    fn as_ref(&self) -> &Environment {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Error {
+    #[baml(name = "type")]
     pub r#type: Option<String>,
 
     pub message: Option<String>,
@@ -137,8 +195,13 @@ pub struct Error {
     pub code: Option<i64>,
 }
 
-/// Streaming variant of ErrorDetail.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Error> for Error {
+    fn as_ref(&self) -> &Error {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ErrorDetail {
     pub code: Option<String>,
 
@@ -147,8 +210,13 @@ pub struct ErrorDetail {
     pub details: Option<std::collections::HashMap<String, String>>,
 }
 
-/// Streaming variant of Feature.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ErrorDetail> for ErrorDetail {
+    fn as_ref(&self) -> &ErrorDetail {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Feature {
     pub name: Option<String>,
 
@@ -159,16 +227,26 @@ pub struct Feature {
     pub dependencies: Vec<String>,
 }
 
-/// Streaming variant of ImageWidget.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Feature> for Feature {
+    fn as_ref(&self) -> &Feature {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ImageWidget {
     pub alt: Option<String>,
 
     pub dimensions: Option<Dimensions>,
 }
 
-/// Streaming variant of Item.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ImageWidget> for ImageWidget {
+    fn as_ref(&self) -> &ImageWidget {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Item {
     pub id: Option<i64>,
 
@@ -179,8 +257,13 @@ pub struct Item {
     pub attributes: std::collections::HashMap<String, types::Union4BoolOrFloatOrIntOrString>,
 }
 
-/// Streaming variant of KitchenSink.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Item> for Item {
+    fn as_ref(&self) -> &Item {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct KitchenSink {
     pub id: Option<i64>,
 
@@ -221,11 +304,17 @@ pub struct KitchenSink {
     pub config: Option<Configuration>,
 }
 
-/// Streaming variant of Node.
-#[derive(Debug, Clone, Default)]
+impl AsRef<KitchenSink> for KitchenSink {
+    fn as_ref(&self) -> &KitchenSink {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Node {
     pub id: Option<i64>,
 
+    #[baml(name = "type")]
     pub r#type: Option<types::Union2KbranchOrKleaf>,
 
     pub value: Option<Union4IntOrListNodeOrMapStringKeyNodeValueOrString>,
@@ -233,8 +322,13 @@ pub struct Node {
     pub metadata: Option<NodeMetadata>,
 }
 
-/// Streaming variant of NodeMetadata.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Node> for Node {
+    fn as_ref(&self) -> &Node {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct NodeMetadata {
     pub created: Option<String>,
 
@@ -245,8 +339,13 @@ pub struct NodeMetadata {
     pub attributes: std::collections::HashMap<String, Option<types::Union3BoolOrIntOrString>>,
 }
 
-/// Streaming variant of PrimaryData.
-#[derive(Debug, Clone, Default)]
+impl AsRef<NodeMetadata> for NodeMetadata {
+    fn as_ref(&self) -> &NodeMetadata {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct PrimaryData {
     pub values: Vec<types::Union3FloatOrIntOrString>,
 
@@ -255,8 +354,13 @@ pub struct PrimaryData {
     pub flags: Vec<bool>,
 }
 
-/// Streaming variant of Record.
-#[derive(Debug, Clone, Default)]
+impl AsRef<PrimaryData> for PrimaryData {
+    fn as_ref(&self) -> &PrimaryData {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Record {
     pub id: Option<i64>,
 
@@ -265,8 +369,13 @@ pub struct Record {
     pub related: Option<Vec<Box<Record>>>,
 }
 
-/// Streaming variant of ResponseMetadata.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Record> for Record {
+    fn as_ref(&self) -> &Record {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ResponseMetadata {
     pub timestamp: Option<String>,
 
@@ -277,8 +386,13 @@ pub struct ResponseMetadata {
     pub retries: Option<i64>,
 }
 
-/// Streaming variant of Rule.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ResponseMetadata> for ResponseMetadata {
+    fn as_ref(&self) -> &ResponseMetadata {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Rule {
     pub id: Option<i64>,
 
@@ -291,16 +405,26 @@ pub struct Rule {
     pub priority: Option<i64>,
 }
 
-/// Streaming variant of SecondaryData.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Rule> for Rule {
+    fn as_ref(&self) -> &Rule {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct SecondaryData {
     pub records: Vec<Record>,
 
     pub index: std::collections::HashMap<String, Record>,
 }
 
-/// Streaming variant of Setting.
-#[derive(Debug, Clone, Default)]
+impl AsRef<SecondaryData> for SecondaryData {
+    fn as_ref(&self) -> &SecondaryData {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Setting {
     pub key: Option<String>,
 
@@ -309,8 +433,13 @@ pub struct Setting {
     pub metadata: Option<std::collections::HashMap<String, String>>,
 }
 
-/// Streaming variant of SimpleCondition.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Setting> for Setting {
+    fn as_ref(&self) -> &Setting {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct SimpleCondition {
     pub field: Option<String>,
 
@@ -319,16 +448,27 @@ pub struct SimpleCondition {
     pub value: Option<types::Union4BoolOrFloatOrIntOrString>,
 }
 
-/// Streaming variant of Success.
-#[derive(Debug, Clone, Default)]
+impl AsRef<SimpleCondition> for SimpleCondition {
+    fn as_ref(&self) -> &SimpleCondition {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Success {
+    #[baml(name = "type")]
     pub r#type: Option<String>,
 
     pub data: std::collections::HashMap<String, String>,
 }
 
-/// Streaming variant of TertiaryData.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Success> for Success {
+    fn as_ref(&self) -> &Success {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct TertiaryData {
     pub raw: Option<String>,
 
@@ -337,8 +477,13 @@ pub struct TertiaryData {
     pub valid: Option<bool>,
 }
 
-/// Streaming variant of TextWidget.
-#[derive(Debug, Clone, Default)]
+impl AsRef<TertiaryData> for TertiaryData {
+    fn as_ref(&self) -> &TertiaryData {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct TextWidget {
     pub content: Option<String>,
 
@@ -347,8 +492,13 @@ pub struct TextWidget {
     pub style: std::collections::HashMap<String, String>,
 }
 
-/// Streaming variant of UltraComplex.
-#[derive(Debug, Clone, Default)]
+impl AsRef<TextWidget> for TextWidget {
+    fn as_ref(&self) -> &TextWidget {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct UltraComplex {
     pub tree: Option<Node>,
 
@@ -361,8 +511,13 @@ pub struct UltraComplex {
     pub assets: Vec<Asset>,
 }
 
-/// Streaming variant of User.
-#[derive(Debug, Clone, Default)]
+impl AsRef<UltraComplex> for UltraComplex {
+    fn as_ref(&self) -> &UltraComplex {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct User {
     pub id: Option<i64>,
 
@@ -371,8 +526,13 @@ pub struct User {
     pub settings: std::collections::HashMap<String, Setting>,
 }
 
-/// Streaming variant of UserProfile.
-#[derive(Debug, Clone, Default)]
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct UserProfile {
     pub name: Option<String>,
 
@@ -383,8 +543,13 @@ pub struct UserProfile {
     pub links: Vec<String>,
 }
 
-/// Streaming variant of UserResponse.
-#[derive(Debug, Clone, Default)]
+impl AsRef<UserProfile> for UserProfile {
+    fn as_ref(&self) -> &UserProfile {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct UserResponse {
     pub status: Option<types::Union2KerrorOrKsuccess>,
 
@@ -395,8 +560,13 @@ pub struct UserResponse {
     pub metadata: Option<ResponseMetadata>,
 }
 
-/// Streaming variant of Variant.
-#[derive(Debug, Clone, Default)]
+impl AsRef<UserResponse> for UserResponse {
+    fn as_ref(&self) -> &UserResponse {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Variant {
     pub sku: Option<String>,
 
@@ -407,9 +577,15 @@ pub struct Variant {
     pub options: std::collections::HashMap<String, String>,
 }
 
-/// Streaming variant of Widget.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Variant> for Variant {
+    fn as_ref(&self) -> &Variant {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Widget {
+    #[baml(name = "type")]
     pub r#type: Option<types::Union4KbuttonOrKcontainerOrKimageOrKtext>,
 
     pub button: Option<ButtonWidget>,
@@ -419,4 +595,10 @@ pub struct Widget {
     pub img: Option<ImageWidget>,
 
     pub container: Option<Box<ContainerWidget>>,
+}
+
+impl AsRef<Widget> for Widget {
+    fn as_ref(&self) -> &Widget {
+        self
+    }
 }

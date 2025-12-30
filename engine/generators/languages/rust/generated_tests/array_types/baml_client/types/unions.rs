@@ -7,7 +7,6 @@
 
 use super::*;
 use baml::{BamlDecode, BamlEncode};
-use std::collections::HashMap;
 
 /// Generated from: (string | int | bool)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
@@ -23,15 +22,15 @@ pub enum Union3BoolOrIntOrString {
     Bool(bool),
 }
 
-impl Default for Union3BoolOrIntOrString {
-    fn default() -> Self {
-        Self::String(Default::default())
-    }
-}
-
 impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
     fn as_ref(&self) -> &Union3BoolOrIntOrString {
         self
+    }
+}
+
+impl Default for Union3BoolOrIntOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
     }
 }
 
@@ -49,15 +48,15 @@ pub enum Union3ProductOrTagOrUser {
     Tag(Tag),
 }
 
-impl Default for Union3ProductOrTagOrUser {
-    fn default() -> Self {
-        Self::User(Default::default())
-    }
-}
-
 impl AsRef<Union3ProductOrTagOrUser> for Union3ProductOrTagOrUser {
     fn as_ref(&self) -> &Union3ProductOrTagOrUser {
         self
+    }
+}
+
+impl Default for Union3ProductOrTagOrUser {
+    fn default() -> Self {
+        Self::User(Default::default())
     }
 }
 
@@ -78,14 +77,14 @@ pub enum Union4BoolOrFloatOrIntOrString {
     Bool(bool),
 }
 
-impl Default for Union4BoolOrFloatOrIntOrString {
-    fn default() -> Self {
-        Self::String(Default::default())
-    }
-}
-
 impl AsRef<Union4BoolOrFloatOrIntOrString> for Union4BoolOrFloatOrIntOrString {
     fn as_ref(&self) -> &Union4BoolOrFloatOrIntOrString {
         self
+    }
+}
+
+impl Default for Union4BoolOrFloatOrIntOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
     }
 }

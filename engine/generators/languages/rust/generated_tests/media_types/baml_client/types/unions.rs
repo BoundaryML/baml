@@ -7,7 +7,6 @@
 
 use super::*;
 use baml::{BamlDecode, BamlEncode};
-use std::collections::HashMap;
 
 /// Generated from: (image | audio | pdf | video)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
@@ -26,14 +25,14 @@ pub enum Union4AudioOrImageOrPDFOrVideo {
     Video(Video),
 }
 
-impl Default for Union4AudioOrImageOrPDFOrVideo {
-    fn default() -> Self {
-        Self::Image(Default::default())
-    }
-}
-
 impl AsRef<Union4AudioOrImageOrPDFOrVideo> for Union4AudioOrImageOrPDFOrVideo {
     fn as_ref(&self) -> &Union4AudioOrImageOrPDFOrVideo {
         self
+    }
+}
+
+impl Default for Union4AudioOrImageOrPDFOrVideo {
+    fn default() -> Self {
+        Self::Image(Default::default())
     }
 }

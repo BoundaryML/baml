@@ -4,7 +4,7 @@ use std::collections::HashMap;
 ///
 /// Note: This is intentionally minimal. Expand with specific variants
 /// (InitError, CallError, etc.) once the core functionality works.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Clone)]
 pub enum BamlError {
     /// Internal/unexpected errors - bugs in BAML that should never happen
     #[error("internal error: {0}")]

@@ -1,20 +1,37 @@
+{% if classes.is_empty() %}
+// No classes defined
+{% else %}
 //! Generated streaming class types.
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
-use std::collections::HashMap;
+use baml::BamlDecode;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
+use super::*;
 
 {% for class in classes %}
-/// Streaming variant of {{ class.name }}.
-#[derive(Debug, Clone, Default)]
+
+{% if let Some(docstring) = class.docstring -%}
+{{ crate::utils::prefix_lines(docstring, "/// ") }}
+{%- endif %}
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct {{ class.name }} {
 {% for field in class.fields %}
+{% if field.docstring.is_some() %}
+    /// {{ field.docstring.as_ref().unwrap() }}
+{% endif %}
+{% if let Some(cffi_name) = field.cffi_name %}
+    #[baml(name = "{{ cffi_name }}")]
+{% endif %}
     pub {{ field.name }}: {{ field.type_str }},
 {% endfor %}
 }
 
+impl AsRef<{{ class.name }}> for {{ class.name }} {
+    fn as_ref(&self) -> &{{ class.name }} {
+        self
+    }
+}
 {% endfor %}
+{% endif %}

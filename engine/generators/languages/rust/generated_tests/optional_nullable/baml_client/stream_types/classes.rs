@@ -7,14 +7,12 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of ComplexOptional.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ComplexOptional {
     pub data: Option<OptionalData>,
 
@@ -23,8 +21,13 @@ pub struct ComplexOptional {
     pub mapping: std::collections::HashMap<String, Option<OptionalValue>>,
 }
 
-/// Streaming variant of MixedOptionalNullable.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ComplexOptional> for ComplexOptional {
+    fn as_ref(&self) -> &ComplexOptional {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct MixedOptionalNullable {
     pub id: Option<i64>,
 
@@ -47,8 +50,13 @@ pub struct MixedOptionalNullable {
     pub tertiaryUser: Option<User>,
 }
 
-/// Streaming variant of NullableTypes.
-#[derive(Debug, Clone, Default)]
+impl AsRef<MixedOptionalNullable> for MixedOptionalNullable {
+    fn as_ref(&self) -> &MixedOptionalNullable {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct NullableTypes {
     pub nullableString: Option<String>,
 
@@ -63,8 +71,13 @@ pub struct NullableTypes {
     pub nullableObject: Option<User>,
 }
 
-/// Streaming variant of OptionalData.
-#[derive(Debug, Clone, Default)]
+impl AsRef<NullableTypes> for NullableTypes {
+    fn as_ref(&self) -> &NullableTypes {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct OptionalData {
     pub value: Option<String>,
 
@@ -73,8 +86,13 @@ pub struct OptionalData {
     pub enabled: Option<bool>,
 }
 
-/// Streaming variant of OptionalFields.
-#[derive(Debug, Clone, Default)]
+impl AsRef<OptionalData> for OptionalData {
+    fn as_ref(&self) -> &OptionalData {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct OptionalFields {
     pub requiredString: Option<String>,
 
@@ -93,8 +111,13 @@ pub struct OptionalFields {
     pub optionalMap: Option<std::collections::HashMap<String, String>>,
 }
 
-/// Streaming variant of OptionalItem.
-#[derive(Debug, Clone, Default)]
+impl AsRef<OptionalFields> for OptionalFields {
+    fn as_ref(&self) -> &OptionalFields {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct OptionalItem {
     pub id: Option<i64>,
 
@@ -105,16 +128,26 @@ pub struct OptionalItem {
     pub metadata: Option<std::collections::HashMap<String, String>>,
 }
 
-/// Streaming variant of OptionalValue.
-#[derive(Debug, Clone, Default)]
+impl AsRef<OptionalItem> for OptionalItem {
+    fn as_ref(&self) -> &OptionalItem {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct OptionalValue {
     pub data: Option<types::Union2IntOrString>,
 
     pub optional: Option<String>,
 }
 
-/// Streaming variant of Product.
-#[derive(Debug, Clone, Default)]
+impl AsRef<OptionalValue> for OptionalValue {
+    fn as_ref(&self) -> &OptionalValue {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Product {
     pub id: Option<i64>,
 
@@ -123,8 +156,13 @@ pub struct Product {
     pub price: Option<f64>,
 }
 
-/// Streaming variant of UnionWithNull.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Product> for Product {
+    fn as_ref(&self) -> &Product {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct UnionWithNull {
     pub simpleUnion: Option<types::Union2IntOrString>,
 
@@ -135,8 +173,13 @@ pub struct UnionWithNull {
     pub complexUnion: Option<Union2ProductOrUser>,
 }
 
-/// Streaming variant of User.
-#[derive(Debug, Clone, Default)]
+impl AsRef<UnionWithNull> for UnionWithNull {
+    fn as_ref(&self) -> &UnionWithNull {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct User {
     pub id: Option<i64>,
 
@@ -145,4 +188,10 @@ pub struct User {
     pub email: Option<String>,
 
     pub phone: Option<String>,
+}
+
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
 }

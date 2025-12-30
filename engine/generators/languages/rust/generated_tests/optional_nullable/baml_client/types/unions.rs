@@ -7,7 +7,6 @@
 
 use super::*;
 use baml::{BamlDecode, BamlEncode};
-use std::collections::HashMap;
 
 /// Generated from: (string | int | null)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
@@ -20,15 +19,15 @@ pub enum Union2IntOrString {
     Int(i64),
 }
 
-impl Default for Union2IntOrString {
-    fn default() -> Self {
-        Self::String(Default::default())
-    }
-}
-
 impl AsRef<Union2IntOrString> for Union2IntOrString {
     fn as_ref(&self) -> &Union2IntOrString {
         self
+    }
+}
+
+impl Default for Union2IntOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
     }
 }
 
@@ -43,14 +42,14 @@ pub enum Union2ProductOrUser {
     Product(Product),
 }
 
-impl Default for Union2ProductOrUser {
-    fn default() -> Self {
-        Self::User(Default::default())
-    }
-}
-
 impl AsRef<Union2ProductOrUser> for Union2ProductOrUser {
     fn as_ref(&self) -> &Union2ProductOrUser {
         self
+    }
+}
+
+impl Default for Union2ProductOrUser {
+    fn default() -> Self {
+        Self::User(Default::default())
     }
 }

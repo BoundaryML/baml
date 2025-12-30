@@ -7,15 +7,14 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of Example.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Example {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub a: Option<types::Checked<i64>>,
@@ -23,9 +22,15 @@ pub struct Example {
     pub b: Option<String>,
 }
 
-/// Streaming variant of Example2.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Example> for Example {
+    fn as_ref(&self) -> &Example {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Example2 {
+    #[baml(name = "type")]
     pub r#type: String,
 
     pub item: Option<Example>,
@@ -33,4 +38,10 @@ pub struct Example2 {
     pub element: Option<String>,
 
     pub element2: Option<String>,
+}
+
+impl AsRef<Example2> for Example2 {
+    fn as_ref(&self) -> &Example2 {
+        self
+    }
 }

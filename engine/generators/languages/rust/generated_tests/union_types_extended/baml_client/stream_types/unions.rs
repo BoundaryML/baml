@@ -4,93 +4,232 @@
 // Learn more at https://docs.boundaryml.com
 
 //! Generated streaming union types.
-//!
-//! Full implementation coming in Phase 6.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of Union2DataResponseOrErrorResponse.
-#[derive(Debug, Clone)]
+/// Generated from: (Streaming.DataResponse | Streaming.ErrorResponse | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union2DataResponseOrErrorResponse {
-    DataResponse(Option<DataResponse>),
+    #[baml(name = "DataResponse")]
+    DataResponse(DataResponse),
 
-    ErrorResponse(Option<ErrorResponse>),
+    #[baml(name = "ErrorResponse")]
+    ErrorResponse(ErrorResponse),
 }
 
-/// Streaming variant of Union2ProductOrUser.
-#[derive(Debug, Clone)]
+impl AsRef<Union2DataResponseOrErrorResponse> for Union2DataResponseOrErrorResponse {
+    fn as_ref(&self) -> &Union2DataResponseOrErrorResponse {
+        self
+    }
+}
+
+impl Default for Union2DataResponseOrErrorResponse {
+    fn default() -> Self {
+        Self::DataResponse(Default::default())
+    }
+}
+
+/// Generated from: (Streaming.User | Streaming.Product | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union2ProductOrUser {
-    User(Option<User>),
+    #[baml(name = "User")]
+    User(User),
 
-    Product(Option<Product>),
+    #[baml(name = "Product")]
+    Product(Product),
 }
 
-/// Streaming variant of Union2RecursiveUnionOrString.
-#[derive(Debug, Clone)]
+impl AsRef<Union2ProductOrUser> for Union2ProductOrUser {
+    fn as_ref(&self) -> &Union2ProductOrUser {
+        self
+    }
+}
+
+impl Default for Union2ProductOrUser {
+    fn default() -> Self {
+        Self::User(Default::default())
+    }
+}
+
+/// Generated from: (string | Streaming.RecursiveUnion)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union2RecursiveUnionOrString {
-    String(Option<String>),
+    #[baml(name = "string")]
+    String(String),
 
-    RecursiveUnion(Option<Box<RecursiveUnion>>),
+    #[baml(name = "RecursiveUnion")]
+    RecursiveUnion(Box<RecursiveUnion>),
 }
 
-/// Streaming variant of Union3AdminOrProductOrUser.
-#[derive(Debug, Clone)]
+impl AsRef<Union2RecursiveUnionOrString> for Union2RecursiveUnionOrString {
+    fn as_ref(&self) -> &Union2RecursiveUnionOrString {
+        self
+    }
+}
+
+impl Default for Union2RecursiveUnionOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
+    }
+}
+
+/// Generated from: (Streaming.User | Streaming.Product | Streaming.Admin | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union3AdminOrProductOrUser {
-    User(Option<User>),
+    #[baml(name = "User")]
+    User(User),
 
-    Product(Option<Product>),
+    #[baml(name = "Product")]
+    Product(Product),
 
-    Admin(Option<Admin>),
+    #[baml(name = "Admin")]
+    Admin(Admin),
 }
 
-/// Streaming variant of Union3ApiErrorOrApiPendingOrApiSuccess.
-#[derive(Debug, Clone)]
+impl AsRef<Union3AdminOrProductOrUser> for Union3AdminOrProductOrUser {
+    fn as_ref(&self) -> &Union3AdminOrProductOrUser {
+        self
+    }
+}
+
+impl Default for Union3AdminOrProductOrUser {
+    fn default() -> Self {
+        Self::User(Default::default())
+    }
+}
+
+/// Generated from: (Streaming.ApiSuccess | Streaming.ApiError | Streaming.ApiPending | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union3ApiErrorOrApiPendingOrApiSuccess {
-    ApiSuccess(Option<ApiSuccess>),
+    #[baml(name = "ApiSuccess")]
+    ApiSuccess(ApiSuccess),
 
-    ApiError(Option<ApiError>),
+    #[baml(name = "ApiError")]
+    ApiError(ApiError),
 
-    ApiPending(Option<ApiPending>),
+    #[baml(name = "ApiPending")]
+    ApiPending(ApiPending),
 }
 
-/// Streaming variant of Union3BirdOrCatOrDog.
-#[derive(Debug, Clone)]
+impl AsRef<Union3ApiErrorOrApiPendingOrApiSuccess> for Union3ApiErrorOrApiPendingOrApiSuccess {
+    fn as_ref(&self) -> &Union3ApiErrorOrApiPendingOrApiSuccess {
+        self
+    }
+}
+
+impl Default for Union3ApiErrorOrApiPendingOrApiSuccess {
+    fn default() -> Self {
+        Self::ApiSuccess(Default::default())
+    }
+}
+
+/// Generated from: (Streaming.Dog | Streaming.Cat | Streaming.Bird | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union3BirdOrCatOrDog {
-    Dog(Option<Dog>),
+    #[baml(name = "Dog")]
+    Dog(Dog),
 
-    Cat(Option<Cat>),
+    #[baml(name = "Cat")]
+    Cat(Cat),
 
-    Bird(Option<Bird>),
+    #[baml(name = "Bird")]
+    Bird(Bird),
 }
 
-/// Streaming variant of Union3CircleOrRectangleOrTriangle.
-#[derive(Debug, Clone)]
+impl AsRef<Union3BirdOrCatOrDog> for Union3BirdOrCatOrDog {
+    fn as_ref(&self) -> &Union3BirdOrCatOrDog {
+        self
+    }
+}
+
+impl Default for Union3BirdOrCatOrDog {
+    fn default() -> Self {
+        Self::Dog(Default::default())
+    }
+}
+
+/// Generated from: (Streaming.Circle | Streaming.Rectangle | Streaming.Triangle | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union3CircleOrRectangleOrTriangle {
-    Circle(Option<Circle>),
+    #[baml(name = "Circle")]
+    Circle(Circle),
 
-    Rectangle(Option<Rectangle>),
+    #[baml(name = "Rectangle")]
+    Rectangle(Rectangle),
 
-    Triangle(Option<Triangle>),
+    #[baml(name = "Triangle")]
+    Triangle(Triangle),
 }
 
-/// Streaming variant of Union3ErrorOrSuccessOrWarning.
-#[derive(Debug, Clone)]
+impl AsRef<Union3CircleOrRectangleOrTriangle> for Union3CircleOrRectangleOrTriangle {
+    fn as_ref(&self) -> &Union3CircleOrRectangleOrTriangle {
+        self
+    }
+}
+
+impl Default for Union3CircleOrRectangleOrTriangle {
+    fn default() -> Self {
+        Self::Circle(Default::default())
+    }
+}
+
+/// Generated from: (Streaming.Success | Streaming.Warning | Streaming.Error | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union3ErrorOrSuccessOrWarning {
-    Success(Option<Success>),
+    #[baml(name = "Success")]
+    Success(Success),
 
-    Warning(Option<Warning>),
+    #[baml(name = "Warning")]
+    Warning(Warning),
 
-    Error(Option<Error>),
+    #[baml(name = "Error")]
+    Error(Error),
 }
 
-/// Streaming variant of Union3IntOrRecursiveUnionOrString.
-#[derive(Debug, Clone)]
+impl AsRef<Union3ErrorOrSuccessOrWarning> for Union3ErrorOrSuccessOrWarning {
+    fn as_ref(&self) -> &Union3ErrorOrSuccessOrWarning {
+        self
+    }
+}
+
+impl Default for Union3ErrorOrSuccessOrWarning {
+    fn default() -> Self {
+        Self::Success(Default::default())
+    }
+}
+
+/// Generated from: (string | int @stream.done | Streaming.RecursiveUnion | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union3IntOrRecursiveUnionOrString {
-    String(Option<String>),
+    #[baml(name = "string")]
+    String(String),
 
-    Int(Option<i64>),
+    #[baml(name = "int")]
+    Int(i64),
 
-    RecursiveUnion(Option<Box<RecursiveUnion>>),
+    #[baml(name = "RecursiveUnion")]
+    RecursiveUnion(Box<RecursiveUnion>),
+}
+
+impl AsRef<Union3IntOrRecursiveUnionOrString> for Union3IntOrRecursiveUnionOrString {
+    fn as_ref(&self) -> &Union3IntOrRecursiveUnionOrString {
+        self
+    }
+}
+
+impl Default for Union3IntOrRecursiveUnionOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
+    }
 }

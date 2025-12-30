@@ -480,8 +480,8 @@ class T { f map<string, int> }
 
 ### Rust
 
-- Non-streaming: `HashMap<String, i64>`
-- Streaming: `HashMap<String, i64>`
+- Non-streaming: `std::collections::HashMap<String, i64>`
+- Streaming: `std::collections::HashMap<String, i64>`
 
 ---
 
@@ -510,8 +510,8 @@ class T { f map<string, string> }
 
 ### Rust
 
-- Non-streaming: `HashMap<String, String>`
-- Streaming: `HashMap<String, String>`
+- Non-streaming: `std::collections::HashMap<String, String>`
+- Streaming: `std::collections::HashMap<String, String>`
 
 ---
 
@@ -540,8 +540,8 @@ class T { f map<string, int>? }
 
 ### Rust
 
-- Non-streaming: `Option<HashMap<String, i64>>`
-- Streaming: `Option<HashMap<String, i64>>`
+- Non-streaming: `Option<std::collections::HashMap<String, i64>>`
+- Streaming: `Option<std::collections::HashMap<String, i64>>`
 
 ---
 
@@ -570,8 +570,8 @@ class T { f map<string, int[]> }
 
 ### Rust
 
-- Non-streaming: `HashMap<String, Vec<i64>>`
-- Streaming: `HashMap<String, Vec<i64>>`
+- Non-streaming: `std::collections::HashMap<String, Vec<i64>>`
+- Streaming: `std::collections::HashMap<String, Vec<i64>>`
 
 ---
 
@@ -1227,8 +1227,8 @@ class T { lookup map<string, Inner> @stream.done }
 
 ### Rust
 
-- Non-streaming: `HashMap<String, Inner>`
-- Streaming: `HashMap<String, types::Inner>`
+- Non-streaming: `std::collections::HashMap<String, Inner>`
+- Streaming: `std::collections::HashMap<String, types::Inner>`
 
 ---
 
@@ -2867,8 +2867,8 @@ type IntMap = map<string, int>
 
 ### Rust
 
-- Non-streaming: `HashMap<String, i64>`
-- Streaming: `HashMap<String, i64>`
+- Non-streaming: `std::collections::HashMap<String, i64>`
+- Streaming: `std::collections::HashMap<String, i64>`
 
 ---
 
@@ -2929,8 +2929,8 @@ class T { f map<string, int>[] }
 
 ### Rust
 
-- Non-streaming: `Vec<HashMap<String, i64>>`
-- Streaming: `Vec<HashMap<String, i64>>`
+- Non-streaming: `Vec<std::collections::HashMap<String, i64>>`
+- Streaming: `Vec<std::collections::HashMap<String, i64>>`
 
 ---
 
@@ -2959,8 +2959,8 @@ class T { f map<string, string[]> }
 
 ### Rust
 
-- Non-streaming: `HashMap<String, Vec<String>>`
-- Streaming: `HashMap<String, Vec<String>>`
+- Non-streaming: `std::collections::HashMap<String, Vec<String>>`
+- Streaming: `std::collections::HashMap<String, Vec<String>>`
 
 ---
 
@@ -3385,8 +3385,8 @@ class Task {
 
 ### Rust
 
-- Non-streaming: `Option<HashMap<String, String>>`
-- Streaming: `Option<HashMap<String, String>>`
+- Non-streaming: `Option<std::collections::HashMap<String, String>>`
+- Streaming: `Option<std::collections::HashMap<String, String>>`
 
 ---
 

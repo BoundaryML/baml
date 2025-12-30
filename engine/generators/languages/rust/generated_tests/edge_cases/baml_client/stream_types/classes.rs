@@ -7,14 +7,12 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of AllNullable.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct AllNullable {
     pub nullString: Option<String>,
 
@@ -29,8 +27,13 @@ pub struct AllNullable {
     pub nullObject: Option<User>,
 }
 
-/// Streaming variant of BooleanEdgeCases.
-#[derive(Debug, Clone, Default)]
+impl AsRef<AllNullable> for AllNullable {
+    fn as_ref(&self) -> &AllNullable {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct BooleanEdgeCases {
     pub explicitTrue: Option<bool>,
 
@@ -43,8 +46,13 @@ pub struct BooleanEdgeCases {
     pub mixedBoolArray: Vec<bool>,
 }
 
-/// Streaming variant of CircularReference.
-#[derive(Debug, Clone, Default)]
+impl AsRef<BooleanEdgeCases> for BooleanEdgeCases {
+    fn as_ref(&self) -> &BooleanEdgeCases {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct CircularReference {
     pub id: Option<i64>,
 
@@ -57,16 +65,26 @@ pub struct CircularReference {
     pub relatedItems: Vec<Box<CircularReference>>,
 }
 
-/// Streaming variant of DeepRecursion.
-#[derive(Debug, Clone, Default)]
+impl AsRef<CircularReference> for CircularReference {
+    fn as_ref(&self) -> &CircularReference {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct DeepRecursion {
     pub value: Option<String>,
 
     pub next: Option<Box<DeepRecursion>>,
 }
 
-/// Streaming variant of EmptyCollections.
-#[derive(Debug, Clone, Default)]
+impl AsRef<DeepRecursion> for DeepRecursion {
+    fn as_ref(&self) -> &DeepRecursion {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct EmptyCollections {
     pub emptyStringArray: Vec<String>,
 
@@ -79,14 +97,24 @@ pub struct EmptyCollections {
     pub emptyNestedArray: Vec<Vec<String>>,
 }
 
-/// Streaming variant of InnerNullable.
-#[derive(Debug, Clone, Default)]
+impl AsRef<EmptyCollections> for EmptyCollections {
+    fn as_ref(&self) -> &EmptyCollections {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct InnerNullable {
     pub value: Option<String>,
 }
 
-/// Streaming variant of LargeStructure.
-#[derive(Debug, Clone, Default)]
+impl AsRef<InnerNullable> for InnerNullable {
+    fn as_ref(&self) -> &InnerNullable {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct LargeStructure {
     pub field1: Option<String>,
 
@@ -149,8 +177,13 @@ pub struct LargeStructure {
     pub map5: std::collections::HashMap<String, User>,
 }
 
-/// Streaming variant of MixedEdgeCases.
-#[derive(Debug, Clone, Default)]
+impl AsRef<LargeStructure> for LargeStructure {
+    fn as_ref(&self) -> &LargeStructure {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct MixedEdgeCases {
     pub emptyString: Option<String>,
 
@@ -168,14 +201,24 @@ pub struct MixedEdgeCases {
     pub optionalEverything: Option<OptionalEverything>,
 }
 
-/// Streaming variant of NestedNullable.
-#[derive(Debug, Clone, Default)]
+impl AsRef<MixedEdgeCases> for MixedEdgeCases {
+    fn as_ref(&self) -> &MixedEdgeCases {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct NestedNullable {
     pub outer: Option<OuterNullable>,
 }
 
-/// Streaming variant of NullEdgeCases.
-#[derive(Debug, Clone, Default)]
+impl AsRef<NestedNullable> for NestedNullable {
+    fn as_ref(&self) -> &NestedNullable {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct NullEdgeCases {
     pub allNull: Option<AllNullable>,
 
@@ -184,8 +227,13 @@ pub struct NullEdgeCases {
     pub nestedNull: Option<NestedNullable>,
 }
 
-/// Streaming variant of NumberEdgeCases.
-#[derive(Debug, Clone, Default)]
+impl AsRef<NullEdgeCases> for NullEdgeCases {
+    fn as_ref(&self) -> &NullEdgeCases {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct NumberEdgeCases {
     pub zero: Option<i64>,
 
@@ -208,8 +256,13 @@ pub struct NumberEdgeCases {
     pub notANumber: Option<f64>,
 }
 
-/// Streaming variant of OptionalEverything.
-#[derive(Debug, Clone, Default)]
+impl AsRef<NumberEdgeCases> for NumberEdgeCases {
+    fn as_ref(&self) -> &NumberEdgeCases {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct OptionalEverything {
     pub optString: Option<String>,
 
@@ -226,14 +279,24 @@ pub struct OptionalEverything {
     pub optObject: Option<User>,
 }
 
-/// Streaming variant of OuterNullable.
-#[derive(Debug, Clone, Default)]
+impl AsRef<OptionalEverything> for OptionalEverything {
+    fn as_ref(&self) -> &OptionalEverything {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct OuterNullable {
     pub inner: Option<InnerNullable>,
 }
 
-/// Streaming variant of SomeNullable.
-#[derive(Debug, Clone, Default)]
+impl AsRef<OuterNullable> for OuterNullable {
+    fn as_ref(&self) -> &OuterNullable {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct SomeNullable {
     pub presentString: Option<String>,
 
@@ -244,8 +307,13 @@ pub struct SomeNullable {
     pub nullInt: Option<i64>,
 }
 
-/// Streaming variant of SpecialCharacters.
-#[derive(Debug, Clone, Default)]
+impl AsRef<SomeNullable> for SomeNullable {
+    fn as_ref(&self) -> &SomeNullable {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct SpecialCharacters {
     pub normalText: Option<String>,
 
@@ -264,16 +332,26 @@ pub struct SpecialCharacters {
     pub withMixedSpecial: Option<String>,
 }
 
-/// Streaming variant of User.
-#[derive(Debug, Clone, Default)]
+impl AsRef<SpecialCharacters> for SpecialCharacters {
+    fn as_ref(&self) -> &SpecialCharacters {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct User {
     pub id: Option<i64>,
 
     pub name: Option<String>,
 }
 
-/// Streaming variant of VeryLongStrings.
-#[derive(Debug, Clone, Default)]
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct VeryLongStrings {
     pub shortString: Option<String>,
 
@@ -284,4 +362,10 @@ pub struct VeryLongStrings {
     pub veryLongString: Option<String>,
 
     pub extremelyLongString: Option<String>,
+}
+
+impl AsRef<VeryLongStrings> for VeryLongStrings {
+    fn as_ref(&self) -> &VeryLongStrings {
+        self
+    }
 }

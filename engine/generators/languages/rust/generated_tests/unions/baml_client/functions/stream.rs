@@ -4,5 +4,41 @@
 // Learn more at https://docs.boundaryml.com
 
 //! Streaming BAML function calls.
-//!
-//! Full implementation coming in Phase 7.
+
+use baml::{BamlEncode, BamlError};
+
+use crate::baml_client::{get_runtime, runtime::FunctionOptions, stream_types, types};
+
+#[derive(Default)]
+pub struct BamlStreamClient {
+    pub(super) options: Option<FunctionOptions>,
+}
+
+macro_rules! baml_function_stream {
+    ($name:ident($($param:ident : $ptype:ty),* $(,)?) -> ($stream_ret:ty, $final_ret:ty)) => {
+        pub fn $name(&self, $($param: $ptype),*) -> Result<baml::StreamingCall<$stream_ret, $final_ret>, BamlError> {
+            let args = self.options.as_ref().unwrap_or(&FunctionOptions::default()).to_baml_args()
+                $(.arg(stringify!($param), $param.baml_encode()))*;
+            get_runtime().call_function_stream(stringify!($name), &args)
+        }
+    };
+}
+
+#[allow(dead_code, non_snake_case)]
+impl BamlStreamClient {
+    pub(super) fn new(options: Option<FunctionOptions>) -> Self {
+        Self { options }
+    }
+
+    pub fn wih_options<F>(&self, _options_fn: F) -> Self
+    where
+        F: Fn(FunctionOptions) -> FunctionOptions,
+    {
+        // Placeholder implementation
+        BamlStreamClient {
+            options: self.options.clone(),
+        }
+    }
+
+    baml_function_stream!(JsonInput(x: &[types::ExistingSystemComponent], ) -> (Vec<String>, Vec<String>));
+}

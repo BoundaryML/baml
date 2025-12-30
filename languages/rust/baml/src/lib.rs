@@ -71,7 +71,7 @@ pub use raw_objects::{
     Video,
 };
 pub use runtime::{BamlRuntime, StaticRuntimeType};
-pub use stream::{StreamEvent, StreamResult};
+pub use stream::{StreamEvent, StreamingCall};
 pub use types::{Check, CheckStatus, Checked, StreamState, StreamingState};
 
 // Re-export derive macros

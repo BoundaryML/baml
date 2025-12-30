@@ -7,14 +7,12 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of MixedPrimitives.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct MixedPrimitives {
     pub name: Option<String>,
 
@@ -35,8 +33,13 @@ pub struct MixedPrimitives {
     pub flags: Vec<bool>,
 }
 
-/// Streaming variant of PrimitiveArrays.
-#[derive(Debug, Clone, Default)]
+impl AsRef<MixedPrimitives> for MixedPrimitives {
+    fn as_ref(&self) -> &MixedPrimitives {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct PrimitiveArrays {
     pub stringArray: Vec<String>,
 
@@ -47,8 +50,13 @@ pub struct PrimitiveArrays {
     pub boolArray: Vec<bool>,
 }
 
-/// Streaming variant of PrimitiveMaps.
-#[derive(Debug, Clone, Default)]
+impl AsRef<PrimitiveArrays> for PrimitiveArrays {
+    fn as_ref(&self) -> &PrimitiveArrays {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct PrimitiveMaps {
     pub stringMap: std::collections::HashMap<String, String>,
 
@@ -59,8 +67,13 @@ pub struct PrimitiveMaps {
     pub boolMap: std::collections::HashMap<String, bool>,
 }
 
-/// Streaming variant of PrimitiveTypes.
-#[derive(Debug, Clone, Default)]
+impl AsRef<PrimitiveMaps> for PrimitiveMaps {
+    fn as_ref(&self) -> &PrimitiveMaps {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct PrimitiveTypes {
     pub stringField: Option<String>,
 
@@ -71,4 +84,10 @@ pub struct PrimitiveTypes {
     pub boolField: Option<bool>,
 
     pub nullField: (),
+}
+
+impl AsRef<PrimitiveTypes> for PrimitiveTypes {
+    fn as_ref(&self) -> &PrimitiveTypes {
+        self
+    }
 }

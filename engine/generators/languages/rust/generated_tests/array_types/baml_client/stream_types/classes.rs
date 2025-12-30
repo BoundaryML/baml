@@ -7,14 +7,12 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of ArrayWithConstraints.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ArrayWithConstraints {
     pub nonEmptyStrings: Vec<String>,
 
@@ -23,8 +21,13 @@ pub struct ArrayWithConstraints {
     pub positiveFloats: Vec<f64>,
 }
 
-/// Streaming variant of MixedArrays.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ArrayWithConstraints> for ArrayWithConstraints {
+    fn as_ref(&self) -> &ArrayWithConstraints {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct MixedArrays {
     pub primitiveArray: Vec<types::Union4BoolOrFloatOrIntOrString>,
 
@@ -37,8 +40,13 @@ pub struct MixedArrays {
     pub complexMixed: Vec<Union3ProductOrTagOrUser>,
 }
 
-/// Streaming variant of NestedArrays.
-#[derive(Debug, Clone, Default)]
+impl AsRef<MixedArrays> for MixedArrays {
+    fn as_ref(&self) -> &MixedArrays {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct NestedArrays {
     pub matrix: Vec<Vec<i64>>,
 
@@ -47,8 +55,13 @@ pub struct NestedArrays {
     pub threeDimensional: Vec<Vec<Vec<f64>>>,
 }
 
-/// Streaming variant of ObjectArrays.
-#[derive(Debug, Clone, Default)]
+impl AsRef<NestedArrays> for NestedArrays {
+    fn as_ref(&self) -> &NestedArrays {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ObjectArrays {
     pub users: Vec<User>,
 
@@ -57,8 +70,13 @@ pub struct ObjectArrays {
     pub tags: Vec<Tag>,
 }
 
-/// Streaming variant of Product.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ObjectArrays> for ObjectArrays {
+    fn as_ref(&self) -> &ObjectArrays {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Product {
     pub id: Option<i64>,
 
@@ -71,8 +89,13 @@ pub struct Product {
     pub inStock: Option<bool>,
 }
 
-/// Streaming variant of SimpleArrays.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Product> for Product {
+    fn as_ref(&self) -> &Product {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct SimpleArrays {
     pub strings: Vec<String>,
 
@@ -83,8 +106,13 @@ pub struct SimpleArrays {
     pub booleans: Vec<bool>,
 }
 
-/// Streaming variant of Tag.
-#[derive(Debug, Clone, Default)]
+impl AsRef<SimpleArrays> for SimpleArrays {
+    fn as_ref(&self) -> &SimpleArrays {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Tag {
     pub id: Option<i64>,
 
@@ -93,8 +121,13 @@ pub struct Tag {
     pub color: Option<String>,
 }
 
-/// Streaming variant of User.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Tag> for Tag {
+    fn as_ref(&self) -> &Tag {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct User {
     pub id: Option<i64>,
 
@@ -103,4 +136,10 @@ pub struct User {
     pub email: Option<String>,
 
     pub isActive: Option<bool>,
+}
+
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
 }

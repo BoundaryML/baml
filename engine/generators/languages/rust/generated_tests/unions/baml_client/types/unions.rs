@@ -7,7 +7,6 @@
 
 use super::*;
 use baml::{BamlDecode, BamlEncode};
-use std::collections::HashMap;
 
 /// Generated from: (int | Recursive1[])
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
@@ -20,15 +19,15 @@ pub enum Union2IntOrListRecursive1 {
     ListRecursive1(Vec<Recursive1>),
 }
 
-impl Default for Union2IntOrListRecursive1 {
-    fn default() -> Self {
-        Self::Int(Default::default())
-    }
-}
-
 impl AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
     fn as_ref(&self) -> &Union2IntOrListRecursive1 {
         self
+    }
+}
+
+impl Default for Union2IntOrListRecursive1 {
+    fn default() -> Self {
+        Self::Int(Default::default())
     }
 }
 
@@ -43,15 +42,15 @@ pub enum Union2KresourceOrKservice {
     Kresource(String),
 }
 
-impl Default for Union2KresourceOrKservice {
-    fn default() -> Self {
-        Self::Kservice(Default::default())
-    }
-}
-
 impl AsRef<Union2KresourceOrKservice> for Union2KresourceOrKservice {
     fn as_ref(&self) -> &Union2KresourceOrKservice {
         self
+    }
+}
+
+impl Default for Union2KresourceOrKservice {
+    fn default() -> Self {
+        Self::Kservice(Default::default())
     }
 }
 
@@ -69,14 +68,14 @@ pub enum Union3IntOrRecursive1OrString {
     String(String),
 }
 
-impl Default for Union3IntOrRecursive1OrString {
-    fn default() -> Self {
-        Self::Recursive1(Default::default())
-    }
-}
-
 impl AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
     fn as_ref(&self) -> &Union3IntOrRecursive1OrString {
         self
+    }
+}
+
+impl Default for Union3IntOrRecursive1OrString {
+    fn default() -> Self {
+        Self::Recursive1(Default::default())
     }
 }

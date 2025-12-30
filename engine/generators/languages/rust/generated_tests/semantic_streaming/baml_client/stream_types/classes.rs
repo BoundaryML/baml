@@ -7,30 +7,38 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of ClassWithBlockDone.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ClassWithBlockDone {
     pub i_16_digits: i64,
 
     pub s_20_words: String,
 }
 
-/// Streaming variant of ClassWithoutDone.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ClassWithBlockDone> for ClassWithBlockDone {
+    fn as_ref(&self) -> &ClassWithBlockDone {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ClassWithoutDone {
     pub i_16_digits: Option<i64>,
 
     pub s_20_words: baml::StreamState<Option<String>>,
 }
 
-/// Streaming variant of SemanticContainer.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ClassWithoutDone> for ClassWithoutDone {
+    fn as_ref(&self) -> &ClassWithoutDone {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct SemanticContainer {
     pub sixteen_digit_number: Option<i64>,
 
@@ -49,10 +57,21 @@ pub struct SemanticContainer {
     pub final_string: Option<String>,
 }
 
-/// Streaming variant of SmallThing.
-#[derive(Debug, Clone, Default)]
+impl AsRef<SemanticContainer> for SemanticContainer {
+    fn as_ref(&self) -> &SemanticContainer {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct SmallThing {
     pub i_16_digits: i64,
 
     pub i_8_digits: Option<i64>,
+}
+
+impl AsRef<SmallThing> for SmallThing {
+    fn as_ref(&self) -> &SmallThing {
+        self
+    }
 }

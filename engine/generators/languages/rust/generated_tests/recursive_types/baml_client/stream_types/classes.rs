@@ -7,14 +7,18 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of UseMyUnion.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct UseMyUnion {
     pub u: Option<Union3IntOrRecursive1OrString>,
+}
+
+impl AsRef<UseMyUnion> for UseMyUnion {
+    fn as_ref(&self) -> &UseMyUnion {
+        self
+    }
 }

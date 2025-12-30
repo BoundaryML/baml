@@ -4,47 +4,110 @@
 // Learn more at https://docs.boundaryml.com
 
 //! Generated streaming union types.
-//!
-//! Full implementation coming in Phase 6.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of Union2ConditionOrSimpleCondition.
-#[derive(Debug, Clone)]
+/// Generated from: (Streaming.Condition | Streaming.SimpleCondition)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union2ConditionOrSimpleCondition {
-    Condition(Option<Box<Condition>>),
+    #[baml(name = "Condition")]
+    Condition(Box<Condition>),
 
-    SimpleCondition(Option<SimpleCondition>),
+    #[baml(name = "SimpleCondition")]
+    SimpleCondition(SimpleCondition),
 }
 
-/// Streaming variant of Union2ErrorOrSuccess.
-#[derive(Debug, Clone)]
+impl AsRef<Union2ConditionOrSimpleCondition> for Union2ConditionOrSimpleCondition {
+    fn as_ref(&self) -> &Union2ConditionOrSimpleCondition {
+        self
+    }
+}
+
+impl Default for Union2ConditionOrSimpleCondition {
+    fn default() -> Self {
+        Self::Condition(Default::default())
+    }
+}
+
+/// Generated from: (Streaming.Success | Streaming.Error | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union2ErrorOrSuccess {
-    Success(Option<Success>),
+    #[baml(name = "Success")]
+    Success(Success),
 
-    Error(Option<Error>),
+    #[baml(name = "Error")]
+    Error(Error),
 }
 
-/// Streaming variant of Union3DataObjectOrIntOrString.
-#[derive(Debug, Clone)]
+impl AsRef<Union2ErrorOrSuccess> for Union2ErrorOrSuccess {
+    fn as_ref(&self) -> &Union2ErrorOrSuccess {
+        self
+    }
+}
+
+impl Default for Union2ErrorOrSuccess {
+    fn default() -> Self {
+        Self::Success(Default::default())
+    }
+}
+
+/// Generated from: (string | int @stream.done | Streaming.DataObject | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union3DataObjectOrIntOrString {
-    String(Option<String>),
+    #[baml(name = "string")]
+    String(String),
 
-    Int(Option<i64>),
+    #[baml(name = "int")]
+    Int(i64),
 
-    DataObject(Option<DataObject>),
+    #[baml(name = "DataObject")]
+    DataObject(DataObject),
 }
 
-/// Streaming variant of Union4IntOrListNodeOrMapStringKeyNodeValueOrString.
-#[derive(Debug, Clone)]
+impl AsRef<Union3DataObjectOrIntOrString> for Union3DataObjectOrIntOrString {
+    fn as_ref(&self) -> &Union3DataObjectOrIntOrString {
+        self
+    }
+}
+
+impl Default for Union3DataObjectOrIntOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
+    }
+}
+
+/// Generated from: (string | int @stream.done | Streaming.Node[] | map<string, Streaming.Node> | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
-    String(Option<String>),
+    #[baml(name = "string")]
+    String(String),
 
-    Int(Option<i64>),
+    #[baml(name = "int")]
+    Int(i64),
 
-    ListNode(Option<Vec<Node>>),
+    #[baml(name = "List__Node")]
+    ListNode(Vec<Node>),
 
-    MapStringKeyNodeValue(Option<std::collections::HashMap<String, Node>>),
+    #[baml(name = "Map__string_Node")]
+    MapStringKeyNodeValue(std::collections::HashMap<String, Node>),
+}
+
+impl AsRef<Union4IntOrListNodeOrMapStringKeyNodeValueOrString>
+    for Union4IntOrListNodeOrMapStringKeyNodeValueOrString
+{
+    fn as_ref(&self) -> &Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
+        self
+    }
+}
+
+impl Default for Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
+    }
 }

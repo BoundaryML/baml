@@ -7,14 +7,12 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of ComplexMaps.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ComplexMaps {
     pub userMap: std::collections::HashMap<String, User>,
 
@@ -27,8 +25,13 @@ pub struct ComplexMaps {
     pub mapArray: Vec<std::collections::HashMap<String, String>>,
 }
 
-/// Streaming variant of Config.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ComplexMaps> for ComplexMaps {
+    fn as_ref(&self) -> &ComplexMaps {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Config {
     pub url: Option<String>,
 
@@ -37,8 +40,13 @@ pub struct Config {
     pub debug: Option<bool>,
 }
 
-/// Streaming variant of EdgeCaseMaps.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Config> for Config {
+    fn as_ref(&self) -> &Config {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct EdgeCaseMaps {
     pub emptyMap: std::collections::HashMap<String, String>,
 
@@ -49,8 +57,13 @@ pub struct EdgeCaseMaps {
     pub unionValues: std::collections::HashMap<String, types::Union3BoolOrIntOrString>,
 }
 
-/// Streaming variant of MixedKeyMaps.
-#[derive(Debug, Clone, Default)]
+impl AsRef<EdgeCaseMaps> for EdgeCaseMaps {
+    fn as_ref(&self) -> &EdgeCaseMaps {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct MixedKeyMaps {
     pub stringIntMap: std::collections::HashMap<String, i64>,
 
@@ -61,8 +74,13 @@ pub struct MixedKeyMaps {
     pub literalMap: std::collections::HashMap<String, Config>,
 }
 
-/// Streaming variant of NestedMaps.
-#[derive(Debug, Clone, Default)]
+impl AsRef<MixedKeyMaps> for MixedKeyMaps {
+    fn as_ref(&self) -> &MixedKeyMaps {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct NestedMaps {
     pub simple: std::collections::HashMap<String, String>,
 
@@ -78,8 +96,13 @@ pub struct NestedMaps {
     pub mapOfMaps: std::collections::HashMap<String, std::collections::HashMap<String, f64>>,
 }
 
-/// Streaming variant of Product.
-#[derive(Debug, Clone, Default)]
+impl AsRef<NestedMaps> for NestedMaps {
+    fn as_ref(&self) -> &NestedMaps {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Product {
     pub id: Option<i64>,
 
@@ -90,8 +113,13 @@ pub struct Product {
     pub tags: Vec<String>,
 }
 
-/// Streaming variant of SimpleMaps.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Product> for Product {
+    fn as_ref(&self) -> &Product {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct SimpleMaps {
     pub stringToString: std::collections::HashMap<String, String>,
 
@@ -104,8 +132,13 @@ pub struct SimpleMaps {
     pub intToString: std::collections::HashMap<String, String>,
 }
 
-/// Streaming variant of User.
-#[derive(Debug, Clone, Default)]
+impl AsRef<SimpleMaps> for SimpleMaps {
+    fn as_ref(&self) -> &SimpleMaps {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct User {
     pub id: Option<i64>,
 
@@ -114,4 +147,10 @@ pub struct User {
     pub email: Option<String>,
 
     pub active: Option<bool>,
+}
+
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
 }

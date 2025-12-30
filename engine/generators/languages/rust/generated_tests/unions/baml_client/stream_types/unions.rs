@@ -4,27 +4,56 @@
 // Learn more at https://docs.boundaryml.com
 
 //! Generated streaming union types.
-//!
-//! Full implementation coming in Phase 6.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of Union2IntOrListRecursive1.
-#[derive(Debug, Clone)]
+/// Generated from: (int @stream.done | Streaming.Recursive1[] | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union2IntOrListRecursive1 {
-    Int(Option<i64>),
+    #[baml(name = "int")]
+    Int(i64),
 
-    ListRecursive1(Option<Vec<Recursive1>>),
+    #[baml(name = "List__Recursive1")]
+    ListRecursive1(Vec<Recursive1>),
 }
 
-/// Streaming variant of Union3IntOrRecursive1OrString.
-#[derive(Debug, Clone)]
+impl AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
+    fn as_ref(&self) -> &Union2IntOrListRecursive1 {
+        self
+    }
+}
+
+impl Default for Union2IntOrListRecursive1 {
+    fn default() -> Self {
+        Self::Int(Default::default())
+    }
+}
+
+/// Generated from: (Streaming.Recursive1 | int @stream.done | string | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union3IntOrRecursive1OrString {
-    Recursive1(Option<Recursive1>),
+    #[baml(name = "Recursive1")]
+    Recursive1(Recursive1),
 
-    Int(Option<i64>),
+    #[baml(name = "int")]
+    Int(i64),
 
-    String(Option<String>),
+    #[baml(name = "string")]
+    String(String),
+}
+
+impl AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
+    fn as_ref(&self) -> &Union3IntOrRecursive1OrString {
+        self
+    }
+}
+
+impl Default for Union3IntOrRecursive1OrString {
+    fn default() -> Self {
+        Self::Recursive1(Default::default())
+    }
 }

@@ -7,7 +7,6 @@
 
 use super::*;
 use baml::{BamlDecode, BamlEncode};
-use std::collections::HashMap;
 
 /// Generated from: (Condition | SimpleCondition)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
@@ -20,15 +19,15 @@ pub enum Union2ConditionOrSimpleCondition {
     SimpleCondition(SimpleCondition),
 }
 
-impl Default for Union2ConditionOrSimpleCondition {
-    fn default() -> Self {
-        Self::Condition(Default::default())
-    }
-}
-
 impl AsRef<Union2ConditionOrSimpleCondition> for Union2ConditionOrSimpleCondition {
     fn as_ref(&self) -> &Union2ConditionOrSimpleCondition {
         self
+    }
+}
+
+impl Default for Union2ConditionOrSimpleCondition {
+    fn default() -> Self {
+        Self::Condition(Default::default())
     }
 }
 
@@ -43,15 +42,15 @@ pub enum Union2ErrorOrSuccess {
     Error(Error),
 }
 
-impl Default for Union2ErrorOrSuccess {
-    fn default() -> Self {
-        Self::Success(Default::default())
-    }
-}
-
 impl AsRef<Union2ErrorOrSuccess> for Union2ErrorOrSuccess {
     fn as_ref(&self) -> &Union2ErrorOrSuccess {
         self
+    }
+}
+
+impl Default for Union2ErrorOrSuccess {
+    fn default() -> Self {
+        Self::Success(Default::default())
     }
 }
 
@@ -66,15 +65,15 @@ pub enum Union2KbranchOrKleaf {
     Kbranch(String),
 }
 
-impl Default for Union2KbranchOrKleaf {
-    fn default() -> Self {
-        Self::Kleaf(Default::default())
-    }
-}
-
 impl AsRef<Union2KbranchOrKleaf> for Union2KbranchOrKleaf {
     fn as_ref(&self) -> &Union2KbranchOrKleaf {
         self
+    }
+}
+
+impl Default for Union2KbranchOrKleaf {
+    fn default() -> Self {
+        Self::Kleaf(Default::default())
     }
 }
 
@@ -89,15 +88,15 @@ pub enum Union2KerrorOrKsuccess {
     Kerror(String),
 }
 
-impl Default for Union2KerrorOrKsuccess {
-    fn default() -> Self {
-        Self::Ksuccess(Default::default())
-    }
-}
-
 impl AsRef<Union2KerrorOrKsuccess> for Union2KerrorOrKsuccess {
     fn as_ref(&self) -> &Union2KerrorOrKsuccess {
         self
+    }
+}
+
+impl Default for Union2KerrorOrKsuccess {
+    fn default() -> Self {
+        Self::Ksuccess(Default::default())
     }
 }
 
@@ -115,15 +114,15 @@ pub enum Union3BoolOrIntOrString {
     Bool(bool),
 }
 
-impl Default for Union3BoolOrIntOrString {
-    fn default() -> Self {
-        Self::String(Default::default())
-    }
-}
-
 impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
     fn as_ref(&self) -> &Union3BoolOrIntOrString {
         self
+    }
+}
+
+impl Default for Union3BoolOrIntOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
     }
 }
 
@@ -141,15 +140,15 @@ pub enum Union3DataObjectOrIntOrString {
     DataObject(DataObject),
 }
 
-impl Default for Union3DataObjectOrIntOrString {
-    fn default() -> Self {
-        Self::String(Default::default())
-    }
-}
-
 impl AsRef<Union3DataObjectOrIntOrString> for Union3DataObjectOrIntOrString {
     fn as_ref(&self) -> &Union3DataObjectOrIntOrString {
         self
+    }
+}
+
+impl Default for Union3DataObjectOrIntOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
     }
 }
 
@@ -167,15 +166,15 @@ pub enum Union3FloatOrIntOrString {
     Float(f64),
 }
 
-impl Default for Union3FloatOrIntOrString {
-    fn default() -> Self {
-        Self::String(Default::default())
-    }
-}
-
 impl AsRef<Union3FloatOrIntOrString> for Union3FloatOrIntOrString {
     fn as_ref(&self) -> &Union3FloatOrIntOrString {
         self
+    }
+}
+
+impl Default for Union3FloatOrIntOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
     }
 }
 
@@ -193,15 +192,15 @@ pub enum Union3KandOrKnotOrKor {
     Knot(String),
 }
 
-impl Default for Union3KandOrKnotOrKor {
-    fn default() -> Self {
-        Self::Kand(Default::default())
-    }
-}
-
 impl AsRef<Union3KandOrKnotOrKor> for Union3KandOrKnotOrKor {
     fn as_ref(&self) -> &Union3KandOrKnotOrKor {
         self
+    }
+}
+
+impl Default for Union3KandOrKnotOrKor {
+    fn default() -> Self {
+        Self::Kand(Default::default())
     }
 }
 
@@ -219,15 +218,15 @@ pub enum Union3KarchivedOrKdraftOrKpublished {
     Karchived(String),
 }
 
-impl Default for Union3KarchivedOrKdraftOrKpublished {
-    fn default() -> Self {
-        Self::Kdraft(Default::default())
-    }
-}
-
 impl AsRef<Union3KarchivedOrKdraftOrKpublished> for Union3KarchivedOrKdraftOrKpublished {
     fn as_ref(&self) -> &Union3KarchivedOrKdraftOrKpublished {
         self
+    }
+}
+
+impl Default for Union3KarchivedOrKdraftOrKpublished {
+    fn default() -> Self {
+        Self::Kdraft(Default::default())
     }
 }
 
@@ -245,15 +244,15 @@ pub enum Union3KaudioOrKdocumentOrKimage {
     Kdocument(String),
 }
 
-impl Default for Union3KaudioOrKdocumentOrKimage {
-    fn default() -> Self {
-        Self::Kimage(Default::default())
-    }
-}
-
 impl AsRef<Union3KaudioOrKdocumentOrKimage> for Union3KaudioOrKdocumentOrKimage {
     fn as_ref(&self) -> &Union3KaudioOrKdocumentOrKimage {
         self
+    }
+}
+
+impl Default for Union3KaudioOrKdocumentOrKimage {
+    fn default() -> Self {
+        Self::Kimage(Default::default())
     }
 }
 
@@ -271,15 +270,15 @@ pub enum Union3KflexOrKgridOrKstack {
     Kstack(String),
 }
 
-impl Default for Union3KflexOrKgridOrKstack {
-    fn default() -> Self {
-        Self::Kflex(Default::default())
-    }
-}
-
 impl AsRef<Union3KflexOrKgridOrKstack> for Union3KflexOrKgridOrKstack {
     fn as_ref(&self) -> &Union3KflexOrKgridOrKstack {
         self
+    }
+}
+
+impl Default for Union3KflexOrKgridOrKstack {
+    fn default() -> Self {
+        Self::Kflex(Default::default())
     }
 }
 
@@ -297,15 +296,15 @@ pub enum Union3KhtmlOrKmarkdownOrKplain {
     Khtml(String),
 }
 
-impl Default for Union3KhtmlOrKmarkdownOrKplain {
-    fn default() -> Self {
-        Self::Kplain(Default::default())
-    }
-}
-
 impl AsRef<Union3KhtmlOrKmarkdownOrKplain> for Union3KhtmlOrKmarkdownOrKplain {
     fn as_ref(&self) -> &Union3KhtmlOrKmarkdownOrKplain {
         self
+    }
+}
+
+impl Default for Union3KhtmlOrKmarkdownOrKplain {
+    fn default() -> Self {
+        Self::Kplain(Default::default())
     }
 }
 
@@ -326,15 +325,15 @@ pub enum Union4BoolOrFloatOrIntOrString {
     Bool(bool),
 }
 
-impl Default for Union4BoolOrFloatOrIntOrString {
-    fn default() -> Self {
-        Self::String(Default::default())
-    }
-}
-
 impl AsRef<Union4BoolOrFloatOrIntOrString> for Union4BoolOrFloatOrIntOrString {
     fn as_ref(&self) -> &Union4BoolOrFloatOrIntOrString {
         self
+    }
+}
+
+impl Default for Union4BoolOrFloatOrIntOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
     }
 }
 
@@ -355,17 +354,17 @@ pub enum Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
     MapStringKeyNodeValue(std::collections::HashMap<String, Node>),
 }
 
-impl Default for Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
-    fn default() -> Self {
-        Self::String(Default::default())
-    }
-}
-
 impl AsRef<Union4IntOrListNodeOrMapStringKeyNodeValueOrString>
     for Union4IntOrListNodeOrMapStringKeyNodeValueOrString
 {
     fn as_ref(&self) -> &Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
         self
+    }
+}
+
+impl Default for Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
     }
 }
 
@@ -386,15 +385,15 @@ pub enum Union4KbuttonOrKcontainerOrKimageOrKtext {
     Kcontainer(String),
 }
 
-impl Default for Union4KbuttonOrKcontainerOrKimageOrKtext {
-    fn default() -> Self {
-        Self::Kbutton(Default::default())
-    }
-}
-
 impl AsRef<Union4KbuttonOrKcontainerOrKimageOrKtext> for Union4KbuttonOrKcontainerOrKimageOrKtext {
     fn as_ref(&self) -> &Union4KbuttonOrKcontainerOrKimageOrKtext {
         self
+    }
+}
+
+impl Default for Union4KbuttonOrKcontainerOrKimageOrKtext {
+    fn default() -> Self {
+        Self::Kbutton(Default::default())
     }
 }
 
@@ -418,15 +417,15 @@ pub enum Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     IntK5(i64),
 }
 
-impl Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
-    fn default() -> Self {
-        Self::IntK1(Default::default())
-    }
-}
-
 impl AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5> for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     fn as_ref(&self) -> &Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
         self
+    }
+}
+
+impl Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
+    fn default() -> Self {
+        Self::IntK1(Default::default())
     }
 }
 
@@ -450,14 +449,14 @@ pub enum Union5KcontainsOrKeqOrKgtOrKltOrKne {
     Kcontains(String),
 }
 
-impl Default for Union5KcontainsOrKeqOrKgtOrKltOrKne {
-    fn default() -> Self {
-        Self::Keq(Default::default())
-    }
-}
-
 impl AsRef<Union5KcontainsOrKeqOrKgtOrKltOrKne> for Union5KcontainsOrKeqOrKgtOrKltOrKne {
     fn as_ref(&self) -> &Union5KcontainsOrKeqOrKgtOrKltOrKne {
         self
+    }
+}
+
+impl Default for Union5KcontainsOrKeqOrKgtOrKltOrKne {
+    fn default() -> Self {
+        Self::Keq(Default::default())
     }
 }

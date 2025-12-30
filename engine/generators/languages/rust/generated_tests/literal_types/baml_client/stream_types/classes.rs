@@ -7,14 +7,12 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of BooleanLiterals.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct BooleanLiterals {
     pub alwaysTrue: Option<bool>,
 
@@ -23,8 +21,13 @@ pub struct BooleanLiterals {
     pub eitherBool: Option<types::Union2BoolKFalseOrBoolKTrue>,
 }
 
-/// Streaming variant of ComplexLiterals.
-#[derive(Debug, Clone, Default)]
+impl AsRef<BooleanLiterals> for BooleanLiterals {
+    fn as_ref(&self) -> &BooleanLiterals {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ComplexLiterals {
     pub state: Option<types::Union4KarchivedOrKdeletedOrKdraftOrKpublished>,
 
@@ -37,8 +40,13 @@ pub struct ComplexLiterals {
     pub codes: Vec<types::Union3IntK200OrIntK404OrIntK500>,
 }
 
-/// Streaming variant of IntegerLiterals.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ComplexLiterals> for ComplexLiterals {
+    fn as_ref(&self) -> &ComplexLiterals {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct IntegerLiterals {
     pub priority: Option<types::Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5>,
 
@@ -47,11 +55,17 @@ pub struct IntegerLiterals {
     pub maxRetries: Option<types::Union4IntK0OrIntK1OrIntK3OrIntK5>,
 }
 
-/// Streaming variant of MixedLiterals.
-#[derive(Debug, Clone, Default)]
+impl AsRef<IntegerLiterals> for IntegerLiterals {
+    fn as_ref(&self) -> &IntegerLiterals {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct MixedLiterals {
     pub id: Option<i64>,
 
+    #[baml(name = "type")]
     pub r#type: Option<types::Union3KadminOrKguestOrKuser>,
 
     pub level: Option<types::Union3IntK1OrIntK2OrIntK3>,
@@ -61,12 +75,23 @@ pub struct MixedLiterals {
     pub apiVersion: Option<types::Union3Kv1OrKv2OrKv3>,
 }
 
-/// Streaming variant of StringLiterals.
-#[derive(Debug, Clone, Default)]
+impl AsRef<MixedLiterals> for MixedLiterals {
+    fn as_ref(&self) -> &MixedLiterals {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct StringLiterals {
     pub status: Option<types::Union3KactiveOrKinactiveOrKpending>,
 
     pub environment: Option<types::Union3KdevOrKprodOrKstaging>,
 
     pub method: Option<types::Union4KDELETEOrKGETOrKPOSTOrKPUT>,
+}
+
+impl AsRef<StringLiterals> for StringLiterals {
+    fn as_ref(&self) -> &StringLiterals {
+        self
+    }
 }

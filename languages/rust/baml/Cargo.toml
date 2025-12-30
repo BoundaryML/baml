@@ -22,6 +22,7 @@ libc = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
 once_cell = { workspace = true }
+futures-util = { workspace = true }
 
 [build-dependencies]
 prost-build = { workspace = true }

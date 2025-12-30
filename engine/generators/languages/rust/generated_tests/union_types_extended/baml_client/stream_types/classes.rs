@@ -7,14 +7,12 @@
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
-//! by the stream_type_to_rust conversion.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of Admin.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Admin {
     pub id: Option<i64>,
 
@@ -22,11 +20,17 @@ pub struct Admin {
 
     pub permissions: Vec<String>,
 
+    #[baml(name = "type")]
     pub r#type: Option<String>,
 }
 
-/// Streaming variant of ApiError.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Admin> for Admin {
+    fn as_ref(&self) -> &Admin {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ApiError {
     pub status: Option<String>,
 
@@ -35,8 +39,13 @@ pub struct ApiError {
     pub code: Option<i64>,
 }
 
-/// Streaming variant of ApiPending.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ApiError> for ApiError {
+    fn as_ref(&self) -> &ApiError {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ApiPending {
     pub status: Option<String>,
 
@@ -45,16 +54,26 @@ pub struct ApiPending {
     pub eta: Option<i64>,
 }
 
-/// Streaming variant of ApiSuccess.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ApiPending> for ApiPending {
+    fn as_ref(&self) -> &ApiPending {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ApiSuccess {
     pub status: Option<String>,
 
     pub data: std::collections::HashMap<String, String>,
 }
 
-/// Streaming variant of Bird.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ApiSuccess> for ApiSuccess {
+    fn as_ref(&self) -> &ApiSuccess {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Bird {
     pub species: Option<String>,
 
@@ -63,8 +82,13 @@ pub struct Bird {
     pub wingspan: Option<f64>,
 }
 
-/// Streaming variant of Cat.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Bird> for Bird {
+    fn as_ref(&self) -> &Bird {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Cat {
     pub species: Option<String>,
 
@@ -73,16 +97,26 @@ pub struct Cat {
     pub lives: Option<i64>,
 }
 
-/// Streaming variant of Circle.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Cat> for Cat {
+    fn as_ref(&self) -> &Cat {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Circle {
     pub shape: Option<String>,
 
     pub radius: Option<f64>,
 }
 
-/// Streaming variant of ComplexUnions.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Circle> for Circle {
+    fn as_ref(&self) -> &Circle {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ComplexUnions {
     pub userOrProduct: Option<Union2ProductOrUser>,
 
@@ -95,8 +129,13 @@ pub struct ComplexUnions {
     pub multiTypeResult: Option<Union3ErrorOrSuccessOrWarning>,
 }
 
-/// Streaming variant of DataResponse.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ComplexUnions> for ComplexUnions {
+    fn as_ref(&self) -> &ComplexUnions {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct DataResponse {
     pub data: Option<String>,
 
@@ -105,8 +144,13 @@ pub struct DataResponse {
     pub status: Option<String>,
 }
 
-/// Streaming variant of DiscriminatedUnions.
-#[derive(Debug, Clone, Default)]
+impl AsRef<DataResponse> for DataResponse {
+    fn as_ref(&self) -> &DataResponse {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct DiscriminatedUnions {
     pub shape: Option<Union3CircleOrRectangleOrTriangle>,
 
@@ -115,8 +159,13 @@ pub struct DiscriminatedUnions {
     pub response: Option<Union3ApiErrorOrApiPendingOrApiSuccess>,
 }
 
-/// Streaming variant of Dog.
-#[derive(Debug, Clone, Default)]
+impl AsRef<DiscriminatedUnions> for DiscriminatedUnions {
+    fn as_ref(&self) -> &DiscriminatedUnions {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Dog {
     pub species: Option<String>,
 
@@ -125,9 +174,15 @@ pub struct Dog {
     pub goodBoy: Option<bool>,
 }
 
-/// Streaming variant of Error.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Dog> for Dog {
+    fn as_ref(&self) -> &Dog {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Error {
+    #[baml(name = "type")]
     pub r#type: Option<String>,
 
     pub message: Option<String>,
@@ -137,8 +192,13 @@ pub struct Error {
     pub details: Option<String>,
 }
 
-/// Streaming variant of ErrorResponse.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Error> for Error {
+    fn as_ref(&self) -> &Error {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct ErrorResponse {
     pub error: Option<String>,
 
@@ -147,8 +207,13 @@ pub struct ErrorResponse {
     pub status: Option<String>,
 }
 
-/// Streaming variant of PrimitiveUnions.
-#[derive(Debug, Clone, Default)]
+impl AsRef<ErrorResponse> for ErrorResponse {
+    fn as_ref(&self) -> &ErrorResponse {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct PrimitiveUnions {
     pub stringOrInt: Option<types::Union2IntOrString>,
 
@@ -161,8 +226,13 @@ pub struct PrimitiveUnions {
     pub anyPrimitive: Option<types::Union4BoolOrFloatOrIntOrString>,
 }
 
-/// Streaming variant of Product.
-#[derive(Debug, Clone, Default)]
+impl AsRef<PrimitiveUnions> for PrimitiveUnions {
+    fn as_ref(&self) -> &PrimitiveUnions {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Product {
     pub id: Option<i64>,
 
@@ -170,11 +240,17 @@ pub struct Product {
 
     pub price: Option<f64>,
 
+    #[baml(name = "type")]
     pub r#type: Option<String>,
 }
 
-/// Streaming variant of Rectangle.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Product> for Product {
+    fn as_ref(&self) -> &Product {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Rectangle {
     pub shape: Option<String>,
 
@@ -183,25 +259,41 @@ pub struct Rectangle {
     pub height: Option<f64>,
 }
 
-/// Streaming variant of RecursiveUnion.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Rectangle> for Rectangle {
+    fn as_ref(&self) -> &Rectangle {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct RecursiveUnion {
     pub value: Option<Union3IntOrRecursiveUnionOrString>,
 
     pub children: Vec<Union2RecursiveUnionOrString>,
 }
 
-/// Streaming variant of Result.
-#[derive(Debug, Clone, Default)]
+impl AsRef<RecursiveUnion> for RecursiveUnion {
+    fn as_ref(&self) -> &RecursiveUnion {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Result {
     pub value: Option<types::Union3FloatOrIntOrString>,
 
     pub metadata: std::collections::HashMap<String, String>,
 }
 
-/// Streaming variant of Success.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Result> for Result {
+    fn as_ref(&self) -> &Result {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Success {
+    #[baml(name = "type")]
     pub r#type: Option<String>,
 
     pub message: Option<String>,
@@ -209,8 +301,13 @@ pub struct Success {
     pub data: std::collections::HashMap<String, String>,
 }
 
-/// Streaming variant of Triangle.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Success> for Success {
+    fn as_ref(&self) -> &Success {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Triangle {
     pub shape: Option<String>,
 
@@ -219,8 +316,13 @@ pub struct Triangle {
     pub height: Option<f64>,
 }
 
-/// Streaming variant of UnionArrays.
-#[derive(Debug, Clone, Default)]
+impl AsRef<Triangle> for Triangle {
+    fn as_ref(&self) -> &Triangle {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct UnionArrays {
     pub mixedArray: Vec<types::Union2IntOrString>,
 
@@ -231,22 +333,40 @@ pub struct UnionArrays {
     pub nestedUnionArray: Vec<types::Union2ListIntOrString>,
 }
 
-/// Streaming variant of User.
-#[derive(Debug, Clone, Default)]
+impl AsRef<UnionArrays> for UnionArrays {
+    fn as_ref(&self) -> &UnionArrays {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct User {
     pub id: Option<i64>,
 
     pub name: Option<String>,
 
+    #[baml(name = "type")]
     pub r#type: Option<String>,
 }
 
-/// Streaming variant of Warning.
-#[derive(Debug, Clone, Default)]
+impl AsRef<User> for User {
+    fn as_ref(&self) -> &User {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, BamlDecode)]
 pub struct Warning {
+    #[baml(name = "type")]
     pub r#type: Option<String>,
 
     pub message: Option<String>,
 
     pub level: Option<i64>,
+}
+
+impl AsRef<Warning> for Warning {
+    fn as_ref(&self) -> &Warning {
+        self
+    }
 }

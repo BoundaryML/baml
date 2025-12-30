@@ -3,7 +3,6 @@
 {% else %}
 //! Generated union types.
 
-use std::collections::HashMap;
 use baml::{BamlEncode, BamlDecode};
 use super::*;
 {% for u in unions %}
@@ -20,6 +19,12 @@ pub enum {{ u.name }} {
 {% endfor %}
 }
 
+impl AsRef<{{ u.name }}> for {{ u.name }} {
+    fn as_ref(&self) -> &{{ u.name }} {
+        self
+    }
+}
+
 impl Default for {{ u.name }} {
     fn default() -> Self {
         {% if u.variants.is_empty() %}
@@ -27,12 +32,6 @@ impl Default for {{ u.name }} {
         {% else %}
             Self::{{ u.variants[0].name }}(Default::default())
         {% endif %}
-    }
-}
-
-impl AsRef<{{ u.name }}> for {{ u.name }} {
-    fn as_ref(&self) -> &{{ u.name }} {
-        self
     }
 }
 {% endfor %}

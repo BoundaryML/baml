@@ -6,6 +6,7 @@
 //! Synchronous BAML function calls.
 
 use crate::baml_client::{
+    functions::stream::BamlStreamClient,
     runtime::{get_runtime, FunctionOptions},
     types,
 };
@@ -13,9 +14,13 @@ use baml::{BamlEncode, BamlError};
 
 pub struct BamlClient {
     options: Option<FunctionOptions>,
+    pub stream: BamlStreamClient,
 }
 
-pub static B: BamlClient = BamlClient { options: None };
+pub static B: BamlClient = BamlClient {
+    options: None,
+    stream: BamlStreamClient { options: None },
+};
 
 /// Generates a BAML function with N parameters.
 macro_rules! baml_function {
@@ -36,8 +41,10 @@ impl BamlClient {
         F: Fn(FunctionOptions) -> FunctionOptions,
     {
         let options = options_fn(self.options.as_ref().map(|o| o.clone()).unwrap_or_default());
+        let stream = BamlStreamClient::new(Some(options.clone()));
         BamlClient {
             options: Some(options),
+            stream,
         }
     }
 

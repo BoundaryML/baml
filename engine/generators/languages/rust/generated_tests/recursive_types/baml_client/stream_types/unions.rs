@@ -4,41 +4,90 @@
 // Learn more at https://docs.boundaryml.com
 
 //! Generated streaming union types.
-//!
-//! Full implementation coming in Phase 6.
 
+use super::*;
 use crate::baml_client::types;
-use crate::baml_client::types::*;
-use std::collections::HashMap;
+use baml::BamlDecode;
 
-/// Streaming variant of Union2IntOrListRecursive1.
-#[derive(Debug, Clone)]
+/// Generated from: (int @stream.done | Streaming.Recursive1[] | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union2IntOrListRecursive1 {
-    Int(Option<i64>),
+    #[baml(name = "int")]
+    Int(i64),
 
-    ListRecursive1(Option<Vec<Recursive1>>),
+    #[baml(name = "List__Recursive1")]
+    ListRecursive1(Vec<Recursive1>),
 }
 
-/// Streaming variant of Union3IntOrRecursive1OrString.
-#[derive(Debug, Clone)]
+impl AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
+    fn as_ref(&self) -> &Union2IntOrListRecursive1 {
+        self
+    }
+}
+
+impl Default for Union2IntOrListRecursive1 {
+    fn default() -> Self {
+        Self::Int(Default::default())
+    }
+}
+
+/// Generated from: (Streaming.Recursive1 | int @stream.done | string | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union3IntOrRecursive1OrString {
-    Recursive1(Option<Recursive1>),
+    #[baml(name = "Recursive1")]
+    Recursive1(Recursive1),
 
-    Int(Option<i64>),
+    #[baml(name = "int")]
+    Int(i64),
 
-    String(Option<String>),
+    #[baml(name = "string")]
+    String(String),
 }
 
-/// Streaming variant of Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString.
-#[derive(Debug, Clone)]
+impl AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
+    fn as_ref(&self) -> &Union3IntOrRecursive1OrString {
+        self
+    }
+}
+
+impl Default for Union3IntOrRecursive1OrString {
+    fn default() -> Self {
+        Self::Recursive1(Default::default())
+    }
+}
+
+/// Generated from: (string | int @stream.done | float @stream.done | map<string, Streaming.JSON> | Streaming.JSON[] | null)
+#[derive(Debug, Clone, BamlDecode)]
+#[baml(union)]
 pub enum Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
-    String(Option<String>),
+    #[baml(name = "string")]
+    String(String),
 
-    Int(Option<i64>),
+    #[baml(name = "int")]
+    Int(i64),
 
-    Float(Option<f64>),
+    #[baml(name = "float")]
+    Float(f64),
 
-    MapStringKeyJSONValue(Option<std::collections::HashMap<String, JSON>>),
+    #[baml(name = "Map__string_JSON")]
+    MapStringKeyJSONValue(std::collections::HashMap<String, JSON>),
 
-    ListJSON(Option<Vec<JSON>>),
+    #[baml(name = "List__JSON")]
+    ListJSON(Vec<JSON>),
+}
+
+impl AsRef<Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString>
+    for Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString
+{
+    fn as_ref(&self) -> &Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
+        self
+    }
+}
+
+impl Default for Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
+    }
 }

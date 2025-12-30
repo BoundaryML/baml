@@ -7,7 +7,6 @@
 
 use super::*;
 use baml::{BamlDecode, BamlEncode};
-use std::collections::HashMap;
 
 /// Generated from: ("light" | "dark")
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
@@ -20,15 +19,15 @@ pub enum Union2KdarkOrKlight {
     Kdark(String),
 }
 
-impl Default for Union2KdarkOrKlight {
-    fn default() -> Self {
-        Self::Klight(Default::default())
-    }
-}
-
 impl AsRef<Union2KdarkOrKlight> for Union2KdarkOrKlight {
     fn as_ref(&self) -> &Union2KdarkOrKlight {
         self
+    }
+}
+
+impl Default for Union2KdarkOrKlight {
+    fn default() -> Self {
+        Self::Klight(Default::default())
     }
 }
 
@@ -43,15 +42,15 @@ pub enum Union2KgridOrKlist {
     Klist(String),
 }
 
-impl Default for Union2KgridOrKlist {
-    fn default() -> Self {
-        Self::Kgrid(Default::default())
-    }
-}
-
 impl AsRef<Union2KgridOrKlist> for Union2KgridOrKlist {
     fn as_ref(&self) -> &Union2KgridOrKlist {
         self
+    }
+}
+
+impl Default for Union2KgridOrKlist {
+    fn default() -> Self {
+        Self::Kgrid(Default::default())
     }
 }
 
@@ -69,15 +68,15 @@ pub enum Union3BoolOrIntOrString {
     Bool(bool),
 }
 
-impl Default for Union3BoolOrIntOrString {
-    fn default() -> Self {
-        Self::String(Default::default())
-    }
-}
-
 impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
     fn as_ref(&self) -> &Union3BoolOrIntOrString {
         self
+    }
+}
+
+impl Default for Union3BoolOrIntOrString {
+    fn default() -> Self {
+        Self::String(Default::default())
     }
 }
 
@@ -95,15 +94,15 @@ pub enum Union3KdailyOrKimmediateOrKweekly {
     Kweekly(String),
 }
 
-impl Default for Union3KdailyOrKimmediateOrKweekly {
-    fn default() -> Self {
-        Self::Kimmediate(Default::default())
-    }
-}
-
 impl AsRef<Union3KdailyOrKimmediateOrKweekly> for Union3KdailyOrKimmediateOrKweekly {
     fn as_ref(&self) -> &Union3KdailyOrKimmediateOrKweekly {
         self
+    }
+}
+
+impl Default for Union3KdailyOrKimmediateOrKweekly {
+    fn default() -> Self {
+        Self::Kimmediate(Default::default())
     }
 }
 
@@ -121,15 +120,15 @@ pub enum Union3KdoneOrKin_progressOrKtodo {
     Kdone(String),
 }
 
-impl Default for Union3KdoneOrKin_progressOrKtodo {
-    fn default() -> Self {
-        Self::Ktodo(Default::default())
-    }
-}
-
 impl AsRef<Union3KdoneOrKin_progressOrKtodo> for Union3KdoneOrKin_progressOrKtodo {
     fn as_ref(&self) -> &Union3KdoneOrKin_progressOrKtodo {
         self
+    }
+}
+
+impl Default for Union3KdoneOrKin_progressOrKtodo {
+    fn default() -> Self {
+        Self::Ktodo(Default::default())
     }
 }
 
@@ -147,15 +146,15 @@ pub enum Union3KfriendsOrKprivateOrKpublic {
     Kfriends(String),
 }
 
-impl Default for Union3KfriendsOrKprivateOrKpublic {
-    fn default() -> Self {
-        Self::Kpublic(Default::default())
-    }
-}
-
 impl AsRef<Union3KfriendsOrKprivateOrKpublic> for Union3KfriendsOrKprivateOrKpublic {
     fn as_ref(&self) -> &Union3KfriendsOrKprivateOrKpublic {
         self
+    }
+}
+
+impl Default for Union3KfriendsOrKprivateOrKpublic {
+    fn default() -> Self {
+        Self::Kpublic(Default::default())
     }
 }
 
@@ -173,15 +172,15 @@ pub enum Union3KhighOrKlowOrKmedium {
     Khigh(String),
 }
 
-impl Default for Union3KhighOrKlowOrKmedium {
-    fn default() -> Self {
-        Self::Klow(Default::default())
-    }
-}
-
 impl AsRef<Union3KhighOrKlowOrKmedium> for Union3KhighOrKlowOrKmedium {
     fn as_ref(&self) -> &Union3KhighOrKlowOrKmedium {
         self
+    }
+}
+
+impl Default for Union3KhighOrKlowOrKmedium {
+    fn default() -> Self {
+        Self::Klow(Default::default())
     }
 }
 
@@ -202,17 +201,17 @@ pub enum Union4KactiveOrKcancelledOrKcompletedOrKplanning {
     Kcancelled(String),
 }
 
-impl Default for Union4KactiveOrKcancelledOrKcompletedOrKplanning {
-    fn default() -> Self {
-        Self::Kplanning(Default::default())
-    }
-}
-
 impl AsRef<Union4KactiveOrKcancelledOrKcompletedOrKplanning>
     for Union4KactiveOrKcancelledOrKcompletedOrKplanning
 {
     fn as_ref(&self) -> &Union4KactiveOrKcancelledOrKcompletedOrKplanning {
         self
+    }
+}
+
+impl Default for Union4KactiveOrKcancelledOrKcompletedOrKplanning {
+    fn default() -> Self {
+        Self::Kplanning(Default::default())
     }
 }
 
@@ -233,16 +232,16 @@ pub enum Union4KenterpriseOrKlargeOrKmediumOrKsmall {
     Kenterprise(String),
 }
 
-impl Default for Union4KenterpriseOrKlargeOrKmediumOrKsmall {
-    fn default() -> Self {
-        Self::Ksmall(Default::default())
-    }
-}
-
 impl AsRef<Union4KenterpriseOrKlargeOrKmediumOrKsmall>
     for Union4KenterpriseOrKlargeOrKmediumOrKsmall
 {
     fn as_ref(&self) -> &Union4KenterpriseOrKlargeOrKmediumOrKsmall {
         self
+    }
+}
+
+impl Default for Union4KenterpriseOrKlargeOrKmediumOrKsmall {
+    fn default() -> Self {
+        Self::Ksmall(Default::default())
     }
 }
