@@ -140,6 +140,8 @@ export const PromptPreview = () => {
                   <ResizablePanel ref={bottomPanelRef} defaultSize={40} minSize={20} maxSize={70}>
                     <div className="h-full overflow-y-auto px-1">
                       <AdaptiveBottomPanel />
+                      {/* padding for status bar at bottom. */}
+                      <div className="h-10 w-10" />
                     </div>
                   </ResizablePanel>
                 </ResizablePanelGroup>

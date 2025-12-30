@@ -40,8 +40,25 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({ response, st
   const parsedResponse = response.parsed_response
   const failureMessage = response.failure_message
 
+  // If there's an LLM failure, show the failure view
+  // But also show any partial response that was captured before the failure
   if (llmFailure) {
-    return <LLMFailureView failure={llmFailure} />
+    return (
+      <div className='space-y-4'>
+        <LLMFailureView failure={llmFailure} />
+        {/* Show partial response if available (e.g., content received before timeout) */}
+        {parsedResponse && (
+          <div className='border-t pt-4'>
+            <div className='space-y-2'>
+              <span className='text-xs text-muted-foreground'>
+                Partial Response (received before failure)
+              </span>
+              <ParsedResponseRenderer response={response} hideFailureError />
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   const handleLlmCopy = () => {
