@@ -115,12 +115,15 @@ pub enum Instruction {
     /// to the target instruction (can be negative to jump backwards).
     Jump(isize),
 
-    /// Jump to another instruction if the top of [`crate::Vm::stack`] is false.
+    /// Pop the condition and jump to another instruction if it is false.
     ///
-    /// Format: `JUMP_IF_FALSE o` where `o` is the offset from the current
+    /// Format: `POP_JUMP_IF_FALSE o` where `o` is the offset from the current
     /// instruction to the target instruction (can be negative to jump
     /// backwards).
-    JumpIfFalse(isize),
+    ///
+    /// This instruction pops the condition value from the stack after checking
+    /// it, ensuring the condition doesn't leak on the evaluation stack.
+    PopJumpIfFalse(isize),
 
     /// Performs an arithmetic binary operation.
     ///
@@ -351,7 +354,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Copy(i) => write!(f, "COPY {i}"),
             Instruction::PopReplace(n) => write!(f, "POP_REPLACE {n}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
-            Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
+            Instruction::PopJumpIfFalse(o) => write!(f, "POP_JUMP_IF_FALSE {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),

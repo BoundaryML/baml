@@ -53,7 +53,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(3),
                 // Loop exit: load result and return
                 Instruction::LoadVar("result".to_string()),
@@ -125,7 +125,7 @@ fn for_with_break() -> anyhow::Result<()> {
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(19),
+                Instruction::PopJumpIfFalse(19),
                 // Loop body: x = _iter[_i]
                 Instruction::LoadVar("_iter".to_string()),
                 Instruction::LoadVar("_i".to_string()),
@@ -140,7 +140,7 @@ fn for_with_break() -> anyhow::Result<()> {
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Gt),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 // break - jump to loop exit
                 Instruction::Jump(6),
                 // result += x
@@ -203,7 +203,7 @@ fn for_with_continue() -> anyhow::Result<()> {
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(3),
                 // Loop exit: load result and return
                 Instruction::LoadVar("result".to_string()),
@@ -222,7 +222,7 @@ fn for_with_continue() -> anyhow::Result<()> {
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Gt),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 // continue - jump to loop condition
                 Instruction::Jump(6),
                 // result += x
@@ -289,7 +289,7 @@ fn for_nested() -> anyhow::Result<()> {
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(3),
                 // Outer loop exit: load result and return
                 Instruction::LoadVar("result".to_string()),
@@ -319,7 +319,7 @@ fn for_nested() -> anyhow::Result<()> {
                 Instruction::LoadVar("_i1".to_string()),
                 Instruction::LoadVar("_len1".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 // Inner loop exit: jump back to outer loop condition
                 Instruction::Jump(-28),

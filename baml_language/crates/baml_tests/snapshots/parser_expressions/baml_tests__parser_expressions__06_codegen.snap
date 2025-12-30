@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -86,41 +86,41 @@ Function IndexAccess (arity: 1, kind: Exec):
      25   RETURN               
 
 Function TestPrecedence (arity: 0, kind: Exec):
-     0    LOAD_CONST 0       (null)
-     1    LOAD_CONST 0       (null)
-     2    LOAD_CONST 0       (null)
-     3    LOAD_CONST 0       (null)
-     4    LOAD_CONST 1       (2)
-     5    LOAD_CONST 2       (3)
-     6    BIN_OP *           
-     7    LOAD_CONST 3       (4)
-     8    BIN_OP +           
-     9    STORE_VAR 2        (c)
-     10   LOAD_CONST 1       (2)
-     11   LOAD_CONST 2       (3)
-     12   LOAD_CONST 3       (4)
-     13   BIN_OP *           
-     14   BIN_OP +           
-     15   LOAD_CONST 4       (10)
-     16   LOAD_CONST 1       (2)
-     17   BIN_OP +           
-     18   CMP_OP >           
-     19   STORE_VAR 3        (b)
-     20   LOAD_CONST 5       (true)
-     21   JUMP_IF_FALSE +2   (to 23)
-     22   JUMP +10           (to 32)
-     23   LOAD_CONST 6       (false)
-     24   JUMP_IF_FALSE +2   (to 26)
-     25   JUMP +4            (to 29)
-     26   LOAD_CONST 6       (false)
-     27   STORE_VAR 4        (d)
-     28   JUMP +3            (to 31)
-     29   LOAD_CONST 6       (false)
-     30   STORE_VAR 4        (d)
-     31   JUMP +3            (to 34)
-     32   LOAD_CONST 5       (true)
-     33   STORE_VAR 4        (d)
-     34   LOAD_VAR 4         (d)
-     35   STORE_VAR 1        (_0)
-     36   LOAD_VAR 1         (_0)
+     0    LOAD_CONST 0           (null)
+     1    LOAD_CONST 0           (null)
+     2    LOAD_CONST 0           (null)
+     3    LOAD_CONST 0           (null)
+     4    LOAD_CONST 1           (2)
+     5    LOAD_CONST 2           (3)
+     6    BIN_OP *               
+     7    LOAD_CONST 3           (4)
+     8    BIN_OP +               
+     9    STORE_VAR 2            (c)
+     10   LOAD_CONST 1           (2)
+     11   LOAD_CONST 2           (3)
+     12   LOAD_CONST 3           (4)
+     13   BIN_OP *               
+     14   BIN_OP +               
+     15   LOAD_CONST 4           (10)
+     16   LOAD_CONST 1           (2)
+     17   BIN_OP +               
+     18   CMP_OP >               
+     19   STORE_VAR 3            (b)
+     20   LOAD_CONST 5           (true)
+     21   POP_JUMP_IF_FALSE +2   (to 23)
+     22   JUMP +10               (to 32)
+     23   LOAD_CONST 6           (false)
+     24   POP_JUMP_IF_FALSE +2   (to 26)
+     25   JUMP +4                (to 29)
+     26   LOAD_CONST 6           (false)
+     27   STORE_VAR 4            (d)
+     28   JUMP +3                (to 31)
+     29   LOAD_CONST 6           (false)
+     30   STORE_VAR 4            (d)
+     31   JUMP +3                (to 34)
+     32   LOAD_CONST 5           (true)
+     33   STORE_VAR 4            (d)
+     34   LOAD_VAR 4             (d)
+     35   STORE_VAR 1            (_0)
+     36   LOAD_VAR 1             (_0)
      37   RETURN

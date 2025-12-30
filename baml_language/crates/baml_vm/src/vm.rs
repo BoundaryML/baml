@@ -895,9 +895,12 @@ impl Vm {
                     frame.instruction_ptr = instruction_ptr + offset;
                 }
 
-                Instruction::JumpIfFalse(offset) => {
-                    match &self.stack[self.stack.ensure_stack_top()?] {
-                        // Reassign only if the top of the stack is false.
+                Instruction::PopJumpIfFalse(offset) => {
+                    // Pop the condition from the stack (don't leave it there).
+                    let condition = self.stack.ensure_pop()?;
+
+                    match condition {
+                        // Reassign only if the condition is false.
                         Value::Bool(value) => {
                             if !value {
                                 frame.instruction_ptr = instruction_ptr + offset;
@@ -909,7 +912,7 @@ impl Vm {
                         other => {
                             return Err(VmError::from(InternalError::TypeError {
                                 expected: Type::Bool,
-                                got: self.objects.type_of(other),
+                                got: self.objects.type_of(&other),
                             }));
                         }
                     }

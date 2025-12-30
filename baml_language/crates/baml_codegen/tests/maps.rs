@@ -120,7 +120,7 @@ fn contains() -> anyhow::Result<()> {
                     Instruction::LoadVar("map".to_string()),
                     Instruction::LoadConst(Value::string("hello")),
                     Instruction::Call(2),
-                    Instruction::JumpIfFalse(6),
+                    Instruction::PopJumpIfFalse(6),
                     Instruction::Pop(1),
                     Instruction::LoadVar("map".to_string()),
                     Instruction::LoadConst(Value::string("hello")),

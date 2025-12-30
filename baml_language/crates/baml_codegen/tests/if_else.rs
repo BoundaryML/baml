@@ -23,7 +23,7 @@ fn if_else_literal_true() -> anyhow::Result<()> {
             // THIR codegen (efficient):
             // vec![
             //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(1)),
             //     Instruction::Jump(3),
@@ -35,7 +35,7 @@ fn if_else_literal_true() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("_0".to_string()),
@@ -63,7 +63,7 @@ fn if_else_literal_false() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("_0".to_string()),
@@ -92,7 +92,7 @@ fn if_else_comparison_condition() -> anyhow::Result<()> {
             //     Instruction::LoadConst(Value::Int(1)),
             //     Instruction::LoadConst(Value::Int(2)),
             //     Instruction::CmpOp(CmpOp::Lt),
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(10)),
             //     Instruction::Jump(3),
@@ -106,7 +106,7 @@ fn if_else_comparison_condition() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(20)),
                 Instruction::StoreVar("_0".to_string()),
@@ -136,7 +136,7 @@ fn if_else_equality_condition() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(200)),
                 Instruction::StoreVar("_0".to_string()),
@@ -166,7 +166,7 @@ fn if_else_assign_to_variable() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
@@ -200,7 +200,7 @@ fn if_else_with_local_in_branches() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null), // Pre-allocate for '_0'
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 // Else branch: b inlined as 2
                 Instruction::LoadConst(Value::Int(2)),
@@ -234,10 +234,10 @@ fn if_else_nested() -> anyhow::Result<()> {
             // THIR codegen (efficient):
             // vec![
             //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(10),
+            //     Instruction::PopJumpIfFalse(10),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Bool(false)),
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(1)),
             //     Instruction::Jump(3),
@@ -252,13 +252,13 @@ fn if_else_nested() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::StoreVar("_0".to_string()),
                 Instruction::Jump(9),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("_0".to_string()),
@@ -291,13 +291,13 @@ fn else_if_chain() -> anyhow::Result<()> {
             // THIR codegen (efficient):
             // vec![
             //     Instruction::LoadConst(Value::Bool(false)),
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(1)),
             //     Instruction::Jump(9),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Bool(false)),
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(2)),
             //     Instruction::Jump(3),
@@ -309,10 +309,10 @@ fn else_if_chain() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(10),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::StoreVar("_0".to_string()),
@@ -352,7 +352,7 @@ fn else_if_with_comparisons() -> anyhow::Result<()> {
             //     Instruction::LoadVar("x".to_string()),
             //     Instruction::LoadConst(Value::Int(0)),
             //     Instruction::CmpOp(CmpOp::Lt),
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(0)),
             //     Instruction::Jump(11),
@@ -360,7 +360,7 @@ fn else_if_with_comparisons() -> anyhow::Result<()> {
             //     Instruction::LoadVar("x".to_string()),
             //     Instruction::LoadConst(Value::Int(10)),
             //     Instruction::CmpOp(CmpOp::Lt),
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(1)),
             //     Instruction::Jump(3),
@@ -377,12 +377,12 @@ fn else_if_with_comparisons() -> anyhow::Result<()> {
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(12),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("_0".to_string()),
@@ -416,7 +416,7 @@ fn if_else_with_function_call_in_branch() -> anyhow::Result<()> {
             // THIR codegen (efficient):
             // vec![
             //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(5),
+            //     Instruction::PopJumpIfFalse(5),
             //     Instruction::Pop(1),
             //     Instruction::LoadGlobal(Value::function("get_value")),
             //     Instruction::Call(0),
@@ -429,7 +429,7 @@ fn if_else_with_function_call_in_branch() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("_0".to_string()),
@@ -461,7 +461,7 @@ fn if_else_with_arithmetic_in_condition() -> anyhow::Result<()> {
             //     Instruction::BinOp(BinOp::Add),
             //     Instruction::LoadConst(Value::Int(2)),
             //     Instruction::CmpOp(CmpOp::Eq),
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(100)),
             //     Instruction::Jump(3),
@@ -477,7 +477,7 @@ fn if_else_with_arithmetic_in_condition() -> anyhow::Result<()> {
                 Instruction::BinOp(BinOp::Add),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("_0".to_string()),
@@ -505,11 +505,11 @@ fn if_else_with_logical_and_in_condition() -> anyhow::Result<()> {
             // vec![
             //     // Short-circuit AND evaluation: if left is false, skip right and use left for if-else
             //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(3), // If false, jump to the if's JumpIfFalse (keeps false on stack)
+            //     Instruction::PopJumpIfFalse(3), // If false, jump to the if's PopJumpIfFalse (keeps false on stack)
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Bool(true)),
             //     // If-else
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(1)),
             //     Instruction::Jump(3),
@@ -522,7 +522,7 @@ fn if_else_with_logical_and_in_condition() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::StoreVar("_1".to_string()),
@@ -530,7 +530,7 @@ fn if_else_with_logical_and_in_condition() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::StoreVar("_1".to_string()),
                 Instruction::LoadVar("_1".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("_0".to_string()),
@@ -558,12 +558,12 @@ fn if_else_with_logical_or_in_condition() -> anyhow::Result<()> {
             // vec![
             //     // Short-circuit OR evaluation: if left is true, skip right and use left for if-else
             //     Instruction::LoadConst(Value::Bool(false)),
-            //     Instruction::JumpIfFalse(2),
-            //     Instruction::Jump(3), // If true, jump past Pop+LoadConst to the if's JumpIfFalse
+            //     Instruction::PopJumpIfFalse(2),
+            //     Instruction::Jump(3), // If true, jump past Pop+LoadConst to the if's PopJumpIfFalse
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Bool(true)),
             //     // If-else
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(1)),
             //     Instruction::Jump(3),
@@ -576,7 +576,7 @@ fn if_else_with_logical_or_in_condition() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::StoreVar("_1".to_string()),
@@ -584,7 +584,7 @@ fn if_else_with_logical_or_in_condition() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::StoreVar("_1".to_string()),
                 Instruction::LoadVar("_1".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("_0".to_string()),
@@ -617,7 +617,7 @@ fn if_else_in_arithmetic() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::StoreVar("_2".to_string()),
@@ -651,7 +651,7 @@ fn if_else_as_function_arg() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(20)),
                 Instruction::StoreVar("_2".to_string()),
@@ -686,7 +686,7 @@ fn parenthesized_if_else_in_arithmetic() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("_1".to_string()),
@@ -694,7 +694,7 @@ fn parenthesized_if_else_in_arithmetic() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("_1".to_string()),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(4)),
                 Instruction::StoreVar("_3".to_string()),
@@ -726,7 +726,7 @@ fn chained_if_else_in_arithmetic() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("_1".to_string()),
@@ -734,7 +734,7 @@ fn chained_if_else_in_arithmetic() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("_1".to_string()),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(4)),
                 Instruction::StoreVar("_3".to_string()),
@@ -780,7 +780,7 @@ fn if_without_else_statement() -> anyhow::Result<()> {
             //     Instruction::LoadConst(Value::Int(0)), // let x = 0
             //     // if (true)
             //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(5), // jump to false path pop
+            //     Instruction::PopJumpIfFalse(5), // jump to false path pop
             //     Instruction::Pop(1),         // pop condition (true path)
             //     // then block: x = 5
             //     Instruction::LoadConst(Value::Int(5)),
@@ -800,7 +800,7 @@ fn if_without_else_statement() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(5)),
@@ -832,7 +832,7 @@ fn if_without_else_with_local_var() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null), // Pre-allocate for 'temp'
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(10)),
@@ -864,7 +864,7 @@ fn consecutive_if_without_else() -> anyhow::Result<()> {
             //     Instruction::LoadConst(Value::Int(0)), // let x = 0
             //     // first if (true)
             //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(5),
+            //     Instruction::PopJumpIfFalse(5),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(1)),
             //     Instruction::StoreVar("x".to_string()),
@@ -873,7 +873,7 @@ fn consecutive_if_without_else() -> anyhow::Result<()> {
             //     // No Stmt::Expr pop for first if
             //     // second if (false)
             //     Instruction::LoadConst(Value::Bool(false)),
-            //     Instruction::JumpIfFalse(5),
+            //     Instruction::PopJumpIfFalse(5),
             //     Instruction::Pop(1),
             //     Instruction::LoadConst(Value::Int(2)),
             //     Instruction::StoreVar("x".to_string()),
@@ -891,13 +891,13 @@ fn consecutive_if_without_else() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(2)),
@@ -962,7 +962,7 @@ fn if_else_assignment_with_locals() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 // Check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 // Else branch: i = 2
                 Instruction::LoadConst(Value::Int(2)),
@@ -1016,7 +1016,7 @@ fn if_else_normal_statement() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 // Check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(10),
                 // Else branch: x = 3, y = 4, identity(y)
                 Instruction::LoadConst(Value::Int(3)),
@@ -1070,11 +1070,11 @@ fn else_if_return_expr_with_locals() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 // Check condition a
                 Instruction::LoadVar("a".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(10),
                 // Else: check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 // Else else: _0 = 3
                 Instruction::LoadConst(Value::Int(3)),
@@ -1119,11 +1119,11 @@ fn else_if_assignment() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 // Check condition a
                 Instruction::LoadVar("a".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(10),
                 // Else: check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 // Else else: result = 3
                 Instruction::LoadConst(Value::Int(3)),
@@ -1171,11 +1171,11 @@ fn else_if_assignment_with_locals() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 // Check condition a
                 Instruction::LoadVar("a".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(10),
                 // Else: check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 // Else else: result = 3
                 Instruction::LoadConst(Value::Int(3)),
@@ -1234,7 +1234,7 @@ fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 // If false: skip to return
                 Instruction::Jump(3),
@@ -1296,13 +1296,13 @@ fn return_with_stack() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(31),
                 // if (a != 1) - inlined b=1 check
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::NotEq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(22),
                 // c = 2
                 Instruction::LoadConst(Value::Int(2)),
@@ -1314,7 +1314,7 @@ fn return_with_stack() -> anyhow::Result<()> {
                 Instruction::LoadVar("b".to_string()),
                 Instruction::LoadVar("c".to_string()),
                 Instruction::CmpOp(CmpOp::NotEq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(5),
                 // Loop exit: return 7
                 Instruction::LoadConst(Value::Int(7)),
@@ -1323,7 +1323,7 @@ fn return_with_stack() -> anyhow::Result<()> {
                 Instruction::Return,
                 // Loop body: if (true)
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 // Jump back to while
                 Instruction::Jump(-12),
@@ -1363,7 +1363,7 @@ fn if_else_return_expr() -> anyhow::Result<()> {
                 // Load condition: parameter b from slot 1
                 Instruction::LoadVar("b".to_string()),
                 // Branch: if false, jump +2 (to else branch at index 4)
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 // True path: jump over else to then branch (at index 7)
                 Instruction::Jump(4),
                 // Else branch: load 2, store to _0
@@ -1406,7 +1406,7 @@ fn if_else_return_expr_with_locals() -> anyhow::Result<()> {
                 // Load condition: parameter b from slot 1
                 Instruction::LoadVar("b".to_string()),
                 // Branch: if false, jump +2 (to else branch at index 4)
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 // True path: jump over else to then branch (at index 7)
                 Instruction::Jump(4),
                 // Else branch: load 2, store to _0 (let a = 2; a optimized away)
@@ -1442,7 +1442,7 @@ fn if_else_assignment() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 // Check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 // Else branch: i = 2
                 Instruction::LoadConst(Value::Int(2)),
@@ -1481,11 +1481,11 @@ fn else_if_return_expr() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 // Check condition a
                 Instruction::LoadVar("a".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(10),
                 // Else: check condition b
                 Instruction::LoadVar("b".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 // Else else: _0 = 3
                 Instruction::LoadConst(Value::Int(3)),
@@ -1530,7 +1530,7 @@ fn early_return() -> anyhow::Result<()> {
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(42)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(7),
                 // Default return: x + 5
                 Instruction::LoadVar("x".to_string()),

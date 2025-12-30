@@ -34,7 +34,7 @@ fn while_loop_gcd() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadVar("b".to_string()),
                 Instruction::CmpOp(CmpOp::NotEq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(3),
                 // Loop exit: return a
                 Instruction::LoadVar("a".to_string()),
@@ -43,7 +43,7 @@ fn while_loop_gcd() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadVar("b".to_string()),
                 Instruction::CmpOp(CmpOp::Gt),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(6),
                 // Else branch: b = b - a
                 Instruction::LoadVar("b".to_string()),
@@ -92,7 +92,7 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(11),
+                Instruction::PopJumpIfFalse(11),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
@@ -100,7 +100,7 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 Instruction::Jump(-13),
                 Instruction::LoadVar("a".to_string()),
@@ -139,7 +139,7 @@ fn while_loop_with_break() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::JumpIfFalse(11),
+                Instruction::PopJumpIfFalse(11),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
@@ -147,7 +147,7 @@ fn while_loop_with_break() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 Instruction::Jump(-13),
                 Instruction::LoadVar("a".to_string()),
@@ -186,12 +186,12 @@ fn break_factorial() -> anyhow::Result<()> {
                 Instruction::StoreVar("result".to_string()),
                 // Loop condition: true
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(15),
+                Instruction::PopJumpIfFalse(15),
                 // if (limit == 0)
                 Instruction::LoadVar("limit".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 // break - jump to loop exit
                 Instruction::Jump(10),
                 // result = result * limit
@@ -252,7 +252,7 @@ fn continue_factorial() -> anyhow::Result<()> {
                 Instruction::StoreVar("should_continue".to_string()),
                 // Loop condition: should_continue
                 Instruction::LoadVar("should_continue".to_string()),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(3),
                 // Loop exit: load result and return
                 Instruction::LoadVar("result".to_string()),
@@ -271,7 +271,7 @@ fn continue_factorial() -> anyhow::Result<()> {
                 Instruction::LoadVar("limit".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::NotEq),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 // continue - jump to loop condition
                 Instruction::Jump(4),
                 // else: should_continue = false
@@ -308,15 +308,15 @@ fn continue_nested() -> anyhow::Result<()> {
             // Dead compiler temps (_2 for if result) are eliminated
             vec![
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::Return,
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(6),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 Instruction::Jump(-11),
                 Instruction::Jump(-12),
@@ -352,9 +352,9 @@ fn break_nested() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::StoreVar("a".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(11),
+                Instruction::PopJumpIfFalse(11),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(5),
+                Instruction::PopJumpIfFalse(5),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),

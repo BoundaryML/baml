@@ -61,14 +61,14 @@ Function array_length (arity: 0, kind: Exec):
      12   RETURN          
 
 Function param_in_if_statement (arity: 1, kind: Exec):
-     0    LOAD_CONST 0       (null)
-     1    LOAD_VAR 1         (b)
-     2    JUMP_IF_FALSE +2   (to 4)
-     3    JUMP +4            (to 7)
-     4    LOAD_CONST 1       (2)
-     5    STORE_VAR 2        (_0)
-     6    JUMP +3            (to 9)
-     7    LOAD_CONST 2       (1)
-     8    STORE_VAR 2        (_0)
-     9    LOAD_VAR 2         (_0)
+     0    LOAD_CONST 0           (null)
+     1    LOAD_VAR 1             (b)
+     2    POP_JUMP_IF_FALSE +2   (to 4)
+     3    JUMP +4                (to 7)
+     4    LOAD_CONST 1           (2)
+     5    STORE_VAR 2            (_0)
+     6    JUMP +3                (to 9)
+     7    LOAD_CONST 2           (1)
+     8    STORE_VAR 2            (_0)
+     9    LOAD_VAR 2             (_0)
      10   RETURN

@@ -505,8 +505,8 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 else_block,
             } => {
                 self.emit_operand_pull(condition, mir);
-                // JumpIfFalse to else_block
-                let else_jump = self.emit(Instruction::JumpIfFalse(0));
+                // PopJumpIfFalse to else_block (pops condition from stack)
+                let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
                 self.pending_jumps.push((else_jump, *else_block));
                 // Jump to then_block (may be elided if it's next)
                 self.emit_jump_unless_fallthrough(*then_block);
@@ -524,8 +524,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                     let idx = self.add_constant(Value::Int(*value));
                     self.emit(Instruction::LoadConst(idx));
                     self.emit(Instruction::CmpOp(CmpOp::Eq));
-                    let jump_idx = self.emit(Instruction::JumpIfFalse(0));
-                    self.emit(Instruction::Pop(1));
+                    let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
                     self.emit(Instruction::Pop(1));
                     self.emit_jump_unless_fallthrough(*target);
                     let skip_to = self.current_pc();
@@ -608,8 +607,9 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 Instruction::Jump(_) => {
                     self.bytecode.instructions[instruction_idx] = Instruction::Jump(offset);
                 }
-                Instruction::JumpIfFalse(_) => {
-                    self.bytecode.instructions[instruction_idx] = Instruction::JumpIfFalse(offset);
+                Instruction::PopJumpIfFalse(_) => {
+                    self.bytecode.instructions[instruction_idx] =
+                        Instruction::PopJumpIfFalse(offset);
                 }
                 _ => panic!("expected jump instruction at index {instruction_idx}"),
             }
@@ -624,8 +624,8 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             Instruction::Jump(_) => {
                 self.bytecode.instructions[instruction_idx] = Instruction::Jump(offset);
             }
-            Instruction::JumpIfFalse(_) => {
-                self.bytecode.instructions[instruction_idx] = Instruction::JumpIfFalse(offset);
+            Instruction::PopJumpIfFalse(_) => {
+                self.bytecode.instructions[instruction_idx] = Instruction::PopJumpIfFalse(offset);
             }
             _ => panic!("expected jump instruction at index {instruction_idx}"),
         }

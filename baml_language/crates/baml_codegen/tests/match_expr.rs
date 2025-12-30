@@ -90,11 +90,11 @@ fn match_literal_int_with_fallback() -> anyhow::Result<()> {
                 Instruction::LoadVar("@match_scrut_0".to_string()),
                 Instruction::LoadConst(Value::Int(1)), // literal 1
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4), // skip to next arm
-                Instruction::Pop(1),         // pop comparison result
+                Instruction::PopJumpIfFalse(4), // skip to next arm
+                Instruction::Pop(1),            // pop comparison result
                 Instruction::LoadConst(Value::Int(100)), // arm body
-                Instruction::Jump(3),        // jump to end
-                Instruction::Pop(1),         // pop comparison result (false path)
+                Instruction::Jump(3),           // jump to end
+                Instruction::Pop(1),            // pop comparison result (false path)
                 Instruction::LoadConst(Value::Int(0)), // catch-all body
                 Instruction::Return,
             ],
@@ -121,7 +121,7 @@ fn match_literal_bool_exhaustive() -> anyhow::Result<()> {
                 Instruction::LoadVar("@match_scrut_0".to_string()),
                 Instruction::LoadConst(Value::Bool(true)), // literal true
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4), // skip to next arm
+                Instruction::PopJumpIfFalse(4), // skip to next arm
                 Instruction::Pop(1),
                 Instruction::LoadConst(Value::string("yes")),
                 Instruction::Jump(7), // jump to end
@@ -156,7 +156,7 @@ fn match_literal_null() -> anyhow::Result<()> {
                 Instruction::LoadVar("@match_scrut_0".to_string()),
                 Instruction::LoadConst(Value::Null), // literal null
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4),
+                Instruction::PopJumpIfFalse(4),
                 Instruction::Pop(1),
                 Instruction::LoadConst(Value::string("nothing")),
                 Instruction::Jump(3),
@@ -203,7 +203,7 @@ fn match_typed_pattern_single_class() -> anyhow::Result<()> {
                 Instruction::LoadVar("@match_scrut_0".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
-                Instruction::JumpIfFalse(7), // skip to catch-all
+                Instruction::PopJumpIfFalse(7), // skip to catch-all
                 Instruction::Pop(1),
                 // bind s and access s.data
                 Instruction::LoadVar("@match_scrut_0".to_string()),
@@ -254,7 +254,7 @@ fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
                 Instruction::LoadVar("@match_scrut_0".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
-                Instruction::JumpIfFalse(7),
+                Instruction::PopJumpIfFalse(7),
                 Instruction::Pop(1),
                 Instruction::LoadVar("@match_scrut_0".to_string()),
                 Instruction::LoadVar("s".to_string()),
@@ -301,14 +301,14 @@ fn match_union_literal_two_values() -> anyhow::Result<()> {
                 Instruction::LoadVar("@match_scrut_0".to_string()),
                 Instruction::LoadConst(Value::Int(200)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(3), // try 201
+                Instruction::PopJumpIfFalse(3), // try 201
                 Instruction::Pop(1),
                 Instruction::Jump(7), // matched! jump to arm body
                 Instruction::Pop(1),
                 Instruction::LoadVar("@match_scrut_0".to_string()),
                 Instruction::LoadConst(Value::Int(201)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4), // neither matched, try next arm
+                Instruction::PopJumpIfFalse(4), // neither matched, try next arm
                 Instruction::Pop(1),
                 Instruction::LoadConst(Value::string("success")),
                 Instruction::Jump(3),
@@ -345,7 +345,7 @@ fn match_in_arithmetic() -> anyhow::Result<()> {
                 Instruction::LoadVar("@match_scrut_0".to_string()),
                 Instruction::LoadConst(Value::Int(2)), // literal 2
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4),
+                Instruction::PopJumpIfFalse(4),
                 Instruction::Pop(1),
                 Instruction::LoadConst(Value::Int(20)),
                 Instruction::Jump(3),
@@ -387,7 +387,7 @@ fn match_nested() -> anyhow::Result<()> {
                 Instruction::LoadVar("@match_scrut_0".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(14), // skip to outer catch-all
+                Instruction::PopJumpIfFalse(14), // skip to outer catch-all
                 Instruction::Pop(1),
                 // Inner match scrutinee
                 Instruction::LoadConst(Value::Int(2)),
@@ -395,7 +395,7 @@ fn match_nested() -> anyhow::Result<()> {
                 Instruction::LoadVar("@match_scrut_1".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4),
+                Instruction::PopJumpIfFalse(4),
                 Instruction::Pop(1),
                 Instruction::LoadConst(Value::Int(12)),
                 Instruction::Jump(3),

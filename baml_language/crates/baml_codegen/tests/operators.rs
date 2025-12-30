@@ -23,7 +23,7 @@ fn basic_and() -> anyhow::Result<()> {
             // THIR codegen (efficient):
             // vec![
             //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(4),
+            //     Instruction::PopJumpIfFalse(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadGlobal(Value::function("ret_bool")),
             //     Instruction::Call(0),
@@ -33,7 +33,7 @@ fn basic_and() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::StoreVar("_0".to_string()),
@@ -65,7 +65,7 @@ fn basic_or() -> anyhow::Result<()> {
             // THIR codegen (efficient):
             // vec![
             //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::JumpIfFalse(2),
+            //     Instruction::PopJumpIfFalse(2),
             //     Instruction::Jump(4),
             //     Instruction::Pop(1),
             //     Instruction::LoadGlobal(Value::function("ret_bool")),
@@ -76,7 +76,7 @@ fn basic_or() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(5),
                 Instruction::LoadGlobal(Value::function("ret_bool")),
                 Instruction::Call(0),
