@@ -86,7 +86,8 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         self.builder = MirBuilder::new(signature.name.to_string(), signature.params.len());
 
         // _0: return place
-        let ret_ty = Self::lower_typed_ir_ty(body.ty(body.root));
+        // Use signature return type, not body root type (which may be Never for diverging bodies)
+        let ret_ty = baml_thir::lower_type_ref(self.db, &signature.return_type);
         let ret = self.builder.declare_local(None, ret_ty, None);
         assert_eq!(ret, Local(0));
 

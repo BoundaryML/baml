@@ -10,17 +10,18 @@ fn array_length() -> Int {
     let _2: Int
     let _3: Int
     let _4: Int
-    let _5: Unknown
-    let _6: List(Int)
+    let _5: Void
+    let _6: Unknown
+    let _7: List(Int)
 
     bb0: {
         _2 = const 1_i64;
         _3 = const 2_i64;
         _4 = const 3_i64;
         _1 = [copy _2, copy _3, copy _4];
-        _5 = const null;
-        _6 = copy _1;
-        _0 = call copy _5(copy _6) -> [bb2];
+        _6 = const fn baml.Array.length;
+        _7 = copy _1;
+        _0 = call copy _6(copy _7) -> [bb2];
     }
 
     bb1: {
@@ -44,14 +45,16 @@ fn Greeting(self: Named("Baz")) -> String {
     let _2: String
     let _3: String
     let _4: String
-    let _5: String
+    let _5: Named("Baz")
+    let _6: String
 
     bb0: {
         _3 = const "Hello, ";
-        _4 = copy _1.0;
+        _5 = copy _1;
+        _4 = copy _5.0;
         _2 = copy _3 + copy _4;
-        _5 = const "!";
-        _0 = copy _2 + copy _5;
+        _6 = const "!";
+        _0 = copy _2 + copy _6;
         goto -> bb1;
     }
 
@@ -147,7 +150,7 @@ fn GreetBaz(n: String) -> String {
     bb0: {
         _3 = copy _1;
         _2 = Baz { copy _3 };
-        _4 = copy _2.0;
+        _4 = const fn Greeting;
         _0 = call copy _4() -> [bb2];
     }
 

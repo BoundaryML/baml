@@ -3,20 +3,13 @@ source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn ComplexType() -> Void {
-    // Locals:
-    let _0: Void // return
-
-    bb0: {
-        return;
-    }
-
-}
+fn ComplexType:
+  (no MIR due to errors: MissingBody)
 
 fn DeepExpression() -> Int {
     // Locals:
     let _0: Int // return
-    let _1: Int
+    let _1: Void
     let _2: Int
     let _3: Int
     let _4: Int
@@ -34,27 +27,28 @@ fn DeepExpression() -> Int {
     let _16: Int
     let _17: Int
     let _18: Int
+    let _19: Int
 
     bb0: {
-        _9 = const 1_i64;
-        _10 = const 2_i64;
-        _8 = copy _9 + copy _10;
-        _11 = const 3_i64;
-        _7 = copy _8 * copy _11;
-        _12 = const 4_i64;
-        _6 = copy _7 - copy _12;
-        _13 = const 5_i64;
-        _5 = copy _6 / copy _13;
-        _14 = const 6_i64;
-        _4 = copy _5 + copy _14;
-        _15 = const 7_i64;
-        _3 = copy _4 * copy _15;
-        _16 = const 8_i64;
-        _2 = copy _3 - copy _16;
-        _17 = const 9_i64;
-        _1 = copy _2 / copy _17;
-        _18 = const 10_i64;
-        _0 = copy _1 + copy _18;
+        _10 = const 1_i64;
+        _11 = const 2_i64;
+        _9 = copy _10 + copy _11;
+        _12 = const 3_i64;
+        _8 = copy _9 * copy _12;
+        _13 = const 4_i64;
+        _7 = copy _8 - copy _13;
+        _14 = const 5_i64;
+        _6 = copy _7 / copy _14;
+        _15 = const 6_i64;
+        _5 = copy _6 + copy _15;
+        _16 = const 7_i64;
+        _4 = copy _5 * copy _16;
+        _17 = const 8_i64;
+        _3 = copy _4 - copy _17;
+        _18 = const 9_i64;
+        _2 = copy _3 / copy _18;
+        _19 = const 10_i64;
+        _0 = copy _2 + copy _19;
         goto -> bb2;
     }
 
@@ -68,2020 +62,324 @@ fn DeepExpression() -> Int {
 
 }
 
-fn Process22(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process22(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process54(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process54(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process95(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process95(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process60(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process60(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process68(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process68(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process14(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process14(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process79(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process79(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process84(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process84(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process33(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process33(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process12(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process12(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process74(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process74(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process99(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process99(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process64(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process64(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process52(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process52(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process7(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process7(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process80(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process80(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process58(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process58(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process97(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process97(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process36(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process36(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process63(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process63(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process19(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process19(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process83(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process83(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process18(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process18(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process26(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process26(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process43(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process43(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process46(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process46(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process62(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process62(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process87(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process87(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process44(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process44(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process47(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process47(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process35(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process35(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process38(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process38(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process41(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process41(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process28(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process28(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process65(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process65(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process6(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process6(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process32(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process32(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process92(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process92(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process55(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process55(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process66(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process66(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process56(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process56(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process67(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process67(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
+fn Process22:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process54:
+  (no MIR due to errors: MissingBody)
 
-fn Process3(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process3(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process75(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process75(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process48(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process48(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process49(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process49(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process61(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process61(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process96(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process96(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process34(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process34(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process59(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process59(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process89(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process89(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process45(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process45(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process86(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process86(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process16(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process16(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process39(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process39(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process82(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process82(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process2(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process2(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process27(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process27(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process53(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process53(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process23(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process23(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process9(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process9(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process72(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process72(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process77(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process77(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
+fn Process95:
+  (no MIR due to errors: MissingBody)
 
-fn Process40(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process40(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process30(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process30(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process8(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process8(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process11(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process11(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process37(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process37(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process4(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process4(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process91(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process91(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process31(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process31(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process50(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process50(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process20(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process20(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process98(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process98(copy _1) -> bb1;
-    }
+fn Process60:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process68:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process14:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process79:
+  (no MIR due to errors: MissingBody)
 
-fn Process85(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process85(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process78(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process78(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process1(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process1(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process90(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process90(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process17(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process17(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process81(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process84:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process81(copy _1) -> bb1;
-    }
+fn Process33:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process12:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process74:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process99:
+  (no MIR due to errors: MissingBody)
 
-fn Process71(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process71(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process15(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process15(copy _1) -> bb1;
-    }
+fn Process64:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process52:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process7:
+  (no MIR due to errors: MissingBody)
 
-}
-
-fn Process42(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn Process42(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Process51(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process80:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process51(copy _1) -> bb1;
-    }
+fn Process58:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process97:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process36:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process63:
+  (no MIR due to errors: MissingBody)
 
-fn Process5(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process19:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process5(copy _1) -> bb1;
-    }
+fn Process83:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process18:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process26:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process43:
+  (no MIR due to errors: MissingBody)
 
-fn Process13(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process46:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process13(copy _1) -> bb1;
-    }
+fn Process62:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process87:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process44:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process47:
+  (no MIR due to errors: MissingBody)
 
-fn Process29(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process35:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process29(copy _1) -> bb1;
-    }
+fn Process38:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process41:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process28:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process65:
+  (no MIR due to errors: MissingBody)
 
-fn Process93(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process6:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process93(copy _1) -> bb1;
-    }
+fn Process32:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process92:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process55:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process66:
+  (no MIR due to errors: MissingBody)
 
-fn Process70(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process56:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process70(copy _1) -> bb1;
-    }
+fn Process67:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process3:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process75:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process48:
+  (no MIR due to errors: MissingBody)
 
-fn Process76(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process49:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process76(copy _1) -> bb1;
-    }
+fn Process61:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process96:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process34:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process59:
+  (no MIR due to errors: MissingBody)
 
-fn Process10(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process89:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process10(copy _1) -> bb1;
-    }
+fn Process45:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process86:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process16:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process39:
+  (no MIR due to errors: MissingBody)
 
-fn Process21(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process82:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process21(copy _1) -> bb1;
-    }
+fn Process2:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process27:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process53:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process23:
+  (no MIR due to errors: MissingBody)
 
-fn Process100(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process9:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process100(copy _1) -> bb1;
-    }
+fn Process72:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process77:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process40:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process30:
+  (no MIR due to errors: MissingBody)
 
-fn Process94(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process8:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process94(copy _1) -> bb1;
-    }
+fn Process11:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process37:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process4:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process91:
+  (no MIR due to errors: MissingBody)
 
-fn Process25(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process31:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process25(copy _1) -> bb1;
-    }
+fn Process50:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process20:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process98:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process85:
+  (no MIR due to errors: MissingBody)
 
-fn Process69(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process78:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process69(copy _1) -> bb1;
-    }
+fn Process1:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process90:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process17:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process81:
+  (no MIR due to errors: MissingBody)
 
-fn Process24(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process71:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process24(copy _1) -> bb1;
-    }
+fn Process15:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process42:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process51:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process5:
+  (no MIR due to errors: MissingBody)
 
-fn Process88(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process13:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process88(copy _1) -> bb1;
-    }
+fn Process29:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process93:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process70:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process76:
+  (no MIR due to errors: MissingBody)
 
-fn Process73(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process10:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process73(copy _1) -> bb1;
-    }
+fn Process21:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process100:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process94:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process25:
+  (no MIR due to errors: MissingBody)
 
-fn Process57(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
+fn Process69:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _2 = dispatch_future const fn Process57(copy _1) -> bb1;
-    }
+fn Process24:
+  (no MIR due to errors: MissingBody)
 
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
+fn Process88:
+  (no MIR due to errors: MissingBody)
 
-    bb2: {
-        return;
-    }
+fn Process73:
+  (no MIR due to errors: MissingBody)
 
-}
+fn Process57:
+  (no MIR due to errors: MissingBody)
 
-fn BodyTorture() -> Void {
+fn BodyTorture() -> Int {
     // Locals:
-    let _0: Void // return
+    let _0: Int // return
     let _1: Unknown // x
-    let _2: Bool
-    let _3: Unknown
-    let _4: Int
+    let _2: Void
+    let _3: Bool
+    let _4: Void
     let _5: Unknown
-    let _6: Void
+    let _6: Int
     let _7: Unknown
-    let _8: Int
-    let _9: Unknown
+    let _8: Void
+    let _9: Void
+    let _10: Unknown
+    let _11: Int
+    let _12: Unknown
 
     bb0: {
+        _1 = const null;
         goto -> bb2;
     }
 
@@ -2090,24 +388,27 @@ fn BodyTorture() -> Void {
     }
 
     bb2: {
-        _3 = copy _1;
-        _4 = const 1_i64;
-        _5 = copy _3 + copy _4;
-        _1 = copy _5;
-        _2 = const null;
-        branch copy _2 -> [bb3, bb4];
+        _5 = copy _1;
+        _6 = const 1_i64;
+        _7 = copy _5 + copy _6;
+        _1 = copy _7;
+        _4 = const null;
+        _3 = const null;
+        branch copy _3 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = copy _1;
-        _8 = const 1_i64;
-        _9 = copy _7 + copy _8;
-        _1 = copy _9;
-        _6 = const null;
+        _10 = copy _1;
+        _11 = const 1_i64;
+        _12 = copy _10 + copy _11;
+        _1 = copy _12;
+        _9 = const null;
+        _8 = const null;
         goto -> bb2;
     }
 
     bb4: {
+        _2 = const null;
         _0 = const null;
         goto -> bb1;
     }

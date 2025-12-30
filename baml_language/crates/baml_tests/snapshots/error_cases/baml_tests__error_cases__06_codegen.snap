@@ -2,35 +2,5 @@
 source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
 expression: output
 ---
-=== BYTECODE ===
-Functions: 3
-Objects: 23
-Globals: 21
-
-Function BadUnionPattern (arity: 1, kind: Exec):
-     0   LOAD_CONST 0   (null)
-     1   RETURN         
-
-Function Invalid (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (null)
-     1   RETURN         
-
-Function MixedLiteralAndTyped (arity: 1, kind: Exec):
-     0    LOAD_CONST 0           (null)
-     1    LOAD_CONST 0           (null)
-     2    LOAD_VAR 1             (x)
-     3    STORE_VAR 2            (_2)
-     4    LOAD_VAR 2             (_2)
-     5    LOAD_CONST 1           (42)
-     6    CMP_OP ==              
-     7    POP_JUMP_IF_FALSE +2   (to 9)
-     8    JUMP +8                (to 16)
-     9    LOAD_VAR 2             (_2)
-     10   LOAD_CONST 2           (false)
-     11   POP_JUMP_IF_FALSE +6   (to 17)
-     12   JUMP +2                (to 14)
-     13   JUMP +4                (to 17)
-     14   LOAD_VAR 2             (_2)
-     15   STORE_VAR 3            (n)
-     16   LOAD_CONST 3           (mixed)
-     17   RETURN
+=== NO CODEGEN DUE TO ERRORS ===
+Error: MissingExpression { span: None }

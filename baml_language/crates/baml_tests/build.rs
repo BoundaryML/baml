@@ -223,6 +223,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_parser;
             use baml_db::baml_hir;
             use baml_db::baml_thir;
+            use baml_db::baml_typed_ir;
             use baml_db::baml_mir;
             use baml_db::baml_codegen;
             use baml_hir::{function_body, function_signature};
@@ -515,11 +516,18 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                         let body = function_body(&db, *func_id);
                         let inference = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
 
-                        // Lower to MIR
-                        let mir = baml_mir::lower_function(&signature, &body, &inference, &db, &classes);
+                        // Lower HIR → TypedIR → MIR
+                        let mir_output = match baml_typed_ir::lower_from_hir(&db, &body, &inference) {
+                            Ok(typed_ir) => {
+                                let mir = baml_mir::lower_from_typed_ir(&signature, &typed_ir, &db, &classes);
+                                baml_mir::pretty::display_function(&mir)
+                            }
+                            Err(err) => {
+                                format!("fn {}:\n  (no MIR due to errors: {:?})\n", signature.name, err)
+                            }
+                        };
 
-                        // Pretty print the MIR
-                        writeln!(output, "{}", baml_mir::pretty::display_function(&mir)).unwrap();
+                        writeln!(output, "{}", mir_output).unwrap();
                     }
                 }
             }
@@ -653,36 +661,43 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
             // Update project root with the list of files for proper Salsa tracking
             root.set_files(&mut db).to(source_files.clone());
 
-            let program = baml_codegen::compile_files(&db, &source_files);
-
             let mut output = String::new();
-            writeln!(output, "=== BYTECODE ===").unwrap();
-            writeln!(output, "Functions: {}", program.function_indices.len()).unwrap();
-            writeln!(output, "Objects: {}", program.objects.len()).unwrap();
-            writeln!(output, "Globals: {}", program.globals.len()).unwrap();
 
-            // Show functions and their bytecode using debug formatting
-            let mut func_names: Vec<_> = program.function_indices.keys().collect();
-            func_names.sort();
-            for func_name in func_names {
-                if let Some(&idx) = program.function_indices.get(func_name)
-                    && let Some(baml_codegen::Object::Function(func)) = program.objects.get(idx)
-                {
-                    writeln!(output, "\nFunction {} (arity: {}, kind: {:?}):", func_name, func.arity, func.kind).unwrap();
-                    let bytecode_table = baml_vm::debug::display_bytecode(
-                        func,
-                        &baml_vm::EvalStack::new(),
-                        &program.objects,
-                        &program.globals,
-                        false,  // no colors
-                    );
-                    if bytecode_table.is_empty() {
-                        writeln!(output, "  (no bytecode)").unwrap();
-                    } else {
-                        for line in bytecode_table.lines() {
-                            writeln!(output, "  {}", line).unwrap();
+            match baml_codegen::compile_files(&db, &source_files) {
+                Ok(program) => {
+                    writeln!(output, "=== BYTECODE ===").unwrap();
+                    writeln!(output, "Functions: {}", program.function_indices.len()).unwrap();
+                    writeln!(output, "Objects: {}", program.objects.len()).unwrap();
+                    writeln!(output, "Globals: {}", program.globals.len()).unwrap();
+
+                    // Show functions and their bytecode using debug formatting
+                    let mut func_names: Vec<_> = program.function_indices.keys().collect();
+                    func_names.sort();
+                    for func_name in func_names {
+                        if let Some(&idx) = program.function_indices.get(func_name)
+                            && let Some(baml_codegen::Object::Function(func)) = program.objects.get(idx)
+                        {
+                            writeln!(output, "\nFunction {} (arity: {}, kind: {:?}):", func_name, func.arity, func.kind).unwrap();
+                            let bytecode_table = baml_vm::debug::display_bytecode(
+                                func,
+                                &baml_vm::EvalStack::new(),
+                                &program.objects,
+                                &program.globals,
+                                false,  // no colors
+                            );
+                            if bytecode_table.is_empty() {
+                                writeln!(output, "  (no bytecode)").unwrap();
+                            } else {
+                                for line in bytecode_table.lines() {
+                                    writeln!(output, "  {}", line).unwrap();
+                                }
+                            }
                         }
                     }
+                }
+                Err(err) => {
+                    writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").unwrap();
+                    writeln!(output, "Error: {:?}", err).unwrap();
                 }
             }
 

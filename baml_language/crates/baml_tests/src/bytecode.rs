@@ -112,6 +112,7 @@ pub fn compile_source(source: &str) -> VmProgram {
     let file = db.add_file("test.baml", source);
     db.set_project(vec![file]);
     baml_codegen::compile_files(&db, &[file])
+        .expect("compile_files should succeed for valid test source")
 }
 
 //

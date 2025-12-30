@@ -17,6 +17,7 @@ pub use baml_mir;
 pub use baml_parser;
 pub use baml_syntax;
 pub use baml_thir;
+pub use baml_typed_ir;
 pub use baml_workspace;
 pub use salsa::Setter;
 use salsa::Storage;

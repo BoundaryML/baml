@@ -1,46 +1,14 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn BadUnionPattern(x: Union([Int, Bool])) -> Union([Unknown, String]) {
+fn BadUnionPattern:
+  (no MIR due to errors: MissingExpression { span: None })
+
+fn Invalid() -> Unknown {
     // Locals:
-    let _0: Union([Unknown, String]) // return
-    let _1: Union([Int, Bool]) // x // param
-    let _2: Union([Int, Bool])
-
-    bb0: {
-        _2 = copy _1;
-        goto -> bb3;
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-
-    bb3: {
-        _0 = const null;
-        goto -> bb2;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
-        _0 = const "bad";
-        goto -> bb2;
-    }
-
-}
-
-fn Invalid() -> Void {
-    // Locals:
-    let _0: Void // return
+    let _0: Unknown // return
 
     bb0: {
         _0 = const null;
@@ -58,14 +26,14 @@ fn MixedLiteralAndTyped(x: Int) -> String {
     let _0: String // return
     let _1: Int // x // param
     let _2: Int
-    let _3: Int
+    let _3: Bool
     let _4: Bool
+    let _5: Int // n
 
     bb0: {
         _2 = copy _1;
-        _3 = const 42_i64;
-        _4 = copy _2 == copy _3;
-        branch copy _4 -> [bb3, bb4];
+        _3 = copy _2 == const 42_i64;
+        branch copy _3 -> [bb3, bb5];
     }
 
     bb1: {
@@ -82,6 +50,16 @@ fn MixedLiteralAndTyped(x: Int) -> String {
     }
 
     bb4: {
+        goto -> bb2;
+    }
+
+    bb5: {
+        _4 = is_type(copy _2, Int);
+        branch copy _4 -> [bb6, bb4];
+    }
+
+    bb6: {
+        _5 = copy _2;
         goto -> bb3;
     }
 

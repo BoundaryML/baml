@@ -1016,17 +1016,19 @@ impl CompilerRunner {
                         *func_id,
                     );
 
-                    // Lower to MIR
-                    let mir = baml_mir::lower_function(
-                        &signature,
-                        &body,
-                        &inference_result,
-                        &self.db,
-                        &classes,
-                    );
-
-                    // Display the MIR
-                    let mir_output = baml_mir::pretty::display_function(&mir);
+                    // Lower HIR → TypedIR → MIR
+                    let mir_output =
+                        match baml_typed_ir::lower_from_hir(&self.db, &body, &inference_result) {
+                            Ok(typed_ir) => {
+                                let mir = baml_mir::lower_from_typed_ir(
+                                    &signature, &typed_ir, &self.db, &classes,
+                                );
+                                baml_mir::pretty::display_function(&mir)
+                            }
+                            Err(err) => {
+                                format!("(no MIR due to errors: {:?})", err)
+                            }
+                        };
 
                     let status = if file_recomputed {
                         LineStatus::Recomputed
@@ -1209,11 +1211,29 @@ impl CompilerRunner {
         // Use compile_files directly with our source files instead of generate_project_bytecode,
         // because project_files(db, root) returns an empty vector (not yet implemented).
         let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = baml_codegen::compile_files(&self.db, &files);
-        let file_recomputed = !self.modified_files.is_empty();
 
         let mut output = String::new();
         let mut output_annotated = Vec::new();
+
+        let program = match baml_codegen::compile_files(&self.db, &files) {
+            Ok(p) => p,
+            Err(err) => {
+                writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").ok();
+                output_annotated.push((
+                    "=== NO CODEGEN DUE TO ERRORS ===".to_string(),
+                    LineStatus::Unknown,
+                ));
+                writeln!(output, "Error: {:?}", err).ok();
+                output_annotated.push((format!("Error: {:?}", err), LineStatus::Unknown));
+
+                self.phase_outputs.insert(CompilerPhase::Codegen, output);
+                self.phase_outputs_annotated
+                    .insert(CompilerPhase::Codegen, output_annotated);
+                return;
+            }
+        };
+
+        let file_recomputed = !self.modified_files.is_empty();
 
         // Summary header
         writeln!(output, "=== BYTECODE ===").ok();
@@ -1299,7 +1319,27 @@ impl CompilerRunner {
 
         // Compile the program
         let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = baml_codegen::compile_files(&self.db, &files);
+        let program = match baml_codegen::compile_files(&self.db, &files) {
+            Ok(p) => p,
+            Err(err) => {
+                writeln!(output, "=== VM RUNNER ===").ok();
+                output_annotated.push(("=== VM RUNNER ===".to_string(), LineStatus::Unknown));
+                writeln!(output).ok();
+                output_annotated.push((String::new(), LineStatus::Unknown));
+                writeln!(output, "Cannot run VM: codegen failed due to errors").ok();
+                output_annotated.push((
+                    "Cannot run VM: codegen failed due to errors".to_string(),
+                    LineStatus::Unknown,
+                ));
+                writeln!(output, "Error: {:?}", err).ok();
+                output_annotated.push((format!("Error: {:?}", err), LineStatus::Unknown));
+
+                self.phase_outputs.insert(CompilerPhase::VmRunner, output);
+                self.phase_outputs_annotated
+                    .insert(CompilerPhase::VmRunner, output_annotated);
+                return;
+            }
+        };
 
         // Extract available executable functions (exclude LLM functions)
         let mut exec_functions: Vec<(String, usize)> = Vec::new();
@@ -1426,7 +1466,16 @@ impl CompilerRunner {
         use baml_vm::{Object, Vm, VmExecState};
 
         let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = baml_codegen::compile_files(&self.db, &files);
+        let program = match baml_codegen::compile_files(&self.db, &files) {
+            Ok(p) => p,
+            Err(err) => {
+                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(format!(
+                    "Codegen failed: {:?}",
+                    err
+                )));
+                return;
+            }
+        };
 
         let Some(func_name) = self
             .vm_runner_state

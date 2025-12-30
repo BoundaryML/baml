@@ -64,7 +64,8 @@ fn get_locals_in_scope(source: &str, function_name: &str) -> Vec<Vec<String>> {
     let file = db.add_file("test.baml", source);
     db.set_project(vec![file]);
 
-    let program = baml_codegen::compile_files(&db, &[file]);
+    let program = baml_codegen::compile_files(&db, &[file])
+        .expect("compile_files should succeed for valid test source");
 
     // Find the function
     let obj_idx = program

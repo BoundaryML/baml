@@ -166,9 +166,9 @@ fn vec2d() -> Named("Vec2D") {
 
 }
 
-fn boolValues() -> Void {
+fn boolValues() -> Named("map<string, bool>") {
     // Locals:
-    let _0: Void // return
+    let _0: Named("map<string, bool>") // return
 
     bb0: {
         _0 = const null;
@@ -181,9 +181,9 @@ fn boolValues() -> Void {
 
 }
 
-fn intValues() -> Void {
+fn intValues() -> Named("map<string, int>") {
     // Locals:
-    let _0: Void // return
+    let _0: Named("map<string, int>") // return
 
     bb0: {
         _0 = const null;
@@ -196,9 +196,9 @@ fn intValues() -> Void {
 
 }
 
-fn stringValues() -> Void {
+fn stringValues() -> Named("map<string, string>") {
     // Locals:
-    let _0: Void // return
+    let _0: Named("map<string, string>") // return
 
     bb0: {
         _0 = const null;
@@ -211,9 +211,9 @@ fn stringValues() -> Void {
 
 }
 
-fn floatValues() -> Void {
+fn floatValues() -> Named("map<string, float>") {
     // Locals:
-    let _0: Void // return
+    let _0: Named("map<string, float>") // return
 
     bb0: {
         _0 = const null;

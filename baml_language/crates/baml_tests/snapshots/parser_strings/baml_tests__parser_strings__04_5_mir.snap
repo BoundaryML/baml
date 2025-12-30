@@ -1,51 +1,18 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn FormatMessage(name: String) -> String {
+fn FormatMessage:
+  (no MIR due to errors: MissingBody)
+
+fn ProcessText:
+  (no MIR due to errors: MissingBody)
+
+fn GetRole() -> Union([Literal(String("admin")), Literal(String("user")), Literal(String("guest"))]) {
     // Locals:
-    let _0: String // return
-    let _1: String // name // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn FormatMessage(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn ProcessText(input: String) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: String // input // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn ProcessText(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn GetRole() -> String {
-    // Locals:
-    let _0: String // return
+    let _0: Union([Literal(String("admin")), Literal(String("user")), Literal(String("guest"))]) // return
+    let _1: Void
 
     bb0: {
         _0 = const "user";

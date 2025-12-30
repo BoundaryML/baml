@@ -343,6 +343,7 @@ dependencies = [
  "baml_parser",
  "baml_syntax",
  "baml_thir",
+ "baml_typed_ir",
  "baml_workspace",
  "rowan",
  "salsa",

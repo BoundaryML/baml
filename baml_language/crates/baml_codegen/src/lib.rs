@@ -44,6 +44,7 @@ use std::collections::HashMap;
 
 use baml_base::{Name, SourceFile};
 use baml_hir::{self, ItemId, function_body, function_signature};
+pub use baml_typed_ir::LoweringError;
 pub use baml_vm::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, Program, UnaryOp, Value,
@@ -54,7 +55,9 @@ pub use baml_vm::{
 /// This is the main entry point for project-wide code generation.
 /// It collects all functions from HIR, type-checks them via THIR,
 /// lowers to MIR, and compiles to bytecode.
-pub fn generate_project_bytecode(db: &dyn baml_mir::Db) -> Program {
+///
+/// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
+pub fn generate_project_bytecode(db: &dyn baml_mir::Db) -> Result<Program, LoweringError> {
     let project = db.project();
     let files = baml_workspace::project_files(db, project);
     compile_files(db, &files)
@@ -63,7 +66,12 @@ pub fn generate_project_bytecode(db: &dyn baml_mir::Db) -> Program {
 /// Generate bytecode for a list of source files.
 ///
 /// This is useful for testing or when you have a subset of files.
-pub fn compile_files(db: &dyn baml_mir::Db, files: &[SourceFile]) -> Program {
+///
+/// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
+pub fn compile_files(
+    db: &dyn baml_mir::Db,
+    files: &[SourceFile],
+) -> Result<Program, LoweringError> {
     let mut program = Program::new();
 
     // Build typing context (maps function names to their types)
@@ -218,20 +226,11 @@ pub fn compile_files(db: &dyn baml_mir::Db, files: &[SourceFile]) -> Program {
                             *func_loc,
                         );
 
-                        // Try TypedIR path first (fails if Missing nodes present)
-                        let mir = match baml_typed_ir::lower_from_hir(db, &body, &inference) {
-                            Ok(typed_ir) => {
-                                // Use the new TypedIR → MIR path
-                                baml_mir::lower_from_typed_ir(&signature, &typed_ir, db, &classes)
-                            }
-                            Err(_) => {
-                                // Fall back to old HIR path if TypedIR lowering fails
-                                // (e.g., due to Missing nodes)
-                                baml_mir::lower_function(
-                                    &signature, &body, &inference, db, &classes,
-                                )
-                            }
-                        };
+                        // Lower HIR → TypedIR → MIR
+                        // Returns early if there are Missing nodes (errors in source)
+                        let typed_ir = baml_typed_ir::lower_from_hir(db, &body, &inference)?;
+                        let mir =
+                            baml_mir::lower_from_typed_ir(&signature, &typed_ir, db, &classes);
 
                         // Compile MIR to bytecode
                         let ctx = MirCodegenContext {
@@ -258,7 +257,7 @@ pub fn compile_files(db: &dyn baml_mir::Db, files: &[SourceFile]) -> Program {
         }
     }
 
-    program
+    Ok(program)
 }
 
 /// Build typing context from source files.

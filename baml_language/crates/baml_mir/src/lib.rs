@@ -45,13 +45,11 @@
 
 mod builder;
 mod ir;
-mod lower;
 mod lower_typed_ir;
 pub mod pretty;
 
 pub use builder::MirBuilder;
 pub use ir::*;
-pub use lower::lower_function;
 pub use lower_typed_ir::lower_from_typed_ir;
 
 // ============================================================================
