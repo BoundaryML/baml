@@ -72,50 +72,49 @@ mod tests {
 
     /// Test streaming version of MakeSemanticContainer.
     /// Mirrors Go's TestMakeSemanticContainerStream.
-    /// Currently ignored as streaming is not yet implemented (Phase 7).
     #[test]
-    #[ignore] // Streaming not yet implemented for Rust (Phase 7)
     fn test_make_semantic_container_stream() {
-        // This test validates streaming behavior of MakeSemanticContainer.
-        //
-        // Expected behavior from Go test:
-        // - Stream should emit partial results as parsing progresses
-        // - Numeric fields (@stream.done) should remain stable once set
-        // - String fields with @stream.done should remain stable once set
-        // - @stream.with_state fields should transition through states (Pending -> Complete)
-        // - @stream.not_null fields in arrays should never be null/zero
-        // - Stream should emit a final result
-        //
-        // TODO: Implement when streaming is available:
-        // let mut stream = B.stream().MakeSemanticContainer().expect("Failed to start stream");
-        //
-        // let mut reference_string: Option<String> = None;
-        // let mut reference_int: Option<i64> = None;
-        // let mut got_final = false;
-        //
-        // while let Some(msg) = stream.next() {
-        //     match msg {
-        //         StreamMessage::Partial(partial) => {
-        //             // Stability checks for numeric and @stream.done fields
-        //             if let Some(num) = partial.sixteen_digit_number {
-        //                 if let Some(ref_int) = reference_int {
-        //                     assert_eq!(ref_int, num, "sixteen_digit_number changed unexpectedly");
-        //                 } else {
-        //                     reference_int = Some(num);
-        //                 }
-        //             }
-        //             // Similar checks for string_with_twenty_words, class_needed.s_20_words state, etc.
-        //         }
-        //         StreamMessage::Final(final_result) => {
-        //             got_final = true;
-        //             assert!(final_result.is_some(), "Expected non-nil final result");
-        //         }
-        //     }
-        // }
-        //
-        // assert!(got_final, "Expected to receive a final result from stream");
+        let mut stream = B
+            .stream
+            .MakeSemanticContainer()
+            .expect("Failed to start MakeSemanticContainer stream");
 
-        println!("Streaming test skipped - not yet implemented");
+        let mut partial_count = 0;
+        let mut reference_int: Option<i64> = None;
+
+        for partial in stream.partials() {
+            let partial = partial.expect("Error receiving partial");
+            partial_count += 1;
+
+            // Stability check: numeric fields should remain stable once set
+            if let Some(num) = partial.sixteen_digit_number {
+                if let Some(ref_int) = reference_int {
+                    assert_eq!(
+                        ref_int, num,
+                        "sixteen_digit_number changed unexpectedly: {} != {}",
+                        ref_int, num
+                    );
+                } else {
+                    reference_int = Some(num);
+                }
+            }
+        }
+
+        let final_result = stream
+            .get_final_response()
+            .expect("Failed to get final response");
+
+        // Validate the final result has valid data
+        assert!(
+            final_result.class_1.i_16_digits != 0 || !final_result.class_1.s_20_words.is_empty(),
+            "Expected class_1 to have valid data"
+        );
+
+        println!(
+            "MakeSemanticContainer stream completed with {} partials",
+            partial_count
+        );
+        println!("Final result: {:?}", final_result);
     }
 
     /// Test synchronous MakeSemanticContainer function.

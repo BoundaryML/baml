@@ -102,7 +102,6 @@ impl BamlRuntime {
             Ok(callbacks::CallbackResult::Final(data)) => {
                 let holder = CffiValueHolder::decode(&data[..])
                     .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
-                println!("holder: {:?}", holder);
                 T::baml_decode(&holder)
             }
             Ok(callbacks::CallbackResult::Partial(_)) => Err(BamlError::internal(

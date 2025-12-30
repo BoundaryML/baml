@@ -37,13 +37,23 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Streaming not yet implemented in Rust
     fn test_foo_stream() {
-        // TODO: Implement streaming test when streaming is available
-        // This should mirror the Go test:
-        // - Call stream.Foo(8192)
-        // - Iterate over the channel
-        // - Verify we get stream results and a final result
-        unimplemented!("Streaming not yet implemented");
+        let mut stream = B.stream.Foo(8192).expect("Failed to start Foo stream");
+
+        let mut partial_count = 0;
+        for partial in stream.partials() {
+            let _partial = partial.expect("Error receiving partial");
+            partial_count += 1;
+        }
+
+        let final_result = stream
+            .get_final_response()
+            .expect("Failed to get final response");
+
+        assert!(
+            final_result.is_some(),
+            "Expected non-null result from Foo stream"
+        );
+        println!("Foo stream completed with {} partials", partial_count);
     }
 }

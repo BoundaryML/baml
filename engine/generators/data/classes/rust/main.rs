@@ -31,12 +31,30 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Streaming not yet implemented for Rust
     fn test_make_simple_class_stream() {
-        // TODO: Implement when streaming is available
-        // This should mirror the Go test:
-        // - Start a stream for MakeSimpleClass
-        // - Iterate through stream results
-        // - Validate we get a final result with non-zero values
+        let mut stream = B
+            .stream
+            .MakeSimpleClass()
+            .expect("Failed to start MakeSimpleClass stream");
+
+        let mut partial_count = 0;
+        for partial in stream.partials() {
+            let _partial = partial.expect("Error receiving partial");
+            partial_count += 1;
+        }
+
+        assert!(partial_count > 0, "Expected at least one partial but got {partial_count}");
+        let final_result = stream
+            .get_final_response()
+            .expect("Failed to get final response");
+
+        assert!(
+            final_result.digits != 0 || !final_result.words.is_empty(),
+            "Expected SimpleClass with valid data"
+        );
+        println!(
+            "MakeSimpleClass stream completed with {} partials: {:?}",
+            partial_count, final_result
+        );
     }
 }

@@ -25,14 +25,27 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Streaming not yet implemented for Rust"]
     fn test_person_test_stream() {
-        // This test is skipped until streaming is implemented
-        // The Go equivalent tests:
-        // - Starting the stream
-        // - Receiving partial results
-        // - Receiving a final result
-        // - Validating the final result has age > 0
-        unimplemented!("Streaming not yet implemented");
+        let mut stream = B
+            .stream
+            .PersonTest()
+            .expect("Failed to start PersonTest stream");
+
+        let mut partial_count = 0;
+        for partial in stream.partials() {
+            let _partial = partial.expect("Error receiving partial");
+            partial_count += 1;
+        }
+
+        let final_result = stream
+            .get_final_response()
+            .expect("Failed to get final response");
+
+        assert!(!final_result.name.is_empty(), "Expected name to not be empty");
+        assert!(final_result.age > 0, "Expected age to be greater than 0");
+        println!(
+            "PersonTest stream completed with {} partials: {:?}",
+            partial_count, final_result
+        );
     }
 }

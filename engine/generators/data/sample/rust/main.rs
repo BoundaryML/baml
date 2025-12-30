@@ -132,19 +132,53 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Streaming not yet implemented in Rust"]
     fn test_foo_stream() {
-        // Streaming tests will be implemented when streaming support is added
-        // This matches the Go streaming test pattern
-        todo!("Implement streaming test for Foo");
+        let mut stream = B.stream.Foo(8192).expect("Failed to start Foo stream");
+
+        let mut partial_count = 0;
+        for partial in stream.partials() {
+            let _partial = partial.expect("Error receiving partial");
+            partial_count += 1;
+        }
+
+        let final_result = stream
+            .get_final_response()
+            .expect("Failed to get final response");
+
+        let variant_name = get_variant_name(&final_result);
+        assert!(
+            !variant_name.is_empty(),
+            "Expected valid variant from Foo stream"
+        );
+        println!(
+            "Foo stream completed with {} partials, final variant: {}",
+            partial_count, variant_name
+        );
     }
 
     #[test]
-    #[ignore = "Streaming not yet implemented in Rust"]
     fn test_bar_stream() {
-        // Streaming tests will be implemented when streaming support is added
-        // This matches the Go streaming test pattern
-        todo!("Implement streaming test for Bar");
+        let mut stream = B.stream.Bar(42).expect("Failed to start Bar stream");
+
+        let mut partial_count = 0;
+        for partial in stream.partials() {
+            let _partial = partial.expect("Error receiving partial");
+            partial_count += 1;
+        }
+
+        let final_result = stream
+            .get_final_response()
+            .expect("Failed to get final response");
+
+        let variant_name = get_variant_name(&final_result);
+        assert!(
+            !variant_name.is_empty(),
+            "Expected valid variant from Bar stream"
+        );
+        println!(
+            "Bar stream completed with {} partials, final variant: {}",
+            partial_count, variant_name
+        );
     }
 
     #[test]
