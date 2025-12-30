@@ -685,20 +685,22 @@ impl LetStmt {
         })
     }
 
-    /// Get the initializer as a token (for direct literals like integers).
+    /// Get the initializer as a token (for direct literals like integers, bools, null).
     /// Returns the literal token if the initializer is a simple literal.
     pub fn initializer_token(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| {
-                matches!(
-                    token.kind(),
+                match token.kind() {
                     SyntaxKind::INTEGER_LITERAL
-                        | SyntaxKind::FLOAT_LITERAL
-                        | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
-                )
+                    | SyntaxKind::FLOAT_LITERAL
+                    | SyntaxKind::STRING_LITERAL
+                    | SyntaxKind::RAW_STRING_LITERAL => true,
+                    // Boolean and null literals are parsed as WORD tokens
+                    SyntaxKind::WORD => matches!(token.text(), "true" | "false" | "null"),
+                    _ => false,
+                }
             })
     }
 }

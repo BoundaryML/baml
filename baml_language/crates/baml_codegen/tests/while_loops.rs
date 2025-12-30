@@ -240,7 +240,6 @@ fn continue_factorial() -> anyhow::Result<()> {
         expected: vec![(
             "Factorial",
             // MIR-based codegen with local pre-allocation
-            // Note: should_continue initialization to true appears to be missing in codegen
             vec![
                 // Pre-allocate locals
                 Instruction::LoadConst(Value::Null),
@@ -248,8 +247,8 @@ fn continue_factorial() -> anyhow::Result<()> {
                 // Initialize result = 1
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("result".to_string()),
-                // Pre-allocate should_continue (should be Bool(true) but codegen produces Null)
-                Instruction::LoadConst(Value::Null),
+                // Initialize should_continue = true
+                Instruction::LoadConst(Value::Bool(true)),
                 Instruction::StoreVar("should_continue".to_string()),
                 // Loop condition: should_continue
                 Instruction::LoadVar("should_continue".to_string()),

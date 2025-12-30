@@ -2074,6 +2074,19 @@ impl LoweringContext {
                                     span,
                                 )
                             }
+                            SyntaxKind::WORD => {
+                                // Handle boolean and null literals (parsed as WORD tokens)
+                                match token.text() {
+                                    "true" => {
+                                        self.alloc_expr(Expr::Literal(Literal::Bool(true)), span)
+                                    }
+                                    "false" => {
+                                        self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
+                                    }
+                                    "null" => self.alloc_expr(Expr::Literal(Literal::Null), span),
+                                    _ => self.alloc_expr(Expr::Missing, span),
+                                }
+                            }
                             _ => self.alloc_expr(Expr::Missing, span),
                         }
                     })

@@ -6,7 +6,6 @@ use baml_tests::{
 };
 
 #[test]
-#[ignore = "method calls not yet in HIR"]
 fn builtin_method_call() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -17,14 +16,15 @@ fn builtin_method_call() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // arr is Virtual (single-use), so array stays on stack as argument.
+            // Method call arr.length() desugars to baml.Array.length(arr).
+            // ReturnPhi: call result stays on stack for return.
             vec![
+                Instruction::LoadGlobal(Value::function("baml.Array.length")),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
-                Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("arr".to_string()),
-                // call with one argument (self)
                 Instruction::Call(1),
                 Instruction::Return,
             ],

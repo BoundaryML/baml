@@ -126,7 +126,6 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment statements not yet in HIR"]
 fn mutable_variables() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -147,16 +146,12 @@ fn mutable_variables() -> anyhow::Result<()> {
         expected: vec![
             (
                 "DeclareMutableInFunction",
-                vec![
-                    Instruction::LoadConst(Value::Int(3)),
-                    Instruction::LoadConst(Value::Int(5)),
-                    Instruction::StoreVar("y".to_string()),
-                    Instruction::LoadVar("y".to_string()),
-                    Instruction::Return,
-                ],
+                // Dead store elimination: y=3 immediately overwritten by y=5, just return 5
+                vec![Instruction::LoadConst(Value::Int(5)), Instruction::Return],
             ),
             (
                 "MutableInArg",
+                // x is a Parameter, so it needs a real slot for the reassignment
                 vec![
                     Instruction::LoadConst(Value::Int(3)),
                     Instruction::StoreVar("x".to_string()),

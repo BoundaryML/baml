@@ -87,7 +87,6 @@ fn basic_add() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment statements not yet in HIR"]
 fn basic_assign_add() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -99,13 +98,17 @@ fn basic_assign_add() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // x is Real (used 3 times: init, compound assign read, return)
+            // Compound assignment x += 2 expands to x = x + 2
             vec![
+                Instruction::LoadConst(Value::Null), // slot for x
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::LoadVar("x".to_string()),
+                Instruction::StoreVar("x".to_string()), // let x = 1
+                Instruction::LoadVar("x".to_string()),  // read x
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("x".to_string()),
-                Instruction::LoadVar("x".to_string()),
+                Instruction::BinOp(BinOp::Add),         // x + 2
+                Instruction::StoreVar("x".to_string()), // x = (x + 2)
+                Instruction::LoadVar("x".to_string()),  // return x
                 Instruction::Return,
             ],
         )],
