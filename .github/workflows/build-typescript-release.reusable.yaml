@@ -68,8 +68,6 @@ jobs:
               tar -xzf x86_64-linux-musl-cross.tgz
               echo "$PWD/x86_64-linux-musl-cross/bin" >> $GITHUB_PATH
 
-              apt-get update && apt-get install -y zig
-
               cat >>$GITHUB_ENV <<EOF
               CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc
               CXX_x86_64_unknown_linux_musl=x86_64-linux-musl-g++
@@ -77,6 +75,7 @@ jobs:
               RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
               EOF
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl -x
+            setup_zig: true
 
           - target: aarch64-unknown-linux-musl
             host: ubuntu-22.04
@@ -117,6 +116,11 @@ jobs:
           targets: ${{ matrix._.target }}
           prefix-key: v5-rust-${{ matrix._.target }}
           cache-on-failure: true
+
+      # Setup Zig for targets that need it (e.g. musl cross-compilation)
+      - name: Setup Zig
+        if: matrix._.setup_zig
+        uses: mlugg/setup-zig@v2
 
       # per-matrix-entry dependency setup
       - name: Build tools setup
