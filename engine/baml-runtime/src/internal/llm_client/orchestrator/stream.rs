@@ -64,6 +64,7 @@ async fn run_parser_loop<'a, ParseFn, EventFn>(
                 ).await;
             }
             changed = snapshot_rx.changed() => {
+
                 if changed.is_err() {
                     process_latest_snapshot(
                         &scope,
@@ -74,6 +75,7 @@ async fn run_parser_loop<'a, ParseFn, EventFn>(
                     ).await;
                     break;
                 }
+                // we purposefully dont process snpashot here -- only strictly every 50ms in case parsing takes long.
             }
         }
     }

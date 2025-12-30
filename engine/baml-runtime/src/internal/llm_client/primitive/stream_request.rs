@@ -118,7 +118,6 @@ pub async fn make_stream_request(
                     }
                     Err(e) => {
                         let error_str = format!("{e:?}");
-                        log::error!("Stream transport error: {error_str}");
 
                         // Check if this is a timeout error:
                         // - Native: reqwest returns errors containing "TimedOut" or "timeout"
@@ -142,7 +141,7 @@ pub async fn make_stream_request(
             })
             // Stop on Done or Error, but emit Error events first
             .take_while(|event| std::future::ready(!matches!(event, StreamEventResult::Done)))
-            .inspect(|event| log::info!("{event:#?}"))
+            .inspect(|event| log::debug!("{event:#?}"))
             .scan(
                 (
                     Ok(LLMCompleteResponse {
@@ -184,7 +183,13 @@ pub async fn make_stream_request(
                             message,
                             is_timeout,
                         } => {
-                            *has_emitted_error = true;
+                            // Only stop the stream for fatal errors (timeouts).
+                            // Non-fatal errors (like JSON parse failures on individual events)
+                            // should emit a failure but allow subsequent events to be processed.
+                            // This matches the old behavior where parse errors didn't kill the stream.
+                            if is_timeout {
+                                *has_emitted_error = true;
+                            }
                             let code = if is_timeout {
                                 ErrorCode::Timeout
                             } else {

@@ -264,12 +264,12 @@ pub fn from_str(
                 .iter()
                 .any(|f| matches!(f, Flag::InferedObject(jsonish::Value::String(_, _))))
             {
-                anyhow::bail!("Failed to coerce value: {:#?}", v.conditions().flags());
+                anyhow::bail!("Failed to coerce value: {:?}", v.conditions().flags());
             }
 
             Ok::<BamlValueWithFlags, anyhow::Error>(v)
         }
-        Err(e) => anyhow::bail!("Failed to coerce value: {:#?}", e),
+        Err(e) => anyhow::bail!("Failed to coerce value: {:?}", e),
     }?;
 
     log::debug!("Parsed JSONish (step 2 of parsing): {parsed_value:#?}");

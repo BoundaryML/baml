@@ -11,26 +11,21 @@ const ErrorText = ({ text }: { text: string }) => {
 }
 
 // Renders the parsed response only
-// Note: This component now renders parsed_response even if llm_failure exists,
-// to support showing partial content that was captured before a timeout/failure
 export const ParsedResponseRenderer: React.FC<{
   response?: TestResponseData
-  // If true, don't show llm_failure error (caller will handle it separately)
-  hideFailureError?: boolean
-}> = ({ response, hideFailureError = false }) => {
+}> = ({ response }) => {
   if (!response) {
     return <div className='text-xs text-muted-foreground'>Waiting for response...</div>
   }
 
   const llmFailure = response.llm_failure
   const failureMessage = response.failure_message
-  const parsedResponse = response.parsed_response
 
-  // If there's an LLM failure and no parsed response, show the error
-  // (unless caller wants to handle error display separately)
-  if (llmFailure && !parsedResponse && !hideFailureError) {
+  if (llmFailure) {
     return <ErrorText text={llmFailure.message} />
   }
+
+  const parsedResponse = response.parsed_response
 
   return (
     <div>
