@@ -61,6 +61,10 @@ pub(crate) enum LocalClassification {
     /// At def sites: emit rvalue but NOT store (leave on stack).
     /// At use site: don't emit `LoadVar` (value already on stack from predecessor).
     PhiLike,
+    /// Return-phi: _0 is assigned immediately before Return in each defining block.
+    /// At def sites: emit rvalue but NOT store (leave on stack).
+    /// At Return: don't emit `LoadVar` for _0 (value already on stack).
+    ReturnPhi,
     /// Dead local - defined but never used, can be eliminated.
     Dead,
 }
@@ -137,7 +141,8 @@ impl<'db> AnalysisResult<'db> {
         let redirect_targets = build_redirect_targets(mir);
 
         // Step 6: Classify each local (including phi-like detection)
-        let classifications = classify_locals(mir, &def_use, &dominators, &predecessors);
+        let classifications =
+            classify_locals(mir, &def_use, &dominators, &predecessors, &redirect_targets);
 
         Self {
             classifications,
@@ -588,6 +593,7 @@ fn classify_locals<'db>(
     def_use: &HashMap<Local, LocalDefUse<'db>>,
     dominators: &Dominators,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
+    redirect_targets: &HashMap<BlockId, BlockId>,
 ) -> HashMap<Local, LocalClassification> {
     let all_defs = collect_all_definitions(mir);
 
@@ -614,6 +620,11 @@ fn classify_locals<'db>(
             // At def sites: emit rvalue but NOT StoreVar (leave on stack).
             // At use site: don't emit LoadVar (value already on stack).
             LocalClassification::PhiLike
+        } else if is_return_phi(local, mir, &all_defs, redirect_targets) {
+            // Return-phi: _0 is assigned immediately before Return in each defining block.
+            // At def sites: emit rvalue but NOT StoreVar (leave on stack).
+            // At Return: don't emit LoadVar for _0 (value already on stack).
+            LocalClassification::ReturnPhi
         } else {
             LocalClassification::Real
         };
@@ -632,6 +643,7 @@ fn collect_all_definitions(mir: &MirFunction<'_>) -> HashMap<Local, Vec<(BlockId
     let mut all_defs: HashMap<Local, Vec<(BlockId, usize)>> = HashMap::new();
 
     for block in &mir.blocks {
+        // Collect definitions from statements
         for (stmt_idx, stmt) in block.statements.iter().enumerate() {
             if let StatementKind::Assign {
                 destination: Place::Local(local),
@@ -642,6 +654,31 @@ fn collect_all_definitions(mir: &MirFunction<'_>) -> HashMap<Local, Vec<(BlockId
                     .entry(*local)
                     .or_default()
                     .push((block.id, stmt_idx));
+            }
+        }
+
+        // Collect definitions from terminators (Call, DispatchFuture, Await)
+        if let Some(terminator) = &block.terminator {
+            let dest_local = match terminator {
+                Terminator::Call {
+                    destination: Place::Local(local),
+                    ..
+                } => Some(*local),
+                Terminator::DispatchFuture {
+                    future: Place::Local(local),
+                    ..
+                } => Some(*local),
+                Terminator::Await {
+                    destination: Place::Local(local),
+                    ..
+                } => Some(*local),
+                _ => None,
+            };
+            if let Some(local) = dest_local {
+                all_defs
+                    .entry(local)
+                    .or_default()
+                    .push((block.id, TERMINATOR_IDX));
             }
         }
     }
@@ -729,7 +766,96 @@ fn is_phi_like(
         }
     }
 
-    // All checks passed - this is a phi-like local
+    true
+}
+
+/// Check if `_0` (the return place) is a "return-phi" local.
+///
+/// Return-phi applies when `_0` is assigned immediately before Return in each defining block.
+/// This allows us to:
+/// - At def sites: emit rvalue but NOT `StoreVar` (leave value on stack)
+/// - At Return: skip `LoadVar` for _0 (value already on stack)
+///
+/// This eliminates the redundant `StoreVar("_0"); LoadVar("_0"); Return` pattern.
+fn is_return_phi(
+    local: Local,
+    mir: &MirFunction<'_>,
+    all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
+    redirect_targets: &HashMap<BlockId, BlockId>,
+) -> bool {
+    // Only applies to _0 (the return place)
+    if local.0 != 0 {
+        return false;
+    }
+
+    // Get all definitions of _0
+    let Some(defs) = all_defs.get(&local) else {
+        return false;
+    };
+
+    // Must have at least one definition
+    if defs.is_empty() {
+        return false;
+    }
+
+    // Build a set of return-only blocks (empty statements + Return terminator)
+    let return_only_blocks: HashSet<BlockId> = mir
+        .blocks
+        .iter()
+        .filter(|b| b.statements.is_empty() && matches!(b.terminator, Some(Terminator::Return)))
+        .map(|b| b.id)
+        .collect();
+
+    // Helper: resolve a target through the redirect chain
+    let resolve_target =
+        |target: BlockId| -> BlockId { redirect_targets.get(&target).copied().unwrap_or(target) };
+
+    // Each definition block must:
+    // 1. Have the definition as the last statement (or be a terminator definition)
+    // 2. End with Return OR Goto/Call to a return-only block (after following redirects)
+    for &(block_id, stmt_idx) in defs {
+        let block = mir.block(block_id);
+
+        // Handle terminator definitions (Call, DispatchFuture, Await)
+        if stmt_idx == TERMINATOR_IDX {
+            // For terminator definitions, check if the continuation is return-only
+            let continuation = match &block.terminator {
+                Some(Terminator::Call { target, .. }) => Some(*target),
+                Some(Terminator::DispatchFuture { resume, .. }) => Some(*resume),
+                Some(Terminator::Await { target, .. }) => Some(*target),
+                _ => None,
+            };
+            let valid = continuation.is_some_and(|target| {
+                let resolved = resolve_target(target);
+                return_only_blocks.contains(&resolved)
+            });
+            if !valid {
+                return false;
+            }
+            continue;
+        }
+
+        // For regular Assign statements: definition must be the last statement
+        if stmt_idx + 1 != block.statements.len() {
+            return false;
+        }
+
+        // Block must end with Return or Goto to return-only block
+        // Follow redirect chain for jump threading
+        let valid_terminator = match &block.terminator {
+            Some(Terminator::Return) => true,
+            Some(Terminator::Goto { target }) => {
+                let resolved = resolve_target(*target);
+                return_only_blocks.contains(&resolved)
+            }
+            _ => false,
+        };
+
+        if !valid_terminator {
+            return false;
+        }
+    }
+
     true
 }
 

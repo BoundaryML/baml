@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -9,8 +9,5 @@ Globals: 19
 
 Function GetTodo (arity: 0, kind: Exec):
      0   LOAD_CONST 0   (null)
-     1   LOAD_CONST 0   (null)
-     2   CALL 0         
-     3   STORE_VAR 1    (_0)
-     4   LOAD_VAR 1     (_0)
-     5   RETURN
+     1   CALL 0         
+     2   RETURN

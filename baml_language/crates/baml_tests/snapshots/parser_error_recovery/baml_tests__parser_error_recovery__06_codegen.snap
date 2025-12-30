@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -14,8 +14,5 @@ Function Incomplete (arity: 1, kind: Exec):
   (no bytecode)
 
 Function NextFunction (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (null)
-     1   LOAD_CONST 1   (parsed)
-     2   STORE_VAR 1    (_0)
-     3   LOAD_VAR 1     (_0)
-     4   RETURN
+     0   LOAD_CONST 0   (parsed)
+     1   RETURN

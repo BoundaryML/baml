@@ -79,13 +79,10 @@ fn return_function_call() -> anyhow::Result<()> {
             ),
             (
                 "main",
-                // Call result is stored to _0 (Real because def is in Call terminator)
+                // ReturnPhi optimization: Call result goes directly to stack, no Store/Load
                 vec![
-                    Instruction::LoadConst(Value::Null),
                     Instruction::LoadGlobal(Value::function("one")),
                     Instruction::Call(0),
-                    Instruction::StoreVar("_0".to_string()),
-                    Instruction::LoadVar("_0".to_string()),
                     Instruction::Return,
                 ],
             ),

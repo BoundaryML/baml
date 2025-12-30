@@ -20,28 +20,15 @@ fn basic_and() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::PopJumpIfFalse(4),
-            //     Instruction::Pop(1),
-            //     Instruction::LoadGlobal(Value::function("ret_bool")),
-            //     Instruction::Call(0),
-            //     Instruction::Return,
-            // ],
-            // Stackification with fall-through elimination:
+            // ReturnPhi + Phi-like optimizations: result stays on stack
             vec![
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(4),
+                Instruction::Jump(3),
                 Instruction::LoadGlobal(Value::function("ret_bool")),
                 Instruction::Call(0),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -62,29 +49,15 @@ fn basic_or() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
-            // THIR codegen (efficient):
-            // vec![
-            //     Instruction::LoadConst(Value::Bool(true)),
-            //     Instruction::PopJumpIfFalse(2),
-            //     Instruction::Jump(4),
-            //     Instruction::Pop(1),
-            //     Instruction::LoadGlobal(Value::function("ret_bool")),
-            //     Instruction::Call(0),
-            //     Instruction::Return,
-            // ],
-            // Stackification with fall-through elimination:
+            // ReturnPhi + Phi-like optimizations: result stays on stack
             vec![
-                Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(5),
+                Instruction::Jump(4),
                 Instruction::LoadGlobal(Value::function("ret_bool")),
                 Instruction::Call(0),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::Jump(3),
+                Instruction::Jump(2),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::LoadVar("_0".to_string()),
                 Instruction::Return,
             ],
         )],

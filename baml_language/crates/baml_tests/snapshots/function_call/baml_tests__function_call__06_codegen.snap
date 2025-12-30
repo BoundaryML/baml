@@ -23,18 +23,15 @@ Function Foo (arity: 1, kind: Exec):
      3   RETURN         
 
 Function GreetBaz (arity: 1, kind: Exec):
-     0    LOAD_CONST 0       (null)
-     1    LOAD_CONST 0       (null)
-     2    ALLOC_INSTANCE 0   (<class Baz>)
-     3    COPY 0             
-     4    LOAD_VAR 1         (n)
-     5    STORE_FIELD 0      
-     6    STORE_VAR 3        (baz)
-     7    LOAD_GLOBAL 19     (<fn Greeting>)
-     8    CALL 0             
-     9    STORE_VAR 2        (_0)
-     10   LOAD_VAR 2         (_0)
-     11   RETURN             
+     0   LOAD_CONST 0       (null)
+     1   ALLOC_INSTANCE 0   (<class Baz>)
+     2   COPY 0             
+     3   LOAD_VAR 1         (n)
+     4   STORE_FIELD 0      
+     5   STORE_VAR 2        (baz)
+     6   LOAD_GLOBAL 19     (<fn Greeting>)
+     7   CALL 0             
+     8   RETURN             
 
 Function Greeting (arity: 1, kind: Exec):
      0   LOAD_CONST 0   (Hello, )
@@ -46,29 +43,22 @@ Function Greeting (arity: 1, kind: Exec):
      6   RETURN         
 
 Function array_length (arity: 0, kind: Exec):
-     0    LOAD_CONST 0    (null)
-     1    LOAD_CONST 0    (null)
-     2    LOAD_CONST 1    (1)
-     3    LOAD_CONST 2    (2)
-     4    LOAD_CONST 3    (3)
-     5    ALLOC_ARRAY 3   
-     6    STORE_VAR 2     (array)
-     7    LOAD_GLOBAL 0   (<fn baml.Array.length>)
-     8    LOAD_VAR 2      (array)
-     9    CALL 1          
-     10   STORE_VAR 1     (_0)
-     11   LOAD_VAR 1      (_0)
-     12   RETURN          
+     0   LOAD_CONST 0    (null)
+     1   LOAD_CONST 1    (1)
+     2   LOAD_CONST 2    (2)
+     3   LOAD_CONST 3    (3)
+     4   ALLOC_ARRAY 3   
+     5   STORE_VAR 1     (array)
+     6   LOAD_GLOBAL 0   (<fn baml.Array.length>)
+     7   LOAD_VAR 1      (array)
+     8   CALL 1          
+     9   RETURN          
 
 Function param_in_if_statement (arity: 1, kind: Exec):
-     0    LOAD_CONST 0           (null)
-     1    LOAD_VAR 1             (b)
-     2    POP_JUMP_IF_FALSE +2   (to 4)
-     3    JUMP +4                (to 7)
-     4    LOAD_CONST 1           (2)
-     5    STORE_VAR 2            (_0)
-     6    JUMP +3                (to 9)
-     7    LOAD_CONST 2           (1)
-     8    STORE_VAR 2            (_0)
-     9    LOAD_VAR 2             (_0)
-     10   RETURN
+     0   LOAD_VAR 1             (b)
+     1   POP_JUMP_IF_FALSE +2   (to 3)
+     2   JUMP +3                (to 5)
+     3   LOAD_CONST 0           (2)
+     4   JUMP +2                (to 6)
+     5   LOAD_CONST 1           (1)
+     6   RETURN
