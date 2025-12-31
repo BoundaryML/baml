@@ -3,26 +3,7 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated BAML function wrappers.
-//!
-//! Full implementation coming in Phase 7.
+//! BAML function modules.
 
-mod parse;
-mod parse_stream;
-mod stream;
-pub mod sync;
-
-/// Streaming function namespace.
-pub mod stream_ns {
-    pub use super::stream::*;
-}
-
-/// Parse function namespace.
-pub mod parse_ns {
-    pub use super::parse::*;
-}
-
-/// Parse stream function namespace.
-pub mod parse_stream_ns {
-    pub use super::parse_stream::*;
-}
+pub mod async_client;
+pub mod sync_client;

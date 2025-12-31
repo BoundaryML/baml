@@ -16,8 +16,8 @@ mod tests {
 
     #[test]
     fn test_empty_collections() {
-        let result = B
-            .TestEmptyCollections("test empty collections")
+        let result = B.TestEmptyCollections
+            .call("test empty collections")
             .expect("Failed to call TestEmptyCollections");
 
         // Verify all collections are empty
@@ -50,8 +50,8 @@ mod tests {
 
     #[test]
     fn test_large_structure() {
-        let result = B
-            .TestLargeStructure("test large structure")
+        let result = B.TestLargeStructure
+            .call("test large structure")
             .expect("Failed to call TestLargeStructure");
 
         // Verify large structure has all string fields populated
@@ -147,8 +147,8 @@ mod tests {
 
     #[test]
     fn test_deep_recursion() {
-        let result = B
-            .TestDeepRecursion(5)
+        let result = B.TestDeepRecursion
+            .call(5)
             .expect("Failed to call TestDeepRecursion");
 
         // Verify recursion depth by traversing the linked list
@@ -170,8 +170,8 @@ mod tests {
 
     #[test]
     fn test_special_characters() {
-        let result = B
-            .TestSpecialCharacters("test special characters")
+        let result = B.TestSpecialCharacters
+            .call("test special characters")
             .expect("Failed to call TestSpecialCharacters");
 
         // Verify special character handling
@@ -212,8 +212,8 @@ mod tests {
 
     #[test]
     fn test_number_edge_cases() {
-        let result = B
-            .TestNumberEdgeCases("test number edge cases")
+        let result = B.TestNumberEdgeCases
+            .call("test number edge cases")
             .expect("Failed to call TestNumberEdgeCases");
 
         // Verify number edge cases
@@ -257,8 +257,8 @@ mod tests {
 
     #[test]
     fn test_circular_reference() {
-        let result = B
-            .TestCircularReference("test circular reference")
+        let result = B.TestCircularReference
+            .call("test circular reference")
             .expect("Failed to call TestCircularReference");
 
         // Verify circular reference structure

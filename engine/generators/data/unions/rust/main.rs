@@ -20,7 +20,7 @@ fn main() {
 
     let array = vec![input];
 
-    let result = B.JsonInput(&array).expect("Failed to call JsonInput");
+    let result = B.JsonInput.call(&array).expect("Failed to call JsonInput");
     println!("Result: {:?}", result);
 }
 
@@ -43,9 +43,8 @@ mod tests {
 
         let array = vec![input];
 
-        let mut stream = B
-            .stream
-            .JsonInput(&array)
+        let mut stream = B.JsonInput
+            .stream(&array)
             .expect("Failed to start JsonInput stream");
 
         let mut partial_count = 0;
@@ -84,7 +83,7 @@ mod tests {
 
         let array = vec![input];
 
-        let result = B.JsonInput(&array).expect("Failed to call JsonInput");
+        let result = B.JsonInput.call(&array).expect("Failed to call JsonInput");
 
         // Basic validation - ensure we get a non-empty result
         assert!(!result.is_empty(), "Expected non-empty result from JsonInput");

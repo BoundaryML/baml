@@ -74,9 +74,8 @@ mod tests {
     /// Mirrors Go's TestMakeSemanticContainerStream.
     #[test]
     fn test_make_semantic_container_stream() {
-        let mut stream = B
-            .stream
-            .MakeSemanticContainer()
+        let mut stream = B.MakeSemanticContainer
+            .stream()
             .expect("Failed to start MakeSemanticContainer stream");
 
         let mut partial_count = 0;
@@ -121,8 +120,8 @@ mod tests {
     /// Mirrors Go's TestMakeSemanticContainer.
     #[test]
     fn test_make_semantic_container() {
-        let result = B
-            .MakeSemanticContainer()
+        let result = B.MakeSemanticContainer
+            .call()
             .expect("Failed to call MakeSemanticContainer");
 
         // Basic validation - check that result contains valid data
@@ -161,8 +160,8 @@ mod tests {
     /// Additional test for semantic streaming class with block-level done annotation.
     #[test]
     fn test_make_class_with_block_done() {
-        let result = B
-            .MakeClassWithBlockDone()
+        let result = B.MakeClassWithBlockDone
+            .call()
             .expect("Failed to call MakeClassWithBlockDone");
 
         // Validate the result has expected fields
@@ -178,8 +177,8 @@ mod tests {
     /// Additional test for semantic streaming class with external done annotation.
     #[test]
     fn test_make_class_with_external_done() {
-        let result = B
-            .MakeClassWithExternalDone()
+        let result = B.MakeClassWithExternalDone
+            .call()
             .expect("Failed to call MakeClassWithExternalDone");
 
         // Validate the result has expected fields

@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_person_test() {
-        let result = B.PersonTest().expect("Failed to call PersonTest");
+        let result = B.PersonTest.call().expect("Failed to call PersonTest");
         println!("{:?}", result);
 
         // Validate the Person struct has expected fields
@@ -26,9 +26,8 @@ mod tests {
 
     #[test]
     fn test_person_test_stream() {
-        let mut stream = B
-            .stream
-            .PersonTest()
+        let mut stream = B.PersonTest
+            .stream()
             .expect("Failed to start PersonTest stream");
 
         let mut partial_count = 0;

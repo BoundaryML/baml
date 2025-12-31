@@ -29,8 +29,8 @@ mod tests {
         let media_union = Union4AudioOrImageOrPDFOrVideo::Image(image_media);
 
         // Call the BAML function
-        let result = B
-            .TestMediaInput(&media_union, "Analyze this image")
+        let result = B.TestMediaInput
+            .call(&media_union, "Analyze this image")
             .expect("Failed to call TestMediaInput with image");
 
         // Validate that we got a non-empty analysis
@@ -56,8 +56,8 @@ mod tests {
         //     .TestMediaInput(&media_union, "This is music used for an intro")
         //     .expect("Failed to call TestMediaInput with audio");
 
-        let result = B
-            .TestMediaInput(&media_union, "This is music used for an intro")
+        let result = B.TestMediaInput
+            .call(&media_union, "This is music used for an intro")
             .expect("Failed to call TestMediaInput with audio");
 
         assert!(
@@ -78,8 +78,8 @@ mod tests {
         let media_union = Union4AudioOrImageOrPDFOrVideo::PDF(pdf_media);
 
         // Call the BAML function
-        let result = B
-            .TestMediaInput(&media_union, "Analyze this PDF")
+        let result = B.TestMediaInput
+            .call(&media_union, "Analyze this PDF")
             .expect("Failed to call TestMediaInput with PDF");
 
         // Validate that we got a non-empty analysis
@@ -104,8 +104,8 @@ mod tests {
         //     .TestMediaInput(&media_union, "Analyze this video")
         //     .expect("Failed to call TestMediaInput with video");
 
-        let result = B
-            .TestMediaInput(&media_union, "Analyze this video")
+        let result = B.TestMediaInput
+            .call(&media_union, "Analyze this video")
             .expect("Failed to call TestMediaInput with video");
 
         assert!(
@@ -131,8 +131,8 @@ mod tests {
         let image_array = vec![image1, image2];
 
         // Call the BAML function with image array
-        let result = B
-            .TestMediaArrayInputs(&image_array, "Analyze these images")
+        let result = B.TestMediaArrayInputs
+            .call(&image_array, "Analyze these images")
             .expect("Failed to call TestMediaArrayInputs");
 
         // Validate that media count is positive

@@ -16,8 +16,8 @@ mod tests {
 
     #[test]
     fn test_consume_test_enum() {
-        let result = B
-            .ConsumeTestEnum(&TestEnum::Confused)
+        let result = B.ConsumeTestEnum
+            .call(&TestEnum::Confused)
             .expect("Failed to call ConsumeTestEnum");
 
         // Basic validation that we got a result (non-empty means we got something back)
@@ -40,8 +40,8 @@ mod tests {
     #[test]
     fn test_fn_test_aliased_enum_output() {
         // Test with "mehhhhh" input
-        let result = B
-            .FnTestAliasedEnumOutput("mehhhhh")
+        let result = B.FnTestAliasedEnumOutput
+            .call("mehhhhh")
             .expect("Failed to call FnTestAliasedEnumOutput");
 
         assert_eq!(
@@ -66,8 +66,8 @@ mod tests {
         ];
 
         for (input, expected) in test_cases {
-            let result = B
-                .FnTestAliasedEnumOutput(input)
+            let result = B.FnTestAliasedEnumOutput
+                .call(input)
                 .unwrap_or_else(|e| panic!("Error testing input '{}': {:?}", input, e));
 
             assert_eq!(

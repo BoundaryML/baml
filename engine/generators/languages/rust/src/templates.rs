@@ -38,34 +38,18 @@ pub struct FunctionsModTemplate<'a> {
     pub pkg: &'a CurrentRenderPackage,
 }
 
-/// Sync functions template
+/// Sync client functions template
 #[derive(Template)]
-#[template(path = "functions/sync.rs.j2", escape = "none")]
-pub struct FunctionsSyncTemplate<'a> {
+#[template(path = "functions/sync_client.rs.j2", escape = "none")]
+pub struct FunctionsSyncClientTemplate<'a> {
     pub functions: &'a [FunctionRust],
     pub pkg: &'a CurrentRenderPackage,
 }
 
-/// Stream functions template
+/// Async client functions template
 #[derive(Template)]
-#[template(path = "functions/stream.rs.j2", escape = "none")]
-pub struct FunctionsStreamTemplate<'a> {
-    pub functions: &'a [FunctionRust],
-    pub pkg: &'a CurrentRenderPackage,
-}
-
-/// Parse functions template
-#[derive(Template)]
-#[template(path = "functions/parse.rs.j2", escape = "none")]
-pub struct FunctionsParseTemplate<'a> {
-    pub functions: &'a [FunctionRust],
-    pub pkg: &'a CurrentRenderPackage,
-}
-
-/// Parse stream functions template
-#[derive(Template)]
-#[template(path = "functions/parse_stream.rs.j2", escape = "none")]
-pub struct FunctionsParseStreamTemplate<'a> {
+#[template(path = "functions/async_client.rs.j2", escape = "none")]
+pub struct FunctionsAsyncClientTemplate<'a> {
     pub functions: &'a [FunctionRust],
     pub pkg: &'a CurrentRenderPackage,
 }

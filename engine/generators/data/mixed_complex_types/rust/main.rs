@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_kitchen_sink() {
-        let result = B.TestKitchenSink("test kitchen sink").expect("Failed to call TestKitchenSink");
+        let result = B.TestKitchenSink.call("test kitchen sink").expect("Failed to call TestKitchenSink");
 
         // Basic field validations
         assert!(result.id > 0, "Expected id to be positive, got {}", result.id);
@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_ultra_complex() {
-        let result = B.TestUltraComplex("test ultra complex").expect("Failed to call TestUltraComplex");
+        let result = B.TestUltraComplex.call("test ultra complex").expect("Failed to call TestUltraComplex");
 
         // Basic validations
         assert!(result.tree.id > 0, "Expected tree.id to be positive, got {}", result.tree.id);
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_recursive_complexity() {
-        let result = B.TestRecursiveComplexity("test recursive complexity").expect("Failed to call TestRecursiveComplexity");
+        let result = B.TestRecursiveComplexity.call("test recursive complexity").expect("Failed to call TestRecursiveComplexity");
 
         // Basic validations
         assert!(result.id > 0, "Expected node.id to be positive, got {}", result.id);

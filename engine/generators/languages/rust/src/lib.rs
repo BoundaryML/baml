@@ -204,29 +204,17 @@ impl LanguageFeatures for RustLanguageFeatures {
         };
         collector.add_file("functions/mod.rs", fn_mod.render()?)?;
 
-        let fn_sync = templates::FunctionsSyncTemplate {
+        let fn_sync_client = templates::FunctionsSyncClientTemplate {
             functions: &functions,
             pkg: &pkg,
         };
-        collector.add_file("functions/sync.rs", fn_sync.render()?)?;
+        collector.add_file("functions/sync_client.rs", fn_sync_client.render()?)?;
 
-        let fn_stream = templates::FunctionsStreamTemplate {
+        let fn_async_client = templates::FunctionsAsyncClientTemplate {
             functions: &functions,
             pkg: &pkg,
         };
-        collector.add_file("functions/stream.rs", fn_stream.render()?)?;
-
-        let fn_parse = templates::FunctionsParseTemplate {
-            functions: &functions,
-            pkg: &pkg,
-        };
-        collector.add_file("functions/parse.rs", fn_parse.render()?)?;
-
-        let fn_parse_stream = templates::FunctionsParseStreamTemplate {
-            functions: &functions,
-            pkg: &pkg,
-        };
-        collector.add_file("functions/parse_stream.rs", fn_parse_stream.render()?)?;
+        collector.add_file("functions/async_client.rs", fn_async_client.render()?)?;
 
         // Phase 7: Generate type_builder/ directory
         pkg.set("baml_client.type_builder");

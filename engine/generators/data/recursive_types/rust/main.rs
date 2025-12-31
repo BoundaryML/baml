@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_foo() {
-        let result = B.Foo(8192).expect("Failed to call Foo");
+        let result = B.Foo.call(8192).expect("Failed to call Foo");
 
         // Basic validation that we got a result
         // JSON is Option<Union5...>, so we check it's Some
@@ -30,7 +30,7 @@ mod tests {
             "Hello".to_string(),
         ));
 
-        let result = B.JsonInput(&input).expect("Failed to call JsonInput");
+        let result = B.JsonInput.call(&input).expect("Failed to call JsonInput");
 
         // Basic validation that we got a result
         assert!(result.is_some(), "Expected non-null result from JsonInput");
@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn test_foo_stream() {
-        let mut stream = B.stream.Foo(8192).expect("Failed to start Foo stream");
+        let mut stream = B.Foo.stream(8192).expect("Failed to start Foo stream");
 
         let mut partial_count = 0;
         for partial in stream.partials() {

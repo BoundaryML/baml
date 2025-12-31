@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_simple_nested() {
-        let result = B.TestSimpleNested("test simple nested").expect("Failed to call TestSimpleNested");
+        let result = B.TestSimpleNested.call("test simple nested").expect("Failed to call TestSimpleNested");
 
         // Verify simple nested structure
         assert!(result.user.id > 0, "Expected user.id to be positive, got {}", result.user.id);
@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn test_deeply_nested() {
-        let result = B.TestDeeplyNested("test deeply nested").expect("Failed to call TestDeeplyNested");
+        let result = B.TestDeeplyNested.call("test deeply nested").expect("Failed to call TestDeeplyNested");
 
         // Verify deeply nested structure (5 levels deep)
         assert!(!result.level1.data.is_empty(), "Expected level1.data to be non-empty");
@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_complex_nested() {
-        let result = B.TestComplexNested("test complex nested").expect("Failed to call TestComplexNested");
+        let result = B.TestComplexNested.call("test complex nested").expect("Failed to call TestComplexNested");
 
         // Verify complex nested structure
         assert!(result.company.id > 0, "Expected company.id to be positive, got {}", result.company.id);
@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn test_recursive_structure() {
-        let result = B.TestRecursiveStructure("test recursive structure").expect("Failed to call TestRecursiveStructure");
+        let result = B.TestRecursiveStructure.call("test recursive structure").expect("Failed to call TestRecursiveStructure");
 
         // Verify recursive structure
         assert!(result.id > 0, "Expected root.id to be positive, got {}", result.id);

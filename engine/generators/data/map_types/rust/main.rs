@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_simple_maps() {
-        let result = B.TestSimpleMaps("test simple maps").expect("Failed to call TestSimpleMaps");
+        let result = B.TestSimpleMaps.call("test simple maps").expect("Failed to call TestSimpleMaps");
 
         // Verify simple map contents
         assert_eq!(result.stringToString.len(), 2, "Expected stringToString length 2, got {}", result.stringToString.len());
@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn test_complex_maps() {
-        let result = B.TestComplexMaps("test complex maps").expect("Failed to call TestComplexMaps");
+        let result = B.TestComplexMaps.call("test complex maps").expect("Failed to call TestComplexMaps");
 
         // Verify complex map contents
         assert!(result.userMap.len() >= 2, "Expected at least 2 users in userMap, got {}", result.userMap.len());
@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_nested_maps() {
-        let result = B.TestNestedMaps("test nested maps").expect("Failed to call TestNestedMaps");
+        let result = B.TestNestedMaps.call("test nested maps").expect("Failed to call TestNestedMaps");
 
         // Verify nested map structure
         assert!(result.simple.len() >= 2, "Expected at least 2 entries in simple map, got {}", result.simple.len());
@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn test_edge_case_maps() {
-        let result = B.TestEdgeCaseMaps("test edge case maps").expect("Failed to call TestEdgeCaseMaps");
+        let result = B.TestEdgeCaseMaps.call("test edge case maps").expect("Failed to call TestEdgeCaseMaps");
 
         // Verify edge case map contents
         assert_eq!(result.emptyMap.len(), 0, "Expected emptyMap to be empty, got length {}", result.emptyMap.len());
@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn test_large_maps() {
-        let result = B.TestLargeMaps("test large maps").expect("Failed to call TestLargeMaps");
+        let result = B.TestLargeMaps.call("test large maps").expect("Failed to call TestLargeMaps");
 
         // Verify large map sizes (LLMs are fuzzy, so we may get a few less)
         assert!(result.stringToString.len() >= 15, "Expected at least 15 entries in stringToString, got {}", result.stringToString.len());
@@ -108,7 +108,7 @@ mod tests {
     // Test top-level map return types
     #[test]
     fn test_top_level_string_map() {
-        let result = B.TestTopLevelStringMap("test string map").expect("Failed to call TestTopLevelStringMap");
+        let result = B.TestTopLevelStringMap.call("test string map").expect("Failed to call TestTopLevelStringMap");
 
         assert_eq!(result.len(), 3, "Expected 3 entries in string map, got {}", result.len());
         assert_eq!(result.get("first"), Some(&"Hello".to_string()), "Unexpected value for 'first'");
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_top_level_int_map() {
-        let result = B.TestTopLevelIntMap("test int map").expect("Failed to call TestTopLevelIntMap");
+        let result = B.TestTopLevelIntMap.call("test int map").expect("Failed to call TestTopLevelIntMap");
 
         assert_eq!(result.len(), 4, "Expected 4 entries in int map, got {}", result.len());
         assert_eq!(result.get("one"), Some(&1), "Unexpected value for 'one'");
@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_top_level_float_map() {
-        let result = B.TestTopLevelFloatMap("test float map").expect("Failed to call TestTopLevelFloatMap");
+        let result = B.TestTopLevelFloatMap.call("test float map").expect("Failed to call TestTopLevelFloatMap");
 
         assert_eq!(result.len(), 3, "Expected 3 entries in float map, got {}", result.len());
         let pi = result.get("pi").expect("Expected 'pi' key");
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_top_level_bool_map() {
-        let result = B.TestTopLevelBoolMap("test bool map").expect("Failed to call TestTopLevelBoolMap");
+        let result = B.TestTopLevelBoolMap.call("test bool map").expect("Failed to call TestTopLevelBoolMap");
 
         assert_eq!(result.len(), 3, "Expected 3 entries in bool map, got {}", result.len());
         assert_eq!(result.get("isActive"), Some(&true), "Unexpected value for 'isActive'");
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_top_level_nested_map() {
-        let result = B.TestTopLevelNestedMap("test nested map").expect("Failed to call TestTopLevelNestedMap");
+        let result = B.TestTopLevelNestedMap.call("test nested map").expect("Failed to call TestTopLevelNestedMap");
 
         assert_eq!(result.len(), 2, "Expected 2 entries in nested map, got {}", result.len());
         let users = result.get("users").expect("Expected 'users' key");
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_top_level_map_of_arrays() {
-        let result = B.TestTopLevelMapOfArrays("test map of arrays").expect("Failed to call TestTopLevelMapOfArrays");
+        let result = B.TestTopLevelMapOfArrays.call("test map of arrays").expect("Failed to call TestTopLevelMapOfArrays");
 
         assert_eq!(result.len(), 3, "Expected 3 entries in map of arrays, got {}", result.len());
         let evens = result.get("evens").expect("Expected 'evens' key");
@@ -174,14 +174,14 @@ mod tests {
 
     #[test]
     fn test_top_level_empty_map() {
-        let result = B.TestTopLevelEmptyMap("test empty map").expect("Failed to call TestTopLevelEmptyMap");
+        let result = B.TestTopLevelEmptyMap.call("test empty map").expect("Failed to call TestTopLevelEmptyMap");
 
         assert_eq!(result.len(), 0, "Expected empty map, got {} entries", result.len());
     }
 
     #[test]
     fn test_top_level_map_with_nullable() {
-        let result = B.TestTopLevelMapWithNullable("use just a json map").expect("Failed to call TestTopLevelMapWithNullable");
+        let result = B.TestTopLevelMapWithNullable.call("use just a json map").expect("Failed to call TestTopLevelMapWithNullable");
 
         assert_eq!(result.len(), 3, "Expected 3 entries in nullable map, got {}", result.len());
         let present = result.get("present").expect("Expected 'present' key");
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_top_level_map_of_objects() {
-        let result = B.TestTopLevelMapOfObjects("test object map").expect("Failed to call TestTopLevelMapOfObjects");
+        let result = B.TestTopLevelMapOfObjects.call("test object map").expect("Failed to call TestTopLevelMapOfObjects");
 
         assert_eq!(result.len(), 2, "Expected 2 entries in object map, got {}", result.len());
         for (key, user) in &result {

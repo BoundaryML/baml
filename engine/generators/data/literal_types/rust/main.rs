@@ -16,8 +16,8 @@ mod tests {
 
     #[test]
     fn test_string_literals() {
-        let result = B
-            .TestStringLiterals("test string literals")
+        let result = B.TestStringLiterals
+            .call("test string literals")
             .expect("Failed to call TestStringLiterals");
 
         // Verify string literal values
@@ -40,8 +40,8 @@ mod tests {
 
     #[test]
     fn test_integer_literals() {
-        let result = B
-            .TestIntegerLiterals("test integer literals")
+        let result = B.TestIntegerLiterals
+            .call("test integer literals")
             .expect("Failed to call TestIntegerLiterals");
 
         // Verify integer literal values
@@ -67,8 +67,8 @@ mod tests {
 
     #[test]
     fn test_boolean_literals() {
-        let result = B
-            .TestBooleanLiterals("test boolean literals")
+        let result = B.TestBooleanLiterals
+            .call("test boolean literals")
             .expect("Failed to call TestBooleanLiterals");
 
         // Verify boolean literal values
@@ -89,8 +89,8 @@ mod tests {
 
     #[test]
     fn test_mixed_literals() {
-        let result = B
-            .TestMixedLiterals("test mixed literals")
+        let result = B.TestMixedLiterals
+            .call("test mixed literals")
             .expect("Failed to call TestMixedLiterals");
 
         // Verify mixed literal values
@@ -123,8 +123,8 @@ mod tests {
 
     #[test]
     fn test_complex_literals() {
-        let result = B
-            .TestComplexLiterals("test complex literals")
+        let result = B.TestComplexLiterals
+            .call("test complex literals")
             .expect("Failed to call TestComplexLiterals");
 
         // Verify complex literal values

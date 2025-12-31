@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_primitive_unions() {
-        let result = B.TestPrimitiveUnions("test primitive unions")
+        let result = B.TestPrimitiveUnions.call("test primitive unions")
             .expect("Failed to call TestPrimitiveUnions");
 
         // Verify primitive union values using pattern matching
@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn test_complex_unions() {
-        let result = B.TestComplexUnions("test complex unions")
+        let result = B.TestComplexUnions.call("test complex unions")
             .expect("Failed to call TestComplexUnions");
 
         // Verify complex union values using pattern matching
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn test_discriminated_unions() {
-        let result = B.TestDiscriminatedUnions("test discriminated unions")
+        let result = B.TestDiscriminatedUnions.call("test discriminated unions")
             .expect("Failed to call TestDiscriminatedUnions");
 
         // Verify shape is one of the valid variants
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn test_union_arrays() {
-        let result = B.TestUnionArrays("test union arrays")
+        let result = B.TestUnionArrays.call("test union arrays")
             .expect("Failed to call TestUnionArrays");
 
         // Verify union array contents

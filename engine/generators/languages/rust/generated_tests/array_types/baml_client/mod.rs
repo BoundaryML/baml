@@ -26,7 +26,17 @@ pub type Error = baml::BamlError;
 /// The dynamic value type for this project.
 pub type BamlValue = baml::BamlValue<Types, StreamTypes>;
 
-pub use functions::sync::B;
+/// Sync client - use `B.FunctionName.call(args)` pattern
+pub use functions::sync_client::B;
+
+/// Re-export sync and async client modules
+pub mod sync_client {
+    pub use super::functions::sync_client::*;
+}
+
+pub mod async_client {
+    pub use super::functions::async_client::*;
+}
 
 // Re-export media factory functions
 pub use runtime::{

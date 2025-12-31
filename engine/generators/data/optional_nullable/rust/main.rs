@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_optional_fields() {
-        let result = B.TestOptionalFields("test optional fields")
+        let result = B.TestOptionalFields.call("test optional fields")
             .expect("Failed to call TestOptionalFields");
 
         // Verify required fields
@@ -41,7 +41,7 @@ mod tests {
 
     #[test]
     fn test_nullable_types() {
-        let result = B.TestNullableTypes("test nullable types")
+        let result = B.TestNullableTypes.call("test nullable types")
             .expect("Failed to call TestNullableTypes");
 
         // Verify nullable fields that should be present
@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_mixed_optional_nullable() {
-        let result = B.TestMixedOptionalNullable("test mixed optional nullable")
+        let result = B.TestMixedOptionalNullable.call("test mixed optional nullable")
             .expect("Failed to call TestMixedOptionalNullable");
 
         // Verify id is positive
@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     fn test_all_null() {
-        let result = B.TestAllNull("test all null")
+        let result = B.TestAllNull.call("test all null")
             .expect("Failed to call TestAllNull");
 
         // Verify all nullable fields are null
@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_all_optional_omitted() {
-        let result = B.TestAllOptionalOmitted("test all optional omitted")
+        let result = B.TestAllOptionalOmitted.call("test all optional omitted")
             .expect("Failed to call TestAllOptionalOmitted");
 
         // Verify required fields have values

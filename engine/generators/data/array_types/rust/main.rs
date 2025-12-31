@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_simple_arrays() {
-        let result = B.TestSimpleArrays("test simple arrays")
+        let result = B.TestSimpleArrays.call("test simple arrays")
             .expect("Failed to call TestSimpleArrays");
 
         // Verify simple array contents
@@ -28,7 +28,7 @@ mod tests {
 
     #[test]
     fn test_nested_arrays() {
-        let result = B.TestNestedArrays("test nested arrays")
+        let result = B.TestNestedArrays.call("test nested arrays")
             .expect("Failed to call TestNestedArrays");
 
         // Verify nested array structure
@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn test_object_arrays() {
-        let result = B.TestObjectArrays("test object arrays")
+        let result = B.TestObjectArrays.call("test object arrays")
             .expect("Failed to call TestObjectArrays");
 
         // Verify object array contents
@@ -58,7 +58,7 @@ mod tests {
 
     #[test]
     fn test_mixed_arrays() {
-        let result = B.TestMixedArrays("test mixed arrays")
+        let result = B.TestMixedArrays.call("test mixed arrays")
             .expect("Failed to call TestMixedArrays");
 
         // Verify mixed array contents
@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn test_empty_arrays() {
-        let result = B.TestEmptyArrays("test empty arrays")
+        let result = B.TestEmptyArrays.call("test empty arrays")
             .expect("Failed to call TestEmptyArrays");
 
         // Verify all arrays are empty
@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     fn test_large_arrays() {
-        let result = B.TestLargeArrays("test large arrays")
+        let result = B.TestLargeArrays.call("test large arrays")
             .expect("Failed to call TestLargeArrays");
 
         // Verify large array sizes
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_top_level_string_array() {
-        let result = B.TestTopLevelStringArray("test string array")
+        let result = B.TestTopLevelStringArray.call("test string array")
             .expect("Failed to call TestTopLevelStringArray");
 
         assert_eq!(result.len(), 4, "Expected 4 strings, got {}", result.len());
@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn test_top_level_int_array() {
-        let result = B.TestTopLevelIntArray("test int array")
+        let result = B.TestTopLevelIntArray.call("test int array")
             .expect("Failed to call TestTopLevelIntArray");
 
         assert_eq!(result.len(), 5, "Expected 5 integers, got {}", result.len());
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_top_level_float_array() {
-        let result = B.TestTopLevelFloatArray("test float array")
+        let result = B.TestTopLevelFloatArray.call("test float array")
             .expect("Failed to call TestTopLevelFloatArray");
 
         assert_eq!(result.len(), 4, "Expected 4 floats, got {}", result.len());
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_top_level_bool_array() {
-        let result = B.TestTopLevelBoolArray("test bool array")
+        let result = B.TestTopLevelBoolArray.call("test bool array")
             .expect("Failed to call TestTopLevelBoolArray");
 
         assert_eq!(result.len(), 5, "Expected 5 booleans, got {}", result.len());
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_top_level_nested_array() {
-        let result = B.TestTopLevelNestedArray("test nested array")
+        let result = B.TestTopLevelNestedArray.call("test nested array")
             .expect("Failed to call TestTopLevelNestedArray");
 
         assert_eq!(result.len(), 3, "Expected 3 rows, got {}", result.len());
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_top_level_3d_array() {
-        let result = B.TestTopLevel3DArray("test 3D array")
+        let result = B.TestTopLevel3DArray.call("test 3D array")
             .expect("Failed to call TestTopLevel3DArray");
 
         assert_eq!(result.len(), 2, "Expected 2 levels, got {}", result.len());
@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_top_level_empty_array() {
-        let result = B.TestTopLevelEmptyArray("test empty array")
+        let result = B.TestTopLevelEmptyArray.call("test empty array")
             .expect("Failed to call TestTopLevelEmptyArray");
 
         assert_eq!(result.len(), 0, "Expected empty array, got {} elements", result.len());
@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn test_top_level_nullable_array() {
-        let result = B.TestTopLevelNullableArray("test nullable array")
+        let result = B.TestTopLevelNullableArray.call("test nullable array")
             .expect("Failed to call TestTopLevelNullableArray");
 
         assert_eq!(result.len(), 5, "Expected 5 elements in nullable array, got {}", result.len());
@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_top_level_object_array() {
-        let result = B.TestTopLevelObjectArray("test object array")
+        let result = B.TestTopLevelObjectArray.call("test object array")
             .expect("Failed to call TestTopLevelObjectArray");
 
         assert_eq!(result.len(), 3, "Expected 3 users, got {}", result.len());
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_top_level_mixed_array() {
-        let result = B.TestTopLevelMixedArray("test mixed array")
+        let result = B.TestTopLevelMixedArray.call("test mixed array")
             .expect("Failed to call TestTopLevelMixedArray");
 
         assert_eq!(result.len(), 6, "Expected 6 elements in mixed array, got {}", result.len());
@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_top_level_array_of_maps() {
-        let result = B.TestTopLevelArrayOfMaps("test array of maps")
+        let result = B.TestTopLevelArrayOfMaps.call("test array of maps")
             .expect("Failed to call TestTopLevelArrayOfMaps");
 
         assert_eq!(result.len(), 3, "Expected 3 maps in array, got {}", result.len());

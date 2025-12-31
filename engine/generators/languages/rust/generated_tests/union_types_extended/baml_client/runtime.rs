@@ -11,7 +11,7 @@ use crate::baml_client::baml_source_map::get_baml_files;
 use std::sync::OnceLock;
 
 /// Options for BAML function calls.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct FunctionOptions {
     env: Option<HashMap<String, String>>,
     tags: Option<HashMap<String, String>>,
@@ -19,7 +19,23 @@ pub struct FunctionOptions {
     collectors: Option<Vec<baml::Collector>>,
 }
 
+impl Default for FunctionOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FunctionOptions {
+    /// Create empty options (const for static initialization).
+    pub const fn new() -> Self {
+        Self {
+            env: None,
+            tags: None,
+            type_builder: None,
+            collectors: None,
+        }
+    }
+
     pub fn reset(self) -> Self {
         Self::default()
     }

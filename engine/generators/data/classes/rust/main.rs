@@ -21,7 +21,7 @@ mod tests {
             words: "hello".to_string(),
         };
 
-        let result = B.ConsumeSimpleClass(&cls).expect("Failed to call ConsumeSimpleClass");
+        let result = B.ConsumeSimpleClass.call(&cls).expect("Failed to call ConsumeSimpleClass");
 
         // Basic validation that we got a result
         assert!(
@@ -32,9 +32,8 @@ mod tests {
 
     #[test]
     fn test_make_simple_class_stream() {
-        let mut stream = B
-            .stream
-            .MakeSimpleClass()
+        let mut stream = B.MakeSimpleClass
+            .stream()
             .expect("Failed to start MakeSimpleClass stream");
 
         let mut partial_count = 0;

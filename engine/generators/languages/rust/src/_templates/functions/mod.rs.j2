@@ -1,23 +1,4 @@
-//! Generated BAML function wrappers.
-//!
-//! Full implementation coming in Phase 7.
+//! BAML function modules.
 
-pub mod sync;
-mod stream;
-mod parse;
-mod parse_stream;
-
-/// Streaming function namespace.
-pub mod stream_ns {
-    pub use super::stream::*;
-}
-
-/// Parse function namespace.
-pub mod parse_ns {
-    pub use super::parse::*;
-}
-
-/// Parse stream function namespace.
-pub mod parse_stream_ns {
-    pub use super::parse_stream::*;
-}
+pub mod sync_client;
+pub mod async_client;
