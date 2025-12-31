@@ -5,6 +5,7 @@ use std::ffi::{CStr, CString, c_void};
 use prost::Message;
 
 use crate::args::FunctionArgs;
+use crate::async_stream::AsyncStreamingCall;
 use crate::codec::BamlDecode;
 use crate::error::BamlError;
 use crate::ffi::{self, callbacks};
@@ -150,6 +151,95 @@ impl BamlRuntime {
         }
 
         Ok(StreamingCall::new(id, receiver))
+    }
+
+    /// Call a function asynchronously (non-blocking)
+    pub async fn call_function_async<T: BamlDecode>(
+        &self,
+        name: &str,
+        args: &FunctionArgs,
+    ) -> Result<T, BamlError> {
+        let encoded = args.encode()?;
+        let name_cstr =
+            CString::new(name).map_err(|_| BamlError::internal("invalid function name"))?;
+
+        let (id, receiver) = callbacks::create_async_callback();
+
+        #[allow(unsafe_code)]
+        let error_ptr = unsafe {
+            ffi::call_function_from_c(
+                self.ptr,
+                name_cstr.as_ptr(),
+                encoded.as_ptr().cast::<i8>(),
+                encoded.len(),
+                id,
+            )
+        };
+
+        // Check for immediate error
+        if !error_ptr.is_null() {
+            callbacks::remove_callback(id);
+            #[allow(unsafe_code)]
+            let error_msg = unsafe {
+                let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
+                cstr.to_string_lossy().into_owned()
+            };
+            return Err(BamlError::internal(error_msg));
+        }
+
+        // Await result (non-blocking)
+        match receiver.recv().await {
+            Ok(callbacks::CallbackResult::Final(data)) => {
+                let holder = CffiValueHolder::decode(&data[..])
+                    .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
+                T::baml_decode(&holder)
+            }
+            Ok(callbacks::CallbackResult::Partial(_)) => Err(BamlError::internal(
+                "unexpected partial result in async call",
+            )),
+            Ok(callbacks::CallbackResult::Error(e)) => Err(e),
+            Err(_) => Err(BamlError::internal("callback channel closed")),
+        }
+    }
+
+    /// Call a function with async streaming results
+    pub fn call_function_stream_async<TPartial, TFinal: Clone>(
+        &self,
+        name: &str,
+        args: &FunctionArgs,
+    ) -> Result<AsyncStreamingCall<TPartial, TFinal>, BamlError>
+    where
+        TPartial: BamlDecode + Send + 'static,
+        TFinal: BamlDecode + Send + 'static,
+    {
+        let encoded = args.encode()?;
+        let name_cstr =
+            CString::new(name).map_err(|_| BamlError::internal("invalid function name"))?;
+
+        let (id, receiver) = callbacks::create_async_callback();
+
+        #[allow(unsafe_code)]
+        let error_ptr = unsafe {
+            ffi::call_function_stream_from_c(
+                self.ptr,
+                name_cstr.as_ptr(),
+                encoded.as_ptr().cast::<i8>(),
+                encoded.len(),
+                id,
+            )
+        };
+
+        if !error_ptr.is_null() {
+            callbacks::remove_callback(id);
+            #[allow(unsafe_code)]
+            let error_msg = unsafe {
+                let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
+                cstr.to_string_lossy().into_owned()
+            };
+            return Err(BamlError::internal(error_msg));
+        }
+
+        Ok(AsyncStreamingCall::new(id, receiver))
     }
 
     /// Parse raw LLM output into typed result

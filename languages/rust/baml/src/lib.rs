@@ -22,6 +22,7 @@
 //! ```
 
 mod args;
+mod async_stream;
 mod codec;
 mod error;
 mod ffi;
@@ -70,6 +71,7 @@ pub use raw_objects::{
     Usage,
     Video,
 };
+pub use async_stream::AsyncStreamingCall;
 pub use runtime::{BamlRuntime, StaticRuntimeType};
 pub use stream::{StreamEvent, StreamingCall};
 pub use types::{Check, CheckStatus, Checked, StreamState, StreamingState};

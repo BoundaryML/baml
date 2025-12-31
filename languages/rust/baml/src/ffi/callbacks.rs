@@ -15,9 +15,20 @@ pub enum CallbackResult {
     Error(BamlError),
 }
 
-/// Callback data stored per call ID
-struct CallbackData {
+/// Sync callback data
+struct SyncCallbackData {
     sender: mpsc::Sender<CallbackResult>,
+}
+
+/// Async callback data
+struct AsyncCallbackData {
+    sender: async_channel::Sender<CallbackResult>,
+}
+
+/// Callback data - either sync or async
+enum CallbackData {
+    Sync(SyncCallbackData),
+    Async(AsyncCallbackData),
 }
 
 /// Global callback storage
@@ -46,14 +57,8 @@ pub fn initialize_callbacks() {
     });
 }
 
-/// Create a new callback ID and channel.
-///
-/// Uses sequential IDs with collision checking to ensure uniqueness even if
-/// IDs wrap around while old callbacks are still pending.
-pub fn create_callback() -> (u32, mpsc::Receiver<CallbackResult>) {
-    let (sender, receiver) = mpsc::channel();
-
-    let mut callbacks = get_callbacks().lock().unwrap();
+/// Allocate a unique callback ID, skipping 0 and any IDs still in use.
+fn allocate_callback_id(callbacks: &mut HashMap<u32, CallbackData>) -> u32 {
     let mut next_id = get_next_id().lock().unwrap();
 
     // Find an unused ID, skipping 0 and any IDs still in use
@@ -70,10 +75,34 @@ pub fn create_callback() -> (u32, mpsc::Receiver<CallbackResult>) {
         }
     }
     *next_id = id.wrapping_add(1);
+    id
+}
 
-    callbacks.insert(id, CallbackData { sender });
+/// Create a new sync callback ID and channel.
+///
+/// Uses sequential IDs with collision checking to ensure uniqueness even if
+/// IDs wrap around while old callbacks are still pending.
+pub fn create_callback() -> (u32, mpsc::Receiver<CallbackResult>) {
+    let (sender, receiver) = mpsc::channel();
+
+    let mut callbacks = get_callbacks().lock().unwrap();
+    let id = allocate_callback_id(&mut callbacks);
+
+    callbacks.insert(id, CallbackData::Sync(SyncCallbackData { sender }));
     drop(callbacks);
-    drop(next_id);
+
+    (id, receiver)
+}
+
+/// Create a new async callback ID and channel.
+pub fn create_async_callback() -> (u32, async_channel::Receiver<CallbackResult>) {
+    let (sender, receiver) = async_channel::unbounded();
+
+    let mut callbacks = get_callbacks().lock().unwrap();
+    let id = allocate_callback_id(&mut callbacks);
+
+    callbacks.insert(id, CallbackData::Async(AsyncCallbackData { sender }));
+    drop(callbacks);
 
     (id, receiver)
 }
@@ -102,8 +131,16 @@ extern "C" fn result_callback(call_id: u32, is_done: c_int, content: *const i8, 
 
     let callbacks = get_callbacks().lock().unwrap();
     if let Some(cb_data) = callbacks.get(&call_id) {
-        // Ignore send errors - receiver may have been dropped
-        let _ = cb_data.sender.send(result);
+        match cb_data {
+            CallbackData::Sync(sync_data) => {
+                // Ignore send errors - receiver may have been dropped
+                let _ = sync_data.sender.send(result);
+            }
+            CallbackData::Async(async_data) => {
+                // send_blocking works from sync context!
+                let _ = async_data.sender.send_blocking(result);
+            }
+        }
     }
 
     // Clean up on final result
@@ -125,9 +162,15 @@ extern "C" fn error_callback(call_id: u32, _is_done: c_int, content: *const i8, 
 
     let callbacks = get_callbacks().lock().unwrap();
     if let Some(cb_data) = callbacks.get(&call_id) {
-        let _ = cb_data
-            .sender
-            .send(CallbackResult::Error(BamlError::internal(error_msg)));
+        let error = CallbackResult::Error(BamlError::internal(error_msg));
+        match cb_data {
+            CallbackData::Sync(sync_data) => {
+                let _ = sync_data.sender.send(error);
+            }
+            CallbackData::Async(async_data) => {
+                let _ = async_data.sender.send_blocking(error);
+            }
+        }
     }
 
     drop(callbacks);
@@ -178,5 +221,39 @@ mod tests {
             let callbacks = get_callbacks().lock().unwrap();
             assert!(!callbacks.contains_key(&id));
         }
+    }
+
+    #[test]
+    fn test_async_callback_id_generation() {
+        let (id1, _rx1) = create_async_callback();
+        let (id2, _rx2) = create_async_callback();
+        let (id3, _rx3) = create_async_callback();
+
+        // IDs should be unique and sequential
+        assert_ne!(id1, id2);
+        assert_ne!(id2, id3);
+        assert_ne!(id1, id3);
+
+        // Clean up
+        remove_callback(id1);
+        remove_callback(id2);
+        remove_callback(id3);
+    }
+
+    #[test]
+    fn test_mixed_sync_async_callbacks() {
+        let (sync_id, _rx_sync) = create_callback();
+        let (async_id, _rx_async) = create_async_callback();
+        let (sync_id2, _rx_sync2) = create_callback();
+
+        // All IDs should be unique
+        assert_ne!(sync_id, async_id);
+        assert_ne!(async_id, sync_id2);
+        assert_ne!(sync_id, sync_id2);
+
+        // Clean up
+        remove_callback(sync_id);
+        remove_callback(async_id);
+        remove_callback(sync_id2);
     }
 }
