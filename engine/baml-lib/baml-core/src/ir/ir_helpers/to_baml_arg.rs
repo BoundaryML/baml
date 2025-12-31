@@ -34,7 +34,7 @@ fn has_multiple_media_types(options: &[&TypeIR]) -> bool {
 
     let mut found: u8 = 0;
 
-    let mut stack: Vec<&TypeIR> = options.iter().copied().collect();
+    let mut stack: Vec<&TypeIR> = options.to_vec();
     while let Some(ty) = stack.pop() {
         match ty {
             TypeIR::Primitive(TypeValue::Media(media_type), _) => {
