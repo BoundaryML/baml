@@ -37,6 +37,14 @@ macro_rules! impl_options_convenience_methods {
             pub fn with_tag(&self, key: impl Into<String>, value: impl Into<String>) -> Self {
                 self.with_options(self.options.clone().with_tag(key, value))
             }
+
+            pub fn with_client(&self, client_name: impl Into<String>) -> Self {
+                self.with_options(self.options.clone().with_client(client_name))
+            }
+
+            pub fn with_client_registry(&self, registry: &baml::ClientRegistry) -> Self {
+                self.with_options(self.options.clone().with_client_registry(registry))
+            }
         }
     };
 }

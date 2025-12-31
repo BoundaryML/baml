@@ -161,6 +161,13 @@ impl<T: BamlEncode> BamlEncode for &T {
     }
 }
 
+/// HostValue is already encoded, return as-is
+impl BamlEncode for HostValue {
+    fn baml_encode(&self) -> HostValue {
+        self.clone()
+    }
+}
+
 /// Encode arbitrary JSON values for ClientRegistry options
 impl BamlEncode for JsonValue {
     fn baml_encode(&self) -> HostValue {

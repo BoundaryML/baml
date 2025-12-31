@@ -6,6 +6,7 @@ mod baml_client;
 use baml_client::B;
 use baml_client::new_collector;
 use baml_client::types::*;
+use baml_client::ClientRegistry;
 
 fn main() {
     println!("Test - baml_client module loaded successfully!");
@@ -345,5 +346,100 @@ mod async_tests {
         let usage = log.usage();
         assert!(usage.input_tokens() > 0);
         assert!(usage.output_tokens() > 0);
+    }
+}
+
+#[cfg(test)]
+mod client_registry_tests {
+    use super::*;
+
+    #[test]
+    fn test_undefined_client_returns_error() {
+        // Using an undefined client should return an error, not panic
+        let result = B.Foo
+            .with_client("NonExistentClient12345")
+            .call(8192);
+
+        assert!(result.is_err(), "Expected error for undefined client");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("NonExistentClient12345") || err_msg.contains("not found") || err_msg.contains("unknown"),
+            "Error message should mention the client name: {}", err_msg
+        );
+    }
+
+    #[test]
+    fn test_client_registry_with_invalid_provider_returns_error() {
+        let mut registry = ClientRegistry::new();
+        registry.add_llm_client(
+            "BadClient",
+            "invalid_provider_xyz",
+            [("model".to_string(), serde_json::json!("test"))].into_iter().collect(),
+        );
+        registry.set_primary_client("BadClient");
+
+        let result = B.Foo
+            .with_client_registry(&registry)
+            .call(8192);
+
+        assert!(result.is_err(), "Expected error for invalid provider");
+    }
+
+    #[test]
+    fn test_client_registry_api_compiles() {
+        // Test ClientRegistry API compiles and basic methods work
+        let mut registry = ClientRegistry::new();
+
+        registry.add_llm_client(
+            "TestClient",
+            "openai",
+            [
+                ("model".to_string(), serde_json::json!("gpt-4")),
+                ("temperature".to_string(), serde_json::json!(0.7)),
+                ("max_tokens".to_string(), serde_json::json!(100)),
+            ].into_iter().collect(),
+        );
+        registry.set_primary_client("TestClient");
+
+        // Verify registry is not empty after adding client
+        assert!(!registry.is_empty());
+
+        // Verify empty registry is empty
+        let empty_registry = ClientRegistry::new();
+        assert!(empty_registry.is_empty());
+    }
+
+    #[test]
+    fn test_with_client_and_collector_chaining() {
+        let collector = new_collector("client-chain-test");
+
+        // Test that with_client and with_collector can be chained
+        // This verifies the builder pattern works correctly
+        let result = B.Foo
+            .with_client("NonExistentClient")
+            .with_collector(&collector)
+            .call(8192);
+
+        // Should fail due to invalid client, but collector should still be set
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_with_client_registry_and_collector_chaining() {
+        let collector = new_collector("registry-chain-test");
+        let mut registry = ClientRegistry::new();
+        registry.add_llm_client(
+            "ChainTest",
+            "openai",
+            [("model".to_string(), serde_json::json!("gpt-4"))].into_iter().collect(),
+        );
+        registry.set_primary_client("ChainTest");
+
+        // Test that with_client_registry and with_collector can be chained
+        let _result = B.Foo
+            .with_client_registry(&registry)
+            .with_collector(&collector)
+            .call(8192);
+        // Result may succeed or fail depending on API key availability
     }
 }

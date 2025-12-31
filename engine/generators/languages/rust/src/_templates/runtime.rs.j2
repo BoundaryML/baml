@@ -12,6 +12,8 @@ pub struct FunctionOptions {
     tags: Option<HashMap<String, String>>,
     type_builder: Option<super::type_builder::TypeBuilder>,
     collectors: Option<Vec<baml::Collector>>,
+    client: Option<String>,
+    client_registry: Option<baml::ClientRegistry>,
 }
 
 impl Default for FunctionOptions {
@@ -28,6 +30,8 @@ impl FunctionOptions {
             tags: None,
             type_builder: None,
             collectors: None,
+            client: None,
+            client_registry: None,
         }
     }
 
@@ -71,6 +75,20 @@ impl FunctionOptions {
         self
     }
 
+    /// Override the primary client for this call.
+    ///
+    /// This is a shorthand for creating a ClientRegistry with just the primary client set.
+    pub fn with_client(mut self, client_name: impl Into<String>) -> Self {
+        self.client = Some(client_name.into());
+        self
+    }
+
+    /// Set the client registry for runtime client configuration.
+    pub fn with_client_registry(mut self, registry: &baml::ClientRegistry) -> Self {
+        self.client_registry = Some(registry.clone());
+        self
+    }
+
     pub(super) fn to_baml_args(&self) -> baml::FunctionArgs {
         let mut args = baml::FunctionArgs::new();
         for (env, values) in std::env::vars() {
@@ -96,6 +114,19 @@ impl FunctionOptions {
             for collector in collectors {
                 args = args.with_collector(collector);
             }
+        }
+        // Resolve client option to client_registry (client takes precedence)
+        let effective_registry = if let Some(client_name) = &self.client {
+            // Create or clone registry and set primary
+            let mut registry = self.client_registry.clone().unwrap_or_else(baml::ClientRegistry::new);
+            registry.set_primary_client(client_name);
+            Some(registry)
+        } else {
+            self.client_registry.clone()
+        };
+
+        if let Some(registry) = &effective_registry {
+            args = args.with_client_registry(registry);
         }
         args
     }

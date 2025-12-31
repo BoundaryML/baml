@@ -46,3 +46,6 @@ pub use runtime::{
 
 // Re-export collector factory function
 pub use runtime::new_collector;
+
+// Re-export client registry for runtime client configuration
+pub use baml::ClientRegistry;
