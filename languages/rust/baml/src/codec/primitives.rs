@@ -1,8 +1,12 @@
 //! Primitive type BamlDecode and BamlEncode implementations.
 
-use crate::__internal::{cffi_field_type_literal};
+use crate::__internal::cffi_field_type_literal;
 use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{CffiValueHolder, HostValue, cffi_value_holder, host_value};
+use crate::proto::baml_cffi_v1::{
+    CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
+    host_map_entry, host_value,
+};
+use serde_json::Value as JsonValue;
 
 use super::helpers::variant_name;
 use super::traits::{BamlDecode, BamlEncode};
@@ -154,5 +158,42 @@ impl BamlEncode for () {
 impl<T: BamlEncode> BamlEncode for &T {
     fn baml_encode(&self) -> HostValue {
         (*self).baml_encode()
+    }
+}
+
+/// Encode arbitrary JSON values for ClientRegistry options
+impl BamlEncode for JsonValue {
+    fn baml_encode(&self) -> HostValue {
+        let inner = match self {
+            JsonValue::Null => None,
+            JsonValue::Bool(b) => Some(host_value::Value::BoolValue(*b)),
+            JsonValue::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Some(host_value::Value::IntValue(i))
+                } else if let Some(f) = n.as_f64() {
+                    Some(host_value::Value::FloatValue(f))
+                } else {
+                    // Fallback to string representation for u64 values
+                    Some(host_value::Value::StringValue(n.to_string()))
+                }
+            }
+            JsonValue::String(s) => Some(host_value::Value::StringValue(s.clone())),
+            JsonValue::Array(arr) => {
+                let values = arr.iter().map(BamlEncode::baml_encode).collect();
+                Some(host_value::Value::ListValue(HostListValue { values }))
+            }
+            JsonValue::Object(obj) => {
+                let entries = obj
+                    .iter()
+                    .map(|(k, v)| HostMapEntry {
+                        key: Some(host_map_entry::Key::StringKey(k.clone())),
+                        value: Some(v.baml_encode()),
+                    })
+                    .collect();
+                Some(host_value::Value::MapValue(HostMapValue { entries }))
+            }
+        };
+
+        HostValue { value: inner }
     }
 }

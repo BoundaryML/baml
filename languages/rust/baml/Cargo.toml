@@ -24,12 +24,12 @@ prost = { workspace = true }
 thiserror = { workspace = true }
 once_cell = { workspace = true }
 futures-util = { workspace = true }
+serde_json = { workspace = true }
 
 [build-dependencies]
 prost-build = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 
 [features]
 default = []

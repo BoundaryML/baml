@@ -1,6 +1,7 @@
 use prost::Message;
 
-use crate::codec::{BamlEncode, HostValue};
+use crate::client_registry::ClientRegistry;
+use crate::codec::BamlEncode;
 use crate::error::BamlError;
 use crate::proto::baml_cffi_v1::{
     host_map_entry, BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry,
@@ -15,6 +16,7 @@ pub struct FunctionArgs {
     collectors: Vec<BamlObjectHandle>,
     type_builder: Option<BamlObjectHandle>,
     tags: Vec<HostMapEntry>,
+    client_registry: Option<ClientRegistry>,
 }
 
 impl FunctionArgs {
@@ -23,10 +25,10 @@ impl FunctionArgs {
     }
 
     /// Add a keyword argument
-    pub fn arg(mut self, name: &str, value: HostValue) -> Self {
+    pub fn arg<V: BamlEncode>(mut self, name: &str, value: V) -> Self {
         self.kwargs.push(HostMapEntry {
             key: Some(host_map_entry::Key::StringKey(name.to_string())),
-            value: Some(value),
+            value: Some(value.baml_encode()),
         });
         self
     }
@@ -61,11 +63,19 @@ impl FunctionArgs {
         self
     }
 
+    /// Set the client registry for runtime client configuration.
+    pub fn with_client_registry(mut self, registry: &ClientRegistry) -> Self {
+        self.client_registry = Some(registry.clone());
+        self
+    }
+
     /// Encode to protobuf bytes for FFI
     pub fn encode(&self) -> Result<Vec<u8>, BamlError> {
+        let client_registry = self.client_registry.as_ref().map(|r| r.encode());
+
         let msg = HostFunctionArguments {
             kwargs: self.kwargs.clone(),
-            client_registry: None, // TODO: Add when ClientRegistry is implemented
+            client_registry,
             env: self.env_overrides.clone(),
             collectors: self.collectors.clone(),
             type_builder: self.type_builder.clone(),

@@ -827,7 +827,7 @@ mod function_calls {
     /// Test streaming function call that returns StreamState<T> with @stream.with_state
     #[test]
     fn call_function_stream_with_state_succeeds() {
-        use baml::{BamlDecode, BamlEncode, StreamEvent};
+        use baml::BamlDecode;
 
         let api_key = require_env!("OPENAI_API_KEY");
 
@@ -885,11 +885,11 @@ mod function_calls {
         let mut saw_started = false;
         let mut saw_done = false;
         let mut partial_count = 0;
-        let mut final_result: Option<MessageWithState> = None;
 
-        for event in stream {
+        let mut stream = stream;
+        for event in stream.partials() {
             match event {
-                StreamEvent::Partial(partial) => {
+                Ok(partial) => {
                     partial_count += 1;
                     if let Some(ref state) = partial.content {
                         // state.value is Option<String> since it's StreamState<Option<String>>
@@ -904,11 +904,7 @@ mod function_calls {
                         }
                     }
                 }
-                StreamEvent::Final(msg) => {
-                    println!("Final: {:?}", msg);
-                    final_result = Some(msg);
-                }
-                StreamEvent::Error(e) => {
+                Err(e) => {
                     println!("Stream error (may be expected for early partials): {:?}", e);
                 }
             }
@@ -920,7 +916,7 @@ mod function_calls {
         // Should have seen at least Started and Done states (Pending might be missed if streaming is fast)
         assert!(saw_started || saw_done, "Expected to see Started or Done streaming state");
 
-        let msg = final_result.expect("Expected final result");
+        let msg = stream.get_final_response().expect("Expected final result");
         assert!(!msg.content.is_empty(), "Content should not be empty");
         println!("Streaming with state test passed with {} partial updates", partial_count);
     }
@@ -928,7 +924,7 @@ mod function_calls {
     /// Test streaming function call with valid API key
     #[test]
     fn call_function_stream_succeeds() {
-        use baml::{BamlDecode, BamlEncode, StreamEvent};
+        use baml::{BamlDecode, BamlEncode};
 
         let api_key = require_env!("OPENAI_API_KEY");
 
@@ -981,28 +977,23 @@ mod function_calls {
             .arg("text", "Alice is 25 years old")
             .with_env("OPENAI_API_KEY", &api_key);
 
-        let stream = runtime
+        let mut stream = runtime
             .call_function_stream::<PartialPerson, Person>("ExtractPerson", &args)
             .expect("stream creation failed");
 
         let mut partial_count = 0;
         let mut error_count = 0;
-        let mut final_result: Option<Person> = None;
 
-        for event in stream {
+        for event in stream.partials() {
             match event {
-                StreamEvent::Partial(partial) => {
+                Ok(partial) => {
                     partial_count += 1;
                     println!(
                         "Partial {}: name={:?}, age={:?}",
                         partial_count, partial.name, partial.age
                     );
                 }
-                StreamEvent::Final(person) => {
-                    println!("Final: {:?}", person);
-                    final_result = Some(person);
-                }
-                StreamEvent::Error(e) => {
+                Err(e) => {
                     // During streaming, partial decode errors can occur as fields
                     // are still being populated. This is expected behavior when
                     // the partial type has required fields that haven't arrived yet.
@@ -1021,7 +1012,7 @@ mod function_calls {
         // Note: Early partials may fail to decode because fields are still null.
         // This is expected behavior - the streaming protocol sends incomplete data.
 
-        let person = final_result.expect("Expected final result");
+        let person = stream.get_final_response().expect("Expected final result");
         assert_eq!(person.name, "Alice");
         assert_eq!(person.age, 25);
         println!(

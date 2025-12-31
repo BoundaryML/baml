@@ -23,6 +23,7 @@
 
 mod args;
 mod async_stream;
+mod client_registry;
 mod codec;
 mod error;
 mod ffi;
@@ -43,6 +44,7 @@ use std::ffi::CString;
 
 // Public API - re-exported through baml_client
 pub use args::FunctionArgs;
+pub use client_registry::ClientRegistry;
 pub use codec::{
     BamlClass, BamlDecode, BamlEncode, BamlEnum, decode_enum, decode_field,
     encode_class, encode_enum,

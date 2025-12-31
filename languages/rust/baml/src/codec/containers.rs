@@ -59,6 +59,11 @@ impl<T: BamlDecode> BamlDecode for Vec<T> {
 impl<T: BamlDecode> BamlDecode for Option<T> {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
         match &holder.value {
+            // Handle explicit null value (holder.value is None)
+            None => Ok(None),
+
+            Some(cffi_value_holder::Value::NullValue(_)) => Ok(None),
+
             Some(cffi_value_holder::Value::UnionVariantValue(union)) => {
                 // Check variant name - "null" means None
                 if union.value_option_name == "null" {
@@ -91,13 +96,10 @@ impl<T: BamlDecode> BamlDecode for Option<T> {
                 // Decode the inner value as T
                 Ok(Some(T::baml_decode(inner)?))
             }
-            other => match T::baml_decode(holder) {
-                Ok(value) => Ok(Some(value)),
-                Err(e) => Err(BamlError::internal(format!(
-                    "expected Option<T>, got {:?}",
-                    other.as_ref().map(variant_name)
-                ))),
-            },
+            _ => {
+                // Try to decode as T (for non-union optional types)
+                Ok(Some(T::baml_decode(holder)?))
+            }
         }
     }
 }

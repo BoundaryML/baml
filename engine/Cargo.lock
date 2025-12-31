@@ -3219,7 +3219,7 @@ dependencies = [
 
 [[package]]
 name = "generators-rust"
-version = "0.214.0"
+version = "0.216.0"
 dependencies = [
  "anyhow",
  "askama",
