@@ -10,6 +10,9 @@ edition = "2021"
 baml = { path = "../../../../../../languages/rust/baml", features = ["dev"] }
 serde_json = "1"
 
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+
 [[bin]]
 name = "sample"
 path = "main.rs"

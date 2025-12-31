@@ -1,7 +1,7 @@
 //! Asynchronous BAML client with function-object pattern.
 
 use crate::baml_client::{runtime::{get_runtime, FunctionOptions}, stream_types, types};
-use baml::{BamlEncode, BamlError, StreamingCall};
+use baml::{AsyncStreamingCall, BamlEncode, BamlError};
 
 // =============================================================================
 // Convenience Builder Methods Macro
@@ -54,19 +54,16 @@ macro_rules! baml_function_async {
             }
 
             // Terminal methods (async)
-            // Note: Currently wraps sync implementation. True async will come later.
             pub async fn call(&self, $($param: $ptype),*) -> Result<$final_ret, BamlError> {
                 let args = self.options.to_baml_args()
                     $(.arg(stringify!($param), $param.baml_encode()))*;
-                // TODO: Use async runtime method when available
-                get_runtime().call_function(stringify!($name), &args)
+                get_runtime().call_function_async(stringify!($name), &args).await
             }
 
-            pub async fn stream(&self, $($param: $ptype),*) -> Result<StreamingCall<$stream_ret, $final_ret>, BamlError> {
+            pub fn stream(&self, $($param: $ptype),*) -> Result<AsyncStreamingCall<$stream_ret, $final_ret>, BamlError> {
                 let args = self.options.to_baml_args()
                     $(.arg(stringify!($param), $param.baml_encode()))*;
-                // TODO: Return async streaming call when available
-                get_runtime().call_function_stream(stringify!($name), &args)
+                get_runtime().call_function_stream_async(stringify!($name), &args)
             }
 
             // Parse methods are sync (no I/O)

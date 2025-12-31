@@ -203,3 +203,147 @@ mod tests {
         assert_eq!(get_variant_name(&result), get_variant_name(&cloned));
     }
 }
+
+#[cfg(test)]
+mod async_tests {
+    use crate::baml_client::async_client::B;
+    use crate::baml_client::new_collector;
+    use crate::baml_client::types::*;
+    use baml::LogType;
+
+    fn get_variant_name(result: &Union2ExampleOrExample2) -> &'static str {
+        match result {
+            Union2ExampleOrExample2::Example(_) => "Example",
+            Union2ExampleOrExample2::Example2(_) => "Example2",
+        }
+    }
+
+    #[tokio::test]
+    async fn test_foo_async() {
+        let collector = new_collector("test-foo-async-collector");
+
+        let result = B.Foo
+            .with_collector(&collector)
+            .call(8192)
+            .await
+            .expect("Failed to call Foo async");
+
+        let variant_name = get_variant_name(&result);
+        assert!(!variant_name.is_empty());
+
+        // Verify collector captured the call correctly
+        let logs = collector.logs();
+        assert_eq!(logs.len(), 1);
+
+        let log = &logs[0];
+        assert_eq!(log.function_name(), "Foo");
+        assert_eq!(log.log_type(), LogType::Call);
+        assert!(!log.id().is_empty());
+
+        // Verify tokens were used
+        let usage = log.usage();
+        assert!(usage.input_tokens() > 0, "Should have input tokens");
+        assert!(usage.output_tokens() > 0, "Should have output tokens");
+    }
+
+    #[tokio::test]
+    async fn test_foo_stream_async() {
+        let collector = new_collector("test-foo-stream-async-collector");
+
+        let mut stream = B.Foo
+            .with_collector(&collector)
+            .stream(8192)
+            .expect("Failed to start Foo stream");
+
+        let mut partial_count = 0;
+        while let Some(partial) = stream.next().await {
+            let _partial = partial.expect("Error receiving partial");
+            partial_count += 1;
+        }
+
+        let final_result = stream
+            .get_final_response()
+            .await
+            .expect("Failed to get final response");
+
+        let variant_name = get_variant_name(&final_result);
+        assert!(!variant_name.is_empty());
+        assert!(partial_count > 0, "Should have received at least one partial");
+
+        // Verify collector captured streaming call
+        let logs = collector.logs();
+        assert_eq!(logs.len(), 1);
+
+        let log = &logs[0];
+        assert_eq!(log.function_name(), "Foo");
+        assert_eq!(log.log_type(), LogType::Stream);
+
+        // Verify tokens were used
+        let usage = log.usage();
+        assert!(usage.input_tokens() > 0, "Should have input tokens");
+        assert!(usage.output_tokens() > 0, "Should have output tokens");
+    }
+
+    #[tokio::test]
+    async fn test_stream_cancellation_on_drop() {
+        let collector = new_collector("test-cancellation-collector");
+
+        // Start a stream but drop it before completion
+        {
+            let mut stream = B.Foo
+                .with_collector(&collector)
+                .stream(8192)
+                .expect("Failed to start Foo stream");
+            // Get just one partial to ensure stream started
+            let first = stream.next().await;
+            assert!(first.is_some(), "Should receive at least one partial");
+            // Drop stream here - should trigger cancellation
+        }
+
+        // Give a moment for cancellation to propagate
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        // Collector should have captured the call
+        let logs = collector.logs();
+        assert_eq!(logs.len(), 1, "Collector should have exactly one log");
+
+        let log = &logs[0];
+        assert_eq!(log.function_name(), "Foo");
+        assert_eq!(log.log_type(), LogType::Stream);
+
+        // Usage will be 0 since it's only populated on the final stream event,
+        // which we cancelled before receiving
+        let usage = log.usage();
+        assert_eq!(usage.input_tokens(), 0, "Cancelled stream should have 0 input tokens");
+        assert_eq!(usage.output_tokens(), 0, "Cancelled stream should have 0 output tokens");
+    }
+
+    #[tokio::test]
+    async fn test_async_with_timeout_success() {
+        use std::time::Duration;
+
+        let collector = new_collector("test-timeout-success-collector");
+
+        // Test that timeout works with async call (generous timeout)
+        let result = tokio::time::timeout(
+            Duration::from_secs(60),
+            B.Foo.with_collector(&collector).call(100)
+        ).await;
+
+        assert!(result.is_ok(), "Call should complete within timeout");
+        let inner = result.unwrap();
+        assert!(inner.is_ok(), "Call should succeed");
+
+        // Verify collector captured successful call
+        let logs = collector.logs();
+        assert_eq!(logs.len(), 1);
+
+        let log = &logs[0];
+        assert_eq!(log.function_name(), "Foo");
+        assert_eq!(log.log_type(), LogType::Call);
+
+        let usage = log.usage();
+        assert!(usage.input_tokens() > 0);
+        assert!(usage.output_tokens() > 0);
+    }
+}
