@@ -1,0 +1,94 @@
+use std::{collections::HashMap, time::Instant};
+
+use lsp_types::{
+    DidChangeTextDocumentParams, PublishDiagnosticsParams, notification::DidChangeTextDocument,
+};
+
+// TODO: playground_server is disabled for now
+// use playground_server::WebviewRouterMessage;
+use crate::{
+    DocumentKey,
+    server::{
+        Result,
+        api::{
+            ResultExt,
+            diagnostics::{not_in_baml_src_diagnostic, publish_diagnostics},
+            traits::{NotificationHandler, SyncNotificationHandler},
+        },
+        client::{Notifier, Requester},
+    },
+    session::Session,
+};
+
+pub(crate) struct DidChangeTextDocumentHandler;
+
+impl NotificationHandler for DidChangeTextDocumentHandler {
+    type NotificationType = DidChangeTextDocument;
+}
+
+impl SyncNotificationHandler for DidChangeTextDocumentHandler {
+    fn run(
+        session: &mut Session,
+        notifier: Notifier,
+        _requester: &mut Requester,
+        params: DidChangeTextDocumentParams,
+    ) -> Result<()> {
+        tracing::info!("DidChangeTextDocumentHandlerv2");
+        let start_time_total = Instant::now();
+
+        let url = params.text_document.uri;
+        let path = url
+            .to_file_path()
+            .internal_error_msg("Could not convert URL to path")?;
+
+        // Get or create the project using the unified method
+        let Ok(project) = session.get_or_create_project(&path) else {
+            notifier
+                .notify::<lsp_types::notification::PublishDiagnostics>(not_in_baml_src_diagnostic(
+                    &url,
+                ))
+                .internal_error()?;
+            return Ok(());
+        };
+        let document_key =
+            DocumentKey::from_url(project.lock().root_path(), &url).internal_error()?;
+
+        session
+            .update_text_document(
+                &document_key,
+                params.content_changes,
+                params.text_document.version,
+                Some(notifier.clone()),
+            )
+            .internal_error()?;
+
+        tracing::info!("publishing diagnostics");
+
+        let default_flags = vec!["beta".to_string()];
+        let effective_flags = session
+            .baml_settings
+            .feature_flags
+            .as_ref()
+            .unwrap_or(&default_flags);
+        tracing::info!(
+            "did_change: session feature_flags: {:?}, effective_flags: {:?}",
+            session
+                .baml_settings
+                .feature_flags
+                .as_ref()
+                .unwrap_or(&default_flags),
+            &effective_flags
+        );
+        publish_diagnostics(
+            &notifier,
+            project,
+            Some(params.text_document.version),
+            effective_flags,
+            session,
+        )?;
+
+        let elapsed = start_time_total.elapsed();
+        tracing::info!("didchange total took {:?}ms", elapsed.as_millis());
+        Ok(())
+    }
+}

@@ -163,6 +163,8 @@ config_primary_expression = {
     config_map_expression |
     config_array_expression |
     numeric_literal |
+    generic_fn_app |
+    fn_app |
     string_literal |
     identifier
 }

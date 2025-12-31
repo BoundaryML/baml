@@ -19,3 +19,8 @@ class Baz {
     "Hello, " + self.name + "!"
   }
 }
+
+// Simple param in if statement.
+function param_in_if_statement(b: bool) -> int {
+    if (b) { 1 } else { 2 }
+}

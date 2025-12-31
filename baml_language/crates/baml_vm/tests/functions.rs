@@ -109,7 +109,6 @@ fn early_return() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "while loop causing infinite loop"]
 fn return_with_stack() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

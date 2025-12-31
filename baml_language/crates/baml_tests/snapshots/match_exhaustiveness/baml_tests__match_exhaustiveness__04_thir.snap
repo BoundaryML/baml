@@ -1,0 +1,245 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function NestedLiteralUnions:
+    Return: String
+  Function ExhaustiveEnumWithTypedPattern:
+    Return: String
+  Function ParenthesizedSingleLiteral:
+    Return: String
+  Function DuplicateEnumVariant:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function WrongLiteralTypeBoolWithInt:
+    Return: String
+    Errors:
+      - Non-exhaustive match on bool: missing true, false
+  Function UnreachableMultiple:
+    Return: String
+    Errors:
+      - Unreachable match arm
+      - Unreachable match arm
+  Function OverlappingWithBindings:
+    Return: String
+  Function ExhaustiveNullableEnum:
+    Return: String
+  Function NonExhaustiveBoolMissingTrue:
+    Return: String
+    Errors:
+      - Non-exhaustive match on bool: missing true
+  Function ExhaustiveEnumAllVariants:
+    Return: String
+  Function ExhaustiveTypeAlias:
+    Return: String
+  Function EnumVariantAfterTypedEnum:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function BoolLiteralAfterTypedBool:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function LiteralUnionWithCatchAll:
+    Return: String
+  Function ExhaustiveIntLiterals:
+    Return: String
+  Function ExhaustiveStringLiterals:
+    Return: String
+    Errors:
+      - Unreachable match arm
+      - Unreachable match arm
+  Function ExhaustiveTypeAliasWithCatchAll:
+    Return: String
+  Function DuplicateIntLiteral:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function ExhaustiveClassPlusLiteral:
+    Return: String
+  Function ExhaustiveLiteralWithBaseType:
+    Return: String
+  Function NonExhaustiveNullableEnumMissingNull:
+    Return: String
+    Errors:
+      - Non-exhaustive match on Status?: missing null
+  Function NonExhaustiveTypeAliasMissingOne:
+    Return: String
+    Errors:
+      - Non-exhaustive match on Result: missing Failure
+  Function BoolUnionPattern:
+    Return: String
+  Function StringLiteralUnionPattern:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function ExhaustiveBool:
+    Return: String
+  Function NonExhaustiveDoubleMaybeMissingNull:
+    Return: String
+    Errors:
+      - Non-exhaustive match on DoubleMaybe: missing null
+  Function ExhaustiveDoubleMaybe:
+    Return: String
+  Function ExhaustiveOptionalSingleton:
+    Return: String
+  Function BoolWithCatchAll:
+    Return: String
+  Function GuardedOnlyNonExhaustive:
+    Return: Int
+    Errors:
+      - Non-exhaustive match on int: missing int
+  Function NonExhaustiveBoolMissingFalse:
+    Return: String
+    Errors:
+      - Non-exhaustive match on bool: missing false
+  Function IntLiteralUnionPattern:
+    Return: String
+  Function MultipleUnreachableSpans:
+    Return: String
+    Errors:
+      - Unreachable match arm
+      - Unreachable match arm
+  Function ExhaustiveCustomBool:
+    Return: String
+  Function ExhaustiveMixedLiterals:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function PartialUnionPlusCatchAll:
+    Return: String
+  Function ExhaustiveTrueType:
+    Return: String
+  Function NestedMatchSpans:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function NonExhaustiveOptionalMissingValue:
+    Return: String
+    Errors:
+      - Non-exhaustive match on MaybeOk: missing 200
+  Function EnumVariantUnion:
+    Return: String
+  Function NestedTypeAlias:
+    Return: String
+  Function ExhaustiveFalseType:
+    Return: String
+  Function NonExhaustiveOptionalMissingNull:
+    Return: String
+    Errors:
+      - Non-exhaustive match on MaybeOk: missing null
+  Function NonExhaustiveTrueTypeWrongLiteral:
+    Return: String
+    Errors:
+      - Non-exhaustive match on AlwaysTrue: missing true
+  Function ExhaustiveWithNamedCatchAll:
+    Return: Int
+  Function NestedTypeBindings:
+    Return: Int
+  Function NonExhaustiveAliasOfLiterals:
+    Return: String
+    Errors:
+      - Non-exhaustive match on OkOrCreated: missing 201
+  Function ExhaustiveAliasOfLiterals:
+    Return: String
+  Function WrongLiteralTypeIntWithString:
+    Return: String
+  Function ExhaustiveEnumWithCatchAll:
+    Return: String
+  Function GuardedWithFallback:
+    Return: Int
+  Function HighLineNumberNonExhaustive:
+    Return: String
+    Errors:
+      - Non-exhaustive match on Status: missing Status.Inactive, Status.Pending
+  Function NonExhaustiveNullableEnumMissingVariant:
+    Return: String
+    Errors:
+      - Non-exhaustive match on Status?: missing Status.Pending
+  Function DeeplyNestedLiterals:
+    Return: String
+  Function NonExhaustiveFullResultMissingOne:
+    Return: String
+    Errors:
+      - Non-exhaustive match on FullResult: missing Pending
+  Function ExhaustiveSingletonInt:
+    Return: String
+  Function NonExhaustiveClassPlusLiteralMissingLiteral:
+    Return: String
+    Errors:
+      - Non-exhaustive match on SuccessOr200: missing 200
+  Function ExhaustiveNullableEnumWithTypedPattern:
+    Return: String
+  Function DuplicateStringLiteral:
+    Return: String
+    Errors:
+      - Unreachable match arm
+      - Unreachable match arm
+      - Unreachable match arm
+  Function NonExhaustiveEnumMissingOne:
+    Return: String
+    Errors:
+      - Non-exhaustive match on Status: missing Status.Pending
+  Function ExhaustiveOptional:
+    Return: String
+  Function NonExhaustiveCustomBoolMissing:
+    Return: String
+    Errors:
+      - Non-exhaustive match on CustomBool: missing false
+  Function NonExhaustiveMixedLiterals:
+    Return: String
+  Function NonExhaustiveClassPlusLiteralMissingClass:
+    Return: String
+    Errors:
+      - Non-exhaustive match on SuccessOr200: missing Success
+  Function UnreachableAfterCatchAll:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function OptionalWithCatchAll:
+    Return: String
+  Function DuplicateBoolLiteral:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function OverlappingTypedPatterns:
+    Return: String
+  Function StringLiteralAfterStringType:
+    Return: String
+  Function NestedEnumVariantUnions:
+    Return: String
+  Function UnionPatternCoversAll:
+    Return: String
+  Function ExhaustiveWithUnderscore:
+    Return: Int
+  Function PartialUnionPatternCoverage:
+    Return: String
+    Errors:
+      - Non-exhaustive match on FullResult: missing Pending
+  Function NonExhaustiveStringLiteral:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function StringLiteralWithCatchAll:
+    Return: String
+    Errors:
+      - Unreachable match arm
+      - Unreachable match arm
+  Function NonExhaustiveEnumMissingMultiple:
+    Return: String
+    Errors:
+      - Non-exhaustive match on Status: missing Status.Inactive, Status.Pending
+  Function MixedPatterns:
+    Return: String
+  Function NonExhaustiveIntLiteral:
+    Return: String
+    Errors:
+      - Non-exhaustive match on SuccessCode: missing 204
+  Function LiteralAfterTypedPattern:
+    Return: String
+    Errors:
+      - Unreachable match arm
+  Function EnumVariantUnionWithCatchAll:
+    Return: String

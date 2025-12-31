@@ -1,0 +1,33 @@
+# This is a configuration file for the bacon tool
+#
+# Complete help on configuration: https://dystroy.org/bacon/config/
+#
+# You may check the current default at
+#   https://github.com/Canop/bacon/blob/main/defaults/default-bacon.toml
+
+default_job = "check"
+env.CARGO_TERM_COLOR = "always"
+
+[jobs.check]
+command = ["cargo", "check"]
+need_stdout = false
+
+[jobs.check-all]
+command = ["cargo", "check", "--all-targets"]
+need_stdout = false
+
+# Run clippy on the default target
+[jobs.clippy]
+command = ["cargo", "clippy"]
+need_stdout = false
+
+# Build the baml-cli binary on file changes
+[jobs.baml-cli]
+command = ["cargo", "build", "--bin", "baml-cli"]
+need_stdout = true
+allow_warnings = true
+
+[jobs.test]
+command = ["cargo", "nextest", "run"]
+need_stdout = true
+allow_warnings = true

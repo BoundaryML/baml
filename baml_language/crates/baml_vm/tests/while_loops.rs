@@ -3,7 +3,6 @@
 use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
 fn while_loop() -> anyhow::Result<()> {
     const SOURCE: &str = r#"
         function GCD(a: int, b: int) -> int {
@@ -34,7 +33,6 @@ fn while_loop() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
 fn while_with_scope() -> anyhow::Result<()> {
     const SOURCE: &str = r#"
         function Fib(n: int) -> int {
@@ -65,7 +63,6 @@ fn while_with_scope() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
 fn break_factorial() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -119,7 +116,6 @@ fn break_nested_loops() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
 fn continue_factorial() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -152,7 +148,6 @@ fn continue_factorial() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "loop codegen causes infinite loop"]
 fn continue_nested() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

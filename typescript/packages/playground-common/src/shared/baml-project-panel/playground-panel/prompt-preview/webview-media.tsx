@@ -24,6 +24,13 @@ import { imageStatsMapAtom } from './image-stats-atom';
 import { mediaCollapsedMapAtom } from './media-collapsed-atom';
 import { showTokensAtom } from './render-text';
 
+// Import react-pdf CSS here (not in pdf-viewer.tsx) to avoid Vite modulepreload issues.
+// VSCode webviews can't resolve relative CSS paths like "/assets/pdf-viewer.css" that
+// Vite generates for lazy-loaded chunks. By importing CSS in the main bundle, it loads
+// normally without preloading.
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+
 // Lazy load PdfViewer to reduce initial bundle size (react-pdf is ~1MB+)
 const PdfViewer = lazy(() => import('./pdf-viewer').then(m => ({ default: m.PdfViewer })));
 

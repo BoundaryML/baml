@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -30,6 +30,72 @@ SOURCE_FILE
     ENUM_VARIANT "Inactive"
       WORD "Inactive"
     R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "Role"
+    EQUALS "="
+    TYPE_EXPR
+      STRING_LITERAL "user"
+        QUOTE """
+        WORD "user"
+        QUOTE """
+      PIPE "|"
+      STRING_LITERAL "assistant"
+        QUOTE """
+        WORD "assistant"
+        QUOTE """
+      PIPE "|"
+      STRING_LITERAL "system"
+        QUOTE """
+        WORD "system"
+        QUOTE """
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "OptionalRole"
+    EQUALS "="
+    TYPE_EXPR
+      STRING_LITERAL "admin"
+        QUOTE """
+        WORD "admin"
+        QUOTE """
+      QUESTION "?"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "RoleList"
+    EQUALS "="
+    TYPE_EXPR
+      STRING_LITERAL "reader"
+        QUOTE """
+        WORD "reader"
+        QUOTE """
+      L_BRACKET "["
+      R_BRACKET "]"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "OptionalRoleList"
+    EQUALS "="
+    TYPE_EXPR
+      STRING_LITERAL "writer"
+        QUOTE """
+        WORD "writer"
+        QUOTE """
+      L_BRACKET "["
+      R_BRACKET "]"
+      QUESTION "?"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "OptionalCode"
+    EQUALS "="
+    TYPE_EXPR "200?"
+      INTEGER_LITERAL "200"
+      QUESTION "?"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "OptionalFlag"
+    EQUALS "="
+    TYPE_EXPR "true?"
+      WORD "true"
+      QUESTION "?"
 
 === ERRORS ===
 None

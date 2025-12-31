@@ -15,6 +15,7 @@ fn return_literal_int() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Stackification with Virtual _0 and fall-through elimination:
             vec![Instruction::LoadConst(Value::Int(42)), Instruction::Return],
         )],
     })
@@ -30,6 +31,7 @@ fn return_literal_bool() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Stackification with Virtual _0 and fall-through elimination:
             vec![
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::Return,
@@ -72,10 +74,12 @@ fn return_function_call() -> anyhow::Result<()> {
         expected: vec![
             (
                 "one",
+                // Stackification with Virtual _0:
                 vec![Instruction::LoadConst(Value::Int(1)), Instruction::Return],
             ),
             (
                 "main",
+                // ReturnPhi optimization: Call result goes directly to stack, no Store/Load
                 vec![
                     Instruction::LoadGlobal(Value::function("one")),
                     Instruction::Call(0),
@@ -102,13 +106,17 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
         expected: vec![
             (
                 "two",
+                // Stackification with Virtual _0 and fall-through elimination:
                 vec![Instruction::LoadConst(Value::Int(2)), Instruction::Return],
             ),
             (
                 "main",
+                // Call result is stored to user variable a (Real because def is in Call terminator)
                 vec![
+                    Instruction::LoadConst(Value::Null),
                     Instruction::LoadGlobal(Value::function("two")),
                     Instruction::Call(0),
+                    Instruction::StoreVar("a".to_string()),
                     Instruction::LoadVar("a".to_string()),
                     Instruction::Return,
                 ],
@@ -118,7 +126,6 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment statements not yet in HIR"]
 fn mutable_variables() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -139,16 +146,12 @@ fn mutable_variables() -> anyhow::Result<()> {
         expected: vec![
             (
                 "DeclareMutableInFunction",
-                vec![
-                    Instruction::LoadConst(Value::Int(3)),
-                    Instruction::LoadConst(Value::Int(5)),
-                    Instruction::StoreVar("y".to_string()),
-                    Instruction::LoadVar("y".to_string()),
-                    Instruction::Return,
-                ],
+                // Dead store elimination: y=3 immediately overwritten by y=5, just return 5
+                vec![Instruction::LoadConst(Value::Int(5)), Instruction::Return],
             ),
             (
                 "MutableInArg",
+                // x is a Parameter, so it needs a real slot for the reassignment
                 vec![
                     Instruction::LoadConst(Value::Int(3)),
                     Instruction::StoreVar("x".to_string()),

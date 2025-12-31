@@ -12,6 +12,14 @@ function Greeting(self: Baz) -> string {
       "Hello, " + self.name + "!"
 }
 
+function param_in_if_statement(b: bool) -> int {
+      if (b) {
+          1
+      } else {
+          2
+      }
+}
+
 function Bar() -> int {
       let x = Foo(1);
       x

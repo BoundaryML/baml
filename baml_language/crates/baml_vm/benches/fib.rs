@@ -14,7 +14,8 @@ struct Program {
 fn bootstrap_vm(input: &Program) -> Vm {
     let mut db = TestDatabase::new();
     let file = db.add_file("bench.baml", input.source);
-    let program = baml_codegen::compile_files(&db, &[file]);
+    let program = baml_codegen::compile_files(&db, &[file])
+        .expect("compile_files should succeed for valid benchmark source");
 
     let function_index = program
         .function_index(input.function)

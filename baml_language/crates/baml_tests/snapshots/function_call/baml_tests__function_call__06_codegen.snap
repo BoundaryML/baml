@@ -3,16 +3,18 @@ source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 5
-Objects: 26
-Globals: 23
+Functions: 6
+Objects: 27
+Globals: 24
 
 Function Bar (arity: 0, kind: Exec):
-     0   LOAD_GLOBAL 21   (<fn Foo>)
-     1   LOAD_CONST 0     (1)
-     2   CALL 1           
-     3   LOAD_VAR 1       (x)
-     4   RETURN           
+     0   LOAD_CONST 0     (null)
+     1   LOAD_GLOBAL 22   (<fn Foo>)
+     2   LOAD_CONST 1     (1)
+     3   CALL 1           
+     4   STORE_VAR 1      (x)
+     5   LOAD_VAR 1       (x)
+     6   RETURN           
 
 Function Foo (arity: 1, kind: Exec):
      0   LOAD_VAR 1     (x)
@@ -21,14 +23,15 @@ Function Foo (arity: 1, kind: Exec):
      3   RETURN         
 
 Function GreetBaz (arity: 1, kind: Exec):
-     0   ALLOC_INSTANCE 0   (<class Baz>)
-     1   COPY 0             
-     2   LOAD_VAR 1         (n)
-     3   STORE_FIELD 0      
-     4   LOAD_VAR 2         (baz)
-     5   LOAD_FIELD 0       
-     6   CALL 0             
-     7   RETURN             
+     0   LOAD_CONST 0       (null)
+     1   ALLOC_INSTANCE 0   (<class Baz>)
+     2   COPY 0             
+     3   LOAD_VAR 1         (n)
+     4   STORE_FIELD 0      
+     5   STORE_VAR 2        (baz)
+     6   LOAD_GLOBAL 19     (<fn Greeting>)
+     7   CALL 0             
+     8   RETURN             
 
 Function Greeting (arity: 1, kind: Exec):
      0   LOAD_CONST 0   (Hello, )
@@ -40,12 +43,22 @@ Function Greeting (arity: 1, kind: Exec):
      6   RETURN         
 
 Function array_length (arity: 0, kind: Exec):
-     0   LOAD_CONST 0    (1)
-     1   LOAD_CONST 1    (2)
-     2   LOAD_CONST 2    (3)
-     3   ALLOC_ARRAY 3   
-     4   LOAD_GLOBAL 0   (<fn baml.Array.length>)
-     5   LOAD_VAR 1      (array)
-     6   CALL 1          
-     7   RETURN          
-     8   RETURN
+     0   LOAD_CONST 0    (null)
+     1   LOAD_CONST 1    (1)
+     2   LOAD_CONST 2    (2)
+     3   LOAD_CONST 3    (3)
+     4   ALLOC_ARRAY 3   
+     5   STORE_VAR 1     (array)
+     6   LOAD_GLOBAL 0   (<fn baml.Array.length>)
+     7   LOAD_VAR 1      (array)
+     8   CALL 1          
+     9   RETURN          
+
+Function param_in_if_statement (arity: 1, kind: Exec):
+     0   LOAD_VAR 1             (b)
+     1   POP_JUMP_IF_FALSE +2   (to 3)
+     2   JUMP +3                (to 5)
+     3   LOAD_CONST 0           (2)
+     4   JUMP +2                (to 6)
+     5   LOAD_CONST 1           (1)
+     6   RETURN

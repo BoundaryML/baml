@@ -18,6 +18,22 @@
       }
     },
     {
+      "name": "Launch VS Code extension (incremental compiler)",
+      "type": "extensionHost",
+      "request": "launch",
+      "sourceMaps": true,
+      "cwd": "${workspaceFolder}/typescript/apps/vscode-ext",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/typescript/apps/vscode-ext"
+      ],
+      "outFiles": ["${workspaceFolder}/typescript/apps/vscode-ext/dist/**"],
+      "env": {
+        "VSCODE_DEBUG_BAML_CLI_PATH": "${workspaceFolder}/baml_language/target/debug/baml-cli",
+        "VSCODE_DEBUG_MODE": "true"
+      }
+    },
+    {
       "type": "node",
       "request": "attach",
       "name": "Attach to Server",

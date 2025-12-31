@@ -85,6 +85,17 @@ export interface SDKStorage {
   clearAllNodeStates(): void;
 
   // ============================================================================
+  // Node Iterations (for loops)
+  // ============================================================================
+
+  setNodeIteration(nodeId: string, iteration: number): void;
+  getNodeIteration(nodeId: string): number;
+  incrementNodeIteration(nodeId: string): number;
+  getLoopOrdinals(): Map<string, number>;
+  setLoopOrdinal(loopPath: string, ordinal: number): void;
+  clearAllNodeIterations(): void;
+
+  // ============================================================================
   // Node Executions (I/O data)
   // ============================================================================
 

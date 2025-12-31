@@ -159,6 +159,26 @@ impl<'a> CodePrinter<'a> {
             Expr::Missing => {
                 self.output.push_str("<missing>");
             }
+            Expr::Match { scrutinee, arms } => {
+                self.output.push_str("match (");
+                self.print_expr(*scrutinee);
+                self.output.push_str(") {\n");
+                self.indent += 1;
+                for arm in arms {
+                    self.write_indent();
+                    self.print_pattern(arm.pattern);
+                    if let Some(guard) = arm.guard {
+                        self.output.push_str(" if ");
+                        self.print_expr(guard);
+                    }
+                    self.output.push_str(" => ");
+                    self.print_expr(arm.body);
+                    self.output.push_str(",\n");
+                }
+                self.indent -= 1;
+                self.write_indent();
+                self.output.push('}');
+            }
         }
     }
 
@@ -240,6 +260,27 @@ impl<'a> CodePrinter<'a> {
         match pattern {
             Pattern::Binding(name) => {
                 self.output.push_str(name.as_ref());
+            }
+            Pattern::TypedBinding { name, ty } => {
+                self.output.push_str(name.as_ref());
+                self.output.push_str(": ");
+                self.output.push_str(&type_ref_to_str(ty));
+            }
+            Pattern::Literal(lit) => {
+                self.print_literal(lit);
+            }
+            Pattern::EnumVariant { enum_name, variant } => {
+                self.output.push_str(enum_name.as_ref());
+                self.output.push('.');
+                self.output.push_str(variant.as_ref());
+            }
+            Pattern::Union(sub_patterns) => {
+                for (i, sub_pat_id) in sub_patterns.iter().enumerate() {
+                    if i > 0 {
+                        self.output.push_str(" | ");
+                    }
+                    self.print_pattern(*sub_pat_id);
+                }
             }
         }
     }
@@ -368,7 +409,8 @@ pub fn type_ref_to_str(ty: &TypeRef) -> String {
             .join(" | "),
         TypeRef::StringLiteral(s) => format!("\"{s}\""),
         TypeRef::IntLiteral(n) => n.to_string(),
-        TypeRef::FloatLiteral(s) => s.clone(),
+        TypeRef::FloatLiteral(f) => f.clone(),
+        TypeRef::BoolLiteral(b) => b.to_string(),
         TypeRef::Generic { base, args } => {
             let args_str = args
                 .iter()

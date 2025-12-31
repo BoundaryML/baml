@@ -12,15 +12,13 @@
 
 use std::collections::HashMap;
 
-use baml_base::{FileId, Name, SourceFile, Span};
+use baml_base::{FileId, Name, Span};
 use baml_diagnostics::compiler_error::TypeError;
-use baml_hir::{
-    ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId,
-    project_class_fields,
-};
+use baml_hir::{ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId};
 use baml_workspace::Project;
 
 pub mod builtins;
+mod exhaustiveness;
 mod lower;
 pub mod pretty;
 mod types;
@@ -29,7 +27,8 @@ pub use builtins::{
     Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
     method_return_type, substitute,
 };
-pub use lower::lower_type_ref;
+pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
+pub use lower::{TypeLoweringContext, lower_type_ref, lower_type_ref_validated};
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 use text_size::TextRange;
 pub use types::*;
@@ -87,34 +86,74 @@ pub enum ResolvedPath {
 pub trait Db: baml_hir::Db {}
 
 // ============================================================================
-// Typing Context Construction
+// Tracked Struct for Enum Variants (no Ty<'db>, so this works)
 // ============================================================================
 
-/// Build typing context from a list of source files.
+/// Tracked struct holding enum variants (enum name -> variant names).
+/// This works because it doesn't contain `Ty<'db>`.
+#[salsa::tracked]
+pub struct EnumVariantsMap<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub enums: HashMap<Name, Vec<Name>>,
+}
+
+// ============================================================================
+// THIR Queries
+// ============================================================================
+
+/// Query: Get enum variants for a project.
 ///
-/// This maps function names to their arrow types, e.g.:
+/// Maps enum names to their variant names, e.g.:
+/// `Status` -> `[Active, Inactive, Pending]`
+///
+/// This is a proper Salsa query because it doesn't return `Ty<'db>`.
+#[salsa::tracked]
+pub fn enum_variants(db: &dyn Db, project: Project) -> EnumVariantsMap<'_> {
+    let items = baml_hir::project_items(db, project);
+    let mut enums = HashMap::new();
+
+    for item in items.items(db) {
+        if let baml_hir::ItemId::Enum(enum_loc) = item {
+            let file = enum_loc.file(db);
+            let item_tree = baml_hir::file_item_tree(db, file);
+            let enum_data = &item_tree[enum_loc.id(db)];
+
+            let variants: Vec<Name> = enum_data.variants.iter().map(|v| v.name.clone()).collect();
+            enums.insert(enum_data.name.clone(), variants);
+        }
+    }
+
+    EnumVariantsMap::new(db, enums)
+}
+
+// ============================================================================
+// Non-Salsa Helper Functions
+// ============================================================================
+//
+// These functions return `Ty<'db>` which cannot be stored in Salsa tracked
+// structs because `Ty` is not interned. To make these proper Salsa queries,
+// we would need to intern `Ty` (make it `#[salsa::interned]`).
+//
+// For now, these are computed on-demand. The underlying HIR queries they
+// depend on (project_items, project_class_fields, etc.) ARE cached by Salsa.
+
+/// Get the typing context for a project.
+///
+/// Maps function names to their arrow types, e.g.:
 /// `Foo` -> `(int) -> int` for `function Foo(x: int) -> int`
-///
-/// This is used as the starting scope when type-checking function bodies,
-/// allowing function calls to be properly typed.
-///
-/// Note: This is not a Salsa query because it returns `Ty<'db>` which contains
-/// lifetime-parameterized data. Callers should cache the result if needed.
-pub fn build_typing_context_from_files<'db>(
-    db: &'db dyn Db,
-    files: &[SourceFile],
-) -> HashMap<Name, Ty<'db>> {
+pub fn typing_context<'db>(db: &'db dyn Db, project: Project) -> HashMap<Name, Ty<'db>> {
+    let files = baml_workspace::project_files(db, project);
     let mut context = HashMap::new();
 
     for file in files {
-        let items_struct = baml_hir::file_items(db, *file);
+        let items_struct = baml_hir::file_items(db, file);
         let items = items_struct.items(db);
 
         for item in items {
             if let baml_hir::ItemId::Function(func_loc) = item {
                 let signature = baml_hir::function_signature(db, *func_loc);
 
-                // Build the arrow type: (param_types) -> return_type
                 let param_types: Vec<Ty<'db>> = signature
                     .params
                     .iter()
@@ -136,62 +175,12 @@ pub fn build_typing_context_from_files<'db>(
     context
 }
 
-/// Build class fields map from source files.
+/// Get class field types for a project.
 ///
-/// This maps class names to their field types, e.g.:
+/// Maps class names to their field types, e.g.:
 /// `Baz` -> { `name` -> `String` }
-///
-/// Used for field access type checking.
-///
-/// This function lowers HIR `TypeRefs` to THIR `Ty`s. It iterates through
-/// the provided files and uses the Salsa-tracked `baml_hir::class_fields` query
-/// for each class, providing better incrementality than the old implementation.
-///
-/// Note: Once `baml_workspace::project_files` is implemented, this can be
-/// replaced with a simpler version that uses `baml_hir::project_class_fields`.
-pub fn build_class_fields_from_files(
-    db: &dyn Db,
-    project: Project,
-) -> HashMap<Name, HashMap<Name, Ty<'_>>> {
-    let class_fields = project_class_fields(db, project);
-
-    class_fields
-        .classes(db)
-        .iter()
-        .map(|(class_name, class_fields)| {
-            (
-                class_name.clone(),
-                class_fields
-                    .iter()
-                    .map(|(field_name, field_type)| {
-                        (field_name.clone(), lower_type_ref(db, field_type))
-                    })
-                    .collect(),
-            )
-        })
-        .collect()
-}
-
-/// Build class fields map for a project using Salsa queries.
-///
-/// This maps class names to their field types, e.g.:
-/// `Baz` -> { `name` -> `String` }
-///
-/// Used for field access type checking.
-///
-/// This function uses the Salsa-tracked `baml_hir::project_class_fields` query
-/// for maximum incrementality, then lowers HIR `TypeRefs` to THIR `Ty`s.
-///
-/// This is the preferred API - it properly uses the Salsa query system.
-///
-/// TODO: How do we make this incremental/cached? It seems like the
-/// `ClassId` and `EnumId` inside `Ty`, which are salsa references, make it
-/// impossible to track `Ty`.
-pub fn lower_project_class_fields(
-    db: &dyn Db,
-    root: baml_workspace::Project,
-) -> HashMap<Name, HashMap<Name, Ty<'_>>> {
-    let hir_fields = baml_hir::project_class_fields(db, root);
+pub fn class_field_types(db: &dyn Db, project: Project) -> HashMap<Name, HashMap<Name, Ty<'_>>> {
+    let hir_fields = baml_hir::project_class_fields(db, project);
 
     hir_fields
         .classes(db)
@@ -204,6 +193,28 @@ pub fn lower_project_class_fields(
             (class_name.clone(), lowered_fields)
         })
         .collect()
+}
+
+/// Get type alias definitions for a project.
+///
+/// Maps type alias names to their resolved types, e.g.:
+/// `Result` -> `Success | Failure`
+pub fn type_aliases(db: &dyn Db, project: Project) -> HashMap<Name, Ty<'_>> {
+    let items = baml_hir::project_items(db, project);
+    let mut aliases = HashMap::new();
+
+    for item in items.items(db) {
+        if let baml_hir::ItemId::TypeAlias(alias_loc) = item {
+            let file = alias_loc.file(db);
+            let item_tree = baml_hir::file_item_tree(db, file);
+            let alias_data = &item_tree[alias_loc.id(db)];
+
+            let lowered_ty = lower_type_ref(db, &alias_data.type_ref);
+            aliases.insert(alias_data.name.clone(), lowered_ty);
+        }
+    }
+
+    aliases
 }
 
 // ============================================================================
@@ -238,6 +249,10 @@ pub struct TypeContext<'db> {
     scopes: Vec<HashMap<Name, Ty<'db>>>,
     /// Class field types: `class_name` -> (`field_name` -> `field_type`)
     class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
+    /// Type alias definitions: `alias_name` -> `resolved_type`
+    type_aliases: HashMap<Name, Ty<'db>>,
+    /// Enum variant definitions: `enum_name` -> `Vec<variant_name>`
+    enum_variants: HashMap<Name, Vec<Name>>,
     /// Inferred types for expressions.
     expr_types: HashMap<ExprId, Ty<'db>>,
     /// For multi-segment paths, the type of each segment.
@@ -261,6 +276,8 @@ impl<'db> TypeContext<'db> {
             db,
             scopes: vec![globals],
             class_fields: HashMap::new(),
+            type_aliases: HashMap::new(),
+            enum_variants: HashMap::new(),
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             return_types: Vec::new(),
@@ -280,6 +297,31 @@ impl<'db> TypeContext<'db> {
             db,
             scopes: vec![globals],
             class_fields,
+            type_aliases: HashMap::new(),
+            enum_variants: HashMap::new(),
+            expr_types: HashMap::new(),
+            path_segment_types: HashMap::new(),
+            return_types: Vec::new(),
+            errors: Vec::new(),
+            file_id,
+        }
+    }
+
+    /// Create a new type context with full type resolution info.
+    pub fn with_type_info(
+        db: &'db dyn Db,
+        globals: HashMap<Name, Ty<'db>>,
+        class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
+        type_aliases: HashMap<Name, Ty<'db>>,
+        enum_variants: HashMap<Name, Vec<Name>>,
+        file_id: FileId,
+    ) -> Self {
+        TypeContext {
+            db,
+            scopes: vec![globals],
+            class_fields,
+            type_aliases,
+            enum_variants,
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             return_types: Vec::new(),
@@ -291,6 +333,16 @@ impl<'db> TypeContext<'db> {
     /// Record a return type encountered during inference.
     pub fn record_return(&mut self, ty: Ty<'db>, span: Span) {
         self.return_types.push((ty, span));
+    }
+
+    /// Look up a type alias definition.
+    pub fn lookup_type_alias(&self, name: &Name) -> Option<&Ty<'db>> {
+        self.type_aliases.get(name)
+    }
+
+    /// Look up enum variants.
+    pub fn lookup_enum_variants(&self, name: &Name) -> Option<&Vec<Name>> {
+        self.enum_variants.get(name)
     }
 
     /// Look up a field in a class.
@@ -423,6 +475,7 @@ impl<'db> TypeContext<'db> {
 ///
 /// Note: In a full implementation, this would be a Salsa tracked function.
 /// For now, it's a regular function that takes the body directly.
+#[allow(clippy::too_many_arguments)]
 pub fn infer_function_body<'db>(
     db: &'db dyn Db,
     body: &FunctionBody,
@@ -430,13 +483,17 @@ pub fn infer_function_body<'db>(
     expected_return: &Ty<'db>,
     globals: Option<HashMap<Name, Ty<'db>>>,
     class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
+    type_aliases: Option<HashMap<Name, Ty<'db>>>,
+    enum_variants: Option<HashMap<Name, Vec<Name>>>,
     function_loc: FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
     let file_id = function_loc.file(db).file_id(db);
-    let mut ctx = TypeContext::with_class_fields(
+    let mut ctx = TypeContext::with_type_info(
         db,
         globals.unwrap_or_default(),
         class_fields.unwrap_or_default(),
+        type_aliases.unwrap_or_default(),
+        enum_variants.unwrap_or_default(),
         file_id,
     );
 
@@ -517,43 +574,72 @@ pub fn infer_function_body<'db>(
 
 /// Infer types for a function given its signature and body.
 ///
-/// This is the entry point for type inference from the test suite.
-/// It takes pre-fetched signature and body data, allowing the caller (`baml_db`)
-/// to handle the Salsa queries for fetching this data.
+/// This queries the database for known type names and validates that all type
+/// references in the signature refer to types that exist. Unknown types will
+/// produce errors and be replaced with `Ty::Error` to suppress downstream
+/// type mismatches.
 ///
 /// The `globals` parameter provides types for top-level functions, allowing
 /// function calls to be properly typed. Pass `None` if no global context is needed.
+#[allow(clippy::too_many_arguments)]
 pub fn infer_function<'db>(
     db: &'db dyn Db,
     signature: &FunctionSignature,
     body: &FunctionBody,
     globals: Option<HashMap<Name, Ty<'db>>>,
     class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
+    type_aliases: Option<HashMap<Name, Ty<'db>>>,
+    enum_variants: Option<HashMap<Name, Vec<Name>>>,
     function_loc: FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
-    // Convert parameter TypeRefs to Tys
+    // Query known type names from the project (Salsa-cached)
+    let project = db.project();
+    let known_type_names = baml_hir::project_type_names(db, project);
+    let known_types: std::collections::HashSet<_> =
+        known_type_names.names(db).iter().cloned().collect();
+
+    let file_id = function_loc.file(db).file_id(db);
+    // Use a placeholder span for now - ideally we'd have spans on TypeRef
+    let placeholder_span = Span::new(file_id, TextRange::empty(0.into()));
+
+    let mut type_errors: Vec<TypeError<Ty<'db>>> = Vec::new();
+
+    // Convert parameter TypeRefs to Tys with validation
     let param_types: HashMap<Name, Ty<'db>> = signature
         .params
         .iter()
         .map(|param| {
-            let ty = lower_type_ref(db, &param.type_ref);
+            let (ty, errors) =
+                lower_type_ref_validated(&param.type_ref, &known_types, placeholder_span);
+            type_errors.extend(errors);
             (param.name.clone(), ty)
         })
         .collect();
 
-    // Convert return type
-    let expected_return = lower_type_ref(db, &signature.return_type);
+    // Convert return type with validation
+    let (expected_return, errors) =
+        lower_type_ref_validated(&signature.return_type, &known_types, placeholder_span);
+    type_errors.extend(errors);
 
     // Delegate to the body inference function
-    infer_function_body(
+    let mut result = infer_function_body(
         db,
         body,
         param_types,
         &expected_return,
         globals,
         class_fields,
+        type_aliases,
+        enum_variants,
         function_loc,
-    )
+    );
+
+    // Prepend type lowering errors to the result
+    // (they should appear before type checking errors)
+    type_errors.extend(result.errors);
+    result.errors = type_errors;
+
+    result
 }
 
 /// Infer the type of an expression (synthesize mode).
@@ -563,7 +649,7 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
     let expr = &body.exprs[expr_id];
 
     // Create a placeholder span for errors (ideally we'd track spans in ExprBody)
-    let span = ctx.build_span_default(&body.expr_span(expr_id));
+    let span = body.get_expr_span(expr_id).unwrap_or_default();
 
     let ty = match expr {
         Expr::Literal(lit) => infer_literal(lit),
@@ -873,11 +959,202 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
             }
         }
 
+        // Match expressions synthesize a type.
+        // TODO: we should support bidirectional type checking
+        Expr::Match { scrutinee, arms } => {
+            let scrutinee_ty = infer_expr(ctx, *scrutinee, body);
+
+            // Use the actual match expression span if available, otherwise fall back to placeholder
+            let match_span = body.get_expr_span(expr_id).unwrap_or(span);
+
+            if arms.is_empty() {
+                // Empty match is non-exhaustive (unless scrutinee is uninhabited).
+                // An uninhabited type has no possible values, so an empty match is
+                // actually exhaustive—there are no cases to handle.
+                // See `Ty::is_uninhabited()` for the full definition and rationale.
+                if !scrutinee_ty.is_uninhabited() {
+                    ctx.push_error(TypeError::NonExhaustiveMatch {
+                        scrutinee_type: scrutinee_ty.clone(),
+                        missing_cases: vec!["all cases".to_string()],
+                        span: match_span,
+                    });
+                }
+                Ty::Unknown
+            } else {
+                // Perform exhaustiveness checking and unreachable arm detection
+                check_match_exhaustiveness(ctx, &scrutinee_ty, arms, body, expr_id, match_span);
+
+                // Collect result types from all arms
+                let arm_types: Vec<Ty> = arms
+                    .iter()
+                    .map(|arm| {
+                        // Push a scope for the arm's pattern bindings
+                        ctx.push_scope();
+
+                        // Extract pattern and determine the narrowed type
+                        let pattern = &body.patterns[arm.pattern];
+                        let (binding_name, narrowed_ty) =
+                            extract_pattern_binding(ctx, pattern, &scrutinee_ty, body);
+
+                        // Bind the pattern variable with the narrowed type
+                        if let Some(name) = binding_name {
+                            ctx.define(name, narrowed_ty);
+                        }
+
+                        // Type-check the guard (if present)
+                        if let Some(guard) = arm.guard {
+                            let guard_ty = infer_expr(ctx, guard, body);
+                            if !guard_ty.is_subtype_of(&Ty::Bool) && !guard_ty.is_unknown() {
+                                ctx.push_error(TypeError::TypeMismatch {
+                                    expected: Ty::Bool,
+                                    found: guard_ty,
+                                    span,
+                                });
+                            }
+                        }
+
+                        // Type-check the arm body
+                        let body_ty = infer_expr(ctx, arm.body, body);
+
+                        ctx.pop_scope();
+                        body_ty
+                    })
+                    .collect();
+
+                // If all arms have the same type, use that; otherwise union
+                if arm_types.iter().all(|t| t == &arm_types[0]) {
+                    arm_types.into_iter().next().unwrap_or(Ty::Unknown)
+                } else {
+                    Ty::Union(arm_types)
+                }
+            }
+        }
+
         Expr::Missing => Ty::Unknown,
     };
 
     ctx.set_expr_type(expr_id, ty.clone());
     ty
+}
+
+/// Extract binding name and narrowed type from a match pattern.
+///
+/// Returns `(Some(name), narrowed_type)` for binding patterns, or `(None, scrutinee_type)` for
+/// patterns that don't introduce bindings (literals, enum variants, unions).
+///
+/// # Type Narrowing Rules
+/// - `name: Type` binds `name` with type `Type` (from the type annotation)
+/// - `name` (without type) binds `name` with the scrutinee type (catch-all)
+/// - `_` is a special case of binding that's semantically discarded later
+/// - Literals, enum variants, and union patterns don't introduce bindings
+fn extract_pattern_binding<'db>(
+    ctx: &TypeContext<'db>,
+    pattern: &Pattern,
+    scrutinee_ty: &Ty<'db>,
+    _body: &ExprBody,
+) -> (Option<Name>, Ty<'db>) {
+    match pattern {
+        // Typed binding: `s: Success` -> s has type Success
+        Pattern::TypedBinding { name, ty } => {
+            let narrowed_ty = lower_type_ref(ctx.db(), ty);
+            (Some(name.clone()), narrowed_ty)
+        }
+
+        // Simple binding: `x` or `_` -> binds with scrutinee type (catch-all)
+        Pattern::Binding(name) => {
+            // `_` is semantically discarded but still creates a binding during type checking
+            // The "discard" behavior is handled in codegen, not here
+            (Some(name.clone()), scrutinee_ty.clone())
+        }
+
+        // Literal patterns don't introduce bindings
+        Pattern::Literal(_) => (None, scrutinee_ty.clone()),
+
+        // Enum variant patterns don't introduce bindings
+        // (they match by value equality, not type)
+        Pattern::EnumVariant { .. } => (None, scrutinee_ty.clone()),
+
+        // Union patterns don't introduce bindings
+        // (they're unions of literals or enum variants)
+        Pattern::Union(_) => (None, scrutinee_ty.clone()),
+    }
+}
+
+// ============================================================================
+// Match Exhaustiveness and Unreachability Checking
+// ============================================================================
+//
+// Exhaustiveness checking is implemented in the `exhaustiveness` module using
+// a value-based model (`ValueSet`). See `exhaustiveness.rs` for details.
+//
+// Key design principle: Pattern matching operates on VALUES, not types.
+// - `Status.Active` matches one specific value
+// - `s: Status` matches all values of type Status
+// - `_` or `other` matches everything (catch-all)
+//
+// The `ExhaustivenessChecker` tracks which value sets have been covered
+// by match arms and reports:
+// - Non-exhaustive matches (uncovered cases)
+// - Unreachable arms (arms that can never match)
+// ============================================================================
+
+/// Check match exhaustiveness and detect unreachable arms.
+///
+/// This function implements the exhaustiveness checking rules from BEP-002:
+/// 1. All cases must be covered explicitly or via catch-all
+/// 2. Guards do NOT contribute to exhaustiveness
+/// 3. Catch-all (`_` or untyped binding) covers remaining cases
+/// 4. Arms after a catch-all are unreachable
+///
+/// # Errors
+/// - `TypeError::NonExhaustiveMatch` if not all cases are covered
+/// - `TypeError::UnreachableArm` if an arm can never match
+fn check_match_exhaustiveness<'db>(
+    ctx: &mut TypeContext<'db>,
+    scrutinee_ty: &Ty<'db>,
+    arms: &[baml_hir::MatchArm],
+    body: &ExprBody,
+    match_expr_id: ExprId,
+    match_span: Span,
+) {
+    // Skip exhaustiveness checking for unknown/error types
+    if scrutinee_ty.is_unknown() || scrutinee_ty.is_error() {
+        return;
+    }
+
+    // Use the new value-based exhaustiveness checker
+    let checker = ExhaustivenessChecker::new(ctx.db(), &ctx.enum_variants, &ctx.type_aliases);
+
+    let result = checker.check(scrutinee_ty, arms, body);
+
+    // Get arm spans if available (for accurate error locations)
+    let arm_spans = body.get_match_arm_spans(match_expr_id);
+
+    // Report unreachable arms with accurate spans
+    for arm_idx in result.unreachable_arms {
+        // Use the arm's specific span if available, otherwise fall back to match span
+        let span = arm_spans
+            .and_then(|spans| spans.get(arm_idx))
+            .map(|s| s.arm_span)
+            .unwrap_or(match_span);
+
+        ctx.push_error(TypeError::UnreachableArm { span });
+    }
+
+    // Report non-exhaustive match (points to the match expression itself)
+    if !result.is_exhaustive {
+        let missing_cases: Vec<String> = result
+            .uncovered
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
+
+        ctx.push_error(TypeError::NonExhaustiveMatch {
+            scrutinee_type: scrutinee_ty.clone(),
+            missing_cases,
+            span: match_span,
+        });
+    }
 }
 
 /// Infer the type of a literal.
@@ -1187,6 +1464,14 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
                 Pattern::Binding(name) => {
                     ctx.define(name.clone(), ty);
                 }
+                Pattern::TypedBinding { name, ty: _ } => {
+                    // TODO: Check declared type matches inferred type
+                    ctx.define(name.clone(), ty);
+                }
+                Pattern::Literal(_) | Pattern::EnumVariant { .. } | Pattern::Union(_) => {
+                    // Literals/enum variants/unions don't introduce bindings in let statements
+                    // This would be a semantic error, but we'll handle it elsewhere
+                }
             }
         }
 
@@ -1215,7 +1500,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         } => {
             let cond_ty = infer_expr(ctx, *condition, body);
             if !cond_ty.is_subtype_of(&Ty::Bool) {
-                let span = ctx.build_span_default(&body.expr_span(*condition));
+                let span = body.get_expr_span(*condition).unwrap_or_default();
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: Ty::Bool,
                     found: cond_ty,

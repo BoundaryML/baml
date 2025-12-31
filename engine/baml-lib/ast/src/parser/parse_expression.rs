@@ -405,6 +405,8 @@ pub fn parse_config_primary_expression(
         Rule::jinja_expression => Some(parse_jinja_expression(token, diagnostics)),
         Rule::config_map_expression => Some(parse_config_map(token, diagnostics)),
         Rule::identifier => Some(Expression::Identifier(parse_identifier(token, diagnostics))),
+        Rule::fn_app => parse_fn_app(token, diagnostics),
+        Rule::generic_fn_app => parse_generic_fn_app(token, diagnostics),
         _ => {
             unreachable_rule(&token, "config_primary_expression", diagnostics);
             None

@@ -192,7 +192,7 @@ const showFunction: NavigationRule = {
   matches: (target) => target.kind === 'function' && target.exists,
   resolve: (target) => ({
     mode: 'function',
-    functionName: target.name,
+    functionName: target.functionName ?? 'unknown-function',
     testName: selectPreferredTest(target.availableTests, null),
   }),
   explain: (target) => `Showing standalone function: ${target.name}`,

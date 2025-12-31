@@ -59,6 +59,8 @@ const NOT_INDEXABLE: ErrorCode = ErrorCode(8);
 const UNEXPECTED_EOF: ErrorCode = ErrorCode(9);
 const UNEXPECTED_TOKEN: ErrorCode = ErrorCode(10);
 const DUPLICATE_NAME: ErrorCode = ErrorCode(11);
+const NON_EXHAUSTIVE_MATCH: ErrorCode = ErrorCode(62);
+const UNREACHABLE_ARM: ErrorCode = ErrorCode(63);
 
 /// Render an ariadne Report to a String.
 ///

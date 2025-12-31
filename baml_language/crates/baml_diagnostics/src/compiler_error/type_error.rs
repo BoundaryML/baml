@@ -34,6 +34,14 @@ pub enum TypeError<T> {
     NoSuchField { ty: T, field: String, span: Span },
     /// Index access on non-indexable type.
     NotIndexable { ty: T, span: Span },
+    /// Match expression is not exhaustive - some cases are not covered.
+    NonExhaustiveMatch {
+        scrutinee_type: T,
+        missing_cases: Vec<String>,
+        span: Span,
+    },
+    /// Match arm is unreachable - it can never match because previous arms cover all cases.
+    UnreachableArm { span: Span },
 }
 
 impl<T> TypeError<T> {
@@ -90,6 +98,16 @@ impl<T> TypeError<T> {
                 ty: f(ty),
                 span: *span,
             },
+            TypeError::NonExhaustiveMatch {
+                scrutinee_type,
+                missing_cases,
+                span,
+            } => TypeError::NonExhaustiveMatch {
+                scrutinee_type: f(scrutinee_type),
+                missing_cases: missing_cases.clone(),
+                span: *span,
+            },
+            TypeError::UnreachableArm { span } => TypeError::UnreachableArm { span: *span },
         }
     }
 }

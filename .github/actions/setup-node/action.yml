@@ -6,6 +6,10 @@ inputs:
     description: 'Node.js version to install'
     required: false
     default: '20'
+    options:
+      - 20
+      - 24
+      - latest
   pnpm-version:
     description: 'pnpm version to install'
     required: false
@@ -26,9 +30,6 @@ inputs:
     description: 'Path for Turbo cache directory'
     required: false
     default: '.turbo'
-  npm-token:
-    description: 'NPM authentication token'
-    required: false
   node-action-version:
     description: 'Version of actions/setup-node to use (v4 or v6)'
     required: false
@@ -65,8 +66,6 @@ runs:
         cache: pnpm
         cache-dependency-path: pnpm-lock.yaml
         registry-url: "https://registry.npmjs.org"
-      env:
-        NODE_AUTH_TOKEN: ${{ inputs.npm-token }}
 
     - name: Setup Node.js (v6)
       if: inputs.node-action-version == 'v6'
@@ -76,8 +75,6 @@ runs:
         cache: pnpm
         cache-dependency-path: pnpm-lock.yaml
         registry-url: "https://registry.npmjs.org"
-      env:
-        NODE_AUTH_TOKEN: ${{ inputs.npm-token }}
 
     - name: Install Node dependencies
       if: inputs.install-dependencies == 'true'

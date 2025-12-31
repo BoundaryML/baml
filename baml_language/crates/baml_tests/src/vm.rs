@@ -292,7 +292,7 @@ pub enum Instruction {
     Copy(usize),
     PopReplace(usize),
     Jump(isize),
-    JumpIfFalse(isize),
+    PopJumpIfFalse(isize),
     BinOp(BinOp),
     CmpOp(CmpOp),
     UnaryOp(UnaryOp),

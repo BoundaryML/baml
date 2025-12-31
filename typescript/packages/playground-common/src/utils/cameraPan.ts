@@ -23,10 +23,10 @@ interface DeadzoneConfig {
 }
 
 const DEFAULT_DEADZONE: DeadzoneConfig = {
-  left: 0.15,   // 15% from left
-  right: 0.85,  // 85% from left (15% from right)
-  top: 0.15,    // 15% from top
-  bottom: 0.85, // 85% from top (15% from bottom)
+  left: 0.10,   // 15% from left
+  right: 0.90,  // 85% from left (15% from right)
+  top: 0.10,    // 15% from top
+  bottom: 0.90, // 85% from top (15% from bottom)
 };
 
 /**
@@ -41,7 +41,7 @@ export function panToNodeIfNeeded(
   node: Node,
   flowInstance: ReactFlowInstance,
   config: DeadzoneConfig = DEFAULT_DEADZONE,
-  duration = 250
+  duration = 150
 ): void {
   // Get viewport dimensions
   const viewport = flowInstance.getViewport();

@@ -3,8 +3,9 @@ use baml_base::Span;
 
 use super::{
     ARGUMENT_COUNT_MISMATCH, CompilerError, DUPLICATE_NAME, ErrorCode, INVALID_OPERATOR,
-    NO_SUCH_FIELD, NOT_CALLABLE, NOT_INDEXABLE, NameError, ParseError, Report, ReportKind,
-    TYPE_MISMATCH, TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_TYPE, UNKNOWN_VARIABLE,
+    NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE, NameError, ParseError,
+    Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_TYPE,
+    UNKNOWN_VARIABLE, UNREACHABLE_ARM,
 };
 
 /// The message format and id of each compiler error variant.
@@ -83,6 +84,25 @@ where
             TypeError::NotIndexable { ty, span } => {
                 simple_error(format!("Type {ty} is not indexable"), span, NOT_INDEXABLE)
             }
+            TypeError::NonExhaustiveMatch {
+                scrutinee_type,
+                missing_cases,
+                span,
+            } => {
+                let missing = missing_cases.join(", ");
+                simple_error(
+                    format!(
+                        "Non-exhaustive match: type {scrutinee_type} not fully covered. Missing: {missing}"
+                    ),
+                    span,
+                    NON_EXHAUSTIVE_MATCH,
+                )
+            }
+            TypeError::UnreachableArm { span } => simple_error(
+                "Unreachable match arm: previous arms already cover all cases".to_string(),
+                span,
+                UNREACHABLE_ARM,
+            ),
         },
         CompilerError::NameError(name_error) => match name_error {
             NameError::DuplicateName {

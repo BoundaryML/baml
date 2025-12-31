@@ -94,7 +94,7 @@ fn convert_instruction(
         baml_vm::Instruction::Copy(idx) => Instruction::Copy(*idx),
         baml_vm::Instruction::PopReplace(n) => Instruction::PopReplace(*n),
         baml_vm::Instruction::Jump(offset) => Instruction::Jump(*offset),
-        baml_vm::Instruction::JumpIfFalse(offset) => Instruction::JumpIfFalse(*offset),
+        baml_vm::Instruction::PopJumpIfFalse(offset) => Instruction::PopJumpIfFalse(*offset),
         baml_vm::Instruction::BinOp(op) => Instruction::BinOp(*op),
         baml_vm::Instruction::CmpOp(op) => Instruction::CmpOp(*op),
         baml_vm::Instruction::UnaryOp(op) => Instruction::UnaryOp(*op),
@@ -176,9 +176,11 @@ type CompileResult = (Vec<(String, CompiledFunction)>, HashMap<String, usize>);
 fn compile_source(source: &str) -> CompileResult {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
+    db.set_project(vec![file]);
 
     // Use the production compile_files function
-    let program = baml_codegen::compile_files(&db, &[file]);
+    let program = baml_codegen::compile_files(&db, &[file])
+        .expect("compile_files should succeed for valid test source");
 
     // Extract functions from the program
     let mut functions = Vec::new();

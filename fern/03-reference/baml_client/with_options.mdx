@@ -16,7 +16,10 @@ The `with_options` function creates a new client with default configuration opti
 from baml_client import b
 from baml_py import ClientRegistry, Collector
 
-# Set up default options for this client
+# Simple: just set the client name
+my_b = b.with_options(client="openai/gpt-5-mini")
+
+# Or with full options for advanced use cases
 collector = Collector(name="my-collector")
 client_registry = ClientRegistry()
 client_registry.set_primary("openai/gpt-5-mini")
@@ -39,27 +42,30 @@ result2 = my_b.ExtractResume("...", baml_options={"collector": other_collector})
 import { b } from "baml_client"
 import { Collector, ClientRegistry } from "@boundaryml/baml"
 
-// Set up default options for this client
+// Simple: just set the client name
+const myB = b.withOptions({ client: "openai/gpt-5-mini" })
+
+// Or with full options for advanced use cases
 const collector = new Collector("my-collector")
 const clientRegistry = new ClientRegistry()
 clientRegistry.setPrimary("openai/gpt-5-mini")
 const env = {"BAML_LOG": "DEBUG", "OPENAI_API_KEY": "key-123"}
 
 // Create client with default options
-const myB = b.withOptions({ collector, clientRegistry, env })
+const myBAdvanced = b.withOptions({ collector, clientRegistry, env })
 
 // Uses the default options
-const result = await myB.ExtractResume("...")
+const result = await myBAdvanced.ExtractResume("...")
 
 // Override options for a specific call
 const otherCollector = new Collector("other-collector")
-const result2 = await myB.ExtractResume("...", { collector: otherCollector })
+const result2 = await myBAdvanced.ExtractResume("...", { collector: otherCollector })
 ```
 </Tab>
 
 <Tab title="Go" language="go">
 <Note>
-Go doesn't have a `with_options` method like Python/TypeScript. Instead, use individual option functions like `WithCollector`, `WithClientRegistry`, and `WithEnv` directly in function calls.
+Go doesn't have a `with_options` method like Python/TypeScript. Instead, use individual option functions like `WithClient`, `WithCollector`, `WithClientRegistry`, and `WithEnv` directly in function calls.
 </Note>
 
 ```go
@@ -67,48 +73,45 @@ package main
 
 import (
     "context"
-    
+
     b "example.com/myproject/baml_client"
 )
 
 func run() {
     ctx := context.Background()
-    
-    // Set up options for function calls
+
+    // Simple: just set the client name
+    result, err := b.ExtractResume(ctx, "...", b.WithClient("openai/gpt-5-mini"))
+    if err != nil {
+        panic(err)
+    }
+
+    // Or with full options for advanced use cases
     collector, err := b.NewCollector("my-collector")
     if err != nil {
         panic(err)
     }
-    
-    clientRegistry, err := b.NewClientRegistry()
-    if err != nil {
-        panic(err)
-    }
-    err = clientRegistry.SetPrimary("openai/gpt-5-mini")
-    if err != nil {
-        panic(err)
-    }
-    
+
     env := map[string]string{
         "BAML_LOG": "DEBUG",
         "OPENAI_API_KEY": "key-123",
     }
-    
+
     // Make function call with multiple options
-    result, err := b.ExtractResume(ctx, "...", nil,
+    result, err = b.ExtractResume(ctx, "...",
+        b.WithClient("openai/gpt-5-mini"),
         b.WithCollector(collector),
-        b.WithClientRegistry(clientRegistry),
         b.WithEnv(env))
     if err != nil {
         panic(err)
     }
-    
+
     // Override options for a specific call
     otherCollector, err := b.NewCollector("other-collector")
     if err != nil {
         panic(err)
     }
-    result2, err := b.ExtractResume(ctx, "...", nil, b.WithCollector(otherCollector))
+    result2, err := b.ExtractResume(ctx, "...", b.WithCollector(otherCollector))
     if err != nil {
         panic(err)
     }
@@ -455,6 +458,7 @@ These can always be overridden on a per-call basis with the `baml_options` param
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
+| `client` | `string` | Client name to use for all calls (shorthand for `client_registry.set_primary()`) |
 | `collector` | [`Collector`](/ref/baml_client/collector) | Collector instance for tracking function calls and usage metrics |
 | `client_registry` | `ClientRegistry` | Registry for managing LLM clients and their configurations |
 | `type_builder` | [`TypeBuilder`](/ref/baml_client/type-builder) | Custom type builder for function inputs and outputs |

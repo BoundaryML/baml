@@ -257,7 +257,6 @@ fn nested_field_read() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "constructor with preceding variables not yet working"]
 fn constructor_with_preceding_variables() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -279,7 +278,6 @@ fn constructor_with_preceding_variables() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "nested constructor with preceding variables not yet working"]
 fn nested_constructor_with_preceding_variables() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -306,7 +304,7 @@ fn nested_constructor_with_preceding_variables() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method calls not yet working"]
+#[ignore = "method call codegen missing self argument"]
 fn basic_method_decl() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -332,7 +330,7 @@ fn basic_method_decl() -> anyhow::Result<()> {
 
 // Method tests
 #[test]
-#[ignore = "mut self methods not yet working"]
+#[ignore = "method call codegen missing self argument"]
 fn mut_self_method_decl() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

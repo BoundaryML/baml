@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -19,15 +19,15 @@ class NestedQuotes {
   She: said
   hello: "')
   escaped_in_escaped string @alias("
-  The: 
-  quote: 
+  The: <unknown>
+  quote: <unknown>
   is: here
   complex_nesting: string
-  really: 
-  complex: 
+  really: <unknown>
+  complex: <unknown>
   json_like: string
-  key: 
-  value: 
+  key: <unknown>
+  value: <unknown>
 }
 
 function ProcessText(input: string) -> string {
@@ -59,7 +59,7 @@ class Messages {
   with_spaces: string
   with_escapes: string
   with_quotes: string
-  hello: 
+  hello: <unknown>
 }
 
 class UnicodeStrings {

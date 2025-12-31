@@ -1,367 +1,1263 @@
 ---
-description: A set of rules for setting up BAML and help with syntax guidance.
-globs: **/baml_src/*.baml
+description: For any LLM calls or config in the repository
 alwaysApply: false
 ---
+# BAML (Basically, A Made-Up Language) Reference Guide for AI Agents
 
 <Overview>
-  BAML (Basically, A Made-Up Language) is a domain-specific language for building LLM prompts as functions.
-  You can build an agentic workflow with BAML.
+BAML is a domain-specific language for building type-safe LLM prompts as functions. It provides:
+- Strongly-typed inputs and outputs for LLM calls
+- Automatic JSON parsing and validation
+- Jinja-based prompt templating
+- Multi-language code generation (Python, TypeScript, Go, Ruby)
+- More docs at docs.boundaryml.com
+
+The workflow is: Define BAML files → Run `baml-cli generate` → Import generated client in your code.
 </Overview>
 
-  <Schema>
-    // Define output schemas using classes
-    class MyObject {
-      // Optional string fields use ?
-      // @description is optional, but if you include it, it goes after the field.
-      name string? @description("The name of the object")
-      
-      // Arrays of primitives
-      // arrays cannot be optional.
-      tags string[]
-      
-      // Enums must be declared separately and are optional
-      status MyEnum?
-      
-      // Union types
-      type "success" | "error"
-      
-      // Primitive types
-      count int
-      enabled bool
-      score float
+## Installation
 
-      // nested objects
-      nested MyObject2
+### Python
+```bash
+# Install the package
+pip install baml-py      # or: poetry add baml-py / uv add baml-py
 
-      // image type
-      myImg image
+# Initialize BAML in your project (creates baml_src/ directory)
+baml-cli init
 
-      {#// checks and assertions. Uses jinja syntax inside the parentheses.
-      // For a single property use one @
-      bar int @assert(between_0_and_10, {{ "{{ this > 0 and this < 10 }}" }}) //this = MyObject.bar value
-      quux string
-      // assertions for multiple fields use @@ and go at the bottom of the class. Uses jinja syntax inside the parentheses.
-      // Do NOT add descriptions after the assertion.
-      @@assert(length_limit, {{ "{{ this.quux|length < this.baz }}" }})#}
+# Generate the client (REQUIRED after any .baml file changes)
+baml-cli generate
+```
+
+### TypeScript / JavaScript
+```bash
+# Install the package
+npm install @boundaryml/baml    # or: pnpm add / yarn add / bun add
+
+# Initialize BAML in your project
+npx baml-cli init
+
+# Generate the client (REQUIRED after any .baml file changes)
+npx baml-cli generate
+```
+
+### VSCode / Cursor Extension
+Install the BAML extension for syntax highlighting, testing playground, and prompt previews:
+https://marketplace.visualstudio.com/items?itemName=boundary.baml-extension
+
+The extension auto-runs `baml-cli generate` on save.
+
+## CRITICAL: Running `baml-cli generate`
+
+**You MUST run `baml-cli generate` every time you modify any `.baml` file.**
+
+This command:
+1. Reads all `.baml` files in `baml_src/`
+2. Generates the `baml_client/` directory with type-safe code
+3. Creates Pydantic models (Python) or TypeScript interfaces
+
+```bash
+# Python
+baml-cli generate
+
+# TypeScript
+npx baml-cli generate
+```
+
+Add to your build process:
+```json
+// package.json
+{
+  "scripts": {
+    "build": "npx baml-cli generate && tsc --build"
+  }
+}
+```
+
+## Testing
+
+Run tests defined in `.baml` files with `baml-cli test`. Use `baml-cli test --help` for all options.
+
+```bash
+baml-cli test                          # Run all tests
+baml-cli test -i "MyFunction:TestName" # Run specific test
+```
+
+## Generator Block
+
+The `generator` block in `baml_src/generators.baml` configures code generation. Created by `baml-cli init`.
+
+```baml
+generator target {
+  // Target language (REQUIRED)
+  // Options: "python/pydantic", "typescript", "typescript/react", "go", "ruby/sorbet"
+  output_type "python/pydantic"
+
+  // Output directory relative to baml_src/ (REQUIRED)
+  output_dir "../"
+
+  // Runtime version - should match installed package version (REQUIRED)
+  version "0.76.2"
+
+  // Default client mode: "sync" or "async"
+  default_client_mode "sync"
+
+  // TypeScript only: "cjs" (CommonJS) or "esm" (ES modules)
+  module_format "cjs"
+
+  // Shell command to run after generation (e.g., formatters)
+  on_generate "black . && isort ."
+}
+```
+
+## Types
+
+### Primitive Types
+```baml
+bool      // true/false
+int       // integers
+float     // decimal numbers
+string    // text
+null      // null value
+```
+
+### Composite Types
+```baml
+string[]           // array of strings
+int?               // optional int
+string | int       // union type
+map<string, int>   // key-value map
+"a" | "b" | "c"    // literal union
+```
+
+### Multimodal Types
+```baml
+image    // for vision models
+audio    // for audio models
+video    // for video models
+pdf      // for document models
+```
+
+### Type Aliases
+```baml
+type Primitive = int | string | bool | float
+type Graph = map<string, string[]>
+
+// Recursive types are supported through containers
+type JsonValue = int | string | bool | float | JsonObject | JsonArray
+type JsonObject = map<string, JsonValue>
+type JsonArray = JsonValue[]
+```
+
+## Classes
+
+Classes define structured data. Properties have NO colon.
+
+```baml
+class MyObject {
+  // Required string
+  name string
+
+  // Optional field (use ?)
+  nickname string?
+
+  // Field with description (goes AFTER the type)
+  age int @description("Age in years")
+
+  // Field with alias (renames for LLM, keeps original in code)
+  email string @alias("email_address")
+
+  // Arrays (cannot be optional)
+  tags string[]
+
+  // Nested objects
+  address Address
+
+  // Enum field
+  status Status
+
+  // Union type
+  result "success" | "error"
+
+  // Literal types
+  version 1 | 2 | 3
+
+  // Map type
+  metadata map<string, string>
+
+  // Multimodal
+  photo image
+}
+
+// Recursive classes are supported
+class Node {
+  value int
+  children Node[]
+}
+```
+
+### Field Attributes
+- `@alias("name")` - Rename field for LLM (keeps original name in code)
+- `@description("...")` - Add context for the LLM
+
+### Class Attributes
+- `@@dynamic` - Allow adding fields at runtime
+
+## Enums
+
+Enums are for classification tasks with a fixed set of values.
+
+```baml
+enum Category {
+  PENDING
+  ACTIVE @description("Currently being processed")
+  COMPLETE
+  CANCELLED @alias("CANCELED") @description("Was stopped before completion")
+  INTERNAL @skip  // Exclude from prompt
+}
+
+// Dynamic enum (can modify at runtime)
+enum DynamicCategory {
+  Value1
+  Value2
+  @@dynamic
+}
+```
+
+### Value Attributes
+- `@alias("name")` - Rename value for LLM
+- `@description("...")` - Add context
+- `@skip` - Exclude from prompt
+
+## Functions
+
+Functions define LLM calls with typed inputs/outputs.
+
+```baml
+function FunctionName(param1: Type1, param2: Type2) -> ReturnType {
+  client "provider/model"
+  prompt #"
+    Your prompt here with {{ param1 }} and {{ param2 }}
+
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+### LLM Clients (Shorthand Syntax)
+```baml
+client "openai/gpt-4o"
+client "openai/gpt-4o-mini"
+client "anthropic/claude-sonnet-4-20250514"
+client "anthropic/claude-3-5-haiku-latest"
+client "google-ai/gemini-2.0-flash"
+```
+
+See the [Providers](#providers-and-clients) section below for full configuration options.
+
+### Prompt Syntax Rules
+
+1. **Always include inputs** - Reference all input parameters in the prompt:
+   ```baml
+   prompt #"
+     Analyze: {{ input }}
+   "#
+   ```
+
+2. **Always include output format** - Let BAML generate schema instructions:
+   ```baml
+   prompt #"
+     {{ ctx.output_format }}
+   "#
+   ```
+
+3. **Use roles for chat models**:
+   ```baml
+   prompt #"
+     {{ _.role("system") }}
+     You are a helpful assistant.
+
+     {{ _.role("user") }}
+     {{ user_message }}
+   "#
+   ```
+
+4. **DO NOT repeat output schema fields** - `{{ ctx.output_format }}` handles this automatically.
+
+### Complete Function Example
+
+```baml
+class TweetAnalysis {
+  mainTopic string @description("The primary topic of the tweet")
+  sentiment "positive" | "negative" | "neutral"
+  isSpam bool
+}
+
+function ClassifyTweets(tweets: string[]) -> TweetAnalysis[] {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Analyze each tweet and classify it.
+
+    {{ _.role("user") }}
+    {{ tweets }}
+
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+## Prompt Syntax (Jinja)
+
+### Variables
+```jinja
+{{ variable }}
+{{ object.field }}
+{{ array[0] }}
+```
+
+### Conditionals
+```jinja
+{% if condition %}
+  content
+{% elif other_condition %}
+  other content
+{% else %}
+  fallback
+{% endif %}
+```
+
+### Loops
+```jinja
+{% for item in items %}
+  {{ item }}
+{% endfor %}
+
+{% for item in items %}
+  {{ _.role("user") if loop.index % 2 == 1 else _.role("assistant") }}
+  {{ item }}
+{% endfor %}
+```
+
+### Roles
+```jinja
+{{ _.role("system") }}   // System message
+{{ _.role("user") }}     // User message
+{{ _.role("assistant") }} // Assistant message
+```
+
+### Context Variables
+```jinja
+{{ ctx.output_format }}      // Output schema instructions (REQUIRED)
+{{ ctx.client.provider }}    // Current provider name
+{{ ctx.client.name }}        // Client name
+```
+
+## Template Strings
+
+Reusable prompt snippets:
+
+```baml
+template_string FormatMessages(messages: Message[]) #"
+  {% for m in messages %}
+    {{ _.role(m.role) }}
+    {{ m.content }}
+  {% endfor %}
+"#
+
+function Chat(messages: Message[]) -> string {
+  client "openai/gpt-4o"
+  prompt #"
+    {{ FormatMessages(messages) }}
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+## Checks and Assertions
+
+### @assert - Strict validation (raises exception on failure)
+```baml
+class Person {
+  age int @assert(valid_age, {{ this >= 0 and this <= 150 }})
+  email string @assert(valid_email, {{ this|regex_match("@") }})
+}
+
+// On return type
+function GetScore(input: string) -> int @assert(valid_score, {{ this >= 0 and this <= 100 }}) {
+  client "openai/gpt-4o"
+  prompt #"..."#
+}
+```
+
+### @check - Non-exception validation (can inspect results)
+```baml
+class Citation {
+  quote string @check(has_content, {{ this|length > 0 }})
+}
+```
+
+### Block-level assertions (cross-field validation)
+```baml
+class DateRange {
+  start_date string
+  end_date string
+  @@assert(valid_range, {{ this.start_date < this.end_date }})
+}
+```
+
+## Multimodal Inputs
+
+### Images
+```baml
+function DescribeImage(img: image) -> string {
+  client "openai/gpt-4o"
+  prompt #"
+    {{ _.role("user") }}
+    Describe this image:
+    {{ img }}
+  "#
+}
+```
+
+### Audio
+```baml
+function TranscribeAudio(audio: audio) -> string {
+  client "openai/gpt-4o"
+  prompt #"
+    {{ _.role("user") }}
+    Transcribe: {{ audio }}
+  "#
+}
+```
+
+## Union Return Types (Tool Selection)
+
+```baml
+class SearchQuery {
+  query string
+}
+
+class WeatherRequest {
+  city string
+}
+
+class CalendarEvent {
+  title string
+  date string
+}
+
+function RouteRequest(input: string) -> SearchQuery | WeatherRequest | CalendarEvent {
+  client "openai/gpt-4o"
+  prompt #"
+    Determine what the user wants and extract the appropriate data.
+
+    {{ _.role("user") }}
+    {{ input }}
+
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+## Chat History Pattern
+
+```baml
+class Message {
+  role "user" | "assistant"
+  content string
+}
+
+function Chat(messages: Message[]) -> string {
+  client "openai/gpt-4o"
+  prompt #"
+    {{ _.role("system") }}
+    You are a helpful assistant.
+
+    {% for message in messages %}
+      {{ _.role(message.role) }}
+      {{ message.content }}
+    {% endfor %}
+  "#
+}
+```
+
+## Tests
+
+```baml
+test TestClassify {
+  functions [ClassifyTweets]
+  args {
+    tweets ["Hello world!", "Buy now! Limited offer!"]
+  }
+}
+
+test TestImage {
+  functions [DescribeImage]
+  args {
+    img { url "https://example.com/image.png" }
+  }
+}
+
+test TestLocalImage {
+  functions [DescribeImage]
+  args {
+    img { file "test_image.png" }
+  }
+}
+```
+
+## Usage in Code
+
+### Python
+```python
+from baml_client import b
+from baml_client.types import TweetAnalysis
+
+def main():
+    # Sync call
+    result = b.ClassifyTweets(["Hello!", "Check out this deal!"])
+
+    for analysis in result:
+        print(f"Topic: {analysis.mainTopic}")
+        print(f"Sentiment: {analysis.sentiment}")
+```
+
+### TypeScript
+```typescript
+import { b } from './baml_client'
+import { TweetAnalysis } from './baml_client/types'
+
+async function main() {
+    const result = await b.ClassifyTweets(["Hello!", "Check out this deal!"])
+
+    for (const analysis of result) {
+        console.log(`Topic: ${analysis.mainTopic}`)
+        console.log(`Sentiment: ${analysis.sentiment}`)
     }
+}
+```
 
-    // Enums are declared separately
-    enum MyEnum {
-      PENDING
-      ACTIVE @description("Item is currently active")
-      COMPLETE
+### Multimodal in Code
+
+```python
+from baml_py import Image
+from baml_client import b
+
+# From URL
+result = b.DescribeImage(Image.from_url("https://example.com/photo.jpg"))
+
+# From base64
+result = b.DescribeImage(Image.from_base64("image/png", base64_string))
+```
+
+```typescript
+import { Image } from "@boundaryml/baml"
+import { b } from './baml_client'
+
+// From URL
+const result = await b.DescribeImage(Image.fromUrl("https://example.com/photo.jpg"))
+
+// From base64
+const result = await b.DescribeImage(Image.fromBase64("image/png", base64String))
+```
+
+## Providers and Clients
+
+BAML supports many LLM providers. For detailed configuration of any provider, search the docs at `docs.boundaryml.com` for the provider name.
+
+### Supported Providers
+
+**Native Providers** (first-class support):
+
+| Provider | Shorthand Example | Default API Key Env Var |
+|----------|-------------------|------------------------|
+| **openai** | `"openai/gpt-4o"` | `OPENAI_API_KEY` |
+| **anthropic** | `"anthropic/claude-sonnet-4-20250514"` | `ANTHROPIC_API_KEY` |
+| **google-ai** | `"google-ai/gemini-2.0-flash"` | `GOOGLE_API_KEY` |
+| **vertex** | `"vertex/gemini-2.0-flash"` | Google Cloud credentials |
+| **azure-openai** | (requires full config) | `AZURE_OPENAI_API_KEY` |
+| **aws-bedrock** | (requires full config) | AWS credentials |
+
+**OpenAI-Compatible Providers** (use `openai-generic`):
+
+These providers use OpenAI's API format. Use `provider openai-generic` with their `base_url`:
+
+| Service | base_url |
+|---------|----------|
+| Groq | `https://api.groq.com/openai/v1` |
+| Together AI | `https://api.together.ai/v1` |
+| OpenRouter | `https://openrouter.ai/api/v1` |
+| Ollama | `http://localhost:11434/v1` |
+| Cerebras | `https://api.cerebras.ai/v1` |
+| Hugging Face | `https://api-inference.huggingface.co/v1` |
+| LM Studio | `http://localhost:1234/v1` |
+| vLLM | `http://localhost:8000/v1` |
+
+For the full list, see: https://docs.boundaryml.com/ref/llm-client
+
+### Shorthand vs Named Clients
+
+**Shorthand** (quick, uses defaults):
+```baml
+function MyFunc(input: string) -> string {
+  client "openai/gpt-4o"
+  prompt #"..."#
+}
+```
+
+**Named Client** (full control):
+```baml
+client<llm> MyClient {
+  provider openai
+  options {
+    model "gpt-4o"
+    api_key env.MY_OPENAI_KEY
+    temperature 0.7
+    max_tokens 1000
+  }
+}
+
+function MyFunc(input: string) -> string {
+  client MyClient
+  prompt #"..."#
+}
+```
+
+### Common Provider Configurations
+
+#### OpenAI
+```baml
+client<llm> GPT4 {
+  provider openai
+  options {
+    model "gpt-4o"           // or "gpt-4o-mini", "gpt-4-turbo", "o1", "o1-mini"
+    api_key env.OPENAI_API_KEY
+    temperature 0.7
+    max_tokens 4096
+  }
+}
+```
+
+#### Anthropic
+```baml
+client<llm> Claude {
+  provider anthropic
+  options {
+    model "claude-sonnet-4-20250514"  // or "claude-3-5-haiku-latest"
+    api_key env.ANTHROPIC_API_KEY
+    max_tokens 4096
+  }
+}
+```
+
+#### Google AI (Gemini)
+```baml
+client<llm> Gemini {
+  provider google-ai
+  options {
+    model "gemini-2.0-flash"  // or "gemini-2.5-pro", "gemini-2.5-flash"
+    api_key env.GOOGLE_API_KEY
+    generationConfig {
+      temperature 0.7
     }
+  }
+}
+```
 
-    // Comments use double slashes
-    // Recursive types and inline definitions are not supported
+#### OpenAI-Generic (Groq, Together, OpenRouter, Ollama, etc.)
+```baml
+// Groq
+client<llm> Groq {
+  provider openai-generic
+  options {
+    base_url "https://api.groq.com/openai/v1"
+    api_key env.GROQ_API_KEY
+    model "llama-3.1-70b-versatile"
+  }
+}
 
-  </Schema>
+// Together AI
+client<llm> Together {
+  provider openai-generic
+  options {
+    base_url "https://api.together.ai/v1"
+    api_key env.TOGETHER_API_KEY
+    model "meta-llama/Llama-3-70b-chat-hf"
+  }
+}
 
-  <Functions>
-    // Functions define inputs, outputs and prompts
-    // function name is always PascalCase
-    function MyFunction(input: MyObject) -> string {
-      client "openai/gpt-4o"
-      // prompt with jinja syntax inside here. with double curly braces for variables.
-      // make sure to include: \{\{ ctx.output_format \}\} in the prompt, which prints the output schema instructions so the LLM returns the output in the correct format (json or string, etc.). DO NOT write the output schema manually.
-      prompt #"
-        
-      "#
+// OpenRouter
+client<llm> OpenRouter {
+  provider openai-generic
+  options {
+    base_url "https://openrouter.ai/api/v1"
+    api_key env.OPENROUTER_API_KEY
+    model "anthropic/claude-3.5-sonnet"
+  }
+}
+
+// Ollama (local)
+client<llm> Ollama {
+  provider openai-generic
+  options {
+    base_url "http://localhost:11434/v1"
+    model "llama3"
+  }
+}
+```
+
+#### Azure OpenAI
+```baml
+client<llm> AzureGPT {
+  provider azure-openai
+  options {
+    resource_name "my-resource"
+    deployment_id "my-deployment"
+    api_key env.AZURE_OPENAI_API_KEY
+  }
+}
+```
+
+### Retry Policies
+
+```baml
+retry_policy MyRetryPolicy {
+  max_retries 3
+  strategy {
+    type exponential_backoff
+    delay_ms 200
+    multiplier 1.5
+    max_delay_ms 10000
+  }
+}
+
+client<llm> ReliableClient {
+  provider openai
+  retry_policy MyRetryPolicy
+  options {
+    model "gpt-4o"
+  }
+}
+```
+
+### Fallback Clients
+
+Use multiple providers with automatic fallback:
+
+```baml
+client<llm> PrimaryClient {
+  provider openai
+  options { model "gpt-4o" }
+}
+
+client<llm> BackupClient {
+  provider anthropic
+  options { model "claude-sonnet-4-20250514" }
+}
+
+client<llm> ResilientClient {
+  provider fallback
+  options {
+    strategy [
+      PrimaryClient
+      BackupClient
+    ]
+  }
+}
+```
+
+### Round-Robin Load Balancing
+
+```baml
+client<llm> LoadBalanced {
+  provider round-robin
+  options {
+    strategy [ClientA, ClientB, ClientC]
+  }
+}
+```
+
+### Custom Headers
+
+```baml
+client<llm> WithHeaders {
+  provider openai
+  options {
+    model "gpt-4o"
+    headers {
+      "X-Custom-Header" "value"
     }
+  }
+}
+```
 
-    <LLMClients>
-      You can use any of the following:
-      - openai/gpt-4o
-      - openai/gpt-4o-mini
-      - anthropic/claude-3-5-sonnet-latest (note the "3-5")
-      - anthropic/claude-3-5-haiku-latest
-    </LLMClients>
+### Environment Variables
 
-    <Prompt>
-      When writing the prompt:
-      1. Make sure to include the input in the prompt (even if it's an image) using {{ "{{ input }}" }}
-      2. Make sure to include {{ "{{ ctx.output_format }}" }} in the prompt so the LLM knows how to format the output.
-      3. You do not need to specify to "answer in JSON format". Only write in the prompt brief instruction, and any other task-specific things to keep in mind for the task.
-      4. Write a {{ "{{ _.role(\"user\") }}" }} tag to indicate where the user's inputs start. So if there's a convo you can write
-      #"{{ "{{ _.role(\"user\") }}" }} {{ "{{ some-variable }}" }}#
+Reference environment variables with `env.VAR_NAME`:
+```baml
+client<llm> MyClient {
+  provider openai
+  options {
+    api_key env.MY_CUSTOM_KEY
+    base_url env.CUSTOM_BASE_URL
+  }
+}
+```
 
-      DO NOT REPEAT output schema fields in the prompt. They are included with {{ "{{ ctx.output_format }}" }}.
-      ```baml
-      class TweetAnalysis {
-        mainTopic string @description("The primary topic or subject matter of the tweet")
-        isSpam bool @description("Whether the tweet appears to be spam")
-      }
+## Streaming
 
-      function ClassifyTweets(tweets: string[]) -> TweetAnalysis[] {
-        client "openai/gpt-4o-mini"
-        prompt #"
-          Analyze each of the following tweets and classify them:
-          {{ "{{ _.role(\"user\") }}" }} {{ "{{ tweets }}" }}
+BAML supports structured streaming with automatic partial JSON parsing.
 
-          {{ "{{ ctx.output_format }}" }}
-        "#
-      }
-      ```
-    </Prompt>
+### Basic Streaming
+```python
+# Python
+stream = b.stream.MyFunction(input)
+for partial in stream:
+    print(partial)  # Partial object with nullable fields
+final = stream.get_final_response()  # Complete validated object
+```
 
-  </Functions>
+```typescript
+// TypeScript
+const stream = b.stream.MyFunction(input)
+for await (const partial of stream) {
+    console.log(partial)  // Partial object
+}
+const final = await stream.getFinalResponse()
+```
 
-  <Usage in other languages>
-    You can use BAML in python, typescript, and other languages.
+### Semantic Streaming Attributes
 
-    ```python
-    import asyncio
-    from baml_client import b // this client is autogenerated
-    from baml_client.types import WeatherAPI
+Control how fields stream with these attributes:
 
-    def main():
-        # In python, BAML functions are synchronous.
-        weather_info = b.UseTool("What's the weather like in San Francisco?")
-        print(weather_info)
-        assert isinstance(weather_info, WeatherAPI)
-        print(f"City: {weather_info.city}")
-        print(f"Time of Day: {weather_info.timeOfDay}")
+| Attribute | Effect | Use Case |
+|-----------|--------|----------|
+| `@stream.done` | Field only appears when complete | Atomic values, IDs |
+| `@stream.not_null` | Parent object waits for this field | Discriminators, required fields |
+| `@stream.with_state` | Adds completion state metadata | UI loading indicators |
 
-    if __name__ == '__main__':
-        main()
-    ```
+```baml
+class BlogPost {
+  // Post won't stream until title is complete
+  title string @stream.done @stream.not_null
 
-    ```typescript
-    import { b } from './baml_client' // this client is autogenerated
-    import { WeatherAPI } from './baml_client/types'
-    import assert from 'assert'
+  // Content streams token-by-token with state tracking
+  content string @stream.with_state
 
-    const main = async () => {
-      const weatherInfo = await b.UseTool("What's the weather like in San Francisco?")
-      console.log(weatherInfo)
-      assert(weatherInfo instanceof WeatherAPI)
-      console.log(`City: ${weatherInfo.city}`)
-      console.log(`Time of Day: ${weatherInfo.timeOfDay}`)
-        }
-    ```
+  // Tags only appear when fully parsed
+  tags string[] @stream.done
+}
 
-  </Usage>
+class Message {
+  // Message won't stream until type is known
+  type "error" | "success" @stream.not_null
+  content string
+}
 
-  <baml_client>
-    The baml_client is the auto-generated client that allows you to call your BAML functions from your application code.
+// Entire item streams atomically (all-or-nothing)
+class ReceiptItem {
+  name string
+  price float
+  @@stream.done
+}
+```
 
-    <ClientTypes>
-      BAML provides both synchronous and asynchronous clients:
-      
-      ```python
-      from baml_client import b  # Synchronous client
-      from baml_client.async_client import b as async_b  # Asynchronous client
-      
-      # Synchronous call
-      result = b.MyFunction(input_data)
-      
-      # Asynchronous call  
-      result = await async_b.MyFunction(input_data)
-      ```
+`@stream.with_state` wraps the field in a `StreamState` object:
+```typescript
+interface StreamState<T> {
+  value: T
+  state: "Pending" | "Incomplete" | "Complete"
+}
+```
 
-      ```typescript
-      import { b } from './baml_client'  // Async client (default)
-      
-      // All calls are async in TypeScript
-      const result = await b.MyFunction(inputData)
-      ```
-    </ClientTypes>
+## React / Next.js SDK
 
-    <Configuration>
-      You can configure client behavior using with_options():
-      
-      ```python
-      from baml_client import b
-      from baml_client.types import ClientOptions
-      
-      # Override default client settings
-      result = b.MyFunction.with_options(
-          client_options=ClientOptions(
-              max_retries=3,
-              timeout_ms=30000,
-              temperature=0.7
-          )
-      )(input_data)
-      ```
+BAML provides first-class React/Next.js integration with auto-generated hooks and server actions. **Requires Next.js 15+**.
 
-      ```typescript
-      import { b } from './baml_client'
-      
-      const result = await b.MyFunction.withOptions({
-          clientOptions: {
-              maxRetries: 3,
-              timeoutMs: 30000,
-              temperature: 0.7
-          }
-      })(inputData)
-      ```
-    </Configuration>
+### Installation
 
-    <ErrorHandling>
-      BAML provides specific error types for better error handling:
-      
-      ```python
-      from baml_client import b
-      from baml_client.errors import (
-          BamlValidationError,
-          BamlClientFinishReasonError
-      )
-      
-      try:
-          result = b.MyFunction(input_data)
-      except BamlValidationError as e:
-          # Handle output validation errors
-          print(f"Validation error: {e}")
-      except BamlClientFinishReasonError as e:
-          # Handle LLM finish reason errors (e.g., content filter)
-          print(f"Finish reason error: {e}")
-      ```
-    </ErrorHandling>
+```bash
+# Install packages
+npm install @boundaryml/baml @boundaryml/baml-nextjs-plugin
 
-    <Streaming>
-      For functions that support streaming, use the stream methods:
-      
-      ```python
-      from baml_client import b
-      
-      # Streaming in Python
-      for chunk in b.MyStreamingFunction.stream(input_data):
-          print(chunk)
-      ```
+# Initialize BAML
+npx baml-cli init
+```
 
-      ```typescript
-      import { b } from './baml_client'
-      
-      // Streaming in TypeScript
-      const stream = b.MyStreamingFunction.stream(inputData)
-      for await (const chunk of stream) {
-          console.log(chunk)
-      }
-      ```
-    </Streaming>
+### Configure Next.js
 
-    <MediaHandling>
-      BAML supports various media types (images, audio, PDFs, videos):
-      
-      ```python
-      from baml_client import b
-      from baml_client.types import BamlImage, BamlAudio, BamlPdf
-      
-      # Handle images
-      image = BamlImage.from_path("./image.jpg")
-      # or from URL
-      image = BamlImage.from_url("https://example.com/image.jpg")
-      # or from base64
-      image = BamlImage.from_base64("image/jpeg", "...")
-      
-      result = b.AnalyzeImage(image)
-      ```
+```typescript
+// next.config.ts
+import { withBaml } from '@boundaryml/baml-nextjs-plugin';
+import type { NextConfig } from 'next';
 
-      ```typescript
-      import { b, BamlImage } from './baml_client'
-      
-      // Handle images
-      const image = BamlImage.fromPath("./image.jpg")
-      // or from URL
-      const image = BamlImage.fromUrl("https://example.com/image.jpg")
-      
-      const result = await b.AnalyzeImage(image)
-      ```
-    </MediaHandling>
+const nextConfig: NextConfig = {
+  // ... existing config
+};
 
-    <ReactIntegration>
-      For React/Next.js applications, BAML generates hooks:
-      
-      ```typescript
-      import { useMyFunction } from './baml_client/react'
-      
-      function MyComponent() {
-          const { data, loading, error, trigger } = useMyFunction()
-          
-          const handleSubmit = async (inputData) => {
-              await trigger(inputData)
-          }
-          
-          if (loading) return <div>Loading...</div>
-          if (error) return <div>Error: {error.message}</div>
-          
-          return (
-              <div>
-                  <button onClick={() => handleSubmit(someData)}>
-                      Call Function
-                  </button>
-                  {data && <div>Result: {JSON.stringify(data)}</div>}
-              </div>
-          )
-      }
-      ```
-    </ReactIntegration>
+export default withBaml()(nextConfig);
+```
 
-    <Collector>
-      Use Collector to track token usage and other metrics:
-      
-      ```python
-      from baml_client import b
-      from baml_client.collector import Collector
-      
-      collector = Collector()
-      result = b.MyFunction.with_options(
-          collector=collector
-      )(input_data)
-      
-      # Access collected metrics
-      print(f"Tokens used: {collector.total_tokens}")
-      print(f"Cost: ${collector.total_cost}")
-      ```
-    </Collector>
+### Configure Generator for React
 
-    <DynamicTypes>
-      Create types dynamically using TypeBuilder:
-      
-      ```python
-      from baml_client.type_builder import TypeBuilder
-      
-      # Build a dynamic class
-      tb = TypeBuilder()
-      tb.class_("DynamicClass")
-      tb.field("name", "string")
-      tb.field("age", "int")
-      dynamic_type = tb.build()
-      
-      # Use with functions
-      result = b.MyFunction.with_options(
-          tb=tb
-      )(input_data)
-      ```
-    </DynamicTypes>
+```baml
+// baml_src/generators.baml
+generator typescript {
+  output_type "typescript/react"  // Enable React hooks generation
+  output_dir "../"
+  version "0.76.2"
+}
+```
 
-    <ClientRegistry>
-      Access and configure LLM clients at runtime:
-      
-      ```python
-      from baml_client.registry import get_client_registry
-      
-      registry = get_client_registry()
-      
-      # Get available clients
-      clients = registry.list_clients()
-      
-      # Override client configuration
-      registry.set_primary("my_client", {
-          "api_key": "new_key",
-          "base_url": "https://custom-endpoint.com"
-      })
-      ```
-    </ClientRegistry>
+Then run `npx baml-cli generate`.
 
-  </baml_client>
+### Auto-Generated Hooks
 
-Do NOT use numbers as confidence intervals if you need to use them. Prefer an enum with descriptions or literals like "high", "medium", "low".
-Don't add confidence levels to extraction schemas.
+For each BAML function, a React hook is auto-generated with the pattern `use{FunctionName}`:
 
-Don't use LLM functions to "validate" any other output. {#You should use @assert for that on each field in the output type. Search the docs for "assert" to see how to use it.#}
+```baml
+// baml_src/story.baml
+class Story {
+  title string
+  content string
+}
 
-Dedent all declarations.
+function WriteMeAStory(input: string) -> Story {
+  client "openai/gpt-4o"
+  prompt #"
+    Tell me a story about {{ input }}
+    {{ ctx.output_format }}
+  "#
+}
+```
 
-Note that the types exported by BAML are pydantic classes in python, and interfaces in Tyepscript, except for primitive types.
+```tsx
+// app/components/story-form.tsx
+'use client'
+
+import { useWriteMeAStory } from "@/baml_client/react/hooks";
+
+export function StoryForm() {
+  const story = useWriteMeAStory();
+
+  return (
+    <div>
+      <button
+        onClick={() => story.mutate("a brave robot")}
+        disabled={story.isLoading}
+      >
+        {story.isLoading ? 'Generating...' : 'Generate Story'}
+      </button>
+
+      {story.data && (
+        <div>
+          <h4>{story.data.title}</h4>
+          <p>{story.data.content}</p>
+        </div>
+      )}
+
+      {story.error && <div>Error: {story.error.message}</div>}
+    </div>
+  );
+}
+```
+
+### Hook Options
+
+```tsx
+// Streaming (default)
+const hook = useWriteMeAStory();
+
+// Non-streaming
+const hook = useWriteMeAStory({ stream: false });
+
+// With callbacks
+const hook = useWriteMeAStory({
+  onStreamData: (partial) => console.log('Streaming:', partial),
+  onFinalData: (final) => console.log('Complete:', final),
+  onError: (error) => console.error('Error:', error),
+});
+```
+
+### Hook Return Values
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `data` | `T \| Partial<T>` | Current data (streaming or final) |
+| `streamData` | `Partial<T>` | Latest streaming update |
+| `finalData` | `T` | Final complete response |
+| `isLoading` | `boolean` | Request in progress |
+| `isPending` | `boolean` | Waiting to start |
+| `isStreaming` | `boolean` | Currently streaming |
+| `isSuccess` | `boolean` | Completed successfully |
+| `isError` | `boolean` | Failed |
+| `error` | `Error` | Error details |
+| `mutate(args)` | `function` | Execute the BAML function |
+| `reset()` | `function` | Reset hook state |
+
+### Chatbot Example
+
+```baml
+// baml_src/chat.baml
+class Message {
+  role "user" | "assistant"
+  content string
+}
+
+function Chat(messages: Message[]) -> string {
+  client "openai/gpt-4o"
+  prompt #"
+    You are a helpful assistant.
+
+    {% for m in messages %}
+      {{ _.role(m.role) }}
+      {{ m.content }}
+    {% endfor %}
+  "#
+}
+```
+
+```tsx
+'use client'
+
+import { useChat } from "@/baml_client/react/hooks";
+import { useState, useEffect } from "react";
+import type { Message } from "@/baml_client/types";
+
+export function ChatInterface() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const chat = useChat();
+
+  // Add assistant response to history when complete
+  useEffect(() => {
+    if (chat.isSuccess && chat.finalData) {
+      setMessages(prev => [...prev, { role: "assistant", content: chat.finalData! }]);
+    }
+  }, [chat.isSuccess, chat.finalData]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || chat.isLoading) return;
+
+    const newMessages = [...messages, { role: "user" as const, content: input }];
+    setMessages(newMessages);
+    setInput("");
+    await chat.mutate(newMessages);
+  };
+
+  return (
+    <div>
+      {messages.map((m, i) => (
+        <div key={i}><strong>{m.role}:</strong> {m.content}</div>
+      ))}
+      {chat.isLoading && <div><strong>assistant:</strong> {chat.data ?? "..."}</div>}
+
+      <form onSubmit={handleSubmit}>
+        <input value={input} onChange={e => setInput(e.target.value)} />
+        <button type="submit" disabled={chat.isLoading}>Send</button>
+      </form>
+    </div>
+  );
+}
+```
+
+## TypeBuilder (Dynamic Types at Runtime)
+
+`TypeBuilder` allows you to modify output schemas at runtime - useful for dynamic categories from databases or user-provided schemas.
+
+### Setup: Mark types as @@dynamic in BAML
+```baml
+enum Category {
+  RED
+  BLUE
+  @@dynamic  // Allows runtime modification
+}
+
+class User {
+  name string
+  age int
+  @@dynamic  // Allows adding properties at runtime
+}
+```
+
+### Modify Types at Runtime
+
+**Python:**
+```python
+from baml_client.type_builder import TypeBuilder
+from baml_client import b
+
+tb = TypeBuilder()
+
+# Add enum values
+tb.Category.add_value('GREEN')
+tb.Category.add_value('YELLOW')
+
+# Add class properties
+tb.User.add_property('email', tb.string())
+tb.User.add_property('address', tb.string().optional())
+
+# Pass TypeBuilder when calling function
+result = b.Categorize("The sun is bright", {"tb": tb})
+```
+
+**TypeScript:**
+```typescript
+import { TypeBuilder } from './baml_client/type_builder'
+import { b } from './baml_client'
+
+const tb = new TypeBuilder()
+
+// Add enum values
+tb.Category.addValue('GREEN')
+tb.Category.addValue('YELLOW')
+
+// Add class properties
+tb.User.addProperty('email', tb.string())
+tb.User.addProperty('address', tb.string().optional())
+
+// Pass TypeBuilder when calling function
+const result = await b.Categorize("The sun is bright", { tb })
+```
+
+### Create New Types at Runtime
+```python
+tb = TypeBuilder()
+
+# Create a new enum
+hobbies = tb.add_enum("Hobbies")
+hobbies.add_value("Soccer")
+hobbies.add_value("Reading")
+
+# Create a new class
+address = tb.add_class("Address")
+address.add_property("street", tb.string())
+address.add_property("city", tb.string())
+
+# Attach to existing type
+tb.User.add_property("hobbies", hobbies.type().list())
+tb.User.add_property("address", address.type())
+```
+
+### TypeBuilder Methods
+
+| Method | Description |
+|--------|-------------|
+| `tb.string()` | String type |
+| `tb.int()` | Integer type |
+| `tb.float()` | Float type |
+| `tb.bool()` | Boolean type |
+| `tb.string().list()` | List of strings |
+| `tb.string().optional()` | Optional string |
+| `tb.add_class("Name")` | Create new class |
+| `tb.add_enum("Name")` | Create new enum |
+| `.add_property(name, type)` | Add property to class |
+| `.add_value(name)` | Add value to enum |
+| `.description("...")` | Add description |
+
+## ClientRegistry (Dynamic Client Selection)
+
+`ClientRegistry` allows you to modify LLM clients at runtime - useful for A/B testing, dynamic model selection, or user-specific API keys.
+
+**Python:**
+```python
+from baml_py import ClientRegistry
+from baml_client import b
+import os
+
+cr = ClientRegistry()
+
+# Add a new client
+cr.add_llm_client(
+    name='MyClient',
+    provider='openai',
+    options={
+        "model": "gpt-4o",
+        "temperature": 0.7,
+        "api_key": os.environ.get('OPENAI_API_KEY')
+    }
+)
+
+# Set as the primary client for this call
+cr.set_primary('MyClient')
+
+# Use the registry
+result = b.ExtractResume("...", {"client_registry": cr})
+```
+
+**TypeScript:**
+```typescript
+import { ClientRegistry } from '@boundaryml/baml'
+import { b } from './baml_client'
+
+const cr = new ClientRegistry()
+
+// Add a new client
+cr.addLlmClient('MyClient', 'openai', {
+    model: "gpt-4o",
+    temperature: 0.7,
+    api_key: process.env.OPENAI_API_KEY
+})
+
+// Set as the primary client
+cr.setPrimary('MyClient')
+
+// Use the registry
+const result = await b.ExtractResume("...", { clientRegistry: cr })
+```
+
+### ClientRegistry Methods
+
+| Method | Description |
+|--------|-------------|
+| `add_llm_client(name, provider, options)` | Add a new LLM client |
+| `set_primary(name)` | Set which client to use |
+
+Note: Using the same name as a BAML-defined client overwrites it for that call.
+
+## Best Practices
+
+1. **Always run `baml-cli generate`** - After ANY change to `.baml` files
+2. **Always use `{{ ctx.output_format }}`** - Never write output schema manually
+3. **Use `{{ _.role("user") }}`** - Mark where user inputs begin
+4. **Use enums for classification** - Not confidence scores or numbers
+5. **Use literal unions for small fixed sets** - `"high" | "medium" | "low"` instead of enums
+6. **Use @description on fields** - Guides the LLM without repeating in prompt
+7. **Keep prompts concise** - Let the type system do the work
+8. **Avoid confidence levels** - Don't add confidence scores to extraction schemas
+9. **Use composition over inheritance** - Nest classes instead of inheriting
+10. **Dedent all declarations** - Keep class/enum/function definitions at the root level
+
+## Documentation
+
+For detailed documentation on any feature, visit: **https://docs.boundaryml.com**
+
+Key documentation pages:
+- Providers: `docs.boundaryml.com/ref/llm-client`
+- React/Next.js: `docs.boundaryml.com/guide/framework-integration/react-next-js`
+- TypeBuilder: `docs.boundaryml.com/ref/baml-client/typebuilder`
+- ClientRegistry: `docs.boundaryml.com/guide/baml-advanced/client-registry`
+- Dynamic Types: `docs.boundaryml.com/guide/baml-advanced/dynamic-runtime-types`
+- Prompt Syntax: `docs.boundaryml.com/ref/prompt-syntax/what-is-jinja`
+- Streaming: `docs.boundaryml.com/guide/baml-basics/streaming`
+
+## File Organization
+
+BAML files go in a `baml_src/` directory:
+```
+baml_src/
+  clients.baml      # LLM client configurations
+  types.baml        # Classes and enums
+  functions.baml    # Function definitions
+  tests.baml        # Test cases
+```
+
+Run `baml generate` after changes to regenerate the client code.
+
+## Notes on Generated Types
+
+- In Python: BAML types are Pydantic classes (except primitives)
+- In TypeScript: BAML types are interfaces (except primitives)
+- Union types generate discriminated unions
+- Optional fields default to `None` in Python, `undefined` in TypeScript

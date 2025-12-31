@@ -113,7 +113,7 @@ pub fn display_instruction(
 
             format!("({})", class.field_names[*index])
         }
-        Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
+        Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr + offset)
         }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
@@ -197,7 +197,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
             Color::BrightBlue
         }
-        Instruction::Jump(_) | Instruction::JumpIfFalse(_) => Color::Yellow,
+        Instruction::Jump(_) | Instruction::PopJumpIfFalse(_) => Color::Yellow,
         Instruction::Call(_) => Color::Magenta,
         Instruction::Assert
         | Instruction::Return

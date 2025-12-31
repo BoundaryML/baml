@@ -75,6 +75,34 @@ impl<Id: std::hash::Hash, Meta: std::hash::Hash> std::hash::Hash for Resolvable<
     }
 }
 
+impl<Id: PartialEq, Meta: PartialEq> PartialEq for Resolvable<Id, Meta> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::String(s1, m1), Self::String(s2, m2)) => s1 == s2 && m1 == m2,
+            (Self::Numeric(n1, m1), Self::Numeric(n2, m2)) => n1 == n2 && m1 == m2,
+            (Self::Bool(b1, m1), Self::Bool(b2, m2)) => b1 == b2 && m1 == m2,
+            (Self::Array(a1, m1), Self::Array(a2, m2)) => a1 == a2 && m1 == m2,
+            (Self::Map(map1, m1), Self::Map(map2, m2)) => {
+                // Compare maps by checking all key-value pairs match
+                m1 == m2
+                    && map1.len() == map2.len()
+                    && map1.iter().all(|(k, (meta1, v1))| {
+                        map2.get(k)
+                            .map(|(meta2, v2)| meta1 == meta2 && v1 == v2)
+                            .unwrap_or(false)
+                    })
+            }
+            (Self::ClassConstructor(n1, f1, m1), Self::ClassConstructor(n2, f2, m2)) => {
+                n1 == n2 && f1 == f2 && m1 == m2
+            }
+            (Self::Null(m1), Self::Null(m2)) => m1 == m2,
+            _ => false,
+        }
+    }
+}
+
+impl<Id: Eq, Meta: Eq> Eq for Resolvable<Id, Meta> {}
+
 impl<Id, Meta> Resolvable<Id, Meta> {
     pub fn into_str(self) -> Result<(Id, Meta), Resolvable<Id, Meta>> {
         match self {
@@ -204,6 +232,39 @@ pub enum StringOr {
     EnvVar(String),
     Value(String),
     JinjaExpression(JinjaExpression),
+    /// A template_string invocation with positional arguments.
+    TemplateStringCall {
+        name: String,
+        args: Vec<Resolvable<StringOr, ()>>,
+    },
+}
+
+/// Helper function to recursively collect env vars from a Resolvable<StringOr, _>
+fn collect_env_vars_from_resolvable<Meta>(
+    resolvable: &Resolvable<StringOr, Meta>,
+    env_vars: &mut HashSet<String>,
+) {
+    match resolvable {
+        Resolvable::String(string_or, _) => {
+            env_vars.extend(string_or.required_env_vars());
+        }
+        Resolvable::Array(items, _) => {
+            for item in items {
+                collect_env_vars_from_resolvable(item, env_vars);
+            }
+        }
+        Resolvable::Map(map, _) => {
+            for (_, (_, v)) in map {
+                collect_env_vars_from_resolvable(v, env_vars);
+            }
+        }
+        Resolvable::ClassConstructor(_, fields, _) => {
+            for (_, v) in fields {
+                collect_env_vars_from_resolvable(v, env_vars);
+            }
+        }
+        Resolvable::Numeric(_, _) | Resolvable::Bool(_, _) | Resolvable::Null(_) => {}
+    }
 }
 
 impl StringOr {
@@ -212,6 +273,14 @@ impl StringOr {
             Self::EnvVar(name) => HashSet::from([name.clone()]),
             Self::Value(_) => HashSet::new(),
             Self::JinjaExpression(_) => HashSet::new(),
+            Self::TemplateStringCall { args, .. } => {
+                // Recursively collect env vars from all arguments
+                let mut env_vars = HashSet::new();
+                for arg in args {
+                    collect_env_vars_from_resolvable(arg, &mut env_vars);
+                }
+                env_vars
+            }
         }
     }
 
@@ -223,6 +292,8 @@ impl StringOr {
             | (Self::JinjaExpression(_), Self::EnvVar(_)) => true,
             (Self::JinjaExpression(_), Self::JinjaExpression(_)) => true,
             (Self::EnvVar(s), Self::EnvVar(o)) => s == o,
+            // Template string calls could evaluate to anything, so conservatively return true
+            (Self::TemplateStringCall { .. }, _) | (_, Self::TemplateStringCall { .. }) => true,
         }
     }
 
@@ -230,7 +301,44 @@ impl StringOr {
         match self {
             Self::EnvVar(name) => ctx.get_env_var(name),
             Self::Value(value) => Ok(value.to_string()),
-            Self::JinjaExpression(_) => todo!("Jinja expressions cannot yet be resolved"),
+            Self::JinjaExpression(_) => {
+                anyhow::bail!("Jinja expressions cannot be resolved without a template context")
+            }
+            Self::TemplateStringCall { name, .. } => {
+                anyhow::bail!(
+                    "Template string call '{}' cannot be resolved without IR context. \
+                     Use resolve_with_templates() instead.",
+                    name
+                )
+            }
+        }
+    }
+
+    /// Resolve this StringOr, with support for template_string calls.
+    pub fn resolve_with_templates(
+        &self,
+        ctx: &impl GetEnvVar,
+        template_renderer: &impl TemplateStringRenderer,
+    ) -> Result<String> {
+        match self {
+            Self::EnvVar(name) => ctx.get_env_var(name),
+            Self::Value(value) => Ok(value.to_string()),
+            Self::JinjaExpression(_) => {
+                anyhow::bail!("Jinja expressions cannot be resolved without a template context")
+            }
+            Self::TemplateStringCall { name, args } => {
+                // First, resolve all arguments to JSON values
+                let resolved_args: Vec<serde_json::Value> = args
+                    .iter()
+                    .map(|arg| {
+                        let resolved = arg.resolve_with_templates(ctx, template_renderer)?;
+                        resolved.try_into()
+                    })
+                    .collect::<Result<_>>()?;
+
+                // Then render the template
+                template_renderer.render_template(name, &resolved_args)
+            }
         }
     }
 
@@ -240,6 +348,7 @@ impl StringOr {
             Self::EnvVar(env_var) => Some(env_var.to_string()),
             Self::Value(_) => None,
             Self::JinjaExpression(_) => None,
+            Self::TemplateStringCall { .. } => None,
         };
         Ok(ApiKeyWithProvenance {
             api_key,
@@ -254,6 +363,57 @@ impl std::fmt::Display for StringOr {
             Self::Value(s) => write!(f, "{s}"),
             Self::EnvVar(s) => write!(f, "${s}"),
             Self::JinjaExpression(j) => write!(f, "{{ {j} }}"),
+            Self::TemplateStringCall { name, args } => {
+                write!(f, "{name}(")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{arg}")?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
+}
+
+impl<Meta> std::fmt::Display for Resolvable<StringOr, Meta> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::String(s, _) => write!(f, "{s}"),
+            Self::Numeric(n, _) => write!(f, "{n}"),
+            Self::Bool(b, _) => write!(f, "{b}"),
+            Self::Null(_) => write!(f, "null"),
+            Self::Array(items, _) => {
+                write!(f, "[")?;
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{item}")?;
+                }
+                write!(f, "]")
+            }
+            Self::Map(map, _) => {
+                write!(f, "{{")?;
+                for (i, (k, (_, v))) in map.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{k}: {v}")?;
+                }
+                write!(f, "}}")
+            }
+            Self::ClassConstructor(name, fields, _) => {
+                write!(f, "{name}{{")?;
+                for (i, (k, v)) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{k}: {v}")?;
+                }
+                write!(f, "}}")
+            }
         }
     }
 }
@@ -292,6 +452,14 @@ impl<Meta> UnresolvedValue<Meta> {
 pub trait GetEnvVar {
     fn get_env_var(&self, key: &str) -> Result<String>;
     fn set_allow_missing_env_var(&self, allow: bool) -> Self;
+}
+
+/// Trait for rendering template_string calls.
+/// This is implemented in baml-core where the IR is available.
+pub trait TemplateStringRenderer {
+    /// Render a template_string with the given name and arguments.
+    /// Arguments are positional and should be converted to BamlValue before rendering.
+    fn render_template(&self, name: &str, args: &[serde_json::Value]) -> Result<String>;
 }
 
 pub struct EvaluationContext<'a> {
@@ -353,6 +521,9 @@ impl<Meta> UnresolvedValue<Meta> {
             Self::String(StringOr::JinjaExpression(..), ..) => {
                 anyhow::bail!("Expected a statically defined string, not expression")
             }
+            Self::String(StringOr::TemplateStringCall { .. }, ..) => {
+                anyhow::bail!("Expected a statically defined string, not a template_string call")
+            }
             Self::Numeric(num, ..) => Ok(num.as_str()),
             Self::Array(..) => anyhow::bail!("Expected a string, not an array"),
             Self::Bool(..) => anyhow::bail!("Expected a string, not a bool"),
@@ -412,6 +583,69 @@ impl<Meta> UnresolvedValue<Meta> {
         match serde_json::from_value(value) {
             Ok(v) => Ok(v),
             Err(e) => Err(anyhow::anyhow!("Failed to deserialize value: {e}")),
+        }
+    }
+
+    /// Resolve and deserialize, with support for template_string calls.
+    pub fn resolve_serde_with_templates<T: serde::de::DeserializeOwned>(
+        &self,
+        ctx: &impl GetEnvVar,
+        template_renderer: &impl TemplateStringRenderer,
+    ) -> Result<T> {
+        let value = self.resolve_with_templates(ctx, template_renderer)?;
+        let value: serde_json::Value = value.try_into()?;
+        match serde_json::from_value(value) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(anyhow::anyhow!("Failed to deserialize value: {e}")),
+        }
+    }
+
+    /// Resolve the value to a [`ResolvedValue`], with support for template_string calls.
+    pub fn resolve_with_templates(
+        &self,
+        ctx: &impl GetEnvVar,
+        template_renderer: &impl TemplateStringRenderer,
+    ) -> Result<ResolvedValue> {
+        match self {
+            Self::String(string_or, ..) => string_or
+                .resolve_with_templates(ctx, template_renderer)
+                .map(|v| ResolvedValue::String(v, ())),
+            Self::Numeric(numeric, ..) => Ok(ResolvedValue::Numeric(numeric.clone(), ())),
+            Self::Bool(bool, ..) => Ok(ResolvedValue::Bool(*bool, ())),
+            Self::Array(array, ..) => {
+                let values = array
+                    .iter()
+                    .map(|item| item.resolve_with_templates(ctx, template_renderer))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(ResolvedValue::Array(values, ()))
+            }
+            Self::Map(map, ..) => {
+                let values = map
+                    .iter()
+                    .map(|(k, (_, v))| {
+                        Ok((
+                            k.to_string(),
+                            ((), v.resolve_with_templates(ctx, template_renderer)?),
+                        ))
+                    })
+                    .collect::<Result<_>>()?;
+                Ok(ResolvedValue::Map(values, ()))
+            }
+            Self::ClassConstructor(class_name, fields, _meta) => {
+                let new_fields = fields
+                    .iter()
+                    .map(|(k, v)| {
+                        v.resolve_with_templates(ctx, template_renderer)
+                            .map(|res| (k.clone(), res))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(ResolvedValue::ClassConstructor(
+                    class_name.clone(),
+                    new_fields,
+                    (),
+                ))
+            }
+            Self::Null(..) => Ok(ResolvedValue::Null(())),
         }
     }
 

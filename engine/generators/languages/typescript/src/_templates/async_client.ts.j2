@@ -1,6 +1,6 @@
-import type { BamlRuntime, FunctionResult, BamlCtxManager, ClientRegistry, Image, Audio, Pdf, Video, FunctionLog,
+import type { BamlRuntime, FunctionResult, BamlCtxManager, Image, Audio, Pdf, Video, FunctionLog,
 HTTPRequest } from "@boundaryml/baml"
-import { toBamlError, BamlStream, BamlAbortError, Collector } from "@boundaryml/baml"
+import { toBamlError, BamlStream, BamlAbortError, Collector, ClientRegistry } from "@boundaryml/baml"
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type { partial_types } from "./partial_types"
 import type * as types from "./types"
@@ -24,6 +24,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
     type BamlCallOptions<WatchersT = never> = {
     tb?: TypeBuilder
     clientRegistry?: ClientRegistry
+    client?: string
     collector?: Collector | Collector[]
     env?: Record<string, string | undefined>
       tags?: Record<string, string>
@@ -110,6 +111,14 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
           const __env__: Record<string, string> = Object.fromEntries(
             Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
             );
+
+            // Resolve client option to clientRegistry (client takes precedence)
+            let __clientRegistry__ = __options__.clientRegistry;
+            if (__options__.client) {
+              __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+              __clientRegistry__.setPrimary(__options__.client);
+            }
+
             const __raw__ = await this.runtime.callFunction(
             "{{func.name}}",
             {
@@ -119,7 +128,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
             },
             this.ctxManager.cloneContext(),
             __options__.tb?.__tb(),
-            __options__.clientRegistry,
+            __clientRegistry__,
             __collector__,
             __options__.tags || {},
             __env__,
@@ -187,6 +196,14 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
               const __env__: Record<string, string> = Object.fromEntries(
                 Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
                 );
+
+                // Resolve client option to clientRegistry (client takes precedence)
+                let __clientRegistry__ = __options__.clientRegistry;
+                if (__options__.client) {
+                  __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+                  __clientRegistry__.setPrimary(__options__.client);
+                }
+
                 const __raw__ = this.runtime.streamFunction(
                 "{{func.name}}",
                 {
@@ -198,7 +215,7 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
                 undefined,
                 this.ctxManager.cloneContext(),
                 __options__.tb?.__tb(),
-                __options__.clientRegistry,
+                __clientRegistry__,
                 __collector__,
                 __options__.tags || {},
                 __env__,

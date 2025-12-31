@@ -41,6 +41,7 @@ export class NavigationCoordinator {
     try {
       // 1. Enrich target with context
       const target = this.enricher.enrich(input);
+      console.log('[NavigationCoordinator] target: ', target)
 
       // 2. Get current state
       const current = atomGet(unifiedSelectionStateAtom);

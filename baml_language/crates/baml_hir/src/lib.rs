@@ -52,13 +52,22 @@ pub use type_ref::*;
 
 /// Database trait for HIR queries.
 ///
-/// This trait is implemented by the root database and provides access
-/// to all HIR-related Salsa queries and interned types.
+/// This is the base trait for the BAML compiler's Db hierarchy.
+/// It provides access to the project being compiled and is extended by
+/// downstream crates (`baml_thir::Db`, `baml_mir::Db`, etc.) to add
+/// phase-specific queries.
 ///
-/// For now, this just extends `salsa::Database`. In the future, we can add
-/// dependencies on other crate Db traits when they're implemented.
+/// The Db trait hierarchy starts here because this is the first compiler
+/// phase that needs project context. Earlier phases (lexer, parser) only
+/// need `salsa::Database` for interning/tracking.
 #[salsa::db]
-pub trait Db: salsa::Database {}
+pub trait Db: salsa::Database {
+    /// Returns the project being analyzed.
+    ///
+    /// The project contains all source files (both user files and dependencies)
+    /// and is the root input for all queries.
+    fn project(&self) -> baml_workspace::Project;
+}
 
 //
 // ───────────────────────────────────────────────────── TRACKED STRUCTS ─────
@@ -232,7 +241,7 @@ fn lower_method_signature(
                 } else {
                     param_node
                         .ty()
-                        .map(|t| lower_type_ref(&t))
+                        .map(|t| TypeRef::from_ast(&t))
                         .unwrap_or(TypeRef::Unknown)
                 };
 
@@ -247,7 +256,7 @@ fn lower_method_signature(
     // Extract return type
     let return_type = method_node
         .return_type()
-        .map(|t| lower_type_ref(&t))
+        .map(|t| TypeRef::from_ast(&t))
         .unwrap_or(TypeRef::Unknown);
 
     Arc::new(FunctionSignature {
@@ -324,6 +333,53 @@ pub fn project_class_fields(db: &dyn Db, root: baml_workspace::Project) -> Proje
     ProjectClassFields::new(db, classes)
 }
 
+/// Tracked struct holding all known type names in a project.
+///
+/// This includes classes, enums, and type aliases - any name that can be
+/// used in a type position.
+#[salsa::tracked]
+pub struct ProjectTypeNames<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub names: Vec<Name>,
+}
+
+/// Returns all known type names in a project.
+///
+/// This includes classes, enums, and type aliases. Used during type lowering
+/// to validate that named types actually exist.
+#[salsa::tracked]
+pub fn project_type_names(db: &dyn Db, root: baml_workspace::Project) -> ProjectTypeNames<'_> {
+    let items = project_items(db, root);
+    let mut names = Vec::new();
+
+    for item in items.items(db) {
+        match item {
+            ItemId::Class(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let class = &item_tree[loc.id(db)];
+                names.push(class.name.clone());
+            }
+            ItemId::Enum(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let enum_def = &item_tree[loc.id(db)];
+                names.push(enum_def.name.clone());
+            }
+            ItemId::TypeAlias(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let alias = &item_tree[loc.id(db)];
+                names.push(alias.name.clone());
+            }
+            _ => {}
+        }
+    }
+
+    ProjectTypeNames::new(db, names)
+}
+
 /// Returns the body of a function (LLM prompt or expression IR).
 ///
 /// This is the most frequently invalidated query - it changes whenever
@@ -353,8 +409,11 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
             function_def.name().as_ref().map(SyntaxToken::text) == Some(&func_name)
         });
 
-    // Lower the function.
-    function_def.map_or(Arc::new(FunctionBody::Missing), |f| FunctionBody::lower(&f))
+    // Lower the function with file_id for span tracking.
+    let file_id = file.file_id(db);
+    function_def.map_or(Arc::new(FunctionBody::Missing), |f| {
+        FunctionBody::lower(&f, file_id)
+    })
 }
 
 //
@@ -508,7 +567,7 @@ fn lower_class(node: &SyntaxNode) -> Option<Class> {
         if let Some(field_name) = field_node.name() {
             let type_ref = field_node
                 .ty()
-                .map(|t| lower_type_ref(&t))
+                .map(|t| TypeRef::from_ast(&t))
                 .unwrap_or(TypeRef::Unknown);
 
             fields.push(crate::Field {
@@ -610,7 +669,7 @@ fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
     // Extract type using AST accessor
     let type_ref = alias
         .ty()
-        .map(|t| lower_type_ref(&t))
+        .map(|t| TypeRef::from_ast(&t))
         .unwrap_or(TypeRef::Unknown);
 
     Some(TypeAlias { name, type_ref })
@@ -665,46 +724,6 @@ fn lower_test(node: &SyntaxNode) -> Option<Test> {
         name,
         function_refs,
     })
-}
-
-/// Lower a type reference from CST.
-///
-/// For now, this is a simplified implementation that extracts just the name.
-/// TODO: Parse complex types (optional, list, union, etc.)
-pub fn lower_type_ref(node: &baml_syntax::ast::TypeExpr) -> TypeRef {
-    // For now, just extract the text representation
-    // This is a simplification - we'll enhance this later
-    let text = node.syntax().text().to_string();
-    let text = text.trim();
-
-    // Handle primitives
-    match text {
-        "int" => TypeRef::Int,
-        "float" => TypeRef::Float,
-        "string" => TypeRef::String,
-        "bool" => TypeRef::Bool,
-        "null" => TypeRef::Null,
-        "image" => TypeRef::Image,
-        "audio" => TypeRef::Audio,
-        "video" => TypeRef::Video,
-        "pdf" => TypeRef::Pdf,
-        _ => {
-            // Check if it ends with '?' (optional)
-            if let Some(inner_text) = text.strip_suffix('?') {
-                let inner = TypeRef::named(inner_text.into());
-                TypeRef::optional(inner)
-            }
-            // Check if it ends with '[]' (list)
-            else if let Some(inner_text) = text.strip_suffix("[]") {
-                let inner = TypeRef::named(inner_text.into());
-                TypeRef::list(inner)
-            }
-            // Otherwise treat as named type
-            else {
-                TypeRef::named(text.into())
-            }
-        }
-    }
 }
 
 //

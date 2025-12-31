@@ -22,6 +22,10 @@ import {
   workflowExecutionsAtomFamily,
   nodeStateAtomFamily,
   registerNodeAtom,
+  clearAllNodeStatesAtom,
+  nodeIterationAtomFamily,
+  loopOrdinalsAtom,
+  clearAllNodeIterationsAtom,
   cacheAtom,
   getCacheKey,
   versionAtom,
@@ -181,10 +185,39 @@ export class JotaiStorage implements SDKStorage {
   }
 
   clearAllNodeStates() {
-    // Note: We can't iterate over all atom family instances
-    // So we rely on the SDK to track which nodes were used
-    // For now, this is a no-op since we can't access all instances
-    // The atoms will naturally reset when new execution starts
+    this.store.set(clearAllNodeStatesAtom);
+  }
+
+  // ============================================================================
+  // Node Iterations (for loops)
+  // ============================================================================
+
+  setNodeIteration(nodeId: string, iteration: number) {
+    this.store.set(nodeIterationAtomFamily(nodeId), iteration);
+  }
+
+  getNodeIteration(nodeId: string) {
+    return this.store.get(nodeIterationAtomFamily(nodeId));
+  }
+
+  incrementNodeIteration(nodeId: string) {
+    const current = this.store.get(nodeIterationAtomFamily(nodeId));
+    this.store.set(nodeIterationAtomFamily(nodeId), current + 1);
+    return current + 1;
+  }
+
+  getLoopOrdinals() {
+    return this.store.get(loopOrdinalsAtom);
+  }
+
+  setLoopOrdinal(loopPath: string, ordinal: number) {
+    const ordinals = new Map(this.store.get(loopOrdinalsAtom));
+    ordinals.set(loopPath, ordinal);
+    this.store.set(loopOrdinalsAtom, ordinals);
+  }
+
+  clearAllNodeIterations() {
+    this.store.set(clearAllNodeIterationsAtom);
   }
 
   // ============================================================================

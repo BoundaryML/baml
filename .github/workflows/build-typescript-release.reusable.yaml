@@ -30,7 +30,7 @@ jobs:
             # Target glibc 2.17. This is the oldest glibc we can practically support.
             # Note that ubuntu-22.04-arm has glibc 2.35, but our users need older glibc.
             # See https://github.com/BoundaryML/baml/issues/2736
-            container: ghcr.io/rust-cross/manylinux2014-cross:aarch64
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
             before: |
               echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
             node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu
@@ -74,7 +74,8 @@ jobs:
               AR_x86_64_unknown_linux_musl=x86_64-linux-musl-ar
               RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
               EOF
-            node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
+            node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl -x
+            setup_zig: true
 
           - target: aarch64-unknown-linux-musl
             host: ubuntu-22.04
@@ -115,6 +116,11 @@ jobs:
           targets: ${{ matrix._.target }}
           prefix-key: v5-rust-${{ matrix._.target }}
           cache-on-failure: true
+
+      # Setup Zig for targets that need it (e.g. musl cross-compilation)
+      - name: Setup Zig
+        if: matrix._.setup_zig
+        uses: mlugg/setup-zig@v2
 
       # per-matrix-entry dependency setup
       - name: Build tools setup

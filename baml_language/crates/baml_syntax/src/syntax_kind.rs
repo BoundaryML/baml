@@ -29,6 +29,7 @@ pub enum SyntaxKind {
     KW_BREAK,
     KW_CONTINUE,
     KW_RETURN,
+    KW_MATCH,
 
     // Other keywords
     KW_WATCH,
@@ -61,6 +62,7 @@ pub enum SyntaxKind {
     DOT,          // .
     DOLLAR,       // $
     ARROW,        // ->
+    FAT_ARROW,    // =>
     AT,           // @
     AT_AT,        // @@
     PIPE,         // |
@@ -209,6 +211,10 @@ pub enum SyntaxKind {
     PAREN_EXPR,
     BLOCK_EXPR,
     IF_EXPR,
+    MATCH_EXPR,
+    MATCH_ARM,
+    MATCH_PATTERN,
+    MATCH_GUARD,
     WHILE_STMT,
     FOR_EXPR,
     LET_STMT,

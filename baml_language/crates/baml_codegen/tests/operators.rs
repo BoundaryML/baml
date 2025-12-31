@@ -20,10 +20,13 @@ fn basic_and() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // ReturnPhi + Phi-like optimizations: result stays on stack
             vec![
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(3),
+                Instruction::LoadConst(Value::Bool(false)),
+                Instruction::Jump(3),
                 Instruction::LoadGlobal(Value::function("ret_bool")),
                 Instruction::Call(0),
                 Instruction::Return,
@@ -46,13 +49,15 @@ fn basic_or() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // ReturnPhi + Phi-like optimizations: result stays on stack
             vec![
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::JumpIfFalse(2),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
-                Instruction::Pop(1),
                 Instruction::LoadGlobal(Value::function("ret_bool")),
                 Instruction::Call(0),
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Bool(true)),
                 Instruction::Return,
             ],
         )],
@@ -70,11 +75,11 @@ fn basic_add() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // 'a' is Virtual (single-use), inlined:
             vec![
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::BinOp(BinOp::Add),
-                Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -82,7 +87,6 @@ fn basic_add() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assignment statements not yet in HIR"]
 fn basic_assign_add() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -94,13 +98,17 @@ fn basic_assign_add() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // x is Real (used 3 times: init, compound assign read, return)
+            // Compound assignment x += 2 expands to x = x + 2
             vec![
+                Instruction::LoadConst(Value::Null), // slot for x
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::LoadVar("x".to_string()),
+                Instruction::StoreVar("x".to_string()), // let x = 1
+                Instruction::LoadVar("x".to_string()),  // read x
                 Instruction::LoadConst(Value::Int(2)),
-                Instruction::BinOp(BinOp::Add),
-                Instruction::StoreVar("x".to_string()),
-                Instruction::LoadVar("x".to_string()),
+                Instruction::BinOp(BinOp::Add),         // x + 2
+                Instruction::StoreVar("x".to_string()), // x = (x + 2)
+                Instruction::LoadVar("x".to_string()),  // return x
                 Instruction::Return,
             ],
         )],

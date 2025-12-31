@@ -38,34 +38,16 @@ function StatusIndicator({ state }: { state: NodeExecutionState }) {
   switch (state) {
     case 'running':
       return <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />;
-    case 'success':
-      return <CheckCircle2 className="w-3 h-3 text-green-500" />;
     case 'error':
       return <XCircle className="w-3 h-3 text-red-500" />;
     case 'pending':
       return <Clock className="w-3 h-3 text-yellow-500" />;
+    case 'success':
     default:
-      return <div className="w-3 h-3 rounded-full bg-muted-foreground/30" />;
+      return null;
   }
 }
 
-function StatusBadge({ state }: { state: NodeExecutionState }) {
-  const styles: Record<NodeExecutionState, string> = {
-    'not-started': 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
-    'pending': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
-    'running': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-    'success': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-    'error': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-    'skipped': 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
-    'cached': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-  };
-
-  return (
-    <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${styles[state]}`}>
-      {state}
-    </span>
-  );
-}
 
 // ============================================================================
 // HEADER CARDS
@@ -82,54 +64,26 @@ function HeaderEnterCard({
 }) {
   if (event.type !== 'header.enter') return null;
 
-  // Level-based styling
-  const levelStyles = [
-    'border-l-purple-500 bg-purple-500/5',
-    'border-l-blue-500 bg-blue-500/5',
-    'border-l-cyan-500 bg-cyan-500/5',
-    'border-l-teal-500 bg-teal-500/5',
+  // Level-based left border colors only
+  const levelColors = [
+    'border-l-purple-500',
+    'border-l-blue-500',
+    'border-l-cyan-500',
+    'border-l-teal-500',
   ];
-  const levelStyle = levelStyles[(event.level - 1) % levelStyles.length];
+  const levelColor = levelColors[(event.level - 1) % levelColors.length];
 
   return (
     <div
-      className={`border border-border rounded-md overflow-hidden ${isHighlighted ? 'ring-2 ring-blue-500' : ''}`}
+      className={`flex items-center gap-2 px-3 py-1.5 border-l-2 ${levelColor} ${isHighlighted ? 'bg-blue-500/10' : ''}`}
       data-node-id={event.nodeId}
     >
-      <div className={`flex items-center gap-2 px-3 py-2 border-l-2 ${levelStyle}`}>
-        <Hash className="w-3 h-3 text-muted-foreground" />
-        <StatusIndicator state={state} />
-        <span className="text-xs font-medium flex-1">{event.label}</span>
-        <StatusBadge state={state} />
-      </div>
+      <StatusIndicator state={state} />
+      <span className="text-xs text-muted-foreground">{event.label}</span>
     </div>
   );
 }
 
-function HeaderExitCard({
-  event,
-  state,
-  isHighlighted,
-}: {
-  event: RichExecutionEvent;
-  state: NodeExecutionState;
-  isHighlighted?: boolean;
-}) {
-  if (event.type !== 'header.exit') return null;
-
-  return (
-    <div
-      className={`flex items-center gap-2 px-3 py-1 text-[10px] text-muted-foreground ${isHighlighted ? 'ring-2 ring-blue-500' : ''}`}
-      data-node-id={event.nodeId}
-    >
-      <CheckCircle2 className="w-3 h-3 text-green-500" />
-      <span>Completed: {event.label}</span>
-      {event.duration !== undefined && (
-        <span className="ml-auto">{event.duration}ms</span>
-      )}
-    </div>
-  );
-}
 
 // ============================================================================
 // VARIABLE CARD
@@ -148,10 +102,10 @@ function VariableCard({ event, isHighlighted }: { event: RichExecutionEvent; isH
 
   return (
     <div
-      className={`px-3 py-1.5 bg-blue-500/5 border-l-2 border-l-blue-500 rounded-r text-[11px] ${isHighlighted ? 'ring-2 ring-blue-500' : ''}`}
+      className={`px-3 py-1 border-l-2 border-l-blue-400 text-[11px] ${isHighlighted ? 'bg-blue-500/10' : ''}`}
       data-node-id={event.nodeId}
     >
-      <span className="text-blue-600 dark:text-blue-400 font-medium">{event.name}</span>
+      <span className="text-muted-foreground">{event.name}</span>
       <span className="text-muted-foreground mx-1">=</span>
       <span className="font-mono text-foreground">{displayValue}</span>
     </div>
@@ -168,11 +122,11 @@ function NodeEnterCard({ event, isHighlighted }: { event: RichExecutionEvent; is
 
   return (
     <div
-      className={`border border-border rounded-md overflow-hidden ${isHighlighted ? 'ring-2 ring-blue-500' : ''}`}
+      className={`border-l-2 border-l-green-500 ${isHighlighted ? 'bg-blue-500/10' : ''}`}
       data-node-id={event.nodeId}
     >
       <div
-        className="flex items-center gap-2 px-3 py-2 bg-muted/30 cursor-pointer hover:bg-muted/50"
+        className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-muted/30"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         {isExpanded ? (
@@ -180,14 +134,14 @@ function NodeEnterCard({ event, isHighlighted }: { event: RichExecutionEvent; is
         ) : (
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
         )}
-        <Play className="w-3 h-3 text-blue-500" />
-        <span className="text-xs font-medium">Enter: {event.nodeId}</span>
+        <Play className="w-3 h-3 text-green-500" />
+        <span className="text-xs text-foreground">{event.nodeId}</span>
         <span className="text-[10px] text-muted-foreground ml-auto">
           {new Date(event.timestamp).toLocaleTimeString()}
         </span>
       </div>
       {isExpanded && event.inputs && Object.keys(event.inputs).length > 0 && (
-        <div className="px-3 py-2 border-t border-border bg-background">
+        <div className="px-3 py-2 ml-4">
           <div className="text-[10px] text-muted-foreground mb-1">Inputs:</div>
           <pre className="text-[10px] font-mono overflow-auto max-h-24">
             {JSON.stringify(event.inputs, null, 2)}
@@ -205,11 +159,11 @@ function NodeExitCard({ event, isHighlighted }: { event: RichExecutionEvent; isH
 
   return (
     <div
-      className={`border rounded-md overflow-hidden ${hasError ? 'border-red-500/50' : 'border-border'} ${isHighlighted ? 'ring-2 ring-blue-500' : ''}`}
+      className={`border-l-2 ${hasError ? 'border-l-red-500' : 'border-l-green-500'} ${isHighlighted ? 'bg-blue-500/10' : ''}`}
       data-node-id={event.nodeId}
     >
       <div
-        className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${hasError ? 'bg-red-500/10 hover:bg-red-500/20' : 'bg-muted/30 hover:bg-muted/50'}`}
+        className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-muted/30"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         {isExpanded ? (
@@ -222,16 +176,16 @@ function NodeExitCard({ event, isHighlighted }: { event: RichExecutionEvent; isH
         ) : (
           <CheckCircle2 className="w-3 h-3 text-green-500" />
         )}
-        <span className="text-xs font-medium">Exit: {event.nodeId}</span>
+        <span className="text-xs text-foreground">{event.nodeId}</span>
         <span className="text-[10px] text-muted-foreground">
-          ({event.duration}ms)
+          {event.duration}ms
         </span>
         <span className="text-[10px] text-muted-foreground ml-auto">
           {new Date(event.timestamp).toLocaleTimeString()}
         </span>
       </div>
       {isExpanded && (
-        <div className="px-3 py-2 border-t border-border bg-background space-y-2">
+        <div className="px-3 py-2 ml-4 space-y-2">
           {event.outputs && Object.keys(event.outputs).length > 0 && (
             <>
               <div className="text-[10px] text-muted-foreground">Output:</div>
@@ -356,20 +310,16 @@ type EventWithIndent = { event: RichExecutionEvent; indent: number };
 
 function computeIndentLevels(events: RichExecutionEvent[]): EventWithIndent[] {
   const result: EventWithIndent[] = [];
-  let currentIndent = 0;
 
   for (const event of events) {
     if (event.type === 'header.enter') {
-      // Header itself is at current level, then increase for children
-      result.push({ event, indent: currentIndent });
-      currentIndent++;
+      // Use the level from the event (calculated from graph depth)
+      result.push({ event, indent: Math.max(0, event.level - 1) });
     } else if (event.type === 'header.exit') {
-      // Decrease indent first, then show exit at that level
-      currentIndent = Math.max(0, currentIndent - 1);
-      result.push({ event, indent: currentIndent });
+      result.push({ event, indent: Math.max(0, event.level - 1) });
     } else {
-      // All other events are at current indent level
-      result.push({ event, indent: currentIndent });
+      // Other events don't have indent
+      result.push({ event, indent: 0 });
     }
   }
 
@@ -387,6 +337,7 @@ export function ExecutionLogPanel() {
   const detailPanel = useAtomValue(detailPanelAtom);
   const nodeStates = useAtomValue(allNodeStatesAtom);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showOnlyVariables, setShowOnlyVariables] = useState(false);
 
   // Auto-scroll to bottom when new events arrive
   const prevEventsLengthRef = useRef(events.length);
@@ -411,14 +362,22 @@ export function ExecutionLogPanel() {
     }
   }, [scrollToNodeId, setScrollToNodeId]);
 
+  // Filter events if showing only variables
+  const filteredEvents = useMemo(() => {
+    if (showOnlyVariables) {
+      return events.filter(e => e.type === 'variable.update');
+    }
+    return events;
+  }, [events, showOnlyVariables]);
+
   // Compute indentation levels for all events
-  const eventsWithIndent = useMemo(() => computeIndentLevels(events), [events]);
+  const eventsWithIndent = useMemo(() => computeIndentLevels(filteredEvents), [filteredEvents]);
 
   if (!detailPanel.isOpen) {
     return null;
   }
 
-  if (eventsWithIndent.length === 0) {
+  if (events.length === 0) {
     return (
       <div className="h-full flex flex-col bg-card border-t border-border">
         <div className="flex items-center justify-between px-3 py-2 border-b border-border">
@@ -444,15 +403,24 @@ export function ExecutionLogPanel() {
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-semibold">Execution Log</h3>
           <span className="px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground rounded">
-            {eventsWithIndent.length} events
+            {filteredEvents.length} events
           </span>
         </div>
+        <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showOnlyVariables}
+            onChange={(e) => setShowOnlyVariables(e.target.checked)}
+            className="w-3 h-3 rounded border-border"
+          />
+          Variables only
+        </label>
       </div>
 
       {/* Event List */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto p-2 space-y-1"
+        className="flex-1 overflow-auto p-2 pb-16 space-y-1"
       >
         {eventsWithIndent.map(({ event, indent }, index) => {
           const isHighlighted = event.nodeId === scrollToNodeId;
@@ -472,15 +440,8 @@ export function ExecutionLogPanel() {
                 </div>
               );
             case 'header.exit':
-              return (
-                <div key={`${event.type}-${event.nodeId}-${index}`} style={indentStyle}>
-                  <HeaderExitCard
-                    event={event}
-                    state={nodeState}
-                    isHighlighted={isHighlighted}
-                  />
-                </div>
-              );
+              // Don't render exit cards
+              return null;
             case 'variable.update':
               return (
                 <div key={`${event.type}-${event.name}-${index}`} style={indentStyle}>

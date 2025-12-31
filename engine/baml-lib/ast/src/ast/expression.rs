@@ -729,7 +729,31 @@ impl Expression {
                 ))
             }
             Expression::Lambda(_arg_names, _body, _span) => todo!(),
-            Expression::App(_) => None,          // Is this right?
+            Expression::App(app) => {
+                // Convert function application to TemplateStringCall
+                // At this stage we don't know if it's a template_string - validation happens later
+                let args: Vec<_> = app
+                    .args
+                    .iter()
+                    .filter_map(|arg| {
+                        arg.to_unresolved_value(_diagnostics)
+                            .map(|v| v.without_meta())
+                    })
+                    .collect();
+
+                // Only convert if all args converted successfully
+                if args.len() == app.args.len() {
+                    Some(UnresolvedValue::String(
+                        StringOr::TemplateStringCall {
+                            name: app.name.name().to_string(),
+                            args,
+                        },
+                        app.span.clone(),
+                    ))
+                } else {
+                    None
+                }
+            }
             Expression::ExprBlock(_, _) => None, // Is this right?
             Expression::If(_, _, _, _) => None,
             Expression::ArrayAccess(_, _, _) => None,

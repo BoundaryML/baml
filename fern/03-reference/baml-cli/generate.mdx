@@ -12,6 +12,7 @@ baml-cli generate [OPTIONS]
 |--------|-------------|---------|
 | `--from <PATH>` | Path to the `baml_src` directory | `./baml_src` |
 | `--no-version-check` | Generate `baml_client` without checking for version mismatch | `false` |
+| `--no-tests` | Strip test blocks from inlined BAML to reduce generated file size | `false` |
 
 ## Description
 
@@ -38,6 +39,11 @@ The `generate` command performs the following actions:
    baml-cli generate --no-version-check
    ```
 
+4. Generate clients without test blocks (reduces file size):
+   ```
+   baml-cli generate --no-tests
+   ```
+
 ## Output
 
 The command provides informative output about the generation process:
@@ -51,3 +57,4 @@ The command provides informative output about the generation process:
 - If no generator configurations are found in the BAML files, the command will generate a default client based on the CLI defaults and provide instructions on how to add a generator configuration to your BAML files.
 - If generator configurations are found, the command will generate clients according to those configurations.
 - If one of the generators fails, the command will stop at that point and report the error.
+- The `--no-tests` flag is useful for production builds where you want to minimize the generated client size. When enabled, test blocks defined in your BAML files are not included in the generated `baml_client`, reducing bundle size without affecting runtime functionality.

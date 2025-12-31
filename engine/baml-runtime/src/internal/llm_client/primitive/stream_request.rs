@@ -30,6 +30,17 @@ use crate::{
     RuntimeContext,
 };
 
+/// Represents the result of processing a stream event
+#[derive(Debug)]
+enum StreamEventResult {
+    /// Successfully parsed JSON data to process
+    Data(serde_json::Value),
+    /// Stream ended normally with [DONE]
+    Done,
+    /// Transport or parsing error occurred
+    Error { message: String, is_timeout: bool },
+}
+
 pub async fn make_stream_request(
     client: &(impl WithClient + RequestBuilder),
     prompt: either::Either<&String, &[RenderedChatMessage]>,
@@ -71,50 +82,119 @@ pub async fn make_stream_request(
     Ok(Box::pin(
         resp.bytes_stream()
             .eventsource()
-            .take_while(move |event| {
-                if let Ok(event) = event {
-                    let trace_event = TraceEvent::new_raw_llm_response_stream(
-                        call_id_stack.clone(),
-                        std::sync::Arc::new(HTTPResponseStream::new(
-                            http_request_id.deref().clone(),
-                            SSEEvent::new(
-                                event.event.clone(),
-                                event.data.clone(),
-                                event.id.clone(),
-                            ),
-                        )),
-                    );
-                    BAML_TRACER
-                        .lock()
-                        .unwrap()
-                        .put(std::sync::Arc::new(trace_event));
+            // Convert eventsource events to our StreamEventResult enum
+            // This allows errors to propagate through instead of stopping at take_while
+            .map(move |event| -> StreamEventResult {
+                match event {
+                    Ok(e) => {
+                        // Log trace event for successful events
+                        let trace_event = TraceEvent::new_raw_llm_response_stream(
+                            call_id_stack.clone(),
+                            std::sync::Arc::new(HTTPResponseStream::new(
+                                http_request_id.deref().clone(),
+                                SSEEvent::new(e.event.clone(), e.data.clone(), e.id.clone()),
+                            )),
+                        );
+                        BAML_TRACER
+                            .lock()
+                            .unwrap()
+                            .put(std::sync::Arc::new(trace_event));
+
+                        // Check for [DONE] signal
+                        if e.data == "[DONE]" {
+                            StreamEventResult::Done
+                        } else {
+                            // Try to parse JSON
+                            match serde_json::from_str(&e.data) {
+                                Ok(json) => StreamEventResult::Data(json),
+                                Err(parse_err) => StreamEventResult::Error {
+                                    message: format!(
+                                        "Failed to parse SSE data as JSON: {parse_err}"
+                                    ),
+                                    is_timeout: false,
+                                },
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let error_str = format!("{e:?}");
+
+                        // Check if this is a timeout error:
+                        // - Native: reqwest returns errors containing "TimedOut" or "timeout"
+                        // - WASM: timeouts are implemented via AbortController, so "abort" indicates timeout
+                        let error_lower = error_str.to_lowercase();
+                        let is_timeout = error_lower.contains("timedout")
+                            || error_lower.contains("timed out")
+                            || error_lower.contains("timeout")
+                            || error_lower.contains("abort");
+
+                        StreamEventResult::Error {
+                            message: if is_timeout {
+                                "Request timed out".to_string()
+                            } else {
+                                format!("Stream transport error: {error_str}")
+                            },
+                            is_timeout,
+                        }
+                    }
                 }
-                std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))
             })
-            .map(|event| -> Result<serde_json::Value> { Ok(serde_json::from_str(&event?.data)?) })
+            // Stop on Done or Error, but emit Error events first
+            .take_while(|event| std::future::ready(!matches!(event, StreamEventResult::Done)))
             .inspect(|event| log::debug!("{event:#?}"))
             .scan(
-                Ok(LLMCompleteResponse {
-                    client: client_name.clone(),
-                    prompt: prompt.clone(),
-                    content: "".to_string(),
-                    start_time: start_time_system,
-                    latency: start_time_instant.elapsed(),
-                    model: model_name.clone().unwrap_or("<unknown>".to_string()),
-                    request_options: params.clone(),
-                    metadata: LLMCompleteResponseMetadata {
-                        baml_is_complete: false,
-                        finish_reason: None,
-                        prompt_tokens: None,
-                        output_tokens: None,
-                        total_tokens: None,
-                        cached_input_tokens: None,
-                    },
-                }),
-                move |accumulated: &mut Result<LLMCompleteResponse>, event| {
+                (
+                    Ok(LLMCompleteResponse {
+                        client: client_name.clone(),
+                        prompt: prompt.clone(),
+                        content: "".to_string(),
+                        start_time: start_time_system,
+                        latency: start_time_instant.elapsed(),
+                        model: model_name.clone().unwrap_or("<unknown>".to_string()),
+                        request_options: params.clone(),
+                        metadata: LLMCompleteResponseMetadata {
+                            baml_is_complete: false,
+                            finish_reason: None,
+                            prompt_tokens: None,
+                            output_tokens: None,
+                            total_tokens: None,
+                            cached_input_tokens: None,
+                        },
+                    }),
+                    false, // has_emitted_error - to stop after emitting error
+                ),
+                move |(accumulated, has_emitted_error): &mut (
+                    Result<LLMCompleteResponse>,
+                    bool,
+                ),
+                      event| {
+                    // If we've already emitted an error, stop the stream
+                    if *has_emitted_error {
+                        return std::future::ready(None);
+                    }
+
                     let event_body = match event {
-                        Ok(event) => event,
-                        Err(e) => {
+                        StreamEventResult::Data(json) => json,
+                        StreamEventResult::Done => {
+                            // Should not reach here due to take_while, but handle gracefully
+                            return std::future::ready(None);
+                        }
+                        StreamEventResult::Error {
+                            message,
+                            is_timeout,
+                        } => {
+                            // Only stop the stream for fatal errors (timeouts).
+                            // Non-fatal errors (like JSON parse failures on individual events)
+                            // should emit a failure but allow subsequent events to be processed.
+                            // This matches the old behavior where parse errors didn't kill the stream.
+                            if is_timeout {
+                                *has_emitted_error = true;
+                            }
+                            let code = if is_timeout {
+                                ErrorCode::Timeout
+                            } else {
+                                ErrorCode::UnsupportedResponse(2)
+                            };
                             return std::future::ready(Some(LLMResponse::LLMFailure(
                                 LLMErrorResponse {
                                     client: client_name.clone(),
@@ -123,8 +203,8 @@ pub async fn make_stream_request(
                                     start_time: start_time_system,
                                     request_options: params.clone(),
                                     latency: start_time_instant.elapsed(),
-                                    message: format!("Failed to parse event: {e:#?}"),
-                                    code: ErrorCode::UnsupportedResponse(2),
+                                    message,
+                                    code,
                                 },
                             )));
                         }

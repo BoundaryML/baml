@@ -1,10 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Result;
+use arboard::Clipboard;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
@@ -16,6 +17,9 @@ use crate::{
     ui,
     watcher::FileWatcher,
 };
+
+/// Duration to show the "Copied!" message
+const COPY_FEEDBACK_DURATION: Duration = Duration::from_secs(2);
 
 pub(crate) struct App {
     file_path: PathBuf,
@@ -37,6 +41,10 @@ pub(crate) struct App {
     last_compiled_files: HashMap<PathBuf, String>,
     /// Whether we are in THIR interactive sub-mode (cursor navigation active)
     thir_interactive_active: bool,
+    /// Timestamp when content was last copied to clipboard (for visual feedback)
+    last_copy_time: Option<Instant>,
+    /// Error message from last clipboard operation
+    clipboard_error: Option<String>,
 }
 
 impl App {
@@ -65,6 +73,8 @@ impl App {
             visualization_mode: VisualizationMode::Diff, // Start in Diff mode
             last_compiled_files: initial_files,
             thir_interactive_active: false,
+            last_copy_time: None,
+            clipboard_error: None,
         })
     }
 
@@ -235,6 +245,14 @@ impl App {
                 if in_vm_runner {
                     self.vm_runner_execute();
                 }
+            }
+            // Copy current output to clipboard with 'c' or 'y' (vim-style yank)
+            (KeyCode::Char('c'), KeyModifiers::NONE) | (KeyCode::Char('y'), KeyModifiers::NONE) => {
+                self.copy_to_clipboard();
+            }
+            // Paste from clipboard with 'p' (shows clipboard contents in a message)
+            (KeyCode::Char('p'), KeyModifiers::NONE) => {
+                self.paste_from_clipboard();
             }
             _ => {}
         }
@@ -467,5 +485,74 @@ impl App {
         let mut compiler = CompilerRunner::new(&self.file_path);
         compiler.compile_from_filesystem(files, snapshot);
         compiler
+    }
+
+    /// Copy the current output to the system clipboard
+    fn copy_to_clipboard(&mut self) {
+        let output = self.current_output().to_string();
+
+        match Clipboard::new() {
+            Ok(mut clipboard) => match clipboard.set_text(&output) {
+                Ok(()) => {
+                    self.last_copy_time = Some(Instant::now());
+                    self.clipboard_error = None;
+                }
+                Err(e) => {
+                    self.clipboard_error = Some(format!("Failed to copy: {}", e));
+                    self.last_copy_time = Some(Instant::now());
+                }
+            },
+            Err(e) => {
+                self.clipboard_error = Some(format!("Clipboard unavailable: {}", e));
+                self.last_copy_time = Some(Instant::now());
+            }
+        }
+    }
+
+    /// Paste from clipboard (displays clipboard contents as a status message)
+    fn paste_from_clipboard(&mut self) {
+        match Clipboard::new() {
+            Ok(mut clipboard) => match clipboard.get_text() {
+                Ok(text) => {
+                    // For now, just show feedback that paste was read
+                    // In future, this could be used for search or filtering
+                    let preview = if text.len() > 50 {
+                        format!("{}...", &text[..50])
+                    } else {
+                        text
+                    };
+                    self.clipboard_error = Some(format!("Clipboard: {}", preview));
+                    self.last_copy_time = Some(Instant::now());
+                }
+                Err(e) => {
+                    self.clipboard_error = Some(format!("Failed to paste: {}", e));
+                    self.last_copy_time = Some(Instant::now());
+                }
+            },
+            Err(e) => {
+                self.clipboard_error = Some(format!("Clipboard unavailable: {}", e));
+                self.last_copy_time = Some(Instant::now());
+            }
+        }
+    }
+
+    /// Check if the "Copied!" feedback should be shown
+    pub(crate) fn show_copy_feedback(&self) -> bool {
+        self.last_copy_time
+            .map(|t| t.elapsed() < COPY_FEEDBACK_DURATION)
+            .unwrap_or(false)
+    }
+
+    /// Get the clipboard status message (either "Copied!" or an error)
+    pub(crate) fn clipboard_status(&self) -> Option<&str> {
+        if self.show_copy_feedback() {
+            if let Some(ref error) = self.clipboard_error {
+                Some(error.as_str())
+            } else {
+                Some("Copied to clipboard!")
+            }
+        } else {
+            None
+        }
     }
 }

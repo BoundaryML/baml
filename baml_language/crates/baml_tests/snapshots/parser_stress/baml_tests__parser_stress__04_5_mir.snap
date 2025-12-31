@@ -1,0 +1,416 @@
+---
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn ComplexType:
+  (no MIR due to errors: MissingBody)
+
+fn DeepExpression() -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Void
+    let _2: Int
+    let _3: Int
+    let _4: Int
+    let _5: Int
+    let _6: Int
+    let _7: Int
+    let _8: Int
+    let _9: Int
+    let _10: Int
+    let _11: Int
+    let _12: Int
+    let _13: Int
+    let _14: Int
+    let _15: Int
+    let _16: Int
+    let _17: Int
+    let _18: Int
+    let _19: Int
+
+    bb0: {
+        _10 = const 1_i64;
+        _11 = const 2_i64;
+        _9 = copy _10 + copy _11;
+        _12 = const 3_i64;
+        _8 = copy _9 * copy _12;
+        _13 = const 4_i64;
+        _7 = copy _8 - copy _13;
+        _14 = const 5_i64;
+        _6 = copy _7 / copy _14;
+        _15 = const 6_i64;
+        _5 = copy _6 + copy _15;
+        _16 = const 7_i64;
+        _4 = copy _5 * copy _16;
+        _17 = const 8_i64;
+        _3 = copy _4 - copy _17;
+        _18 = const 9_i64;
+        _2 = copy _3 / copy _18;
+        _19 = const 10_i64;
+        _0 = copy _2 + copy _19;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn Process22:
+  (no MIR due to errors: MissingBody)
+
+fn Process54:
+  (no MIR due to errors: MissingBody)
+
+fn Process95:
+  (no MIR due to errors: MissingBody)
+
+fn Process60:
+  (no MIR due to errors: MissingBody)
+
+fn Process68:
+  (no MIR due to errors: MissingBody)
+
+fn Process14:
+  (no MIR due to errors: MissingBody)
+
+fn Process79:
+  (no MIR due to errors: MissingBody)
+
+fn Process84:
+  (no MIR due to errors: MissingBody)
+
+fn Process33:
+  (no MIR due to errors: MissingBody)
+
+fn Process12:
+  (no MIR due to errors: MissingBody)
+
+fn Process74:
+  (no MIR due to errors: MissingBody)
+
+fn Process99:
+  (no MIR due to errors: MissingBody)
+
+fn Process64:
+  (no MIR due to errors: MissingBody)
+
+fn Process52:
+  (no MIR due to errors: MissingBody)
+
+fn Process7:
+  (no MIR due to errors: MissingBody)
+
+fn Process80:
+  (no MIR due to errors: MissingBody)
+
+fn Process58:
+  (no MIR due to errors: MissingBody)
+
+fn Process97:
+  (no MIR due to errors: MissingBody)
+
+fn Process36:
+  (no MIR due to errors: MissingBody)
+
+fn Process63:
+  (no MIR due to errors: MissingBody)
+
+fn Process19:
+  (no MIR due to errors: MissingBody)
+
+fn Process83:
+  (no MIR due to errors: MissingBody)
+
+fn Process18:
+  (no MIR due to errors: MissingBody)
+
+fn Process26:
+  (no MIR due to errors: MissingBody)
+
+fn Process43:
+  (no MIR due to errors: MissingBody)
+
+fn Process46:
+  (no MIR due to errors: MissingBody)
+
+fn Process62:
+  (no MIR due to errors: MissingBody)
+
+fn Process87:
+  (no MIR due to errors: MissingBody)
+
+fn Process44:
+  (no MIR due to errors: MissingBody)
+
+fn Process47:
+  (no MIR due to errors: MissingBody)
+
+fn Process35:
+  (no MIR due to errors: MissingBody)
+
+fn Process38:
+  (no MIR due to errors: MissingBody)
+
+fn Process41:
+  (no MIR due to errors: MissingBody)
+
+fn Process28:
+  (no MIR due to errors: MissingBody)
+
+fn Process65:
+  (no MIR due to errors: MissingBody)
+
+fn Process6:
+  (no MIR due to errors: MissingBody)
+
+fn Process32:
+  (no MIR due to errors: MissingBody)
+
+fn Process92:
+  (no MIR due to errors: MissingBody)
+
+fn Process55:
+  (no MIR due to errors: MissingBody)
+
+fn Process66:
+  (no MIR due to errors: MissingBody)
+
+fn Process56:
+  (no MIR due to errors: MissingBody)
+
+fn Process67:
+  (no MIR due to errors: MissingBody)
+
+fn Process3:
+  (no MIR due to errors: MissingBody)
+
+fn Process75:
+  (no MIR due to errors: MissingBody)
+
+fn Process48:
+  (no MIR due to errors: MissingBody)
+
+fn Process49:
+  (no MIR due to errors: MissingBody)
+
+fn Process61:
+  (no MIR due to errors: MissingBody)
+
+fn Process96:
+  (no MIR due to errors: MissingBody)
+
+fn Process34:
+  (no MIR due to errors: MissingBody)
+
+fn Process59:
+  (no MIR due to errors: MissingBody)
+
+fn Process89:
+  (no MIR due to errors: MissingBody)
+
+fn Process45:
+  (no MIR due to errors: MissingBody)
+
+fn Process86:
+  (no MIR due to errors: MissingBody)
+
+fn Process16:
+  (no MIR due to errors: MissingBody)
+
+fn Process39:
+  (no MIR due to errors: MissingBody)
+
+fn Process82:
+  (no MIR due to errors: MissingBody)
+
+fn Process2:
+  (no MIR due to errors: MissingBody)
+
+fn Process27:
+  (no MIR due to errors: MissingBody)
+
+fn Process53:
+  (no MIR due to errors: MissingBody)
+
+fn Process23:
+  (no MIR due to errors: MissingBody)
+
+fn Process9:
+  (no MIR due to errors: MissingBody)
+
+fn Process72:
+  (no MIR due to errors: MissingBody)
+
+fn Process77:
+  (no MIR due to errors: MissingBody)
+
+fn Process40:
+  (no MIR due to errors: MissingBody)
+
+fn Process30:
+  (no MIR due to errors: MissingBody)
+
+fn Process8:
+  (no MIR due to errors: MissingBody)
+
+fn Process11:
+  (no MIR due to errors: MissingBody)
+
+fn Process37:
+  (no MIR due to errors: MissingBody)
+
+fn Process4:
+  (no MIR due to errors: MissingBody)
+
+fn Process91:
+  (no MIR due to errors: MissingBody)
+
+fn Process31:
+  (no MIR due to errors: MissingBody)
+
+fn Process50:
+  (no MIR due to errors: MissingBody)
+
+fn Process20:
+  (no MIR due to errors: MissingBody)
+
+fn Process98:
+  (no MIR due to errors: MissingBody)
+
+fn Process85:
+  (no MIR due to errors: MissingBody)
+
+fn Process78:
+  (no MIR due to errors: MissingBody)
+
+fn Process1:
+  (no MIR due to errors: MissingBody)
+
+fn Process90:
+  (no MIR due to errors: MissingBody)
+
+fn Process17:
+  (no MIR due to errors: MissingBody)
+
+fn Process81:
+  (no MIR due to errors: MissingBody)
+
+fn Process71:
+  (no MIR due to errors: MissingBody)
+
+fn Process15:
+  (no MIR due to errors: MissingBody)
+
+fn Process42:
+  (no MIR due to errors: MissingBody)
+
+fn Process51:
+  (no MIR due to errors: MissingBody)
+
+fn Process5:
+  (no MIR due to errors: MissingBody)
+
+fn Process13:
+  (no MIR due to errors: MissingBody)
+
+fn Process29:
+  (no MIR due to errors: MissingBody)
+
+fn Process93:
+  (no MIR due to errors: MissingBody)
+
+fn Process70:
+  (no MIR due to errors: MissingBody)
+
+fn Process76:
+  (no MIR due to errors: MissingBody)
+
+fn Process10:
+  (no MIR due to errors: MissingBody)
+
+fn Process21:
+  (no MIR due to errors: MissingBody)
+
+fn Process100:
+  (no MIR due to errors: MissingBody)
+
+fn Process94:
+  (no MIR due to errors: MissingBody)
+
+fn Process25:
+  (no MIR due to errors: MissingBody)
+
+fn Process69:
+  (no MIR due to errors: MissingBody)
+
+fn Process24:
+  (no MIR due to errors: MissingBody)
+
+fn Process88:
+  (no MIR due to errors: MissingBody)
+
+fn Process73:
+  (no MIR due to errors: MissingBody)
+
+fn Process57:
+  (no MIR due to errors: MissingBody)
+
+fn BodyTorture() -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Unknown // x
+    let _2: Void
+    let _3: Bool
+    let _4: Void
+    let _5: Unknown
+    let _6: Int
+    let _7: Unknown
+    let _8: Void
+    let _9: Void
+    let _10: Unknown
+    let _11: Int
+    let _12: Unknown
+
+    bb0: {
+        _1 = const null;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = copy _1;
+        _6 = const 1_i64;
+        _7 = copy _5 + copy _6;
+        _1 = copy _7;
+        _4 = const null;
+        _3 = const null;
+        branch copy _3 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _10 = copy _1;
+        _11 = const 1_i64;
+        _12 = copy _10 + copy _11;
+        _1 = copy _12;
+        _9 = const null;
+        _8 = const null;
+        goto -> bb2;
+    }
+
+    bb4: {
+        _2 = const null;
+        _0 = const null;
+        goto -> bb1;
+    }
+
+}

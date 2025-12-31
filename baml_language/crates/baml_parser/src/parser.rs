@@ -49,6 +49,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
         TokenKind::Env => SyntaxKind::KW_ENV,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
+        TokenKind::Match => SyntaxKind::KW_MATCH,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
@@ -75,6 +76,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
 
         // Special operators
         TokenKind::Arrow => SyntaxKind::ARROW,
+        TokenKind::FatArrow => SyntaxKind::FAT_ARROW,
         TokenKind::At => SyntaxKind::AT,
         TokenKind::AtAt => SyntaxKind::AT_AT,
         TokenKind::Pipe => SyntaxKind::PIPE,
@@ -910,14 +912,27 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type_primary(&mut self) {
-        // Check for string literal types
+        // Check for string literal types: "user" | "assistant"
         if self.parse_any_string() {
-            // String literal type: "user" | "assistant"
+            return;
+        }
+
+        // Check for integer literal types: 200 | 201 | 204
+        // Used for exhaustiveness checking on literal unions
+        if self.at(TokenKind::IntegerLiteral) {
+            self.bump();
+            return;
+        }
+
+        // Check for number literal types
+        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+            self.bump();
             return;
         }
 
         if self.at(TokenKind::Word) {
-            // Base type name or generic type
+            // Base type name, generic type, or boolean literal (true/false)
+            // Note: true/false are Word tokens, and they become BoolLiteral types
             self.bump();
 
             // Check for generic arguments: map<K, V>
@@ -1406,6 +1421,185 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// Parse a match expression.
+    ///
+    /// Grammar (from BEP-002):
+    /// ```text
+    /// match_expr := 'match' '(' expr ')' '{' match_arm+ '}'
+    /// ```
+    fn parse_match_expr(&mut self) {
+        self.with_node(SyntaxKind::MATCH_EXPR, |p| {
+            p.expect(TokenKind::Match);
+
+            // Scrutinee expression in parentheses
+            if p.at(TokenKind::LParen) {
+                p.bump(); // (
+                p.parse_expr();
+                p.expect(TokenKind::RParen);
+            } else {
+                p.error("'(' after 'match'".to_string());
+            }
+
+            // Match body with arms
+            if p.at(TokenKind::LBrace) {
+                p.bump(); // {
+
+                // Parse at least one arm
+                if !p.at(TokenKind::RBrace) {
+                    p.parse_match_arm();
+
+                    // Parse additional arms
+                    while !p.at(TokenKind::RBrace) && !p.at_end() {
+                        // Error recovery: if we see a top-level keyword, assume we missed a closing brace
+                        if p.at_top_level_keyword() {
+                            break;
+                        }
+                        p.parse_match_arm();
+                    }
+                } else {
+                    p.error("at least one match arm".to_string());
+                }
+
+                p.expect(TokenKind::RBrace);
+            } else {
+                p.error("'{' after match scrutinee".to_string());
+            }
+        });
+    }
+
+    /// Parse a single match arm.
+    ///
+    /// Grammar (from BEP-002):
+    /// ```text
+    /// match_arm := pattern guard? '=>' arm_body
+    /// guard     := 'if' expr
+    /// arm_body  := expr | block_expr
+    /// ```
+    fn parse_match_arm(&mut self) {
+        self.with_node(SyntaxKind::MATCH_ARM, |p| {
+            // Parse the pattern
+            p.parse_match_pattern();
+
+            // Optional guard: if expr
+            if p.at(TokenKind::If) {
+                p.parse_match_guard();
+            }
+
+            // Expect fat arrow
+            if p.at(TokenKind::FatArrow) {
+                p.bump(); // =>
+            } else {
+                p.error("'=>' after pattern".to_string());
+            }
+
+            // Arm body: expression or block
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.parse_expr();
+            }
+
+            // Optional trailing comma
+            p.eat(TokenKind::Comma);
+        });
+    }
+
+    /// Parse a match pattern.
+    ///
+    /// Grammar (from BEP-002):
+    ///
+    /// ```text
+    /// pattern         := binding_pattern | literal_pattern | union_pattern
+    /// binding_pattern := IDENT (':' type_expr)?
+    /// literal_pattern := 'null' | 'true' | 'false' | INTEGER | FLOAT | STRING
+    /// union_pattern   := (literal_pattern | enum_variant) ('|' (literal_pattern | enum_variant))*
+    /// enum_variant    := IDENT '.' IDENT
+    /// ```
+    ///
+    /// Note: `_` is parsed as a regular identifier (binding pattern) - semantic
+    /// analysis will treat it as a wildcard/discard.
+    fn parse_match_pattern(&mut self) {
+        self.with_node(SyntaxKind::MATCH_PATTERN, |p| {
+            // First, parse the initial pattern element
+            p.parse_pattern_element();
+
+            // Check for union pattern: element | element | ...
+            while p.at(TokenKind::Pipe) {
+                p.bump(); // |
+                p.parse_pattern_element();
+            }
+        });
+    }
+
+    /// Parse a single pattern element (used in patterns and union patterns).
+    ///
+    /// This can be:
+    /// - A literal: null, true, false, integer, float, string
+    /// - An enum variant: Ident.Ident
+    /// - A binding: ident or ident: Type
+    /// - A parenthesized pattern group: (pattern)
+    fn parse_pattern_element(&mut self) {
+        // Handle parenthesized pattern group (for nested unions like `200 | (201 | 202)`)
+        if self.at(TokenKind::LParen) {
+            self.bump(); // (
+            self.parse_match_pattern(); // Recursive - creates nested MATCH_PATTERN
+            self.expect(TokenKind::RParen);
+            return;
+        }
+
+        // Check for literals first
+        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+            self.bump();
+        } else if self.parse_any_string() {
+            // String literal handled
+        } else if self.at(TokenKind::Word) {
+            let text = self.current().map(|t| t.text.as_str()).unwrap_or("");
+
+            if text == "null" || text == "true" || text == "false" {
+                // Literal keywords
+                self.bump();
+            } else {
+                // Could be:
+                // 1. Enum variant: Ident.Ident (e.g., Status.Active)
+                // 2. Binding without type: ident (including _ as wildcard)
+                // 3. Binding with type: ident: Type
+
+                self.bump(); // First identifier
+
+                if self.at(TokenKind::Dot) {
+                    // Enum variant pattern: Ident.Ident
+                    self.bump(); // .
+                    if self.at(TokenKind::Word) {
+                        self.bump(); // variant name
+                    } else {
+                        self.error("enum variant name after '.'".to_string());
+                    }
+                } else if self.at(TokenKind::Colon) {
+                    // Typed binding pattern: ident: Type
+                    self.bump(); // :
+                    self.parse_type();
+                }
+                // else: simple binding pattern (just the identifier)
+            }
+        } else {
+            self.error("pattern".to_string());
+            // Consume unexpected token to avoid infinite loop
+            if !self.at_end() {
+                self.bump();
+            }
+        }
+    }
+
+    /// Parse a match guard.
+    ///
+    /// Grammar: guard := 'if' expr
+    fn parse_match_guard(&mut self) {
+        self.with_node(SyntaxKind::MATCH_GUARD, |p| {
+            p.expect(TokenKind::If);
+            p.parse_expr();
+        });
+    }
+
     fn parse_while_stmt(&mut self) {
         self.with_node(SyntaxKind::WHILE_STMT, |p| {
             p.expect(TokenKind::While);
@@ -1821,6 +2015,9 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::If) {
             // If expression (can be used in expression context like `let x = if (cond) { a } else { b }`)
             self.parse_if_expr();
+        } else if self.at(TokenKind::Match) {
+            // Match expression
+            self.parse_match_expr();
         } else {
             self.error("expression".to_string());
             // Consume the unexpected token to avoid infinite loops

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -23,6 +23,88 @@ SOURCE_FILE
         BLOCK_EXPR "{}"
           L_BRACE "{"
           R_BRACE "}"
+    FUNCTION_DEF
+      KW_FUNCTION "function"
+      WORD "BadUnionPattern"
+      PARAMETER_LIST
+        L_PAREN "("
+        PARAMETER
+          WORD "x"
+          COLON ":"
+          TYPE_EXPR "int | bool"
+            WORD "int"
+            PIPE "|"
+            WORD "bool"
+        R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string"
+        WORD "string"
+      EXPR_FUNCTION_BODY
+        BLOCK_EXPR
+          L_BRACE "{"
+          MATCH_EXPR
+            KW_MATCH "match"
+            L_PAREN "("
+            WORD "x"
+            R_PAREN ")"
+            L_BRACE "{"
+            MATCH_ARM
+              MATCH_PATTERN
+                WORD "a"
+                COLON ":"
+                TYPE_EXPR "int | b"
+                  WORD "int"
+                  PIPE "|"
+                  WORD "b"
+              COLON ":"
+            MATCH_ARM
+              MATCH_PATTERN "bool"
+                WORD "bool"
+              FAT_ARROW "=>"
+              STRING_LITERAL "bad"
+                QUOTE """
+                WORD "bad"
+                QUOTE """
+            R_BRACE "}"
+          R_BRACE "}"
+    FUNCTION_DEF
+      KW_FUNCTION "function"
+      WORD "MixedLiteralAndTyped"
+      PARAMETER_LIST
+        L_PAREN "("
+        PARAMETER
+          WORD "x"
+          COLON ":"
+          TYPE_EXPR "int"
+            WORD "int"
+        R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string"
+        WORD "string"
+      EXPR_FUNCTION_BODY
+        BLOCK_EXPR
+          L_BRACE "{"
+          MATCH_EXPR
+            KW_MATCH "match"
+            L_PAREN "("
+            WORD "x"
+            R_PAREN ")"
+            L_BRACE "{"
+            MATCH_ARM
+              MATCH_PATTERN
+                INTEGER_LITERAL "42"
+                PIPE "|"
+                WORD "n"
+                COLON ":"
+                TYPE_EXPR "int"
+                  WORD "int"
+              FAT_ARROW "=>"
+              STRING_LITERAL "mixed"
+                QUOTE """
+                WORD "mixed"
+                QUOTE """
+            R_BRACE "}"
+          R_BRACE "}"
 
 === ERRORS ===
 Error: Expected function name, found IntegerLiteral
@@ -45,12 +127,32 @@ Error: Expected return type (->), found LBrace
    │ Note: Error code: E0010
 ───╯
 
+Error: Expected '=>' after pattern, found Colon
+    ╭─[ 0:18:19 ]
+    │
+ 18 │         a: int | b: bool => "bad"
+    │                   ┬  
+    │                   ╰── Expected '=>' after pattern, found Colon
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found Colon
+    ╭─[ 0:18:19 ]
+    │
+ 18 │         a: int | b: bool => "bad"
+    │                   ┬  
+    │                   ╰── Expected expression, found Colon
+    │ 
+    │ Note: Error code: E0010
+────╯
+
 Error: Expected RBrace, found EOF
-   ╭─[ 0:6:24 ]
-   │
- 6 │ function 123Invalid() {}
-   │                        ┬  
-   │                        ╰── Expected RBrace, found EOF
-   │ 
-   │ Note: Error code: E0010
-───╯
+    ╭─[ 0:27:1 ]
+    │
+ 27 │ }
+    │ ┬  
+    │ ╰── Expected RBrace, found EOF
+    │ 
+    │ Note: Error code: E0010
+────╯
