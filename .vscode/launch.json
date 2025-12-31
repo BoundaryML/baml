@@ -8,6 +8,7 @@
       "sourceMaps": true,
       "cwd": "${workspaceFolder}/typescript2/app-vscode-ext",
       "args": [
+        "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/typescript2/app-vscode-ext"
       ],
       "outFiles": ["${workspaceFolder}/typescript2/app-vscode-ext/dist/**"],

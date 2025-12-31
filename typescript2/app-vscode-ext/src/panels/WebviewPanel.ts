@@ -97,45 +97,42 @@ export class WebviewPanel {
 
     const csp = [
       `default-src 'none'`,
-      `script-src 'unsafe-eval' ${
-        isDevelopment
-          ? `http://${devServerUrl} 'nonce-${nonce}'`
-          : `'nonce-${nonce}'`
+      `script-src 'unsafe-eval' ${isDevelopment
+        ? `http://${devServerUrl} 'nonce-${nonce}'`
+        : `'nonce-${nonce}'`
       }`,
-      `style-src ${webview.cspSource} 'self' 'unsafe-inline' ${
-        isDevelopment ? `http://${devServerUrl}` : ''
+      `style-src ${webview.cspSource} 'self' 'unsafe-inline' ${isDevelopment ? `http://${devServerUrl}` : ''
       }`,
       `font-src ${webview.cspSource}`,
-      `connect-src ${
-        isDevelopment
-          ? `ws://${devServerUrl} http://${devServerUrl}`
-          : ''
+      `connect-src ${isDevelopment
+        ? `ws://${devServerUrl} http://${devServerUrl}`
+        : ''
       }`,
       `img-src ${webview.cspSource} https: data:`,
     ];
 
-    const reactRefresh = isDevelopment
+    const viteScripts = isDevelopment
       ? `<script type="module" nonce="${nonce}">
-          import RefreshRuntime from "http://${devServerUrl}/@react-refresh"
-          RefreshRuntime.injectIntoGlobalHook(window)
-          window.$RefreshReg$ = () => {}
-          window.$RefreshSig$ = () => (type) => type
-          window.__vite_plugin_react_preamble_installed__ = true
-        </script>`
+          import { injectIntoGlobalHook } from "http://${devServerUrl}/@react-refresh";
+          injectIntoGlobalHook(window);
+          window.$RefreshReg$ = () => {};
+          window.$RefreshSig$ = () => (type) => type;
+        </script>
+        <script type="module" nonce="${nonce}" src="http://${devServerUrl}/@vite/client"></script>`
       : '';
 
     return `<!DOCTYPE html>
     <html lang="en">
       <head>
+        ${viteScripts}
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta http-equiv="Content-Security-Policy" content="${csp.join('; ')}">
-        <link rel="stylesheet" type="text/css" href="${stylesUri}">
+        ${!isDevelopment ? `<link rel="stylesheet" type="text/css" href="${stylesUri}">` : ''}
         <title>BAML Playground</title>
       </head>
       <body>
         <div id="root"></div>
-        ${reactRefresh}
         <script type="module" ${isDevelopment ? '' : `nonce="${nonce}"`} src="${scriptUri}"></script>
       </body>
     </html>`;
