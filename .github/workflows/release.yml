@@ -21,6 +21,7 @@ on:
       - cursor/implement-collector-clear-and-update-docs-7c67
       - greg/bedrock-pdf-citations
       - typescript-x86-musl
+      - ts-x86-linux
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock

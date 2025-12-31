@@ -30,7 +30,7 @@ jobs:
             # Target glibc 2.17. This is the oldest glibc we can practically support.
             # Note that ubuntu-22.04-arm has glibc 2.35, but our users need older glibc.
             # See https://github.com/BoundaryML/baml/issues/2736
-            container: ghcr.io/rust-cross/manylinux2014-cross:aarch64
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
             before: |
               echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
             node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu
