@@ -8,13 +8,15 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest --workspace vitest.workspace.ts",
-    "test:run": "vitest run --workspace vitest.workspace.ts",
+    "test": "vitest",
+    "test:run": "vitest run",
     "test:ui": "vitest --ui",
-    "test:unit": "vitest --config vitest.config.ts",
-    "test:unit:run": "vitest run --config vitest.config.ts",
-    "test:browser": "vitest --config vitest.config.browser.ts",
-    "test:browser:run": "vitest run --config vitest.config.browser.ts"
+    "test:unit": "vitest --project unit",
+    "test:unit:run": "vitest run --project unit",
+    "test:browser": "vitest --project browser",
+    "test:browser:run": "vitest run --project browser",
+    "test:hmr": "vitest run --project hmr",
+    "test:hmr:debug": "DEBUG_HMR=1 vitest run --project hmr"
   },
   "dependencies": {
     "pkg-playground": "workspace:*",
@@ -28,12 +30,13 @@
     "@types/react": "^18.3.26",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",
-    "@vitest/browser": "^2.1.9",
+    "@vitest/browser": "^4.0.16",
+    "@vitest/browser-playwright": "^4.0.16",
     "jotai-devtools": "^0.13.0",
     "jsdom": "^25.0.1",
     "playwright": "^1.57.0",
     "typescript": "^5.9.3",
-    "vite": "^5.4.21",
-    "vitest": "^2.1.8"
+    "vite": "^6.0.0",
+    "vitest": "^4.0.16"
   }
 }

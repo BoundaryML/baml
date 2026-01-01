@@ -6,8 +6,23 @@ import { fileURLToPath } from 'node:url';
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 
 // Vite configuration for the standalone playground shell
+// Plugin to disable caching for WASM files
+const wasmNoCachePlugin = () => ({
+  name: 'wasm-no-cache',
+  configureServer(server: any) {
+    server.middlewares.use((req: any, res: any, next: any) => {
+      if (req.url?.includes('.wasm') || req.url?.includes('baml_runtime_wasm')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+      next();
+    });
+  },
+});
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), wasmNoCachePlugin()],
   resolve: {
     alias: {
       'pkg-playground': resolve(projectRoot, '../pkg-playground/src')
@@ -20,6 +35,14 @@ export default defineConfig({
     headers: {
       'Access-Control-Allow-Origin': '*',
     },
+    watch: {
+      // Watch the WASM output directory for hot reload
+      ignored: ['!**/pkg-playground/wasm/**'],
+    },
+  },
+  optimizeDeps: {
+    // Don't pre-bundle the WASM package so changes are picked up immediately
+    exclude: ['baml-runtime-wasm'],
   },
   build: {
     rollupOptions: {
