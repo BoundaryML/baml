@@ -16,15 +16,20 @@ pub fn derive_decode(input: DeriveInput) -> Result<TokenStream> {
     let baml_crate = baml_crate_path();
 
     match &input.data {
-        Data::Struct(data) => {
-            derive_struct_decode(type_name, &baml_name, &data.fields, &baml_crate)
-        }
+        Data::Struct(data) => derive_struct_decode(
+            type_name,
+            &baml_name,
+            &data.fields,
+            &baml_crate,
+            container_attrs.dynamic,
+        ),
         Data::Enum(data) => derive_enum_decode(
             type_name,
             &baml_name,
             data,
             &baml_crate,
             container_attrs.union,
+            container_attrs.dynamic,
         ),
         Data::Union(_) => Err(syn::Error::new_spanned(
             &input,
@@ -38,6 +43,7 @@ fn derive_struct_decode(
     baml_name: &str,
     fields: &Fields,
     baml_crate: &TokenStream,
+    is_dynamic: bool,
 ) -> Result<TokenStream> {
     let Fields::Named(named_fields) = fields else {
         return Err(syn::Error::new_spanned(
@@ -47,11 +53,21 @@ fn derive_struct_decode(
     };
 
     let mut field_decodings = Vec::new();
+    let mut known_field_names = Vec::new();
+    let mut dynamic_field_name: Option<syn::Ident> = None;
 
     for field in &named_fields.named {
         let field_attrs = FieldAttrs::from_attrs(&field.attrs)?;
         let field_name = field.ident.as_ref().unwrap();
+
+        if field_attrs.dynamic_fields {
+            // This is the __dynamic field - we'll populate it separately
+            dynamic_field_name = Some(field_name.clone());
+            continue;
+        }
+
         let baml_field_name = field_attrs.name.unwrap_or_else(|| field_name.to_string());
+        known_field_names.push(baml_field_name.clone());
 
         // Check if this is an Option type
         let is_optional = is_option_type(&field.ty);
@@ -63,6 +79,41 @@ fn derive_struct_decode(
         field_decodings.push(quote! {
             #field_name: #decode_expr
         });
+    }
+
+    // Generate the dynamic field initialization if present
+    if let Some(ref dyn_field) = dynamic_field_name {
+        if !is_dynamic {
+            return Err(syn::Error::new_spanned(
+                dyn_field,
+                "#[baml(dynamic_fields)] requires #[baml(dynamic)] on the struct",
+            ));
+        }
+
+        let known_fields_array = known_field_names.iter().map(|n| quote! { #n });
+        let dynamic_init = quote! {
+            #dyn_field: {
+                let known_fields: std::collections::HashSet<&str> = [#(#known_fields_array),*].into_iter().collect();
+                let mut dynamic = std::collections::HashMap::new();
+                for entry in &class.fields {
+                    if !known_fields.contains(entry.key.as_str()) {
+                        if let Some(value) = &entry.value {
+                            dynamic.insert(
+                                entry.key.clone(),
+                                #baml_crate::BamlDecode::baml_decode(value)?
+                            );
+                        }
+                    }
+                }
+                dynamic
+            }
+        };
+        field_decodings.push(dynamic_init);
+    } else if is_dynamic {
+        return Err(syn::Error::new_spanned(
+            type_name,
+            "#[baml(dynamic)] struct requires a field with #[baml(dynamic_fields)]",
+        ));
     }
 
     Ok(quote! {
@@ -94,11 +145,12 @@ fn derive_enum_decode(
     data: &syn::DataEnum,
     baml_crate: &TokenStream,
     is_union: bool,
+    is_dynamic: bool,
 ) -> Result<TokenStream> {
     if is_union {
         derive_union_decode(type_name, data, baml_crate)
     } else {
-        derive_baml_enum_decode(type_name, baml_name, data, baml_crate)
+        derive_baml_enum_decode(type_name, baml_name, data, baml_crate, is_dynamic)
     }
 }
 
@@ -108,12 +160,31 @@ fn derive_baml_enum_decode(
     baml_name: &str,
     data: &syn::DataEnum,
     baml_crate: &TokenStream,
+    is_dynamic: bool,
 ) -> Result<TokenStream> {
     let mut variant_arms = Vec::new();
+    let mut dynamic_variant_name: Option<syn::Ident> = None;
 
     for variant in &data.variants {
         let variant_attrs = VariantAttrs::from_attrs(&variant.attrs)?;
         let variant_name = &variant.ident;
+
+        if variant_attrs.dynamic_variant {
+            // This is the _Dynamic(String) catch-all variant
+            match &variant.fields {
+                Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                    dynamic_variant_name = Some(variant_name.clone());
+                }
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        variant,
+                        "#[baml(dynamic_variant)] must be a single-field tuple variant like _Dynamic(String)",
+                    ));
+                }
+            }
+            continue;
+        }
+
         let baml_variant_name = variant_attrs
             .name
             .unwrap_or_else(|| variant_name.to_string());
@@ -133,6 +204,30 @@ fn derive_baml_enum_decode(
         }
     }
 
+    // Generate the catch-all arm
+    let catch_all = if let Some(ref dyn_var) = dynamic_variant_name {
+        if !is_dynamic {
+            return Err(syn::Error::new_spanned(
+                dyn_var,
+                "#[baml(dynamic_variant)] requires #[baml(dynamic)] on the enum",
+            ));
+        }
+        quote! {
+            other => Ok(Self::#dyn_var(other.to_string()))
+        }
+    } else if is_dynamic {
+        return Err(syn::Error::new_spanned(
+            type_name,
+            "#[baml(dynamic)] enum requires a variant with #[baml(dynamic_variant)]",
+        ));
+    } else {
+        quote! {
+            other => Err(#baml_crate::BamlError::internal(
+                format!("unknown variant '{}' for enum {}", other, #baml_name)
+            ))
+        }
+    };
+
     Ok(quote! {
         impl #baml_crate::BamlEnum for #type_name {
             const ENUM_NAME: &'static str = #baml_name;
@@ -140,9 +235,7 @@ fn derive_baml_enum_decode(
             fn from_variant_name(name: &str) -> ::core::result::Result<Self, #baml_crate::BamlError> {
                 match name {
                     #(#variant_arms,)*
-                    other => Err(#baml_crate::BamlError::internal(
-                        format!("unknown variant '{}' for enum {}", other, #baml_name)
-                    ))
+                    #catch_all
                 }
             }
         }

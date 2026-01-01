@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ExistingSystemComponent {
     pub id: Option<i64>,
 
@@ -33,6 +34,7 @@ impl AsRef<ExistingSystemComponent> for ExistingSystemComponent {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct UseMyUnion {
     pub u: Option<Union3IntOrRecursive1OrString>,
 }

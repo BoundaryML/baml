@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ArrayWithConstraints {
     pub nonEmptyStrings: Vec<String>,
 
@@ -28,6 +29,7 @@ impl AsRef<ArrayWithConstraints> for ArrayWithConstraints {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct MixedArrays {
     pub primitiveArray: Vec<types::Union4BoolOrFloatOrIntOrString>,
 
@@ -47,6 +49,7 @@ impl AsRef<MixedArrays> for MixedArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct NestedArrays {
     pub matrix: Vec<Vec<i64>>,
 
@@ -62,6 +65,7 @@ impl AsRef<NestedArrays> for NestedArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ObjectArrays {
     pub users: Vec<User>,
 
@@ -77,6 +81,7 @@ impl AsRef<ObjectArrays> for ObjectArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Product {
     pub id: Option<i64>,
 
@@ -96,6 +101,7 @@ impl AsRef<Product> for Product {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct SimpleArrays {
     pub strings: Vec<String>,
 
@@ -113,6 +119,7 @@ impl AsRef<SimpleArrays> for SimpleArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Tag {
     pub id: Option<i64>,
 
@@ -128,6 +135,7 @@ impl AsRef<Tag> for Tag {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct User {
     pub id: Option<i64>,
 

@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Example {
     #[baml(name = "type")]
     pub r#type: String,
@@ -29,6 +30,7 @@ impl AsRef<Example> for Example {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Example2 {
     #[baml(name = "type")]
     pub r#type: String,

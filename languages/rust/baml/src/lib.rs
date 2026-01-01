@@ -47,7 +47,7 @@ pub use args::FunctionArgs;
 pub use client_registry::ClientRegistry;
 pub use codec::{
     BamlClass, BamlDecode, BamlEncode, BamlEnum, decode_enum, decode_field,
-    encode_class, encode_enum,
+    encode_class, encode_class_dynamic, encode_enum,
 };
 // New dynamic type exports
 pub use codec::{

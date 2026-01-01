@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct UseMyUnion {
     pub u: Option<Union3IntOrRecursive1OrString>,
 }

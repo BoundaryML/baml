@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ComplexOptional {
     pub data: Option<OptionalData>,
 
@@ -28,6 +29,7 @@ impl AsRef<ComplexOptional> for ComplexOptional {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct MixedOptionalNullable {
     pub id: Option<i64>,
 
@@ -57,6 +59,7 @@ impl AsRef<MixedOptionalNullable> for MixedOptionalNullable {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct NullableTypes {
     pub nullableString: Option<String>,
 
@@ -78,6 +81,7 @@ impl AsRef<NullableTypes> for NullableTypes {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct OptionalData {
     pub value: Option<String>,
 
@@ -93,6 +97,7 @@ impl AsRef<OptionalData> for OptionalData {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct OptionalFields {
     pub requiredString: Option<String>,
 
@@ -118,6 +123,7 @@ impl AsRef<OptionalFields> for OptionalFields {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct OptionalItem {
     pub id: Option<i64>,
 
@@ -135,6 +141,7 @@ impl AsRef<OptionalItem> for OptionalItem {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct OptionalValue {
     pub data: Option<types::Union2IntOrString>,
 
@@ -148,6 +155,7 @@ impl AsRef<OptionalValue> for OptionalValue {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Product {
     pub id: Option<i64>,
 
@@ -163,6 +171,7 @@ impl AsRef<Product> for Product {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct UnionWithNull {
     pub simpleUnion: Option<types::Union2IntOrString>,
 
@@ -180,6 +189,7 @@ impl AsRef<UnionWithNull> for UnionWithNull {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct User {
     pub id: Option<i64>,
 

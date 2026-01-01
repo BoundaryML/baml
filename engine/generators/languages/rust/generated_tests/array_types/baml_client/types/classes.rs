@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ArrayWithConstraints {
     pub nonEmptyStrings: Vec<String>,
 
@@ -24,6 +25,7 @@ impl AsRef<ArrayWithConstraints> for ArrayWithConstraints {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct MixedArrays {
     pub primitiveArray: Vec<Union4BoolOrFloatOrIntOrString>,
 
@@ -43,6 +45,7 @@ impl AsRef<MixedArrays> for MixedArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct NestedArrays {
     pub matrix: Vec<Vec<i64>>,
 
@@ -58,6 +61,7 @@ impl AsRef<NestedArrays> for NestedArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ObjectArrays {
     pub users: Vec<User>,
 
@@ -73,6 +77,7 @@ impl AsRef<ObjectArrays> for ObjectArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Product {
     pub id: i64,
 
@@ -92,6 +97,7 @@ impl AsRef<Product> for Product {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct SimpleArrays {
     pub strings: Vec<String>,
 
@@ -109,6 +115,7 @@ impl AsRef<SimpleArrays> for SimpleArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Tag {
     pub id: i64,
 
@@ -124,6 +131,7 @@ impl AsRef<Tag> for Tag {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct User {
     pub id: i64,
 

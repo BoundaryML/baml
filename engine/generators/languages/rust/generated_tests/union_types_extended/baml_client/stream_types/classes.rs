@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Admin {
     pub id: Option<i64>,
 
@@ -31,6 +32,7 @@ impl AsRef<Admin> for Admin {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ApiError {
     pub status: Option<String>,
 
@@ -46,6 +48,7 @@ impl AsRef<ApiError> for ApiError {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ApiPending {
     pub status: Option<String>,
 
@@ -61,6 +64,7 @@ impl AsRef<ApiPending> for ApiPending {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ApiSuccess {
     pub status: Option<String>,
 
@@ -74,6 +78,7 @@ impl AsRef<ApiSuccess> for ApiSuccess {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Bird {
     pub species: Option<String>,
 
@@ -89,6 +94,7 @@ impl AsRef<Bird> for Bird {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Cat {
     pub species: Option<String>,
 
@@ -104,6 +110,7 @@ impl AsRef<Cat> for Cat {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Circle {
     pub shape: Option<String>,
 
@@ -117,6 +124,7 @@ impl AsRef<Circle> for Circle {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ComplexUnions {
     pub userOrProduct: Option<Union2ProductOrUser>,
 
@@ -136,6 +144,7 @@ impl AsRef<ComplexUnions> for ComplexUnions {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct DataResponse {
     pub data: Option<String>,
 
@@ -151,6 +160,7 @@ impl AsRef<DataResponse> for DataResponse {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct DiscriminatedUnions {
     pub shape: Option<Union3CircleOrRectangleOrTriangle>,
 
@@ -166,6 +176,7 @@ impl AsRef<DiscriminatedUnions> for DiscriminatedUnions {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Dog {
     pub species: Option<String>,
 
@@ -181,6 +192,7 @@ impl AsRef<Dog> for Dog {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Error {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -199,6 +211,7 @@ impl AsRef<Error> for Error {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ErrorResponse {
     pub error: Option<String>,
 
@@ -214,6 +227,7 @@ impl AsRef<ErrorResponse> for ErrorResponse {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct PrimitiveUnions {
     pub stringOrInt: Option<types::Union2IntOrString>,
 
@@ -233,6 +247,7 @@ impl AsRef<PrimitiveUnions> for PrimitiveUnions {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Product {
     pub id: Option<i64>,
 
@@ -251,6 +266,7 @@ impl AsRef<Product> for Product {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Rectangle {
     pub shape: Option<String>,
 
@@ -266,6 +282,7 @@ impl AsRef<Rectangle> for Rectangle {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct RecursiveUnion {
     pub value: Option<Union3IntOrRecursiveUnionOrString>,
 
@@ -279,6 +296,7 @@ impl AsRef<RecursiveUnion> for RecursiveUnion {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Result {
     pub value: Option<types::Union3FloatOrIntOrString>,
 
@@ -292,6 +310,7 @@ impl AsRef<Result> for Result {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Success {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -308,6 +327,7 @@ impl AsRef<Success> for Success {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Triangle {
     pub shape: Option<String>,
 
@@ -323,6 +343,7 @@ impl AsRef<Triangle> for Triangle {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct UnionArrays {
     pub mixedArray: Vec<types::Union2IntOrString>,
 
@@ -340,6 +361,7 @@ impl AsRef<UnionArrays> for UnionArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct User {
     pub id: Option<i64>,
 
@@ -356,6 +378,7 @@ impl AsRef<User> for User {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Warning {
     #[baml(name = "type")]
     pub r#type: Option<String>,

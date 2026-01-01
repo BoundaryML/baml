@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Action {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -29,6 +30,7 @@ impl AsRef<Action> for Action {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Asset {
     pub id: Option<i64>,
 
@@ -47,6 +49,7 @@ impl AsRef<Asset> for Asset {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct AssetMetadata {
     pub filename: Option<String>,
 
@@ -66,6 +69,7 @@ impl AsRef<AssetMetadata> for AssetMetadata {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ButtonWidget {
     pub label: Option<String>,
 
@@ -81,6 +85,7 @@ impl AsRef<ButtonWidget> for ButtonWidget {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ComplexData {
     pub primary: Option<PrimaryData>,
 
@@ -96,6 +101,7 @@ impl AsRef<ComplexData> for ComplexData {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Condition {
     #[baml(name = "type")]
     pub r#type: Option<types::Union3KandOrKnotOrKor>,
@@ -110,6 +116,7 @@ impl AsRef<Condition> for Condition {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Configuration {
     pub version: Option<String>,
 
@@ -127,6 +134,7 @@ impl AsRef<Configuration> for Configuration {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ContainerWidget {
     pub layout: Option<types::Union3KflexOrKgridOrKstack>,
 
@@ -142,6 +150,7 @@ impl AsRef<ContainerWidget> for ContainerWidget {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct DataObject {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -156,6 +165,7 @@ impl AsRef<DataObject> for DataObject {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Dimensions {
     pub width: Option<i64>,
 
@@ -169,6 +179,7 @@ impl AsRef<Dimensions> for Dimensions {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Environment {
     pub name: Option<String>,
 
@@ -186,6 +197,7 @@ impl AsRef<Environment> for Environment {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Error {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -202,6 +214,7 @@ impl AsRef<Error> for Error {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ErrorDetail {
     pub code: Option<String>,
 
@@ -217,6 +230,7 @@ impl AsRef<ErrorDetail> for ErrorDetail {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Feature {
     pub name: Option<String>,
 
@@ -234,6 +248,7 @@ impl AsRef<Feature> for Feature {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ImageWidget {
     pub alt: Option<String>,
 
@@ -247,6 +262,7 @@ impl AsRef<ImageWidget> for ImageWidget {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Item {
     pub id: Option<i64>,
 
@@ -264,6 +280,7 @@ impl AsRef<Item> for Item {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct KitchenSink {
     pub id: Option<i64>,
 
@@ -311,6 +328,7 @@ impl AsRef<KitchenSink> for KitchenSink {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Node {
     pub id: Option<i64>,
 
@@ -329,6 +347,7 @@ impl AsRef<Node> for Node {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct NodeMetadata {
     pub created: Option<String>,
 
@@ -346,6 +365,7 @@ impl AsRef<NodeMetadata> for NodeMetadata {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct PrimaryData {
     pub values: Vec<types::Union3FloatOrIntOrString>,
 
@@ -361,6 +381,7 @@ impl AsRef<PrimaryData> for PrimaryData {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Record {
     pub id: Option<i64>,
 
@@ -376,6 +397,7 @@ impl AsRef<Record> for Record {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ResponseMetadata {
     pub timestamp: Option<String>,
 
@@ -393,6 +415,7 @@ impl AsRef<ResponseMetadata> for ResponseMetadata {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Rule {
     pub id: Option<i64>,
 
@@ -412,6 +435,7 @@ impl AsRef<Rule> for Rule {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct SecondaryData {
     pub records: Vec<Record>,
 
@@ -425,6 +449,7 @@ impl AsRef<SecondaryData> for SecondaryData {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Setting {
     pub key: Option<String>,
 
@@ -440,6 +465,7 @@ impl AsRef<Setting> for Setting {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct SimpleCondition {
     pub field: Option<String>,
 
@@ -455,6 +481,7 @@ impl AsRef<SimpleCondition> for SimpleCondition {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Success {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -469,6 +496,7 @@ impl AsRef<Success> for Success {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct TertiaryData {
     pub raw: Option<String>,
 
@@ -484,6 +512,7 @@ impl AsRef<TertiaryData> for TertiaryData {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct TextWidget {
     pub content: Option<String>,
 
@@ -499,6 +528,7 @@ impl AsRef<TextWidget> for TextWidget {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct UltraComplex {
     pub tree: Option<Node>,
 
@@ -518,6 +548,7 @@ impl AsRef<UltraComplex> for UltraComplex {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct User {
     pub id: Option<i64>,
 
@@ -533,6 +564,7 @@ impl AsRef<User> for User {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct UserProfile {
     pub name: Option<String>,
 
@@ -550,6 +582,7 @@ impl AsRef<UserProfile> for UserProfile {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct UserResponse {
     pub status: Option<types::Union2KerrorOrKsuccess>,
 
@@ -567,6 +600,7 @@ impl AsRef<UserResponse> for UserResponse {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Variant {
     pub sku: Option<String>,
 
@@ -584,6 +618,7 @@ impl AsRef<Variant> for Variant {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Widget {
     #[baml(name = "type")]
     pub r#type: Option<types::Union4KbuttonOrKcontainerOrKimageOrKtext>,

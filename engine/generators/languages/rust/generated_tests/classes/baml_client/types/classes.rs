@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct SimpleClass {
     pub digits: i64,
 

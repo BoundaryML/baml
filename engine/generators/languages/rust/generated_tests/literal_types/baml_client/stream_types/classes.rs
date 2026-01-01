@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct BooleanLiterals {
     pub alwaysTrue: Option<bool>,
 
@@ -28,6 +29,7 @@ impl AsRef<BooleanLiterals> for BooleanLiterals {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ComplexLiterals {
     pub state: Option<types::Union4KarchivedOrKdeletedOrKdraftOrKpublished>,
 
@@ -47,6 +49,7 @@ impl AsRef<ComplexLiterals> for ComplexLiterals {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct IntegerLiterals {
     pub priority: Option<types::Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5>,
 
@@ -62,6 +65,7 @@ impl AsRef<IntegerLiterals> for IntegerLiterals {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct MixedLiterals {
     pub id: Option<i64>,
 
@@ -82,6 +86,7 @@ impl AsRef<MixedLiterals> for MixedLiterals {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct StringLiterals {
     pub status: Option<types::Union3KactiveOrKinactiveOrKpending>,
 

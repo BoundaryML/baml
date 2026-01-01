@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct MediaAnalysisResult {
     pub topics: Vec<String>,
 
@@ -22,6 +23,7 @@ impl AsRef<MediaAnalysisResult> for MediaAnalysisResult {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct MediaArrayAnalysisResult {
     pub analysisText: String,
 
@@ -35,6 +37,7 @@ impl AsRef<MediaArrayAnalysisResult> for MediaArrayAnalysisResult {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct MediaMapAnalysisResult {
     pub analysisText: String,
 
@@ -50,6 +53,7 @@ impl AsRef<MediaMapAnalysisResult> for MediaMapAnalysisResult {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct MixedMediaAnalysisResult {
     pub title: String,
 
@@ -75,6 +79,7 @@ impl AsRef<MixedMediaAnalysisResult> for MixedMediaAnalysisResult {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct OptionalMediaAnalysisResult {
     pub analysisText: String,
 

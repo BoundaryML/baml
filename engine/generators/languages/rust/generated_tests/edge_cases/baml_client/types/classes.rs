@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct AllNullable {
     pub nullString: Option<String>,
 
@@ -30,6 +31,7 @@ impl AsRef<AllNullable> for AllNullable {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct BooleanEdgeCases {
     pub explicitTrue: bool,
 
@@ -49,6 +51,7 @@ impl AsRef<BooleanEdgeCases> for BooleanEdgeCases {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct CircularReference {
     pub id: i64,
 
@@ -68,6 +71,7 @@ impl AsRef<CircularReference> for CircularReference {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct DeepRecursion {
     pub value: String,
 
@@ -81,6 +85,7 @@ impl AsRef<DeepRecursion> for DeepRecursion {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct EmptyCollections {
     pub emptyStringArray: Vec<String>,
 
@@ -100,6 +105,7 @@ impl AsRef<EmptyCollections> for EmptyCollections {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct InnerNullable {
     pub value: Option<String>,
 }
@@ -111,6 +117,7 @@ impl AsRef<InnerNullable> for InnerNullable {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct LargeStructure {
     pub field1: String,
 
@@ -180,6 +187,7 @@ impl AsRef<LargeStructure> for LargeStructure {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct MixedEdgeCases {
     pub emptyString: String,
 
@@ -204,6 +212,7 @@ impl AsRef<MixedEdgeCases> for MixedEdgeCases {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct NestedNullable {
     pub outer: Option<OuterNullable>,
 }
@@ -215,6 +224,7 @@ impl AsRef<NestedNullable> for NestedNullable {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct NullEdgeCases {
     pub allNull: AllNullable,
 
@@ -230,6 +240,7 @@ impl AsRef<NullEdgeCases> for NullEdgeCases {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct NumberEdgeCases {
     pub zero: i64,
 
@@ -259,6 +270,7 @@ impl AsRef<NumberEdgeCases> for NumberEdgeCases {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct OptionalEverything {
     pub optString: Option<String>,
 
@@ -282,6 +294,7 @@ impl AsRef<OptionalEverything> for OptionalEverything {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct OuterNullable {
     pub inner: Option<InnerNullable>,
 }
@@ -293,6 +306,7 @@ impl AsRef<OuterNullable> for OuterNullable {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct SomeNullable {
     pub presentString: Option<String>,
 
@@ -310,6 +324,7 @@ impl AsRef<SomeNullable> for SomeNullable {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct SpecialCharacters {
     pub normalText: String,
 
@@ -335,6 +350,7 @@ impl AsRef<SpecialCharacters> for SpecialCharacters {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct User {
     pub id: i64,
 
@@ -348,6 +364,7 @@ impl AsRef<User> for User {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct VeryLongStrings {
     pub shortString: String,
 

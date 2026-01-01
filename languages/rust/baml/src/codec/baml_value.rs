@@ -81,10 +81,98 @@ impl<T: KnownTypes, S: KnownTypes> BamlValue<T, S> {
 }
 
 // =============================================================================
+// BamlEncode implementation for BamlValue
+// =============================================================================
+
+use super::traits::{BamlDecode, BamlEncode};
+use crate::proto::baml_cffi_v1::{
+    host_map_entry, host_value, HostClassValue, HostEnumValue, HostListValue, HostMapEntry,
+    HostMapValue, HostValue,
+};
+
+impl<T: KnownTypes, S: KnownTypes> BamlEncode for BamlValue<T, S> {
+    fn baml_encode(&self) -> HostValue {
+        match self {
+            BamlValue::Null => HostValue { value: None },
+            BamlValue::String(s) => HostValue {
+                value: Some(host_value::Value::StringValue(s.clone())),
+            },
+            BamlValue::Int(i) => HostValue {
+                value: Some(host_value::Value::IntValue(*i)),
+            },
+            BamlValue::Float(f) => HostValue {
+                value: Some(host_value::Value::FloatValue(*f)),
+            },
+            BamlValue::Bool(b) => HostValue {
+                value: Some(host_value::Value::BoolValue(*b)),
+            },
+            BamlValue::List(items) => HostValue {
+                value: Some(host_value::Value::ListValue(HostListValue {
+                    values: items.iter().map(|v| v.baml_encode()).collect(),
+                })),
+            },
+            BamlValue::Map(map) => HostValue {
+                value: Some(host_value::Value::MapValue(HostMapValue {
+                    entries: map
+                        .iter()
+                        .map(|(k, v)| HostMapEntry {
+                            key: Some(host_map_entry::Key::StringKey(k.clone())),
+                            value: Some(v.baml_encode()),
+                        })
+                        .collect(),
+                })),
+            },
+            BamlValue::DynamicClass(dc) => {
+                let entries = dc
+                    .fields()
+                    .map(|(k, v)| HostMapEntry {
+                        key: Some(host_map_entry::Key::StringKey(k.to_string())),
+                        value: Some(v.baml_encode()),
+                    })
+                    .collect();
+                HostValue {
+                    value: Some(host_value::Value::ClassValue(HostClassValue {
+                        name: dc.name().to_string(),
+                        fields: entries,
+                    })),
+                }
+            }
+            BamlValue::DynamicEnum(de) => HostValue {
+                value: Some(host_value::Value::EnumValue(HostEnumValue {
+                    name: de.name().to_string(),
+                    value: de.value.clone(),
+                })),
+            },
+            BamlValue::DynamicUnion(du) => {
+                // Encode the inner value - union variant is handled at a higher level
+                du.value.baml_encode()
+            }
+            BamlValue::Known(_) => {
+                // Known types should implement BamlEncode
+                // For now, encode as null since we don't have access to the actual type
+                // This is a fallback - users should encode known types directly
+                HostValue { value: None }
+            }
+            BamlValue::StreamKnown(_) => {
+                // Stream known types - encode as null for now
+                HostValue { value: None }
+            }
+            BamlValue::Checked(c) => {
+                // Encode the inner value (checks are metadata, not data)
+                c.value.baml_encode()
+            }
+            BamlValue::StreamState(ss) => {
+                // Encode the inner value
+                ss.value.baml_encode()
+            }
+        }
+    }
+}
+
+// =============================================================================
 // BamlDecode implementation for BamlValue
 // =============================================================================
 
-use super::traits::BamlDecode;
 use crate::proto::baml_cffi_v1::{
     cffi_field_type_literal, cffi_value_holder, CffiStreamState, CffiValueHolder,
 };

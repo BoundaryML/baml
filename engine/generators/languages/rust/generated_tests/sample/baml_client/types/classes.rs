@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Example {
     #[baml(name = "type")]
     pub r#type: String,
@@ -25,6 +26,7 @@ impl AsRef<Example> for Example {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Example2 {
     #[baml(name = "type")]
     pub r#type: String,

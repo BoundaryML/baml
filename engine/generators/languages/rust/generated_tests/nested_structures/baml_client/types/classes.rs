@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Address {
     pub street: String,
 
@@ -30,6 +31,7 @@ impl AsRef<Address> for Address {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Approval {
     pub approver: String,
 
@@ -47,6 +49,7 @@ impl AsRef<Approval> for Approval {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Budget {
     pub total: f64,
 
@@ -64,6 +67,7 @@ impl AsRef<Budget> for Budget {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Company {
     pub id: i64,
 
@@ -83,6 +87,7 @@ impl AsRef<Company> for Company {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct CompanyMetadata {
     pub founded: String,
 
@@ -102,6 +107,7 @@ impl AsRef<CompanyMetadata> for CompanyMetadata {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ComplexNested {
     pub company: Company,
 
@@ -117,6 +123,7 @@ impl AsRef<ComplexNested> for ComplexNested {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Contact {
     pub name: String,
 
@@ -134,6 +141,7 @@ impl AsRef<Contact> for Contact {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Coordinates {
     pub latitude: f64,
 
@@ -147,6 +155,7 @@ impl AsRef<Coordinates> for Coordinates {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct DeeplyNested {
     pub level1: Level1,
 }
@@ -158,6 +167,7 @@ impl AsRef<DeeplyNested> for DeeplyNested {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Department {
     pub id: i64,
 
@@ -179,6 +189,7 @@ impl AsRef<Department> for Department {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct DisplaySettings {
     pub fontSize: i64,
 
@@ -194,6 +205,7 @@ impl AsRef<DisplaySettings> for DisplaySettings {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Employee {
     pub id: i64,
 
@@ -219,6 +231,7 @@ impl AsRef<Employee> for Employee {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Level1 {
     pub data: String,
 
@@ -232,6 +245,7 @@ impl AsRef<Level1> for Level1 {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Level2 {
     pub data: String,
 
@@ -245,6 +259,7 @@ impl AsRef<Level2> for Level2 {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Level3 {
     pub data: String,
 
@@ -258,6 +273,7 @@ impl AsRef<Level3> for Level3 {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Level4 {
     pub data: String,
 
@@ -271,6 +287,7 @@ impl AsRef<Level4> for Level4 {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Level5 {
     pub data: String,
 
@@ -286,6 +303,7 @@ impl AsRef<Level5> for Level5 {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Metadata {
     pub createdAt: String,
 
@@ -305,6 +323,7 @@ impl AsRef<Metadata> for Metadata {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Milestone {
     pub id: i64,
 
@@ -324,6 +343,7 @@ impl AsRef<Milestone> for Milestone {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct NotificationSettings {
     pub email: bool,
 
@@ -341,6 +361,7 @@ impl AsRef<NotificationSettings> for NotificationSettings {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Preferences {
     pub theme: Union2KdarkOrKlight,
 
@@ -356,6 +377,7 @@ impl AsRef<Preferences> for Preferences {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct PrivacySettings {
     pub profileVisibility: Union3KfriendsOrKprivateOrKpublic,
 
@@ -371,6 +393,7 @@ impl AsRef<PrivacySettings> for PrivacySettings {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Profile {
     pub bio: String,
 
@@ -388,6 +411,7 @@ impl AsRef<Profile> for Profile {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Project {
     pub id: i64,
 
@@ -411,6 +435,7 @@ impl AsRef<Project> for Project {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct RecursiveStructure {
     pub id: i64,
 
@@ -430,6 +455,7 @@ impl AsRef<RecursiveStructure> for RecursiveStructure {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct SimpleNested {
     pub user: User,
 
@@ -445,6 +471,7 @@ impl AsRef<SimpleNested> for SimpleNested {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct SocialLinks {
     pub twitter: Option<String>,
 
@@ -462,6 +489,7 @@ impl AsRef<SocialLinks> for SocialLinks {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Task {
     pub id: i64,
 
@@ -485,6 +513,7 @@ impl AsRef<Task> for Task {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct User {
     pub id: i64,
 
@@ -502,6 +531,7 @@ impl AsRef<User> for User {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct UserSettings {
     pub privacy: PrivacySettings,
 

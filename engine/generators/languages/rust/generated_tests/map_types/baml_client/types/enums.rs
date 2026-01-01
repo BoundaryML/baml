@@ -8,12 +8,47 @@
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+
 pub enum Status {
     ACTIVE,
 
     INACTIVE,
 
     PENDING,
+}
+
+impl Default for Status {
+    fn default() -> Self {
+        Self::ACTIVE
+    }
+}
+
+impl std::fmt::Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ACTIVE => write!(f, "ACTIVE"),
+
+            Self::INACTIVE => write!(f, "INACTIVE"),
+
+            Self::PENDING => write!(f, "PENDING"),
+        }
+    }
+}
+
+impl std::str::FromStr for Status {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ACTIVE" => Ok(Self::ACTIVE),
+
+            "INACTIVE" => Ok(Self::INACTIVE),
+
+            "PENDING" => Ok(Self::PENDING),
+
+            _ => Err(()),
+        }
+    }
 }
 
 impl AsRef<Status> for Status {

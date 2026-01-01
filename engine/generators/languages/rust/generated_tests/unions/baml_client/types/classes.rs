@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ExistingSystemComponent {
     pub id: i64,
 
@@ -29,6 +30,7 @@ impl AsRef<ExistingSystemComponent> for ExistingSystemComponent {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct UseMyUnion {
     pub u: Option<Union3IntOrRecursive1OrString>,
 }

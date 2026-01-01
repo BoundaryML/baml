@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct BooleanLiterals {
     pub alwaysTrue: bool,
 
@@ -24,6 +25,7 @@ impl AsRef<BooleanLiterals> for BooleanLiterals {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ComplexLiterals {
     pub state: Union4KarchivedOrKdeletedOrKdraftOrKpublished,
 
@@ -43,6 +45,7 @@ impl AsRef<ComplexLiterals> for ComplexLiterals {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct IntegerLiterals {
     pub priority: Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5,
 
@@ -58,6 +61,7 @@ impl AsRef<IntegerLiterals> for IntegerLiterals {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct MixedLiterals {
     pub id: i64,
 
@@ -78,6 +82,7 @@ impl AsRef<MixedLiterals> for MixedLiterals {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct StringLiterals {
     pub status: Union3KactiveOrKinactiveOrKpending,
 

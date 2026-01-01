@@ -24,6 +24,8 @@ pub struct ContainerAttrs {
     pub name: Option<String>,
     /// Whether this enum represents a BAML union type
     pub union: bool,
+    /// Whether this type supports dynamic fields/variants
+    pub dynamic: bool,
 }
 
 /// Field-level attributes
@@ -33,6 +35,8 @@ pub struct FieldAttrs {
     pub name: Option<String>,
     /// Whether to skip this field during encoding
     pub skip: bool,
+    /// Whether this field holds dynamic properties (HashMap<String, BamlValue>)
+    pub dynamic_fields: bool,
 }
 
 /// Variant-level attributes (for enums)
@@ -40,6 +44,8 @@ pub struct FieldAttrs {
 pub struct VariantAttrs {
     /// The BAML variant name (defaults to Rust variant name)
     pub name: Option<String>,
+    /// Whether this variant is the dynamic catch-all
+    pub dynamic_variant: bool,
 }
 
 impl ContainerAttrs {
@@ -59,6 +65,9 @@ impl ContainerAttrs {
                     Ok(())
                 } else if meta.path.is_ident("union") {
                     result.union = true;
+                    Ok(())
+                } else if meta.path.is_ident("dynamic") {
+                    result.dynamic = true;
                     Ok(())
                 } else {
                     Err(meta.error("unrecognized baml attribute"))
@@ -88,6 +97,9 @@ impl FieldAttrs {
                 } else if meta.path.is_ident("skip") {
                     result.skip = true;
                     Ok(())
+                } else if meta.path.is_ident("dynamic_fields") {
+                    result.dynamic_fields = true;
+                    Ok(())
                 } else {
                     Err(meta.error("unrecognized baml attribute"))
                 }
@@ -112,6 +124,9 @@ impl VariantAttrs {
                 if meta.path.is_ident("name") {
                     let value: LitStr = meta.value()?.parse()?;
                     result.name = Some(value.value());
+                    Ok(())
+                } else if meta.path.is_ident("dynamic_variant") {
+                    result.dynamic_variant = true;
                     Ok(())
                 } else {
                     Err(meta.error("unrecognized baml attribute"))

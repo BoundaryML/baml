@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ComplexMaps {
     pub userMap: std::collections::HashMap<String, User>,
 
@@ -32,6 +33,7 @@ impl AsRef<ComplexMaps> for ComplexMaps {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Config {
     pub url: Option<String>,
 
@@ -47,6 +49,7 @@ impl AsRef<Config> for Config {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct EdgeCaseMaps {
     pub emptyMap: std::collections::HashMap<String, String>,
 
@@ -64,6 +67,7 @@ impl AsRef<EdgeCaseMaps> for EdgeCaseMaps {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct MixedKeyMaps {
     pub stringIntMap: std::collections::HashMap<String, i64>,
 
@@ -81,6 +85,7 @@ impl AsRef<MixedKeyMaps> for MixedKeyMaps {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct NestedMaps {
     pub simple: std::collections::HashMap<String, String>,
 
@@ -103,6 +108,7 @@ impl AsRef<NestedMaps> for NestedMaps {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct Product {
     pub id: Option<i64>,
 
@@ -120,6 +126,7 @@ impl AsRef<Product> for Product {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct SimpleMaps {
     pub stringToString: std::collections::HashMap<String, String>,
 
@@ -139,6 +146,7 @@ impl AsRef<SimpleMaps> for SimpleMaps {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct User {
     pub id: Option<i64>,
 

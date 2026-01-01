@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Action {
     #[baml(name = "type")]
     pub r#type: String,
@@ -25,6 +26,7 @@ impl AsRef<Action> for Action {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Asset {
     pub id: i64,
 
@@ -43,6 +45,7 @@ impl AsRef<Asset> for Asset {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct AssetMetadata {
     pub filename: String,
 
@@ -62,6 +65,7 @@ impl AsRef<AssetMetadata> for AssetMetadata {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ButtonWidget {
     pub label: String,
 
@@ -77,6 +81,7 @@ impl AsRef<ButtonWidget> for ButtonWidget {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ComplexData {
     pub primary: PrimaryData,
 
@@ -92,6 +97,7 @@ impl AsRef<ComplexData> for ComplexData {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Condition {
     #[baml(name = "type")]
     pub r#type: Union3KandOrKnotOrKor,
@@ -106,6 +112,7 @@ impl AsRef<Condition> for Condition {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Configuration {
     pub version: String,
 
@@ -123,6 +130,7 @@ impl AsRef<Configuration> for Configuration {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ContainerWidget {
     pub layout: Union3KflexOrKgridOrKstack,
 
@@ -138,6 +146,7 @@ impl AsRef<ContainerWidget> for ContainerWidget {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct DataObject {
     #[baml(name = "type")]
     pub r#type: String,
@@ -152,6 +161,7 @@ impl AsRef<DataObject> for DataObject {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Dimensions {
     pub width: i64,
 
@@ -165,6 +175,7 @@ impl AsRef<Dimensions> for Dimensions {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Environment {
     pub name: String,
 
@@ -182,6 +193,7 @@ impl AsRef<Environment> for Environment {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Error {
     #[baml(name = "type")]
     pub r#type: String,
@@ -198,6 +210,7 @@ impl AsRef<Error> for Error {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ErrorDetail {
     pub code: String,
 
@@ -213,6 +226,7 @@ impl AsRef<ErrorDetail> for ErrorDetail {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Feature {
     pub name: String,
 
@@ -230,6 +244,7 @@ impl AsRef<Feature> for Feature {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ImageWidget {
     pub alt: String,
 
@@ -243,6 +258,7 @@ impl AsRef<ImageWidget> for ImageWidget {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Item {
     pub id: i64,
 
@@ -260,6 +276,7 @@ impl AsRef<Item> for Item {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct KitchenSink {
     pub id: i64,
 
@@ -307,6 +324,7 @@ impl AsRef<KitchenSink> for KitchenSink {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Node {
     pub id: i64,
 
@@ -325,6 +343,7 @@ impl AsRef<Node> for Node {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct NodeMetadata {
     pub created: String,
 
@@ -342,6 +361,7 @@ impl AsRef<NodeMetadata> for NodeMetadata {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct PrimaryData {
     pub values: Vec<Union3FloatOrIntOrString>,
 
@@ -357,6 +377,7 @@ impl AsRef<PrimaryData> for PrimaryData {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Record {
     pub id: i64,
 
@@ -372,6 +393,7 @@ impl AsRef<Record> for Record {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ResponseMetadata {
     pub timestamp: String,
 
@@ -389,6 +411,7 @@ impl AsRef<ResponseMetadata> for ResponseMetadata {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Rule {
     pub id: i64,
 
@@ -408,6 +431,7 @@ impl AsRef<Rule> for Rule {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct SecondaryData {
     pub records: Vec<Record>,
 
@@ -421,6 +445,7 @@ impl AsRef<SecondaryData> for SecondaryData {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Setting {
     pub key: String,
 
@@ -436,6 +461,7 @@ impl AsRef<Setting> for Setting {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct SimpleCondition {
     pub field: String,
 
@@ -451,6 +477,7 @@ impl AsRef<SimpleCondition> for SimpleCondition {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Success {
     #[baml(name = "type")]
     pub r#type: String,
@@ -465,6 +492,7 @@ impl AsRef<Success> for Success {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct TertiaryData {
     pub raw: String,
 
@@ -480,6 +508,7 @@ impl AsRef<TertiaryData> for TertiaryData {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct TextWidget {
     pub content: String,
 
@@ -495,6 +524,7 @@ impl AsRef<TextWidget> for TextWidget {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct UltraComplex {
     pub tree: Node,
 
@@ -514,6 +544,7 @@ impl AsRef<UltraComplex> for UltraComplex {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct User {
     pub id: i64,
 
@@ -529,6 +560,7 @@ impl AsRef<User> for User {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct UserProfile {
     pub name: String,
 
@@ -546,6 +578,7 @@ impl AsRef<UserProfile> for UserProfile {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct UserResponse {
     pub status: Union2KerrorOrKsuccess,
 
@@ -563,6 +596,7 @@ impl AsRef<UserResponse> for UserResponse {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Variant {
     pub sku: String,
 
@@ -580,6 +614,7 @@ impl AsRef<Variant> for Variant {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Widget {
     #[baml(name = "type")]
     pub r#type: Union4KbuttonOrKcontainerOrKimageOrKtext,

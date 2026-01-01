@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct MixedPrimitives {
     pub name: String,
 
@@ -36,6 +37,7 @@ impl AsRef<MixedPrimitives> for MixedPrimitives {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct PrimitiveArrays {
     pub stringArray: Vec<String>,
 
@@ -53,6 +55,7 @@ impl AsRef<PrimitiveArrays> for PrimitiveArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct PrimitiveMaps {
     pub stringMap: std::collections::HashMap<String, String>,
 
@@ -70,6 +73,7 @@ impl AsRef<PrimitiveMaps> for PrimitiveMaps {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct PrimitiveTypes {
     pub stringField: String,
 

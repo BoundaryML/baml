@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ClassWithBlockDone {
     pub i_16_digits: i64,
 
@@ -26,6 +27,7 @@ impl AsRef<ClassWithBlockDone> for ClassWithBlockDone {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct ClassWithoutDone {
     pub i_16_digits: Option<i64>,
 
@@ -39,6 +41,7 @@ impl AsRef<ClassWithoutDone> for ClassWithoutDone {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct SemanticContainer {
     pub sixteen_digit_number: Option<i64>,
 
@@ -64,6 +67,7 @@ impl AsRef<SemanticContainer> for SemanticContainer {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct SmallThing {
     pub i_16_digits: i64,
 

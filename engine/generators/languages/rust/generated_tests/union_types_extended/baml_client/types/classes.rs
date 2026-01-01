@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Admin {
     pub id: i64,
 
@@ -27,6 +28,7 @@ impl AsRef<Admin> for Admin {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ApiError {
     pub status: String,
 
@@ -42,6 +44,7 @@ impl AsRef<ApiError> for ApiError {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ApiPending {
     pub status: String,
 
@@ -57,6 +60,7 @@ impl AsRef<ApiPending> for ApiPending {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ApiSuccess {
     pub status: String,
 
@@ -70,6 +74,7 @@ impl AsRef<ApiSuccess> for ApiSuccess {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Bird {
     pub species: String,
 
@@ -85,6 +90,7 @@ impl AsRef<Bird> for Bird {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Cat {
     pub species: String,
 
@@ -100,6 +106,7 @@ impl AsRef<Cat> for Cat {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Circle {
     pub shape: String,
 
@@ -113,6 +120,7 @@ impl AsRef<Circle> for Circle {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ComplexUnions {
     pub userOrProduct: Union2ProductOrUser,
 
@@ -132,6 +140,7 @@ impl AsRef<ComplexUnions> for ComplexUnions {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct DataResponse {
     pub data: String,
 
@@ -147,6 +156,7 @@ impl AsRef<DataResponse> for DataResponse {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct DiscriminatedUnions {
     pub shape: Union3CircleOrRectangleOrTriangle,
 
@@ -162,6 +172,7 @@ impl AsRef<DiscriminatedUnions> for DiscriminatedUnions {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Dog {
     pub species: String,
 
@@ -177,6 +188,7 @@ impl AsRef<Dog> for Dog {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Error {
     #[baml(name = "type")]
     pub r#type: String,
@@ -195,6 +207,7 @@ impl AsRef<Error> for Error {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ErrorResponse {
     pub error: String,
 
@@ -210,6 +223,7 @@ impl AsRef<ErrorResponse> for ErrorResponse {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct PrimitiveUnions {
     pub stringOrInt: Union2IntOrString,
 
@@ -229,6 +243,7 @@ impl AsRef<PrimitiveUnions> for PrimitiveUnions {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Product {
     pub id: i64,
 
@@ -247,6 +262,7 @@ impl AsRef<Product> for Product {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Rectangle {
     pub shape: String,
 
@@ -262,6 +278,7 @@ impl AsRef<Rectangle> for Rectangle {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct RecursiveUnion {
     pub value: Union3IntOrRecursiveUnionOrString,
 
@@ -275,6 +292,7 @@ impl AsRef<RecursiveUnion> for RecursiveUnion {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Result {
     pub value: Union3FloatOrIntOrString,
 
@@ -288,6 +306,7 @@ impl AsRef<Result> for Result {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Success {
     #[baml(name = "type")]
     pub r#type: String,
@@ -304,6 +323,7 @@ impl AsRef<Success> for Success {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Triangle {
     pub shape: String,
 
@@ -319,6 +339,7 @@ impl AsRef<Triangle> for Triangle {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct UnionArrays {
     pub mixedArray: Vec<Union2IntOrString>,
 
@@ -336,6 +357,7 @@ impl AsRef<UnionArrays> for UnionArrays {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct User {
     pub id: i64,
 
@@ -352,6 +374,7 @@ impl AsRef<User> for User {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Warning {
     #[baml(name = "type")]
     pub r#type: String,

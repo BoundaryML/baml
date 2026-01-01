@@ -13,6 +13,7 @@ use crate::baml_client::types;
 use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct MediaAnalysisResult {
     pub topics: Vec<String>,
 
@@ -26,6 +27,7 @@ impl AsRef<MediaAnalysisResult> for MediaAnalysisResult {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct MediaArrayAnalysisResult {
     pub analysisText: Option<String>,
 
@@ -39,6 +41,7 @@ impl AsRef<MediaArrayAnalysisResult> for MediaArrayAnalysisResult {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct MediaMapAnalysisResult {
     pub analysisText: Option<String>,
 
@@ -54,6 +57,7 @@ impl AsRef<MediaMapAnalysisResult> for MediaMapAnalysisResult {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct MixedMediaAnalysisResult {
     pub title: Option<String>,
 
@@ -79,6 +83,7 @@ impl AsRef<MixedMediaAnalysisResult> for MixedMediaAnalysisResult {
 }
 
 #[derive(Debug, Clone, Default, BamlDecode)]
+
 pub struct OptionalMediaAnalysisResult {
     pub analysisText: Option<String>,
 

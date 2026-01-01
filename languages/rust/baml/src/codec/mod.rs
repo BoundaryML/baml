@@ -34,7 +34,7 @@ mod from_baml_value_ref;
 
 // Re-export all public items
 pub use traits::{BamlDecode, BamlEncode, BamlClass, BamlEnum, IntoKwargs};
-pub use helpers::{decode_enum, decode_field, encode_class, encode_enum};
+pub use helpers::{decode_enum, decode_field, encode_class, encode_class_dynamic, encode_enum};
 pub use known_types::KnownTypes;
 pub use baml_value::BamlValue;
 pub use dynamic_types::{DynamicClass, DynamicEnum, DynamicUnion};

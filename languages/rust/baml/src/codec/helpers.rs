@@ -64,6 +64,24 @@ pub fn encode_class(name: &str, fields: Vec<(&str, HostValue)>) -> HostValue {
     }
 }
 
+/// Encode a class with dynamic field names (for dynamic classes that flatten __dynamic fields)
+pub fn encode_class_dynamic(name: &str, fields: Vec<(&str, HostValue)>) -> HostValue {
+    let entries = fields
+        .into_iter()
+        .map(|(k, v)| HostMapEntry {
+            key: Some(host_map_entry::Key::StringKey(k.to_string())),
+            value: Some(v),
+        })
+        .collect();
+
+    HostValue {
+        value: Some(host_value::Value::ClassValue(HostClassValue {
+            name: name.to_string(),
+            fields: entries,
+        })),
+    }
+}
+
 /// Encode an enum to HostValue
 pub fn encode_enum(enum_name: &str, variant: &str) -> HostValue {
     HostValue {

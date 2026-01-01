@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ClassWithBlockDone {
     pub i_16_digits: i64,
 
@@ -22,6 +23,7 @@ impl AsRef<ClassWithBlockDone> for ClassWithBlockDone {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ClassWithoutDone {
     pub i_16_digits: i64,
 
@@ -35,6 +37,7 @@ impl AsRef<ClassWithoutDone> for ClassWithoutDone {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct SemanticContainer {
     pub sixteen_digit_number: i64,
 
@@ -60,6 +63,7 @@ impl AsRef<SemanticContainer> for SemanticContainer {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct SmallThing {
     pub i_16_digits: i64,
 

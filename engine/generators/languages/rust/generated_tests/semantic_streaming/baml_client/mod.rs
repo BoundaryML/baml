@@ -15,9 +15,10 @@ pub mod stream_types;
 pub mod type_builder;
 pub mod types;
 
-use runtime::{get_runtime, FunctionOptions};
+use runtime::get_runtime;
+pub use runtime::FunctionOptions;
 use stream_types::StreamTypes;
-use type_builder::TypeBuilder;
+pub use type_builder::TypeBuilder;
 use types::Types;
 
 /// Re-export error type for convenience.

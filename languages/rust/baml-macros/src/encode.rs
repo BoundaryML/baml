@@ -43,11 +43,18 @@ fn derive_struct_encode(
     };
 
     let mut field_encodings = Vec::new();
+    let mut dynamic_field_name: Option<syn::Ident> = None;
 
     for field in &named_fields.named {
         let field_attrs = FieldAttrs::from_attrs(&field.attrs)?;
 
         if field_attrs.skip {
+            continue;
+        }
+
+        if field_attrs.dynamic_fields {
+            // Remember this field for flattening later
+            dynamic_field_name = Some(field.ident.as_ref().unwrap().clone());
             continue;
         }
 
@@ -61,13 +68,30 @@ fn derive_struct_encode(
         });
     }
 
+    // Generate the encode implementation
+    let encode_body = if let Some(dyn_field) = dynamic_field_name {
+        // Flatten dynamic fields into the encoding
+        quote! {
+            let mut fields: Vec<(&str, #baml_crate::__internal::HostValue)> = vec![#(#field_encodings),*];
+            // Flatten dynamic fields
+            for (key, value) in &self.#dyn_field {
+                fields.push((key.as_str(), #baml_crate::BamlEncode::baml_encode(value)));
+            }
+            #baml_crate::encode_class_dynamic(#baml_name, fields)
+        }
+    } else {
+        quote! {
+            #baml_crate::encode_class(
+                #baml_name,
+                vec![#(#field_encodings),*]
+            )
+        }
+    };
+
     Ok(quote! {
         impl #baml_crate::BamlEncode for #type_name {
             fn baml_encode(&self) -> #baml_crate::__internal::HostValue {
-                #baml_crate::encode_class(
-                    #baml_name,
-                    vec![#(#field_encodings),*]
-                )
+                #encode_body
             }
         }
     })
@@ -85,6 +109,25 @@ fn derive_enum_encode(
     for variant in &data.variants {
         let variant_attrs = VariantAttrs::from_attrs(&variant.attrs)?;
         let variant_name = &variant.ident;
+
+        if variant_attrs.dynamic_variant {
+            // Handle _Dynamic(String) variant
+            match &variant.fields {
+                Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                    variant_arms.push(quote! {
+                        Self::#variant_name(s) => #baml_crate::encode_enum(#baml_name, s)
+                    });
+                }
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        variant,
+                        "#[baml(dynamic_variant)] must be a single-field tuple variant",
+                    ));
+                }
+            }
+            continue;
+        }
+
         let baml_variant_name = variant_attrs
             .name
             .unwrap_or_else(|| variant_name.to_string());

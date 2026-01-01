@@ -8,6 +8,7 @@
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+
 pub enum TestEnum {
     Angry,
 
@@ -22,6 +23,56 @@ pub enum TestEnum {
     Exclamation,
 
     Bored,
+}
+
+impl Default for TestEnum {
+    fn default() -> Self {
+        Self::Angry
+    }
+}
+
+impl std::fmt::Display for TestEnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Angry => write!(f, "Angry"),
+
+            Self::Happy => write!(f, "Happy"),
+
+            Self::Sad => write!(f, "Sad"),
+
+            Self::Confused => write!(f, "Confused"),
+
+            Self::Excited => write!(f, "Excited"),
+
+            Self::Exclamation => write!(f, "Exclamation"),
+
+            Self::Bored => write!(f, "Bored"),
+        }
+    }
+}
+
+impl std::str::FromStr for TestEnum {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Angry" => Ok(Self::Angry),
+
+            "Happy" => Ok(Self::Happy),
+
+            "Sad" => Ok(Self::Sad),
+
+            "Confused" => Ok(Self::Confused),
+
+            "Excited" => Ok(Self::Excited),
+
+            "Exclamation" => Ok(Self::Exclamation),
+
+            "Bored" => Ok(Self::Bored),
+
+            _ => Err(()),
+        }
+    }
 }
 
 impl AsRef<TestEnum> for TestEnum {

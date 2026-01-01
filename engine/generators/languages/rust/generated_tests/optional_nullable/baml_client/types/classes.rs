@@ -9,6 +9,7 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct ComplexOptional {
     pub data: Option<OptionalData>,
 
@@ -24,6 +25,7 @@ impl AsRef<ComplexOptional> for ComplexOptional {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct MixedOptionalNullable {
     pub id: i64,
 
@@ -53,6 +55,7 @@ impl AsRef<MixedOptionalNullable> for MixedOptionalNullable {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct NullableTypes {
     pub nullableString: Option<String>,
 
@@ -74,6 +77,7 @@ impl AsRef<NullableTypes> for NullableTypes {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct OptionalData {
     pub value: String,
 
@@ -89,6 +93,7 @@ impl AsRef<OptionalData> for OptionalData {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct OptionalFields {
     pub requiredString: String,
 
@@ -114,6 +119,7 @@ impl AsRef<OptionalFields> for OptionalFields {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct OptionalItem {
     pub id: i64,
 
@@ -131,6 +137,7 @@ impl AsRef<OptionalItem> for OptionalItem {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct OptionalValue {
     pub data: Option<Union2IntOrString>,
 
@@ -144,6 +151,7 @@ impl AsRef<OptionalValue> for OptionalValue {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct Product {
     pub id: i64,
 
@@ -159,6 +167,7 @@ impl AsRef<Product> for Product {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct UnionWithNull {
     pub simpleUnion: Union2IntOrString,
 
@@ -176,6 +185,7 @@ impl AsRef<UnionWithNull> for UnionWithNull {
 }
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
+
 pub struct User {
     pub id: i64,
 
