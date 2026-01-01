@@ -1,0 +1,91 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== BYTECODE ===
+Functions: 10
+Objects: 38
+Globals: 28
+
+Function ConsecutiveHeaders (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (multiple consecutive headers)
+     1   RETURN         
+
+Function HeaderLevels (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (deep nesting)
+     1   RETURN         
+
+Function HeaderOnlyFunction (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (default)
+     1   RETURN         
+
+Function HeadersAndComments (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (test)
+     1   RETURN         
+
+Function HeadersAroundExpressions (arity: 0, kind: Exec):
+     0    LOAD_CONST 0           (null)
+     1    LOAD_CONST 0           (null)
+     2    LOAD_CONST 0           (null)
+     3    LOAD_CONST 0           (null)
+     4    LOAD_CONST 0           (null)
+     5    LOAD_CONST 1           (5)
+     6    STORE_VAR 1            (x)
+     7    LOAD_VAR 1             (x)
+     8    LOAD_CONST 2           (0)
+     9    CMP_OP >               
+     10   POP_JUMP_IF_FALSE +2   (to 12)
+     11   JUMP +2                (to 13)
+     12   JUMP +1                (to 13)
+     13   LOAD_CONST 3           (1)
+     14   LOAD_CONST 4           (2)
+     15   LOAD_CONST 5           (3)
+     16   ALLOC_ARRAY 3          
+     17   STORE_VAR 2            (_iter)
+     18   LOAD_GLOBAL 0          (<fn baml.Array.length>)
+     19   LOAD_VAR 2             (_iter)
+     20   CALL 1                 
+     21   STORE_VAR 3            (_len)
+     22   LOAD_CONST 2           (0)
+     23   STORE_VAR 4            (_i)
+     24   LOAD_VAR 4             (_i)
+     25   LOAD_VAR 3             (_len)
+     26   CMP_OP <               
+     27   POP_JUMP_IF_FALSE +2   (to 29)
+     28   JUMP +3                (to 31)
+     29   LOAD_VAR 1             (x)
+     30   RETURN                 
+     31   LOAD_VAR 2             (_iter)
+     32   LOAD_VAR 4             (_i)
+     33   LOAD_ARRAY_ELEMENT     
+     34   STORE_VAR 5            (i)
+     35   LOAD_VAR 4             (_i)
+     36   LOAD_CONST 3           (1)
+     37   BIN_OP +               
+     38   STORE_VAR 4            (_i)
+     39   JUMP -15               (to 24)
+
+Function HeadersInComplexNesting (arity: 0, kind: Exec):
+     0   LOAD_CONST 0           (true)
+     1   POP_JUMP_IF_FALSE +2   (to 3)
+     2   JUMP +3                (to 5)
+     3   LOAD_CONST 1           (else value)
+     4   JUMP +2                (to 6)
+     5   LOAD_CONST 2           (deep value)
+     6   RETURN                 
+
+Function HeadersWithSpecialChars (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (special chars)
+     1   RETURN         
+
+Function HeadersWithWhitespace (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (whitespace test)
+     1   RETURN         
+
+Function UnicodeHeaders (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (test)
+     1   RETURN         
+
+Function VeryLongHeaderTitle (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (long headers)
+     1   RETURN

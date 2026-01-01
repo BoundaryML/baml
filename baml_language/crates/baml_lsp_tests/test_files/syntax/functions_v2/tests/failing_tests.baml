@@ -127,45 +127,25 @@ test Bar {
 
 //----
 //- diagnostics
-// Error: Expected config key, found Comma
-//     ╭─[ 0:78:23 ]
-//     │
-//  78 │   functions [InputEnum, InputEnum]
-//     │                       ┬  
-//     │                       ╰── Expected config key, found Comma
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Duplicate test 'Bar'
+// Error: Duplicate test 'Bar' for function 'InputEnum'
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ client<llm> Bar {
 //    │ │ 
-//    │ ╰─ test 'Bar' defined in functions_v2_tests_failing_tests.baml
+//    │ ╰─ test 'Bar' for function 'InputEnum' defined in functions_v2_tests_failing_tests.baml
 //    │ │ 
-//    │ ╰─ 'Bar' previously defined in functions_v2_tests_failing_tests.baml
+//    │ ╰─ 'Bar' for 'InputEnum' previously defined in functions_v2_tests_failing_tests.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate test 'Foo'
+// Error: Duplicate test 'Foo' for function 'InputImage'
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ client<llm> Bar {
 //    │ │ 
-//    │ ╰─ test 'Foo' defined in functions_v2_tests_failing_tests.baml
+//    │ ╰─ test 'Foo' for function 'InputImage' defined in functions_v2_tests_failing_tests.baml
 //    │ │ 
-//    │ ╰─ 'Foo' previously defined in functions_v2_tests_failing_tests.baml
+//    │ ╰─ 'Foo' for 'InputImage' previously defined in functions_v2_tests_failing_tests.baml
 //    │ 
 //    │ Note: Error code: E0011
-// ───╯
-// Error: Unknown type // Do something
-// string
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ client<llm> Bar {
-//    │ │ 
-//    │ ╰─ Unknown type // Do something
-// string
-//    │ 
-//    │ Note: Error code: E0002
 // ───╯

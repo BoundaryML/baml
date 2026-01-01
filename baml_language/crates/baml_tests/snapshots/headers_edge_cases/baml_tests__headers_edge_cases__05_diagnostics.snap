@@ -1,0 +1,14 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== DIAGNOSTICS ===
+  [type] Error: Expected string, found int
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Edge cases for MDX headers
+   │ │ 
+   │ ╰─ Expected string, found int
+   │ 
+   │ Note: Error code: E0001
+───╯

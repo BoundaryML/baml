@@ -21,75 +21,12 @@ test MyTest {
 
 //----
 //- diagnostics
-// Error: Expected client name, found Quote
-//    ╭─[ 0:4:10 ]
-//    │
-//  4 │   client "openai/gpt-4"
-//    │          ┬  
-//    │          ╰── Expected client name, found Quote
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    ╭─[ 0:4:10 ]
-//    │
-//  4 │   client "openai/gpt-4"
-//    │          ┬  
-//    │          ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'openai', found Word
-//    ╭─[ 0:4:11 ]
-//    │
-//  4 │   client "openai/gpt-4"
-//    │           ───┬──  
-//    │              ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'openai', found Word
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '/', found Slash
-//    ╭─[ 0:4:17 ]
-//    │
-//  4 │   client "openai/gpt-4"
-//    │                 ┬  
-//    │                 ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '/', found Slash
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'gpt-4', found Word
-//    ╭─[ 0:4:18 ]
-//    │
-//  4 │   client "openai/gpt-4"
-//    │                  ──┬──  
-//    │                    ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'gpt-4', found Word
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    ╭─[ 0:4:23 ]
-//    │
-//  4 │   client "openai/gpt-4"
-//    │                       ┬  
-//    │                       ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
 // Error: Expected config key, found At
 //     ╭─[ 0:12:5 ]
 //     │
 //  12 │   } @check(args_check, {{ true }})
 //     │     ┬  
 //     │     ╰── Expected config key, found At
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected config key, found Comma
-//     ╭─[ 0:12:22 ]
-//     │
-//  12 │   } @check(args_check, {{ true }})
-//     │                      ┬  
-//     │                      ╰── Expected config key, found Comma
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

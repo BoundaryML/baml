@@ -1,0 +1,82 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "TestClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "baml-openai-chat"
+          WORD "baml-openai-chat"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "FunctionWithComments"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "// Comment after arrow
+string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client TestClient"
+        KW_CLIENT "client"
+        WORD "TestClient"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL #"test"#
+          HASH "#"
+          QUOTE """
+          KW_TEST "test"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CommentAfterArrow"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "// inline comment
+string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client TestClient"
+        KW_CLIENT "client"
+        WORD "TestClient"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL #"test"#
+          HASH "#"
+          QUOTE """
+          KW_TEST "test"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

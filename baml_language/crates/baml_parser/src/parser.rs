@@ -151,6 +151,11 @@ enum Event {
         found: String,
         span: Span,
     },
+    /// A syntax hint with a custom message (not using "Expected/found" format)
+    SyntaxHint {
+        message: String,
+        span: Span,
+    },
 }
 
 /// Recursive descent parser with error recovery.
@@ -287,11 +292,27 @@ impl<'a> Parser<'a> {
         false
     }
 
-    /// Check if position i starts a line comment (//)
+    /// Check if position i starts a line comment (//) but NOT a header comment (//#)
     fn is_line_comment_at(&self, i: usize) -> bool {
-        i + 1 < self.tokens.len()
+        if i + 1 < self.tokens.len()
             && self.tokens[i].kind == TokenKind::Slash
             && self.tokens[i + 1].kind == TokenKind::Slash
+        {
+            // Check if it's a header comment (//# ) - those are NOT regular comments
+            if i + 2 < self.tokens.len() && self.tokens[i + 2].kind == TokenKind::Hash {
+                return false; // It's a header, not a comment to skip
+            }
+            return true;
+        }
+        false
+    }
+
+    /// Check if position i starts a header comment (//#)
+    fn is_header_comment_at(&self, i: usize) -> bool {
+        i + 2 < self.tokens.len()
+            && self.tokens[i].kind == TokenKind::Slash
+            && self.tokens[i + 1].kind == TokenKind::Slash
+            && self.tokens[i + 2].kind == TokenKind::Hash
     }
 
     /// Check if position i starts a block comment (/*)
@@ -304,6 +325,41 @@ impl<'a> Parser<'a> {
     /// Check if we're at the start of a line comment (//)
     fn at_line_comment_start(&self) -> bool {
         self.is_line_comment_at(self.current)
+    }
+
+    /// Check if we're at the start of a header comment (//#)
+    /// This skips trivia (whitespace, newlines, regular comments) to find the actual token position.
+    fn at_header_comment_start(&self) -> bool {
+        let mut i = self.current;
+        // Skip trivia (whitespace, newlines, regular comments) to find the actual token
+        while i < self.tokens.len() {
+            let kind = self.tokens[i].kind;
+            if kind == TokenKind::Whitespace || kind == TokenKind::Newline {
+                i += 1;
+            } else if self.is_line_comment_at(i) {
+                // Skip regular line comment (but not header comments)
+                i += 2; // Skip //
+                while i < self.tokens.len() && self.tokens[i].kind != TokenKind::Newline {
+                    i += 1;
+                }
+            } else if self.is_block_comment_at(i) {
+                // Skip block comment
+                i += 2; // Skip /*
+                while i < self.tokens.len() {
+                    if self.tokens[i].kind == TokenKind::Star
+                        && i + 1 < self.tokens.len()
+                        && self.tokens[i + 1].kind == TokenKind::Slash
+                    {
+                        i += 2; // Skip */
+                        break;
+                    }
+                    i += 1;
+                }
+            } else {
+                break;
+            }
+        }
+        self.is_header_comment_at(i)
     }
 
     /// Check if we're at the start of a block comment (/*)
@@ -373,6 +429,68 @@ impl<'a> Parser<'a> {
         self.events.push(Event::Token {
             kind: SyntaxKind::BLOCK_COMMENT,
             text,
+        });
+    }
+
+    /// Consume a header comment (//#...) as a `HEADER_COMMENT` node.
+    /// Header comments are MDX-style headers: //# Level 1, //## Level 2, etc.
+    /// The number of # determines the header level.
+    fn consume_header_comment(&mut self) {
+        // First, skip any leading trivia (whitespace, newlines, regular comments) and emit them
+        while self.current < self.tokens.len() {
+            let kind = self.tokens[self.current].kind;
+            if kind == TokenKind::Whitespace || kind == TokenKind::Newline {
+                self.events.push(Event::Token {
+                    kind: token_kind_to_syntax_kind(kind),
+                    text: self.tokens[self.current].text.clone(),
+                });
+                self.current += 1;
+            } else if self.is_line_comment_at(self.current) {
+                // Consume regular line comment as trivia
+                self.consume_line_comment();
+            } else if self.is_block_comment_at(self.current) {
+                // Consume block comment as trivia
+                self.consume_block_comment();
+            } else {
+                break;
+            }
+        }
+
+        self.with_node(SyntaxKind::HEADER_COMMENT, |p| {
+            // Consume // prefix
+            p.events.push(Event::Token {
+                kind: SyntaxKind::SLASH,
+                text: p.tokens[p.current].text.clone(),
+            });
+            p.current += 1;
+            p.events.push(Event::Token {
+                kind: SyntaxKind::SLASH,
+                text: p.tokens[p.current].text.clone(),
+            });
+            p.current += 1;
+
+            // Count and consume # tokens (determines header level)
+            while p.current < p.tokens.len() && p.tokens[p.current].kind == TokenKind::Hash {
+                p.events.push(Event::Token {
+                    kind: SyntaxKind::HASH,
+                    text: p.tokens[p.current].text.clone(),
+                });
+                p.current += 1;
+            }
+
+            // Consume the rest of the line (header title content)
+            while p.current < p.tokens.len() {
+                let token = &p.tokens[p.current];
+                if token.kind == TokenKind::Newline {
+                    break;
+                }
+                // Emit each token with its original kind
+                p.events.push(Event::Token {
+                    kind: token_kind_to_syntax_kind(token.kind),
+                    text: token.text.clone(),
+                });
+                p.current += 1;
+            }
         });
     }
 
@@ -518,6 +636,17 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// Emit a syntax hint with a custom message (not using "Expected/found" format)
+    fn hint(&mut self, message: String) {
+        let span = self.current().map(|t| t.span).unwrap_or_else(|| {
+            self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
+                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
+            })
+        });
+
+        self.events.push(Event::SyntaxHint { message, span });
+    }
+
     /// Parse with a node wrapper
     fn with_node<F>(&mut self, kind: SyntaxKind, f: F)
     where
@@ -560,6 +689,9 @@ impl<'a> Parser<'a> {
                         found,
                         span,
                     });
+                }
+                Event::SyntaxHint { message, span } => {
+                    errors.push(ParseError::SyntaxHint { message, span });
                 }
             }
         }
@@ -1275,9 +1407,11 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::CLIENT_FIELD, |p| {
             p.expect(TokenKind::Client);
 
-            // Client name
+            // Client name: either an identifier (Word) or a shorthand string like "provider/model"
             if p.at(TokenKind::Word) {
                 p.bump();
+            } else if p.at(TokenKind::Quote) {
+                p.parse_string();
             } else {
                 p.error("client name".to_string());
             }
@@ -1310,6 +1444,12 @@ impl<'a> Parser<'a> {
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace
                 if p.at_top_level_keyword() {
                     break;
+                }
+
+                // Handle MDX-style header comments (//#...)
+                if p.at_header_comment_start() {
+                    p.consume_header_comment();
+                    continue;
                 }
 
                 p.parse_stmt();
@@ -1779,6 +1919,16 @@ impl<'a> Parser<'a> {
         while let Some(token) = self.current() {
             let op = token.kind;
 
+            // If we see a / that might be the start of a header comment, check and stop
+            // Headers should only appear at statement boundaries, not in expressions
+            if op == TokenKind::Slash {
+                // Check if this is the start of a header comment (//#)
+                // We need to check the raw token stream, not current() which skips comments
+                if self.at_header_comment_start() {
+                    break;
+                }
+            }
+
             // Check for special cases first
             if op == TokenKind::Less && self.looks_like_generic_args() {
                 // Parse as generic arguments: foo<T>
@@ -1893,7 +2043,7 @@ impl<'a> Parser<'a> {
                         return i;
                     }
                 }
-                Event::UnexpectedToken { .. } => {}
+                Event::UnexpectedToken { .. } | Event::SyntaxHint { .. } => {}
             }
         }
 
@@ -1936,7 +2086,7 @@ impl<'a> Parser<'a> {
                         return *kind == SyntaxKind::WORD;
                     }
                 }
-                Event::UnexpectedToken { .. } => {}
+                Event::UnexpectedToken { .. } | Event::SyntaxHint { .. } => {}
             }
         }
         false
@@ -2053,10 +2203,16 @@ impl<'a> Parser<'a> {
             if !p.at(TokenKind::RBracket) {
                 p.parse_expr();
 
-                while p.eat(TokenKind::Comma) {
-                    if p.at(TokenKind::RBracket) {
-                        break; // Trailing comma
+                // Allow commas and/or newlines as separators between elements
+                loop {
+                    // Consume optional comma
+                    p.eat(TokenKind::Comma);
+
+                    // Check if we're done
+                    if p.at(TokenKind::RBracket) || p.at_end() {
+                        break;
                     }
+
                     p.parse_expr();
                 }
             }
@@ -2158,6 +2314,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // Check if word is followed by colon (map field)
+                // Config-style (word value) is only allowed in config contexts, not expressions
                 if let Some(token_after_word) = self.peek(2) {
                     if token_after_word.kind == TokenKind::Colon {
                         return true; // word: pattern indicates a map
@@ -2169,7 +2326,8 @@ impl<'a> Parser<'a> {
         false // Default to block
     }
 
-    /// Parse a map literal: { "key": value, ... }
+    /// Parse a map literal in expression context: { "key": value, ... }
+    /// Requires colons and commas (JSON-style)
     fn parse_map_literal(&mut self) {
         self.with_node(SyntaxKind::MAP_LITERAL, |p| {
             p.expect(TokenKind::LBrace);
@@ -2270,7 +2428,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a single map entry: key: value
+    /// Parse a single map entry in expression context: key: value
+    /// Requires colon between key and value (JSON-style)
     fn parse_map_entry(&mut self) {
         self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
             // Key - can be identifier or string literal
@@ -2281,7 +2440,7 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            // Colon
+            // Colon required in expression context
             if !p.expect(TokenKind::Colon) {
                 return; // Error already emitted by expect
             }
@@ -2443,12 +2602,16 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::LBrace);
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword() {
+                // Error recovery: if we see a top-level keyword, assume we missed a closing brace.
+                // Exception: RetryPolicy can appear as a config key (e.g., `retry_policy MyPolicy`
+                // inside client blocks), so we don't break on it - let parse_config_item handle it.
+                if p.at_top_level_keyword() && !p.at(TokenKind::RetryPolicy) {
                     break;
                 }
 
                 p.parse_config_item();
+                // Allow optional comma between config items
+                p.eat(TokenKind::Comma);
             }
 
             p.expect(TokenKind::RBrace);
@@ -2457,9 +2620,22 @@ impl<'a> Parser<'a> {
 
     fn parse_config_item(&mut self) {
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
-            // Config key (identifier)
-            if p.at(TokenKind::Word) {
+            // Config key: identifier, keyword-as-identifier, or quoted/raw string
+            // Note: RetryPolicy is a top-level keyword (for `retry_policy MyPolicy { ... }` declarations)
+            // but it's also used as a config key inside client blocks (e.g., `retry_policy MyPolicy`).
+            // We explicitly allow it here so it parses as a config item rather than triggering
+            // error recovery that would break out of the config block.
+            if p.at(TokenKind::Word) || p.at(TokenKind::RetryPolicy) {
                 p.bump();
+            } else if p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
+                // Quoted or raw string key (e.g., "string key" or #"raw key"#)
+                if !p.parse_any_string() {
+                    p.error("config key".to_string());
+                    if !p.at_end() {
+                        p.bump();
+                    }
+                    return;
+                }
             } else {
                 p.error("config key".to_string());
                 if !p.at_end() {
@@ -2485,6 +2661,7 @@ impl<'a> Parser<'a> {
             // Config values can be:
             // - Strings: "value"
             // - Raw strings: #"value"#
+            // - Arrays: [item1, item2]
             // - Unquoted strings: gpt-4o, env.OPENAI_API_KEY
             // - Numbers: 123, 3.14
 
@@ -2493,11 +2670,24 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            // Parse unquoted string - consume tokens until newline, comma, or brace
+            // Array in config context: uses config-style parsing for nested objects
+            if p.at(TokenKind::LBracket) {
+                p.parse_config_array();
+                return;
+            }
+
+            // Nested config block: key { ... }
+            if p.at(TokenKind::LBrace) {
+                p.parse_config_block();
+                return;
+            }
+
+            // Parse unquoted string - consume tokens until newline, comma, or brace/bracket
             while !p.at_end() {
-                // Check if we should stop - at brace/comma OR newline is ahead
+                // Check if we should stop - at brace/bracket/comma OR newline is ahead
                 if p.at(TokenKind::RBrace)
                     || p.at(TokenKind::LBrace)
+                    || p.at(TokenKind::RBracket)
                     || p.at(TokenKind::Comma)
                     || p.has_newline_ahead()
                 {
@@ -2506,6 +2696,53 @@ impl<'a> Parser<'a> {
                 p.bump();
             }
         });
+    }
+
+    /// Parse an array in config context - uses config-style parsing for nested objects
+    fn parse_config_array(&mut self) {
+        self.with_node(SyntaxKind::ARRAY_LITERAL, |p| {
+            p.expect(TokenKind::LBracket);
+
+            if !p.at(TokenKind::RBracket) {
+                p.parse_config_array_element();
+
+                // Allow commas and/or newlines as separators
+                loop {
+                    let pos_before = p.current;
+                    p.eat(TokenKind::Comma);
+                    if p.at(TokenKind::RBracket) || p.at_end() {
+                        break;
+                    }
+                    p.parse_config_array_element();
+                    // Safety: break if no progress was made to avoid infinite loop
+                    if p.current == pos_before {
+                        p.error("array element".to_string());
+                        p.bump();
+                    }
+                }
+            }
+
+            p.expect(TokenKind::RBracket);
+        });
+    }
+
+    /// Parse an element in a config array - can be a config block or simple value
+    fn parse_config_array_element(&mut self) {
+        if self.at(TokenKind::LBrace) {
+            // Parse as config block (config-style: no colons required)
+            self.parse_config_block();
+        } else if self.at(TokenKind::RBracket) {
+            // Empty or trailing - don't consume
+            return;
+        } else if self.at(TokenKind::Word) {
+            // Simple identifier (e.g., client names in strategy arrays)
+            self.with_node(SyntaxKind::CONFIG_VALUE, |p| {
+                p.bump();
+            });
+        } else {
+            // Parse as simple value (string, number, etc.)
+            self.parse_config_value();
+        }
     }
 
     // ============ Test Parsing ============
@@ -2517,10 +2754,23 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::Test);
 
             // Test name
-            if p.at(TokenKind::Word) {
+            let test_name = if p.at(TokenKind::Word) {
+                let name = p.current().map(|t| t.text.clone());
                 p.bump();
+                name
             } else {
                 p.error("test name".to_string());
+                None
+            };
+
+            // Check for unnecessary parentheses and emit helpful hint
+            if p.at(TokenKind::LParen) {
+                let name = test_name.as_deref().unwrap_or("Name");
+                p.hint(format!("remove parentheses from test name: `test {}`", name));
+                p.bump(); // consume (
+                if p.at(TokenKind::RParen) {
+                    p.bump(); // consume )
+                }
             }
 
             // Config block
@@ -2642,6 +2892,10 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
             && parser.current().map(|t| t.text == "type").unwrap_or(false)
         {
             parser.parse_type_alias();
+        } else if parser.at(TokenKind::Let) {
+            parser.parse_let_stmt();
+        } else if parser.at_header_comment_start() {
+            parser.consume_header_comment();
         } else {
             parser.error("top-level declaration".to_string());
             parser.bump(); // Skip unknown token

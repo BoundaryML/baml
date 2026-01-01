@@ -2223,6 +2223,7 @@ fn get_error_file_id(error: &StoredCompilerError) -> FileId {
         },
         CompilerError::NameError(e) => match e {
             baml_diagnostics::NameError::DuplicateName { second, .. } => second.file_id,
+            baml_diagnostics::NameError::DuplicateTestForFunction { second, .. } => second.file_id,
         },
     }
 }

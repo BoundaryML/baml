@@ -54,60 +54,6 @@ test AttemptToMakeClassInfinitelyRecursive {
 
 //----
 //- diagnostics
-// Error: Expected client name, found Quote
-//    ╭─[ 0:2:10 ]
-//    │
-//  2 │   client "openai/gpt-4o-mini"
-//    │          ┬  
-//    │          ╰── Expected client name, found Quote
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    ╭─[ 0:2:10 ]
-//    │
-//  2 │   client "openai/gpt-4o-mini"
-//    │          ┬  
-//    │          ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'openai', found Word
-//    ╭─[ 0:2:11 ]
-//    │
-//  2 │   client "openai/gpt-4o-mini"
-//    │           ───┬──  
-//    │              ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'openai', found Word
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '/', found Slash
-//    ╭─[ 0:2:17 ]
-//    │
-//  2 │   client "openai/gpt-4o-mini"
-//    │                 ┬  
-//    │                 ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '/', found Slash
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'gpt-4o-mini', found Word
-//    ╭─[ 0:2:18 ]
-//    │
-//  2 │   client "openai/gpt-4o-mini"
-//    │                  ─────┬─────  
-//    │                       ╰─────── Expected Only 'client' and 'prompt' allowed in LLM function, found 'gpt-4o-mini', found Word
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    ╭─[ 0:2:29 ]
-//    │
-//  2 │   client "openai/gpt-4o-mini"
-//    │                             ┬  
-//    │                             ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
 // Error: Expected RBrace, found TypeBuilder
 //     ╭─[ 0:14:3 ]
 //     │

@@ -32,6 +32,7 @@ where
                 span,
                 UNEXPECTED_EOF,
             ),
+            ParseError::SyntaxHint { message, span } => simple_error(message, span, UNEXPECTED_TOKEN),
         },
         CompilerError::TypeError(type_error) => match type_error {
             // TODO: This error should provide a second span that indicates the source
@@ -123,6 +124,26 @@ where
                         Label::new(first)
                             .with_message(format!("'{name}' previously defined in {first_path}")),
                     ),
+                DUPLICATE_NAME,
+            ),
+            NameError::DuplicateTestForFunction {
+                test_name,
+                function_name,
+                first,
+                first_path,
+                second,
+                second_path,
+            } => (
+                Report::build(ReportKind::Error, second)
+                    .with_message(format!(
+                        "Duplicate test '{test_name}' for function '{function_name}'"
+                    ))
+                    .with_label(Label::new(second).with_message(format!(
+                        "test '{test_name}' for function '{function_name}' defined in {second_path}"
+                    )))
+                    .with_label(Label::new(first).with_message(format!(
+                        "'{test_name}' for '{function_name}' previously defined in {first_path}"
+                    ))),
                 DUPLICATE_NAME,
             ),
         },

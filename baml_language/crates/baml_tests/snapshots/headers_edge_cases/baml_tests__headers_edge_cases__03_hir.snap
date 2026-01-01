@@ -1,0 +1,73 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function HeaderOnlyFunction() -> string {
+      "default"
+}
+
+function VeryLongHeaderTitle() -> string {
+      "long headers"
+}
+
+function HeadersAroundExpressions() -> string {
+      let x = 5;
+      if (x > 0) {
+          x
+      } else {
+          0
+      };
+      {
+          let _iter = [1, 2, 3];
+          let _len = _iter.length();
+          let _i = 0;
+          while (_i < _len) {
+              let i = _iter[_i];
+              _i += 1;
+              i;
+          }
+      };
+      x
+}
+
+function HeadersInComplexNesting() -> string {
+      let result = {
+          let inner = if (true) {
+              let deep = {
+                  "deep value"
+              };
+              deep
+          } else {
+              "else value"
+          };
+          inner
+      };
+      result
+}
+
+function HeadersAndComments() -> string {
+      let x = "test";
+      x
+}
+
+function ConsecutiveHeaders() -> string {
+      "multiple consecutive headers"
+}
+
+function UnicodeHeaders() -> string {
+      "test"
+}
+
+function HeaderLevels() -> string {
+      "deep nesting"
+}
+
+function HeadersWithSpecialChars() -> string {
+      "special chars"
+}
+
+function HeadersWithWhitespace() -> string {
+      let x = "whitespace test";
+      x
+}

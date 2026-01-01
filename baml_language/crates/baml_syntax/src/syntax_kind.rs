@@ -113,8 +113,9 @@ pub enum SyntaxKind {
     // Whitespace and comments (preserved for losslessness)
     WHITESPACE,
     NEWLINE,
-    LINE_COMMENT,  // //...
-    BLOCK_COMMENT, // /* ... */
+    LINE_COMMENT,   // //...
+    BLOCK_COMMENT,  // /* ... */
+    HEADER_COMMENT, // //# Header (MDX-style)
 
     // Error token
     ERROR_TOKEN,

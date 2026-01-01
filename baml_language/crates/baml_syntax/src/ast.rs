@@ -92,6 +92,10 @@ impl TypeExpr {
         for child in self.syntax.children_with_tokens() {
             match child {
                 rowan::NodeOrToken::Token(token) => {
+                    // Skip trivia tokens (whitespace, comments)
+                    if token.kind().is_trivia() {
+                        continue;
+                    }
                     if token.kind() == SyntaxKind::PIPE {
                         let trimmed = current_part.trim().to_string();
                         if !trimmed.is_empty() {
@@ -343,14 +347,21 @@ impl ConfigItem {
             .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
-    /// Get the config item value (second WORD token, if present).
+    /// Get the config item value (WORD token inside CONFIG_VALUE, if present).
     /// For simple `key value` patterns like `provider openai`.
+    /// The value is nested inside a CONFIG_VALUE node: CONFIG_ITEM { WORD "key", CONFIG_VALUE { WORD "value" } }
     pub fn value_word(&self) -> Option<SyntaxToken> {
+        // Find the CONFIG_VALUE child node
         self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
-            .nth(1)
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .and_then(|config_value| {
+                // Look for a WORD token inside CONFIG_VALUE
+                config_value
+                    .children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|token| token.kind() == SyntaxKind::WORD)
+            })
     }
 }
 
@@ -366,15 +377,32 @@ impl TestDef {
             .nth(0) // Get the first WORD (test keyword is KW_TEST, not WORD)
     }
 
-    /// Get the function name that this test is for.
+    /// Get the function name that this test is for (first function only).
     /// Pattern: `test <TestName> { functions [<FunctionName>] ... }`
     pub fn function_name(&self) -> Option<SyntaxToken> {
-        // Look for a ConfigItem with key "functions" and extract the function name
+        self.function_names().into_iter().next()
+    }
+
+    /// Get all function names that this test is for.
+    /// Pattern: `test <TestName> { functions [<Func1>, <Func2>, ...] ... }`
+    pub fn function_names(&self) -> Vec<SyntaxToken> {
+        // Look for a ConfigItem with key "functions" and extract all function names
+        // The function names are inside a CONFIG_VALUE node: functions [Func1, Func2]
         self.syntax
             .descendants()
             .filter_map(ConfigItem::cast)
             .find(|item| item.key().map(|k| k.text() == "functions").unwrap_or(false))
-            .and_then(|item| item.value_word())
+            .map(|item| {
+                // Look for WORD tokens within the config item's descendants
+                // Skip the first one (which is the key "functions")
+                item.syntax()
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .filter(|token| token.kind() == SyntaxKind::WORD)
+                    .skip(1) // Skip "functions" key
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Get the config block.
@@ -803,7 +831,9 @@ impl BlockExpr {
                         | SyntaxKind::INDEX_EXPR
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::ARRAY_LITERAL
-                        | SyntaxKind::OBJECT_LITERAL => Some(BlockElement::ExprNode(n)),
+                        | SyntaxKind::OBJECT_LITERAL
+                        | SyntaxKind::STRING_LITERAL
+                        | SyntaxKind::RAW_STRING_LITERAL => Some(BlockElement::ExprNode(n)),
                         _ => None,
                     }
                 }

@@ -76,25 +76,4 @@ test Foo {
 
 //----
 //- diagnostics
-// Error: Duplicate test 'Foo'
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ client<llm> Bar {
-//    │ │ 
-//    │ ╰─ test 'Foo' defined in functions_v2_tests_valid_tests.baml
-//    │ │ 
-//    │ ╰─ 'Foo' previously defined in functions_v2_tests_valid_tests.baml
-//    │ 
-//    │ Note: Error code: E0011
-// ───╯
-// Error: Unknown type // Do something
-// string
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ client<llm> Bar {
-//    │ │ 
-//    │ ╰─ Unknown type // Do something
-// string
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
+// <no-diagnostics-expected>

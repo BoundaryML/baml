@@ -261,6 +261,7 @@ fn parse_error_to_diagnostic(
             span,
             "E0009",
         ),
+        ParseError::SyntaxHint { message, span } => (message.clone(), span, "E0010"),
     };
 
     let (_, source_text, line_index) = file_info.get(&span.file_id)?;
@@ -331,6 +332,63 @@ fn name_error_to_diagnostic(
                     range,
                     severity: Some(DiagnosticSeverity::ERROR),
                     code: Some(lsp_types::NumberOrString::String("E0011".to_string())),
+                    code_description: None,
+                    source: Some("baml".to_string()),
+                    message,
+                    related_information,
+                    tags: None,
+                    data: None,
+                },
+                second.file_id,
+            ))
+        }
+        NameError::DuplicateTestForFunction {
+            test_name,
+            function_name,
+            first,
+            first_path,
+            second,
+            second_path: _,
+        } => {
+            let (_, source_text, line_index) = file_info.get(&second.file_id)?;
+            let range = convert_text_range(second.range).to_range(
+                source_text,
+                line_index,
+                session.position_encoding,
+            );
+
+            let message = format!(
+                "Duplicate test `{}` for function `{}` (first defined in {})",
+                test_name, function_name, first_path
+            );
+
+            // Build related information pointing to the first definition
+            let related_information = file_info.get(&first.file_id).and_then(
+                |(path, first_source_text, first_line_index)| {
+                    let first_range = convert_text_range(first.range).to_range(
+                        first_source_text,
+                        first_line_index,
+                        session.position_encoding,
+                    );
+                    let uri = Url::from_file_path(path).ok()?;
+                    Some(vec![lsp_types::DiagnosticRelatedInformation {
+                        location: lsp_types::Location {
+                            uri,
+                            range: first_range,
+                        },
+                        message: format!(
+                            "First definition of test `{}` for `{}` here",
+                            test_name, function_name
+                        ),
+                    }])
+                },
+            );
+
+            Some((
+                lsp_types::Diagnostic {
+                    range,
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: Some(lsp_types::NumberOrString::String("E0012".to_string())),
                     code_description: None,
                     source: Some("baml".to_string()),
                     message,
@@ -434,6 +492,7 @@ fn get_parse_error_file_id(error: &ParseError) -> FileId {
     match error {
         ParseError::UnexpectedToken { span, .. } => span.file_id,
         ParseError::UnexpectedEof { span, .. } => span.file_id,
+        ParseError::SyntaxHint { span, .. } => span.file_id,
     }
 }
 

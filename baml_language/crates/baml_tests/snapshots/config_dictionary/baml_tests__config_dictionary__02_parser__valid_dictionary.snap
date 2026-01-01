@@ -1,0 +1,340 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "MyClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "baml-openai-chat"
+          WORD "baml-openai-chat"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "max_tokens"
+            CONFIG_VALUE "100"
+              INTEGER_LITERAL "100"
+          CONFIG_ITEM
+            WORD "array_key_with_quoted_unquoted"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_VALUE
+                  STRING_LITERAL "abc"
+                    QUOTE """
+                    WORD "abc"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "abc"
+                    QUOTE """
+                    WORD "abc"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "ccc"
+                    QUOTE """
+                    WORD "ccc"
+                    QUOTE """
+                R_BRACKET "]"
+          CONFIG_ITEM
+            WORD "key2"
+            CONFIG_VALUE
+              STRING_LITERAL "some random value"
+                QUOTE """
+                WORD "some"
+                WORD "random"
+                WORD "value"
+                QUOTE """
+          COMMA ","
+          CONFIG_ITEM
+            WORD "hello"
+            CONFIG_VALUE
+              STRING_LITERAL "world"
+                QUOTE """
+                WORD "world"
+                QUOTE """
+          COMMA ","
+          CONFIG_ITEM
+            WORD "thing"
+            CONFIG_VALUE
+              STRING_LITERAL "hello"
+                QUOTE """
+                WORD "hello"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "block_string"
+            CONFIG_VALUE
+              RAW_STRING_LITERAL #"hello there my frien
+                d"#
+                HASH "#"
+                QUOTE """
+                WORD "hello"
+                WORD "there"
+                WORD "my"
+                WORD "frien"
+                WORD "d"
+                QUOTE """
+                HASH "#"
+          CONFIG_ITEM
+            WORD "inline_raw_string"
+            CONFIG_VALUE
+              RAW_STRING_LITERAL #"inline "raw" string,,"#
+                HASH "#"
+                QUOTE """
+                WORD "inline"
+                QUOTE """
+                WORD "raw"
+                QUOTE """
+                WORD "string"
+                COMMA ","
+                COMMA ","
+                QUOTE """
+                HASH "#"
+          CONFIG_ITEM
+            WORD "keyStringNoSpacesWorksWithoutQuotes"
+            CONFIG_VALUE "NoQuotes!!123"
+              WORD "NoQuotes"
+              NOT "!"
+              NOT "!"
+              INTEGER_LITERAL "123"
+          CONFIG_ITEM
+            WORD "unquoted_string_whitespace"
+            CONFIG_VALUE "hello world"
+              WORD "hello"
+              WORD "world"
+          CONFIG_ITEM
+            STRING_LITERAL "string key"
+              QUOTE """
+              WORD "string"
+              WORD "key"
+              QUOTE """
+            CONFIG_VALUE
+              STRING_LITERAL "value with spaces"
+                QUOTE """
+                WORD "value"
+                WORD "with"
+                WORD "spaces"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "filePathString"
+            CONFIG_VALUE "../this-is-also-a-string"
+              DOT "."
+              DOT "."
+              SLASH "/"
+              WORD "this-is-also-a-string"
+          CONFIG_ITEM
+            WORD "booleanValue"
+            CONFIG_VALUE "true"
+              WORD "true"
+          CONFIG_ITEM
+            WORD "stringKey"
+            CONFIG_VALUE
+              STRING_LITERAL "true"
+                QUOTE """
+                WORD "true"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "array1"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_VALUE
+                  STRING_LITERAL "one"
+                    QUOTE """
+                    WORD "one"
+                    QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "two"
+                    QUOTE """
+                    WORD "two"
+                    QUOTE """
+                R_BRACKET "]"
+          CONFIG_ITEM
+            WORD "array2"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_VALUE
+                  STRING_LITERAL "one"
+                    QUOTE """
+                    WORD "one"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "two"
+                    QUOTE """
+                    WORD "two"
+                    QUOTE """
+                R_BRACKET "]"
+          CONFIG_ITEM
+            WORD "array3Numbers"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_VALUE "1"
+                  INTEGER_LITERAL "1"
+                COMMA ","
+                CONFIG_VALUE "2"
+                  INTEGER_LITERAL "2"
+                COMMA ","
+                CONFIG_VALUE "3"
+                  INTEGER_LITERAL "3"
+                R_BRACKET "]"
+          CONFIG_ITEM
+            WORD "nestedKey"
+            CONFIG_BLOCK
+              L_BRACE "{"
+              CONFIG_ITEM
+                WORD "key"
+                CONFIG_VALUE
+                  STRING_LITERAL "value"
+                    QUOTE """
+                    WORD "value"
+                    QUOTE """
+              CONFIG_ITEM
+                WORD "key2"
+                CONFIG_VALUE
+                  STRING_LITERAL "value2"
+                    QUOTE """
+                    WORD "value2"
+                    QUOTE """
+              CONFIG_ITEM
+                WORD "nestedArray"
+                CONFIG_VALUE
+                  ARRAY_LITERAL
+                    L_BRACKET "["
+                    CONFIG_VALUE
+                      STRING_LITERAL "yes"
+                        QUOTE """
+                        WORD "yes"
+                        QUOTE """
+                    COMMA ","
+                    CONFIG_VALUE
+                      STRING_LITERAL "queen"
+                        QUOTE """
+                        WORD "queen"
+                        QUOTE """
+                    R_BRACKET "]"
+              CONFIG_ITEM
+                WORD "number"
+                CONFIG_VALUE "10"
+                  INTEGER_LITERAL "10"
+              R_BRACE "}"
+          CONFIG_ITEM
+            WORD "oneMoreValueToTestBrokenness"
+            CONFIG_VALUE
+              STRING_LITERAL "value"
+                QUOTE """
+                WORD "value"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "myInteger"
+            CONFIG_VALUE "100"
+              INTEGER_LITERAL "100"
+          CONFIG_ITEM
+            WORD "tools"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_BLOCK
+                  L_BRACE "{"
+                  CONFIG_ITEM
+                    WORD "server_label"
+                    CONFIG_VALUE
+                      STRING_LITERAL "parallel_web_search"
+                        QUOTE """
+                        WORD "parallel_web_search"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "server_url"
+                    CONFIG_VALUE
+                      STRING_LITERAL "https://example.com"
+                        QUOTE """
+                        WORD "https"
+                        COLON ":"
+                        SLASH "/"
+                        SLASH "/"
+                        WORD "example"
+                        DOT "."
+                        WORD "com"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "headers"
+                    CONFIG_BLOCK
+                      L_BRACE "{"
+                      CONFIG_ITEM
+                        STRING_LITERAL "x-api-key"
+                          QUOTE """
+                          WORD "x-api-key"
+                          QUOTE """
+                        CONFIG_VALUE "myapikey"
+                          WORD "myapikey"
+                      CONFIG_ITEM
+                        WORD "authorization"
+                        CONFIG_VALUE
+                          STRING_LITERAL "Bearer token"
+                            QUOTE """
+                            WORD "Bearer"
+                            WORD "token"
+                            QUOTE """
+                      R_BRACE "}"
+                  CONFIG_ITEM
+                    WORD "type"
+                    CONFIG_VALUE
+                      STRING_LITERAL "mcp"
+                        QUOTE """
+                        WORD "mcp"
+                        QUOTE """
+                  R_BRACE "}"
+                CONFIG_BLOCK
+                  L_BRACE "{"
+                  CONFIG_ITEM
+                    WORD "another_tool"
+                    CONFIG_VALUE
+                      STRING_LITERAL "value"
+                        QUOTE """
+                        WORD "value"
+                        QUOTE """
+                  R_BRACE "}"
+                R_BRACKET "]"
+          CONFIG_ITEM
+            WORD "block_string"
+            CONFIG_VALUE
+              RAW_STRING_LITERAL #"
+      hello there my friend
+      {# a comment in a prompt #}
+    "#
+                HASH "#"
+                QUOTE """
+                WORD "hello"
+                WORD "there"
+                WORD "my"
+                WORD "friend"
+                L_BRACE "{"
+                HASH "#"
+                WORD "a"
+                WORD "comment"
+                KW_IN "in"
+                WORD "a"
+                WORD "prompt"
+                HASH "#"
+                R_BRACE "}"
+                QUOTE """
+                HASH "#"
+          R_BRACE "}"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -113,7 +113,12 @@ impl<S> tracing_subscriber::layer::Filter<S> for LogLevelFilter {
         meta: &tracing::Metadata<'_>,
         _: &tracing_subscriber::layer::Context<'_, S>,
     ) -> bool {
-        let filter = if meta.target().starts_with("baml") {
+        let target = meta.target();
+
+        // Salsa logs a lot of revision changes at INFO level - filter those to WARN+
+        let filter = if target.starts_with("salsa") {
+            tracing::Level::WARN
+        } else if target.starts_with("baml") {
             self.filter.trace_level()
         } else {
             tracing::Level::INFO

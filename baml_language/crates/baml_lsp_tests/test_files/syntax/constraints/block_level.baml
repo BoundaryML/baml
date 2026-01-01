@@ -49,15 +49,6 @@ test TestFoo {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected config key, found Comma
-//     ╭─[ 0:37:22 ]
-//     │
-//  37 │   @@check(foo_check_1, {{ this }})
-//     │                      ┬  
-//     │                      ╰── Expected config key, found Comma
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
 // Error: Expected config key, found LBrace
 //     ╭─[ 0:37:24 ]
 //     │

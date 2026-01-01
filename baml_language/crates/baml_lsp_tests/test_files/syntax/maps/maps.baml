@@ -59,6 +59,15 @@ function Len() -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
+// Error: Expected map<string, string>, found string
+//    ╭─[ 0:1:1 ]
+//    │
+//  1 │ function CreateMap() -> map<string, string> {
+//    │ │ 
+//    │ ╰─ Expected map<string, string>, found string
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
 // Error: Type map<string, string> has no field 'has'
 //     ╭─[ 0:21:9 ]
 //     │
@@ -77,15 +86,6 @@ function Len() -> int {
 //     │ 
 //     │ Note: Error code: E0008
 // ────╯
-// Error: Expected string, found unknown | void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ function CreateMap() -> map<string, string> {
-//    │ │ 
-//    │ ╰─ Expected string, found unknown | void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
 // Error: Type map<string, string> has no field 'length'
 //     ╭─[ 0:29:27 ]
 //     │
