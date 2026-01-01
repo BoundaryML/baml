@@ -362,6 +362,37 @@ impl<'a> Parser<'a> {
         self.is_header_comment_at(i)
     }
 
+    /// Get the span of a header comment (from first / to end of line).
+    /// Call this before `consume_header_comment` to get the full span.
+    fn header_comment_span(&self) -> baml_base::Span {
+        let mut i = self.current;
+        // Skip trivia to find the start of the header comment
+        while i < self.tokens.len() {
+            let kind = self.tokens[i].kind;
+            if kind == TokenKind::Whitespace || kind == TokenKind::Newline {
+                i += 1;
+            } else {
+                break;
+            }
+        }
+
+        let start = self.tokens.get(i).map(|t| t.span.range.start()).unwrap_or_default();
+        let file_id = self.tokens.get(i).map(|t| t.span.file_id).unwrap_or(baml_base::FileId::new(0));
+
+        // Find the end (newline or EOF)
+        let mut end = start;
+        while i < self.tokens.len() {
+            let token = &self.tokens[i];
+            if token.kind == TokenKind::Newline {
+                break;
+            }
+            end = token.span.range.end();
+            i += 1;
+        }
+
+        baml_base::Span::new(file_id, TextRange::new(start, end))
+    }
+
     /// Check if we're at the start of a block comment (/*)
     fn at_block_comment_start(&self) -> bool {
         self.is_block_comment_at(self.current)
@@ -636,14 +667,8 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Emit a syntax hint with a custom message (not using "Expected/found" format)
-    fn hint(&mut self, message: String) {
-        let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-            self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-            })
-        });
-
+    /// Emit a syntax hint with a custom message and span
+    fn hint(&mut self, message: String, span: baml_base::Span) {
         self.events.push(Event::SyntaxHint { message, span });
     }
 
@@ -1362,7 +1387,15 @@ impl<'a> Parser<'a> {
                     break;
                 }
 
-                if p.at(TokenKind::Client) {
+                // Check for header comments - not allowed in LLM functions
+                if p.at_header_comment_start() {
+                    let span = p.header_comment_span();
+                    p.hint(
+                        "Header comments (//#) are not allowed inside LLM functions".to_string(),
+                        span,
+                    );
+                    p.consume_header_comment();
+                } else if p.at(TokenKind::Client) {
                     if has_client {
                         p.error("Duplicate 'client' field".to_string());
                     }
@@ -2766,14 +2799,23 @@ impl<'a> Parser<'a> {
             // Check for unnecessary parentheses and emit helpful hint
             if p.at(TokenKind::LParen) {
                 let name = test_name.as_deref().unwrap_or("Name");
-                p.hint(format!(
-                    "remove parentheses from test name: `test {}`",
-                    name
-                ));
+                let start_span = p.current().map(|t| t.span).unwrap();
                 p.bump(); // consume (
-                if p.at(TokenKind::RParen) {
+                let end_span = if p.at(TokenKind::RParen) {
+                    let span = p.current().map(|t| t.span).unwrap();
                     p.bump(); // consume )
-                }
+                    span
+                } else {
+                    start_span
+                };
+                let span = baml_base::Span::new(
+                    start_span.file_id,
+                    TextRange::new(start_span.range.start(), end_span.range.end()),
+                );
+                p.hint(
+                    format!("remove parentheses from test name: `test {}`", name),
+                    span,
+                );
             }
 
             // Config block

@@ -327,20 +327,18 @@ impl LspDatabase {
         let mut functions = Vec::new();
 
         if let Some(project) = self.project() {
-            let items = project_items(&self.db, project);
-            for item in items.items(&self.db) {
-                if let ItemId::Function(func_loc) = item {
-                    let file = func_loc.file(&self.db);
-                    let item_tree = file_item_tree(&self.db, file);
-                    let func = &item_tree[func_loc.id(&self.db)];
+            // Get functions with proper spans from HIR
+            let func_list = baml_hir::list_function_names(&self.db, project);
 
-                    let file_path = file.path(&self.db);
-                    let text = file.text(&self.db);
-                    let span = Span::new(file.file_id(&self.db), TextRange::empty(0.into()));
+            for (func_name, span) in func_list {
+                // Get file path and text for range conversion
+                if let Some(source_file) = self.get_file_by_id(span.file_id) {
+                    let file_path = source_file.path(&self.db);
+                    let text = source_file.text(&self.db);
                     let range = span_to_lsp_range(text, &span);
 
                     functions.push(SymbolLocation {
-                        name: func.name.to_string(),
+                        name: func_name,
                         kind: SymbolKind::Function,
                         file_path,
                         range,

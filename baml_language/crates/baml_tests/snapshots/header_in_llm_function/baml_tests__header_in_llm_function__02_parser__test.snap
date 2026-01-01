@@ -1,0 +1,105 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Hi"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "VertexGCP"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "vertex-ai"
+          WORD "vertex-ai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE "gemini-2.0-flash"
+              WORD "gemini-2"
+              DOT "."
+              INTEGER_LITERAL "0"
+              MINUS "-"
+              WORD "flash"
+          R_BRACE "}"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "FetchDatax"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "user_id"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "Hi"
+      WORD "Hi"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      HEADER_COMMENT "//# collect source material"
+        SLASH "/"
+        SLASH "/"
+        HASH "#"
+        WORD "collect"
+        WORD "source"
+        WORD "material"
+      CLIENT_FIELD "client VertexGCP"
+        KW_CLIENT "client"
+        WORD "VertexGCP"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL #"
+        give short story {{ user_id }}
+        {{ ctx.output_format }}
+    "#
+          HASH "#"
+          QUOTE """
+          WORD "give"
+          WORD "short"
+          WORD "story"
+          L_BRACE "{"
+          L_BRACE "{"
+          WORD "user_id"
+          R_BRACE "}"
+          R_BRACE "}"
+          L_BRACE "{"
+          L_BRACE "{"
+          WORD "ctx"
+          DOT "."
+          WORD "output_format"
+          R_BRACE "}"
+          R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+
+=== ERRORS ===
+Error: Header comments (//#) are not allowed inside LLM functions
+    ╭─[ 0:13:5 ]
+    │
+ 13 │     //# collect source material
+    │     ─────────────┬─────────────  
+    │                  ╰─────────────── Header comments (//#) are not allowed inside LLM functions
+    │ 
+    │ Note: Error code: E0010
+────╯

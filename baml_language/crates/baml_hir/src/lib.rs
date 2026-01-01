@@ -380,6 +380,49 @@ pub fn project_type_names(db: &dyn Db, root: baml_workspace::Project) -> Project
     ProjectTypeNames::new(db, names)
 }
 
+/// Returns the names and spans of all functions defined in the project.
+///
+/// This is a convenience function for WASM/external consumers that just need
+/// a list of function names without dealing with HIR internals.
+/// Returns (function_name, span) pairs for CodeLens positioning.
+pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(String, Span)> {
+    let items = project_items(db, root);
+    let mut functions = Vec::new();
+
+    for item in items.items(db) {
+        if let ItemId::Function(func_loc) = item {
+            let file = func_loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let func = &item_tree[func_loc.id(db)];
+            let func_name = func.name.clone();
+
+            // Get the span from the CST
+            let tree = syntax_tree(db, file);
+            let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
+            let file_id = file.file_id(db);
+
+            // Find the function in the CST to get its name span
+            let span = source_file
+                .items()
+                .flat_map(|item| match item {
+                    baml_syntax::ast::Item::Function(func_node) => vec![func_node],
+                    baml_syntax::ast::Item::Class(class_node) => class_node.methods().collect(),
+                    _ => vec![],
+                })
+                .find(|function_def| {
+                    function_def.name().as_ref().map(SyntaxToken::text) == Some(&func_name)
+                })
+                .and_then(|f| f.name())
+                .map(|name_token| Span::new(file_id, name_token.text_range()))
+                .unwrap_or_else(|| Span::new(file_id, TextRange::empty(0.into())));
+
+            functions.push((func_name.to_string(), span));
+        }
+    }
+
+    functions
+}
+
 /// Returns the body of a function (LLM prompt or expression IR).
 ///
 /// This is the most frequently invalidated query - it changes whenever

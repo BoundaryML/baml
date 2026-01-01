@@ -75,8 +75,8 @@ test TestMakePoem() {
 //     ╭─[ 0:44:18 ]
 //     │
 //  44 │ test TestPipeline() {
-//     │                  ┬  
-//     │                  ╰── remove parentheses from test name: `test TestPipeline`
+//     │                  ─┬  
+//     │                   ╰── remove parentheses from test name: `test TestPipeline`
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -84,8 +84,8 @@ test TestMakePoem() {
 //     ╭─[ 0:49:17 ]
 //     │
 //  49 │ test TestPyramid() {
-//     │                 ┬  
-//     │                 ╰── remove parentheses from test name: `test TestPyramid`
+//     │                 ─┬  
+//     │                  ╰── remove parentheses from test name: `test TestPyramid`
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -93,8 +93,8 @@ test TestMakePoem() {
 //     ╭─[ 0:54:18 ]
 //     │
 //  54 │ test OuterPyramid() {
-//     │                  ┬  
-//     │                  ╰── remove parentheses from test name: `test OuterPyramid`
+//     │                  ─┬  
+//     │                   ╰── remove parentheses from test name: `test OuterPyramid`
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -102,8 +102,8 @@ test TestMakePoem() {
 //     ╭─[ 0:67:18 ]
 //     │
 //  67 │ test TestMakePoem() {
-//     │                  ┬  
-//     │                  ╰── remove parentheses from test name: `test TestMakePoem`
+//     │                  ─┬  
+//     │                   ╰── remove parentheses from test name: `test TestMakePoem`
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

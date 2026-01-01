@@ -1,17 +1,7 @@
-// TODO: This file has been modified to remove baml_runtime dependency.
-// For now, we return empty code lenses.
-
-use std::{collections::HashMap, path::PathBuf};
-
-use baml_lsp_types::BamlSpan;
-// TODO: baml_runtime is disabled for now
-// use baml_runtime::InternalRuntimeInterface;
-use itertools::Itertools;
-use lsp_types::{CodeLensParams, Command, Position, Range, request};
+use lsp_types::{CodeLensParams, request};
 
 use crate::{
-    DocumentKey, Session,
-    baml_project::Project,
+    Session,
     server::{
         Result,
         api::{
@@ -19,7 +9,7 @@ use crate::{
             traits::{RequestHandler, SyncRequestHandler},
         },
         client::{Notifier, Requester},
-        commands::{CodeLensCommand, OpenBamlPanel, RunBamlTest},
+        commands::{CodeLensCommand, OpenBamlPanel},
     },
 };
 
@@ -32,119 +22,46 @@ impl RequestHandler for CodeLens {
 impl SyncRequestHandler for CodeLens {
     fn run(
         session: &mut Session,
-        notifier: Notifier,
+        _notifier: Notifier,
         _requester: &mut Requester,
         params: CodeLensParams,
     ) -> Result<Option<Vec<lsp_types::CodeLens>>> {
-        tracing::info!("CodeLens request");
-        // TODO: Code lenses are disabled until we have the salsa database integration
-        // For now, return empty list
-        Ok(Some(vec![]))
+        let url = &params.text_document.uri;
+        let path = url
+            .to_file_path()
+            .internal_error_msg("Could not convert URL to path")?;
 
-        // TODO: Original implementation commented out below
-        // let url = params.text_document.uri.clone();
-        // let path = url
-        //     .to_file_path()
-        //     .internal_error_msg("Could not convert URL to path")?;
-        // let Ok(project) = session.get_or_create_project(&path) else {
-        //     return Ok(None);
-        // };
-        // let fake_env = HashMap::new();
-        // let default_flags = vec!["beta".to_string()];
-        // let baml_diagnostics = match project.lock().baml_project.runtime(
-        //     fake_env,
-        //     session
-        //         .baml_settings
-        //         .feature_flags
-        //         .as_ref()
-        //         .unwrap_or(&default_flags),
-        // ) {
-        //     Ok(runtime) => runtime.diagnostics().clone(),
-        //     Err(err) => err,
-        // };
+        // Get the project to access the LspDatabase
+        let Ok(project) = session.get_or_create_project(&path) else {
+            return Ok(None);
+        };
 
-        // if baml_diagnostics.has_errors() {
-        //     return Ok(None);
-        // }
+        let guard = project.lock();
+        let lsp_db = guard.lsp_db();
+        let project_id = guard.root_path().to_string_lossy().to_string();
 
-        // let mk_range = |span: &BamlSpan| {
-        //     Range::new(
-        //         Position::new(span.start_line as u32, span.start as u32),
-        //         Position::new(span.end_line as u32, span.end as u32),
-        //     )
-        // };
+        // Get all functions and filter to current file
+        let functions = lsp_db.list_functions();
 
-        // let project_lock = project.lock();
+        let lenses: Vec<lsp_types::CodeLens> = functions
+            .into_iter()
+            .filter(|func| func.file_path == path)
+            .map(|func| {
+                let command = OpenBamlPanel {
+                    project_id: project_id.clone(),
+                    function_name: func.name,
+                    show_tests: true,
+                };
 
-        // let doc_matches = |span: &BamlSpan, project_lock: &Project| {
-        //     let absolute_file = DocumentKey::from_url(project_lock.root_path(), &url);
-        //     let absolute_target = DocumentKey::from_path(
-        //         project_lock.root_path(),
-        //         &PathBuf::from(span.file_path.clone()),
-        //     );
-        //     match (&absolute_file, &absolute_target) {
-        //         (Ok(file), Ok(target)) => file.path() == target.path(),
-        //         _ => {
-        //             tracing::error!(
-        //                 "Could not construct either file path: {:?}, or target path: {:?}",
-        //                 absolute_file,
-        //                 absolute_target
-        //             );
-        //             false
-        //         }
-        //     }
-        // };
+                lsp_types::CodeLens {
+                    range: func.range,
+                    command: command.to_lsp_command(),
+                    data: None,
+                }
+            })
+            .collect();
 
-        // let mut function_lenses: Vec<lsp_types::CodeLens> = project_lock
-        //     .list_functions()
-        //     .unwrap_or_default()
-        //     .iter()
-        //     .filter(|func| doc_matches(&func.span, &project_lock))
-        //     .map(|func| {
-        //         let range = mk_range(&func.span);
-        //         let command = OpenBamlPanel {
-        //             project_id: project_lock.root_path().to_string_lossy().to_string(),
-        //             function_name: func.name.clone(),
-        //             show_tests: true,
-        //         };
-        //         lsp_types::CodeLens {
-        //             range,
-        //             command: command.to_lsp_command(),
-        //             data: None,
-        //         }
-        //     })
-        //     .collect();
-
-        // let test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
-        //     .list_function_test_pairs()
-        //     .unwrap_or_default()
-        //     .iter()
-        //     .filter(|testcase| doc_matches(&testcase.span, &project_lock))
-        //     .map(|testcase| {
-        //         let project_id = project_lock.root_path().to_string_lossy().to_string();
-        //         (
-        //             testcase.function_name_span.as_ref(),
-        //             lsp_types::CodeLens {
-        //                 range: mk_range(&testcase.span),
-        //                 command: RunBamlTest {
-        //                     project_id: project_id.clone(),
-        //                     test_case_name: testcase.name.clone(),
-        //                     function_name: testcase.function.name.clone(),
-        //                     show_tests: true,
-        //                 }
-        //                 .to_lsp_command(),
-        //                 data: None,
-        //             },
-        //         )
-        //     })
-        //     .sorted_by_key(|(span, _)| span.map_or(None, |span| Some(span.start)))
-        //     .map(|(_, codelens)| codelens)
-        //     .collect();
-
-        // function_lenses.extend(test_case_lenses);
-        // function_lenses.sort_by_key(|lens| lens.range.start);
-        // tracing::debug!("Function lenses: {:#?}", function_lenses);
-        // Ok(Some(function_lenses))
+        Ok(Some(lenses))
     }
 }
 
