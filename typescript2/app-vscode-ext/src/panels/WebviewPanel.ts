@@ -6,8 +6,8 @@ import {
   type WebviewPanel as VSCodeWebviewPanel,
   window,
 } from 'vscode';
-import { getNonce } from '../utils/getNonce';
 import { getUri } from '../utils/getUri';
+import { getWebviewHtml } from './getWebviewHtml';
 
 export class WebviewPanel {
   public static currentPanel: WebviewPanel | undefined;
@@ -66,9 +66,7 @@ export class WebviewPanel {
 
   private _getWebviewContent(webview: Webview, extensionUri: Uri): string {
     const isDevelopment = process.env.VSCODE_DEBUG_MODE === 'true';
-    const devServerUrl = 'localhost:5173';
-
-    const nonce = getNonce();
+    const devServerUrl = 'localhost:4000';
 
     let stylesUri: string;
     let scriptUri: string;
@@ -95,47 +93,13 @@ export class WebviewPanel {
       ]).toString();
     }
 
-    const csp = [
-      `default-src 'none'`,
-      `script-src 'unsafe-eval' ${isDevelopment
-        ? `http://${devServerUrl} 'nonce-${nonce}'`
-        : `'nonce-${nonce}'`
-      }`,
-      `style-src ${webview.cspSource} 'self' 'unsafe-inline' ${isDevelopment ? `http://${devServerUrl}` : ''
-      }`,
-      `font-src ${webview.cspSource}`,
-      `connect-src ${isDevelopment
-        ? `ws://${devServerUrl} http://${devServerUrl}`
-        : ''
-      }`,
-      `img-src ${webview.cspSource} https: data:`,
-    ];
-
-    const viteScripts = isDevelopment
-      ? `<script type="module" nonce="${nonce}">
-          import { injectIntoGlobalHook } from "http://${devServerUrl}/@react-refresh";
-          injectIntoGlobalHook(window);
-          window.$RefreshReg$ = () => {};
-          window.$RefreshSig$ = () => (type) => type;
-        </script>
-        <script type="module" nonce="${nonce}" src="http://${devServerUrl}/@vite/client"></script>`
-      : '';
-
-    return `<!DOCTYPE html>
-    <html lang="en">
-      <head>
-        ${viteScripts}
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta http-equiv="Content-Security-Policy" content="${csp.join('; ')}">
-        ${!isDevelopment ? `<link rel="stylesheet" type="text/css" href="${stylesUri}">` : ''}
-        <title>BAML Playground</title>
-      </head>
-      <body>
-        <div id="root"></div>
-        <script type="module" ${isDevelopment ? '' : `nonce="${nonce}"`} src="${scriptUri}"></script>
-      </body>
-    </html>`;
+    return getWebviewHtml({
+      isDevelopment,
+      devServerUrl,
+      scriptUri,
+      stylesUri,
+      cspSource: webview.cspSource,
+    });
   }
 
   private _setWebviewMessageListener(webview: Webview) {

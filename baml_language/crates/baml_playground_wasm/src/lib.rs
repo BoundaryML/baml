@@ -85,7 +85,7 @@ impl BamlRuntime {
     pub fn function_names(&self) -> Vec<String> {
         let names_struct = baml_hir::project_function_names(&self.db, self.project);
         let mut foo = names_struct.names(&self.db).clone();
-        foo.push("injected-hot-reload2".to_string());
+        foo.push("injected-hot-reload4".to_string());
         foo
     }
 
