@@ -2766,7 +2766,10 @@ impl<'a> Parser<'a> {
             // Check for unnecessary parentheses and emit helpful hint
             if p.at(TokenKind::LParen) {
                 let name = test_name.as_deref().unwrap_or("Name");
-                p.hint(format!("remove parentheses from test name: `test {}`", name));
+                p.hint(format!(
+                    "remove parentheses from test name: `test {}`",
+                    name
+                ));
                 p.bump(); // consume (
                 if p.at(TokenKind::RParen) {
                     p.bump(); // consume )
