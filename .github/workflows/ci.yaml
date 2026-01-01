@@ -44,6 +44,8 @@ jobs:
       beps: ${{ steps.check_beps.outputs.changed }}
       # Flag for docs/frontend changes
       docs: ${{ steps.check_docs.outputs.changed }}
+      # Flag for typescript2/webview changes
+      webview: ${{ steps.check_webview.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -182,6 +184,22 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check if webview changed
+        id: check_webview
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/app-vscode-webview/**' \
+            ':typescript2/pkg-playground/**' \
+            ':baml_language/crates/baml_playground_wasm/**' \
+            ':.github/workflows/webview-tests.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
   # Call reusable workflows
   cargo-tests:
     name: "Cargo Tests"
@@ -225,6 +243,15 @@ jobs:
       is_canary: ${{ github.ref == 'refs/heads/canary' }}
     secrets: inherit
     permissions: write-all
+
+  webview-tests:
+    name: "Webview Tests"
+    needs: determine_changes
+    uses: ./.github/workflows/webview-tests.reusable.yaml
+    with:
+      code_changed: ${{ needs.determine_changes.outputs.webview }}
+      run_all: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
+    secrets: inherit
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
@@ -281,6 +308,7 @@ jobs:
       - wasm-pack-tests
       - beps
       - docs
+      - webview-tests
       - benchmarks-instrumented
     steps:
       - name: "Check test results"
@@ -302,6 +330,11 @@ jobs:
 
           if [[ "${{ needs.docs.result }}" != "success" && "${{ needs.docs.result }}" != "skipped" ]]; then
             echo "::error::Docs workflow failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.webview-tests.result }}" != "success" && "${{ needs.webview-tests.result }}" != "skipped" ]]; then
+            echo "::error::Webview tests failed"
             exit 1
           fi
 

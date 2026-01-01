@@ -15,11 +15,14 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./vitest.setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
-    exclude: ['src/**/*.browser.test.{ts,tsx}'],
-    css: true,
+    setupFiles: ['./vitest.setup.browser.ts'],
+    include: ['src/**/*.browser.test.{ts,tsx}'],
+    browser: {
+      enabled: true,
+      provider: 'playwright',
+      name: 'chromium',
+      headless: true,
+    },
   },
   define: {
     __DEV__: true,

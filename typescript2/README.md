@@ -66,21 +66,41 @@ Tests are located in `app-vscode-ext/src/**/__tests__/`.
 The webview app (`app-vscode-webview`) uses Vitest with [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/) for component testing.
 
 ```bash
-# Run tests once
+# Run all tests once (jsdom + browser)
 pnpm --filter app-vscode-webview test:run
 
-# Run tests in watch mode
+# Run all tests in watch mode
 pnpm --filter app-vscode-webview test
 
 # Run tests with UI
 pnpm --filter app-vscode-webview test:ui
 ```
 
+#### Unit Tests (jsdom)
+
+Unit tests run in jsdom and don't require Playwright:
+
+```bash
+pnpm --filter app-vscode-webview test:unit:run  # Single run
+pnpm --filter app-vscode-webview test:unit      # Watch mode
+```
+
 Tests are located in `app-vscode-webview/src/**/*.test.tsx`.
 
-#### WASM Loading
+The setup file (`vitest.setup.ts`) patches `fetch` to handle WASM file loading in the Node.js/jsdom environment.
 
-The webview tests load the real `baml-runtime-wasm` module. The setup file (`vitest.setup.ts`) patches `fetch` to handle WASM file loading in the Node.js/jsdom environment, allowing the WASM module to initialize normally.
+#### Browser Tests (Playwright)
+
+Browser tests run in a real Chromium browser via Playwright:
+
+```bash
+pnpm --filter app-vscode-webview test:browser:run  # Single run
+pnpm --filter app-vscode-webview test:browser      # Watch mode
+```
+
+Tests are located in `app-vscode-webview/src/**/*.browser.test.tsx`.
+
+These tests use Vitest's browser mode with native `fetch` and full WASM support.
 
 ### Running All Tests
 
