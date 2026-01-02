@@ -15,11 +15,11 @@
 //!
 //! # Comparison with Other IRs
 //!
-//! | IR  | Error Nodes | Use Case |
-//! |-----|-------------|----------|
+//! | IR  | Error Nodes            | Use Case                          |
+//! |-----|------------------------|-----------------------------------|
 //! | HIR | Yes (Missing variants) | LSP features, incremental parsing |
-//! | TIR | Yes (Unknown types) | Type inference, diagnostics |
-//! | VIR | **No** | Code generation, optimization |
+//! | TIR | Yes (Unknown types)    | Type inference, diagnostics       |
+//! | VIR | **No**                 | Code generation, optimization     |
 //!
 //! # Key Design Principles
 //!
