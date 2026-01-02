@@ -7,7 +7,9 @@ use baml_db::{
     baml_hir::{self, file_items, function_body, function_signature},
     baml_parser, baml_thir,
 };
-use baml_diagnostics::{render_name_error, render_parse_error, render_type_error};
+use baml_diagnostics::{
+    render_hir_diagnostic, render_name_error, render_parse_error, render_type_error,
+};
 use salsa::Setter;
 
 use super::{
@@ -61,7 +63,15 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         }
     }
 
-    // Collect name errors (duplicates)
+    // Collect HIR lowering diagnostics (per-file validation)
+    for source_file in &source_files {
+        let lowering_result = baml_hir::file_lowering(&db, *source_file);
+        for diag in lowering_result.diagnostics(&db) {
+            all_errors.push(render_hir_diagnostic(diag, &sources, false));
+        }
+    }
+
+    // Collect name errors (duplicates across files)
     for error in baml_hir::validate_duplicate_names(&db, root) {
         all_errors.push(render_name_error(&error, &sources, false));
     }

@@ -9,8 +9,8 @@ use std::{
 
 use baml_db::{
     FileId, SourceFile,
-    baml_diagnostics::{NameError, ParseError, TypeError},
-    baml_hir::{self, FunctionBody, ItemId},
+    baml_diagnostics::{HirDiagnostic, NameError, ParseError, TypeError},
+    baml_hir::{self, FunctionBody, ItemId, file_lowering},
     baml_parser, baml_thir,
 };
 use lsp_server::ErrorCode;
@@ -188,7 +188,17 @@ pub(super) fn project_diagnostics(
         }
     }
 
-    // 2. Gather name errors (duplicate names)
+    // 2. Gather HIR lowering diagnostics (duplicate fields, attributes, etc.)
+    for source_file in &source_files {
+        let lowering_result = file_lowering(db, *source_file);
+        for error in lowering_result.diagnostics(db) {
+            if let Some(diag) = hir_diagnostic_to_lsp_diagnostic(error, &file_info, session) {
+                add_diagnostic(get_hir_diagnostic_file_id(error), diag);
+            }
+        }
+    }
+
+    // 3. Gather name errors (duplicate names)
     let name_errors = baml_hir::validate_duplicate_names(db, project_root);
     for error in name_errors {
         if let Some((diag, file_id)) = name_error_to_diagnostic(&error, &file_info, session) {
@@ -520,6 +530,156 @@ fn get_type_error_file_id<T>(error: &TypeError<T>) -> FileId {
         TypeError::NonExhaustiveMatch { span, .. } => span.file_id,
         TypeError::UnreachableArm { span, .. } => span.file_id,
         TypeError::UnknownEnumVariant { span, .. } => span.file_id,
+    }
+}
+
+/// Convert an HirDiagnostic to an LSP Diagnostic with related information
+fn hir_diagnostic_to_lsp_diagnostic(
+    error: &HirDiagnostic,
+    file_info: &HashMap<FileId, (PathBuf, String, LineIndex)>,
+    session: &Session,
+) -> Option<lsp_types::Diagnostic> {
+    // Extract message, main span, first span (for related info), and code
+    let (message, span, first_span, code, related_msg) = match error {
+        HirDiagnostic::DuplicateField {
+            class_name,
+            field_name,
+            first_span,
+            second_span,
+        } => (
+            format!("Duplicate field '{}' in class '{}'", field_name, class_name),
+            second_span,
+            Some(first_span),
+            "E0012",
+            format!("'{}' first defined here", field_name),
+        ),
+        HirDiagnostic::DuplicateVariant {
+            enum_name,
+            variant_name,
+            first_span,
+            second_span,
+        } => (
+            format!(
+                "Duplicate variant '{}' in enum '{}'",
+                variant_name, enum_name
+            ),
+            second_span,
+            Some(first_span),
+            "E0013",
+            format!("'{}' first defined here", variant_name),
+        ),
+        HirDiagnostic::DuplicateBlockAttribute {
+            item_kind,
+            item_name,
+            attr_name,
+            first_span,
+            second_span,
+        } => (
+            format!(
+                "Attribute '{}' can only be defined once on {} '{}'",
+                attr_name, item_kind, item_name
+            ),
+            second_span,
+            Some(first_span),
+            "E0014",
+            format!("'{}' first defined here", attr_name),
+        ),
+        HirDiagnostic::DuplicateFieldAttribute {
+            container_kind,
+            container_name,
+            field_name,
+            attr_name,
+            first_span,
+            second_span,
+        } => (
+            format!(
+                "Attribute '{}' can only be defined once on field '{}' in {} '{}'",
+                attr_name, field_name, container_kind, container_name
+            ),
+            second_span,
+            Some(first_span),
+            "E0014",
+            format!("'{}' first defined here", attr_name),
+        ),
+        HirDiagnostic::UnknownAttribute {
+            attr_name,
+            span,
+            valid_attributes,
+        } => {
+            let suggestions = if valid_attributes.is_empty() {
+                String::new()
+            } else {
+                format!(". Valid attributes: {}", valid_attributes.join(", "))
+            };
+            (
+                format!("Unknown attribute '{}'{}", attr_name, suggestions),
+                span,
+                None,
+                "E0015",
+                String::new(),
+            )
+        }
+        HirDiagnostic::InvalidAttributeContext {
+            attr_name,
+            context,
+            allowed_contexts,
+            span,
+        } => (
+            format!(
+                "Attribute '{}' is not valid on {}. Allowed on: {}",
+                attr_name, context, allowed_contexts
+            ),
+            span,
+            None,
+            "E0016",
+            String::new(),
+        ),
+    };
+
+    let (path, source_text, line_index) = file_info.get(&span.file_id)?;
+    let range =
+        convert_text_range(span.range).to_range(source_text, line_index, session.position_encoding);
+
+    // Build related information if we have a first span (for duplicates)
+    let related_information = first_span.and_then(|first| {
+        let (first_path, first_source_text, first_line_index) = file_info.get(&first.file_id)?;
+        let first_range = convert_text_range(first.range).to_range(
+            first_source_text,
+            first_line_index,
+            session.position_encoding,
+        );
+        let uri = Url::from_file_path(first_path).ok()?;
+        Some(vec![lsp_types::DiagnosticRelatedInformation {
+            location: lsp_types::Location {
+                uri,
+                range: first_range,
+            },
+            message: related_msg.clone(),
+        }])
+    });
+
+    Some(lsp_types::Diagnostic {
+        range,
+        severity: Some(DiagnosticSeverity::ERROR),
+        code: Some(lsp_types::NumberOrString::String(code.to_string())),
+        code_description: None,
+        source: Some("baml".to_string()),
+        message,
+        related_information,
+        tags: None,
+        data: None,
+    })
+}
+
+/// Get the FileId from an HirDiagnostic
+fn get_hir_diagnostic_file_id(error: &HirDiagnostic) -> FileId {
+    match error {
+        HirDiagnostic::DuplicateField { second_span, .. } => second_span.file_id,
+        HirDiagnostic::DuplicateVariant { second_span, .. } => second_span.file_id,
+        HirDiagnostic::DuplicateBlockAttribute { second_span, .. } => second_span.file_id,
+        HirDiagnostic::DuplicateFieldAttribute { second_span, .. } => second_span.file_id,
+        HirDiagnostic::UnknownAttribute { span, .. } => span.file_id,
+        HirDiagnostic::InvalidAttributeContext { span, .. } => span.file_id,
     }
 }
 

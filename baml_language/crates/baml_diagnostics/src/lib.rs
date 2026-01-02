@@ -6,6 +6,7 @@
 pub mod compiler_error;
 
 pub use compiler_error::{
-    ColorMode, CompilerError, NameError, ParseError, TypeError, render_error, render_name_error,
-    render_parse_error, render_report_to_string, render_type_error,
+    ColorMode, CompilerError, HirDiagnostic, NameError, ParseError, TypeError, render_error,
+    render_hir_diagnostic, render_name_error, render_parse_error, render_report_to_string,
+    render_type_error,
 };

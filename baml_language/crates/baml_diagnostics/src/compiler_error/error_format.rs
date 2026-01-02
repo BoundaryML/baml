@@ -2,10 +2,11 @@ use ariadne::{Label, ReportBuilder};
 use baml_base::Span;
 
 use super::{
-    ARGUMENT_COUNT_MISMATCH, CompilerError, DUPLICATE_NAME, ErrorCode, INVALID_OPERATOR,
+    ARGUMENT_COUNT_MISMATCH, CompilerError, DUPLICATE_ATTRIBUTE, DUPLICATE_FIELD, DUPLICATE_NAME,
+    DUPLICATE_VARIANT, ErrorCode, HirDiagnostic, INVALID_ATTRIBUTE_CONTEXT, INVALID_OPERATOR,
     NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE, NameError, ParseError,
     Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN,
-    UNKNOWN_ENUM_VARIANT, UNKNOWN_TYPE, UNKNOWN_VARIABLE, UNREACHABLE_ARM,
+    UNKNOWN_ATTRIBUTE, UNKNOWN_ENUM_VARIANT, UNKNOWN_TYPE, UNKNOWN_VARIABLE, UNREACHABLE_ARM,
 };
 
 /// The message format and id of each compiler error variant.
@@ -156,6 +157,111 @@ where
                         "'{test_name}' for '{function_name}' previously defined in {first_path}"
                     ))),
                 DUPLICATE_NAME,
+            ),
+        },
+        CompilerError::HirDiagnostic(hir_diag) => match hir_diag {
+            HirDiagnostic::DuplicateField {
+                class_name,
+                field_name,
+                first_span,
+                second_span,
+            } => (
+                Report::build(ReportKind::Error, second_span)
+                    .with_message(format!(
+                        "Duplicate field '{field_name}' in class '{class_name}'"
+                    ))
+                    .with_label(
+                        Label::new(second_span).with_message("duplicate definition"),
+                    )
+                    .with_label(
+                        Label::new(first_span).with_message("first definition here"),
+                    ),
+                DUPLICATE_FIELD,
+            ),
+            HirDiagnostic::DuplicateVariant {
+                enum_name,
+                variant_name,
+                first_span,
+                second_span,
+            } => (
+                Report::build(ReportKind::Error, second_span)
+                    .with_message(format!(
+                        "Duplicate variant '{variant_name}' in enum '{enum_name}'"
+                    ))
+                    .with_label(
+                        Label::new(second_span).with_message("duplicate definition"),
+                    )
+                    .with_label(
+                        Label::new(first_span).with_message("first definition here"),
+                    ),
+                DUPLICATE_VARIANT,
+            ),
+            HirDiagnostic::DuplicateBlockAttribute {
+                item_kind,
+                item_name,
+                attr_name,
+                first_span,
+                second_span,
+            } => (
+                Report::build(ReportKind::Error, second_span)
+                    .with_message(format!(
+                        "Attribute '@@{attr_name}' can only be defined once on {item_kind} '{item_name}'"
+                    ))
+                    .with_label(
+                        Label::new(second_span).with_message("duplicate attribute"),
+                    )
+                    .with_label(
+                        Label::new(first_span).with_message("first definition here"),
+                    ),
+                DUPLICATE_ATTRIBUTE,
+            ),
+            HirDiagnostic::DuplicateFieldAttribute {
+                container_kind,
+                container_name,
+                field_name,
+                attr_name,
+                first_span,
+                second_span,
+            } => (
+                Report::build(ReportKind::Error, second_span)
+                    .with_message(format!(
+                        "Attribute '@{attr_name}' can only be defined once on field '{field_name}' in {container_kind} '{container_name}'"
+                    ))
+                    .with_label(
+                        Label::new(second_span).with_message("duplicate attribute"),
+                    )
+                    .with_label(
+                        Label::new(first_span).with_message("first definition here"),
+                    ),
+                DUPLICATE_ATTRIBUTE,
+            ),
+            HirDiagnostic::UnknownAttribute {
+                attr_name,
+                span,
+                valid_attributes,
+            } => {
+                let suggestions = if valid_attributes.is_empty() {
+                    String::new()
+                } else {
+                    format!(". Valid attributes: {}", valid_attributes.join(", "))
+                };
+                simple_error(
+                    format!("Unknown attribute '{attr_name}'{suggestions}"),
+                    span,
+                    UNKNOWN_ATTRIBUTE,
+                )
+            }
+            HirDiagnostic::InvalidAttributeContext {
+                attr_name,
+                context,
+                allowed_contexts,
+                span,
+            } => simple_error(
+                format!(
+                    "Attribute '{attr_name}' is not allowed on {context}. Allowed on: {allowed_contexts}"
+                ),
+                span,
+                INVALID_ATTRIBUTE_CONTEXT,
             ),
         },
     }

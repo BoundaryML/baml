@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -241,4 +241,36 @@ expression: output
    │  ╰── Expected RBrace, found EOF
    │ 
    │ Note: Error code: E0010
+───╯
+
+  [hir] Error: Duplicate field 'string' in class 'Partial'
+   ╭─[ 2:6:10 ]
+   │
+ 6 │   field4 string @alias(  // Unclosed attribute
+   │          ───┬──  
+   │             ╰──── duplicate definition
+   │
+   ├─[ 2:6:10 ]
+   │
+ 5 │   field3 string @  // Incomplete attribute
+   │          ───┬──  
+   │             ╰──── first definition here
+   │ 
+   │ Note: Error code: E0012
+───╯
+
+  [hir] Error: Duplicate field 'string' in class 'Partial'
+   ╭─[ 2:7:10 ]
+   │
+ 7 │   field5 string  // This should parse correctly
+   │          ───┬──  
+   │             ╰──── duplicate definition
+   │
+   ├─[ 2:7:10 ]
+   │
+ 5 │   field3 string @  // Incomplete attribute
+   │          ───┬──  
+   │             ╰──── first definition here
+   │ 
+   │ Note: Error code: E0012
 ───╯

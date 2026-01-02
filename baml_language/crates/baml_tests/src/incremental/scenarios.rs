@@ -33,7 +33,7 @@ fn query_all_function_signatures(db: &baml_db::RootDatabase, file: SourceFile) {
 /// Test that editing a function body doesn't invalidate the item tree.
 ///
 /// The ItemTree only contains function names, not bodies. So changing a
-/// function's prompt should NOT cause file_item_tree to re-execute.
+/// function's prompt should NOT cause file_lowering to re-execute.
 #[test]
 fn editing_function_body_preserves_item_tree() {
     let mut test_db = IncrementalTestDb::new();
@@ -56,7 +56,7 @@ function Greet(name: string) -> string {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 1),
         ],
     );
@@ -71,7 +71,7 @@ function Greet(name: string) -> string {
     .to_string());
 
     // After body change: lex and parse must re-run (different tokens/CST).
-    // file_item_tree re-executes because the CST changed, but produces the same
+    // file_lowering re-executes because the CST changed, but produces the same
     // ItemTree (body changes don't affect item names/structure).
     // file_items benefits from early cutoff: ItemTree is equal, so it's cached.
     test_db.assert_executed(
@@ -79,10 +79,10 @@ function Greet(name: string) -> string {
             let _ = baml_hir::file_items(db, file);
         },
         &[
-            ("lex_file", 1),       // Must re-run: input text changed
-            ("parse_result", 1),   // Must re-run: tokens changed
-            ("file_item_tree", 1), // Must re-run: CST changed (even though ItemTree will be same)
-            ("file_items", 0),     // Early cutoff! ItemTree equal → cached
+            ("lex_file", 1),      // Must re-run: input text changed
+            ("parse_result", 1),  // Must re-run: tokens changed
+            ("file_lowering", 1), // Must re-run: CST changed (even though ItemTree will be same)
+            ("file_items", 0),    // Early cutoff! ItemTree equal → cached
         ],
     );
 }
@@ -121,7 +121,7 @@ function Baz(z: bool) -> bool {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 1),
             ("function_signature", 3),
         ],
@@ -147,7 +147,7 @@ function Baz(z: bool) -> bool {
     .to_string());
 
     // After body-only edit:
-    // - lex/parse/file_item_tree must re-run (input changed, CST changed)
+    // - lex/parse/file_lowering must re-run (input changed, CST changed)
     // - file_items is cached (early cutoff: ItemTree equal)
     // - all 3 signatures re-execute (they depend on CST which changed)
     test_db.assert_executed(
@@ -155,7 +155,7 @@ function Baz(z: bool) -> bool {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 0),         // Early cutoff: ItemTree equal
             ("function_signature", 3), // All re-execute (CST changed)
         ],
@@ -183,7 +183,7 @@ function Test(x: string) -> string {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 1),
             ("function_body", 1),
         ],
@@ -199,7 +199,7 @@ function Test(x: string) -> string {
     .to_string());
 
     // After body change:
-    // - lex/parse/file_item_tree must re-run (input changed, CST changed)
+    // - lex/parse/file_lowering must re-run (input changed, CST changed)
     // - file_items is cached (early cutoff: ItemTree equal, same function name)
     // - function_body must re-execute (body content changed)
     test_db.assert_executed(
@@ -207,7 +207,7 @@ function Test(x: string) -> string {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 0),    // Early cutoff: ItemTree equal
             ("function_body", 1), // Must re-execute: body changed
         ],
@@ -242,7 +242,7 @@ class Address {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 1),
         ],
     );
@@ -274,7 +274,7 @@ class NewClass {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 1),
         ],
     );
@@ -302,7 +302,7 @@ class MyClass {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 1),
         ],
     );
@@ -317,7 +317,7 @@ class MyClass {
     .to_string());
 
     // After comment change: lex and parse must re-run (different tokens/CST).
-    // file_item_tree re-executes because the CST changed, but produces the same
+    // file_lowering re-executes because the CST changed, but produces the same
     // ItemTree (comments don't affect item names/structure).
     // file_items benefits from early cutoff: ItemTree is equal, so it's cached.
     test_db.assert_executed(
@@ -325,10 +325,10 @@ class MyClass {
             let _ = baml_hir::file_items(db, file);
         },
         &[
-            ("lex_file", 1),       // Must re-run: input text changed
-            ("parse_result", 1),   // Must re-run: tokens changed
-            ("file_item_tree", 1), // Must re-run: CST changed (even though ItemTree will be same)
-            ("file_items", 0),     // Early cutoff! ItemTree equal → cached
+            ("lex_file", 1),      // Must re-run: input text changed
+            ("parse_result", 1),  // Must re-run: tokens changed
+            ("file_lowering", 1), // Must re-run: CST changed (even though ItemTree will be same)
+            ("file_items", 0),    // Early cutoff! ItemTree equal → cached
         ],
     );
 }
@@ -365,7 +365,7 @@ class ClassB {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 1),
         ],
     );
@@ -387,7 +387,7 @@ class ClassA {
         &[
             ("lex_file", 0),
             ("parse_result", 0),
-            ("file_item_tree", 0),
+            ("file_lowering", 0),
             ("file_items", 0),
         ],
     );
@@ -400,7 +400,7 @@ class ClassA {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 1),
         ],
     );
@@ -429,7 +429,7 @@ function OldName(x: string) -> string {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 1),
         ],
     );
@@ -451,7 +451,7 @@ function NewName(x: string) -> string {
         &[
             ("lex_file", 1),
             ("parse_result", 1),
-            ("file_item_tree", 1),
+            ("file_lowering", 1),
             ("file_items", 1),
         ],
     );

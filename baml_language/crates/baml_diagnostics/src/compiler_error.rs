@@ -1,4 +1,5 @@
 pub mod error_format;
+pub mod hir_diagnostic;
 pub mod name_error;
 pub mod parse_error;
 pub mod type_error;
@@ -7,6 +8,7 @@ use std::collections::HashMap;
 
 use ariadne::{Report, ReportKind};
 use baml_base::{FileId, Span};
+pub use hir_diagnostic::HirDiagnostic;
 pub use name_error::NameError;
 pub use parse_error::ParseError;
 pub use type_error::TypeError;
@@ -19,6 +21,7 @@ pub enum CompilerError<Ty> {
     ParseError(ParseError),
     TypeError(TypeError<Ty>),
     NameError(NameError),
+    HirDiagnostic(HirDiagnostic),
 }
 
 pub struct ErrorCode(u32);
@@ -59,6 +62,14 @@ const NOT_INDEXABLE: ErrorCode = ErrorCode(8);
 const UNEXPECTED_EOF: ErrorCode = ErrorCode(9);
 const UNEXPECTED_TOKEN: ErrorCode = ErrorCode(10);
 const DUPLICATE_NAME: ErrorCode = ErrorCode(11);
+
+// HIR lowering diagnostics (per-file validation)
+const DUPLICATE_FIELD: ErrorCode = ErrorCode(12);
+const DUPLICATE_VARIANT: ErrorCode = ErrorCode(13);
+const DUPLICATE_ATTRIBUTE: ErrorCode = ErrorCode(14);
+const UNKNOWN_ATTRIBUTE: ErrorCode = ErrorCode(15);
+const INVALID_ATTRIBUTE_CONTEXT: ErrorCode = ErrorCode(16);
+
 const NON_EXHAUSTIVE_MATCH: ErrorCode = ErrorCode(62);
 const UNREACHABLE_ARM: ErrorCode = ErrorCode(63);
 const UNKNOWN_ENUM_VARIANT: ErrorCode = ErrorCode(64);
@@ -142,6 +153,25 @@ pub fn render_name_error(
     };
     // Use String as the type parameter since NameError doesn't use it
     let compiler_error: CompilerError<String> = CompilerError::NameError(error.clone());
+    let report = render_error(&color_mode, compiler_error);
+    render_report_to_string(&report, sources)
+}
+
+/// Convenience function to render a `HirDiagnostic` directly to a string.
+///
+/// This combines `render_error` and `render_report_to_string` for the common case
+/// of rendering HIR lowering diagnostics.
+pub fn render_hir_diagnostic(
+    error: &HirDiagnostic,
+    sources: &HashMap<FileId, String>,
+    color: bool,
+) -> String {
+    let color_mode = if color {
+        ColorMode::Color
+    } else {
+        ColorMode::NoColor
+    };
+    let compiler_error: CompilerError<String> = CompilerError::HirDiagnostic(error.clone());
     let report = render_error(&color_mode, compiler_error);
     render_report_to_string(&report, sources)
 }

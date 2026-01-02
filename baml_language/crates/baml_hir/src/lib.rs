@@ -17,8 +17,8 @@
 
 use std::sync::Arc;
 
-use baml_base::{Name, SourceFile, Span};
-use baml_diagnostics::NameError;
+use baml_base::{FileId, Name, SourceFile, Span};
+use baml_diagnostics::{HirDiagnostic, NameError};
 use baml_parser::syntax_tree;
 use baml_syntax::SyntaxNode;
 use rowan::{SyntaxToken, TextRange, ast::AstNode};
@@ -93,19 +93,88 @@ pub struct ProjectItems<'db> {
     pub items: Vec<ItemId<'db>>,
 }
 
+/// Tracked struct holding the result of lowering a file.
+///
+/// Contains both the ItemTree and any diagnostics discovered during lowering.
+/// This enables single-pass lowering with validation.
+///
+/// Note: `item_tree` is stored as `Arc<ItemTree>` so that `file_item_tree`
+/// can return a cheap clone (Arc clone = reference count increment, O(1))
+/// rather than cloning the entire ItemTree.
+#[salsa::tracked]
+pub struct LoweringResult<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub item_tree: Arc<ItemTree>,
+
+    #[tracked]
+    #[returns(ref)]
+    pub diagnostics: Vec<HirDiagnostic>,
+}
+
+//
+// ──────────────────────────────────────────────────── LOWERING CONTEXT ─────
+//
+
+/// Context for lowering CST to HIR, accumulating diagnostics.
+///
+/// This follows the rust-analyzer pattern of collecting errors during traversal
+/// rather than failing fast, allowing us to report all errors in one pass.
+struct LoweringContext {
+    /// File ID for creating spans.
+    file_id: FileId,
+
+    /// Accumulated diagnostics.
+    diagnostics: Vec<HirDiagnostic>,
+}
+
+impl LoweringContext {
+    fn new(file_id: FileId) -> Self {
+        Self {
+            file_id,
+            diagnostics: Vec::new(),
+        }
+    }
+
+    /// Create a span for the given text range in this file.
+    fn span(&self, range: TextRange) -> Span {
+        Span::new(self.file_id, range)
+    }
+
+    /// Push a diagnostic to be reported.
+    fn push_diagnostic(&mut self, diagnostic: HirDiagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
+    /// Consume the context and return the collected diagnostics.
+    fn finish(self) -> Vec<HirDiagnostic> {
+        self.diagnostics
+    }
+}
+
 //
 // ────────────────────────────────────────────────────────── SALSA QUERIES ─────
 //
 
-/// Tracked: Extract `ItemTree` from a file's syntax tree.
+/// Tracked: Lower a file's syntax tree to HIR, collecting diagnostics.
 ///
-/// This query is the "invalidation barrier" - it only changes when
-/// item signatures change, not when whitespace/comments/bodies change.
+/// This is the primary lowering query that validates items during construction.
+/// It returns both the `ItemTree` and any diagnostics discovered.
 #[salsa::tracked]
-pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+pub fn file_lowering(db: &dyn Db, file: SourceFile) -> LoweringResult<'_> {
     let tree = syntax_tree(db, file);
-    let item_tree = lower_file(&tree);
-    Arc::new(item_tree)
+    let file_id = file.file_id(db);
+    let (item_tree, diagnostics) = lower_file_with_ctx(&tree, file_id);
+    LoweringResult::new(db, Arc::new(item_tree), diagnostics)
+}
+
+/// Extract `ItemTree` from a file's syntax tree.
+///
+/// This is a convenience wrapper around `file_lowering` for callers that
+/// only need the ItemTree. Not tracked separately since `file_lowering`
+/// already caches the result - this just clones the Arc (O(1)).
+pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+    file_lowering(db, file).item_tree(db).clone()
 }
 
 // Future: When we add modules, we'll need a function like this:
@@ -535,30 +604,32 @@ fn intern_all_items<'db>(db: &'db dyn Db, file: SourceFile, tree: &ItemTree) -> 
 // ──────────────────────────────────────────────────── CST → HIR LOWERING ─────
 //
 
-/// Lower a syntax tree into an `ItemTree`.
+/// Lower a syntax tree into an `ItemTree` with validation, collecting diagnostics.
 ///
 /// This is the main extraction logic that walks the CST and builds
-/// position-independent item representations.
-fn lower_file(root: &SyntaxNode) -> ItemTree {
+/// position-independent item representations while validating for errors
+/// like duplicate fields, duplicate attributes, etc.
+fn lower_file_with_ctx(root: &SyntaxNode, file_id: FileId) -> (ItemTree, Vec<HirDiagnostic>) {
     let mut tree = ItemTree::new();
+    let mut ctx = LoweringContext::new(file_id);
 
     // Walk only direct children of the root (top-level items)
     // Don't use descendants() because that would pick up nested items like
     // CLIENT_DEF nodes inside function bodies
     for child in root.children() {
-        lower_item(&mut tree, &child);
+        lower_item(&mut tree, &child, &mut ctx);
     }
 
-    tree
+    (tree, ctx.finish())
 }
 
 /// Lower a single item from the CST.
-fn lower_item(tree: &mut ItemTree, node: &SyntaxNode) {
+fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext) {
     use baml_syntax::SyntaxKind;
 
     match node.kind() {
         SyntaxKind::CLASS_DEF => {
-            if let Some(class) = lower_class(node) {
+            if let Some(class) = lower_class(node, ctx) {
                 tree.alloc_class(class);
             }
             // Desugar methods into top-level functions
@@ -567,7 +638,7 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode) {
             }
         }
         SyntaxKind::ENUM_DEF => {
-            if let Some(enum_def) = lower_enum(node) {
+            if let Some(enum_def) = lower_enum(node, ctx) {
                 tree.alloc_enum(enum_def);
             }
         }
@@ -597,33 +668,100 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode) {
     }
 }
 
-/// Extract class definition from CST.
-fn lower_class(node: &SyntaxNode) -> Option<Class> {
+/// Extract class definition from CST with validation.
+fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
     use baml_syntax::ast::ClassDef;
 
     let class = ClassDef::cast(node.clone())?;
-    let name = class.name()?.text().into();
+    let name_token = class.name()?;
+    let name: Name = name_token.text().into();
     let mut fields = Vec::new();
 
-    // Extract fields
+    // Track seen field names for duplicate detection
+    let mut seen_fields: FxHashMap<Name, Span> = FxHashMap::default();
+
+    // Extract fields with duplicate validation
     for field_node in class.fields() {
-        if let Some(field_name) = field_node.name() {
+        if let Some(field_name_token) = field_node.name() {
+            let field_name: Name = field_name_token.text().into();
+            let field_span = ctx.span(field_name_token.text_range());
+
+            // Check for duplicate field
+            if let Some(first_span) = seen_fields.get(&field_name) {
+                ctx.push_diagnostic(HirDiagnostic::DuplicateField {
+                    class_name: name.to_string(),
+                    field_name: field_name.to_string(),
+                    first_span: *first_span,
+                    second_span: field_span,
+                });
+            } else {
+                seen_fields.insert(field_name.clone(), field_span);
+            }
+
+            // Validate field attributes for duplicates
+            let mut seen_field_attrs: FxHashMap<String, Span> = FxHashMap::default();
+            for attr in field_node.attributes() {
+                if let Some(attr_name_token) = attr.name() {
+                    let attr_name = attr_name_token.text().to_string();
+                    let attr_span = ctx.span(attr_name_token.text_range());
+
+                    if let Some(first_span) = seen_field_attrs.get(&attr_name) {
+                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                            container_kind: "class",
+                            container_name: name.to_string(),
+                            field_name: field_name.to_string(),
+                            attr_name: attr_name.clone(),
+                            first_span: *first_span,
+                            second_span: attr_span,
+                        });
+                    } else {
+                        seen_field_attrs.insert(attr_name, attr_span);
+                    }
+                }
+            }
+
             let type_ref = field_node
                 .ty()
                 .map(|t| TypeRef::from_ast(&t))
                 .unwrap_or(TypeRef::Unknown);
 
             fields.push(crate::Field {
-                name: field_name.text().into(),
+                name: field_name,
                 type_ref,
             });
         }
     }
 
-    // Check for @@dynamic attribute using AST accessor
-    let is_dynamic = class
-        .block_attributes()
-        .any(|attr| attr.name().map(|n| n.text() == "dynamic").unwrap_or(false));
+    // Track seen block attributes for duplicate detection
+    let mut seen_attrs: FxHashMap<String, Span> = FxHashMap::default();
+    let mut is_dynamic = false;
+
+    // Validate block attributes
+    for attr in class.block_attributes() {
+        if let Some(attr_name_token) = attr.name() {
+            let attr_name = attr_name_token.text().to_string();
+            // Use the attribute name token's range for precise error highlighting
+            let attr_span = ctx.span(attr_name_token.text_range());
+
+            // Check for duplicate attribute
+            if let Some(first_span) = seen_attrs.get(&attr_name) {
+                ctx.push_diagnostic(HirDiagnostic::DuplicateBlockAttribute {
+                    item_kind: "class",
+                    item_name: name.to_string(),
+                    attr_name: attr_name.clone(),
+                    first_span: *first_span,
+                    second_span: attr_span,
+                });
+            } else {
+                seen_attrs.insert(attr_name.clone(), attr_span);
+            }
+
+            // Track is_dynamic
+            if attr_name == "dynamic" {
+                is_dynamic = true;
+            }
+        }
+    }
 
     Some(Class {
         name,
@@ -655,8 +793,8 @@ fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
     functions
 }
 
-/// Extract enum definition from CST.
-fn lower_enum(node: &SyntaxNode) -> Option<Enum> {
+/// Extract enum definition from CST with validation.
+fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Enum> {
     use baml_syntax::ast::EnumDef;
 
     let enum_def = EnumDef::cast(node.clone())?;
@@ -673,15 +811,78 @@ fn lower_enum(node: &SyntaxNode) -> Option<Enum> {
         .map(|t| Name::new(t.text()))
         .unwrap_or_else(|| Name::new("UnnamedEnum"));
 
-    // Extract variants using AST accessor
-    let variants = enum_def
-        .variants()
-        .filter_map(|variant| {
-            variant.name().map(|name_token| crate::EnumVariant {
-                name: Name::new(name_token.text()),
-            })
-        })
-        .collect();
+    // Track seen variant names for duplicate detection
+    let mut seen_variants: FxHashMap<Name, Span> = FxHashMap::default();
+    let mut variants = Vec::new();
+
+    // Extract variants with duplicate validation
+    for variant in enum_def.variants() {
+        if let Some(name_token) = variant.name() {
+            let variant_name = Name::new(name_token.text());
+            let variant_span = ctx.span(name_token.text_range());
+
+            // Check for duplicate variant
+            if let Some(first_span) = seen_variants.get(&variant_name) {
+                ctx.push_diagnostic(HirDiagnostic::DuplicateVariant {
+                    enum_name: name.to_string(),
+                    variant_name: variant_name.to_string(),
+                    first_span: *first_span,
+                    second_span: variant_span,
+                });
+            } else {
+                seen_variants.insert(variant_name.clone(), variant_span);
+            }
+
+            // Validate variant attributes for duplicates
+            let mut seen_variant_attrs: FxHashMap<String, Span> = FxHashMap::default();
+            for attr in variant.attributes() {
+                if let Some(attr_name_token) = attr.name() {
+                    let attr_name = attr_name_token.text().to_string();
+                    let attr_span = ctx.span(attr_name_token.text_range());
+
+                    if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
+                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                            container_kind: "enum",
+                            container_name: name.to_string(),
+                            field_name: variant_name.to_string(),
+                            attr_name: attr_name.clone(),
+                            first_span: *first_span,
+                            second_span: attr_span,
+                        });
+                    } else {
+                        seen_variant_attrs.insert(attr_name, attr_span);
+                    }
+                }
+            }
+
+            variants.push(crate::EnumVariant { name: variant_name });
+        }
+    }
+
+    // Track seen block attributes for duplicate detection
+    let mut seen_attrs: FxHashMap<String, Span> = FxHashMap::default();
+
+    // Validate block attributes
+    for attr in enum_def.block_attributes() {
+        if let Some(attr_name_token) = attr.name() {
+            let attr_name = attr_name_token.text().to_string();
+            // Use the attribute name token's range for precise error highlighting
+            let attr_span = ctx.span(attr_name_token.text_range());
+
+            // Check for duplicate attribute
+            if let Some(first_span) = seen_attrs.get(&attr_name) {
+                ctx.push_diagnostic(HirDiagnostic::DuplicateBlockAttribute {
+                    item_kind: "enum",
+                    item_name: name.to_string(),
+                    attr_name: attr_name.clone(),
+                    first_span: *first_span,
+                    second_span: attr_span,
+                });
+            } else {
+                seen_attrs.insert(attr_name, attr_span);
+            }
+        }
+    }
 
     Some(Enum { name, variants })
 }
