@@ -9,6 +9,8 @@
 //! - Phi-like local detection (locals assigned in all predecessors, used once at join)
 //! - Constant propagation (pure constants with single definition inlined at all use sites)
 //! - Call result immediate (single-use Call results used at continuation block start)
+//! - Copy propagation (locals that are simple copies of parameters/other locals)
+//! - Wildcard elimination (unused `_` pattern bindings are eliminated)
 
 use std::collections::{HashMap, HashSet};
 
@@ -72,6 +74,11 @@ pub(crate) enum LocalClassification {
     /// At def site (after Call): don't emit Store (leave on stack).
     /// At use site: don't emit `LoadVar` (value already on stack from Call).
     CallResultImmediate,
+    /// Copy of another local: `_X = copy _Y` where _Y is a parameter or simple local.
+    /// At def site: don't emit anything (skip the copy entirely).
+    /// At use sites: load from the source local instead.
+    /// The source local is stored in `AnalysisResult::copy_sources`.
+    CopyOf,
     /// Dead local - defined but never used, can be eliminated.
     Dead,
 }
@@ -123,6 +130,9 @@ pub(crate) struct AnalysisResult<'db> {
     /// Jump threading: maps empty goto-only blocks to their final target.
     /// Used during emission to skip intermediate jumps.
     pub redirect_targets: HashMap<BlockId, BlockId>,
+    /// Copy propagation: maps locals classified as `CopyOf` to their source local.
+    /// When emitting a use of local X, if X is in this map, load from the mapped local instead.
+    pub copy_sources: HashMap<Local, Local>,
 }
 
 // ============================================================================
@@ -147,8 +157,8 @@ impl<'db> AnalysisResult<'db> {
         // Step 5: Build jump threading redirect map
         let redirect_targets = build_redirect_targets(mir);
 
-        // Step 6: Classify each local (including phi-like detection)
-        let classifications =
+        // Step 6: Classify each local (including phi-like detection and copy propagation)
+        let (classifications, copy_sources) =
             classify_locals(mir, &def_use, &dominators, &predecessors, &redirect_targets);
 
         Self {
@@ -158,6 +168,7 @@ impl<'db> AnalysisResult<'db> {
             rpo,
             predecessors,
             redirect_targets,
+            copy_sources,
         }
     }
 
@@ -168,6 +179,17 @@ impl<'db> AnalysisResult<'db> {
             .get(&target)
             .copied()
             .unwrap_or(target)
+    }
+
+    /// Resolve a local through copy propagation.
+    /// If the local is a copy of another local, returns the source local.
+    /// Follows chains: if A copies B and B copies C, resolves A to C.
+    pub(crate) fn resolve_copy_source(&self, local: Local) -> Local {
+        let mut current = local;
+        while let Some(&source) = self.copy_sources.get(&current) {
+            current = source;
+        }
+        current
     }
 }
 
@@ -628,32 +650,49 @@ fn collect_uses_in_terminator<'db>(
 // Local Classification
 // ============================================================================
 
-/// Classify each local as Virtual, Real, `PhiLike`, or Dead.
+/// Classify each local as Virtual, Real, `PhiLike`, `CopyOf`, or Dead.
+///
+/// Returns both the classifications and the `copy_sources` map for copy propagation.
 fn classify_locals<'db>(
     mir: &MirFunction<'db>,
     def_use: &HashMap<Local, LocalDefUse<'db>>,
     dominators: &Dominators,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
     redirect_targets: &HashMap<BlockId, BlockId>,
-) -> HashMap<Local, LocalClassification> {
+) -> (HashMap<Local, LocalClassification>, HashMap<Local, Local>) {
     let all_defs = collect_all_definitions(mir);
 
     let mut classifications = HashMap::new();
+    let mut copy_sources: HashMap<Local, Local> = HashMap::new();
 
     for (idx, _local_decl) in mir.locals.iter().enumerate() {
         let local = Local(idx);
         let du = &def_use[&local];
 
         let local_decl = mir.local(local);
+
+        // Check if this is an unused wildcard binding.
+        // NOTE: We currently only check for exactly "_". In the future, we may want
+        // more robust checking (e.g., any name starting with "_", or type-based analysis
+        // to verify the binding truly has no observable side effects). For now, this
+        // simple check handles the common pattern-matching wildcard case.
+        let is_unused_wildcard = du.uses.is_empty() && local_decl.name.as_deref() == Some("_");
+
         let classification = if idx > 0 && idx <= mir.arity {
             // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
-        } else if idx != 0 && du.uses.is_empty() && local_decl.name.is_none() {
-            // Dead compiler temp - defined but never used (skip _0 which is implicitly used by return)
-            // NOTE: To also eliminate dead user variables (e.g., `let x = 5;` where x is never read),
-            // remove the `&& local_decl.name.is_none()` check above. Currently we preserve user
-            // variables for debugging/semantics even if unused.
+        } else if idx != 0
+            && du.uses.is_empty()
+            && (local_decl.name.is_none() || is_unused_wildcard)
+        {
+            // Dead local: either an unused compiler temp, or an unused wildcard binding.
+            // Skip _0 which is implicitly used by return.
             LocalClassification::Dead
+        } else if let Some(source) = get_copy_source(local, du, mir, &all_defs) {
+            // Copy propagation: this local is just `_X = copy _Y` where _Y is suitable.
+            // We can eliminate _X and use _Y directly at all use sites.
+            copy_sources.insert(local, source);
+            LocalClassification::CopyOf
         } else if can_be_virtual(local, du, dominators, mir, def_use, predecessors, &all_defs) {
             LocalClassification::Virtual
         } else if is_phi_like(local, du, mir, predecessors, &all_defs) {
@@ -678,7 +717,7 @@ fn classify_locals<'db>(
         classifications.insert(local, classification);
     }
 
-    classifications
+    (classifications, copy_sources)
 }
 
 /// Collect all definition sites for each local.
@@ -1290,6 +1329,56 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse<'_>, mir: &MirFunctio
 
     // Check that the continuation block is the use block
     continuation_target == Some(use_loc.block)
+}
+
+/// Check if a local is a simple copy of another local (for copy propagation).
+///
+/// Returns `Some(source_local)` if the local is defined as `_X = copy _Y` where:
+/// 1. There is exactly one definition of `_X`
+/// 2. The definition is `Rvalue::Use(Operand::Copy(Place::Local(source)))` or
+///    `Rvalue::Use(Operand::Move(Place::Local(source)))`
+/// 3. The source is a parameter (not modified) or another suitable local
+///
+/// This optimization is particularly useful for match expressions where the
+/// scrutinee is copied into a temporary before comparisons.
+fn get_copy_source(
+    local: Local,
+    du: &LocalDefUse<'_>,
+    mir: &MirFunction<'_>,
+    all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
+) -> Option<Local> {
+    // Must have exactly one definition
+    let def = du.def.as_ref()?;
+
+    // Definition must not be from a terminator (Call/Await results aren't copies)
+    if def.statement_idx == TERMINATOR_IDX {
+        return None;
+    }
+
+    // Must have exactly one definition site
+    let defs = all_defs.get(&local)?;
+    if defs.len() != 1 {
+        return None;
+    }
+
+    // The rvalue must be a simple copy/move of a local (not a field or index)
+    let source = match &def.rvalue {
+        Rvalue::Use(Operand::Copy(Place::Local(src))) => *src,
+        Rvalue::Use(Operand::Move(Place::Local(src))) => *src,
+        _ => return None,
+    };
+
+    // The source must be a parameter (parameters are never reassigned in MIR)
+    // We only propagate copies of parameters to keep the analysis simple and safe.
+    // Propagating copies of other locals would require verifying the source isn't
+    // modified between the copy and all uses of the copy.
+    let source_idx = source.0;
+    if source_idx == 0 || source_idx > mir.arity {
+        // Source is not a parameter (_0 is return value, > arity are locals)
+        return None;
+    }
+
+    Some(source)
 }
 
 // ============================================================================

@@ -143,8 +143,9 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 | LocalClassification::PhiLike
                 | LocalClassification::ReturnPhi
                 | LocalClassification::CallResultImmediate
+                | LocalClassification::CopyOf
                 | LocalClassification::Dead => {
-                    // Virtual, phi-like, return-phi, call-result-immediate, and dead locals don't get slots!
+                    // Virtual, phi-like, return-phi, call-result-immediate, copy-of, and dead locals don't get slots!
                 }
             }
         }
@@ -248,6 +249,11 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                             self.emit_rvalue_pull(value, mir);
                             return;
                         }
+                        LocalClassification::CopyOf => {
+                            // Copy propagation - skip the copy entirely.
+                            // Uses of this local will load from the source instead.
+                            return;
+                        }
                         LocalClassification::Dead => {
                             // Dead store elimination - skip entirely
                             return;
@@ -333,6 +339,12 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                         // ReturnPhi: value is already on the stack from the assignment.
                         // CallResultImmediate: value is already on the stack from the Call.
                         // Don't emit any instruction - the value is there waiting for us.
+                    }
+                    LocalClassification::CopyOf => {
+                        // Copy propagation: load from the source local instead.
+                        let source = self.analysis.resolve_copy_source(*local);
+                        let slot = self.local_slots[&source];
+                        self.emit(Instruction::LoadVar(slot));
                     }
                     _ => {
                         // Real/Parameter local: emit LoadVar
@@ -584,8 +596,10 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                         // PhiLike/ReturnPhi: keep value on stack (no-op) - value goes to join/return.
                         // CallResultImmediate: keep value on stack (no-op) - value used immediately.
                     }
-                    LocalClassification::Virtual | LocalClassification::Dead => {
-                        // Virtual or Dead local - just pop the value
+                    LocalClassification::Virtual
+                    | LocalClassification::CopyOf
+                    | LocalClassification::Dead => {
+                        // Virtual, CopyOf, or Dead local - just pop the value
                         self.emit(Instruction::Pop(1));
                     }
                 }
