@@ -384,7 +384,7 @@ pub fn project_type_names(db: &dyn Db, root: baml_workspace::Project) -> Project
 ///
 /// This is a convenience function for WASM/external consumers that just need
 /// a list of function names without dealing with HIR internals.
-/// Returns (function_name, span) pairs for CodeLens positioning.
+/// Returns (`function_name`, span) pairs for `CodeLens` positioning.
 pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(String, Span)> {
     let items = project_items(db, root);
     let mut functions = Vec::new();
