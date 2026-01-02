@@ -711,6 +711,29 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         dest: Place,
         body: &ExprBody,
     ) {
+        // Special case: instanceof operator - RHS is a type name, not a value
+        if op == BinaryOp::Instanceof {
+            let lhs_ty = Self::lower_typed_ir_ty(body.ty(lhs));
+            let lhs_local = self.builder.temp(lhs_ty);
+            self.lower_expr(lhs, Place::local(lhs_local), body);
+
+            // Extract the type name from RHS (should be a Var or single-segment Path)
+            let type_name = match body.expr(rhs) {
+                Expr::Var(name) => name.clone(),
+                Expr::Path(segments) if segments.len() == 1 => segments[0].clone(),
+                _ => panic!("instanceof RHS must be a simple type name"),
+            };
+
+            self.builder.assign(
+                dest,
+                Rvalue::IsType {
+                    operand: Operand::copy_local(lhs_local),
+                    ty: Ty::Named(type_name),
+                },
+            );
+            return;
+        }
+
         let lhs_ty = Self::lower_typed_ir_ty(body.ty(lhs));
         let rhs_ty = Self::lower_typed_ir_ty(body.ty(rhs));
 
