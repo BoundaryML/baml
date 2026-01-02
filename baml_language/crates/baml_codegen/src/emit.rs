@@ -142,8 +142,9 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 LocalClassification::Virtual
                 | LocalClassification::PhiLike
                 | LocalClassification::ReturnPhi
+                | LocalClassification::CallResultImmediate
                 | LocalClassification::Dead => {
-                    // Virtual, phi-like, return-phi, and dead locals don't get slots!
+                    // Virtual, phi-like, return-phi, call-result-immediate, and dead locals don't get slots!
                 }
             }
         }
@@ -325,9 +326,12 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                             .unwrap_or_else(|| panic!("virtual local {local} without definition"));
                         self.emit_rvalue_pull(&rvalue, mir);
                     }
-                    LocalClassification::PhiLike | LocalClassification::ReturnPhi => {
+                    LocalClassification::PhiLike
+                    | LocalClassification::ReturnPhi
+                    | LocalClassification::CallResultImmediate => {
                         // PhiLike: value is already on the stack from the predecessor block.
                         // ReturnPhi: value is already on the stack from the assignment.
+                        // CallResultImmediate: value is already on the stack from the Call.
                         // Don't emit any instruction - the value is there waiting for us.
                     }
                     _ => {
@@ -574,10 +578,11 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                         let slot = self.local_slots[local];
                         self.emit(Instruction::StoreVar(slot));
                     }
-                    LocalClassification::PhiLike | LocalClassification::ReturnPhi => {
-                        // PhiLike/ReturnPhi: keep value on stack (no-op)
-                        // Note: This case shouldn't occur because phi-like and return-phi
-                        // locals require specific terminator patterns (Goto/Return).
+                    LocalClassification::PhiLike
+                    | LocalClassification::ReturnPhi
+                    | LocalClassification::CallResultImmediate => {
+                        // PhiLike/ReturnPhi: keep value on stack (no-op) - value goes to join/return.
+                        // CallResultImmediate: keep value on stack (no-op) - value used immediately.
                     }
                     LocalClassification::Virtual | LocalClassification::Dead => {
                         // Virtual or Dead local - just pop the value

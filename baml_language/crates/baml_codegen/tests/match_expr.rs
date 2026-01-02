@@ -74,17 +74,15 @@ fn match_literal_int_with_fallback() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Constant propagation: scrutinee 1 is inlined at each use site
             vec![
-                Instruction::LoadConst(Value::Null),   // slot for _
-                Instruction::LoadConst(Value::Null),   // slot for _1 (scrutinee)
-                Instruction::LoadConst(Value::Int(1)), // scrutinee value
-                Instruction::StoreVar("_1".to_string()),
-                Instruction::LoadVar("_1".to_string()), // load for comparison
-                Instruction::LoadConst(Value::Int(1)),  // literal 1
+                Instruction::LoadConst(Value::Null), // slot for _ (catch-all binding)
+                Instruction::LoadConst(Value::Int(1)), // scrutinee (inlined for comparison)
+                Instruction::LoadConst(Value::Int(1)), // literal 1
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
                 Instruction::Jump(5),           // if true, skip to arm body (100)
-                Instruction::LoadVar("_1".to_string()), // catch-all: load scrutinee
+                Instruction::LoadConst(Value::Int(1)), // scrutinee (inlined for catch-all)
                 Instruction::StoreVar("_".to_string()), // bind to _
                 Instruction::LoadConst(Value::Int(0)), // catch-all result
                 Instruction::Jump(2),           // skip to return
@@ -108,16 +106,14 @@ fn match_literal_bool_exhaustive() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Constant propagation: scrutinee true is inlined at each comparison
             vec![
-                Instruction::LoadConst(Value::Null), // slot for _1 (scrutinee)
-                Instruction::LoadConst(Value::Bool(true)), // scrutinee value
-                Instruction::StoreVar("_1".to_string()),
-                Instruction::LoadVar("_1".to_string()), // load for first comparison
+                Instruction::LoadConst(Value::Bool(true)), // scrutinee (inlined)
                 Instruction::LoadConst(Value::Bool(true)), // literal true
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if false, try next arm
                 Instruction::Jump(9),           // if true, skip to "yes"
-                Instruction::LoadVar("_1".to_string()), // load for second comparison
+                Instruction::LoadConst(Value::Bool(true)), // scrutinee (inlined)
                 Instruction::LoadConst(Value::Bool(false)), // literal false
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(6), // if false (shouldn't happen)
@@ -145,17 +141,15 @@ fn match_literal_null() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Constant propagation: scrutinee null is inlined at each use
             vec![
-                Instruction::LoadConst(Value::Null), // slot for _
-                Instruction::LoadConst(Value::Null), // slot for _1 (scrutinee)
-                Instruction::LoadConst(Value::Null), // scrutinee value
-                Instruction::StoreVar("_1".to_string()),
-                Instruction::LoadVar("_1".to_string()), // load for comparison
-                Instruction::LoadConst(Value::Null),    // literal null
+                Instruction::LoadConst(Value::Null), // slot for _ (catch-all binding)
+                Instruction::LoadConst(Value::Null), // scrutinee (inlined for comparison)
+                Instruction::LoadConst(Value::Null), // literal null
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
                 Instruction::Jump(5),           // if true, skip to "nothing"
-                Instruction::LoadVar("_1".to_string()), // catch-all: load scrutinee
+                Instruction::LoadConst(Value::Null), // scrutinee (inlined for catch-all)
                 Instruction::StoreVar("_".to_string()), // bind to _
                 Instruction::LoadConst(Value::string("something")), // catch-all result
                 Instruction::Jump(2),           // skip to return
@@ -290,25 +284,23 @@ fn match_union_literal_two_values() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Constant propagation: scrutinee 200 is inlined at each use
             vec![
-                Instruction::LoadConst(Value::Null),     // slot for _
-                Instruction::LoadConst(Value::Null),     // slot for _1 (scrutinee)
-                Instruction::LoadConst(Value::Int(200)), // scrutinee value
-                Instruction::StoreVar("_1".to_string()),
+                Instruction::LoadConst(Value::Null), // slot for _ (catch-all binding)
                 // First part of union: 200
-                Instruction::LoadVar("_1".to_string()),
-                Instruction::LoadConst(Value::Int(200)),
+                Instruction::LoadConst(Value::Int(200)), // scrutinee (inlined)
+                Instruction::LoadConst(Value::Int(200)), // literal
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if false, try 201
                 Instruction::Jump(10),          // if true, skip to "success"
                 // Second part of union: 201
-                Instruction::LoadVar("_1".to_string()),
-                Instruction::LoadConst(Value::Int(201)),
+                Instruction::LoadConst(Value::Int(200)), // scrutinee (inlined)
+                Instruction::LoadConst(Value::Int(201)), // literal
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if false, try catch-all
                 Instruction::Jump(5),           // if true, skip to "success"
                 // Catch-all arm
-                Instruction::LoadVar("_1".to_string()),
+                Instruction::LoadConst(Value::Int(200)), // scrutinee (inlined for catch-all)
                 Instruction::StoreVar("_".to_string()),
                 Instruction::LoadConst(Value::string("other")),
                 Instruction::Jump(2), // skip to return
@@ -337,19 +329,18 @@ fn match_in_arithmetic() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Constant propagation: scrutinee 2 is inlined at each use
+            // _2 (match result) still needs slot (assigned in multiple branches)
             vec![
-                Instruction::LoadConst(Value::Null),   // slot for _
-                Instruction::LoadConst(Value::Null),   // slot for _2 (match result)
-                Instruction::LoadConst(Value::Null),   // slot for _3 (scrutinee)
-                Instruction::LoadConst(Value::Int(2)), // scrutinee value
-                Instruction::StoreVar("_3".to_string()),
-                Instruction::LoadVar("_3".to_string()), // load for comparison
-                Instruction::LoadConst(Value::Int(2)),  // literal 2
+                Instruction::LoadConst(Value::Null), // slot for _ (catch-all binding)
+                Instruction::LoadConst(Value::Null), // slot for _2 (match result)
+                Instruction::LoadConst(Value::Int(2)), // scrutinee (inlined)
+                Instruction::LoadConst(Value::Int(2)), // literal 2
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
                 Instruction::Jump(6),           // if true, skip to 20
                 // Catch-all arm
-                Instruction::LoadVar("_3".to_string()),
+                Instruction::LoadConst(Value::Int(2)), // scrutinee (inlined for catch-all)
                 Instruction::StoreVar("_".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("_2".to_string()), // store match result
@@ -387,34 +378,29 @@ fn match_nested() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Constant propagation: scrutinees 1 and 2 are inlined at each use
             vec![
-                Instruction::LoadConst(Value::Null), // slot for outer _
-                Instruction::LoadConst(Value::Null), // slot for _1 (outer scrutinee)
-                Instruction::LoadConst(Value::Null), // slot for inner _
-                Instruction::LoadConst(Value::Null), // slot for _3 (inner scrutinee)
-                // Outer scrutinee
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("_1".to_string()),
-                Instruction::LoadVar("_1".to_string()),
-                Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadConst(Value::Null), // slot for outer _ (catch-all binding)
+                Instruction::LoadConst(Value::Null), // slot for inner _ (catch-all binding)
+                // Outer match: compare with 1
+                Instruction::LoadConst(Value::Int(1)), // scrutinee (inlined)
+                Instruction::LoadConst(Value::Int(1)), // literal
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if outer != 1, skip to outer catch-all
                 Instruction::Jump(5),           // if outer == 1, skip to inner match
                 // Outer catch-all arm
-                Instruction::LoadVar("_1".to_string()),
+                Instruction::LoadConst(Value::Int(1)), // scrutinee (inlined for catch-all)
                 Instruction::StoreVar("_".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::Jump(13), // skip to return
-                // Inner match scrutinee
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("_3".to_string()),
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::LoadConst(Value::Int(2)),
+                Instruction::Jump(11), // skip to return
+                // Inner match: compare with 2
+                Instruction::LoadConst(Value::Int(2)), // scrutinee (inlined)
+                Instruction::LoadConst(Value::Int(2)), // literal
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if inner != 2, skip to inner catch-all
                 Instruction::Jump(5),           // if inner == 2, skip to 12
                 // Inner catch-all arm
-                Instruction::LoadVar("_3".to_string()),
+                Instruction::LoadConst(Value::Int(2)), // scrutinee (inlined for catch-all)
                 Instruction::StoreVar("_".to_string()),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::Jump(2), // skip to return

@@ -7,6 +7,8 @@
 //! - Local classification (Virtual vs Real)
 //! - Jump threading (redirect targets for empty goto-only blocks)
 //! - Phi-like local detection (locals assigned in all predecessors, used once at join)
+//! - Constant propagation (pure constants with single definition inlined at all use sites)
+//! - Call result immediate (single-use Call results used at continuation block start)
 
 use std::collections::{HashMap, HashSet};
 
@@ -65,6 +67,11 @@ pub(crate) enum LocalClassification {
     /// At def sites: emit rvalue but NOT store (leave on stack).
     /// At Return: don't emit `LoadVar` for _0 (value already on stack).
     ReturnPhi,
+    /// Call result immediate: defined by Call/Await/DispatchFuture, used exactly once
+    /// immediately in the continuation block.
+    /// At def site (after Call): don't emit Store (leave on stack).
+    /// At use site: don't emit `LoadVar` (value already on stack from Call).
+    CallResultImmediate,
     /// Dead local - defined but never used, can be eliminated.
     Dead,
 }
@@ -647,7 +654,7 @@ fn classify_locals<'db>(
             // remove the `&& local_decl.name.is_none()` check above. Currently we preserve user
             // variables for debugging/semantics even if unused.
             LocalClassification::Dead
-        } else if can_be_virtual(local, du, dominators, mir, def_use, predecessors) {
+        } else if can_be_virtual(local, du, dominators, mir, def_use, predecessors, &all_defs) {
             LocalClassification::Virtual
         } else if is_phi_like(local, du, mir, predecessors, &all_defs) {
             // Phi-like: assigned in each predecessor, used once at join point.
@@ -659,6 +666,11 @@ fn classify_locals<'db>(
             // At def sites: emit rvalue but NOT StoreVar (leave on stack).
             // At Return: don't emit LoadVar for _0 (value already on stack).
             LocalClassification::ReturnPhi
+        } else if is_call_result_immediate(local, du, mir) {
+            // Call result used immediately in continuation block.
+            // At def site (after Call): don't emit StoreVar (leave on stack).
+            // At use site: don't emit LoadVar (value already on stack from Call).
+            LocalClassification::CallResultImmediate
         } else {
             LocalClassification::Real
         };
@@ -895,12 +907,13 @@ fn is_return_phi(
 
 /// Check if a local can be classified as Virtual.
 fn can_be_virtual<'db>(
-    _local: Local,
+    local: Local,
     du: &LocalDefUse<'db>,
     dominators: &Dominators,
     mir: &MirFunction<'db>,
     def_use: &HashMap<Local, LocalDefUse<'db>>,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
+    all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
 ) -> bool {
     // Must have exactly one definition
     let Some(def) = &du.def else {
@@ -913,7 +926,17 @@ fn can_be_virtual<'db>(
         return false;
     }
 
-    // Must have exactly one use for simple virtual inlining
+    // Pure constants with a SINGLE definition can be inlined even with multiple uses.
+    // They have no side effects and always produce the same value.
+    // If there are multiple definitions (e.g., from if-else branches), we can't inline
+    // because we'd inline the wrong definition for some execution paths.
+    let has_single_def = all_defs.get(&local).is_some_and(|defs| defs.len() == 1);
+    if has_single_def && is_pure_constant(&def.rvalue) {
+        // Just need at least one use to not be dead
+        return !du.uses.is_empty();
+    }
+
+    // For non-constant rvalues, must have exactly one use
     if du.uses.len() != 1 {
         return false;
     }
@@ -1176,6 +1199,94 @@ fn is_inlinable_rvalue(_rvalue: &Rvalue<'_>) -> bool {
     // All current rvalues can be inlined
     // May want to exclude complex aggregates in the future
     true
+}
+
+/// Check if an rvalue is a pure constant that can be safely duplicated.
+///
+/// Pure constants have no side effects and always produce the same value,
+/// so they can be re-emitted at every use site even with multiple uses.
+fn is_pure_constant(rvalue: &Rvalue<'_>) -> bool {
+    matches!(rvalue, Rvalue::Use(Operand::Constant(_)))
+}
+
+/// Check if a local is a "call result immediate": defined by Call/Await/DispatchFuture,
+/// used exactly once at the start of the continuation block.
+///
+/// Call result immediate applies when:
+/// 1. The local is defined by a Call/Await/DispatchFuture terminator
+/// 2. It has exactly one use
+/// 3. The use is in the continuation block (target of the Call)
+/// 4. The use is at statement index 0 (first thing in the continuation block)
+///
+/// This allows us to:
+/// - After Call: don't emit `StoreVar` (leave result on stack)
+/// - At use site: don't emit `LoadVar` (value already on stack from Call)
+///
+/// This eliminates the redundant `StoreVar("_X"); LoadVar("_X")` pattern for call results.
+fn is_call_result_immediate(local: Local, du: &LocalDefUse<'_>, mir: &MirFunction<'_>) -> bool {
+    // Must have exactly one use
+    if du.uses.len() != 1 {
+        return false;
+    }
+
+    // Must have a definition from a terminator (Call/Await/DispatchFuture)
+    let Some(def) = &du.def else {
+        return false;
+    };
+
+    // Definition must be in a terminator
+    if def.statement_idx != TERMINATOR_IDX {
+        return false;
+    }
+
+    let use_loc = &du.uses[0];
+
+    // The use must be at statement index 0 (first statement of the continuation block)
+    if use_loc.statement_idx != 0 {
+        return false;
+    }
+
+    // Get the defining block and check that its terminator is Call/Await/DispatchFuture
+    // with the continuation block being the use block
+    let def_block = mir.block(def.block);
+    let continuation_target = match &def_block.terminator {
+        Some(Terminator::Call {
+            destination,
+            target,
+            ..
+        }) => {
+            // Verify this Call defines our local
+            if matches!(destination, Place::Local(l) if *l == local) {
+                Some(*target)
+            } else {
+                None
+            }
+        }
+        Some(Terminator::Await {
+            destination,
+            target,
+            ..
+        }) => {
+            // Verify this Await defines our local
+            if matches!(destination, Place::Local(l) if *l == local) {
+                Some(*target)
+            } else {
+                None
+            }
+        }
+        Some(Terminator::DispatchFuture { future, resume, .. }) => {
+            // Verify this DispatchFuture defines our local
+            if matches!(future, Place::Local(l) if *l == local) {
+                Some(*resume)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+
+    // Check that the continuation block is the use block
+    continuation_target == Some(use_loc.block)
 }
 
 // ============================================================================
