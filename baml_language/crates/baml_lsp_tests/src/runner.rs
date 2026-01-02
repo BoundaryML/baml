@@ -71,8 +71,12 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         }
     }
 
-    // Collect name errors (duplicates across files)
-    for error in baml_hir::validate_duplicate_names(&db, root) {
+    // Collect validation errors (duplicates across files, reserved names)
+    let validation_result = baml_hir::validate_hir(&db, root);
+    for diag in validation_result.hir_diagnostics {
+        all_errors.push(render_hir_diagnostic(&diag, &sources, false));
+    }
+    for error in validation_result.name_errors {
         all_errors.push(render_name_error(&error, &sources, false));
     }
 

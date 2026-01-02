@@ -755,6 +755,19 @@ impl CompilerRunner {
                             writeln!(output).ok();
                             output_annotated.push((String::new(), LineStatus::Unknown));
                         }
+                        ItemId::Generator(gen_loc) => {
+                            let generator = &item_tree[gen_loc.id(&self.db)];
+                            let output_type =
+                                generator.output_type.as_deref().unwrap_or("<missing>");
+                            let line = format!(
+                                "generator {} (output_type: {})",
+                                generator.name, output_type
+                            );
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            writeln!(output).ok();
+                            output_annotated.push((String::new(), LineStatus::Unknown));
+                        }
                     }
                 }
             }
@@ -2291,6 +2304,11 @@ fn get_error_file_id(error: &StoredCompilerError) -> FileId {
             HirDiagnostic::DuplicateFieldAttribute { second_span, .. } => second_span.file_id,
             HirDiagnostic::UnknownAttribute { span, .. } => span.file_id,
             HirDiagnostic::InvalidAttributeContext { span, .. } => span.file_id,
+            HirDiagnostic::UnknownGeneratorProperty { span, .. } => span.file_id,
+            HirDiagnostic::MissingGeneratorProperty { span, .. } => span.file_id,
+            HirDiagnostic::InvalidGeneratorPropertyValue { span, .. } => span.file_id,
+            HirDiagnostic::ReservedFieldName { span, .. } => span.file_id,
+            HirDiagnostic::FieldNameMatchesTypeName { span, .. } => span.file_id,
         },
     }
 }

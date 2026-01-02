@@ -9,15 +9,9 @@ use std::{
 
 use baml_db::{
     FileId, SourceFile,
-<<<<<<< HEAD
     baml_diagnostics::{HirDiagnostic, NameError, ParseError, TypeError},
     baml_hir::{self, FunctionBody, ItemId, file_lowering},
-    baml_parser, baml_thir,
-=======
-    baml_diagnostics::{NameError, ParseError, TypeError},
-    baml_hir::{self, FunctionBody, ItemId},
     baml_parser, baml_tir,
->>>>>>> origin/canary
 };
 use lsp_server::ErrorCode;
 use lsp_types::{
@@ -204,9 +198,14 @@ pub(super) fn project_diagnostics(
         }
     }
 
-    // 3. Gather name errors (duplicate names)
-    let name_errors = baml_hir::validate_duplicate_names(db, project_root);
-    for error in name_errors {
+    // 3. Gather validation errors (duplicate names, reserved names)
+    let validation_result = baml_hir::validate_hir(db, project_root);
+    for diag in &validation_result.hir_diagnostics {
+        if let Some(lsp_diag) = hir_diagnostic_to_lsp_diagnostic(diag, &file_info, session) {
+            add_diagnostic(get_hir_diagnostic_file_id(diag), lsp_diag);
+        }
+    }
+    for error in validation_result.name_errors {
         if let Some((diag, file_id)) = name_error_to_diagnostic(&error, &file_info, session) {
             add_diagnostic(file_id, diag);
         }
@@ -640,6 +639,91 @@ fn hir_diagnostic_to_lsp_diagnostic(
             "E0016",
             String::new(),
         ),
+        HirDiagnostic::UnknownGeneratorProperty {
+            generator_name,
+            property_name,
+            span,
+            valid_properties,
+        } => (
+            format!(
+                "Unknown property '{}' in generator '{}'. Valid properties: {}",
+                property_name,
+                generator_name,
+                valid_properties.join(", ")
+            ),
+            span,
+            None,
+            "E0017",
+            String::new(),
+        ),
+        HirDiagnostic::MissingGeneratorProperty {
+            generator_name,
+            property_name,
+            span,
+        } => (
+            format!(
+                "Generator '{}' is missing required property '{}'",
+                generator_name, property_name
+            ),
+            span,
+            None,
+            "E0018",
+            String::new(),
+        ),
+        HirDiagnostic::InvalidGeneratorPropertyValue {
+            generator_name,
+            property_name,
+            value,
+            span,
+            valid_values,
+            help,
+        } => {
+            let mut msg = format!(
+                "Invalid value '{}' for property '{}' in generator '{}'",
+                value, property_name, generator_name
+            );
+            if let Some(valid) = valid_values {
+                msg.push_str(&format!(". Valid values: {}", valid.join(", ")));
+            }
+            if let Some(h) = help {
+                msg.push_str(&format!(". {}", h));
+            }
+            (msg, span, None, "E0019", String::new())
+        }
+        HirDiagnostic::ReservedFieldName {
+            item_kind,
+            item_name,
+            field_name,
+            span,
+            target_languages,
+        } => (
+            format!(
+                "Field '{}' in {} '{}' is a reserved keyword in {}",
+                field_name,
+                item_kind,
+                item_name,
+                target_languages.join(", ")
+            ),
+            span,
+            None,
+            "E0020",
+            String::new(),
+        ),
+        HirDiagnostic::FieldNameMatchesTypeName {
+            class_name,
+            field_name,
+            type_name,
+            span,
+        } => (
+            format!(
+                "Field '{}' in class '{}' has the same name as its type '{}'. This causes issues in Python.",
+                field_name, class_name, type_name
+            ),
+            span,
+            None,
+            "E0021",
+            String::new(),
+        ),
     };
 
     let (path, source_text, line_index) = file_info.get(&span.file_id)?;
@@ -686,6 +770,11 @@ fn get_hir_diagnostic_file_id(error: &HirDiagnostic) -> FileId {
         HirDiagnostic::DuplicateFieldAttribute { second_span, .. } => second_span.file_id,
         HirDiagnostic::UnknownAttribute { span, .. } => span.file_id,
         HirDiagnostic::InvalidAttributeContext { span, .. } => span.file_id,
+        HirDiagnostic::UnknownGeneratorProperty { span, .. } => span.file_id,
+        HirDiagnostic::MissingGeneratorProperty { span, .. } => span.file_id,
+        HirDiagnostic::InvalidGeneratorPropertyValue { span, .. } => span.file_id,
+        HirDiagnostic::ReservedFieldName { span, .. } => span.file_id,
+        HirDiagnostic::FieldNameMatchesTypeName { span, .. } => span.file_id,
     }
 }
 

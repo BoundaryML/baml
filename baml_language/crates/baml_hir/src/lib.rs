@@ -31,6 +31,7 @@ mod item_tree;
 mod loc;
 mod path;
 pub mod pretty;
+pub mod reserved_names;
 mod signature;
 mod type_ref;
 
@@ -42,6 +43,7 @@ pub use item_tree::*;
 pub use loc::*;
 pub use path::*;
 pub use pretty::{body_to_code, expr_to_code, stmt_to_code};
+pub use reserved_names::{OutputType, ReservedNamesMode};
 // Re-export signature types explicitly (no wildcards to avoid conflicts)
 pub use signature::{FunctionSignature, Param};
 pub use type_ref::*;
@@ -587,6 +589,14 @@ fn intern_all_items<'db>(db: &'db dyn Db, file: SourceFile, tree: &ItemTree) -> 
         items.push(ItemId::Test(loc));
     }
 
+    // Intern generators
+    let mut generators: Vec<_> = tree.generators.keys().copied().collect();
+    generators.sort_by_key(|id| id.as_u32());
+    for local_id in generators {
+        let loc = GeneratorLoc::new(db, file, local_id);
+        items.push(ItemId::Generator(loc));
+    }
+
     items
 }
 
@@ -976,6 +986,208 @@ fn lower_test(node: &SyntaxNode) -> Option<Test> {
     })
 }
 
+/// Valid generator properties.
+const VALID_GENERATOR_PROPERTIES: &[&str] = &[
+    "output_type",
+    "output_dir",
+    "version",
+    "default_client_mode",
+    "on_generate",
+    "project",
+    "client_package_name",
+    "module_format",
+];
+
+/// Valid output types for generators.
+const VALID_OUTPUT_TYPES: &[&str] = &[
+    "python/pydantic",
+    "python/pydantic/v1",
+    "typescript",
+    "typescript/react",
+    "ruby/sorbet",
+    "go",
+    "rest/openapi",
+    "boundary-cloud",
+];
+
+/// Valid values for default_client_mode.
+const VALID_CLIENT_MODES: &[&str] = &["sync", "async"];
+
+/// Valid values for module_format.
+const VALID_MODULE_FORMATS: &[&str] = &["cjs", "esm"];
+
+/// Extract generator definition from CST with validation.
+fn lower_generator(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Generator> {
+    use baml_syntax::ast::GeneratorDef;
+
+    let generator = GeneratorDef::cast(node.clone())?;
+
+    // Extract name using AST accessor
+    let name_token = generator.name()?;
+    let name = Name::new(name_token.text());
+    let generator_name = name.to_string();
+
+    // Track for required property check
+    let mut output_type: Option<String> = None;
+    let mut output_dir: Option<String> = None;
+    let mut version: Option<String> = None;
+    let mut default_client_mode: Option<String> = None;
+    let mut on_generate: Option<String> = None;
+    let mut project: Option<String> = None;
+    let mut client_package_name: Option<String> = None;
+    let mut module_format: Option<String> = None;
+
+    // Process config block if present
+    if let Some(config_block) = generator.config_block() {
+        for item in config_block.items() {
+            let key_token = match item.key() {
+                Some(t) => t,
+                None => continue,
+            };
+            let key = key_token.text();
+            let key_span = ctx.span(key_token.text_range());
+
+            // Validate property name
+            if !VALID_GENERATOR_PROPERTIES.contains(&key) {
+                ctx.diagnostics
+                    .push(HirDiagnostic::UnknownGeneratorProperty {
+                        generator_name: generator_name.clone(),
+                        property_name: key.to_string(),
+                        span: key_span,
+                        valid_properties: VALID_GENERATOR_PROPERTIES.to_vec(),
+                    });
+                continue;
+            }
+
+            // Get value - use value_str() to handle compound values like "python/pydantic"
+            let value = item.value_str();
+
+            match key {
+                "output_type" => {
+                    if let Some(ref v) = value {
+                        if !VALID_OUTPUT_TYPES.contains(&v.as_str()) {
+                            if let Some(value_token) = item.value_word() {
+                                ctx.diagnostics.push(
+                                    HirDiagnostic::InvalidGeneratorPropertyValue {
+                                        generator_name: generator_name.clone(),
+                                        property_name: key.to_string(),
+                                        value: v.clone(),
+                                        span: ctx.span(value_token.text_range()),
+                                        valid_values: Some(
+                                            VALID_OUTPUT_TYPES
+                                                .iter()
+                                                .map(|s| s.to_string())
+                                                .collect(),
+                                        ),
+                                        help: None,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                    output_type = value;
+                }
+                "output_dir" => {
+                    output_dir = value;
+                }
+                "version" => {
+                    version = value;
+                }
+                "default_client_mode" => {
+                    if let Some(ref v) = value {
+                        if !VALID_CLIENT_MODES.contains(&v.as_str()) {
+                            if let Some(value_token) = item.value_word() {
+                                ctx.diagnostics.push(
+                                    HirDiagnostic::InvalidGeneratorPropertyValue {
+                                        generator_name: generator_name.clone(),
+                                        property_name: key.to_string(),
+                                        value: v.clone(),
+                                        span: ctx.span(value_token.text_range()),
+                                        valid_values: Some(
+                                            VALID_CLIENT_MODES
+                                                .iter()
+                                                .map(|s| s.to_string())
+                                                .collect(),
+                                        ),
+                                        help: Some("Use \"sync\" or \"async\"".to_string()),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                    default_client_mode = value;
+                }
+                "on_generate" => {
+                    on_generate = value;
+                }
+                "project" => {
+                    project = value;
+                }
+                "client_package_name" => {
+                    client_package_name = value;
+                }
+                "module_format" => {
+                    if let Some(ref v) = value {
+                        if !VALID_MODULE_FORMATS.contains(&v.as_str()) {
+                            if let Some(value_token) = item.value_word() {
+                                ctx.diagnostics.push(
+                                    HirDiagnostic::InvalidGeneratorPropertyValue {
+                                        generator_name: generator_name.clone(),
+                                        property_name: key.to_string(),
+                                        value: v.clone(),
+                                        span: ctx.span(value_token.text_range()),
+                                        valid_values: Some(
+                                            VALID_MODULE_FORMATS
+                                                .iter()
+                                                .map(|s| s.to_string())
+                                                .collect(),
+                                        ),
+                                        help: Some("Use \"cjs\" or \"esm\"".to_string()),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                    module_format = value;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Check required property: output_type
+    if output_type.is_none() {
+        ctx.diagnostics
+            .push(HirDiagnostic::MissingGeneratorProperty {
+                generator_name: generator_name.clone(),
+                property_name: "output_type",
+                span: ctx.span(name_token.text_range()),
+            });
+    }
+
+    // Check boundary-cloud specific requirement
+    if output_type.as_deref() == Some("boundary-cloud") && project.is_none() {
+        ctx.diagnostics
+            .push(HirDiagnostic::MissingGeneratorProperty {
+                generator_name: generator_name.clone(),
+                property_name: "project",
+                span: ctx.span(name_token.text_range()),
+            });
+    }
+
+    Some(Generator {
+        name,
+        output_type,
+        output_dir,
+        version,
+        default_client_mode,
+        on_generate,
+        project,
+        client_package_name,
+        module_format,
+    })
+}
+
 //
 // ────────────────────────────────────────────────────── NAME VALIDATION ─────
 //
@@ -988,6 +1200,27 @@ struct ItemInfo {
     path: String,
 }
 
+/// Result of HIR validation.
+pub struct HirValidationResult {
+    /// HIR-level diagnostics (field duplicates, reserved names, etc.).
+    pub hir_diagnostics: Vec<HirDiagnostic>,
+    /// Name errors (duplicate top-level names, etc.).
+    pub name_errors: Vec<NameError>,
+}
+
+/// Run all HIR-level validations on a project.
+///
+/// This is the main entry point for HIR validation. It runs:
+/// - Duplicate name detection (classes, functions, etc.)
+/// - Reserved name validation (field names that are keywords in target languages)
+/// - Field name matches type name validation (Python-specific)
+pub fn validate_hir(db: &dyn Db, root: baml_workspace::Project) -> HirValidationResult {
+    HirValidationResult {
+        hir_diagnostics: validate_reserved_names(db, root),
+        name_errors: validate_duplicate_names(db, root),
+    }
+}
+
 /// Validate that there are no duplicate names in the project.
 ///
 /// Top-level entities (classes, enums, functions, type aliases, clients)
@@ -995,7 +1228,7 @@ struct ItemInfo {
 ///
 /// Tests are validated separately: only tests with the same name AND
 /// targeting the same function are considered duplicates.
-pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<NameError> {
+fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<NameError> {
     let items = project_items(db, root);
     let mut seen: FxHashMap<Name, ItemInfo> = FxHashMap::default();
     // For tests: key is (test_name, function_name)
@@ -1152,4 +1385,294 @@ fn check_duplicate(
     } else {
         seen.insert(name, ItemInfo { span, path });
     }
+}
+
+/// Extract the base type name from a TypeRef, unwrapping Optional, List, etc.
+fn get_base_type_name(type_ref: &TypeRef) -> Option<String> {
+    match type_ref {
+        TypeRef::Path(path) => path.last_segment().map(|s| s.to_string()),
+        TypeRef::Optional(inner) => get_base_type_name(inner),
+        TypeRef::List(inner) => get_base_type_name(inner),
+        TypeRef::Generic { base, .. } => get_base_type_name(base),
+        _ => None,
+    }
+}
+
+/// Information about a class field or enum variant from the syntax tree.
+struct FieldInfo {
+    span: Span,
+    has_alias: bool,
+}
+
+/// Look up the span and attributes of a field in a class from the syntax tree.
+fn get_class_field_info(
+    db: &dyn Db,
+    file: baml_base::files::SourceFile,
+    class_name: &str,
+    field_name: &str,
+) -> Option<FieldInfo> {
+    use baml_syntax::{SyntaxKind, ast::ClassDef};
+
+    let tree = baml_parser::syntax_tree(db, file);
+
+    // Find the class node
+    for node in tree.children() {
+        if node.kind() == SyntaxKind::CLASS_DEF {
+            if let Some(class) = ClassDef::cast(node) {
+                if let Some(name_token) = class.name() {
+                    if name_token.text() == class_name {
+                        // Found the class, now find the field
+                        for field_node in class.fields() {
+                            if let Some(field_name_token) = field_node.name() {
+                                if field_name_token.text() == field_name {
+                                    // Check if field has @alias attribute
+                                    let has_alias = field_node.attributes().any(|attr| {
+                                        attr.name().map(|n| n.text() == "alias").unwrap_or(false)
+                                    });
+
+                                    return Some(FieldInfo {
+                                        span: Span::new(
+                                            file.file_id(db),
+                                            field_name_token.text_range(),
+                                        ),
+                                        has_alias,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Look up the span and attributes of a variant in an enum from the syntax tree.
+fn get_enum_variant_info(
+    db: &dyn Db,
+    file: baml_base::files::SourceFile,
+    enum_name: &str,
+    variant_name: &str,
+) -> Option<FieldInfo> {
+    use baml_syntax::{SyntaxKind, ast::EnumDef};
+
+    let tree = baml_parser::syntax_tree(db, file);
+
+    // Find the enum node
+    for node in tree.children() {
+        if node.kind() == SyntaxKind::ENUM_DEF {
+            if let Some(enum_def) = EnumDef::cast(node) {
+                if let Some(name_token) = enum_def.name() {
+                    if name_token.text() == enum_name {
+                        // Found the enum, now find the variant
+                        for variant_node in enum_def.variants() {
+                            if let Some(variant_name_token) = variant_node.name() {
+                                if variant_name_token.text() == variant_name {
+                                    // Check if variant has @alias attribute
+                                    let has_alias = variant_node.attributes().any(|attr| {
+                                        attr.name().map(|n| n.text() == "alias").unwrap_or(false)
+                                    });
+
+                                    return Some(FieldInfo {
+                                        span: Span::new(
+                                            file.file_id(db),
+                                            variant_name_token.text_range(),
+                                        ),
+                                        has_alias,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Validate that field names and function parameters don't use reserved keywords.
+///
+/// This checks:
+/// - Class field names against reserved keywords in target languages
+/// - Enum variant names against reserved keywords
+/// - Function parameter names against reserved keywords
+/// - Field names that match their type name (Python-specific issue)
+///
+/// The validation is based on which generators are configured in the project.
+fn validate_reserved_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<HirDiagnostic> {
+    use std::collections::HashSet;
+
+    let items = project_items(db, root);
+    let mut errors = Vec::new();
+
+    // First, collect all output types from generators
+    let mut output_types: HashSet<reserved_names::OutputType> = HashSet::new();
+    for item in items.items(db) {
+        if let ItemId::Generator(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let generator = &item_tree[loc.id(db)];
+
+            if let Some(ref output_type_str) = generator.output_type {
+                if let Some(output_type) = reserved_names::OutputType::from_str(output_type_str) {
+                    output_types.insert(output_type);
+                }
+            }
+        }
+    }
+
+    // If no generators, nothing to check
+    if output_types.is_empty() {
+        return errors;
+    }
+
+    // Get reserved names for field names
+    let reserved_field_names =
+        reserved_names::reserved_names_for_outputs(&output_types, ReservedNamesMode::FieldNames);
+
+    // Get reserved names for function parameters
+    let reserved_param_names = reserved_names::reserved_names_for_outputs(
+        &output_types,
+        ReservedNamesMode::FunctionParameters,
+    );
+
+    // Check if Python is a target (for field name == type name check)
+    let has_python = output_types.contains(&reserved_names::OutputType::PythonPydantic);
+
+    // Check class fields
+    for item in items.items(db) {
+        if let ItemId::Class(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let class = &item_tree[loc.id(db)];
+            let class_name = class.name.as_str();
+
+            for field in &class.fields {
+                let field_name = field.name.as_str();
+
+                // Get field info from syntax tree
+                let field_info = get_class_field_info(db, file, class_name, field_name);
+                let field_span = field_info
+                    .as_ref()
+                    .map(|info| info.span)
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                let has_alias = field_info
+                    .as_ref()
+                    .map(|info| info.has_alias)
+                    .unwrap_or(false);
+
+                // Check if field name is a reserved keyword
+                if let Some(languages) = reserved_field_names.get(field_name) {
+                    let target_languages: Vec<String> = languages
+                        .iter()
+                        .map(|l| l.display_name().to_string())
+                        .collect();
+
+                    errors.push(HirDiagnostic::ReservedFieldName {
+                        item_kind: "class",
+                        item_name: class_name.to_string(),
+                        field_name: field_name.to_string(),
+                        span: field_span,
+                        target_languages,
+                    });
+                }
+
+                // Check if field name matches its type name (Python-specific)
+                // Skip if field has an @alias attribute
+                if has_python && !has_alias {
+                    if let Some(type_name) = get_base_type_name(&field.type_ref) {
+                        // Compare case-insensitively for Python
+                        if field_name.to_lowercase() == type_name.to_lowercase() {
+                            errors.push(HirDiagnostic::FieldNameMatchesTypeName {
+                                class_name: class_name.to_string(),
+                                field_name: field_name.to_string(),
+                                type_name: type_name.clone(),
+                                span: field_span,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Check enum variants
+    for item in items.items(db) {
+        if let ItemId::Enum(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let enum_def = &item_tree[loc.id(db)];
+            let enum_name = enum_def.name.as_str();
+
+            for variant in &enum_def.variants {
+                let variant_name = variant.name.as_str();
+
+                // Get variant info from syntax tree
+                let variant_info = get_enum_variant_info(db, file, enum_name, variant_name);
+                let variant_span = variant_info
+                    .as_ref()
+                    .map(|info| info.span)
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                let has_alias = variant_info
+                    .as_ref()
+                    .map(|info| info.has_alias)
+                    .unwrap_or(false);
+
+                // Skip if variant has an @alias attribute
+                if has_alias {
+                    continue;
+                }
+
+                // Check if variant name is a reserved keyword
+                if let Some(languages) = reserved_field_names.get(variant_name) {
+                    let target_languages: Vec<String> = languages
+                        .iter()
+                        .map(|l| l.display_name().to_string())
+                        .collect();
+
+                    errors.push(HirDiagnostic::ReservedFieldName {
+                        item_kind: "enum",
+                        item_name: enum_name.to_string(),
+                        field_name: variant_name.to_string(),
+                        span: variant_span,
+                        target_languages,
+                    });
+                }
+            }
+        }
+    }
+
+    // Check function parameters
+    for item in items.items(db) {
+        if let ItemId::Function(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let func = &item_tree[loc.id(db)];
+            let sig = function_signature(db, *loc);
+
+            for param in &sig.params {
+                let param_name = param.name.as_str();
+
+                // Check if parameter name is a reserved keyword
+                if let Some(languages) = reserved_param_names.get(param_name) {
+                    let target_languages: Vec<String> = languages
+                        .iter()
+                        .map(|l| l.display_name().to_string())
+                        .collect();
+
+                    errors.push(HirDiagnostic::ReservedFieldName {
+                        item_kind: "function",
+                        item_name: func.name.to_string(),
+                        field_name: param_name.to_string(),
+                        span: Span::new(file.file_id(db), TextRange::empty(0.into())),
+                        target_languages,
+                    });
+                }
+            }
+        }
+    }
+
+    errors
 }

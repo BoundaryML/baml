@@ -3,10 +3,12 @@ use baml_base::Span;
 
 use super::{
     ARGUMENT_COUNT_MISMATCH, CompilerError, DUPLICATE_ATTRIBUTE, DUPLICATE_FIELD, DUPLICATE_NAME,
-    DUPLICATE_VARIANT, ErrorCode, HirDiagnostic, INVALID_ATTRIBUTE_CONTEXT, INVALID_OPERATOR,
-    NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE, NameError, ParseError,
-    Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN,
-    UNKNOWN_ATTRIBUTE, UNKNOWN_ENUM_VARIANT, UNKNOWN_TYPE, UNKNOWN_VARIABLE, UNREACHABLE_ARM,
+    DUPLICATE_VARIANT, ErrorCode, FIELD_NAME_MATCHES_TYPE_NAME, HirDiagnostic,
+    INVALID_ATTRIBUTE_CONTEXT, INVALID_GENERATOR_PROPERTY_VALUE, INVALID_OPERATOR,
+    MISSING_GENERATOR_PROPERTY, NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE,
+    NameError, ParseError, RESERVED_FIELD_NAME, Report, ReportKind, TYPE_MISMATCH, TypeError,
+    UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_ATTRIBUTE, UNKNOWN_ENUM_VARIANT,
+    UNKNOWN_GENERATOR_PROPERTY, UNKNOWN_TYPE, UNKNOWN_VARIABLE, UNREACHABLE_ARM,
 };
 
 /// The message format and id of each compiler error variant.
@@ -262,6 +264,85 @@ where
                 ),
                 span,
                 INVALID_ATTRIBUTE_CONTEXT,
+            ),
+            HirDiagnostic::UnknownGeneratorProperty {
+                generator_name,
+                property_name,
+                span,
+                valid_properties,
+            } => {
+                let suggestions = format!("Valid properties: {}", valid_properties.join(", "));
+                simple_error(
+                    format!(
+                        "Unknown property '{property_name}' in generator '{generator_name}'. {suggestions}"
+                    ),
+                    span,
+                    UNKNOWN_GENERATOR_PROPERTY,
+                )
+            }
+            HirDiagnostic::MissingGeneratorProperty {
+                generator_name,
+                property_name,
+                span,
+            } => simple_error(
+                format!(
+                    "Generator '{generator_name}' is missing required property '{property_name}'"
+                ),
+                span,
+                MISSING_GENERATOR_PROPERTY,
+            ),
+            HirDiagnostic::InvalidGeneratorPropertyValue {
+                generator_name,
+                property_name,
+                value,
+                span,
+                valid_values,
+                help,
+            } => {
+                let mut msg = format!(
+                    "Invalid value '{value}' for property '{property_name}' in generator '{generator_name}'"
+                );
+                if let Some(valid) = valid_values {
+                    msg.push_str(&format!(". Valid values: {}", valid.join(", ")));
+                }
+                if let Some(h) = help {
+                    msg.push_str(&format!(". {h}"));
+                }
+                simple_error(msg, span, INVALID_GENERATOR_PROPERTY_VALUE)
+            }
+            HirDiagnostic::ReservedFieldName {
+                item_kind,
+                item_name,
+                field_name,
+                span,
+                target_languages,
+            } => {
+                let field_type = match item_kind {
+                    "class" => "Class field",
+                    "enum" => "Enum value",
+                    "function" => "Function parameter",
+                    _ => "Field",
+                };
+                simple_error(
+                    format!(
+                        "{field_type} '{field_name}' in {item_kind} '{item_name}' is a reserved keyword in {}",
+                        target_languages.join(", ")
+                    ),
+                    span,
+                    RESERVED_FIELD_NAME,
+                )
+            }
+            HirDiagnostic::FieldNameMatchesTypeName {
+                class_name,
+                field_name,
+                type_name,
+                span,
+            } => simple_error(
+                format!(
+                    "Error validating field `{field_name}` in class `{class_name}`: When using the python/pydantic generator, a field name must not be exactly equal to the type name (`{type_name}`). Consider changing the field name or using an @alias."
+                ),
+                span,
+                FIELD_NAME_MATCHES_TYPE_NAME,
             ),
         },
     }

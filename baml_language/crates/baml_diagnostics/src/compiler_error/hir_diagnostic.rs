@@ -62,7 +62,6 @@ pub enum HirDiagnostic {
     },
 
     // ============ Generator Diagnostics ============
-
     /// Unknown property in generator block.
     UnknownGeneratorProperty {
         generator_name: String,
@@ -89,7 +88,6 @@ pub enum HirDiagnostic {
     },
 
     // ============ Reserved Names Diagnostics ============
-
     /// Field/parameter name is a reserved keyword in target language.
     ReservedFieldName {
         item_kind: &'static str, // "class", "enum", "function"

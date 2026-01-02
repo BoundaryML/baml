@@ -227,15 +227,9 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_mir;
             use baml_db::baml_codegen;
             use baml_hir::{function_body, function_signature};
-<<<<<<< HEAD
-            use baml_thir::{typing_context, class_field_types, type_aliases, enum_variants};
-            use baml_thir::pretty::short_display;
-            use baml_diagnostics::{render_hir_diagnostic, render_name_error, render_parse_error, render_type_error};
-=======
             use baml_tir::{typing_context, class_field_types, type_aliases, enum_variants};
             use baml_tir::pretty::short_display;
-            use baml_diagnostics::{render_name_error, render_parse_error, render_type_error};
->>>>>>> origin/canary
+            use baml_diagnostics::{render_hir_diagnostic, render_name_error, render_parse_error, render_type_error};
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
@@ -596,8 +590,12 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
                 }
             }
 
-            // Check for duplicate names (project-wide validation)
-            for error in baml_hir::validate_duplicate_names(&db, root) {
+            // Check for validation errors (project-wide validation)
+            let validation_result = baml_hir::validate_hir(&db, root);
+            for diag in validation_result.hir_diagnostics {
+                all_errors.push(("hir".to_string(), render_hir_diagnostic(&diag, &sources, false)));
+            }
+            for error in validation_result.name_errors {
                 all_errors.push(("name".to_string(), render_name_error(&error, &sources, false)));
             }
 

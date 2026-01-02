@@ -332,6 +332,24 @@ impl ClientDef {
     }
 }
 
+impl GeneratorDef {
+    /// Get the generator name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+            })
+            .nth(0) // Get the first WORD (generator keyword is KW_GENERATOR, not WORD)
+    }
+
+    /// Get the config block.
+    pub fn config_block(&self) -> Option<ConfigBlock> {
+        self.syntax.children().find_map(ConfigBlock::cast)
+    }
+}
+
 impl ConfigBlock {
     /// Get all config items.
     pub fn items(&self) -> impl Iterator<Item = ConfigItem> {
@@ -363,6 +381,34 @@ impl ConfigItem {
                     .filter_map(rowan::NodeOrToken::into_token)
                     .find(|token| token.kind() == SyntaxKind::WORD)
             })
+    }
+
+    /// Get the full config item value as a string.
+    /// This handles compound values like "python/pydantic" that span multiple tokens.
+    /// Returns the unquoted text of the value.
+    pub fn value_str(&self) -> Option<String> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .map(|config_value| {
+                // Collect all non-whitespace, non-quote token text from nested tokens
+                config_value
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .filter(|token| {
+                        !matches!(
+                            token.kind(),
+                            SyntaxKind::WHITESPACE
+                                | SyntaxKind::NEWLINE
+                                | SyntaxKind::LINE_COMMENT
+                                | SyntaxKind::BLOCK_COMMENT
+                                | SyntaxKind::QUOTE
+                        )
+                    })
+                    .map(|token| token.text().to_string())
+                    .collect::<String>()
+            })
+            .filter(|s| !s.is_empty())
     }
 }
 

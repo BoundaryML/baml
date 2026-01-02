@@ -1270,7 +1270,10 @@ impl<'a> Parser<'a> {
                 // Field is incomplete - emit error and don't consume more tokens
                 if let Some(span) = field_name_span {
                     let name = field_name_text.as_deref().unwrap_or("field");
-                    p.error(format!("field '{}' is missing a type annotation", name), span);
+                    p.error(
+                        format!("field '{}' is missing a type annotation", name),
+                        span,
+                    );
                 }
             }
         });

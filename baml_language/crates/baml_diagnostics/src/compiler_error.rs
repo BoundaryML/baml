@@ -70,6 +70,15 @@ const DUPLICATE_ATTRIBUTE: ErrorCode = ErrorCode(14);
 const UNKNOWN_ATTRIBUTE: ErrorCode = ErrorCode(15);
 const INVALID_ATTRIBUTE_CONTEXT: ErrorCode = ErrorCode(16);
 
+// Generator diagnostics
+const UNKNOWN_GENERATOR_PROPERTY: ErrorCode = ErrorCode(17);
+const MISSING_GENERATOR_PROPERTY: ErrorCode = ErrorCode(18);
+const INVALID_GENERATOR_PROPERTY_VALUE: ErrorCode = ErrorCode(19);
+
+// Reserved names diagnostics
+const RESERVED_FIELD_NAME: ErrorCode = ErrorCode(20);
+const FIELD_NAME_MATCHES_TYPE_NAME: ErrorCode = ErrorCode(21);
+
 const NON_EXHAUSTIVE_MATCH: ErrorCode = ErrorCode(62);
 const UNREACHABLE_ARM: ErrorCode = ErrorCode(63);
 const UNKNOWN_ENUM_VARIANT: ErrorCode = ErrorCode(64);

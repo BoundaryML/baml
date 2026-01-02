@@ -351,6 +351,9 @@ impl std::fmt::Display for TokenKind {
 
             // Error
             TokenKind::Error => "error",
+
+            // Spread/Ellipsis
+            TokenKind::DotDotDot => "'...'",
         };
         write!(f, "{}", s)
     }

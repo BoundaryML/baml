@@ -29,6 +29,7 @@ pub enum SymbolKind {
     TypeAlias,
     Client,
     Test,
+    Generator,
     /// A field within a class.
     Field,
     /// A variant within an enum.
@@ -45,6 +46,7 @@ impl SymbolKind {
             SymbolKind::TypeAlias => lsp_types::SymbolKind::TYPE_PARAMETER,
             SymbolKind::Client => lsp_types::SymbolKind::OBJECT,
             SymbolKind::Test => lsp_types::SymbolKind::METHOD,
+            SymbolKind::Generator => lsp_types::SymbolKind::MODULE,
             SymbolKind::Field => lsp_types::SymbolKind::FIELD,
             SymbolKind::EnumVariant => lsp_types::SymbolKind::ENUM_MEMBER,
         }
@@ -293,6 +295,27 @@ impl LspDatabase {
                     None
                 }
             }
+            ItemId::Generator(gen_loc) => {
+                let file = gen_loc.file(&self.db);
+                let item_tree = file_item_tree(&self.db, file);
+                let generator = &item_tree[gen_loc.id(&self.db)];
+
+                if &generator.name == name_to_find {
+                    let file_path = file.path(&self.db);
+                    let text = file.text(&self.db);
+                    let span = Span::new(file.file_id(&self.db), TextRange::empty(0.into()));
+                    let range = span_to_lsp_range(text, &span);
+
+                    Some(SymbolLocation {
+                        name: generator.name.to_string(),
+                        kind: SymbolKind::Generator,
+                        file_path,
+                        range,
+                    })
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -472,6 +495,7 @@ impl LspDatabase {
             SymbolKind::TypeAlias => format!("type {}", symbol.name),
             SymbolKind::Client => format!("client {}", symbol.name),
             SymbolKind::Test => format!("test {}", symbol.name),
+            SymbolKind::Generator => format!("generator {}", symbol.name),
             SymbolKind::Field => format!("field {}", symbol.name),
             SymbolKind::EnumVariant => format!("variant {}", symbol.name),
         }

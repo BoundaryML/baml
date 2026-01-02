@@ -4,6 +4,12 @@ enum Test {
     World
 }
 
+enum TestValidEnumKeyword {
+    None @alias("None")
+    Hello
+    World
+}
+
 generator target{
     output_type "python/pydantic"
 }
@@ -18,93 +24,12 @@ generator target{
 
 //----
 //- diagnostics
-// Error: Expected top-level declaration, found generator
-//    ╭─[ 0:7:1 ]
+// Error: Enum value 'None' in enum 'Test' is a reserved keyword in Python
+//    ╭─[ 0:2:5 ]
 //    │
-//  7 │ generator target{
-//    │ ────┬────  
-//    │     ╰────── Expected top-level declaration, found generator
+//  2 │     None
+//    │     ──┬─  
+//    │       ╰─── Enum value 'None' in enum 'Test' is a reserved keyword in Python
 //    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:7:11 ]
-//    │
-//  7 │ generator target{
-//    │           ───┬──  
-//    │              ╰──── Expected top-level declaration, found identifier
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found '{'
-//    ╭─[ 0:7:17 ]
-//    │
-//  7 │ generator target{
-//    │                 ┬  
-//    │                 ╰── Expected top-level declaration, found '{'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:8:5 ]
-//    │
-//  8 │     output_type "python/pydantic"
-//    │     ─────┬─────  
-//    │          ╰─────── Expected top-level declaration, found identifier
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found '"'
-//    ╭─[ 0:8:17 ]
-//    │
-//  8 │     output_type "python/pydantic"
-//    │                 ┬  
-//    │                 ╰── Expected top-level declaration, found '"'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:8:18 ]
-//    │
-//  8 │     output_type "python/pydantic"
-//    │                  ───┬──  
-//    │                     ╰──── Expected top-level declaration, found identifier
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found '/'
-//    ╭─[ 0:8:24 ]
-//    │
-//  8 │     output_type "python/pydantic"
-//    │                        ┬  
-//    │                        ╰── Expected top-level declaration, found '/'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:8:25 ]
-//    │
-//  8 │     output_type "python/pydantic"
-//    │                         ────┬───  
-//    │                             ╰───── Expected top-level declaration, found identifier
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found '"'
-//    ╭─[ 0:8:33 ]
-//    │
-//  8 │     output_type "python/pydantic"
-//    │                                 ┬  
-//    │                                 ╰── Expected top-level declaration, found '"'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found '}'
-//    ╭─[ 0:9:1 ]
-//    │
-//  9 │ }
-//    │ ┬  
-//    │ ╰── Expected top-level declaration, found '}'
-//    │ 
-//    │ Note: Error code: E0010
+//    │ Note: Error code: E0020
 // ───╯
