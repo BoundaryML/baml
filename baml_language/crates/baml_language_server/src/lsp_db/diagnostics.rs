@@ -291,6 +291,15 @@ fn convert_type_error<T: std::fmt::Display>(
             "E0012",
         ),
         TypeError::UnreachableArm { span } => ("Unreachable match arm".to_string(), span, "E0013"),
+        TypeError::UnknownEnumVariant {
+            enum_name,
+            variant_name,
+            span,
+        } => (
+            format!("Unknown variant `{variant_name}` for enum `{enum_name}`"),
+            span,
+            "E0064",
+        ),
     };
 
     let range = span_to_range_with_index(line_index, span);

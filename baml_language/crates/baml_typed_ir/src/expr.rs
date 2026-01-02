@@ -33,6 +33,10 @@ pub struct ExprBody {
     pub expr_types: rustc_hash::FxHashMap<ExprId, Ty>,
     /// Source spans for expressions.
     pub expr_spans: rustc_hash::FxHashMap<ExprId, TextRange>,
+    /// Expressions that are enum variant values (e.g., `Status.Active`).
+    /// Maps expression ID to (`enum_name`, `variant_name`).
+    /// Used by MIR lowering to emit enum variant constants.
+    pub enum_variant_exprs: rustc_hash::FxHashMap<ExprId, (Name, Name)>,
     /// Root expression of the body.
     pub root: ExprId,
 }
@@ -94,6 +98,10 @@ pub enum Expr {
     Var(Name),
 
     /// Multi-segment path (e.g., `user.name`, `Status.Active`).
+    ///
+    /// Resolution of what this path refers to (variable + field access,
+    /// enum variant, module item) is tracked via metadata passed through
+    /// from THIR. See `enum_variant_exprs` for enum variant paths.
     Path(Vec<Name>),
 
     // ========== Binding & Sequencing ==========

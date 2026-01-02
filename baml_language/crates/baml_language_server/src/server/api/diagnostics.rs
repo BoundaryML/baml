@@ -410,6 +410,15 @@ fn type_error_to_diagnostic<T: std::fmt::Display>(
             "E0012",
         ),
         TypeError::UnreachableArm { span } => ("Unreachable match arm".to_string(), span, "E0013"),
+        TypeError::UnknownEnumVariant {
+            enum_name,
+            variant_name,
+            span,
+        } => (
+            format!("Unknown variant `{variant_name}` for enum `{enum_name}`"),
+            span,
+            "E0064",
+        ),
     };
 
     let (_, source_text, line_index) = file_info.get(&span.file_id)?;
@@ -451,6 +460,7 @@ fn get_type_error_file_id<T>(error: &TypeError<T>) -> FileId {
         TypeError::NotIndexable { span, .. } => span.file_id,
         TypeError::NonExhaustiveMatch { span, .. } => span.file_id,
         TypeError::UnreachableArm { span, .. } => span.file_id,
+        TypeError::UnknownEnumVariant { span, .. } => span.file_id,
     }
 }
 

@@ -4,8 +4,8 @@ use baml_base::Span;
 use super::{
     ARGUMENT_COUNT_MISMATCH, CompilerError, DUPLICATE_NAME, ErrorCode, INVALID_OPERATOR,
     NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE, NameError, ParseError,
-    Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_TYPE,
-    UNKNOWN_VARIABLE, UNREACHABLE_ARM,
+    Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN,
+    UNKNOWN_ENUM_VARIANT, UNKNOWN_TYPE, UNKNOWN_VARIABLE, UNREACHABLE_ARM,
 };
 
 /// The message format and id of each compiler error variant.
@@ -102,6 +102,15 @@ where
                 "Unreachable match arm: previous arms already cover all cases".to_string(),
                 span,
                 UNREACHABLE_ARM,
+            ),
+            TypeError::UnknownEnumVariant {
+                enum_name,
+                variant_name,
+                span,
+            } => simple_error(
+                format!("Enum '{enum_name}' has no variant '{variant_name}'"),
+                span,
+                UNKNOWN_ENUM_VARIANT,
             ),
         },
         CompilerError::NameError(name_error) => match name_error {

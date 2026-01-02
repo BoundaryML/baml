@@ -234,6 +234,10 @@ pub struct InferenceResult<'db> {
     /// For `o.inner.value` where `o: Outer`, stores `[Outer, Inner, int]`.
     /// Used by codegen to look up field indices at each step.
     pub path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
+    /// Expressions that are enum variant values (e.g., `Status.Active`).
+    /// Maps expression ID to (`enum_name`, `variant_name`).
+    /// Used by codegen to emit enum variant construction.
+    pub enum_variant_exprs: HashMap<ExprId, (Name, Name)>,
     /// Type checking errors.
     pub errors: Vec<TypeError<Ty<'db>>>,
 }
@@ -257,6 +261,8 @@ pub struct TypeContext<'db> {
     expr_types: HashMap<ExprId, Ty<'db>>,
     /// For multi-segment paths, the type of each segment.
     path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
+    /// Expressions that are enum variant values.
+    enum_variant_exprs: HashMap<ExprId, (Name, Name)>,
     /// Types of all return statements encountered during inference.
     /// Used to validate that all return paths match the declared return type.
     return_types: Vec<(Ty<'db>, Span)>,
@@ -280,6 +286,7 @@ impl<'db> TypeContext<'db> {
             enum_variants: HashMap::new(),
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
+            enum_variant_exprs: HashMap::new(),
             return_types: Vec::new(),
             errors: Vec::new(),
             file_id,
@@ -301,6 +308,7 @@ impl<'db> TypeContext<'db> {
             enum_variants: HashMap::new(),
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
+            enum_variant_exprs: HashMap::new(),
             return_types: Vec::new(),
             errors: Vec::new(),
             file_id,
@@ -324,6 +332,7 @@ impl<'db> TypeContext<'db> {
             enum_variants,
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
+            enum_variant_exprs: HashMap::new(),
             return_types: Vec::new(),
             errors: Vec::new(),
             file_id,
@@ -568,6 +577,7 @@ pub fn infer_function_body<'db>(
         param_types,
         expr_types: ctx.expr_types,
         path_segment_types: ctx.path_segment_types,
+        enum_variant_exprs: ctx.enum_variant_exprs,
         errors: ctx.errors,
     }
 }
@@ -694,6 +704,28 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
                         params: param_types,
                         ret: Box::new(return_type),
                     };
+                }
+
+                // Check if this is an enum variant (e.g., Status.Active)
+                if segments.len() == 2 {
+                    let enum_name = &segments[0];
+                    let variant_name = &segments[1];
+
+                    if let Some(variants) = ctx.lookup_enum_variants(enum_name) {
+                        if variants.contains(variant_name) {
+                            // This is a valid enum variant - record it and return the enum type
+                            ctx.enum_variant_exprs
+                                .insert(expr_id, (enum_name.clone(), variant_name.clone()));
+                            return Ty::Named(enum_name.clone());
+                        }
+                        // Enum exists but variant doesn't
+                        ctx.push_error(TypeError::UnknownEnumVariant {
+                            enum_name: enum_name.to_string(),
+                            variant_name: variant_name.to_string(),
+                            span,
+                        });
+                        return Ty::Unknown;
+                    }
                 }
 
                 // Otherwise, treat as variable + field accesses

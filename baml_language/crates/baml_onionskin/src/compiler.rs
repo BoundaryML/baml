@@ -2220,6 +2220,7 @@ fn get_error_file_id(error: &StoredCompilerError) -> FileId {
             TypeError::NotIndexable { span, .. } => span.file_id,
             TypeError::NonExhaustiveMatch { span, .. } => span.file_id,
             TypeError::UnreachableArm { span, .. } => span.file_id,
+            TypeError::UnknownEnumVariant { span, .. } => span.file_id,
         },
         CompilerError::NameError(e) => match e {
             baml_diagnostics::NameError::DuplicateName { second, .. } => second.file_id,

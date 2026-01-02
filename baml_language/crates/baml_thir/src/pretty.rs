@@ -557,5 +557,10 @@ pub fn short_display(error: &TypeError<Ty<'_>>) -> String {
             format!("Non-exhaustive match on {scrutinee_type}: missing {missing}")
         }
         TypeError::UnreachableArm { .. } => "Unreachable match arm".to_string(),
+        TypeError::UnknownEnumVariant {
+            enum_name,
+            variant_name,
+            ..
+        } => format!("Enum '{enum_name}' has no variant '{variant_name}'"),
     }
 }

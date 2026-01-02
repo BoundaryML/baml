@@ -176,6 +176,15 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                             Rvalue::Use(Operand::Constant(Constant::Function(name.clone()))),
                         );
                     }
+                } else if let Some((enum_name, variant)) = body.enum_variant_exprs.get(&expr_id) {
+                    // Enum variant value (e.g., Status.Active)
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Constant(Constant::EnumVariant {
+                            enum_name: enum_name.clone(),
+                            variant: variant.clone(),
+                        })),
+                    );
                 } else {
                     // Multi-segment path that's not a field access chain (e.g., baml.Array.length).
                     // TODO: This is a hack - we're treating these as builtin function references

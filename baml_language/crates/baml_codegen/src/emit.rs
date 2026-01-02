@@ -34,6 +34,10 @@ struct StackifyCodegen<'ctx, 'obj, 'db> {
     classes: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Pre-allocated Class object indices.
     class_object_indices: &'ctx HashMap<String, usize>,
+    /// Pre-allocated Enum object indices.
+    enum_object_indices: &'ctx HashMap<String, usize>,
+    /// Enum variant mappings (enum name -> variant name -> variant index).
+    enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Shared object pool.
     objects: &'obj mut ObjectPool,
 
@@ -67,6 +71,8 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             globals: ctx.globals,
             classes: ctx.classes,
             class_object_indices: ctx.class_object_indices,
+            enum_object_indices: ctx.enum_object_indices,
+            enum_variants: ctx.enum_variants,
             objects: ctx.objects,
             analysis,
             local_slots: HashMap::new(),
@@ -396,10 +402,29 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                             self.emit(Instruction::StoreField(field_idx));
                         }
                     }
-                    AggregateKind::EnumVariant { .. } => {
-                        // TODO: Implement enum variant construction
-                        let idx = self.add_constant(Value::Null);
+                    AggregateKind::EnumVariant { enum_name, variant } => {
+                        // Look up the enum object index
+                        let enum_obj_idx = self
+                            .enum_object_indices
+                            .get(enum_name)
+                            .copied()
+                            .unwrap_or_else(|| panic!("undefined enum: {enum_name}"));
+
+                        // Look up the variant index
+                        let variant_idx = self
+                            .enum_variants
+                            .get(enum_name)
+                            .and_then(|variants| variants.get(variant))
+                            .copied()
+                            .unwrap_or_else(|| panic!("undefined variant: {enum_name}.{variant}"));
+
+                        // Load variant index onto stack, then allocate variant
+                        #[allow(clippy::cast_possible_wrap)]
+                        let idx = self.add_constant(Value::Int(variant_idx as i64));
                         self.emit(Instruction::LoadConst(idx));
+                        self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
+                            enum_obj_idx,
+                        )));
                     }
                 }
             }
@@ -482,11 +507,31 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 let idx = self.add_constant(Value::Null);
                 self.emit(Instruction::LoadConst(idx));
             }
-            Constant::EnumVariant { .. } => {
-                // TODO: Implement proper enum variant constant emission
-                // This needs to look up the enum object and create a Variant object
-                let idx = self.add_constant(Value::Null);
+            Constant::EnumVariant { enum_name, variant } => {
+                // Look up the enum object index
+                let enum_name_str = enum_name.to_string();
+                let enum_obj_idx = self
+                    .enum_object_indices
+                    .get(&enum_name_str)
+                    .copied()
+                    .unwrap_or_else(|| panic!("undefined enum: {enum_name_str}"));
+
+                // Look up the variant index
+                let variant_str = variant.to_string();
+                let variant_idx = self
+                    .enum_variants
+                    .get(&enum_name_str)
+                    .and_then(|variants| variants.get(&variant_str))
+                    .copied()
+                    .unwrap_or_else(|| panic!("undefined variant: {enum_name_str}.{variant_str}"));
+
+                // Load variant index onto stack, then allocate variant
+                #[allow(clippy::cast_possible_wrap)]
+                let idx = self.add_constant(Value::Int(variant_idx as i64));
                 self.emit(Instruction::LoadConst(idx));
+                self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
+                    enum_obj_idx,
+                )));
             }
         }
     }
