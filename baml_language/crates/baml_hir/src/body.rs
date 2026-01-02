@@ -171,6 +171,9 @@ pub enum Expr {
     /// Array constructor: `[1, 2, 3]`
     Array { elements: Vec<ExprId> },
 
+    /// Map literal: `{ "key": value, ... }` or `{ key value, ... }`
+    Map { entries: Vec<(ExprId, ExprId)> },
+
     /// Block expression: `{ stmt1; stmt2; expr }`
     Block {
         stmts: Vec<StmtId>,
@@ -757,6 +760,7 @@ impl LoweringContext {
             }
             SyntaxKind::ARRAY_LITERAL => self.lower_array_literal(node),
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
+            SyntaxKind::MAP_LITERAL => self.lower_map_literal(node),
             _ => {
                 // Check if this is a literal token
                 if let Some(literal) = self.try_lower_literal_token(node) {
@@ -1463,6 +1467,9 @@ impl LoweringContext {
                                 | SyntaxKind::BLOCK_EXPR
                                 | SyntaxKind::PAREN_EXPR
                                 | SyntaxKind::ARRAY_LITERAL
+                                | SyntaxKind::STRING_LITERAL
+                                | SyntaxKind::OBJECT_LITERAL
+                                | SyntaxKind::MAP_LITERAL
                         ) {
                             args.push(self.lower_expr(&child));
                         }
@@ -1918,6 +1925,133 @@ impl LoweringContext {
                 .collect();
 
         self.alloc_expr(Expr::Object { type_name, fields }, node.text_range())
+    }
+
+    fn lower_map_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
+        use baml_syntax::SyntaxKind;
+
+        // Extract entries from OBJECT_FIELD children (parser reuses this node type for map entries)
+        let entries =
+            node.children()
+                .filter(|n| n.kind() == SyntaxKind::OBJECT_FIELD)
+                .filter_map(|field_node| {
+                    let field_span = field_node.text_range();
+
+                    // Key - can be identifier (WORD) or string literal
+                    let key = field_node
+                        .children()
+                        .find(|n| n.kind() == SyntaxKind::STRING_LITERAL)
+                        .map(|n| self.lower_string_literal(&n))
+                        .or_else(|| {
+                            // Try to get key as identifier token
+                            field_node
+                                .children_with_tokens()
+                                .filter_map(baml_syntax::NodeOrToken::into_token)
+                                .find(|token| token.kind() == SyntaxKind::WORD)
+                                .map(|token| {
+                                    let span = token.text_range();
+                                    // Identifier key becomes a string literal
+                                    self.alloc_expr(
+                                        Expr::Literal(Literal::String(token.text().to_string())),
+                                        span,
+                                    )
+                                })
+                        })?;
+
+                    let key_span = self.expr_spans.get(&key).copied();
+
+                    // Value - get child expression after the key
+                    // Skip STRING_LITERAL if it was the key (compare spans), and get the next expression
+                    let value = field_node
+                        .children()
+                        .filter(|n| {
+                            // Skip the key if it's a STRING_LITERAL by comparing spans
+                            if n.kind() == SyntaxKind::STRING_LITERAL {
+                                key_span != Some(self.span_from_range(n.text_range()))
+                            } else {
+                                true
+                            }
+                        })
+                        .find(|n| {
+                            matches!(
+                                n.kind(),
+                                SyntaxKind::STRING_LITERAL
+                                    | SyntaxKind::INTEGER_LITERAL
+                                    | SyntaxKind::FLOAT_LITERAL
+                                    | SyntaxKind::PATH_EXPR
+                                    | SyntaxKind::CALL_EXPR
+                                    | SyntaxKind::BINARY_EXPR
+                                    | SyntaxKind::UNARY_EXPR
+                                    | SyntaxKind::PAREN_EXPR
+                                    | SyntaxKind::IF_EXPR
+                                    | SyntaxKind::BLOCK_EXPR
+                                    | SyntaxKind::ARRAY_LITERAL
+                                    | SyntaxKind::OBJECT_LITERAL
+                                    | SyntaxKind::MAP_LITERAL
+                                    | SyntaxKind::INDEX_EXPR
+                                    | SyntaxKind::FIELD_ACCESS_EXPR
+                            )
+                        })
+                        .map(|n| self.lower_expr(&n))
+                        .or_else(|| {
+                            // Try to get value as a direct token (literal or identifier)
+                            // Skip tokens before the colon
+                            let mut seen_colon = false;
+                            field_node
+                                .children_with_tokens()
+                                .filter_map(baml_syntax::NodeOrToken::into_token)
+                                .find_map(|token| {
+                                    if token.kind() == SyntaxKind::COLON {
+                                        seen_colon = true;
+                                        return None;
+                                    }
+                                    if !seen_colon {
+                                        return None;
+                                    }
+                                    let span = token.text_range();
+                                    match token.kind() {
+                                        SyntaxKind::INTEGER_LITERAL => {
+                                            let value = token.text().parse::<i64>().unwrap_or(0);
+                                            Some(self.alloc_expr(
+                                                Expr::Literal(Literal::Int(value)),
+                                                span,
+                                            ))
+                                        }
+                                        SyntaxKind::FLOAT_LITERAL => Some(self.alloc_expr(
+                                            Expr::Literal(Literal::Float(token.text().to_string())),
+                                            span,
+                                        )),
+                                        SyntaxKind::WORD => {
+                                            let text = token.text();
+                                            let expr = match text {
+                                                "true" => self.alloc_expr(
+                                                    Expr::Literal(Literal::Bool(true)),
+                                                    span,
+                                                ),
+                                                "false" => self.alloc_expr(
+                                                    Expr::Literal(Literal::Bool(false)),
+                                                    span,
+                                                ),
+                                                "null" => self
+                                                    .alloc_expr(Expr::Literal(Literal::Null), span),
+                                                _ => self.alloc_expr(
+                                                    Expr::Path(vec![Name::new(text)]),
+                                                    span,
+                                                ),
+                                            };
+                                            Some(expr)
+                                        }
+                                        _ => None,
+                                    }
+                                })
+                        })
+                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, field_span));
+
+                    Some((key, value))
+                })
+                .collect();
+
+        self.alloc_expr(Expr::Map { entries }, node.text_range())
     }
 
     fn try_lower_literal_token(&mut self, node: &baml_syntax::SyntaxNode) -> Option<ExprId> {

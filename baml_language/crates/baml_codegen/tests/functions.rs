@@ -41,7 +41,6 @@ fn return_literal_bool() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "string literals not yet supported in HIR"]
 fn return_literal_string() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"

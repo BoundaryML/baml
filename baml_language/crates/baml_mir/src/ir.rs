@@ -275,6 +275,15 @@ impl Terminator<'_> {
 // Place
 // ============================================================================
 
+/// The kind of indexing operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IndexKind {
+    /// Array indexing: `arr[i]`
+    Array,
+    /// Map indexing: `map[key]`
+    Map,
+}
+
 /// A place in memory (lvalue).
 ///
 /// Places represent locations that can be read from or written to.
@@ -286,8 +295,12 @@ pub enum Place {
     /// Field access: `_1.field_idx`
     Field { base: Box<Place>, field: usize },
 
-    /// Array indexing: `_1[_2]`
-    Index { base: Box<Place>, index: Local },
+    /// Indexing: `_1[_2]`
+    Index {
+        base: Box<Place>,
+        index: Local,
+        kind: IndexKind,
+    },
 }
 
 impl Place {
@@ -305,10 +318,11 @@ impl Place {
     }
 
     /// Create an index projection.
-    pub fn index(base: Place, index: Local) -> Self {
+    pub fn index(base: Place, index: Local, kind: IndexKind) -> Self {
         Place::Index {
             base: Box::new(base),
             index,
+            kind,
         }
     }
 
@@ -326,7 +340,7 @@ impl fmt::Display for Place {
         match self {
             Place::Local(l) => write!(f, "{l}"),
             Place::Field { base, field } => write!(f, "{base}.{field}"),
-            Place::Index { base, index } => write!(f, "{base}[{index}]"),
+            Place::Index { base, index, .. } => write!(f, "{base}[{index}]"),
         }
     }
 }
@@ -356,6 +370,10 @@ pub enum Rvalue<'db> {
 
     /// Create an array: `[_1, _2, _3]`
     Array(Vec<Operand<'db>>),
+
+    /// Create a map: `{ key1: value1, key2: value2, ... }`
+    /// Each entry is a (key, value) pair.
+    Map(Vec<(Operand<'db>, Operand<'db>)>),
 
     /// Create an aggregate (class instance, enum variant): `ClassName { _1, _2 }`
     Aggregate {

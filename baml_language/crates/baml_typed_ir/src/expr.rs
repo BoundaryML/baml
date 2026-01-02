@@ -183,6 +183,9 @@ pub enum Expr {
         fields: Vec<(Name, ExprId)>,
     },
 
+    /// Map literal: `{ key: value, ... }`
+    Map { entries: Vec<(ExprId, ExprId)> },
+
     // ========== Access ==========
     /// Field access: `base.field`
     FieldAccess { base: ExprId, field: Name },

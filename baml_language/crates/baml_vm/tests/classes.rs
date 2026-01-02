@@ -304,7 +304,6 @@ fn nested_constructor_with_preceding_variables() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method call codegen missing self argument"]
 fn basic_method_decl() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -330,7 +329,6 @@ fn basic_method_decl() -> anyhow::Result<()> {
 
 // Method tests
 #[test]
-#[ignore = "method call codegen missing self argument"]
 fn mut_self_method_decl() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

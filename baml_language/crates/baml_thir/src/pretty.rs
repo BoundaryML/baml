@@ -191,6 +191,9 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                     .unwrap_or_default();
                 format!("Object({} {{ {} fields }}): {}", name, fields.len(), ty)
             }
+            Expr::Map { entries } => {
+                format!("Map({{ {} entries }}): {}", entries.len(), ty)
+            }
             Expr::Block { stmts, tail_expr } => {
                 let tail = if tail_expr.is_some() { " + tail" } else { "" };
                 format!("Block({} stmts{}): {}", stmts.len(), tail, ty)
@@ -239,6 +242,17 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                     let field_prefix = self.make_prefix(is_last);
                     writeln!(self.output, "{field_prefix}{name}:").ok();
                     self.push_continuation(!is_last);
+                    self.render_expr(*value, body, result, true);
+                    self.pop_continuation();
+                }
+            }
+            Expr::Map { entries } => {
+                for (i, (key, value)) in entries.iter().enumerate() {
+                    let is_last = i == entries.len() - 1;
+                    let entry_prefix = self.make_prefix(is_last);
+                    writeln!(self.output, "{entry_prefix}entry[{i}]:").ok();
+                    self.push_continuation(!is_last);
+                    self.render_expr(*key, body, result, false);
                     self.render_expr(*value, body, result, true);
                     self.pop_continuation();
                 }
@@ -493,6 +507,13 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
                 .map(|(n, v)| format!("{}: {}", n, expr_to_string(*v, body)))
                 .collect();
             format!("{}{{ {} }}", name, field_strs.join(", "))
+        }
+        Expr::Map { entries } => {
+            let entry_strs: Vec<String> = entries
+                .iter()
+                .map(|(k, v)| format!("{}: {}", expr_to_string(*k, body), expr_to_string(*v, body)))
+                .collect();
+            format!("{{ {} }}", entry_strs.join(", "))
         }
         Expr::Block { .. } => "{ ... }".to_string(),
         Expr::If { .. } => "if ... { ... }".to_string(),

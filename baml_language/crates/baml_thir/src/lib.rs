@@ -938,6 +938,43 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
             }
         }
 
+        Expr::Map { entries } => {
+            if entries.is_empty() {
+                Ty::Map {
+                    key: Box::new(Ty::Unknown),
+                    value: Box::new(Ty::Unknown),
+                }
+            } else {
+                // Infer key and value types from first entry
+                let key_ty = infer_expr(ctx, entries[0].0, body);
+                let value_ty = infer_expr(ctx, entries[0].1, body);
+
+                // Check all entries have compatible types
+                for &(key, value) in &entries[1..] {
+                    let other_key_ty = infer_expr(ctx, key, body);
+                    let other_value_ty = infer_expr(ctx, value, body);
+                    if !other_key_ty.is_subtype_of(&key_ty) {
+                        ctx.push_error(TypeError::TypeMismatch {
+                            expected: key_ty.clone(),
+                            found: other_key_ty,
+                            span,
+                        });
+                    }
+                    if !other_value_ty.is_subtype_of(&value_ty) {
+                        ctx.push_error(TypeError::TypeMismatch {
+                            expected: value_ty.clone(),
+                            found: other_value_ty,
+                            span,
+                        });
+                    }
+                }
+                Ty::Map {
+                    key: Box::new(key_ty),
+                    value: Box::new(value_ty),
+                }
+            }
+        }
+
         Expr::Block { stmts, tail_expr } => {
             ctx.push_scope();
 

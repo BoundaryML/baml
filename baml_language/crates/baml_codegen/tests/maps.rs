@@ -7,12 +7,11 @@ use baml_tests::{
 use baml_vm::BinOp;
 
 #[test]
-#[ignore = "maps not yet in HIR"]
 fn create_and_access() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
             function CreateMap() -> map<string, string> {
-                { hello "world" }
+                { "hello": "world" }
             }
 
             function UseMap() -> string {
@@ -33,8 +32,10 @@ fn create_and_access() -> anyhow::Result<()> {
             (
                 "UseMap",
                 vec![
+                    Instruction::LoadConst(Value::Null),
                     Instruction::LoadGlobal(Value::function("CreateMap")),
                     Instruction::Call(0),
+                    Instruction::StoreVar("map".to_string()),
                     Instruction::LoadVar("map".to_string()),
                     Instruction::LoadConst(Value::string("hello")),
                     Instruction::LoadMapElement,
@@ -46,12 +47,11 @@ fn create_and_access() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "maps not yet in HIR"]
 fn access_no_key() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
             function CreateMap() -> map<string, string> {
-                { hello "world" }
+                { "hello": "world" }
             }
 
             function UseMapNoKey() -> string {
@@ -72,8 +72,10 @@ fn access_no_key() -> anyhow::Result<()> {
             (
                 "UseMapNoKey",
                 vec![
+                    Instruction::LoadConst(Value::Null),
                     Instruction::LoadGlobal(Value::function("CreateMap")),
                     Instruction::Call(0),
+                    Instruction::StoreVar("map".to_string()),
                     Instruction::LoadVar("map".to_string()),
                     Instruction::LoadConst(Value::string("world")),
                     Instruction::LoadMapElement,
@@ -85,7 +87,6 @@ fn access_no_key() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "maps and method calls not yet in HIR"]
 fn contains() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -114,20 +115,30 @@ fn contains() -> anyhow::Result<()> {
             (
                 "UseMapContains",
                 vec![
+                    // Init locals for return value and map
+                    Instruction::LoadConst(Value::Null),
+                    Instruction::LoadConst(Value::Null),
+                    // let map = CreateMapJSON();
                     Instruction::LoadGlobal(Value::function("CreateMapJSON")),
                     Instruction::Call(0),
+                    Instruction::StoreVar("map".to_string()),
+                    // map.has("hello") - method call
                     Instruction::LoadGlobal(Value::function("baml.Map.has")),
                     Instruction::LoadVar("map".to_string()),
                     Instruction::LoadConst(Value::string("hello")),
                     Instruction::Call(2),
-                    Instruction::PopJumpIfFalse(6),
-                    Instruction::Pop(1),
+                    Instruction::StoreVar("_3".to_string()),
+                    Instruction::LoadVar("_3".to_string()),
+                    // if condition
+                    Instruction::PopJumpIfFalse(2),
+                    Instruction::Jump(3),
+                    // else branch: "hi"
+                    Instruction::LoadConst(Value::string("hi")),
+                    Instruction::Jump(4),
+                    // then branch: map["hello"]
                     Instruction::LoadVar("map".to_string()),
                     Instruction::LoadConst(Value::string("hello")),
                     Instruction::LoadMapElement,
-                    Instruction::Jump(3),
-                    Instruction::Pop(1),
-                    Instruction::LoadConst(Value::string("hi")),
                     Instruction::Return,
                 ],
             ),
@@ -136,12 +147,11 @@ fn contains() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "maps and assignment not yet in HIR"]
 fn modify() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
             function EditMapKey() -> int {
-                let map = { hi 123 };
+                let map = { "hi": 123 };
 
                 map["hi"] = 42 - 4;
                 map["hi"] += 4;
@@ -153,23 +163,33 @@ fn modify() -> anyhow::Result<()> {
         expected: vec![(
             "EditMapKey",
             vec![
+                // Init locals for return value and map
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                // let map = { "hi": 123 }; (values first, then keys)
                 Instruction::LoadConst(Value::Int(123)),
                 Instruction::LoadConst(Value::string("hi")),
                 Instruction::AllocMap(1),
+                Instruction::StoreVar("map".to_string()),
+                // map["hi"] = 42 - 4;
                 Instruction::LoadVar("map".to_string()),
                 Instruction::LoadConst(Value::string("hi")),
                 Instruction::LoadConst(Value::Int(42)),
                 Instruction::LoadConst(Value::Int(4)),
                 Instruction::BinOp(BinOp::Sub),
                 Instruction::StoreMapElement,
-                Instruction::LoadVar("map".to_string()),
+                // map["hi"] += 4; (uses temp for key)
                 Instruction::LoadConst(Value::string("hi")),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::StoreVar("_10".to_string()),
+                Instruction::LoadVar("map".to_string()),
+                Instruction::LoadVar("_10".to_string()),
+                Instruction::LoadVar("map".to_string()),
+                Instruction::LoadVar("_10".to_string()),
                 Instruction::LoadMapElement,
                 Instruction::LoadConst(Value::Int(4)),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreMapElement,
+                // map["hi"] - final value
                 Instruction::LoadVar("map".to_string()),
                 Instruction::LoadConst(Value::string("hi")),
                 Instruction::LoadMapElement,
@@ -180,14 +200,13 @@ fn modify() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "maps and method calls not yet in HIR"]
 fn len() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
             function Len() -> int {
                 let map = {
-                    hi 123
-                    it_works 456
+                    "hi": 123,
+                    "it_works": 456
                 };
                 map.length()
             }
@@ -195,13 +214,15 @@ fn len() -> anyhow::Result<()> {
         expected: vec![(
             "Len",
             vec![
+                // Method call on map literal
+                Instruction::LoadGlobal(Value::function("baml.Map.length")),
+                // Map literal: values first, then keys
+                // { "hi": 123, "it_works": 456 }
                 Instruction::LoadConst(Value::Int(123)),
                 Instruction::LoadConst(Value::Int(456)),
                 Instruction::LoadConst(Value::string("hi")),
                 Instruction::LoadConst(Value::string("it_works")),
                 Instruction::AllocMap(2),
-                Instruction::LoadGlobal(Value::function("baml.Map.length")),
-                Instruction::LoadVar("map".to_string()),
                 Instruction::Call(1),
                 Instruction::Return,
             ],

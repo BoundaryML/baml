@@ -243,6 +243,19 @@ impl<'a> PrettyPrinter<'a> {
                 }
             }
 
+            Expr::Map { entries } => {
+                self.indent(level);
+                write!(self.output, "map : {ty}").unwrap();
+                for (i, (key, value)) in entries.iter().enumerate() {
+                    self.output.push('\n');
+                    self.indent(level + 1);
+                    writeln!(self.output, "entry[{i}]:").unwrap();
+                    self.print_expr(*key, level + 2);
+                    self.output.push('\n');
+                    self.print_expr(*value, level + 2);
+                }
+            }
+
             Expr::FieldAccess { base, field } => {
                 self.indent(level);
                 writeln!(self.output, ".{field} : {ty}").unwrap();

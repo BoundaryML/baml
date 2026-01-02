@@ -18,18 +18,10 @@ expression: output
   Function vec2d:
     Return: Named("Vec2D")
   Function boolValues:
-    Return: Void
-    Errors:
-      - Expected map<string, bool>. Found void
+    Return: Map { key: String, value: Bool }
   Function intValues:
-    Return: Void
-    Errors:
-      - Expected map<string, int>. Found void
+    Return: Map { key: String, value: Int }
   Function stringValues:
-    Return: Void
-    Errors:
-      - Expected map<string, string>. Found void
+    Return: Map { key: String, value: String }
   Function floatValues:
-    Return: Void
-    Errors:
-      - Expected map<string, float>. Found void
+    Return: Map { key: String, value: Float }

@@ -166,12 +166,20 @@ fn vec2d() -> Named("Vec2D") {
 
 }
 
-fn boolValues() -> Named("map<string, bool>") {
+fn boolValues() -> Map { key: String, value: Bool } {
     // Locals:
-    let _0: Named("map<string, bool>") // return
+    let _0: Map { key: String, value: Bool } // return
+    let _1: String
+    let _2: Bool
+    let _3: String
+    let _4: Bool
 
     bb0: {
-        _0 = const null;
+        _1 = const "hello";
+        _2 = const true;
+        _3 = const "test";
+        _4 = const false;
+        _0 = { copy _1: copy _2, copy _3: copy _4 };
         goto -> bb1;
     }
 
@@ -181,12 +189,20 @@ fn boolValues() -> Named("map<string, bool>") {
 
 }
 
-fn intValues() -> Named("map<string, int>") {
+fn intValues() -> Map { key: String, value: Int } {
     // Locals:
-    let _0: Named("map<string, int>") // return
+    let _0: Map { key: String, value: Int } // return
+    let _1: String
+    let _2: Int
+    let _3: String
+    let _4: Int
 
     bb0: {
-        _0 = const null;
+        _1 = const "hello";
+        _2 = const 1_i64;
+        _3 = const "test";
+        _4 = const 2_i64;
+        _0 = { copy _1: copy _2, copy _3: copy _4 };
         goto -> bb1;
     }
 
@@ -196,12 +212,20 @@ fn intValues() -> Named("map<string, int>") {
 
 }
 
-fn stringValues() -> Named("map<string, string>") {
+fn stringValues() -> Map { key: String, value: String } {
     // Locals:
-    let _0: Named("map<string, string>") // return
+    let _0: Map { key: String, value: String } // return
+    let _1: String
+    let _2: String
+    let _3: String
+    let _4: String
 
     bb0: {
-        _0 = const null;
+        _1 = const "hello";
+        _2 = const "world";
+        _3 = const "test";
+        _4 = const "test";
+        _0 = { copy _1: copy _2, copy _3: copy _4 };
         goto -> bb1;
     }
 
@@ -211,12 +235,20 @@ fn stringValues() -> Named("map<string, string>") {
 
 }
 
-fn floatValues() -> Named("map<string, float>") {
+fn floatValues() -> Map { key: String, value: Float } {
     // Locals:
-    let _0: Named("map<string, float>") // return
+    let _0: Map { key: String, value: Float } // return
+    let _1: String
+    let _2: Float
+    let _3: String
+    let _4: Float
 
     bb0: {
-        _0 = const null;
+        _1 = const "hello";
+        _2 = const 1_f64;
+        _3 = const "test";
+        _4 = const 2_f64;
+        _0 = { copy _1: copy _2, copy _3: copy _4 };
         goto -> bb1;
     }
 

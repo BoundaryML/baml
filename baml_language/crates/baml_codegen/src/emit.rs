@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 
 use baml_mir::{
-    AggregateKind, BasicBlock, BinOp, BlockId, Constant, Local, MirFunction, Operand, Place,
-    Rvalue, StatementKind, Terminator, UnaryOp,
+    AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand,
+    Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
 use baml_thir::Ty;
 use baml_vm::{
@@ -264,12 +264,15 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                         self.emit_rvalue_pull(value, mir); // push value
                         self.emit(Instruction::StoreField(*field));
                     }
-                    Place::Index { base, index } => {
-                        // For index store: push array, then index, then value, then StoreArrayElement
-                        self.emit_place_value_pull(base, mir); // push array
-                        self.emit_place_value_pull(&Place::Local(*index), mir); // push index
+                    Place::Index { base, index, kind } => {
+                        // For index store: push array/map, then index/key, then value, then Store*Element
+                        self.emit_place_value_pull(base, mir); // push array/map
+                        self.emit_place_value_pull(&Place::Local(*index), mir); // push index/key
                         self.emit_rvalue_pull(value, mir); // push value
-                        self.emit(Instruction::StoreArrayElement);
+                        match kind {
+                            IndexKind::Array => self.emit(Instruction::StoreArrayElement),
+                            IndexKind::Map => self.emit(Instruction::StoreMapElement),
+                        };
                     }
                     Place::Local(_) => {
                         // Local assignment: emit rvalue then store
@@ -339,12 +342,15 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 self.emit_place_value_pull(base, mir);
                 self.emit(Instruction::LoadField(*field));
             }
-            Place::Index { base, index } => {
-                // Load base, load index, then LoadArrayElement
+            Place::Index { base, index, kind } => {
+                // Load base, load index, then LoadArrayElement or LoadMapElement
                 self.emit_place_value_pull(base, mir);
                 // Index may be virtual or real
                 self.emit_place_value_pull(&Place::Local(*index), mir);
-                self.emit(Instruction::LoadArrayElement);
+                match kind {
+                    IndexKind::Array => self.emit(Instruction::LoadArrayElement),
+                    IndexKind::Map => self.emit(Instruction::LoadMapElement),
+                };
             }
         }
     }
@@ -372,6 +378,19 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                     self.emit_operand_pull(elem, mir);
                 }
                 self.emit(Instruction::AllocArray(elements.len()));
+            }
+
+            Rvalue::Map(entries) => {
+                // For maps, VM expects stack layout: [value1, value2, ..., valueN, key1, key2, ..., keyN]
+                // Push all values first
+                for (_key, value) in entries {
+                    self.emit_operand_pull(value, mir);
+                }
+                // Then push all keys
+                for (key, _value) in entries {
+                    self.emit_operand_pull(key, mir);
+                }
+                self.emit(Instruction::AllocMap(entries.len()));
             }
 
             Rvalue::Aggregate { kind, fields } => {

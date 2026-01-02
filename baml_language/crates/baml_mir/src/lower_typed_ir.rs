@@ -433,6 +433,28 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 );
             }
 
+            Expr::Map { entries } => {
+                let entry_operands: Vec<(Operand<'db>, Operand<'db>)> = entries
+                    .iter()
+                    .map(|(key, value)| {
+                        let key_ty = Self::lower_typed_ir_ty(body.ty(*key));
+                        let key_local = self.builder.temp(key_ty);
+                        self.lower_expr(*key, Place::local(key_local), body);
+
+                        let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
+                        let value_local = self.builder.temp(value_ty);
+                        self.lower_expr(*value, Place::local(value_local), body);
+
+                        (
+                            Operand::copy_local(key_local),
+                            Operand::copy_local(value_local),
+                        )
+                    })
+                    .collect();
+
+                self.builder.assign(dest, Rvalue::Map(entry_operands));
+            }
+
             // ========== Access ==========
             Expr::FieldAccess { base, field } => {
                 let result_ty = body.ty(expr_id);
@@ -466,18 +488,27 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             }
 
             Expr::Index { base, index } => {
-                let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
-                let base_local = self.builder.temp(base_ty);
+                let typed_ir_base_ty = body.ty(*base);
+                let base_ty = Self::lower_typed_ir_ty(typed_ir_base_ty);
+                let base_local = self.builder.temp(base_ty.clone());
                 self.lower_expr(*base, Place::local(base_local), body);
 
                 let index_local = self.builder.temp(Ty::Int);
                 self.lower_expr(*index, Place::local(index_local), body);
+
+                // Determine index kind based on base type
+                let index_kind = if matches!(base_ty, Ty::Map { .. }) {
+                    crate::IndexKind::Map
+                } else {
+                    crate::IndexKind::Array
+                };
 
                 self.builder.assign(
                     dest,
                     Rvalue::Use(Operand::Copy(Place::index(
                         Place::local(base_local),
                         index_local,
+                        index_kind,
                     ))),
                 );
             }
@@ -1025,9 +1056,18 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             Expr::Index { base, index } => {
                 let base_place = self.lower_lvalue(*base, body);
+                let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
                 let index_local = self.builder.temp(Ty::Int);
                 self.lower_expr(*index, Place::local(index_local), body);
-                Place::index(base_place, index_local)
+
+                // Determine index kind based on base type
+                let index_kind = if matches!(base_ty, Ty::Map { .. }) {
+                    crate::IndexKind::Map
+                } else {
+                    crate::IndexKind::Array
+                };
+
+                Place::index(base_place, index_local, index_kind)
             }
 
             Expr::Call { callee, args } => {

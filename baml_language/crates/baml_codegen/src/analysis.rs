@@ -387,11 +387,28 @@ fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'d
                         }
                     }
 
-                    // For field/index stores, the base local is also used (we need to load it
-                    // to store the field value). This ensures the base isn't classified as Virtual.
+                    // For field/index stores, the base local (and index local for Index) is also
+                    // used. We need to load them to store the value. This ensures they aren't
+                    // classified as Virtual.
                     match destination {
-                        Place::Field { base, .. } | Place::Index { base, .. } => {
+                        Place::Field { base, .. } => {
                             collect_uses_in_place(base, block.id, stmt_idx, &mut def_use);
+                        }
+                        Place::Index { base, index, .. } => {
+                            collect_uses_in_place(base, block.id, stmt_idx, &mut def_use);
+                            // The index is also used - we need to load it for the Store*Element
+                            def_use
+                                .entry(*index)
+                                .or_insert_with(|| LocalDefUse {
+                                    local: *index,
+                                    def: None,
+                                    uses: Vec::new(),
+                                })
+                                .uses
+                                .push(UseLocation {
+                                    block: block.id,
+                                    statement_idx: stmt_idx,
+                                });
                         }
                         Place::Local(_) => {}
                     }
@@ -436,6 +453,12 @@ fn collect_uses_in_rvalue<'db>(
         Rvalue::Array(elements) => {
             for elem in elements {
                 collect_uses_in_operand(elem, block, stmt_idx, def_use);
+            }
+        }
+        Rvalue::Map(entries) => {
+            for (key, value) in entries {
+                collect_uses_in_operand(key, block, stmt_idx, def_use);
+                collect_uses_in_operand(value, block, stmt_idx, def_use);
             }
         }
         Rvalue::Aggregate { fields, .. } => {
@@ -491,7 +514,7 @@ fn collect_uses_in_place(
             // Recurse into the base to find all used locals
             collect_uses_in_place(base, block, stmt_idx, def_use);
         }
-        Place::Index { base, index } => {
+        Place::Index { base, index, .. } => {
             // Recurse into the base to find all used locals
             collect_uses_in_place(base, block, stmt_idx, def_use);
             // The index local is also used
@@ -1081,6 +1104,12 @@ fn collect_rvalue_reads(rvalue: &Rvalue<'_>, locals: &mut Vec<Local>) {
                 collect_operand_reads(op, locals);
             }
         }
+        Rvalue::Map(entries) => {
+            for (key, value) in entries {
+                collect_operand_reads(key, locals);
+                collect_operand_reads(value, locals);
+            }
+        }
         Rvalue::Aggregate { fields, .. } => {
             for op in fields {
                 collect_operand_reads(op, locals);
@@ -1114,7 +1143,7 @@ fn collect_place_reads(place: &Place, locals: &mut Vec<Local>) {
         Place::Field { base, .. } => {
             collect_place_reads(base, locals);
         }
-        Place::Index { base, index } => {
+        Place::Index { base, index, .. } => {
             collect_place_reads(base, locals);
             locals.push(*index); // The index variable is also read
         }

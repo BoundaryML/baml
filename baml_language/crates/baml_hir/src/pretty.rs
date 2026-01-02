@@ -145,6 +145,18 @@ impl<'a> CodePrinter<'a> {
                 }
                 self.output.push_str(" }");
             }
+            Expr::Map { entries } => {
+                self.output.push_str("{ ");
+                for (i, (key, value)) in entries.iter().enumerate() {
+                    if i > 0 {
+                        self.output.push_str(", ");
+                    }
+                    self.print_expr(*key);
+                    self.output.push_str(": ");
+                    self.print_expr(*value);
+                }
+                self.output.push_str(" }");
+            }
             Expr::FieldAccess { base, field } => {
                 self.print_expr(*base);
                 self.output.push('.');

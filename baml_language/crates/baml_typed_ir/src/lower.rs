@@ -401,6 +401,18 @@ impl<'db> LoweringContext<'db> {
                 ))
             }
 
+            HirExpr::Map { entries } => {
+                let mut entry_ids = Vec::with_capacity(entries.len());
+                for (key, value) in entries {
+                    let key_id = self.lower_expr(*key, hir_body)?;
+                    let value_id = self.lower_expr(*value, hir_body)?;
+                    entry_ids.push((key_id, value_id));
+                }
+                Ok(self
+                    .builder
+                    .alloc(Expr::Map { entries: entry_ids }, ty, span.map(|s| s.range)))
+            }
+
             HirExpr::Block { stmts, tail_expr } => {
                 // This is the key transformation!
                 // Weave statements together into Let/Seq chains.
