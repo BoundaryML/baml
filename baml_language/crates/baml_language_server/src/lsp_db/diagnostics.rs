@@ -150,7 +150,7 @@ fn convert_parse_error(error: &ParseError, line_index: &LineIndex) -> Diagnostic
                 data: None,
             }
         }
-        ParseError::SyntaxHint { message, span } => {
+        ParseError::InvalidSyntax { message, span } => {
             let range = span_to_range_with_index(line_index, span);
             Diagnostic {
                 range,

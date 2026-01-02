@@ -261,7 +261,7 @@ fn parse_error_to_diagnostic(
             span,
             "E0009",
         ),
-        ParseError::SyntaxHint { message, span } => (message.clone(), span, "E0010"),
+        ParseError::InvalidSyntax { message, span } => (message.clone(), span, "E0010"),
     };
 
     let (_, source_text, line_index) = file_info.get(&span.file_id)?;
@@ -501,7 +501,7 @@ fn get_parse_error_file_id(error: &ParseError) -> FileId {
     match error {
         ParseError::UnexpectedToken { span, .. } => span.file_id,
         ParseError::UnexpectedEof { span, .. } => span.file_id,
-        ParseError::SyntaxHint { span, .. } => span.file_id,
+        ParseError::InvalidSyntax { span, .. } => span.file_id,
     }
 }
 

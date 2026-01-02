@@ -32,7 +32,9 @@ where
                 span,
                 UNEXPECTED_EOF,
             ),
-            ParseError::SyntaxHint { message, span } => simple_error(message, span, UNEXPECTED_TOKEN),
+            ParseError::InvalidSyntax { message, span } => {
+                simple_error(message, span, UNEXPECTED_TOKEN)
+            }
         },
         CompilerError::TypeError(type_error) => match type_error {
             // TODO: This error should provide a second span that indicates the source

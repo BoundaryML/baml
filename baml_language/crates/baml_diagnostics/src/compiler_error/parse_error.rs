@@ -13,7 +13,7 @@ pub enum ParseError {
         span: Span,
     },
     /// A syntax hint with a custom message (not using "Expected/found" format)
-    SyntaxHint {
+    InvalidSyntax {
         message: String,
         span: Span,
     },

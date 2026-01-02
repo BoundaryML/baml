@@ -716,7 +716,7 @@ impl<'a> Parser<'a> {
                     });
                 }
                 Event::SyntaxHint { message, span } => {
-                    errors.push(ParseError::SyntaxHint { message, span });
+                    errors.push(ParseError::InvalidSyntax { message, span });
                 }
             }
         }
