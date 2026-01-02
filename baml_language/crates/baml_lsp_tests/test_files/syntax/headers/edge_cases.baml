@@ -223,24 +223,6 @@ function HeaderOnlyFunction() -> string {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
 // Error: Expected string, found int
 //    ╭─[ 0:1:1 ]
 //    │
@@ -250,48 +232,12 @@ function HeaderOnlyFunction() -> string {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: Expected string, found unknown | void
+// Error: Expected string, found map<string, unknown> | string
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ // Edge cases for MDX headers
 //    │ │ 
-//    │ ╰─ Expected string, found unknown | void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
+//    │ ╰─ Expected string, found map<string, unknown> | string
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
