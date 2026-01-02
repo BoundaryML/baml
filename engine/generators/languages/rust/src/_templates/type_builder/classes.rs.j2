@@ -1,5 +1,54 @@
-//! Generated class builder wrappers.
-//!
-//! Full implementation coming in Phase 8.
+//! Generated class builder wrappers for type-safe field access.
 
-// Class builder placeholders will be generated here in Phase 8.
+{% for cls in classes %}
+/// Wrapper for the `{{ cls.name }}` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+{% if cls.dynamic %}
+///
+/// This class is marked `@@dynamic` - you can add new properties at runtime.
+{% endif %}
+pub struct {{ cls.name }}ClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl {{ cls.name }}ClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner.as_type()
+            .expect("class {{ cls.name }} type lookup failed")
+    }
+
+{% if cls.dynamic %}
+    /// Add a new property to this dynamic class.
+    pub fn add_property(&self, name: &str, field_type: &baml::TypeDef) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        self.inner.add_property(name, field_type)
+    }
+
+{% endif %}
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+{% for field in cls.fields %}
+
+    /// Access the `{{ field.name }}` field builder.
+    pub fn {{ field.name }}(&self) -> baml::ClassPropertyBuilder {
+        self.inner.get_property("{{ field.name }}")
+            .expect("field {{ field.name }} lookup failed")
+            .expect("field {{ field.name }} is defined in schema")
+    }
+{% endfor %}
+}
+
+{% endfor %}

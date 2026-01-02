@@ -230,23 +230,30 @@ impl<T: KnownTypes, S: KnownTypes> BamlDecode for BamlValue<T, S> {
                 }))
             }
             Some(cffi_value_holder::Value::UnionVariantValue(union)) => {
-                // Extract union type name from CFFITypeName
-                let name = union
-                    .name
-                    .as_ref()
-                    .map(|n| n.name.clone())
-                    .unwrap_or_default();
-                let variant_name = union.value_option_name.clone();
                 let inner = union
                     .value
                     .as_ref()
                     .ok_or_else(|| BamlError::internal("union variant missing value"))?;
-                let value = Box::new(Self::baml_decode(inner)?);
-                Ok(BamlValue::DynamicUnion(DynamicUnion {
-                    name,
-                    variant_name,
-                    value,
-                }))
+                let decoded_value = Self::baml_decode(inner)?;
+
+                // For simple optional types (like string?), unwrap directly
+                // is_single_pattern = true means it's a simple A | null pattern
+                if union.is_single_pattern {
+                    Ok(decoded_value)
+                } else {
+                    // Complex unions need DynamicUnion wrapper for discriminated access
+                    let name = union
+                        .name
+                        .as_ref()
+                        .map(|n| n.name.clone())
+                        .unwrap_or_default();
+                    let variant_name = union.value_option_name.clone();
+                    Ok(BamlValue::DynamicUnion(DynamicUnion {
+                        name,
+                        variant_name,
+                        value: Box::new(decoded_value),
+                    }))
+                }
             }
             Some(cffi_value_holder::Value::CheckedValue(checked)) => {
                 let inner = checked

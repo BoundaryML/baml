@@ -113,7 +113,7 @@ impl FunctionOptions {
             }
         }
         if let Some(type_builder) = &self.type_builder {
-            // TODO
+            args = args.with_type_builder(type_builder.inner());
         }
         if let Some(collectors) = &self.collectors {
             for collector in collectors {

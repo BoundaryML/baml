@@ -3,8 +3,188 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated enum builder wrappers.
-//!
-//! Full implementation coming in Phase 8.
+//! Generated enum builder wrappers for type-safe value access.
 
-// Enum builder placeholders will be generated here in Phase 8.
+/// Wrapper for the `Category` enum builder.
+///
+/// Provides type-safe method access to values defined in the schema.
+/// Access values via methods: `builder.ValueName()`
+
+///
+/// This enum is marked `@@dynamic` - you can add new values at runtime.
+
+pub struct CategoryEnumBuilder {
+    inner: baml::EnumBuilder,
+}
+
+impl CategoryEnumBuilder {
+    /// Create wrapper from runtime EnumBuilder.
+    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying EnumBuilder.
+    pub fn inner(&self) -> &baml::EnumBuilder {
+        &self.inner
+    }
+
+    /// Get the enum as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("enum Category type lookup failed")
+    }
+
+    /// Add a new value to this dynamic enum.
+    pub fn add_value(&self, value: &str) -> Result<baml::EnumValueBuilder, baml::BamlError> {
+        self.inner.add_value(value)
+    }
+
+    // =========================================================================
+    // Value Accessors (1:1 with schema value names)
+    // =========================================================================
+
+    /// Access the `Technology` value builder.
+    pub fn Technology(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Technology")
+            .expect("value Technology lookup failed")
+            .expect("value Technology is defined in schema")
+    }
+
+    /// Access the `Science` value builder.
+    pub fn Science(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Science")
+            .expect("value Science lookup failed")
+            .expect("value Science is defined in schema")
+    }
+
+    /// Access the `Arts` value builder.
+    pub fn Arts(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Arts")
+            .expect("value Arts lookup failed")
+            .expect("value Arts is defined in schema")
+    }
+}
+
+/// Wrapper for the `Priority` enum builder.
+///
+/// Provides type-safe method access to values defined in the schema.
+/// Access values via methods: `builder.ValueName()`
+
+///
+/// This enum is marked `@@dynamic` - you can add new values at runtime.
+
+pub struct PriorityEnumBuilder {
+    inner: baml::EnumBuilder,
+}
+
+impl PriorityEnumBuilder {
+    /// Create wrapper from runtime EnumBuilder.
+    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying EnumBuilder.
+    pub fn inner(&self) -> &baml::EnumBuilder {
+        &self.inner
+    }
+
+    /// Get the enum as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("enum Priority type lookup failed")
+    }
+
+    /// Add a new value to this dynamic enum.
+    pub fn add_value(&self, value: &str) -> Result<baml::EnumValueBuilder, baml::BamlError> {
+        self.inner.add_value(value)
+    }
+
+    // =========================================================================
+    // Value Accessors (1:1 with schema value names)
+    // =========================================================================
+
+    /// Access the `High` value builder.
+    pub fn High(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("High")
+            .expect("value High lookup failed")
+            .expect("value High is defined in schema")
+    }
+
+    /// Access the `Medium` value builder.
+    pub fn Medium(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Medium")
+            .expect("value Medium lookup failed")
+            .expect("value Medium is defined in schema")
+    }
+
+    /// Access the `Low` value builder.
+    pub fn Low(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Low")
+            .expect("value Low lookup failed")
+            .expect("value Low is defined in schema")
+    }
+}
+
+/// Wrapper for the `Status` enum builder.
+///
+/// Provides type-safe method access to values defined in the schema.
+/// Access values via methods: `builder.ValueName()`
+
+pub struct StatusEnumBuilder {
+    inner: baml::EnumBuilder,
+}
+
+impl StatusEnumBuilder {
+    /// Create wrapper from runtime EnumBuilder.
+    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying EnumBuilder.
+    pub fn inner(&self) -> &baml::EnumBuilder {
+        &self.inner
+    }
+
+    /// Get the enum as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("enum Status type lookup failed")
+    }
+
+    // =========================================================================
+    // Value Accessors (1:1 with schema value names)
+    // =========================================================================
+
+    /// Access the `Active` value builder.
+    pub fn Active(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Active")
+            .expect("value Active lookup failed")
+            .expect("value Active is defined in schema")
+    }
+
+    /// Access the `Inactive` value builder.
+    pub fn Inactive(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Inactive")
+            .expect("value Inactive lookup failed")
+            .expect("value Inactive is defined in schema")
+    }
+
+    /// Access the `Pending` value builder.
+    pub fn Pending(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Pending")
+            .expect("value Pending lookup failed")
+            .expect("value Pending is defined in schema")
+    }
+}
