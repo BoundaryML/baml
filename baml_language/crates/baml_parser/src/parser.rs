@@ -376,8 +376,16 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let start = self.tokens.get(i).map(|t| t.span.range.start()).unwrap_or_default();
-        let file_id = self.tokens.get(i).map(|t| t.span.file_id).unwrap_or(baml_base::FileId::new(0));
+        let start = self
+            .tokens
+            .get(i)
+            .map(|t| t.span.range.start())
+            .unwrap_or_default();
+        let file_id = self
+            .tokens
+            .get(i)
+            .map(|t| t.span.file_id)
+            .unwrap_or(baml_base::FileId::new(0));
 
         // Find the end (newline or EOF)
         let mut end = start;
