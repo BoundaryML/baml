@@ -637,7 +637,7 @@ impl<'a> Parser<'a> {
         } else {
             let found = self
                 .current()
-                .map(|t| format!("{:?}", t.kind))
+                .map(|t| format!("{}", t.kind))
                 .unwrap_or_else(|| "EOF".to_string());
 
             let span = self.current().map(|t| t.span).unwrap_or_else(|| {
@@ -648,7 +648,7 @@ impl<'a> Parser<'a> {
             });
 
             self.events.push(Event::UnexpectedToken {
-                expected: format!("{kind:?}"),
+                expected: format!("{kind}"),
                 found,
                 span,
             });
@@ -669,7 +669,7 @@ impl<'a> Parser<'a> {
     fn error_unexpected_token(&mut self, expected: String) {
         let found = self
             .current()
-            .map(|t| format!("{:?}", t.kind))
+            .map(|t| format!("{}", t.kind))
             .unwrap_or_else(|| "EOF".to_string());
 
         let span = self.current().map(|t| t.span).unwrap_or_else(|| {
@@ -2886,6 +2886,30 @@ impl<'a> Parser<'a> {
         });
     }
 
+    // ============ Generator Parsing ============
+
+    /// Parse a generator declaration
+    pub(crate) fn parse_generator(&mut self) {
+        self.with_node(SyntaxKind::GENERATOR_DEF, |p| {
+            // 'generator' keyword
+            p.expect(TokenKind::Generator);
+
+            // Generator name
+            if p.at(TokenKind::Word) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("generator name".to_string());
+            }
+
+            // Config block
+            if p.at(TokenKind::LBrace) {
+                p.parse_config_block();
+            } else {
+                p.error_unexpected_token("generator body".to_string());
+            }
+        });
+    }
+
     // ============ Template String Parsing ============
 
     /// Parse a template string declaration
@@ -2962,6 +2986,8 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
             parser.parse_function();
         } else if parser.at(TokenKind::Client) {
             parser.parse_client();
+        } else if parser.at(TokenKind::Generator) {
+            parser.parse_generator();
         } else if parser.at(TokenKind::Test) {
             parser.parse_test();
         } else if parser.at(TokenKind::RetryPolicy) {

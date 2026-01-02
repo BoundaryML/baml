@@ -81,147 +81,147 @@ template_string BadCall4 #"
 
 //----
 //- diagnostics
-// Error: Expected LParen, found Hash
+// Error: Expected '(', found '#'
 //    ╭─[ 0:5:26 ]
 //    │
 //  5 │ template_string BadCall1 #"
 //    │                          ┬  
-//    │                          ╰── Expected LParen, found Hash
+//    │                          ╰── Expected '(', found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected parameter name, found Hash
+// Error: Expected parameter name, found '#'
 //    ╭─[ 0:5:26 ]
 //    │
 //  5 │ template_string BadCall1 #"
 //    │                          ┬  
-//    │                          ╰── Expected parameter name, found Hash
+//    │                          ╰── Expected parameter name, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected type annotation, found Hash
+// Error: Expected type annotation, found '#'
 //    ╭─[ 0:5:26 ]
 //    │
 //  5 │ template_string BadCall1 #"
 //    │                          ┬  
-//    │                          ╰── Expected type annotation, found Hash
+//    │                          ╰── Expected type annotation, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected RParen, found Hash
+// Error: Expected ')', found '#'
 //    ╭─[ 0:5:26 ]
 //    │
 //  5 │ template_string BadCall1 #"
 //    │                          ┬  
-//    │                          ╰── Expected RParen, found Hash
+//    │                          ╰── Expected ')', found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected LParen, found Hash
+// Error: Expected '(', found '#'
 //    ╭─[ 0:9:26 ]
 //    │
 //  9 │ template_string BadCall2 #"
 //    │                          ┬  
-//    │                          ╰── Expected LParen, found Hash
+//    │                          ╰── Expected '(', found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected parameter name, found Hash
+// Error: Expected parameter name, found '#'
 //    ╭─[ 0:9:26 ]
 //    │
 //  9 │ template_string BadCall2 #"
 //    │                          ┬  
-//    │                          ╰── Expected parameter name, found Hash
+//    │                          ╰── Expected parameter name, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected type annotation, found Hash
+// Error: Expected type annotation, found '#'
 //    ╭─[ 0:9:26 ]
 //    │
 //  9 │ template_string BadCall2 #"
 //    │                          ┬  
-//    │                          ╰── Expected type annotation, found Hash
+//    │                          ╰── Expected type annotation, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected RParen, found Hash
+// Error: Expected ')', found '#'
 //    ╭─[ 0:9:26 ]
 //    │
 //  9 │ template_string BadCall2 #"
 //    │                          ┬  
-//    │                          ╰── Expected RParen, found Hash
+//    │                          ╰── Expected ')', found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected LParen, found Hash
+// Error: Expected '(', found '#'
 //     ╭─[ 0:13:26 ]
 //     │
 //  13 │ template_string BadCall3 #"
 //     │                          ┬  
-//     │                          ╰── Expected LParen, found Hash
+//     │                          ╰── Expected '(', found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected parameter name, found Hash
+// Error: Expected parameter name, found '#'
 //     ╭─[ 0:13:26 ]
 //     │
 //  13 │ template_string BadCall3 #"
 //     │                          ┬  
-//     │                          ╰── Expected parameter name, found Hash
+//     │                          ╰── Expected parameter name, found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected type annotation, found Hash
+// Error: Expected type annotation, found '#'
 //     ╭─[ 0:13:26 ]
 //     │
 //  13 │ template_string BadCall3 #"
 //     │                          ┬  
-//     │                          ╰── Expected type annotation, found Hash
+//     │                          ╰── Expected type annotation, found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RParen, found Hash
+// Error: Expected ')', found '#'
 //     ╭─[ 0:13:26 ]
 //     │
 //  13 │ template_string BadCall3 #"
 //     │                          ┬  
-//     │                          ╰── Expected RParen, found Hash
+//     │                          ╰── Expected ')', found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected LParen, found Hash
+// Error: Expected '(', found '#'
 //     ╭─[ 0:17:26 ]
 //     │
 //  17 │ template_string BadCall4 #"
 //     │                          ┬  
-//     │                          ╰── Expected LParen, found Hash
+//     │                          ╰── Expected '(', found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected parameter name, found Hash
+// Error: Expected parameter name, found '#'
 //     ╭─[ 0:17:26 ]
 //     │
 //  17 │ template_string BadCall4 #"
 //     │                          ┬  
-//     │                          ╰── Expected parameter name, found Hash
+//     │                          ╰── Expected parameter name, found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected type annotation, found Hash
+// Error: Expected type annotation, found '#'
 //     ╭─[ 0:17:26 ]
 //     │
 //  17 │ template_string BadCall4 #"
 //     │                          ┬  
-//     │                          ╰── Expected type annotation, found Hash
+//     │                          ╰── Expected type annotation, found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RParen, found Hash
+// Error: Expected ')', found '#'
 //     ╭─[ 0:17:26 ]
 //     │
 //  17 │ template_string BadCall4 #"
 //     │                          ┬  
-//     │                          ╰── Expected RParen, found Hash
+//     │                          ╰── Expected ')', found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

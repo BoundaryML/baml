@@ -39,93 +39,93 @@ function BadFunction2(i: string) -> bool {
 
 //----
 //- diagnostics
-// Error: Expected expression, found Watch
+// Error: Expected expression, found watch
 //    ╭─[ 0:2:3 ]
 //    │
 //  2 │   watch let x = 10;
 //    │   ──┬──  
-//    │     ╰──── Expected expression, found Watch
+//    │     ╰──── Expected expression, found watch
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Expected field name after '.', found Dollar
+// Error: Expected Expected field name after '.', found '$'
 //    ╭─[ 0:3:5 ]
 //    │
 //  3 │   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
 //    │     ┬  
-//    │     ╰── Expected Expected field name after '.', found Dollar
+//    │     ╰── Expected Expected field name after '.', found '$'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Expected field name after '$', found Watch
+// Error: Expected Expected field name after '$', found watch
 //    ╭─[ 0:3:6 ]
 //    │
 //  3 │   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
 //    │      ──┬──  
-//    │        ╰──── Expected Expected field name after '$', found Watch
+//    │        ╰──── Expected Expected field name after '$', found watch
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected expression, found Watch
+// Error: Expected expression, found watch
 //    ╭─[ 0:3:6 ]
 //    │
 //  3 │   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
 //    │      ──┬──  
-//    │        ╰──── Expected expression, found Watch
+//    │        ╰──── Expected expression, found watch
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Expected field name after '.', found Dollar
+// Error: Expected Expected field name after '.', found '$'
 //    ╭─[ 0:4:5 ]
 //    │
 //  4 │   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
 //    │     ┬  
-//    │     ╰── Expected Expected field name after '.', found Dollar
+//    │     ╰── Expected Expected field name after '.', found '$'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Expected field name after '$', found Watch
+// Error: Expected Expected field name after '$', found watch
 //    ╭─[ 0:4:6 ]
 //    │
 //  4 │   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
 //    │      ──┬──  
-//    │        ╰──── Expected Expected field name after '$', found Watch
+//    │        ╰──── Expected Expected field name after '$', found watch
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected expression, found Watch
+// Error: Expected expression, found watch
 //    ╭─[ 0:4:6 ]
 //    │
 //  4 │   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
 //    │      ──┬──  
-//    │        ╰──── Expected expression, found Watch
+//    │        ╰──── Expected expression, found watch
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Expected field name after '.', found Dollar
+// Error: Expected Expected field name after '.', found '$'
 //    ╭─[ 0:5:5 ]
 //    │
 //  5 │   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
 //    │     ┬  
-//    │     ╰── Expected Expected field name after '.', found Dollar
+//    │     ╰── Expected Expected field name after '.', found '$'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Expected field name after '$', found Watch
+// Error: Expected Expected field name after '$', found watch
 //    ╭─[ 0:5:6 ]
 //    │
 //  5 │   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
 //    │      ──┬──  
-//    │        ╰──── Expected Expected field name after '$', found Watch
+//    │        ╰──── Expected Expected field name after '$', found watch
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected expression, found Watch
+// Error: Expected expression, found watch
 //    ╭─[ 0:5:6 ]
 //    │
 //  5 │   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
 //    │      ──┬──  
-//    │        ╰──── Expected expression, found Watch
+//    │        ╰──── Expected expression, found watch
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

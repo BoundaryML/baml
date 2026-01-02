@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -23,12 +23,12 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-Error: Expected RBrace, found Class
+Error: Expected '}', found class
    ╭─[ 0:5:1 ]
    │
  5 │ class Another {  // Should still parse this class
    │ ──┬──  
-   │   ╰──── Expected RBrace, found Class
+   │   ╰──── Expected '}', found class
    │ 
    │ Note: Error code: E0010
 ───╯

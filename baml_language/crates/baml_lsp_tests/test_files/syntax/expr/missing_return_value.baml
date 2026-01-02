@@ -13,12 +13,12 @@ function NoRet(x: int) {
 
 //----
 //- diagnostics
-// Error: Expected return type (->), found LBrace
+// Error: Expected return type (->), found '{'
 //    ╭─[ 0:1:24 ]
 //    │
 //  1 │ function NoRet(x: int) {
 //    │                        ┬  
-//    │                        ╰── Expected return type (->), found LBrace
+//    │                        ╰── Expected return type (->), found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

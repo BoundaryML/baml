@@ -12,12 +12,12 @@ class Foo2 {
 
 //----
 //- diagnostics
-// Error: Expected Unexpected token in class body, found Dot
+// Error: Expected Unexpected token in class body, found '.'
 //     ╭─[ 0:10:13 ]
 //     │
 //  10 │     @@stream.done
 //     │             ┬  
-//     │             ╰── Expected Unexpected token in class body, found Dot
+//     │             ╰── Expected Unexpected token in class body, found '.'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

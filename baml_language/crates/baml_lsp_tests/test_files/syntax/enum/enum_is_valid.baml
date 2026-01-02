@@ -18,93 +18,93 @@ generator target{
 
 //----
 //- diagnostics
-// Error: Expected top-level declaration, found Generator
+// Error: Expected top-level declaration, found generator
 //    ╭─[ 0:7:1 ]
 //    │
 //  7 │ generator target{
 //    │ ────┬────  
-//    │     ╰────── Expected top-level declaration, found Generator
+//    │     ╰────── Expected top-level declaration, found generator
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:7:11 ]
 //    │
 //  7 │ generator target{
 //    │           ───┬──  
-//    │              ╰──── Expected top-level declaration, found Word
+//    │              ╰──── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //    ╭─[ 0:7:17 ]
 //    │
 //  7 │ generator target{
 //    │                 ┬  
-//    │                 ╰── Expected top-level declaration, found LBrace
+//    │                 ╰── Expected top-level declaration, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:8:5 ]
 //    │
 //  8 │     output_type "python/pydantic"
 //    │     ─────┬─────  
-//    │          ╰─────── Expected top-level declaration, found Word
+//    │          ╰─────── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //    ╭─[ 0:8:17 ]
 //    │
 //  8 │     output_type "python/pydantic"
 //    │                 ┬  
-//    │                 ╰── Expected top-level declaration, found Quote
+//    │                 ╰── Expected top-level declaration, found '"'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:8:18 ]
 //    │
 //  8 │     output_type "python/pydantic"
 //    │                  ───┬──  
-//    │                     ╰──── Expected top-level declaration, found Word
+//    │                     ╰──── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Slash
+// Error: Expected top-level declaration, found '/'
 //    ╭─[ 0:8:24 ]
 //    │
 //  8 │     output_type "python/pydantic"
 //    │                        ┬  
-//    │                        ╰── Expected top-level declaration, found Slash
+//    │                        ╰── Expected top-level declaration, found '/'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:8:25 ]
 //    │
 //  8 │     output_type "python/pydantic"
 //    │                         ────┬───  
-//    │                             ╰───── Expected top-level declaration, found Word
+//    │                             ╰───── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //    ╭─[ 0:8:33 ]
 //    │
 //  8 │     output_type "python/pydantic"
 //    │                                 ┬  
-//    │                                 ╰── Expected top-level declaration, found Quote
+//    │                                 ╰── Expected top-level declaration, found '"'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //    ╭─[ 0:9:1 ]
 //    │
 //  9 │ }
 //    │ ┬  
-//    │ ╰── Expected top-level declaration, found RBrace
+//    │ ╰── Expected top-level declaration, found '}'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

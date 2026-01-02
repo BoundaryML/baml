@@ -12,12 +12,12 @@ enum Test {
 
 //----
 //- diagnostics
-// Error: Expected Unexpected token in enum body, found Pipe
+// Error: Expected Unexpected token in enum body, found '|'
 //    ╭─[ 0:2:11 ]
 //    │
 //  2 │     A int | string
 //    │           ┬  
-//    │           ╰── Expected Unexpected token in enum body, found Pipe
+//    │           ╰── Expected Unexpected token in enum body, found '|'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

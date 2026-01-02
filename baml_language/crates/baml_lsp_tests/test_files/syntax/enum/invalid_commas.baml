@@ -28,30 +28,30 @@ enum Test {
 
 //----
 //- diagnostics
-// Error: Expected Unexpected token in enum body, found Comma
+// Error: Expected Unexpected token in enum body, found ','
 //    ╭─[ 0:2:6 ]
 //    │
 //  2 │     A,
 //    │      ┬  
-//    │      ╰── Expected Unexpected token in enum body, found Comma
+//    │      ╰── Expected Unexpected token in enum body, found ','
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Unexpected token in enum body, found Comma
+// Error: Expected Unexpected token in enum body, found ','
 //    ╭─[ 0:3:6 ]
 //    │
 //  3 │     B,
 //    │      ┬  
-//    │      ╰── Expected Unexpected token in enum body, found Comma
+//    │      ╰── Expected Unexpected token in enum body, found ','
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Unexpected token in enum body, found Comma
+// Error: Expected Unexpected token in enum body, found ','
 //    ╭─[ 0:4:6 ]
 //    │
 //  4 │     C,
 //    │      ┬  
-//    │      ╰── Expected Unexpected token in enum body, found Comma
+//    │      ╰── Expected Unexpected token in enum body, found ','
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

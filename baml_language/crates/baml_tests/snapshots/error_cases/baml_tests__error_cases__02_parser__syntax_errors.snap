@@ -107,52 +107,52 @@ SOURCE_FILE
           R_BRACE "}"
 
 === ERRORS ===
-Error: Expected function name, found IntegerLiteral
+Error: Expected function name, found integer
    ╭─[ 0:6:10 ]
    │
  6 │ function 123Invalid() {}
    │          ─┬─  
-   │           ╰─── Expected function name, found IntegerLiteral
+   │           ╰─── Expected function name, found integer
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected return type (->), found LBrace
+Error: Expected return type (->), found '{'
    ╭─[ 0:6:23 ]
    │
  6 │ function 123Invalid() {}
    │                       ┬  
-   │                       ╰── Expected return type (->), found LBrace
+   │                       ╰── Expected return type (->), found '{'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected '=>' after pattern, found Colon
+Error: Expected '=>' after pattern, found ':'
     ╭─[ 0:18:19 ]
     │
  18 │         a: int | b: bool => "bad"
     │                   ┬  
-    │                   ╰── Expected '=>' after pattern, found Colon
+    │                   ╰── Expected '=>' after pattern, found ':'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected expression, found Colon
+Error: Expected expression, found ':'
     ╭─[ 0:18:19 ]
     │
  18 │         a: int | b: bool => "bad"
     │                   ┬  
-    │                   ╰── Expected expression, found Colon
+    │                   ╰── Expected expression, found ':'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected RBrace, found EOF
+Error: Expected '}', found EOF
     ╭─[ 0:27:1 ]
     │
  27 │ }
     │ ┬  
-    │ ╰── Expected RBrace, found EOF
+    │ ╰── Expected '}', found EOF
     │ 
     │ Note: Error code: E0010
 ────╯

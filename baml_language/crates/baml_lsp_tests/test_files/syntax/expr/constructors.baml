@@ -23,39 +23,39 @@ class Person {
 
 //----
 //- diagnostics
-// Error: Expected field name or '}', found Dot
+// Error: Expected field name or '}', found '.'
 //    ╭─[ 0:8:25 ]
 //    │
 //  8 │ let y = MyClass { a: 1, ...x };
 //    │                         ┬  
-//    │                         ╰── Expected field name or '}', found Dot
+//    │                         ╰── Expected field name or '}', found '.'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected field name or '}', found Dot
+// Error: Expected field name or '}', found '.'
 //    ╭─[ 0:8:26 ]
 //    │
 //  8 │ let y = MyClass { a: 1, ...x };
 //    │                          ┬  
-//    │                          ╰── Expected field name or '}', found Dot
+//    │                          ╰── Expected field name or '}', found '.'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected field name or '}', found Dot
+// Error: Expected field name or '}', found '.'
 //    ╭─[ 0:8:27 ]
 //    │
 //  8 │ let y = MyClass { a: 1, ...x };
 //    │                           ┬  
-//    │                           ╰── Expected field name or '}', found Dot
+//    │                           ╰── Expected field name or '}', found '.'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Colon, found RBrace
+// Error: Expected ':', found '}'
 //    ╭─[ 0:8:30 ]
 //    │
 //  8 │ let y = MyClass { a: 1, ...x };
 //    │                              ┬  
-//    │                              ╰── Expected Colon, found RBrace
+//    │                              ╰── Expected ':', found '}'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

@@ -12,75 +12,75 @@ template_string GoodCall2 #"
 
 //----
 //- diagnostics
-// Error: Expected LParen, found Hash
+// Error: Expected '(', found '#'
 //    ╭─[ 0:5:27 ]
 //    │
 //  5 │ template_string GoodCall1 #"
 //    │                           ┬  
-//    │                           ╰── Expected LParen, found Hash
+//    │                           ╰── Expected '(', found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected parameter name, found Hash
+// Error: Expected parameter name, found '#'
 //    ╭─[ 0:5:27 ]
 //    │
 //  5 │ template_string GoodCall1 #"
 //    │                           ┬  
-//    │                           ╰── Expected parameter name, found Hash
+//    │                           ╰── Expected parameter name, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected type annotation, found Hash
+// Error: Expected type annotation, found '#'
 //    ╭─[ 0:5:27 ]
 //    │
 //  5 │ template_string GoodCall1 #"
 //    │                           ┬  
-//    │                           ╰── Expected type annotation, found Hash
+//    │                           ╰── Expected type annotation, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected RParen, found Hash
+// Error: Expected ')', found '#'
 //    ╭─[ 0:5:27 ]
 //    │
 //  5 │ template_string GoodCall1 #"
 //    │                           ┬  
-//    │                           ╰── Expected RParen, found Hash
+//    │                           ╰── Expected ')', found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected LParen, found Hash
+// Error: Expected '(', found '#'
 //    ╭─[ 0:9:27 ]
 //    │
 //  9 │ template_string GoodCall2 #"
 //    │                           ┬  
-//    │                           ╰── Expected LParen, found Hash
+//    │                           ╰── Expected '(', found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected parameter name, found Hash
+// Error: Expected parameter name, found '#'
 //    ╭─[ 0:9:27 ]
 //    │
 //  9 │ template_string GoodCall2 #"
 //    │                           ┬  
-//    │                           ╰── Expected parameter name, found Hash
+//    │                           ╰── Expected parameter name, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected type annotation, found Hash
+// Error: Expected type annotation, found '#'
 //    ╭─[ 0:9:27 ]
 //    │
 //  9 │ template_string GoodCall2 #"
 //    │                           ┬  
-//    │                           ╰── Expected type annotation, found Hash
+//    │                           ╰── Expected type annotation, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected RParen, found Hash
+// Error: Expected ')', found '#'
 //    ╭─[ 0:9:27 ]
 //    │
 //  9 │ template_string GoodCall2 #"
 //    │                           ┬  
-//    │                           ╰── Expected RParen, found Hash
+//    │                           ╰── Expected ')', found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

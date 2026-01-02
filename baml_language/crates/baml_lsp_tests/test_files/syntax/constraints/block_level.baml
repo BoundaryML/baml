@@ -40,156 +40,156 @@ test TestFoo {
 
 //----
 //- diagnostics
-// Error: Expected config key, found AtAt
+// Error: Expected config key, found '@@'
 //     ╭─[ 0:37:3 ]
 //     │
 //  37 │   @@check(foo_check_1, {{ this }})
 //     │   ─┬  
-//     │    ╰── Expected config key, found AtAt
+//     │    ╰── Expected config key, found '@@'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected config key, found LBrace
+// Error: Expected config key, found '{'
 //     ╭─[ 0:37:24 ]
 //     │
 //  37 │   @@check(foo_check_1, {{ this }})
 //     │                        ┬  
-//     │                        ╰── Expected config key, found LBrace
+//     │                        ╰── Expected config key, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected config key, found LBrace
+// Error: Expected config key, found '{'
 //     ╭─[ 0:37:25 ]
 //     │
 //  37 │   @@check(foo_check_1, {{ this }})
 //     │                         ┬  
-//     │                         ╰── Expected config key, found LBrace
+//     │                         ╰── Expected config key, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:37:33 ]
 //     │
 //  37 │   @@check(foo_check_1, {{ this }})
 //     │                                 ┬  
-//     │                                 ╰── Expected top-level declaration, found RBrace
+//     │                                 ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RParen
+// Error: Expected top-level declaration, found ')'
 //     ╭─[ 0:37:34 ]
 //     │
 //  37 │   @@check(foo_check_1, {{ this }})
 //     │                                  ┬  
-//     │                                  ╰── Expected top-level declaration, found RParen
+//     │                                  ╰── Expected top-level declaration, found ')'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found AtAt
+// Error: Expected top-level declaration, found '@@'
 //     ╭─[ 0:38:3 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │   ─┬  
-//     │    ╰── Expected top-level declaration, found AtAt
+//     │    ╰── Expected top-level declaration, found '@@'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:38:5 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │     ──┬──  
-//     │       ╰──── Expected top-level declaration, found Word
+//     │       ╰──── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LParen
+// Error: Expected top-level declaration, found '('
 //     ╭─[ 0:38:10 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │          ┬  
-//     │          ╰── Expected top-level declaration, found LParen
+//     │          ╰── Expected top-level declaration, found '('
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:38:11 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │           ─────┬─────  
-//     │                ╰─────── Expected top-level declaration, found Word
+//     │                ╰─────── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Comma
+// Error: Expected top-level declaration, found ','
 //     ╭─[ 0:38:22 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                      ┬  
-//     │                      ╰── Expected top-level declaration, found Comma
+//     │                      ╰── Expected top-level declaration, found ','
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:38:24 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                        ┬  
-//     │                        ╰── Expected top-level declaration, found LBrace
+//     │                        ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:38:25 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                         ┬  
-//     │                         ╰── Expected top-level declaration, found LBrace
+//     │                         ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:38:27 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                           ──┬─  
-//     │                             ╰─── Expected top-level declaration, found Word
+//     │                             ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:38:32 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                                ┬  
-//     │                                ╰── Expected top-level declaration, found RBrace
+//     │                                ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:38:33 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                                 ┬  
-//     │                                 ╰── Expected top-level declaration, found RBrace
+//     │                                 ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RParen
+// Error: Expected top-level declaration, found ')'
 //     ╭─[ 0:38:34 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                                  ┬  
-//     │                                  ╰── Expected top-level declaration, found RParen
+//     │                                  ╰── Expected top-level declaration, found ')'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:39:1 ]
 //     │
 //  39 │ }
 //     │ ┬  
-//     │ ╰── Expected top-level declaration, found RBrace
+//     │ ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

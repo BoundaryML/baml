@@ -130,6 +130,7 @@ pub enum SyntaxKind {
     CLASS_DEF,
     ENUM_DEF,
     CLIENT_DEF,
+    GENERATOR_DEF,
     TEST_DEF,
     RETRY_POLICY_DEF,
     TEMPLATE_STRING_DEF,

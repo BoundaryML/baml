@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -278,182 +278,182 @@ SOURCE_FILE
   R_BRACE "}"
 
 === ERRORS ===
-Error: Expected function name, found Error
+Error: Expected function name, found error
     ╭─[ 0:29:1 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │ ─┬─  
-    │  ╰─── Expected function name, found Error
+    │  ╰─── Expected function name, found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected parameter name, found Error
+Error: Expected parameter name, found error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected parameter name, found Error
+    │               ╰─── Expected parameter name, found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected type annotation, found Error
+Error: Expected type annotation, found error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected type annotation, found Error
+    │               ╰─── Expected type annotation, found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected RParen, found Error
+Error: Expected ')', found error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected RParen, found Error
+    │               ╰─── Expected ')', found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected return type (->), found Error
+Error: Expected return type (->), found error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected return type (->), found Error
+    │               ╰─── Expected return type (->), found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected function body, found Error
+Error: Expected function body, found error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected function body, found Error
+    │               ╰─── Expected function body, found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Error
+Error: Expected top-level declaration, found error
     ╭─[ 0:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
-    │               ╰─── Expected top-level declaration, found Error
+    │               ╰─── Expected top-level declaration, found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Error
+Error: Expected top-level declaration, found error
     ╭─[ 0:29:17 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                 ─┬─  
-    │                  ╰─── Expected top-level declaration, found Error
+    │                  ╰─── Expected top-level declaration, found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
     ╭─[ 0:29:21 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                     ───┬──  
-    │                        ╰──── Expected top-level declaration, found Word
+    │                        ╰──── Expected top-level declaration, found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found RParen
+Error: Expected top-level declaration, found ')'
     ╭─[ 0:29:27 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                           ┬  
-    │                           ╰── Expected top-level declaration, found RParen
+    │                           ╰── Expected top-level declaration, found ')'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Arrow
+Error: Expected top-level declaration, found '->'
     ╭─[ 0:29:29 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                             ─┬   
-    │                              ╰─── Expected top-level declaration, found Arrow
+    │                              ╰─── Expected top-level declaration, found '->'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
     ╭─[ 0:29:32 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                                ────┬───  
-    │                                    ╰───── Expected top-level declaration, found Word
+    │                                    ╰───── Expected top-level declaration, found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found '{'
     ╭─[ 0:30:1 ]
     │
  30 │   "#
     │ ┬  
-    │ ╰── Expected top-level declaration, found LBrace
+    │ ╰── Expected top-level declaration, found '{'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected config block, found Word
+Error: Expected config block, found identifier
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
 
-Error: Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found '#'
 
-Error: Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found '"'
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
 
-Error: Expected top-level declaration, found Colon
+Error: Expected top-level declaration, found ':'
 
-Error: Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found '{'
 
-Error: Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found '{'
 
-Error: Expected top-level declaration, found Error
+Error: Expected top-level declaration, found error
 
-Error: Expected top-level declaration, found Error
+Error: Expected top-level declaration, found error
 
-Error: Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found '}'
 
-Error: Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found '}'
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
 
-Error: Expected top-level declaration, found Colon
+Error: Expected top-level declaration, found ':'
 
-Error: Expected top-level declaration, found Error
+Error: Expected top-level declaration, found error
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
 
-Error: Expected top-level declaration, found Error
+Error: Expected top-level declaration, found error
 
-Error: Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found '"'
 
-Error: Expected top-level declaration, found Hash
+Error: Expected top-level declaration, found '#'
 
-Error: Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found '}'

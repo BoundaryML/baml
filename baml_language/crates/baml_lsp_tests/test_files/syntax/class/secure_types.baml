@@ -28,21 +28,21 @@ class ComplexTypes {
 
 //----
 //- diagnostics
-// Error: Expected RParen, found Dot
+// Error: Expected ')', found '.'
 //    ╭─[ 0:4:65 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                 ┬  
-//    │                                                                 ╰── Expected RParen, found Dot
+//    │                                                                 ╰── Expected ')', found '.'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Unexpected token in class body, found Dot
+// Error: Expected Unexpected token in class body, found '.'
 //    ╭─[ 0:4:65 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                 ┬  
-//    │                                                                 ╰── Expected Unexpected token in class body, found Dot
+//    │                                                                 ╰── Expected Unexpected token in class body, found '.'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
@@ -55,57 +55,57 @@ class ComplexTypes {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Unexpected token in class body, found LBracket
+// Error: Expected Unexpected token in class body, found '['
 //    ╭─[ 0:4:72 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                        ┬  
-//    │                                                                        ╰── Expected Unexpected token in class body, found LBracket
+//    │                                                                        ╰── Expected Unexpected token in class body, found '['
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Unexpected token in class body, found RBracket
+// Error: Expected Unexpected token in class body, found ']'
 //    ╭─[ 0:4:73 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                         ┬  
-//    │                                                                         ╰── Expected Unexpected token in class body, found RBracket
+//    │                                                                         ╰── Expected Unexpected token in class body, found ']'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Unexpected token in class body, found RParen
+// Error: Expected Unexpected token in class body, found ')'
 //    ╭─[ 0:4:74 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                          ┬  
-//    │                                                                          ╰── Expected Unexpected token in class body, found RParen
+//    │                                                                          ╰── Expected Unexpected token in class body, found ')'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Greater, found GreaterGreater
+// Error: Expected '>', found '>>'
 //     ╭─[ 0:16:62 ]
 //     │
 //  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
 //     │                                                              ─┬  
-//     │                                                               ╰── Expected Greater, found GreaterGreater
+//     │                                                               ╰── Expected '>', found '>>'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Greater, found GreaterGreater
+// Error: Expected '>', found '>>'
 //     ╭─[ 0:16:62 ]
 //     │
 //  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
 //     │                                                              ─┬  
-//     │                                                               ╰── Expected Greater, found GreaterGreater
+//     │                                                               ╰── Expected '>', found '>>'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Unexpected token in class body, found GreaterGreater
+// Error: Expected Unexpected token in class body, found '>>'
 //     ╭─[ 0:16:62 ]
 //     │
 //  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
 //     │                                                              ─┬  
-//     │                                                               ╰── Expected Unexpected token in class body, found GreaterGreater
+//     │                                                               ╰── Expected Unexpected token in class body, found '>>'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
