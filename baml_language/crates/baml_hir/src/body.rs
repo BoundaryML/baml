@@ -963,23 +963,56 @@ impl LoweringContext {
     fn lower_unary_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
         use baml_syntax::SyntaxKind;
 
-        // Find the operator
-        let op = node
-            .children_with_tokens()
-            .filter_map(baml_syntax::NodeOrToken::into_token)
-            .find_map(|token| match token.kind() {
-                SyntaxKind::NOT => Some(UnaryOp::Not),
-                SyntaxKind::MINUS => Some(UnaryOp::Neg),
-                _ => None,
-            })
-            .unwrap_or(UnaryOp::Not); // Default
+        // Unary expressions can have: child nodes (other exprs) OR direct tokens (literals/identifiers)
+        // We need to handle both cases, similar to lower_binary_expr.
+        let mut op = None;
+        let mut operand = None;
 
-        // Find the expression
-        let expr = node
-            .children()
-            .next()
-            .map(|n| self.lower_expr(&n))
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child_node) => {
+                    // This is a child expression node
+                    operand = Some(self.lower_expr(&child_node));
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    let span = token.text_range();
+                    match token.kind() {
+                        // Operators
+                        SyntaxKind::NOT => op = Some(UnaryOp::Not),
+                        SyntaxKind::MINUS => op = Some(UnaryOp::Neg),
+
+                        // Literals and identifiers - convert to expressions
+                        SyntaxKind::INTEGER_LITERAL => {
+                            let value = token.text().parse::<i64>().unwrap_or(0);
+                            operand =
+                                Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
+                        }
+                        SyntaxKind::FLOAT_LITERAL => {
+                            operand = Some(self.alloc_expr(
+                                Expr::Literal(Literal::Float(token.text().to_string())),
+                                span,
+                            ));
+                        }
+                        SyntaxKind::WORD => {
+                            let text = token.text();
+                            let expr_id = match text {
+                                "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
+                                "false" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
+                                }
+                                "null" => self.alloc_expr(Expr::Literal(Literal::Null), span),
+                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), span),
+                            };
+                            operand = Some(expr_id);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        let op = op.unwrap_or(UnaryOp::Not);
+        let expr = operand.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
         self.alloc_expr(Expr::Unary { op, expr }, node.text_range())
     }
