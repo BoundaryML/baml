@@ -662,6 +662,11 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
                 tree.alloc_test(test);
             }
         }
+        SyntaxKind::GENERATOR_DEF => {
+            if let Some(generator) = lower_generator(node, ctx) {
+                tree.alloc_generator(generator);
+            }
+        }
         _ => {
             // Skip other nodes (whitespace, comments, etc.)
         }
@@ -1070,6 +1075,21 @@ pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> V
                     &mut errors,
                     client.name.clone(),
                     "client",
+                    span,
+                    path,
+                );
+            }
+            ItemId::Generator(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let generator = &item_tree[loc.id(db)];
+                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let path = file.path(db).display().to_string();
+                check_duplicate(
+                    &mut seen,
+                    &mut errors,
+                    generator.name.clone(),
+                    "generator",
                     span,
                     path,
                 );

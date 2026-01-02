@@ -27,6 +27,8 @@ pub struct TypeAliasMarker;
 pub struct ClientMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TestMarker;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GeneratorMarker;
 
 /// Location of a function in the source code.
 ///
@@ -73,4 +75,11 @@ pub struct ClientLoc {
 pub struct TestLoc {
     pub file: SourceFile,
     pub id: LocalItemId<TestMarker>,
+}
+
+/// Location of a generator configuration.
+#[salsa::interned]
+pub struct GeneratorLoc {
+    pub file: SourceFile,
+    pub id: LocalItemId<GeneratorMarker>,
 }

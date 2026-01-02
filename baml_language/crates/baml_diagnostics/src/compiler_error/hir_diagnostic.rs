@@ -60,4 +60,50 @@ pub enum HirDiagnostic {
         allowed_contexts: &'static str, // "class fields, enum variants"
         span: Span,
     },
+
+    // ============ Generator Diagnostics ============
+
+    /// Unknown property in generator block.
+    UnknownGeneratorProperty {
+        generator_name: String,
+        property_name: String,
+        span: Span,
+        valid_properties: Vec<&'static str>,
+    },
+
+    /// Required property missing in generator.
+    MissingGeneratorProperty {
+        generator_name: String,
+        property_name: &'static str,
+        span: Span,
+    },
+
+    /// Invalid value for generator property.
+    InvalidGeneratorPropertyValue {
+        generator_name: String,
+        property_name: String,
+        value: String,
+        span: Span,
+        valid_values: Option<Vec<String>>,
+        help: Option<String>,
+    },
+
+    // ============ Reserved Names Diagnostics ============
+
+    /// Field/parameter name is a reserved keyword in target language.
+    ReservedFieldName {
+        item_kind: &'static str, // "class", "enum", "function"
+        item_name: String,
+        field_name: String,
+        span: Span,
+        target_languages: Vec<String>,
+    },
+
+    /// Field name matches its type name (Python-specific issue).
+    FieldNameMatchesTypeName {
+        class_name: String,
+        field_name: String,
+        type_name: String,
+        span: Span,
+    },
 }

@@ -20,6 +20,8 @@ pub use crate::loc::EnumLoc as EnumId;
 /// Identifier for a function (LLM or expression).
 /// This is the interned `FunctionLoc` from loc.rs.
 pub use crate::loc::FunctionLoc as FunctionId;
+/// Identifier for a generator configuration.
+pub use crate::loc::GeneratorLoc as GeneratorId;
 /// Identifier for a test definition.
 pub use crate::loc::TestLoc as TestId;
 /// Identifier for a type alias.
@@ -64,6 +66,12 @@ impl std::fmt::Debug for TestId<'_> {
     }
 }
 
+impl std::fmt::Debug for GeneratorId<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GeneratorId(..)")
+    }
+}
+
 /// Union type for any top-level item.
 ///
 /// Note: Salsa interned types have a `'db` lifetime, so `ItemId` must also have one.
@@ -74,6 +82,7 @@ pub enum ItemId<'db> {
     Enum(EnumId<'db>),
     TypeAlias(TypeAliasId<'db>),
     Client(ClientId<'db>),
+    Generator(GeneratorId<'db>),
     Test(TestId<'db>),
 }
 
@@ -86,6 +95,7 @@ impl std::fmt::Debug for ItemId<'_> {
             ItemId::Enum(_) => write!(f, "Enum(_)"),
             ItemId::TypeAlias(_) => write!(f, "TypeAlias(_)"),
             ItemId::Client(_) => write!(f, "Client(_)"),
+            ItemId::Generator(_) => write!(f, "Generator(_)"),
             ItemId::Test(_) => write!(f, "Test(_)"),
         }
     }
@@ -153,5 +163,6 @@ pub enum ItemKind {
     Enum,
     TypeAlias,
     Client,
+    Generator,
     Test,
 }

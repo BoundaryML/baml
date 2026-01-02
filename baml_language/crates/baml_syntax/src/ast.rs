@@ -51,6 +51,7 @@ ast_node!(ClassDef, CLASS_DEF);
 ast_node!(EnumDef, ENUM_DEF);
 ast_node!(ClientDef, CLIENT_DEF);
 ast_node!(TestDef, TEST_DEF);
+ast_node!(GeneratorDef, GENERATOR_DEF);
 ast_node!(RetryPolicyDef, RETRY_POLICY_DEF);
 ast_node!(TemplateStringDef, TEMPLATE_STRING_DEF);
 ast_node!(TypeAliasDef, TYPE_ALIAS_DEF);
