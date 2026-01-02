@@ -33,6 +33,31 @@ pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 use text_size::TextRange;
 pub use types::*;
 
+/// Substitute type variable bindings into a `TypePattern`, falling back to `Ty::Unknown`
+/// for unbound type variables.
+///
+/// This is used for builtin function type inference where some type variables may be
+/// bound from arguments but others might not be.
+fn substitute_with_fallback<'db>(
+    pattern: &baml_vm::TypePattern,
+    bindings: &Bindings<'db>,
+) -> Ty<'db> {
+    use baml_vm::TypePattern;
+    match pattern {
+        TypePattern::Var(name) => bindings.get(name).cloned().unwrap_or(Ty::Unknown),
+        TypePattern::Int => Ty::Int,
+        TypePattern::Float => Ty::Float,
+        TypePattern::String => Ty::String,
+        TypePattern::Bool => Ty::Bool,
+        TypePattern::Null => Ty::Null,
+        TypePattern::Array(elem) => Ty::List(Box::new(substitute_with_fallback(elem, bindings))),
+        TypePattern::Map { key, value } => Ty::Map {
+            key: Box::new(substitute_with_fallback(key, bindings)),
+            value: Box::new(substitute_with_fallback(value, bindings)),
+        },
+    }
+}
+
 // ============================================================================
 // Path Resolution
 // ============================================================================
@@ -795,30 +820,63 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
                 }
                 Expr::Path(segments) if segments.len() >= 2 => {
                     // First, check if this is a direct builtin function call
-                    // (e.g., baml.Array.length(arr))
+                    // (e.g., baml.Array.length(arr), baml.deep_copy(x))
                     let full_path = segments
                         .iter()
                         .map(smol_str::SmolStr::as_str)
                         .collect::<Vec<_>>()
                         .join(".");
                     if let Some(def) = builtins::lookup_builtin_by_path(&full_path) {
-                        // It's a builtin function - build function type from definition
-                        // For methods called as functions, receiver is the first argument
-                        let mut param_types: Vec<Ty<'db>> = Vec::new();
+                        // It's a builtin function - infer argument types first so we can
+                        // bind type variables (e.g., T in deep_copy(x: T) -> T)
+                        let arg_types: Vec<Ty<'db>> =
+                            args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
+
+                        // Build parameter patterns and match against argument types to
+                        // extract type variable bindings
+                        let mut param_patterns: Vec<&baml_vm::TypePattern> = Vec::new();
                         if let Some(ref receiver_pattern) = def.receiver {
-                            param_types.push(builtins::substitute_unknown(receiver_pattern));
+                            param_patterns.push(receiver_pattern);
                         }
                         for (_, pattern) in &def.params {
-                            param_types.push(builtins::substitute_unknown(pattern));
+                            param_patterns.push(pattern);
                         }
-                        let return_type = builtins::substitute_unknown(&def.returns);
+
+                        // Try to match each argument against its parameter pattern
+                        let mut bindings = builtins::Bindings::new();
+                        for (arg_ty, param_pattern) in arg_types.iter().zip(param_patterns.iter()) {
+                            if let Some(new_bindings) =
+                                builtins::match_pattern(param_pattern, arg_ty)
+                            {
+                                // Merge bindings (first binding wins for consistency)
+                                for (name, ty) in new_bindings {
+                                    bindings.entry(name).or_insert(ty);
+                                }
+                            }
+                        }
+
+                        // Build function type using bindings for type variables
+                        let param_types: Vec<Ty<'db>> = param_patterns
+                            .iter()
+                            .map(|p| {
+                                if bindings.is_empty() {
+                                    builtins::substitute_unknown(p)
+                                } else {
+                                    substitute_with_fallback(p, &bindings)
+                                }
+                            })
+                            .collect();
+
+                        let return_type = if bindings.is_empty() {
+                            builtins::substitute_unknown(&def.returns)
+                        } else {
+                            substitute_with_fallback(&def.returns, &bindings)
+                        };
 
                         let callee_ty = Ty::Function {
                             params: param_types,
                             ret: Box::new(return_type),
                         };
-                        let arg_types: Vec<Ty<'db>> =
-                            args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
                         (callee_ty, arg_types)
                     } else {
                         // Method call via Path: `receiver.method(args)`
