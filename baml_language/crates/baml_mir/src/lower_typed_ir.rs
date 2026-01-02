@@ -713,6 +713,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             // These are handled separately as short-circuit
             BinaryOp::And => BinOp::BitAnd,
             BinaryOp::Or => BinOp::BitOr,
+            BinaryOp::Instanceof => BinOp::Instanceof,
         }
     }
 

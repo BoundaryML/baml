@@ -358,6 +358,9 @@ pub enum BinaryOp {
     BitXor,
     Shl,
     Shr,
+
+    // Type checking
+    Instanceof,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -811,6 +814,7 @@ impl LoweringContext {
                         SyntaxKind::CARET => op = Some(BinaryOp::BitXor),
                         SyntaxKind::LESS_LESS => op = Some(BinaryOp::Shl),
                         SyntaxKind::GREATER_GREATER => op = Some(BinaryOp::Shr),
+                        SyntaxKind::KW_INSTANCEOF => op = Some(BinaryOp::Instanceof),
 
                         // Literals and identifiers - convert to expressions
                         SyntaxKind::INTEGER_LITERAL => {

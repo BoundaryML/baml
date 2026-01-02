@@ -2549,9 +2549,9 @@ impl<'a> Parser<'a> {
     fn infix_binding_power(op: TokenKind) -> Option<(u8, u8)> {
         use TokenKind::{
             And, AndAnd, AndEquals, Caret, CaretEquals, Equals, EqualsEquals, Greater,
-            GreaterEquals, GreaterGreater, GreaterGreaterEquals, Less, LessEquals, LessLess,
-            LessLessEquals, Minus, MinusEquals, NotEquals, OrOr, Percent, PercentEquals, Pipe,
-            PipeEquals, Plus, PlusEquals, Slash, SlashEquals, Star, StarEquals,
+            GreaterEquals, GreaterGreater, GreaterGreaterEquals, Instanceof, Less, LessEquals,
+            LessLess, LessLessEquals, Minus, MinusEquals, NotEquals, OrOr, Percent, PercentEquals,
+            Pipe, PipeEquals, Plus, PlusEquals, Slash, SlashEquals, Star, StarEquals,
         };
 
         Some(match op {
@@ -2579,8 +2579,8 @@ impl<'a> Parser<'a> {
             // Equality (left associative)
             EqualsEquals | NotEquals => (13, 14),
 
-            // Comparison (left associative)
-            Less | Greater | LessEquals | GreaterEquals => (15, 16),
+            // Comparison (left associative) - includes instanceof
+            Less | Greater | LessEquals | GreaterEquals | Instanceof => (15, 16),
 
             // Bitwise shift (left associative)
             LessLess | GreaterGreater => (17, 18),

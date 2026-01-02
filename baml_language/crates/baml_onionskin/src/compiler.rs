@@ -2207,6 +2207,7 @@ fn get_error_file_id(error: &StoredCompilerError) -> FileId {
             baml_diagnostics::compiler_error::ParseError::UnexpectedEof { span, .. } => {
                 span.file_id
             }
+            baml_diagnostics::compiler_error::ParseError::SyntaxHint { span, .. } => span.file_id,
         },
         CompilerError::TypeError(e) => match e {
             TypeError::TypeMismatch { span, .. } => span.file_id,

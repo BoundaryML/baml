@@ -725,9 +725,18 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
         }
 
         Expr::Binary { lhs, op, rhs } => {
-            let lhs_ty = infer_expr(ctx, *lhs, body);
-            let rhs_ty = infer_expr(ctx, *rhs, body);
-            infer_binary_op(ctx, *op, &lhs_ty, &rhs_ty, span)
+            // Special case: instanceof operator - RHS is a type reference, not an expression
+            if *op == baml_hir::BinaryOp::Instanceof {
+                let _lhs_ty = infer_expr(ctx, *lhs, body);
+                // For instanceof, don't try to resolve RHS as a variable.
+                // The RHS is a type name and will be resolved at runtime.
+                // Just return bool since instanceof always returns a boolean.
+                Ty::Bool
+            } else {
+                let lhs_ty = infer_expr(ctx, *lhs, body);
+                let rhs_ty = infer_expr(ctx, *rhs, body);
+                infer_binary_op(ctx, *op, &lhs_ty, &rhs_ty, span)
+            }
         }
 
         Expr::Unary { op, expr: inner } => {
@@ -940,8 +949,20 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
                 });
             }
 
-            // Infer branch types
-            let then_ty = infer_expr(ctx, *then_branch, body);
+            // Check for instanceof narrowing
+            let instanceof_narrowing = extract_instanceof_narrowing(ctx, *condition, body);
+
+            // Infer then-branch with narrowed type if applicable
+            let then_ty = if let Some((var_name, narrowed_ty)) = &instanceof_narrowing {
+                ctx.push_scope();
+                ctx.define(var_name.clone(), narrowed_ty.clone());
+                let ty = infer_expr(ctx, *then_branch, body);
+                ctx.pop_scope();
+                ty
+            } else {
+                infer_expr(ctx, *then_branch, body)
+            };
+
             let else_ty = if let Some(else_expr) = else_branch {
                 infer_expr(ctx, *else_expr, body)
             } else {
@@ -1168,6 +1189,44 @@ fn infer_literal(lit: &baml_hir::Literal) -> Ty<'static> {
     }
 }
 
+/// Extract instanceof narrowing info from a condition expression.
+///
+/// If the condition is `x instanceof Foo`, returns `Some((x, Foo_type))`.
+/// Otherwise returns `None`.
+fn extract_instanceof_narrowing<'db>(
+    _ctx: &TypeContext<'db>,
+    condition: ExprId,
+    body: &ExprBody,
+) -> Option<(Name, Ty<'db>)> {
+    use baml_hir::Expr;
+
+    let expr = &body.exprs[condition];
+
+    // Check if this is an instanceof expression
+    if let Expr::Binary { op, lhs, rhs } = expr {
+        if *op == baml_hir::BinaryOp::Instanceof {
+            // LHS should be a simple path (variable name)
+            if let Expr::Path(segments) = &body.exprs[*lhs] {
+                if segments.len() == 1 {
+                    let var_name = segments[0].clone();
+
+                    // RHS should be a simple path (type name)
+                    if let Expr::Path(type_segments) = &body.exprs[*rhs] {
+                        if type_segments.len() == 1 {
+                            let type_name = type_segments[0].clone();
+                            // Return the variable name and the narrowed type
+                            // We use Ty::Named here since user-defined types are represented this way
+                            return Some((var_name, Ty::Named(type_name)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Infer the result type of a binary operation.
 fn infer_binary_op<'db>(
     ctx: &mut TypeContext<'db>,
@@ -1177,7 +1236,8 @@ fn infer_binary_op<'db>(
     span: Span,
 ) -> Ty<'db> {
     use baml_hir::BinaryOp::{
-        Add, And, BitAnd, BitOr, BitXor, Div, Eq, Ge, Gt, Le, Lt, Mod, Mul, Ne, Or, Shl, Shr, Sub,
+        Add, And, BitAnd, BitOr, BitXor, Div, Eq, Ge, Gt, Instanceof, Le, Lt, Mod, Mul, Ne, Or,
+        Shl, Shr, Sub,
     };
 
     match op {
@@ -1263,6 +1323,9 @@ fn infer_binary_op<'db>(
                 Ty::Error
             }
         }
+
+        // instanceof always returns bool (type checking happens separately)
+        Instanceof => Ty::Bool,
     }
 }
 

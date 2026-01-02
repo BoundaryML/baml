@@ -699,6 +699,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             BinOp::BitXor => Instruction::BinOp(VmBinOp::BitXor),
             BinOp::Shl => Instruction::BinOp(VmBinOp::Shl),
             BinOp::Shr => Instruction::BinOp(VmBinOp::Shr),
+            BinOp::Instanceof => Instruction::CmpOp(CmpOp::InstanceOf),
         }
     }
 

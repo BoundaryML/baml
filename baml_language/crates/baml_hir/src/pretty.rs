@@ -354,6 +354,7 @@ fn binary_op_str(op: BinaryOp) -> &'static str {
         BinaryOp::BitXor => "^",
         BinaryOp::Shl => "<<",
         BinaryOp::Shr => ">>",
+        BinaryOp::Instanceof => "instanceof",
     }
 }
 

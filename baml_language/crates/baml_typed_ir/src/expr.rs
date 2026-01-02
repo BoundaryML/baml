@@ -240,6 +240,9 @@ pub enum BinaryOp {
     BitXor,
     Shl,
     Shr,
+
+    // Type checking
+    Instanceof,
 }
 
 /// Unary operators.
@@ -308,6 +311,7 @@ impl From<baml_hir::BinaryOp> for BinaryOp {
             baml_hir::BinaryOp::BitXor => BinaryOp::BitXor,
             baml_hir::BinaryOp::Shl => BinaryOp::Shl,
             baml_hir::BinaryOp::Shr => BinaryOp::Shr,
+            baml_hir::BinaryOp::Instanceof => BinaryOp::Instanceof,
         }
     }
 }

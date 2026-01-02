@@ -105,3 +105,7 @@ cargo insta review
 
 
 DO NOT EDIT the diagnostics manually in baml_lsp_tests. Use update_expect=1
+
+Find the base-case that makes syntax fail and add that to baml_test with a good name and good folder organization.
+
+A good place to start when given a diagnostic failure or some parser issue is to look at the snapshot test (create one if missing) and checking the .snap files for CST/HIR etc.
