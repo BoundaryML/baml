@@ -468,28 +468,39 @@ fn collect_uses_in_operand<'db>(
 }
 
 /// Collect uses in a place.
+///
+/// This recursively walks the place structure to find all used locals,
+/// including index locals in nested `Place::Index` projections.
 fn collect_uses_in_place(
     place: &Place,
     block: BlockId,
     stmt_idx: usize,
     def_use: &mut HashMap<Local, LocalDefUse<'_>>,
 ) {
-    // The base local is used
-    let base = place.base_local();
-    if let Some(du) = def_use.get_mut(&base) {
-        du.uses.push(UseLocation {
-            block,
-            statement_idx: stmt_idx,
-        });
-    }
-
-    // For index places, the index local is also used
-    if let Place::Index { index, .. } = place {
-        if let Some(du) = def_use.get_mut(index) {
-            du.uses.push(UseLocation {
-                block,
-                statement_idx: stmt_idx,
-            });
+    match place {
+        Place::Local(local) => {
+            // Base case: a simple local reference
+            if let Some(du) = def_use.get_mut(local) {
+                du.uses.push(UseLocation {
+                    block,
+                    statement_idx: stmt_idx,
+                });
+            }
+        }
+        Place::Field { base, .. } => {
+            // Recurse into the base to find all used locals
+            collect_uses_in_place(base, block, stmt_idx, def_use);
+        }
+        Place::Index { base, index } => {
+            // Recurse into the base to find all used locals
+            collect_uses_in_place(base, block, stmt_idx, def_use);
+            // The index local is also used
+            if let Some(du) = def_use.get_mut(index) {
+                du.uses.push(UseLocation {
+                    block,
+                    statement_idx: stmt_idx,
+                });
+            }
         }
     }
 }

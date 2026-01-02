@@ -920,7 +920,46 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             }
         }
 
-        // Regular function call
+        // Check if this is a user-defined method call (callee is FieldAccess on class type)
+        // For method calls like `obj.method()`, we need to pass `obj` as the first argument (self)
+        if let Expr::FieldAccess { base, field: _ } = callee_expr {
+            let base_ty = body.ty(*base);
+            let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
+
+            // Check if base is a class type (has a class name)
+            if self.class_name_from_ty(&thir_base_ty).is_some() {
+                // This is a method call - pass receiver as first argument
+                let receiver_local = self.builder.temp(thir_base_ty);
+                self.lower_expr(*base, Place::local(receiver_local), body);
+
+                let callee_ty = Self::lower_typed_ir_ty(body.ty(callee));
+                let callee_local = self.builder.temp(callee_ty);
+                self.lower_expr(callee, Place::local(callee_local), body);
+
+                let mut all_args = vec![Operand::copy_local(receiver_local)];
+                for &arg in args {
+                    let arg_ty = Self::lower_typed_ir_ty(body.ty(arg));
+                    let arg_local = self.builder.temp(arg_ty);
+                    self.lower_expr(arg, Place::local(arg_local), body);
+                    all_args.push(Operand::copy_local(arg_local));
+                }
+
+                let continue_block = self.builder.create_block();
+
+                self.builder.call(
+                    Operand::copy_local(callee_local),
+                    all_args,
+                    dest,
+                    continue_block,
+                    None,
+                );
+
+                self.builder.set_current_block(continue_block);
+                return;
+            }
+        }
+
+        // Regular function call (not a method)
         let callee_ty = Self::lower_typed_ir_ty(body.ty(callee));
         let callee_local = self.builder.temp(callee_ty);
         self.lower_expr(callee, Place::local(callee_local), body);
@@ -989,6 +1028,17 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 let index_local = self.builder.temp(Ty::Int);
                 self.lower_expr(*index, Place::local(index_local), body);
                 Place::index(base_place, index_local)
+            }
+
+            Expr::Call { callee, args } => {
+                // For method calls used as lvalue bases (e.g., `obj.get_field().value = x`),
+                // evaluate the call and store the result in a temp, then use that as base.
+                // This works because objects have reference semantics in the VM.
+                let call_ty = body.ty(expr_id);
+                let mir_ty = Self::lower_typed_ir_ty(call_ty);
+                let temp = self.builder.temp(mir_ty);
+                self.lower_call(*callee, args, Place::local(temp), body, call_ty);
+                Place::local(temp)
             }
 
             _ => {

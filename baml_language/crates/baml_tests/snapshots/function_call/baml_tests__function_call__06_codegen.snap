@@ -28,10 +28,11 @@ Function GreetBaz (arity: 1, kind: Exec):
      2   COPY 0             
      3   LOAD_VAR 1         (n)
      4   STORE_FIELD 0      
-     5   STORE_VAR 2        (baz)
+     5   STORE_VAR 2        (_4)
      6   LOAD_GLOBAL 19     (<fn Greeting>)
-     7   CALL 0             
-     8   RETURN             
+     7   LOAD_VAR 2         (_4)
+     8   CALL 1             
+     9   RETURN             
 
 Function Greeting (arity: 1, kind: Exec):
      0   LOAD_CONST 0   (Hello, )
