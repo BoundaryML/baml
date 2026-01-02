@@ -347,9 +347,9 @@ impl ConfigItem {
             .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
-    /// Get the config item value (WORD token inside CONFIG_VALUE, if present).
+    /// Get the config item value (WORD token inside `CONFIG_VALUE`, if present).
     /// For simple `key value` patterns like `provider openai`.
-    /// The value is nested inside a CONFIG_VALUE node: CONFIG_ITEM { WORD "key", CONFIG_VALUE { WORD "value" } }
+    /// The value is nested inside a `CONFIG_VALUE` node: `CONFIG_ITEM` { WORD "key", `CONFIG_VALUE` { WORD "value" } }
     pub fn value_word(&self) -> Option<SyntaxToken> {
         // Find the CONFIG_VALUE child node
         self.syntax
