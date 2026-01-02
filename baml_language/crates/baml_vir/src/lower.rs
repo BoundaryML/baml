@@ -28,7 +28,8 @@ use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
 use crate::{
-    AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, MatchArm, PatId, Pattern, Ty, UnaryOp,
+    AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, MatchArm, PatId, Pattern, SpreadField, Ty,
+    UnaryOp,
 };
 
 /// Error that occurs when lowering HIR to VIR.
@@ -386,15 +387,27 @@ impl<'db> LoweringContext<'db> {
                 ))
             }
 
-            HirExpr::Object { type_name, fields } => {
+            HirExpr::Object {
+                type_name,
+                fields,
+                spreads,
+            } => {
                 let mut field_ids = Vec::with_capacity(fields.len());
                 for (name, expr) in fields {
                     field_ids.push((name.clone(), self.lower_expr(*expr, hir_body)?));
+                }
+                let mut spread_ids = Vec::with_capacity(spreads.len());
+                for spread in spreads {
+                    spread_ids.push(SpreadField {
+                        expr: self.lower_expr(spread.expr, hir_body)?,
+                        position: spread.position,
+                    });
                 }
                 Ok(self.builder.alloc(
                     Expr::Object {
                         type_name: type_name.clone(),
                         fields: field_ids,
+                        spreads: spread_ids,
                     },
                     ty,
                     span.map(|s| s.range),

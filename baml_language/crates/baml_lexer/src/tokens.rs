@@ -138,6 +138,8 @@ pub enum TokenKind {
     Comma,
     #[token(";")]
     Semicolon,
+    #[token("...")]
+    DotDotDot,
     #[token(".")]
     Dot,
     #[token("$")]

@@ -129,19 +129,46 @@ impl<'a> CodePrinter<'a> {
                 }
                 self.output.push(']');
             }
-            Expr::Object { type_name, fields } => {
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+            } => {
                 if let Some(name) = type_name {
                     self.output.push_str(name.as_ref());
                     self.output.push(' ');
                 }
                 self.output.push_str("{ ");
-                for (i, (name, value)) in fields.iter().enumerate() {
-                    if i > 0 {
+
+                // Build a combined list of elements with their positions
+                // for proper ordering in output
+                let mut elements: Vec<(usize, bool, usize)> = Vec::new();
+                for (i, _) in fields.iter().enumerate() {
+                    // We don't have position info for fields in the current struct,
+                    // so we'll output fields first, then spreads
+                    elements.push((i, false, i));
+                }
+                for (i, spread) in spreads.iter().enumerate() {
+                    elements.push((spread.position, true, i));
+                }
+                elements.sort_by_key(|(pos, _, _)| *pos);
+
+                let mut first = true;
+                for (_, is_spread, idx) in elements {
+                    if !first {
                         self.output.push_str(", ");
                     }
-                    self.output.push_str(name.as_ref());
-                    self.output.push_str(": ");
-                    self.print_expr(*value);
+                    first = false;
+
+                    if is_spread {
+                        self.output.push_str("...");
+                        self.print_expr(spreads[idx].expr);
+                    } else {
+                        let (name, value) = &fields[idx];
+                        self.output.push_str(name.as_ref());
+                        self.output.push_str(": ");
+                        self.print_expr(*value);
+                    }
                 }
                 self.output.push_str(" }");
             }

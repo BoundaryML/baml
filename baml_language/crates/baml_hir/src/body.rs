@@ -123,6 +123,16 @@ pub type ExprId = Idx<Expr>;
 pub type StmtId = Idx<Stmt>;
 pub type PatId = Idx<Pattern>;
 
+/// A spread element in an object constructor: `...expr`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpreadField {
+    /// The expression being spread
+    pub expr: ExprId,
+    /// Position index where this spread appears among all elements
+    /// Used to determine override order (later positions override earlier)
+    pub position: usize,
+}
+
 /// Expressions in BAML function bodies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
@@ -162,10 +172,12 @@ pub enum Expr {
     /// Function call: `call_f1()`, `transform(user)`
     Call { callee: ExprId, args: Vec<ExprId> },
 
-    /// Object constructor: `Point { x: 1, y: 2 }`
+    /// Object constructor: `Point { x: 1, y: 2, ...spread }`
     Object {
         type_name: Option<Name>,
         fields: Vec<(Name, ExprId)>,
+        /// Spread elements with their positions for override semantics
+        spreads: Vec<SpreadField>,
     },
 
     /// Array constructor: `[1, 2, 3]`
@@ -1867,101 +1879,141 @@ impl LoweringContext {
             .find(|token| token.kind() == SyntaxKind::WORD)
             .map(|token| Name::new(token.text()));
 
-        // Extract fields from OBJECT_FIELD children
-        let fields =
-            node.children()
-                .filter(|n| n.kind() == SyntaxKind::OBJECT_FIELD)
-                .filter_map(|field_node| {
-                    let field_span = field_node.text_range();
+        // Track position for override semantics
+        let mut position = 0;
+        let mut fields = Vec::new();
+        let mut spreads = Vec::new();
+
+        // Process children in order to track positions correctly
+        for child in node.children() {
+            match child.kind() {
+                SyntaxKind::OBJECT_FIELD => {
+                    let field_span = child.text_range();
                     // OBJECT_FIELD has: WORD (field name), COLON, value (EXPR or literal token)
-                    let field_name = field_node
+                    let field_name = child
                         .children_with_tokens()
                         .filter_map(baml_syntax::NodeOrToken::into_token)
                         .find(|token| token.kind() == SyntaxKind::WORD)
-                        .map(|token| Name::new(token.text()))?;
+                        .map(|token| Name::new(token.text()));
 
-                    // Try to get value as a child node first
-                    let value = field_node
+                    if let Some(field_name) = field_name {
+                        // Try to get value as a child node first
+                        let value = child
+                            .children()
+                            .next()
+                            .map(|n| self.lower_expr(&n))
+                            .or_else(|| {
+                                // Try to get value as a direct token (literal or identifier)
+                                // Skip the field name WORD and look for the value token after COLON
+                                let mut seen_colon = false;
+                                child
+                                    .children_with_tokens()
+                                    .filter_map(baml_syntax::NodeOrToken::into_token)
+                                    .find_map(|token| {
+                                        if token.kind() == SyntaxKind::COLON {
+                                            seen_colon = true;
+                                            return None;
+                                        }
+                                        if !seen_colon {
+                                            return None;
+                                        }
+                                        let span = token.text_range();
+                                        match token.kind() {
+                                            SyntaxKind::INTEGER_LITERAL => {
+                                                let value =
+                                                    token.text().parse::<i64>().unwrap_or(0);
+                                                Some(self.alloc_expr(
+                                                    Expr::Literal(Literal::Int(value)),
+                                                    span,
+                                                ))
+                                            }
+                                            SyntaxKind::FLOAT_LITERAL => Some(self.alloc_expr(
+                                                Expr::Literal(Literal::Float(
+                                                    token.text().to_string(),
+                                                )),
+                                                span,
+                                            )),
+                                            SyntaxKind::STRING_LITERAL
+                                            | SyntaxKind::RAW_STRING_LITERAL => {
+                                                let text = token.text();
+                                                let content = if text.starts_with("#\"")
+                                                    && text.ends_with("\"#")
+                                                {
+                                                    &text[2..text.len() - 2]
+                                                } else if text.starts_with('"')
+                                                    && text.ends_with('"')
+                                                {
+                                                    &text[1..text.len() - 1]
+                                                } else {
+                                                    text
+                                                };
+                                                Some(self.alloc_expr(
+                                                    Expr::Literal(Literal::String(
+                                                        content.to_string(),
+                                                    )),
+                                                    span,
+                                                ))
+                                            }
+                                            SyntaxKind::WORD => {
+                                                // Variable reference or boolean/null literal
+                                                let text = token.text();
+                                                let expr = match text {
+                                                    "true" => self.alloc_expr(
+                                                        Expr::Literal(Literal::Bool(true)),
+                                                        span,
+                                                    ),
+                                                    "false" => self.alloc_expr(
+                                                        Expr::Literal(Literal::Bool(false)),
+                                                        span,
+                                                    ),
+                                                    "null" => self.alloc_expr(
+                                                        Expr::Literal(Literal::Null),
+                                                        span,
+                                                    ),
+                                                    _ => self.alloc_expr(
+                                                        Expr::Path(vec![Name::new(text)]),
+                                                        span,
+                                                    ),
+                                                };
+                                                Some(expr)
+                                            }
+                                            _ => None,
+                                        }
+                                    })
+                            })
+                            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, field_span));
+
+                        fields.push((field_name, value));
+                    }
+                    position += 1;
+                }
+                SyntaxKind::SPREAD_ELEMENT => {
+                    // SPREAD_ELEMENT has: DOT_DOT_DOT, expr
+                    // Get the expression being spread (child node after the ... token)
+                    let spread_expr = child
                         .children()
                         .next()
                         .map(|n| self.lower_expr(&n))
-                        .or_else(|| {
-                            // Try to get value as a direct token (literal or identifier)
-                            // Skip the field name WORD and look for the value token after COLON
-                            let mut seen_colon = false;
-                            field_node
-                                .children_with_tokens()
-                                .filter_map(baml_syntax::NodeOrToken::into_token)
-                                .find_map(|token| {
-                                    if token.kind() == SyntaxKind::COLON {
-                                        seen_colon = true;
-                                        return None;
-                                    }
-                                    if !seen_colon {
-                                        return None;
-                                    }
-                                    let span = token.text_range();
-                                    match token.kind() {
-                                        SyntaxKind::INTEGER_LITERAL => {
-                                            let value = token.text().parse::<i64>().unwrap_or(0);
-                                            Some(self.alloc_expr(
-                                                Expr::Literal(Literal::Int(value)),
-                                                span,
-                                            ))
-                                        }
-                                        SyntaxKind::FLOAT_LITERAL => Some(self.alloc_expr(
-                                            Expr::Literal(Literal::Float(token.text().to_string())),
-                                            span,
-                                        )),
-                                        SyntaxKind::STRING_LITERAL
-                                        | SyntaxKind::RAW_STRING_LITERAL => {
-                                            let text = token.text();
-                                            let content = if text.starts_with("#\"")
-                                                && text.ends_with("\"#")
-                                            {
-                                                &text[2..text.len() - 2]
-                                            } else if text.starts_with('"') && text.ends_with('"') {
-                                                &text[1..text.len() - 1]
-                                            } else {
-                                                text
-                                            };
-                                            Some(self.alloc_expr(
-                                                Expr::Literal(Literal::String(content.to_string())),
-                                                span,
-                                            ))
-                                        }
-                                        SyntaxKind::WORD => {
-                                            // Variable reference or boolean/null literal
-                                            let text = token.text();
-                                            let expr = match text {
-                                                "true" => self.alloc_expr(
-                                                    Expr::Literal(Literal::Bool(true)),
-                                                    span,
-                                                ),
-                                                "false" => self.alloc_expr(
-                                                    Expr::Literal(Literal::Bool(false)),
-                                                    span,
-                                                ),
-                                                "null" => self
-                                                    .alloc_expr(Expr::Literal(Literal::Null), span),
-                                                _ => self.alloc_expr(
-                                                    Expr::Path(vec![Name::new(text)]),
-                                                    span,
-                                                ),
-                                            };
-                                            Some(expr)
-                                        }
-                                        _ => None,
-                                    }
-                                })
-                        })
-                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, field_span));
+                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, child.text_range()));
 
-                    Some((field_name, value))
-                })
-                .collect();
+                    spreads.push(SpreadField {
+                        expr: spread_expr,
+                        position,
+                    });
+                    position += 1;
+                }
+                _ => {}
+            }
+        }
 
-        self.alloc_expr(Expr::Object { type_name, fields }, node.text_range())
+        self.alloc_expr(
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+            },
+            node.text_range(),
+        )
     }
 
     fn lower_map_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {

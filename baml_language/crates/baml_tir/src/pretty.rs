@@ -184,12 +184,27 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
             Expr::FieldAccess { field, .. } => format!("FieldAccess(.{field}): {ty}"),
             Expr::Index { .. } => format!("Index: {ty}"),
             Expr::Array { elements } => format!("Array[{}]: {}", elements.len(), ty),
-            Expr::Object { type_name, fields } => {
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+            } => {
                 let name = type_name
                     .as_ref()
                     .map(std::string::ToString::to_string)
                     .unwrap_or_default();
-                format!("Object({} {{ {} fields }}): {}", name, fields.len(), ty)
+                let spread_info = if spreads.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {} spreads", spreads.len())
+                };
+                format!(
+                    "Object({} {{ {} fields{} }}): {}",
+                    name,
+                    fields.len(),
+                    spread_info,
+                    ty
+                )
             }
             Expr::Map { entries } => {
                 format!("Map({{ {} entries }}): {}", entries.len(), ty)
@@ -236,13 +251,29 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                     self.render_expr(*elem, body, result, i == elements.len() - 1);
                 }
             }
-            Expr::Object { fields, .. } => {
-                for (i, (name, value)) in fields.iter().enumerate() {
-                    let is_last = i == fields.len() - 1;
+            Expr::Object {
+                fields, spreads, ..
+            } => {
+                let total_elements = fields.len() + spreads.len();
+                let mut element_idx = 0;
+
+                for (name, value) in fields {
+                    element_idx += 1;
+                    let is_last = element_idx == total_elements;
                     let field_prefix = self.make_prefix(is_last);
                     writeln!(self.output, "{field_prefix}{name}:").ok();
                     self.push_continuation(!is_last);
                     self.render_expr(*value, body, result, true);
+                    self.pop_continuation();
+                }
+
+                for spread in spreads {
+                    element_idx += 1;
+                    let is_last = element_idx == total_elements;
+                    let spread_prefix = self.make_prefix(is_last);
+                    writeln!(self.output, "{spread_prefix}...").ok();
+                    self.push_continuation(!is_last);
+                    self.render_expr(spread.expr, body, result, true);
                     self.pop_continuation();
                 }
             }
@@ -497,7 +528,11 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
             let elems: Vec<String> = elements.iter().map(|e| expr_to_string(*e, body)).collect();
             format!("[{}]", elems.join(", "))
         }
-        Expr::Object { type_name, fields } => {
+        Expr::Object {
+            type_name,
+            fields,
+            spreads,
+        } => {
             let name = type_name
                 .as_ref()
                 .map(|n| format!("{n} "))
@@ -506,7 +541,12 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
                 .iter()
                 .map(|(n, v)| format!("{}: {}", n, expr_to_string(*v, body)))
                 .collect();
-            format!("{}{{ {} }}", name, field_strs.join(", "))
+            let spread_strs: Vec<String> = spreads
+                .iter()
+                .map(|s| format!("...{}", expr_to_string(s.expr, body)))
+                .collect();
+            let all_elements: Vec<String> = field_strs.into_iter().chain(spread_strs).collect();
+            format!("{}{{ {} }}", name, all_elements.join(", "))
         }
         Expr::Map { entries } => {
             let entry_strs: Vec<String> = entries

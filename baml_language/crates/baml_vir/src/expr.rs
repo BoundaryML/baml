@@ -22,6 +22,16 @@ pub type ExprId = Idx<Expr>;
 /// Pattern ID - index into the pattern arena.
 pub type PatId = Idx<Pattern>;
 
+/// A spread element in an object constructor: `...expr`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpreadField {
+    /// The expression being spread
+    pub expr: ExprId,
+    /// Position index where this spread appears among all elements
+    /// Used to determine override order (later positions override earlier)
+    pub position: usize,
+}
+
 /// A typed expression body containing all expressions for a function.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExprBody {
@@ -177,10 +187,12 @@ pub enum Expr {
     /// Array literal: `[elem1, elem2, ...]`
     Array { elements: Vec<ExprId> },
 
-    /// Object/struct literal: `TypeName { field1: value1, ... }`
+    /// Object/struct literal: `TypeName { field1: value1, ...spread }`
     Object {
         type_name: Option<Name>,
         fields: Vec<(Name, ExprId)>,
+        /// Spread elements with their positions for override semantics
+        spreads: Vec<SpreadField>,
     },
 
     /// Map literal: `{ key: value, ... }`

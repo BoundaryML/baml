@@ -229,7 +229,11 @@ impl<'a> PrettyPrinter<'a> {
                 }
             }
 
-            Expr::Object { type_name, fields } => {
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+            } => {
                 self.indent(level);
                 let name = type_name
                     .as_ref()
@@ -241,6 +245,12 @@ impl<'a> PrettyPrinter<'a> {
                     self.indent(level + 1);
                     writeln!(self.output, "{field_name}:").unwrap();
                     self.print_expr(*value, level + 2);
+                }
+                for spread in spreads {
+                    self.output.push('\n');
+                    self.indent(level + 1);
+                    writeln!(self.output, "...(position {})", spread.position).unwrap();
+                    self.print_expr(spread.expr, level + 2);
                 }
             }
 

@@ -933,18 +933,37 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
             }
         }
 
-        Expr::Object { type_name, fields } => {
+        Expr::Object {
+            type_name,
+            fields,
+            spreads,
+        } => {
             // Infer field types
             for (_, value_expr) in fields {
                 infer_expr(ctx, *value_expr, body);
             }
-            // Return the named type if type_name is provided
-            if let Some(name) = type_name {
+
+            // Determine the expected object type
+            let obj_ty = if let Some(name) = type_name {
                 Ty::Named(name.clone())
             } else {
-                // Anonymous object - return Unknown for now
                 Ty::Unknown
+            };
+
+            // Type check spread expressions - they must be the same type as the object
+            for spread in spreads {
+                let spread_ty = infer_expr(ctx, spread.expr, body);
+                // If we have a named type, verify the spread is compatible
+                if !matches!(obj_ty, Ty::Unknown) && !spread_ty.is_subtype_of(&obj_ty) {
+                    ctx.push_error(TypeError::TypeMismatch {
+                        expected: obj_ty.clone(),
+                        found: spread_ty,
+                        span,
+                    });
+                }
             }
+
+            obj_ty
         }
 
         Expr::Map { entries } => {

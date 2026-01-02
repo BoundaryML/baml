@@ -71,6 +71,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::DoubleColon => SyntaxKind::DOUBLE_COLON,
         TokenKind::Comma => SyntaxKind::COMMA,
         TokenKind::Semicolon => SyntaxKind::SEMICOLON,
+        TokenKind::DotDotDot => SyntaxKind::DOT_DOT_DOT,
         TokenKind::Dot => SyntaxKind::DOT,
         TokenKind::Dollar => SyntaxKind::DOLLAR,
 
@@ -2493,14 +2494,37 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse the body of an object literal/constructor: { field: value, ... }
+    /// Parse the body of an object literal/constructor: { field: value, ...spread }
     fn parse_object_literal_body(&mut self) {
         self.expect(TokenKind::LBrace);
 
         // Parse fields until we hit the closing brace
         while !self.at(TokenKind::RBrace) && !self.at_end() {
+            // Check for spread element: ...expr
+            if self.at(TokenKind::DotDotDot) {
+                self.parse_spread_element();
+
+                // Handle comma between elements
+                if !self.at(TokenKind::RBrace) {
+                    if !self.eat(TokenKind::Comma) {
+                        // Missing comma - error but try to continue
+                        self.error_unexpected_token("',' or '}' after spread element".to_string());
+                        // Try to recover
+                        if !self.at(TokenKind::Word)
+                            && !self.at(TokenKind::Quote)
+                            && !self.at(TokenKind::Hash)
+                            && !self.at(TokenKind::DotDotDot)
+                            && !self.at(TokenKind::RBrace)
+                        {
+                            self.bump();
+                        }
+                    }
+                }
             // Check for valid field start
-            if self.at(TokenKind::Word) || self.at(TokenKind::Quote) || self.at(TokenKind::Hash) {
+            } else if self.at(TokenKind::Word)
+                || self.at(TokenKind::Quote)
+                || self.at(TokenKind::Hash)
+            {
                 self.parse_object_field();
 
                 // Handle comma between fields
@@ -2512,6 +2536,7 @@ impl<'a> Parser<'a> {
                         if !self.at(TokenKind::Word)
                             && !self.at(TokenKind::Quote)
                             && !self.at(TokenKind::Hash)
+                            && !self.at(TokenKind::DotDotDot)
                             && !self.at(TokenKind::RBrace)
                         {
                             // Skip unexpected token
@@ -2524,13 +2549,21 @@ impl<'a> Parser<'a> {
                 continue;
             } else {
                 // Unexpected token in object literal
-                self.error_unexpected_token("field name or '}'".to_string());
+                self.error_unexpected_token("field name, spread element, or '}'".to_string());
                 // Skip the unexpected token to avoid getting stuck
                 self.bump();
             }
         }
 
         self.expect(TokenKind::RBrace);
+    }
+
+    /// Parse a spread element: ...expr
+    fn parse_spread_element(&mut self) {
+        self.with_node(SyntaxKind::SPREAD_ELEMENT, |p| {
+            p.expect(TokenKind::DotDotDot);
+            p.parse_expr();
+        });
     }
 
     /// Parse a single object field: name: value

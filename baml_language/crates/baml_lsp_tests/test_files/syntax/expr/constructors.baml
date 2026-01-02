@@ -23,39 +23,4 @@ class Person {
 
 //----
 //- diagnostics
-// Error: Expected field name or '}', found Dot
-//    ╭─[ 0:8:25 ]
-//    │
-//  8 │ let y = MyClass { a: 1, ...x };
-//    │                         ┬  
-//    │                         ╰── Expected field name or '}', found Dot
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected field name or '}', found Dot
-//    ╭─[ 0:8:26 ]
-//    │
-//  8 │ let y = MyClass { a: 1, ...x };
-//    │                          ┬  
-//    │                          ╰── Expected field name or '}', found Dot
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected field name or '}', found Dot
-//    ╭─[ 0:8:27 ]
-//    │
-//  8 │ let y = MyClass { a: 1, ...x };
-//    │                           ┬  
-//    │                           ╰── Expected field name or '}', found Dot
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Colon, found RBrace
-//    ╭─[ 0:8:30 ]
-//    │
-//  8 │ let y = MyClass { a: 1, ...x };
-//    │                              ┬  
-//    │                              ╰── Expected Colon, found RBrace
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
+// <no-diagnostics-expected>

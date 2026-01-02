@@ -26,6 +26,14 @@ use crate::{
     Rvalue, UnaryOp as MirUnaryOp,
 };
 
+/// Source of a field value in spread expansion.
+enum FieldSource {
+    /// Field value comes from a named field assignment.
+    Named(ExprId),
+    /// Field value comes from a spread source (local containing spread value, field index).
+    Spread(Local, usize),
+}
+
 /// Lower a function from VIR to MIR.
 ///
 /// This is the main entry point for VIR → MIR lowering.
@@ -407,30 +415,145 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 self.builder.assign(dest, Rvalue::Array(elem_operands));
             }
 
-            Expr::Object { type_name, fields } => {
-                let field_operands: Vec<Operand<'db>> = fields
-                    .iter()
-                    .map(|(_, value)| {
-                        let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
-                        let value_local = self.builder.temp(value_ty);
-                        self.lower_expr(*value, Place::local(value_local), body);
-                        Operand::copy_local(value_local)
-                    })
-                    .collect();
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+            } => {
+                // If there are no spreads, use the simple aggregate approach
+                if spreads.is_empty() {
+                    let field_operands: Vec<Operand<'db>> = fields
+                        .iter()
+                        .map(|(_, value)| {
+                            let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
+                            let value_local = self.builder.temp(value_ty);
+                            self.lower_expr(*value, Place::local(value_local), body);
+                            Operand::copy_local(value_local)
+                        })
+                        .collect();
 
-                let kind = if let Some(name) = type_name {
-                    AggregateKind::Class(name.to_string())
+                    let kind = if let Some(name) = type_name {
+                        AggregateKind::Class(name.to_string())
+                    } else {
+                        AggregateKind::Class("Anonymous".to_string())
+                    };
+
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Aggregate {
+                            kind,
+                            fields: field_operands,
+                        },
+                    );
                 } else {
-                    AggregateKind::Class("Anonymous".to_string())
-                };
+                    // With spreads, we need to determine the final value for each field
+                    // based on position-based override semantics (last assignment wins).
+                    //
+                    // Algorithm:
+                    // 1. Evaluate all spread sources into temp locals
+                    // 2. Get all class fields in definition order
+                    // 3. For each class field, determine source (named field or spread)
+                    //    based on which has the highest position
+                    // 4. Generate field operands accordingly
 
-                self.builder.assign(
-                    dest,
-                    Rvalue::Aggregate {
-                        kind,
-                        fields: field_operands,
-                    },
-                );
+                    let class_name = type_name
+                        .as_ref()
+                        .map(std::string::ToString::to_string)
+                        .unwrap_or_else(|| "Anonymous".to_string());
+
+                    // Get class fields and invert to get field_index -> field_name
+                    let class_field_map = self.class_fields.get(&class_name);
+                    let class_fields_ordered: Vec<(usize, String)> =
+                        if let Some(field_map) = class_field_map {
+                            let mut fields_vec: Vec<(usize, String)> = field_map
+                                .iter()
+                                .map(|(name, &idx)| (idx, name.clone()))
+                                .collect();
+                            fields_vec.sort_by_key(|(idx, _)| *idx);
+                            fields_vec
+                        } else {
+                            // Fallback: use named fields order if class not found
+                            fields
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, (name, _))| (idx, name.to_string()))
+                                .collect()
+                        };
+
+                    // Evaluate all spread sources into temp locals
+                    let spread_locals: Vec<(Local, usize)> = spreads
+                        .iter()
+                        .map(|spread| {
+                            let spread_ty = Self::lower_typed_ir_ty(body.ty(spread.expr));
+                            let spread_local = self.builder.temp(spread_ty);
+                            self.lower_expr(spread.expr, Place::local(spread_local), body);
+                            (spread_local, spread.position)
+                        })
+                        .collect();
+
+                    // Build a map of named field name -> (value_expr_id, position)
+                    // Position is the index in the fields vector
+                    let named_field_map: HashMap<String, (ExprId, usize)> = fields
+                        .iter()
+                        .enumerate()
+                        .map(|(pos, (name, value))| (name.to_string(), (*value, pos)))
+                        .collect();
+
+                    // For each class field, determine the source and generate operand
+                    let field_operands: Vec<Operand<'db>> = class_fields_ordered
+                        .iter()
+                        .map(|(field_idx, field_name)| {
+                            // Find the highest-positioned source for this field
+                            let mut best_source: Option<FieldSource> = None;
+                            let mut best_position: Option<usize> = None;
+
+                            // Check named fields
+                            if let Some(&(value_expr, pos)) = named_field_map.get(field_name) {
+                                best_source = Some(FieldSource::Named(value_expr));
+                                best_position = Some(pos);
+                            }
+
+                            // Check spreads (all spreads provide all fields of the class)
+                            for (spread_local, spread_pos) in &spread_locals {
+                                if best_position.is_none() || *spread_pos > best_position.unwrap() {
+                                    best_source =
+                                        Some(FieldSource::Spread(*spread_local, *field_idx));
+                                    best_position = Some(*spread_pos);
+                                }
+                            }
+
+                            // Generate the operand based on the source
+                            match best_source {
+                                Some(FieldSource::Named(value_expr)) => {
+                                    let value_ty = Self::lower_typed_ir_ty(body.ty(value_expr));
+                                    let value_local = self.builder.temp(value_ty);
+                                    self.lower_expr(value_expr, Place::local(value_local), body);
+                                    Operand::copy_local(value_local)
+                                }
+                                Some(FieldSource::Spread(spread_local, field_idx)) => {
+                                    // Load field from spread source
+                                    Operand::Copy(Place::field(
+                                        Place::local(spread_local),
+                                        field_idx,
+                                    ))
+                                }
+                                None => {
+                                    // This shouldn't happen if the class has fields
+                                    // Fall back to null
+                                    Operand::Constant(Constant::Null)
+                                }
+                            }
+                        })
+                        .collect();
+
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Aggregate {
+                            kind: AggregateKind::Class(class_name),
+                            fields: field_operands,
+                        },
+                    );
+                }
             }
 
             Expr::Map { entries } => {
