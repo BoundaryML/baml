@@ -113,21 +113,18 @@ fn contains() -> anyhow::Result<()> {
             (
                 "UseMapContains",
                 vec![
-                    // Init locals for return value and map
-                    Instruction::LoadConst(Value::Null),
+                    // Init local for map (return value is PhiLike, _3 is CallResultImmediate)
                     Instruction::LoadConst(Value::Null),
                     // let map = CreateMapJSON();
                     Instruction::LoadGlobal(Value::function("CreateMapJSON")),
                     Instruction::Call(0),
                     Instruction::StoreVar("map".to_string()),
-                    // map.has("hello") - method call
+                    // map.has("hello") - method call, result stays on stack (CallResultImmediate)
                     Instruction::LoadGlobal(Value::function("baml.Map.has")),
                     Instruction::LoadVar("map".to_string()),
                     Instruction::LoadConst(Value::string("hello")),
                     Instruction::Call(2),
-                    Instruction::StoreVar("_3".to_string()),
-                    Instruction::LoadVar("_3".to_string()),
-                    // if condition
+                    // if condition - Call result used directly from stack
                     Instruction::PopJumpIfFalse(2),
                     Instruction::Jump(3),
                     // else branch: "hi"

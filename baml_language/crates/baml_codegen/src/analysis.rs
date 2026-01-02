@@ -1241,8 +1241,13 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse<'_>, mir: &MirFunctio
 
     let use_loc = &du.uses[0];
 
-    // The use must be at statement index 0 (first statement of the continuation block)
-    if use_loc.statement_idx != 0 {
+    // The use must be at the very start of the continuation block:
+    // - statement index 0 (first statement), OR
+    // - TERMINATOR_IDX if the block has no statements (use is directly in terminator)
+    let use_block = mir.block(use_loc.block);
+    let is_first_use = use_loc.statement_idx == 0
+        || (use_loc.statement_idx == TERMINATOR_IDX && use_block.statements.is_empty());
+    if !is_first_use {
         return false;
     }
 
