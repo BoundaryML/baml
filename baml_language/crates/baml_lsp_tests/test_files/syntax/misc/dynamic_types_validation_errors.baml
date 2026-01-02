@@ -857,12 +857,12 @@ args {
 //      │ 
 //      │ Note: Error code: E0010
 // ─────╯
-// Error: Expected type, found RBrace
-//      ╭─[ 0:106:5 ]
+// Error: field 'C' is missing a type annotation
+//      ╭─[ 0:105:7 ]
 //      │
-//  106 │     }
-//      │     ┬  
-//      │     ╰── Expected type, found RBrace
+//  105 │       C
+//      │       ┬  
+//      │       ╰── field 'C' is missing a type annotation
 //      │ 
 //      │ Note: Error code: E0010
 // ─────╯

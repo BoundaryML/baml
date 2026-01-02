@@ -33,7 +33,7 @@ class Partial {
   field1: str
   field2: field3
   string: <unknown>
-  string: <unknown>
+  field4: string
   string: <unknown>
 }
 

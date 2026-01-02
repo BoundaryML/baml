@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -17,16 +17,13 @@ SOURCE_FILE
       TYPE_EXPR "// Missing type entirely
   field3"
         WORD "field3"
-    FIELD
+    FIELD "string"
       WORD "string"
-      TYPE_EXPR
-      ATTRIBUTE "@  // Incomplete attribute
-  field4"
-        AT "@"
-        WORD "field4"
+    AT "@"
     FIELD
-      WORD "string"
-      TYPE_EXPR
+      WORD "field4"
+      TYPE_EXPR "string"
+        WORD "string"
       ATTRIBUTE
         AT "@"
         WORD "alias"
@@ -34,9 +31,8 @@ SOURCE_FILE
   field5"
           L_PAREN "("
           WORD "field5"
-    FIELD
+    FIELD "string"
       WORD "string"
-      TYPE_EXPR
     R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -84,22 +80,22 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-Error: Expected type, found At
-   ╭─[ 0:5:17 ]
+Error: field 'string' is missing a type annotation
+   ╭─[ 0:5:10 ]
    │
  5 │   field3 string @  // Incomplete attribute
-   │                 ┬  
-   │                 ╰── Expected type, found At
+   │          ───┬──  
+   │             ╰──── field 'string' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found At
-   ╭─[ 0:6:17 ]
+Error: Expected Unexpected token in class body, found At
+   ╭─[ 0:5:17 ]
    │
- 6 │   field4 string @alias(  // Unclosed attribute
+ 5 │   field3 string @  // Incomplete attribute
    │                 ┬  
-   │                 ╰── Expected type, found At
+   │                 ╰── Expected Unexpected token in class body, found At
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -114,12 +110,12 @@ Error: Expected RParen, found Word
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found RBrace
-   ╭─[ 0:8:1 ]
+Error: field 'string' is missing a type annotation
+   ╭─[ 0:7:10 ]
    │
- 8 │ }
-   │ ┬  
-   │ ╰── Expected type, found RBrace
+ 7 │   field5 string  // This should parse correctly
+   │          ───┬──  
+   │             ╰──── field 'string' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯

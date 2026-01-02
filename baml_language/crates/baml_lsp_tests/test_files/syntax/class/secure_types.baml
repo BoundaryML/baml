@@ -46,12 +46,30 @@ class ComplexTypes {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected type, found LBracket
+// Error: field 'foobar' is missing a type annotation
+//    ╭─[ 0:4:66 ]
+//    │
+//  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
+//    │                                                                  ───┬──  
+//    │                                                                     ╰──── field 'foobar' is missing a type annotation
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected Unexpected token in class body, found LBracket
 //    ╭─[ 0:4:72 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                        ┬  
-//    │                                                                        ╰── Expected type, found LBracket
+//    │                                                                        ╰── Expected Unexpected token in class body, found LBracket
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected Unexpected token in class body, found RBracket
+//    ╭─[ 0:4:73 ]
+//    │
+//  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
+//    │                                                                         ┬  
+//    │                                                                         ╰── Expected Unexpected token in class body, found RBracket
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

@@ -226,12 +226,12 @@ class Foo {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected type, found Question
-//     ╭─[ 0:13:12 ]
+// Error: field 'string' is missing a type annotation
+//     ╭─[ 0:12:8 ]
 //     │
-//  13 │     ETA ETA?
-//     │            ┬  
-//     │            ╰── Expected type, found Question
+//  12 │     if string
+//     │        ───┬──  
+//     │           ╰──── field 'string' is missing a type annotation
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

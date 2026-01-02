@@ -269,6 +269,17 @@ impl<'a> Parser<'a> {
         self.current().map(|t| t.kind == kind).unwrap_or(false)
     }
 
+    /// Check if the current token can start a type expression.
+    /// Valid type starts: Word (type name), string literal, integer/float literal, LParen (tuple).
+    fn is_at_type_start(&self) -> bool {
+        self.at(TokenKind::Word)
+            || self.at(TokenKind::Quote) // string literal type
+            || self.at(TokenKind::Hash) // raw string literal type
+            || self.at(TokenKind::IntegerLiteral)
+            || self.at(TokenKind::FloatLiteral)
+            || self.at(TokenKind::LParen) // tuple/parenthesized type
+    }
+
     /// Check if a token kind is basic trivia (whitespace/newlines, not comments).
     /// Comments are also conceptually trivia, but they're assembled from token patterns (// and /*).
     #[allow(clippy::unused_self)]
@@ -1236,15 +1247,30 @@ impl<'a> Parser<'a> {
 
     fn parse_field(&mut self) {
         self.with_node(SyntaxKind::FIELD, |p| {
-            // Field name
+            // Field name - capture span and text before bumping
+            let field_name_span = p.current().map(|t| t.span);
+            let field_name_text = p.current().map(|t| t.text.clone());
             p.bump();
 
-            // Field type
-            p.parse_type();
+            // Check if there's a newline before the next token
+            // (newline means the type is on a different line - the field is incomplete)
+            let newline_before_type = p.has_newline_ahead();
 
-            // Optional field attributes (@alias, @description, @assert, etc.)
-            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_field_attribute();
+            // Field type - check if we're at a valid type start AND no newline separates them
+            let has_type = p.is_at_type_start() && !newline_before_type;
+            if has_type {
+                p.parse_type();
+
+                // Optional field attributes (@alias, @description, @assert, etc.)
+                while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
+                    p.parse_field_attribute();
+                }
+            } else {
+                // Field is incomplete - emit error and don't consume more tokens
+                if let Some(span) = field_name_span {
+                    let name = field_name_text.as_deref().unwrap_or("field");
+                    p.error(format!("field '{}' is missing a type annotation", name), span);
+                }
             }
         });
     }

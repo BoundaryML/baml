@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -43,12 +43,12 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found Error
-   ╭─[ 0:5:41 ]
+  [parse] Error: field 'The' is missing a type annotation
+   ╭─[ 0:5:37 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                         ┬  
-   │                                         ╰── Expected type, found Error
+   │                                     ─┬─  
+   │                                      ╰─── field 'The' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -73,12 +73,12 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found Error
-   ╭─[ 0:5:48 ]
+  [parse] Error: field 'quote' is missing a type annotation
+   ╭─[ 0:5:43 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                                ┬  
-   │                                                ╰── Expected type, found Error
+   │                                           ──┬──  
+   │                                             ╰──── field 'quote' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -133,12 +133,12 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found Error
-   ╭─[ 0:6:53 ]
+  [parse] Error: field 'really' is missing a type annotation
+   ╭─[ 0:6:47 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                     ┬  
-   │                                                     ╰── Expected type, found Error
+   │                                               ───┬──  
+   │                                                  ╰──── field 'really' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -173,12 +173,12 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found Error
-   ╭─[ 0:6:64 ]
+  [parse] Error: field 'complex' is missing a type annotation
+   ╭─[ 0:6:57 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                                ┬  
-   │                                                                ╰── Expected type, found Error
+   │                                                         ───┬───  
+   │                                                            ╰───── field 'complex' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -223,12 +223,12 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found Error
-   ╭─[ 0:7:34 ]
+  [parse] Error: field 'key' is missing a type annotation
+   ╭─[ 0:7:31 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                  ┬  
-   │                                  ╰── Expected type, found Error
+   │                               ─┬─  
+   │                                ╰─── field 'key' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -283,12 +283,12 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found Error
-   ╭─[ 0:7:45 ]
+  [parse] Error: field 'value' is missing a type annotation
+   ╭─[ 0:7:40 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                             ┬  
-   │                                             ╰── Expected type, found Error
+   │                                        ──┬──  
+   │                                          ╰──── field 'value' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -353,12 +353,12 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found Error
-   ╭─[ 2:7:46 ]
+  [parse] Error: field 'hello' is missing a type annotation
+   ╭─[ 2:7:41 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
-   │                                              ┬  
-   │                                              ╰── Expected type, found Error
+   │                                         ──┬──  
+   │                                           ╰──── field 'hello' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -113,22 +113,22 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found At
-   ╭─[ 2:5:17 ]
+  [parse] Error: field 'string' is missing a type annotation
+   ╭─[ 2:5:10 ]
    │
  5 │   field3 string @  // Incomplete attribute
-   │                 ┬  
-   │                 ╰── Expected type, found At
+   │          ───┬──  
+   │             ╰──── field 'string' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found At
-   ╭─[ 2:6:17 ]
+  [parse] Error: Expected Unexpected token in class body, found At
+   ╭─[ 2:5:17 ]
    │
- 6 │   field4 string @alias(  // Unclosed attribute
+ 5 │   field3 string @  // Incomplete attribute
    │                 ┬  
-   │                 ╰── Expected type, found At
+   │                 ╰── Expected Unexpected token in class body, found At
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -143,12 +143,12 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found RBrace
-   ╭─[ 2:8:1 ]
+  [parse] Error: field 'string' is missing a type annotation
+   ╭─[ 2:7:10 ]
    │
- 8 │ }
-   │ ┬  
-   │ ╰── Expected type, found RBrace
+ 7 │   field5 string  // This should parse correctly
+   │          ───┬──  
+   │             ╰──── field 'string' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -241,22 +241,6 @@ expression: output
    │  ╰── Expected RBrace, found EOF
    │ 
    │ Note: Error code: E0010
-───╯
-
-  [hir] Error: Duplicate field 'string' in class 'Partial'
-   ╭─[ 2:6:10 ]
-   │
- 6 │   field4 string @alias(  // Unclosed attribute
-   │          ───┬──  
-   │             ╰──── duplicate definition
-   │
-   ├─[ 2:6:10 ]
-   │
- 5 │   field3 string @  // Incomplete attribute
-   │          ───┬──  
-   │             ╰──── first definition here
-   │ 
-   │ Note: Error code: E0012
 ───╯
 
   [hir] Error: Duplicate field 'string' in class 'Partial'

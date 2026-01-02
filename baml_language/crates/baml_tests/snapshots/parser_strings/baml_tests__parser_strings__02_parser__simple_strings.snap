@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -83,9 +83,8 @@ SOURCE_FILE
             WORD "said"
             ERROR_TOKEN "\"
             QUOTE """
-    FIELD
+    FIELD "hello"
       WORD "hello"
-      TYPE_EXPR
     ERROR_TOKEN "\"
     QUOTE """
     QUOTE """
@@ -136,12 +135,12 @@ Error: Expected RParen, found Word
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found Error
-   ╭─[ 0:7:46 ]
+Error: field 'hello' is missing a type annotation
+   ╭─[ 0:7:41 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
-   │                                              ┬  
-   │                                              ╰── Expected type, found Error
+   │                                         ──┬──  
+   │                                           ╰──── field 'hello' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯

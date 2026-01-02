@@ -13,12 +13,12 @@ class InterfaceThree {
 
 //----
 //- diagnostics
-// Error: Expected type, found RBrace
-//    ╭─[ 0:4:1 ]
+// Error: field 'foo' is missing a type annotation
+//    ╭─[ 0:3:3 ]
 //    │
-//  4 │ }
-//    │ ┬  
-//    │ ╰── Expected type, found RBrace
+//  3 │   foo
+//    │   ─┬─  
+//    │    ╰─── field 'foo' is missing a type annotation
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
