@@ -6,12 +6,11 @@ use baml_tests::bytecode::{
 use baml_vm::RuntimeError;
 
 #[test]
-#[ignore = "maps not yet implemented"]
 fn create_and_access() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
                 function CreateMap() -> map<string, string> {
-                    { hello "world" }
+                    { "hello": "world" }
                 }
                 function UseMap() -> string {
                     let map = CreateMap();
@@ -24,12 +23,11 @@ fn create_and_access() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "maps not yet implemented"]
 fn access_no_key() -> anyhow::Result<()> {
     assert_vm_fails(FailingProgram {
         source: r#"
             function CreateMap() -> map<string, string> {
-                { hello "world" }
+                { "hello": "world" }
             }
 
             function UseMapNoKey() -> string {
@@ -43,7 +41,6 @@ fn access_no_key() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "maps not yet implemented"]
 fn contains() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -65,12 +62,11 @@ fn contains() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "maps not yet implemented"]
 fn modify() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             function EditMapKey() -> int {
-                let map = { hi 123 };
+                let map = { "hi": 123 };
 
                 map["hi"] = 42 - 4;
                 map["hi"] += 4;
@@ -85,14 +81,13 @@ fn modify() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "maps not yet implemented"]
 fn len() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             function Len() -> int {
                 let map = {
-                    hi 123
-                    it_works 456
+                    "hi": 123,
+                    "it_works": 456
                 };
                 map.length()
             }

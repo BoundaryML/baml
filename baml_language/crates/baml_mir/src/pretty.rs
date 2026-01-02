@@ -244,6 +244,18 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue<'_>) -> fmt::Result {
             }
             write!(f, "]")
         }
+        Rvalue::Map(entries) => {
+            write!(f, "{{ ")?;
+            for (i, (key, value)) in entries.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write_operand(f, key)?;
+                write!(f, ": ")?;
+                write_operand(f, value)?;
+            }
+            write!(f, " }}")
+        }
         Rvalue::Aggregate { kind, fields } => {
             match kind {
                 AggregateKind::Array => write!(f, "array")?,

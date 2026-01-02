@@ -27,10 +27,10 @@ fn for_loop_sum() -> anyhow::Result<()> {
         expected: vec![(
             "Sum",
             // MIR-based codegen with local pre-allocation:
-            // Locals: _0 (return), xs (param), result, _iter, _len, _i, x
+            // Locals: _0 (return), xs (param), result, _len, _i, x
+            // Note: _iter is eliminated by copy propagation (uses xs directly)
             vec![
-                // Pre-allocate all locals
-                Instruction::LoadConst(Value::Null),
+                // Pre-allocate locals (4: result, _len, _i, x)
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
@@ -38,12 +38,9 @@ fn for_loop_sum() -> anyhow::Result<()> {
                 // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("result".to_string()),
-                // _iter = xs
-                Instruction::LoadVar("xs".to_string()),
-                Instruction::StoreVar("_iter".to_string()),
-                // _len = baml.Array.length(_iter)
+                // _len = baml.Array.length(xs) - using param directly
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("_iter".to_string()),
+                Instruction::LoadVar("xs".to_string()),
                 Instruction::Call(1),
                 Instruction::StoreVar("_len".to_string()),
                 // _i = 0
@@ -58,8 +55,8 @@ fn for_loop_sum() -> anyhow::Result<()> {
                 // Loop exit: load result and return
                 Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
-                // Loop body: x = _iter[_i]
-                Instruction::LoadVar("_iter".to_string()),
+                // Loop body: x = xs[_i] - using param directly
+                Instruction::LoadVar("xs".to_string()),
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
                 Instruction::StoreVar("x".to_string()),
@@ -100,9 +97,9 @@ fn for_with_break() -> anyhow::Result<()> {
         expected: vec![(
             "ForWithBreak",
             // MIR-based codegen with local pre-allocation
+            // Note: _iter is eliminated by copy propagation (uses xs directly)
             vec![
-                // Pre-allocate all locals
-                Instruction::LoadConst(Value::Null),
+                // Pre-allocate locals (4: result, _len, _i, x)
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
@@ -110,12 +107,9 @@ fn for_with_break() -> anyhow::Result<()> {
                 // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("result".to_string()),
-                // _iter = xs
-                Instruction::LoadVar("xs".to_string()),
-                Instruction::StoreVar("_iter".to_string()),
-                // _len = baml.Array.length(_iter)
+                // _len = baml.Array.length(xs) - using param directly
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("_iter".to_string()),
+                Instruction::LoadVar("xs".to_string()),
                 Instruction::Call(1),
                 Instruction::StoreVar("_len".to_string()),
                 // _i = 0
@@ -126,8 +120,8 @@ fn for_with_break() -> anyhow::Result<()> {
                 Instruction::LoadVar("_len".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::PopJumpIfFalse(19),
-                // Loop body: x = _iter[_i]
-                Instruction::LoadVar("_iter".to_string()),
+                // Loop body: x = xs[_i] - using param directly
+                Instruction::LoadVar("xs".to_string()),
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
                 Instruction::StoreVar("x".to_string()),
@@ -178,9 +172,9 @@ fn for_with_continue() -> anyhow::Result<()> {
         expected: vec![(
             "ForWithContinue",
             // MIR-based codegen with local pre-allocation
+            // Note: _iter is eliminated by copy propagation (uses xs directly)
             vec![
-                // Pre-allocate all locals
-                Instruction::LoadConst(Value::Null),
+                // Pre-allocate locals (4: result, _len, _i, x)
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
@@ -188,12 +182,9 @@ fn for_with_continue() -> anyhow::Result<()> {
                 // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("result".to_string()),
-                // _iter = xs
-                Instruction::LoadVar("xs".to_string()),
-                Instruction::StoreVar("_iter".to_string()),
-                // _len = baml.Array.length(_iter)
+                // _len = baml.Array.length(xs) - using param directly
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("_iter".to_string()),
+                Instruction::LoadVar("xs".to_string()),
                 Instruction::Call(1),
                 Instruction::StoreVar("_len".to_string()),
                 // _i = 0
@@ -208,8 +199,8 @@ fn for_with_continue() -> anyhow::Result<()> {
                 // Loop exit: load result and return
                 Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
-                // Loop body: x = _iter[_i]
-                Instruction::LoadVar("_iter".to_string()),
+                // Loop body: x = xs[_i] - using param directly
+                Instruction::LoadVar("xs".to_string()),
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
                 Instruction::StoreVar("x".to_string()),
@@ -223,7 +214,7 @@ fn for_with_continue() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Gt),
                 Instruction::PopJumpIfFalse(2),
-                // continue - jump threading: direct to loop condition (was Jump(6) -> Jump(-25))
+                // continue - jump threading: direct to loop condition
                 Instruction::Jump(-19),
                 // result += x
                 Instruction::LoadVar("result".to_string()),
@@ -258,11 +249,10 @@ fn for_nested() -> anyhow::Result<()> {
         expected: vec![(
             "NestedFor",
             // MIR-based codegen with local pre-allocation
-            // Locals: _0, as, bs, result, _iter, _len, _i, a, _iter1, _len1, _i1, b
+            // Locals: _0, as, bs, result, _len, _i, a, _len1, _i1, b
+            // Note: _iter and _iter1 are eliminated by copy propagation (use params directly)
             vec![
-                // Pre-allocate all locals (9 nulls)
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
+                // Pre-allocate locals (7: result, _len, _i, a, _len1, _i1, b)
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
@@ -273,12 +263,9 @@ fn for_nested() -> anyhow::Result<()> {
                 // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("result".to_string()),
-                // Outer loop: _iter = as
-                Instruction::LoadVar("as".to_string()),
-                Instruction::StoreVar("_iter".to_string()),
-                // _len = baml.Array.length(_iter)
+                // _len = baml.Array.length(as) - using param directly
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("_iter".to_string()),
+                Instruction::LoadVar("as".to_string()),
                 Instruction::Call(1),
                 Instruction::StoreVar("_len".to_string()),
                 // _i = 0
@@ -293,8 +280,8 @@ fn for_nested() -> anyhow::Result<()> {
                 // Outer loop exit: load result and return
                 Instruction::LoadVar("result".to_string()),
                 Instruction::Return,
-                // Outer loop body: a = _iter[_i]
-                Instruction::LoadVar("_iter".to_string()),
+                // Outer loop body: a = as[_i] - using param directly
+                Instruction::LoadVar("as".to_string()),
                 Instruction::LoadVar("_i".to_string()),
                 Instruction::LoadArrayElement,
                 Instruction::StoreVar("a".to_string()),
@@ -303,12 +290,9 @@ fn for_nested() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("_i".to_string()),
-                // Inner loop: _iter1 = bs
-                Instruction::LoadVar("bs".to_string()),
-                Instruction::StoreVar("_iter1".to_string()),
-                // _len1 = baml.Array.length(_iter1)
+                // _len1 = baml.Array.length(bs) - using param directly
                 Instruction::LoadGlobal(Value::function("baml.Array.length")),
-                Instruction::LoadVar("_iter1".to_string()),
+                Instruction::LoadVar("bs".to_string()),
                 Instruction::Call(1),
                 Instruction::StoreVar("_len1".to_string()),
                 // _i1 = 0
@@ -321,9 +305,9 @@ fn for_nested() -> anyhow::Result<()> {
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
                 // Inner loop exit: jump back to outer loop condition
-                Instruction::Jump(-28),
-                // Inner loop body: b = _iter1[_i1]
-                Instruction::LoadVar("_iter1".to_string()),
+                Instruction::Jump(-26),
+                // Inner loop body: b = bs[_i1] - using param directly
+                Instruction::LoadVar("bs".to_string()),
                 Instruction::LoadVar("_i1".to_string()),
                 Instruction::LoadArrayElement,
                 Instruction::StoreVar("b".to_string()),

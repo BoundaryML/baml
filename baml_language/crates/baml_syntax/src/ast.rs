@@ -707,6 +707,7 @@ impl LetStmt {
                     | SyntaxKind::PAREN_EXPR
                     | SyntaxKind::ARRAY_LITERAL
                     | SyntaxKind::OBJECT_LITERAL
+                    | SyntaxKind::MAP_LITERAL
                     | SyntaxKind::STRING_LITERAL
                     | SyntaxKind::RAW_STRING_LITERAL
             )
@@ -832,6 +833,7 @@ impl BlockExpr {
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::ARRAY_LITERAL
                         | SyntaxKind::OBJECT_LITERAL
+                        | SyntaxKind::MAP_LITERAL
                         | SyntaxKind::STRING_LITERAL
                         | SyntaxKind::RAW_STRING_LITERAL => Some(BlockElement::ExprNode(n)),
                         _ => None,

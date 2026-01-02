@@ -7,6 +7,10 @@
 //! - Local classification (Virtual vs Real)
 //! - Jump threading (redirect targets for empty goto-only blocks)
 //! - Phi-like local detection (locals assigned in all predecessors, used once at join)
+//! - Constant propagation (pure constants with single definition inlined at all use sites)
+//! - Call result immediate (single-use Call results used at continuation block start)
+//! - Copy propagation (locals that are simple copies of parameters/other locals)
+//! - Wildcard elimination (unused `_` pattern bindings are eliminated)
 
 use std::collections::{HashMap, HashSet};
 
@@ -65,6 +69,16 @@ pub(crate) enum LocalClassification {
     /// At def sites: emit rvalue but NOT store (leave on stack).
     /// At Return: don't emit `LoadVar` for _0 (value already on stack).
     ReturnPhi,
+    /// Call result immediate: defined by Call/Await/DispatchFuture, used exactly once
+    /// immediately in the continuation block.
+    /// At def site (after Call): don't emit Store (leave on stack).
+    /// At use site: don't emit `LoadVar` (value already on stack from Call).
+    CallResultImmediate,
+    /// Copy of another local: `_X = copy _Y` where _Y is a parameter or simple local.
+    /// At def site: don't emit anything (skip the copy entirely).
+    /// At use sites: load from the source local instead.
+    /// The source local is stored in `AnalysisResult::copy_sources`.
+    CopyOf,
     /// Dead local - defined but never used, can be eliminated.
     Dead,
 }
@@ -116,6 +130,9 @@ pub(crate) struct AnalysisResult<'db> {
     /// Jump threading: maps empty goto-only blocks to their final target.
     /// Used during emission to skip intermediate jumps.
     pub redirect_targets: HashMap<BlockId, BlockId>,
+    /// Copy propagation: maps locals classified as `CopyOf` to their source local.
+    /// When emitting a use of local X, if X is in this map, load from the mapped local instead.
+    pub copy_sources: HashMap<Local, Local>,
 }
 
 // ============================================================================
@@ -140,8 +157,8 @@ impl<'db> AnalysisResult<'db> {
         // Step 5: Build jump threading redirect map
         let redirect_targets = build_redirect_targets(mir);
 
-        // Step 6: Classify each local (including phi-like detection)
-        let classifications =
+        // Step 6: Classify each local (including phi-like detection and copy propagation)
+        let (classifications, copy_sources) =
             classify_locals(mir, &def_use, &dominators, &predecessors, &redirect_targets);
 
         Self {
@@ -151,6 +168,7 @@ impl<'db> AnalysisResult<'db> {
             rpo,
             predecessors,
             redirect_targets,
+            copy_sources,
         }
     }
 
@@ -161,6 +179,17 @@ impl<'db> AnalysisResult<'db> {
             .get(&target)
             .copied()
             .unwrap_or(target)
+    }
+
+    /// Resolve a local through copy propagation.
+    /// If the local is a copy of another local, returns the source local.
+    /// Follows chains: if A copies B and B copies C, resolves A to C.
+    pub(crate) fn resolve_copy_source(&self, local: Local) -> Local {
+        let mut current = local;
+        while let Some(&source) = self.copy_sources.get(&current) {
+            current = source;
+        }
+        current
     }
 }
 
@@ -387,11 +416,28 @@ fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'d
                         }
                     }
 
-                    // For field/index stores, the base local is also used (we need to load it
-                    // to store the field value). This ensures the base isn't classified as Virtual.
+                    // For field/index stores, the base local (and index local for Index) is also
+                    // used. We need to load them to store the value. This ensures they aren't
+                    // classified as Virtual.
                     match destination {
-                        Place::Field { base, .. } | Place::Index { base, .. } => {
+                        Place::Field { base, .. } => {
                             collect_uses_in_place(base, block.id, stmt_idx, &mut def_use);
+                        }
+                        Place::Index { base, index, .. } => {
+                            collect_uses_in_place(base, block.id, stmt_idx, &mut def_use);
+                            // The index is also used - we need to load it for the Store*Element
+                            def_use
+                                .entry(*index)
+                                .or_insert_with(|| LocalDefUse {
+                                    local: *index,
+                                    def: None,
+                                    uses: Vec::new(),
+                                })
+                                .uses
+                                .push(UseLocation {
+                                    block: block.id,
+                                    statement_idx: stmt_idx,
+                                });
                         }
                         Place::Local(_) => {}
                     }
@@ -438,6 +484,12 @@ fn collect_uses_in_rvalue<'db>(
                 collect_uses_in_operand(elem, block, stmt_idx, def_use);
             }
         }
+        Rvalue::Map(entries) => {
+            for (key, value) in entries {
+                collect_uses_in_operand(key, block, stmt_idx, def_use);
+                collect_uses_in_operand(value, block, stmt_idx, def_use);
+            }
+        }
         Rvalue::Aggregate { fields, .. } => {
             for field in fields {
                 collect_uses_in_operand(field, block, stmt_idx, def_use);
@@ -468,28 +520,39 @@ fn collect_uses_in_operand<'db>(
 }
 
 /// Collect uses in a place.
+///
+/// This recursively walks the place structure to find all used locals,
+/// including index locals in nested `Place::Index` projections.
 fn collect_uses_in_place(
     place: &Place,
     block: BlockId,
     stmt_idx: usize,
     def_use: &mut HashMap<Local, LocalDefUse<'_>>,
 ) {
-    // The base local is used
-    let base = place.base_local();
-    if let Some(du) = def_use.get_mut(&base) {
-        du.uses.push(UseLocation {
-            block,
-            statement_idx: stmt_idx,
-        });
-    }
-
-    // For index places, the index local is also used
-    if let Place::Index { index, .. } = place {
-        if let Some(du) = def_use.get_mut(index) {
-            du.uses.push(UseLocation {
-                block,
-                statement_idx: stmt_idx,
-            });
+    match place {
+        Place::Local(local) => {
+            // Base case: a simple local reference
+            if let Some(du) = def_use.get_mut(local) {
+                du.uses.push(UseLocation {
+                    block,
+                    statement_idx: stmt_idx,
+                });
+            }
+        }
+        Place::Field { base, .. } => {
+            // Recurse into the base to find all used locals
+            collect_uses_in_place(base, block, stmt_idx, def_use);
+        }
+        Place::Index { base, index, .. } => {
+            // Recurse into the base to find all used locals
+            collect_uses_in_place(base, block, stmt_idx, def_use);
+            // The index local is also used
+            if let Some(du) = def_use.get_mut(index) {
+                du.uses.push(UseLocation {
+                    block,
+                    statement_idx: stmt_idx,
+                });
+            }
         }
     }
 }
@@ -587,33 +650,50 @@ fn collect_uses_in_terminator<'db>(
 // Local Classification
 // ============================================================================
 
-/// Classify each local as Virtual, Real, `PhiLike`, or Dead.
+/// Classify each local as Virtual, Real, `PhiLike`, `CopyOf`, or Dead.
+///
+/// Returns both the classifications and the `copy_sources` map for copy propagation.
 fn classify_locals<'db>(
     mir: &MirFunction<'db>,
     def_use: &HashMap<Local, LocalDefUse<'db>>,
     dominators: &Dominators,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
     redirect_targets: &HashMap<BlockId, BlockId>,
-) -> HashMap<Local, LocalClassification> {
+) -> (HashMap<Local, LocalClassification>, HashMap<Local, Local>) {
     let all_defs = collect_all_definitions(mir);
 
     let mut classifications = HashMap::new();
+    let mut copy_sources: HashMap<Local, Local> = HashMap::new();
 
     for (idx, _local_decl) in mir.locals.iter().enumerate() {
         let local = Local(idx);
         let du = &def_use[&local];
 
         let local_decl = mir.local(local);
+
+        // Check if this is an unused wildcard binding.
+        // NOTE: We currently only check for exactly "_". In the future, we may want
+        // more robust checking (e.g., any name starting with "_", or type-based analysis
+        // to verify the binding truly has no observable side effects). For now, this
+        // simple check handles the common pattern-matching wildcard case.
+        let is_unused_wildcard = du.uses.is_empty() && local_decl.name.as_deref() == Some("_");
+
         let classification = if idx > 0 && idx <= mir.arity {
             // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
-        } else if idx != 0 && du.uses.is_empty() && local_decl.name.is_none() {
-            // Dead compiler temp - defined but never used (skip _0 which is implicitly used by return)
-            // NOTE: To also eliminate dead user variables (e.g., `let x = 5;` where x is never read),
-            // remove the `&& local_decl.name.is_none()` check above. Currently we preserve user
-            // variables for debugging/semantics even if unused.
+        } else if idx != 0
+            && du.uses.is_empty()
+            && (local_decl.name.is_none() || is_unused_wildcard)
+        {
+            // Dead local: either an unused compiler temp, or an unused wildcard binding.
+            // Skip _0 which is implicitly used by return.
             LocalClassification::Dead
-        } else if can_be_virtual(local, du, dominators, mir, def_use, predecessors) {
+        } else if let Some(source) = get_copy_source(local, du, mir, &all_defs) {
+            // Copy propagation: this local is just `_X = copy _Y` where _Y is suitable.
+            // We can eliminate _X and use _Y directly at all use sites.
+            copy_sources.insert(local, source);
+            LocalClassification::CopyOf
+        } else if can_be_virtual(local, du, dominators, mir, def_use, predecessors, &all_defs) {
             LocalClassification::Virtual
         } else if is_phi_like(local, du, mir, predecessors, &all_defs) {
             // Phi-like: assigned in each predecessor, used once at join point.
@@ -625,6 +705,11 @@ fn classify_locals<'db>(
             // At def sites: emit rvalue but NOT StoreVar (leave on stack).
             // At Return: don't emit LoadVar for _0 (value already on stack).
             LocalClassification::ReturnPhi
+        } else if is_call_result_immediate(local, du, mir) {
+            // Call result used immediately in continuation block.
+            // At def site (after Call): don't emit StoreVar (leave on stack).
+            // At use site: don't emit LoadVar (value already on stack from Call).
+            LocalClassification::CallResultImmediate
         } else {
             LocalClassification::Real
         };
@@ -632,7 +717,7 @@ fn classify_locals<'db>(
         classifications.insert(local, classification);
     }
 
-    classifications
+    (classifications, copy_sources)
 }
 
 /// Collect all definition sites for each local.
@@ -861,12 +946,13 @@ fn is_return_phi(
 
 /// Check if a local can be classified as Virtual.
 fn can_be_virtual<'db>(
-    _local: Local,
+    local: Local,
     du: &LocalDefUse<'db>,
     dominators: &Dominators,
     mir: &MirFunction<'db>,
     def_use: &HashMap<Local, LocalDefUse<'db>>,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
+    all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
 ) -> bool {
     // Must have exactly one definition
     let Some(def) = &du.def else {
@@ -879,7 +965,17 @@ fn can_be_virtual<'db>(
         return false;
     }
 
-    // Must have exactly one use for simple virtual inlining
+    // Pure constants with a SINGLE definition can be inlined even with multiple uses.
+    // They have no side effects and always produce the same value.
+    // If there are multiple definitions (e.g., from if-else branches), we can't inline
+    // because we'd inline the wrong definition for some execution paths.
+    let has_single_def = all_defs.get(&local).is_some_and(|defs| defs.len() == 1);
+    if has_single_def && is_pure_constant(&def.rvalue) {
+        // Just need at least one use to not be dead
+        return !du.uses.is_empty();
+    }
+
+    // For non-constant rvalues, must have exactly one use
     if du.uses.len() != 1 {
         return false;
     }
@@ -1070,6 +1166,12 @@ fn collect_rvalue_reads(rvalue: &Rvalue<'_>, locals: &mut Vec<Local>) {
                 collect_operand_reads(op, locals);
             }
         }
+        Rvalue::Map(entries) => {
+            for (key, value) in entries {
+                collect_operand_reads(key, locals);
+                collect_operand_reads(value, locals);
+            }
+        }
         Rvalue::Aggregate { fields, .. } => {
             for op in fields {
                 collect_operand_reads(op, locals);
@@ -1103,7 +1205,7 @@ fn collect_place_reads(place: &Place, locals: &mut Vec<Local>) {
         Place::Field { base, .. } => {
             collect_place_reads(base, locals);
         }
-        Place::Index { base, index } => {
+        Place::Index { base, index, .. } => {
             collect_place_reads(base, locals);
             locals.push(*index); // The index variable is also read
         }
@@ -1114,16 +1216,14 @@ fn collect_place_reads(place: &Place, locals: &mut Vec<Local>) {
 fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> bool {
     match kind {
         StatementKind::Assign { destination, value } => {
-            // Function calls have side effects
-            if let Rvalue::Use(Operand::Constant(Constant::Function(_))) = value {
-                return true;
-            }
             // Check if this assignment modifies a variable that the rvalue reads
             if let Place::Local(local) = destination {
                 if rvalue_reads.contains(local) {
                     return true;
                 }
             }
+            // All other assignments (including loading constants) are pure
+            _ = value;
             false
         }
         StatementKind::Drop(_) => true,
@@ -1136,6 +1236,149 @@ fn is_inlinable_rvalue(_rvalue: &Rvalue<'_>) -> bool {
     // All current rvalues can be inlined
     // May want to exclude complex aggregates in the future
     true
+}
+
+/// Check if an rvalue is a pure constant that can be safely duplicated.
+///
+/// Pure constants have no side effects and always produce the same value,
+/// so they can be re-emitted at every use site even with multiple uses.
+fn is_pure_constant(rvalue: &Rvalue<'_>) -> bool {
+    matches!(rvalue, Rvalue::Use(Operand::Constant(_)))
+}
+
+/// Check if a local is a "call result immediate": defined by Call/Await/DispatchFuture,
+/// used exactly once at the start of the continuation block.
+///
+/// Call result immediate applies when:
+/// 1. The local is defined by a Call/Await/DispatchFuture terminator
+/// 2. It has exactly one use
+/// 3. The use is in the continuation block (target of the Call)
+/// 4. The use is at statement index 0 (first thing in the continuation block)
+///
+/// This allows us to:
+/// - After Call: don't emit `StoreVar` (leave result on stack)
+/// - At use site: don't emit `LoadVar` (value already on stack from Call)
+///
+/// This eliminates the redundant `StoreVar("_X"); LoadVar("_X")` pattern for call results.
+fn is_call_result_immediate(local: Local, du: &LocalDefUse<'_>, mir: &MirFunction<'_>) -> bool {
+    // Must have exactly one use
+    if du.uses.len() != 1 {
+        return false;
+    }
+
+    // Must have a definition from a terminator (Call/Await/DispatchFuture)
+    let Some(def) = &du.def else {
+        return false;
+    };
+
+    // Definition must be in a terminator
+    if def.statement_idx != TERMINATOR_IDX {
+        return false;
+    }
+
+    let use_loc = &du.uses[0];
+
+    // The use must be at the very start of the continuation block:
+    // - statement index 0 (first statement), OR
+    // - TERMINATOR_IDX if the block has no statements (use is directly in terminator)
+    let use_block = mir.block(use_loc.block);
+    let is_first_use = use_loc.statement_idx == 0
+        || (use_loc.statement_idx == TERMINATOR_IDX && use_block.statements.is_empty());
+    if !is_first_use {
+        return false;
+    }
+
+    // Get the defining block and check that its terminator is Call/Await/DispatchFuture
+    // with the continuation block being the use block
+    let def_block = mir.block(def.block);
+    let continuation_target = match &def_block.terminator {
+        Some(Terminator::Call {
+            destination,
+            target,
+            ..
+        }) => {
+            // Verify this Call defines our local
+            if matches!(destination, Place::Local(l) if *l == local) {
+                Some(*target)
+            } else {
+                None
+            }
+        }
+        Some(Terminator::Await {
+            destination,
+            target,
+            ..
+        }) => {
+            // Verify this Await defines our local
+            if matches!(destination, Place::Local(l) if *l == local) {
+                Some(*target)
+            } else {
+                None
+            }
+        }
+        Some(Terminator::DispatchFuture { future, resume, .. }) => {
+            // Verify this DispatchFuture defines our local
+            if matches!(future, Place::Local(l) if *l == local) {
+                Some(*resume)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    };
+
+    // Check that the continuation block is the use block
+    continuation_target == Some(use_loc.block)
+}
+
+/// Check if a local is a simple copy of another local (for copy propagation).
+///
+/// Returns `Some(source_local)` if the local is defined as `_X = copy _Y` where:
+/// 1. There is exactly one definition of `_X`
+/// 2. The definition is `Rvalue::Use(Operand::Copy(Place::Local(source)))` or
+///    `Rvalue::Use(Operand::Move(Place::Local(source)))`
+/// 3. The source is a parameter (not modified) or another suitable local
+///
+/// This optimization is particularly useful for match expressions where the
+/// scrutinee is copied into a temporary before comparisons.
+fn get_copy_source(
+    local: Local,
+    du: &LocalDefUse<'_>,
+    mir: &MirFunction<'_>,
+    all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
+) -> Option<Local> {
+    // Must have exactly one definition
+    let def = du.def.as_ref()?;
+
+    // Definition must not be from a terminator (Call/Await results aren't copies)
+    if def.statement_idx == TERMINATOR_IDX {
+        return None;
+    }
+
+    // Must have exactly one definition site
+    let defs = all_defs.get(&local)?;
+    if defs.len() != 1 {
+        return None;
+    }
+
+    // The rvalue must be a simple copy/move of a local (not a field or index)
+    let source = match &def.rvalue {
+        Rvalue::Use(Operand::Copy(Place::Local(src))) => *src,
+        Rvalue::Use(Operand::Move(Place::Local(src))) => *src,
+        _ => return None,
+    };
+
+    // The source must be a parameter (parameters are never reassigned in MIR)
+    // We only propagate copies of parameters to keep the analysis simple and safe.
+    // Propagating copies of other locals would require verifying the source isn't
+    // modified between the copy and all uses of the copy.
+    let source_idx = source.0;
+    if source_idx == 0 || source_idx > mir.arity {
+        // Source is not a parameter (_0 is return value, > arity are locals)
+        return None;
+    }
+
+    Some(source)
 }
 
 // ============================================================================

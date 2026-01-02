@@ -42,6 +42,12 @@ pub enum TypeError<T> {
     },
     /// Match arm is unreachable - it can never match because previous arms cover all cases.
     UnreachableArm { span: Span },
+    /// Reference to an unknown enum variant.
+    UnknownEnumVariant {
+        enum_name: String,
+        variant_name: String,
+        span: Span,
+    },
 }
 
 impl<T> TypeError<T> {
@@ -108,6 +114,15 @@ impl<T> TypeError<T> {
                 span: *span,
             },
             TypeError::UnreachableArm { span } => TypeError::UnreachableArm { span: *span },
+            TypeError::UnknownEnumVariant {
+                enum_name,
+                variant_name,
+                span,
+            } => TypeError::UnknownEnumVariant {
+                enum_name: enum_name.clone(),
+                variant_name: variant_name.clone(),
+                span: *span,
+            },
         }
     }
 }

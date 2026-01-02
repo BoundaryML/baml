@@ -136,7 +136,6 @@ fn basic_bit_shift_right() -> anyhow::Result<()> {
 
 // Unary operators
 #[test]
-#[ignore = "unary operators not yet implemented"]
 fn unary_neg() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -150,7 +149,6 @@ fn unary_neg() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "unary operators not yet implemented"]
 fn unary_not() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

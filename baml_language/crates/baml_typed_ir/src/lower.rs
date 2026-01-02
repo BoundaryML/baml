@@ -103,6 +103,7 @@ struct ExprBodyBuilder {
     patterns: Arena<Pattern>,
     expr_types: FxHashMap<ExprId, Ty>,
     expr_spans: FxHashMap<ExprId, TextRange>,
+    enum_variant_exprs: FxHashMap<ExprId, (baml_base::Name, baml_base::Name)>,
 }
 
 impl ExprBodyBuilder {
@@ -112,6 +113,7 @@ impl ExprBodyBuilder {
             patterns: Arena::new(),
             expr_types: FxHashMap::default(),
             expr_spans: FxHashMap::default(),
+            enum_variant_exprs: FxHashMap::default(),
         }
     }
 
@@ -142,8 +144,18 @@ impl ExprBodyBuilder {
             patterns: self.patterns,
             expr_types: self.expr_types,
             expr_spans: self.expr_spans,
+            enum_variant_exprs: self.enum_variant_exprs,
             root,
         }
+    }
+
+    fn record_enum_variant(
+        &mut self,
+        id: ExprId,
+        enum_name: baml_base::Name,
+        variant: baml_base::Name,
+    ) {
+        self.enum_variant_exprs.insert(id, (enum_name, variant));
     }
 }
 
@@ -254,9 +266,22 @@ impl<'db> LoweringContext<'db> {
                     // which should have type `fn(Array<T>) -> int` but generics are currently hacked
                     // and not properly implemented. When real generics are added, this will need
                     // proper type instantiation.
-                    Ok(self
+                    let expr_id = self
                         .builder
-                        .alloc(Expr::Path(segments.clone()), ty, text_range))
+                        .alloc(Expr::Path(segments.clone()), ty, text_range);
+
+                    // Check if this path is an enum variant and record it for MIR lowering
+                    if let Some((enum_name, variant)) =
+                        self.inference.enum_variant_exprs.get(&hir_id)
+                    {
+                        self.builder.record_enum_variant(
+                            expr_id,
+                            enum_name.clone(),
+                            variant.clone(),
+                        );
+                    }
+
+                    Ok(expr_id)
                 }
             }
 
@@ -374,6 +399,18 @@ impl<'db> LoweringContext<'db> {
                     ty,
                     span.map(|s| s.range),
                 ))
+            }
+
+            HirExpr::Map { entries } => {
+                let mut entry_ids = Vec::with_capacity(entries.len());
+                for (key, value) in entries {
+                    let key_id = self.lower_expr(*key, hir_body)?;
+                    let value_id = self.lower_expr(*value, hir_body)?;
+                    entry_ids.push((key_id, value_id));
+                }
+                Ok(self
+                    .builder
+                    .alloc(Expr::Map { entries: entry_ids }, ty, span.map(|s| s.range)))
             }
 
             HirExpr::Block { stmts, tail_expr } => {

@@ -41,7 +41,6 @@ fn return_literal_bool() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "string literals not yet supported in HIR"]
 fn return_literal_string() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -111,13 +110,11 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
             ),
             (
                 "main",
-                // Call result is stored to user variable a (Real because def is in Call terminator)
+                // CallResultImmediate optimization: Call result stays on stack,
+                // used immediately as return value (no Store/Load)
                 vec![
-                    Instruction::LoadConst(Value::Null),
                     Instruction::LoadGlobal(Value::function("two")),
                     Instruction::Call(0),
-                    Instruction::StoreVar("a".to_string()),
-                    Instruction::LoadVar("a".to_string()),
                     Instruction::Return,
                 ],
             ),

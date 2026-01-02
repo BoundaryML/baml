@@ -61,6 +61,7 @@ const UNEXPECTED_TOKEN: ErrorCode = ErrorCode(10);
 const DUPLICATE_NAME: ErrorCode = ErrorCode(11);
 const NON_EXHAUSTIVE_MATCH: ErrorCode = ErrorCode(62);
 const UNREACHABLE_ARM: ErrorCode = ErrorCode(63);
+const UNKNOWN_ENUM_VARIANT: ErrorCode = ErrorCode(64);
 
 /// Render an ariadne Report to a String.
 ///

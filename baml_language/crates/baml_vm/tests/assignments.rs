@@ -280,7 +280,6 @@ fn array_element_field_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method call field assignment not yet implemented"]
 fn array_element_method_field_assignment() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -324,7 +323,6 @@ fn array_element_method_field_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method call field assignment not yet implemented"]
 fn method_call_then_array_access_assignment() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -353,7 +351,6 @@ fn method_call_then_array_access_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method call field assignment not yet implemented"]
 fn method_call_field_assignment() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -385,7 +382,6 @@ fn method_call_field_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method call field assignment not yet implemented"]
 fn method_call_field_assignment_with_copy() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

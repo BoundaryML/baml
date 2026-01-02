@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -217,7 +217,7 @@ function BoolWithCatchAll(b: bool) -> string {
 function GuardedOnlyNonExhaustive(x: int) -> int {
       match (x) {
           n: int if n > 0 => n * 2,
-          n: int if n < 0 => n * -<missing>,
+          n: int if n < 0 => n * -1,
       }
 }
 

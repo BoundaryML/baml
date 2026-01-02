@@ -36,6 +36,10 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub classes: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Pre-allocated Class object indices in the program's object pool.
     pub class_object_indices: &'ctx HashMap<String, usize>,
+    /// Pre-allocated Enum object indices in the program's object pool.
+    pub enum_object_indices: &'ctx HashMap<String, usize>,
+    /// Enum variant mappings (enum name -> variant name -> variant index).
+    pub enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Shared object pool for strings, etc.
     pub objects: &'obj mut ObjectPool,
 }
@@ -140,6 +144,43 @@ pub fn compile_files(
         }
     }
 
+    // Build enums map (enum name -> variant name -> variant index) and add Enum objects to program
+    // Also build enum_variant_names for type inference (enum name -> list of variant names)
+    let mut enum_variants: HashMap<String, HashMap<String, usize>> = HashMap::new();
+    let mut enum_variant_names: HashMap<Name, Vec<Name>> = HashMap::new();
+    let mut enum_object_indices: HashMap<String, usize> = HashMap::new();
+
+    for file in files {
+        let item_tree = baml_hir::file_item_tree(db, *file);
+        let items_struct = baml_hir::file_items(db, *file);
+        for item in items_struct.items(db) {
+            if let ItemId::Enum(enum_loc) = item {
+                let enum_def = &item_tree[enum_loc.id(db)];
+                let enum_name = enum_def.name.to_string();
+
+                let mut variant_indices = HashMap::new();
+                let mut variant_names = Vec::new();
+                let mut variant_name_list: Vec<Name> = Vec::new();
+                for (idx, variant) in enum_def.variants.iter().enumerate() {
+                    variant_indices.insert(variant.name.to_string(), idx);
+                    variant_names.push(variant.name.to_string());
+                    variant_name_list.push(variant.name.clone());
+                }
+
+                // Add Enum object to program and record its index
+                let enum_obj = Object::Enum(Enum {
+                    name: enum_name.clone(),
+                    variant_names,
+                });
+                let enum_obj_idx = program.add_object(enum_obj);
+                enum_object_indices.insert(enum_name.clone(), enum_obj_idx);
+
+                enum_variants.insert(enum_name, variant_indices);
+                enum_variant_names.insert(enum_def.name.clone(), variant_name_list);
+            }
+        }
+    }
+
     // Add builtin functions to globals FIRST (stable indices)
     for (path, (native_fn, arity)) in &builtins {
         let builtin_fn = Function {
@@ -205,16 +246,10 @@ pub fn compile_files(
                     }
                     baml_hir::FunctionBody::Expr(_) => {
                         // Run type inference
-                        // Note: type_aliases and enum_variants are not passed here,
-                        // so exhaustiveness checking for type aliases and enums won't work.
-                        // This is acceptable since codegen is for runtime execution,
-                        // and type errors should be caught in the THIR phase.
-                        //
-                        // TODO(codegen-inference): Re-evaluate whether we need full type context.
-                        // Currently this works because:
-                        //   1. Exhaustiveness errors are caught in the THIR/Diagnostics phase
-                        //   2. The core type inference doesn't depend on these maps
-                        //   3. Codegen only uses inference.expr_types and path_segment_types
+                        // Note: type_aliases is not passed here, so exhaustiveness
+                        // checking for type aliases won't work. This is acceptable
+                        // since codegen is for runtime execution, and type errors
+                        // should be caught in the THIR phase.
                         let inference = baml_thir::infer_function(
                             db,
                             &signature,
@@ -222,7 +257,7 @@ pub fn compile_files(
                             Some(typing_context.clone()),
                             Some(class_field_types.clone()),
                             None, // type_aliases - not needed for codegen
-                            None, // enum_variants - not needed for codegen
+                            Some(enum_variant_names.clone()), // enum_variants - needed for enum variant detection
                             *func_loc,
                         );
 
@@ -237,6 +272,8 @@ pub fn compile_files(
                             globals: &globals,
                             classes: &classes,
                             class_object_indices: &class_object_indices,
+                            enum_object_indices: &enum_object_indices,
+                            enum_variants: &enum_variants,
                             objects: &mut program.objects,
                         };
                         compile_mir_function(&mir, ctx)
