@@ -1,6 +1,16 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [hir] Error: Attribute '@stream' can only be defined once on field 'multiple' in class 'FieldAttributes'
+    ╭─[ 0:16:97 ]
+    │
+ 16 │     multiple string? @description("Multiple attributes") @alias("multiple_alias") @stream.done @stream.not_null
+    │                                                                                    ───┬──       ───┬──  
+    │                                                                                       ╰───────────────── first definition here
+    │                                                                                                    │    
+    │                                                                                                    ╰──── duplicate attribute
+    │ 
+    │ Note: Error code: E0014
+────╯
