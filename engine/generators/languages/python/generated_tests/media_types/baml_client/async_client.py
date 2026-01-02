@@ -11,6 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -38,6 +39,7 @@ class BamlAsyncClient:
     def with_options(self,
         tb: typing.Optional[type_builder.TypeBuilder] = None,
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
+        client: typing.Optional[str] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
         tags: typing.Optional[typing.Dict[str, str]] = None,
@@ -48,6 +50,8 @@ class BamlAsyncClient:
             options["tb"] = tb
         if client_registry is not None:
             options["client_registry"] = client_registry
+        if client is not None:
+            options["client"] = client
         if collector is not None:
             options["collector"] = collector
         if env is not None:
@@ -77,37 +81,37 @@ class BamlAsyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     async def TestMediaArrayInputs(self, imageArray: typing.List[baml_py.Image],textInput: str,
         baml_options: BamlCallOptions = {},
     ) -> types.MediaArrayAnalysisResult:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestMediaArrayInputs(imageArray=imageArray,textInput=textInput,
+            __stream__ = self.stream.TestMediaArrayInputs(imageArray=imageArray,textInput=textInput,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMediaArrayInputs", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMediaArrayInputs", args={
                 "imageArray": imageArray,"textInput": textInput,
             })
-            return typing.cast(types.MediaArrayAnalysisResult, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.MediaArrayAnalysisResult, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestMediaInput(self, media: typing.Union[baml_py.Image, baml_py.Audio, baml_py.Pdf, baml_py.Video],textInput: str,
         baml_options: BamlCallOptions = {},
     ) -> types.MediaAnalysisResult:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            stream = self.stream.TestMediaInput(media=media,textInput=textInput,
+            __stream__ = self.stream.TestMediaInput(media=media,textInput=textInput,
                 baml_options=baml_options)
-            return await stream.get_final_response()
+            return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMediaInput", args={
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestMediaInput", args={
                 "media": media,"textInput": textInput,
             })
-            return typing.cast(types.MediaAnalysisResult, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.MediaAnalysisResult, __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -120,26 +124,26 @@ class BamlStreamClient:
     def TestMediaArrayInputs(self, imageArray: typing.List[baml_py.Image],textInput: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestMediaArrayInputs", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestMediaArrayInputs", args={
             "imageArray": imageArray,"textInput": textInput,
         })
         return baml_py.BamlStream[stream_types.MediaArrayAnalysisResult, types.MediaArrayAnalysisResult](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.MediaArrayAnalysisResult, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.MediaArrayAnalysisResult, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestMediaInput(self, media: typing.Union[baml_py.Image, baml_py.Audio, baml_py.Pdf, baml_py.Video],textInput: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.MediaAnalysisResult, types.MediaAnalysisResult]:
-        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="TestMediaInput", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestMediaInput", args={
             "media": media,"textInput": textInput,
         })
         return baml_py.BamlStream[stream_types.MediaAnalysisResult, types.MediaAnalysisResult](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.MediaAnalysisResult, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.MediaAnalysisResult, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     
 
@@ -152,17 +156,17 @@ class BamlHttpRequestClient:
     async def TestMediaArrayInputs(self, imageArray: typing.List[baml_py.Image],textInput: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMediaArrayInputs", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMediaArrayInputs", args={
             "imageArray": imageArray,"textInput": textInput,
         }, mode="request")
-        return result
+        return __result__
     async def TestMediaInput(self, media: typing.Union[baml_py.Image, baml_py.Audio, baml_py.Pdf, baml_py.Video],textInput: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMediaInput", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMediaInput", args={
             "media": media,"textInput": textInput,
         }, mode="request")
-        return result
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -174,17 +178,17 @@ class BamlHttpStreamRequestClient:
     async def TestMediaArrayInputs(self, imageArray: typing.List[baml_py.Image],textInput: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMediaArrayInputs", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMediaArrayInputs", args={
             "imageArray": imageArray,"textInput": textInput,
         }, mode="stream")
-        return result
+        return __result__
     async def TestMediaInput(self, media: typing.Union[baml_py.Image, baml_py.Audio, baml_py.Pdf, baml_py.Video],textInput: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMediaInput", args={
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestMediaInput", args={
             "media": media,"textInput": textInput,
         }, mode="stream")
-        return result
+        return __result__
     
 
 b = BamlAsyncClient(DoNotUseDirectlyCallManager({}))

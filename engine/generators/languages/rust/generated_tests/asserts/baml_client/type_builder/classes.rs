@@ -3,8 +3,52 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated class builder wrappers.
-//!
-//! Full implementation coming in Phase 8.
+//! Generated class builder wrappers for type-safe field access.
 
-// Class builder placeholders will be generated here in Phase 8.
+/// Wrapper for the `Person` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct PersonClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl PersonClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Person type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `name` field builder.
+    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("name")
+            .expect("field name lookup failed")
+            .expect("field name is defined in schema")
+    }
+
+    /// Access the `age` field builder.
+    pub fn property_age(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("age")
+            .expect("field age lookup failed")
+            .expect("field age is defined in schema")
+    }
+}

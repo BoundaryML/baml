@@ -3,8 +3,92 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated enum builder wrappers.
-//!
-//! Full implementation coming in Phase 8.
+//! Generated enum builder wrappers for type-safe value access.
 
-// Enum builder placeholders will be generated here in Phase 8.
+/// Wrapper for the `TestEnum` enum builder.
+///
+/// Provides type-safe method access to values defined in the schema.
+/// Access values via methods: `builder.ValueName()`
+
+pub struct TestEnumEnumBuilder {
+    inner: baml::EnumBuilder,
+}
+
+impl TestEnumEnumBuilder {
+    /// Create wrapper from runtime EnumBuilder.
+    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying EnumBuilder.
+    pub fn inner(&self) -> &baml::EnumBuilder {
+        &self.inner
+    }
+
+    /// Get the enum as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("enum TestEnum type lookup failed")
+    }
+
+    // =========================================================================
+    // Value Accessors (1:1 with schema value names)
+    // =========================================================================
+
+    /// Access the `Angry` value builder.
+    pub fn value_Angry(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Angry")
+            .expect("value Angry lookup failed")
+            .expect("value Angry is defined in schema")
+    }
+
+    /// Access the `Happy` value builder.
+    pub fn value_Happy(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Happy")
+            .expect("value Happy lookup failed")
+            .expect("value Happy is defined in schema")
+    }
+
+    /// Access the `Sad` value builder.
+    pub fn value_Sad(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Sad")
+            .expect("value Sad lookup failed")
+            .expect("value Sad is defined in schema")
+    }
+
+    /// Access the `Confused` value builder.
+    pub fn value_Confused(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Confused")
+            .expect("value Confused lookup failed")
+            .expect("value Confused is defined in schema")
+    }
+
+    /// Access the `Excited` value builder.
+    pub fn value_Excited(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Excited")
+            .expect("value Excited lookup failed")
+            .expect("value Excited is defined in schema")
+    }
+
+    /// Access the `Exclamation` value builder.
+    pub fn value_Exclamation(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Exclamation")
+            .expect("value Exclamation lookup failed")
+            .expect("value Exclamation is defined in schema")
+    }
+
+    /// Access the `Bored` value builder.
+    pub fn value_Bored(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("Bored")
+            .expect("value Bored lookup failed")
+            .expect("value Bored is defined in schema")
+    }
+}

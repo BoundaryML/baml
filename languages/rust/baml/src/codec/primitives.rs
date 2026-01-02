@@ -90,8 +90,9 @@ impl BamlDecode for () {
         match &holder.value {
             Some(cffi_value_holder::Value::NullValue(_)) | None => Ok(()),
             other => Err(BamlError::internal(format!(
-                "expected null/void, got {:?}",
-                other.as_ref().map(variant_name)
+                "expected null/void, got {:?} - {:?}",
+                other.as_ref().map(variant_name),
+                holder,
             ))),
         }
     }

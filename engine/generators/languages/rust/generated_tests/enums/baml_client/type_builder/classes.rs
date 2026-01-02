@@ -3,8 +3,4 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated class builder wrappers.
-//!
-//! Full implementation coming in Phase 8.
-
-// Class builder placeholders will be generated here in Phase 8.
+//! Generated class builder wrappers for type-safe field access.

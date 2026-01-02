@@ -34,7 +34,7 @@ func (c *{{ name }}) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 				{% endfor %}
 		default:
 			{% if dynamic %}
-			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
 			{% else %}
 			panic(fmt.Sprintf("unexpected field: %s in class {{ name }}", key))
 			{% endif %}

@@ -37,7 +37,7 @@ impl AddressClassBuilder {
     // =========================================================================
 
     /// Access the `street` field builder.
-    pub fn street(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_street(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("street")
             .expect("field street lookup failed")
@@ -45,7 +45,7 @@ impl AddressClassBuilder {
     }
 
     /// Access the `city` field builder.
-    pub fn city(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_city(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("city")
             .expect("field city lookup failed")
@@ -53,7 +53,7 @@ impl AddressClassBuilder {
     }
 
     /// Access the `country` field builder.
-    pub fn country(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_country(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("country")
             .expect("field country lookup failed")
@@ -105,7 +105,7 @@ impl ArticleClassBuilder {
     // =========================================================================
 
     /// Access the `title` field builder.
-    pub fn title(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_title(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("title")
             .expect("field title lookup failed")
@@ -113,7 +113,7 @@ impl ArticleClassBuilder {
     }
 
     /// Access the `category` field builder.
-    pub fn category(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_category(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("category")
             .expect("field category lookup failed")
@@ -121,7 +121,7 @@ impl ArticleClassBuilder {
     }
 
     /// Access the `author` field builder.
-    pub fn author(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_author(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("author")
             .expect("field author lookup failed")
@@ -129,7 +129,7 @@ impl ArticleClassBuilder {
     }
 
     /// Access the `status` field builder.
-    pub fn status(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_status(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("status")
             .expect("field status lookup failed")
@@ -181,7 +181,7 @@ impl PersonClassBuilder {
     // =========================================================================
 
     /// Access the `name` field builder.
-    pub fn name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
             .expect("field name lookup failed")
@@ -189,7 +189,7 @@ impl PersonClassBuilder {
     }
 
     /// Access the `age` field builder.
-    pub fn age(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_age(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("age")
             .expect("field age lookup failed")

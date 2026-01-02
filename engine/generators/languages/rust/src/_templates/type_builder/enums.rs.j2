@@ -43,7 +43,7 @@ impl {{ enm.name }}EnumBuilder {
 {% for (val, _) in enm.values %}
 
     /// Access the `{{ val }}` value builder.
-    pub fn {{ val }}(&self) -> baml::EnumValueBuilder {
+    pub fn value_{{ val }}(&self) -> baml::EnumValueBuilder {
         self.inner.get_value("{{ val }}")
             .expect("value {{ val }} lookup failed")
             .expect("value {{ val }} is defined in schema")

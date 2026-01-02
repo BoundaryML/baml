@@ -3,8 +3,4 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated enum builder wrappers.
-//!
-//! Full implementation coming in Phase 8.
-
-// Enum builder placeholders will be generated here in Phase 8.
+//! Generated enum builder wrappers for type-safe value access.

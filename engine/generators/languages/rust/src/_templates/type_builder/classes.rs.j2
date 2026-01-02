@@ -43,10 +43,10 @@ impl {{ cls.name }}ClassBuilder {
 {% for field in cls.fields %}
 
     /// Access the `{{ field.name }}` field builder.
-    pub fn {{ field.name }}(&self) -> baml::ClassPropertyBuilder {
-        self.inner.get_property("{{ field.name }}")
-            .expect("field {{ field.name }} lookup failed")
-            .expect("field {{ field.name }} is defined in schema")
+    pub fn property_{{ field.raw_name }}(&self) -> baml::ClassPropertyBuilder {
+        self.inner.get_property("{{ field.raw_name }}")
+            .expect("field {{ field.raw_name }} lookup failed")
+            .expect("field {{ field.raw_name }} is defined in schema")
     }
 {% endfor %}
 }

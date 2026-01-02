@@ -12,6 +12,7 @@ pub struct ClassRust {
 #[derive(Debug)]
 pub struct FieldRust {
     name: String,
+    raw_name: String,
     cffi_name: Option<String>,
     pub docstring: Option<String>,
     pub r#type: TypeRust,
@@ -26,6 +27,7 @@ impl FieldRust {
             } else {
                 Some(name.to_string())
             },
+            raw_name: name.to_string(),
             name: safe_name,
             docstring,
             r#type,
@@ -110,6 +112,7 @@ impl ClassRustRendered {
 pub struct FieldRustRendered {
     pub name: String,
     pub cffi_name: Option<String>,
+    pub raw_name: String,
     pub docstring: Option<String>,
     pub type_str: String,
 }
@@ -119,6 +122,7 @@ impl FieldRustRendered {
         Self {
             name: field.name.clone(),
             cffi_name: field.cffi_name.clone(),
+            raw_name: field.raw_name.clone(),
             docstring: field.docstring.clone(),
             type_str: field.r#type.serialize_type(pkg),
         }

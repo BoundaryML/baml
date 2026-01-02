@@ -3,8 +3,308 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated class builder wrappers.
-//!
-//! Full implementation coming in Phase 8.
+//! Generated class builder wrappers for type-safe field access.
 
-// Class builder placeholders will be generated here in Phase 8.
+/// Wrapper for the `MediaAnalysisResult` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct MediaAnalysisResultClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl MediaAnalysisResultClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class MediaAnalysisResult type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `topics` field builder.
+    pub fn property_topics(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("topics")
+            .expect("field topics lookup failed")
+            .expect("field topics is defined in schema")
+    }
+
+    /// Access the `analysisText` field builder.
+    pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("analysisText")
+            .expect("field analysisText lookup failed")
+            .expect("field analysisText is defined in schema")
+    }
+}
+
+/// Wrapper for the `MediaArrayAnalysisResult` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct MediaArrayAnalysisResultClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl MediaArrayAnalysisResultClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class MediaArrayAnalysisResult type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `analysisText` field builder.
+    pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("analysisText")
+            .expect("field analysisText lookup failed")
+            .expect("field analysisText is defined in schema")
+    }
+
+    /// Access the `mediaCount` field builder.
+    pub fn property_mediaCount(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("mediaCount")
+            .expect("field mediaCount lookup failed")
+            .expect("field mediaCount is defined in schema")
+    }
+}
+
+/// Wrapper for the `MediaMapAnalysisResult` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct MediaMapAnalysisResultClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl MediaMapAnalysisResultClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class MediaMapAnalysisResult type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `analysisText` field builder.
+    pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("analysisText")
+            .expect("field analysisText lookup failed")
+            .expect("field analysisText is defined in schema")
+    }
+
+    /// Access the `keyCount` field builder.
+    pub fn property_keyCount(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("keyCount")
+            .expect("field keyCount lookup failed")
+            .expect("field keyCount is defined in schema")
+    }
+
+    /// Access the `keys` field builder.
+    pub fn property_keys(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("keys")
+            .expect("field keys lookup failed")
+            .expect("field keys is defined in schema")
+    }
+}
+
+/// Wrapper for the `MixedMediaAnalysisResult` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct MixedMediaAnalysisResultClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl MixedMediaAnalysisResultClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class MixedMediaAnalysisResult type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `title` field builder.
+    pub fn property_title(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("title")
+            .expect("field title lookup failed")
+            .expect("field title is defined in schema")
+    }
+
+    /// Access the `description` field builder.
+    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("description")
+            .expect("field description lookup failed")
+            .expect("field description is defined in schema")
+    }
+
+    /// Access the `hasImage` field builder.
+    pub fn property_hasImage(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("hasImage")
+            .expect("field hasImage lookup failed")
+            .expect("field hasImage is defined in schema")
+    }
+
+    /// Access the `hasVideo` field builder.
+    pub fn property_hasVideo(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("hasVideo")
+            .expect("field hasVideo lookup failed")
+            .expect("field hasVideo is defined in schema")
+    }
+
+    /// Access the `hasAudio` field builder.
+    pub fn property_hasAudio(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("hasAudio")
+            .expect("field hasAudio lookup failed")
+            .expect("field hasAudio is defined in schema")
+    }
+
+    /// Access the `hasPdf` field builder.
+    pub fn property_hasPdf(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("hasPdf")
+            .expect("field hasPdf lookup failed")
+            .expect("field hasPdf is defined in schema")
+    }
+
+    /// Access the `additionalImageCount` field builder.
+    pub fn property_additionalImageCount(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("additionalImageCount")
+            .expect("field additionalImageCount lookup failed")
+            .expect("field additionalImageCount is defined in schema")
+    }
+
+    /// Access the `metadataKeys` field builder.
+    pub fn property_metadataKeys(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("metadataKeys")
+            .expect("field metadataKeys lookup failed")
+            .expect("field metadataKeys is defined in schema")
+    }
+}
+
+/// Wrapper for the `OptionalMediaAnalysisResult` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct OptionalMediaAnalysisResultClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl OptionalMediaAnalysisResultClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class OptionalMediaAnalysisResult type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `analysisText` field builder.
+    pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("analysisText")
+            .expect("field analysisText lookup failed")
+            .expect("field analysisText is defined in schema")
+    }
+
+    /// Access the `providedMediaTypes` field builder.
+    pub fn property_providedMediaTypes(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("providedMediaTypes")
+            .expect("field providedMediaTypes lookup failed")
+            .expect("field providedMediaTypes is defined in schema")
+    }
+
+    /// Access the `missingMediaTypes` field builder.
+    pub fn property_missingMediaTypes(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("missingMediaTypes")
+            .expect("field missingMediaTypes lookup failed")
+            .expect("field missingMediaTypes is defined in schema")
+    }
+}

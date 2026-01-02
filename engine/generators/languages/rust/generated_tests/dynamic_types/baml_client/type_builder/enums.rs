@@ -45,7 +45,7 @@ impl CategoryEnumBuilder {
     // =========================================================================
 
     /// Access the `Technology` value builder.
-    pub fn Technology(&self) -> baml::EnumValueBuilder {
+    pub fn value_Technology(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Technology")
             .expect("value Technology lookup failed")
@@ -53,7 +53,7 @@ impl CategoryEnumBuilder {
     }
 
     /// Access the `Science` value builder.
-    pub fn Science(&self) -> baml::EnumValueBuilder {
+    pub fn value_Science(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Science")
             .expect("value Science lookup failed")
@@ -61,7 +61,7 @@ impl CategoryEnumBuilder {
     }
 
     /// Access the `Arts` value builder.
-    pub fn Arts(&self) -> baml::EnumValueBuilder {
+    pub fn value_Arts(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Arts")
             .expect("value Arts lookup failed")
@@ -109,7 +109,7 @@ impl PriorityEnumBuilder {
     // =========================================================================
 
     /// Access the `High` value builder.
-    pub fn High(&self) -> baml::EnumValueBuilder {
+    pub fn value_High(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("High")
             .expect("value High lookup failed")
@@ -117,7 +117,7 @@ impl PriorityEnumBuilder {
     }
 
     /// Access the `Medium` value builder.
-    pub fn Medium(&self) -> baml::EnumValueBuilder {
+    pub fn value_Medium(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Medium")
             .expect("value Medium lookup failed")
@@ -125,7 +125,7 @@ impl PriorityEnumBuilder {
     }
 
     /// Access the `Low` value builder.
-    pub fn Low(&self) -> baml::EnumValueBuilder {
+    pub fn value_Low(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Low")
             .expect("value Low lookup failed")
@@ -165,7 +165,7 @@ impl StatusEnumBuilder {
     // =========================================================================
 
     /// Access the `Active` value builder.
-    pub fn Active(&self) -> baml::EnumValueBuilder {
+    pub fn value_Active(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Active")
             .expect("value Active lookup failed")
@@ -173,7 +173,7 @@ impl StatusEnumBuilder {
     }
 
     /// Access the `Inactive` value builder.
-    pub fn Inactive(&self) -> baml::EnumValueBuilder {
+    pub fn value_Inactive(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Inactive")
             .expect("value Inactive lookup failed")
@@ -181,7 +181,7 @@ impl StatusEnumBuilder {
     }
 
     /// Access the `Pending` value builder.
-    pub fn Pending(&self) -> baml::EnumValueBuilder {
+    pub fn value_Pending(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Pending")
             .expect("value Pending lookup failed")

@@ -3,8 +3,2188 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated class builder wrappers.
-//!
-//! Full implementation coming in Phase 8.
+//! Generated class builder wrappers for type-safe field access.
 
-// Class builder placeholders will be generated here in Phase 8.
+/// Wrapper for the `Action` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ActionClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ActionClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Action type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `r#type` field builder.
+    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("type")
+            .expect("field type lookup failed")
+            .expect("field type is defined in schema")
+    }
+
+    /// Access the `parameters` field builder.
+    pub fn property_parameters(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("parameters")
+            .expect("field parameters lookup failed")
+            .expect("field parameters is defined in schema")
+    }
+
+    /// Access the `async_` field builder.
+    pub fn property_async_(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("async_")
+            .expect("field async_ lookup failed")
+            .expect("field async_ is defined in schema")
+    }
+}
+
+/// Wrapper for the `Asset` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct AssetClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl AssetClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Asset type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `id` field builder.
+    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("id")
+            .expect("field id lookup failed")
+            .expect("field id is defined in schema")
+    }
+
+    /// Access the `r#type` field builder.
+    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("type")
+            .expect("field type lookup failed")
+            .expect("field type is defined in schema")
+    }
+
+    /// Access the `metadata` field builder.
+    pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("metadata")
+            .expect("field metadata lookup failed")
+            .expect("field metadata is defined in schema")
+    }
+
+    /// Access the `tags` field builder.
+    pub fn property_tags(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("tags")
+            .expect("field tags lookup failed")
+            .expect("field tags is defined in schema")
+    }
+}
+
+/// Wrapper for the `AssetMetadata` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct AssetMetadataClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl AssetMetadataClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class AssetMetadata type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `filename` field builder.
+    pub fn property_filename(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("filename")
+            .expect("field filename lookup failed")
+            .expect("field filename is defined in schema")
+    }
+
+    /// Access the `size` field builder.
+    pub fn property_size(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("size")
+            .expect("field size lookup failed")
+            .expect("field size is defined in schema")
+    }
+
+    /// Access the `mimeType` field builder.
+    pub fn property_mimeType(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("mimeType")
+            .expect("field mimeType lookup failed")
+            .expect("field mimeType is defined in schema")
+    }
+
+    /// Access the `uploaded` field builder.
+    pub fn property_uploaded(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("uploaded")
+            .expect("field uploaded lookup failed")
+            .expect("field uploaded is defined in schema")
+    }
+
+    /// Access the `checksum` field builder.
+    pub fn property_checksum(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("checksum")
+            .expect("field checksum lookup failed")
+            .expect("field checksum is defined in schema")
+    }
+}
+
+/// Wrapper for the `ButtonWidget` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ButtonWidgetClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ButtonWidgetClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class ButtonWidget type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `label` field builder.
+    pub fn property_label(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("label")
+            .expect("field label lookup failed")
+            .expect("field label is defined in schema")
+    }
+
+    /// Access the `action` field builder.
+    pub fn property_action(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("action")
+            .expect("field action lookup failed")
+            .expect("field action is defined in schema")
+    }
+
+    /// Access the `style` field builder.
+    pub fn property_style(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("style")
+            .expect("field style lookup failed")
+            .expect("field style is defined in schema")
+    }
+}
+
+/// Wrapper for the `ComplexData` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ComplexDataClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ComplexDataClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class ComplexData type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `primary` field builder.
+    pub fn property_primary(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("primary")
+            .expect("field primary lookup failed")
+            .expect("field primary is defined in schema")
+    }
+
+    /// Access the `secondary` field builder.
+    pub fn property_secondary(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("secondary")
+            .expect("field secondary lookup failed")
+            .expect("field secondary is defined in schema")
+    }
+
+    /// Access the `tertiary` field builder.
+    pub fn property_tertiary(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("tertiary")
+            .expect("field tertiary lookup failed")
+            .expect("field tertiary is defined in schema")
+    }
+}
+
+/// Wrapper for the `Condition` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ConditionClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ConditionClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Condition type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `r#type` field builder.
+    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("type")
+            .expect("field type lookup failed")
+            .expect("field type is defined in schema")
+    }
+
+    /// Access the `conditions` field builder.
+    pub fn property_conditions(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("conditions")
+            .expect("field conditions lookup failed")
+            .expect("field conditions is defined in schema")
+    }
+}
+
+/// Wrapper for the `Configuration` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ConfigurationClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ConfigurationClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Configuration type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `version` field builder.
+    pub fn property_version(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("version")
+            .expect("field version lookup failed")
+            .expect("field version is defined in schema")
+    }
+
+    /// Access the `features` field builder.
+    pub fn property_features(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("features")
+            .expect("field features lookup failed")
+            .expect("field features is defined in schema")
+    }
+
+    /// Access the `environments` field builder.
+    pub fn property_environments(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("environments")
+            .expect("field environments lookup failed")
+            .expect("field environments is defined in schema")
+    }
+
+    /// Access the `rules` field builder.
+    pub fn property_rules(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("rules")
+            .expect("field rules lookup failed")
+            .expect("field rules is defined in schema")
+    }
+}
+
+/// Wrapper for the `ContainerWidget` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ContainerWidgetClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ContainerWidgetClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class ContainerWidget type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `layout` field builder.
+    pub fn property_layout(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("layout")
+            .expect("field layout lookup failed")
+            .expect("field layout is defined in schema")
+    }
+
+    /// Access the `children` field builder.
+    pub fn property_children(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("children")
+            .expect("field children lookup failed")
+            .expect("field children is defined in schema")
+    }
+
+    /// Access the `style` field builder.
+    pub fn property_style(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("style")
+            .expect("field style lookup failed")
+            .expect("field style is defined in schema")
+    }
+}
+
+/// Wrapper for the `DataObject` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct DataObjectClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl DataObjectClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class DataObject type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `r#type` field builder.
+    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("type")
+            .expect("field type lookup failed")
+            .expect("field type is defined in schema")
+    }
+
+    /// Access the `value` field builder.
+    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("value")
+            .expect("field value lookup failed")
+            .expect("field value is defined in schema")
+    }
+}
+
+/// Wrapper for the `Dimensions` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct DimensionsClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl DimensionsClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Dimensions type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `width` field builder.
+    pub fn property_width(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("width")
+            .expect("field width lookup failed")
+            .expect("field width is defined in schema")
+    }
+
+    /// Access the `height` field builder.
+    pub fn property_height(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("height")
+            .expect("field height lookup failed")
+            .expect("field height is defined in schema")
+    }
+}
+
+/// Wrapper for the `Environment` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct EnvironmentClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl EnvironmentClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Environment type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `name` field builder.
+    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("name")
+            .expect("field name lookup failed")
+            .expect("field name is defined in schema")
+    }
+
+    /// Access the `url` field builder.
+    pub fn property_url(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("url")
+            .expect("field url lookup failed")
+            .expect("field url is defined in schema")
+    }
+
+    /// Access the `variables` field builder.
+    pub fn property_variables(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("variables")
+            .expect("field variables lookup failed")
+            .expect("field variables is defined in schema")
+    }
+
+    /// Access the `secrets` field builder.
+    pub fn property_secrets(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("secrets")
+            .expect("field secrets lookup failed")
+            .expect("field secrets is defined in schema")
+    }
+}
+
+/// Wrapper for the `Error` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ErrorClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ErrorClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Error type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `r#type` field builder.
+    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("type")
+            .expect("field type lookup failed")
+            .expect("field type is defined in schema")
+    }
+
+    /// Access the `message` field builder.
+    pub fn property_message(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("message")
+            .expect("field message lookup failed")
+            .expect("field message is defined in schema")
+    }
+
+    /// Access the `code` field builder.
+    pub fn property_code(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("code")
+            .expect("field code lookup failed")
+            .expect("field code is defined in schema")
+    }
+}
+
+/// Wrapper for the `ErrorDetail` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ErrorDetailClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ErrorDetailClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class ErrorDetail type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `code` field builder.
+    pub fn property_code(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("code")
+            .expect("field code lookup failed")
+            .expect("field code is defined in schema")
+    }
+
+    /// Access the `message` field builder.
+    pub fn property_message(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("message")
+            .expect("field message lookup failed")
+            .expect("field message is defined in schema")
+    }
+
+    /// Access the `details` field builder.
+    pub fn property_details(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("details")
+            .expect("field details lookup failed")
+            .expect("field details is defined in schema")
+    }
+}
+
+/// Wrapper for the `Feature` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct FeatureClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl FeatureClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Feature type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `name` field builder.
+    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("name")
+            .expect("field name lookup failed")
+            .expect("field name is defined in schema")
+    }
+
+    /// Access the `enabled` field builder.
+    pub fn property_enabled(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("enabled")
+            .expect("field enabled lookup failed")
+            .expect("field enabled is defined in schema")
+    }
+
+    /// Access the `config` field builder.
+    pub fn property_config(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("config")
+            .expect("field config lookup failed")
+            .expect("field config is defined in schema")
+    }
+
+    /// Access the `dependencies` field builder.
+    pub fn property_dependencies(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("dependencies")
+            .expect("field dependencies lookup failed")
+            .expect("field dependencies is defined in schema")
+    }
+}
+
+/// Wrapper for the `ImageWidget` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ImageWidgetClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ImageWidgetClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class ImageWidget type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `alt` field builder.
+    pub fn property_alt(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("alt")
+            .expect("field alt lookup failed")
+            .expect("field alt is defined in schema")
+    }
+
+    /// Access the `dimensions` field builder.
+    pub fn property_dimensions(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("dimensions")
+            .expect("field dimensions lookup failed")
+            .expect("field dimensions is defined in schema")
+    }
+}
+
+/// Wrapper for the `Item` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ItemClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ItemClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner.as_type().expect("class Item type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `id` field builder.
+    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("id")
+            .expect("field id lookup failed")
+            .expect("field id is defined in schema")
+    }
+
+    /// Access the `name` field builder.
+    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("name")
+            .expect("field name lookup failed")
+            .expect("field name is defined in schema")
+    }
+
+    /// Access the `variants` field builder.
+    pub fn property_variants(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("variants")
+            .expect("field variants lookup failed")
+            .expect("field variants is defined in schema")
+    }
+
+    /// Access the `attributes` field builder.
+    pub fn property_attributes(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("attributes")
+            .expect("field attributes lookup failed")
+            .expect("field attributes is defined in schema")
+    }
+}
+
+/// Wrapper for the `KitchenSink` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct KitchenSinkClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl KitchenSinkClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class KitchenSink type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `id` field builder.
+    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("id")
+            .expect("field id lookup failed")
+            .expect("field id is defined in schema")
+    }
+
+    /// Access the `name` field builder.
+    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("name")
+            .expect("field name lookup failed")
+            .expect("field name is defined in schema")
+    }
+
+    /// Access the `score` field builder.
+    pub fn property_score(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("score")
+            .expect("field score lookup failed")
+            .expect("field score is defined in schema")
+    }
+
+    /// Access the `active` field builder.
+    pub fn property_active(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("active")
+            .expect("field active lookup failed")
+            .expect("field active is defined in schema")
+    }
+
+    /// Access the `nothing` field builder.
+    pub fn property_nothing(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("nothing")
+            .expect("field nothing lookup failed")
+            .expect("field nothing is defined in schema")
+    }
+
+    /// Access the `status` field builder.
+    pub fn property_status(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("status")
+            .expect("field status lookup failed")
+            .expect("field status is defined in schema")
+    }
+
+    /// Access the `priority` field builder.
+    pub fn property_priority(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("priority")
+            .expect("field priority lookup failed")
+            .expect("field priority is defined in schema")
+    }
+
+    /// Access the `tags` field builder.
+    pub fn property_tags(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("tags")
+            .expect("field tags lookup failed")
+            .expect("field tags is defined in schema")
+    }
+
+    /// Access the `numbers` field builder.
+    pub fn property_numbers(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("numbers")
+            .expect("field numbers lookup failed")
+            .expect("field numbers is defined in schema")
+    }
+
+    /// Access the `matrix` field builder.
+    pub fn property_matrix(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("matrix")
+            .expect("field matrix lookup failed")
+            .expect("field matrix is defined in schema")
+    }
+
+    /// Access the `metadata` field builder.
+    pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("metadata")
+            .expect("field metadata lookup failed")
+            .expect("field metadata is defined in schema")
+    }
+
+    /// Access the `scores` field builder.
+    pub fn property_scores(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("scores")
+            .expect("field scores lookup failed")
+            .expect("field scores is defined in schema")
+    }
+
+    /// Access the `description` field builder.
+    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("description")
+            .expect("field description lookup failed")
+            .expect("field description is defined in schema")
+    }
+
+    /// Access the `notes` field builder.
+    pub fn property_notes(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("notes")
+            .expect("field notes lookup failed")
+            .expect("field notes is defined in schema")
+    }
+
+    /// Access the `data` field builder.
+    pub fn property_data(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("data")
+            .expect("field data lookup failed")
+            .expect("field data is defined in schema")
+    }
+
+    /// Access the `result` field builder.
+    pub fn property_result(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("result")
+            .expect("field result lookup failed")
+            .expect("field result is defined in schema")
+    }
+
+    /// Access the `user` field builder.
+    pub fn property_user(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("user")
+            .expect("field user lookup failed")
+            .expect("field user is defined in schema")
+    }
+
+    /// Access the `items` field builder.
+    pub fn property_items(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("items")
+            .expect("field items lookup failed")
+            .expect("field items is defined in schema")
+    }
+
+    /// Access the `config` field builder.
+    pub fn property_config(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("config")
+            .expect("field config lookup failed")
+            .expect("field config is defined in schema")
+    }
+}
+
+/// Wrapper for the `Node` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct NodeClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl NodeClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner.as_type().expect("class Node type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `id` field builder.
+    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("id")
+            .expect("field id lookup failed")
+            .expect("field id is defined in schema")
+    }
+
+    /// Access the `r#type` field builder.
+    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("type")
+            .expect("field type lookup failed")
+            .expect("field type is defined in schema")
+    }
+
+    /// Access the `value` field builder.
+    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("value")
+            .expect("field value lookup failed")
+            .expect("field value is defined in schema")
+    }
+
+    /// Access the `metadata` field builder.
+    pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("metadata")
+            .expect("field metadata lookup failed")
+            .expect("field metadata is defined in schema")
+    }
+}
+
+/// Wrapper for the `NodeMetadata` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct NodeMetadataClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl NodeMetadataClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class NodeMetadata type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `created` field builder.
+    pub fn property_created(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("created")
+            .expect("field created lookup failed")
+            .expect("field created is defined in schema")
+    }
+
+    /// Access the `modified` field builder.
+    pub fn property_modified(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("modified")
+            .expect("field modified lookup failed")
+            .expect("field modified is defined in schema")
+    }
+
+    /// Access the `tags` field builder.
+    pub fn property_tags(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("tags")
+            .expect("field tags lookup failed")
+            .expect("field tags is defined in schema")
+    }
+
+    /// Access the `attributes` field builder.
+    pub fn property_attributes(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("attributes")
+            .expect("field attributes lookup failed")
+            .expect("field attributes is defined in schema")
+    }
+}
+
+/// Wrapper for the `PrimaryData` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct PrimaryDataClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl PrimaryDataClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class PrimaryData type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `values` field builder.
+    pub fn property_values(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("values")
+            .expect("field values lookup failed")
+            .expect("field values is defined in schema")
+    }
+
+    /// Access the `mappings` field builder.
+    pub fn property_mappings(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("mappings")
+            .expect("field mappings lookup failed")
+            .expect("field mappings is defined in schema")
+    }
+
+    /// Access the `flags` field builder.
+    pub fn property_flags(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("flags")
+            .expect("field flags lookup failed")
+            .expect("field flags is defined in schema")
+    }
+}
+
+/// Wrapper for the `Record` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct RecordClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl RecordClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Record type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `id` field builder.
+    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("id")
+            .expect("field id lookup failed")
+            .expect("field id is defined in schema")
+    }
+
+    /// Access the `data` field builder.
+    pub fn property_data(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("data")
+            .expect("field data lookup failed")
+            .expect("field data is defined in schema")
+    }
+
+    /// Access the `related` field builder.
+    pub fn property_related(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("related")
+            .expect("field related lookup failed")
+            .expect("field related is defined in schema")
+    }
+}
+
+/// Wrapper for the `ResponseMetadata` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct ResponseMetadataClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl ResponseMetadataClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class ResponseMetadata type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `timestamp` field builder.
+    pub fn property_timestamp(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("timestamp")
+            .expect("field timestamp lookup failed")
+            .expect("field timestamp is defined in schema")
+    }
+
+    /// Access the `requestId` field builder.
+    pub fn property_requestId(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("requestId")
+            .expect("field requestId lookup failed")
+            .expect("field requestId is defined in schema")
+    }
+
+    /// Access the `duration` field builder.
+    pub fn property_duration(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("duration")
+            .expect("field duration lookup failed")
+            .expect("field duration is defined in schema")
+    }
+
+    /// Access the `retries` field builder.
+    pub fn property_retries(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("retries")
+            .expect("field retries lookup failed")
+            .expect("field retries is defined in schema")
+    }
+}
+
+/// Wrapper for the `Rule` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct RuleClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl RuleClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner.as_type().expect("class Rule type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `id` field builder.
+    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("id")
+            .expect("field id lookup failed")
+            .expect("field id is defined in schema")
+    }
+
+    /// Access the `name` field builder.
+    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("name")
+            .expect("field name lookup failed")
+            .expect("field name is defined in schema")
+    }
+
+    /// Access the `condition` field builder.
+    pub fn property_condition(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("condition")
+            .expect("field condition lookup failed")
+            .expect("field condition is defined in schema")
+    }
+
+    /// Access the `actions` field builder.
+    pub fn property_actions(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("actions")
+            .expect("field actions lookup failed")
+            .expect("field actions is defined in schema")
+    }
+
+    /// Access the `priority` field builder.
+    pub fn property_priority(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("priority")
+            .expect("field priority lookup failed")
+            .expect("field priority is defined in schema")
+    }
+}
+
+/// Wrapper for the `SecondaryData` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct SecondaryDataClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl SecondaryDataClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class SecondaryData type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `records` field builder.
+    pub fn property_records(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("records")
+            .expect("field records lookup failed")
+            .expect("field records is defined in schema")
+    }
+
+    /// Access the `index` field builder.
+    pub fn property_index(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("index")
+            .expect("field index lookup failed")
+            .expect("field index is defined in schema")
+    }
+}
+
+/// Wrapper for the `Setting` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct SettingClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl SettingClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Setting type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `key` field builder.
+    pub fn property_key(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("key")
+            .expect("field key lookup failed")
+            .expect("field key is defined in schema")
+    }
+
+    /// Access the `value` field builder.
+    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("value")
+            .expect("field value lookup failed")
+            .expect("field value is defined in schema")
+    }
+
+    /// Access the `metadata` field builder.
+    pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("metadata")
+            .expect("field metadata lookup failed")
+            .expect("field metadata is defined in schema")
+    }
+}
+
+/// Wrapper for the `SimpleCondition` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct SimpleConditionClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl SimpleConditionClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class SimpleCondition type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `field` field builder.
+    pub fn property_field(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("field")
+            .expect("field field lookup failed")
+            .expect("field field is defined in schema")
+    }
+
+    /// Access the `operator` field builder.
+    pub fn property_operator(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("operator")
+            .expect("field operator lookup failed")
+            .expect("field operator is defined in schema")
+    }
+
+    /// Access the `value` field builder.
+    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("value")
+            .expect("field value lookup failed")
+            .expect("field value is defined in schema")
+    }
+}
+
+/// Wrapper for the `Success` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct SuccessClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl SuccessClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Success type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `r#type` field builder.
+    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("type")
+            .expect("field type lookup failed")
+            .expect("field type is defined in schema")
+    }
+
+    /// Access the `data` field builder.
+    pub fn property_data(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("data")
+            .expect("field data lookup failed")
+            .expect("field data is defined in schema")
+    }
+}
+
+/// Wrapper for the `TertiaryData` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct TertiaryDataClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl TertiaryDataClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class TertiaryData type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `raw` field builder.
+    pub fn property_raw(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("raw")
+            .expect("field raw lookup failed")
+            .expect("field raw is defined in schema")
+    }
+
+    /// Access the `parsed` field builder.
+    pub fn property_parsed(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("parsed")
+            .expect("field parsed lookup failed")
+            .expect("field parsed is defined in schema")
+    }
+
+    /// Access the `valid` field builder.
+    pub fn property_valid(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("valid")
+            .expect("field valid lookup failed")
+            .expect("field valid is defined in schema")
+    }
+}
+
+/// Wrapper for the `TextWidget` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct TextWidgetClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl TextWidgetClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class TextWidget type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `content` field builder.
+    pub fn property_content(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("content")
+            .expect("field content lookup failed")
+            .expect("field content is defined in schema")
+    }
+
+    /// Access the `format` field builder.
+    pub fn property_format(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("format")
+            .expect("field format lookup failed")
+            .expect("field format is defined in schema")
+    }
+
+    /// Access the `style` field builder.
+    pub fn property_style(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("style")
+            .expect("field style lookup failed")
+            .expect("field style is defined in schema")
+    }
+}
+
+/// Wrapper for the `UltraComplex` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct UltraComplexClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl UltraComplexClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class UltraComplex type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `tree` field builder.
+    pub fn property_tree(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("tree")
+            .expect("field tree lookup failed")
+            .expect("field tree is defined in schema")
+    }
+
+    /// Access the `widgets` field builder.
+    pub fn property_widgets(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("widgets")
+            .expect("field widgets lookup failed")
+            .expect("field widgets is defined in schema")
+    }
+
+    /// Access the `data` field builder.
+    pub fn property_data(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("data")
+            .expect("field data lookup failed")
+            .expect("field data is defined in schema")
+    }
+
+    /// Access the `response` field builder.
+    pub fn property_response(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("response")
+            .expect("field response lookup failed")
+            .expect("field response is defined in schema")
+    }
+
+    /// Access the `assets` field builder.
+    pub fn property_assets(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("assets")
+            .expect("field assets lookup failed")
+            .expect("field assets is defined in schema")
+    }
+}
+
+/// Wrapper for the `User` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct UserClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl UserClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner.as_type().expect("class User type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `id` field builder.
+    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("id")
+            .expect("field id lookup failed")
+            .expect("field id is defined in schema")
+    }
+
+    /// Access the `profile` field builder.
+    pub fn property_profile(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("profile")
+            .expect("field profile lookup failed")
+            .expect("field profile is defined in schema")
+    }
+
+    /// Access the `settings` field builder.
+    pub fn property_settings(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("settings")
+            .expect("field settings lookup failed")
+            .expect("field settings is defined in schema")
+    }
+}
+
+/// Wrapper for the `UserProfile` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct UserProfileClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl UserProfileClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class UserProfile type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `name` field builder.
+    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("name")
+            .expect("field name lookup failed")
+            .expect("field name is defined in schema")
+    }
+
+    /// Access the `email` field builder.
+    pub fn property_email(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("email")
+            .expect("field email lookup failed")
+            .expect("field email is defined in schema")
+    }
+
+    /// Access the `bio` field builder.
+    pub fn property_bio(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("bio")
+            .expect("field bio lookup failed")
+            .expect("field bio is defined in schema")
+    }
+
+    /// Access the `links` field builder.
+    pub fn property_links(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("links")
+            .expect("field links lookup failed")
+            .expect("field links is defined in schema")
+    }
+}
+
+/// Wrapper for the `UserResponse` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct UserResponseClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl UserResponseClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class UserResponse type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `status` field builder.
+    pub fn property_status(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("status")
+            .expect("field status lookup failed")
+            .expect("field status is defined in schema")
+    }
+
+    /// Access the `data` field builder.
+    pub fn property_data(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("data")
+            .expect("field data lookup failed")
+            .expect("field data is defined in schema")
+    }
+
+    /// Access the `error` field builder.
+    pub fn property_error(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("error")
+            .expect("field error lookup failed")
+            .expect("field error is defined in schema")
+    }
+
+    /// Access the `metadata` field builder.
+    pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("metadata")
+            .expect("field metadata lookup failed")
+            .expect("field metadata is defined in schema")
+    }
+}
+
+/// Wrapper for the `Variant` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct VariantClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl VariantClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Variant type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `sku` field builder.
+    pub fn property_sku(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("sku")
+            .expect("field sku lookup failed")
+            .expect("field sku is defined in schema")
+    }
+
+    /// Access the `price` field builder.
+    pub fn property_price(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("price")
+            .expect("field price lookup failed")
+            .expect("field price is defined in schema")
+    }
+
+    /// Access the `stock` field builder.
+    pub fn property_stock(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("stock")
+            .expect("field stock lookup failed")
+            .expect("field stock is defined in schema")
+    }
+
+    /// Access the `options` field builder.
+    pub fn property_options(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("options")
+            .expect("field options lookup failed")
+            .expect("field options is defined in schema")
+    }
+}
+
+/// Wrapper for the `Widget` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct WidgetClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl WidgetClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("class Widget type lookup failed")
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `r#type` field builder.
+    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("type")
+            .expect("field type lookup failed")
+            .expect("field type is defined in schema")
+    }
+
+    /// Access the `button` field builder.
+    pub fn property_button(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("button")
+            .expect("field button lookup failed")
+            .expect("field button is defined in schema")
+    }
+
+    /// Access the `text` field builder.
+    pub fn property_text(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("text")
+            .expect("field text lookup failed")
+            .expect("field text is defined in schema")
+    }
+
+    /// Access the `img` field builder.
+    pub fn property_img(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("img")
+            .expect("field img lookup failed")
+            .expect("field img is defined in schema")
+    }
+
+    /// Access the `container` field builder.
+    pub fn property_container(&self) -> baml::ClassPropertyBuilder {
+        self.inner
+            .get_property("container")
+            .expect("field container lookup failed")
+            .expect("field container is defined in schema")
+    }
+}

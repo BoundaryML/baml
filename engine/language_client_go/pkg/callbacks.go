@@ -9,6 +9,7 @@ import "C"
 import (
 	"context"
 	"math/rand"
+	"reflect"
 	"sync"
 	"unsafe"
 
@@ -59,8 +60,8 @@ var (
 	typeMap          serde.TypeMap
 )
 
-func SetTypeMap(t serde.TypeMap) {
-	typeMap = t
+func SetTypeMap(t map[string]reflect.Type) {
+	typeMap = serde.NewExternalTypeMap(t)
 }
 
 //export on_tick_callback

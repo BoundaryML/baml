@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/shared"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
@@ -11,7 +13,7 @@ import (
 
 // debugLog prints debug information if BAML_INTERNAL_LOG=trace is set
 func debugLog(format string, args ...interface{}) {
-	if os.Getenv("BAML_INTERNAL_LOG") == "trace" || true {
+	if os.Getenv("BAML_INTERNAL_LOG") == "trace" { // TODO: remove this once we have a proper logging system
 		fmt.Printf(format, args...)
 		if format[len(format)-1] != '\n' {
 			fmt.Println()
@@ -87,16 +89,24 @@ func decodeListValue(valueList *cffi.CFFIValueList, typeMap TypeMap) (reflect.Va
 
 	goElementType := convertFieldTypeToGoType(valueList.ItemType, typeMap)
 
-	length := len(valueList.Items)
-	sliceOf := reflect.SliceOf(goElementType)
-	values := reflect.MakeSlice(sliceOf, length, length)
+	if goElementType == typeMap.typeMap["INTERNAL.nil"] {
+		values := []any{}
+		for _, v := range valueList.Items {
+			decodedValue, _ := Decode(v, typeMap)
+			values = append(values, decodedValue.Elem())
+		}
+		return reflect.ValueOf(values), reflect.TypeOf(values)
+	} else {
+		length := len(valueList.Items)
+		sliceOf := reflect.SliceOf(goElementType)
+		values := reflect.MakeSlice(sliceOf, length, length)
 
-	for i, v := range valueList.Items {
-		decodedValue, _ := Decode(v, typeMap)
-		values.Index(i).Set(decodedValue)
+		for i, v := range valueList.Items {
+			decodedValue, _ := Decode(v, typeMap)
+			values.Index(i).Set(decodedValue)
+		}
+		return values, sliceOf
 	}
-
-	return values, sliceOf
 }
 
 func decodeMapValue(valueMap *cffi.CFFIValueMap, typeMap TypeMap) (reflect.Value, reflect.Type) {
@@ -107,17 +117,37 @@ func decodeMapValue(valueMap *cffi.CFFIValueMap, typeMap TypeMap) (reflect.Value
 	valueType := valueMap.ValueType
 	goKeyType := convertFieldTypeToGoType(keyType, typeMap)
 	goValueType := convertFieldTypeToGoType(valueType, typeMap)
-
-	mapType := reflect.MapOf(goKeyType, goValueType)
-	values := reflect.MakeMap(mapType)
-
-	for _, entry := range valueMap.Entries {
-		key := entry.Key
-		value := entry.Value
-		decodedValue, _ := Decode(value, typeMap)
-		values.SetMapIndex(reflect.ValueOf(key), decodedValue)
+	debugLog("goValueType: %+v\n", goValueType)
+	debugLog("typeMap.typeMap[\"INTERNAL.nil\"]: %+v\n", typeMap.typeMap["INTERNAL.nil"])
+	if goValueType == typeMap.typeMap["INTERNAL.nil"] {
+		values := map[string]any{}
+		for _, entry := range valueMap.Entries {
+			key := entry.Key
+			value := entry.Value
+			decodedValue, goType := Decode(value, typeMap)
+			switch goType {
+			case reflect.TypeOf(int64(0)):
+				values[key] = decodedValue.Int()
+			case reflect.TypeOf(float64(0)):
+				values[key] = decodedValue.Float()
+			case reflect.TypeOf(false):
+				values[key] = decodedValue.Bool()
+			default:
+				values[key] = decodedValue.Interface()
+			}
+		}
+		return reflect.ValueOf(values), reflect.TypeOf(values)
+	} else {
+		mapType := reflect.MapOf(goKeyType, goValueType)
+		values := reflect.MakeMap(mapType)
+		for _, entry := range valueMap.Entries {
+			key := entry.Key
+			value := entry.Value
+			decodedValue, _ := Decode(value, typeMap)
+			values.SetMapIndex(reflect.ValueOf(key), decodedValue)
+		}
+		return values, mapType
 	}
-	return values, mapType
 }
 
 func decodeStreamingStateValue(valueStreamingState *cffi.CFFIValueStreamingState, typeMap TypeMap) (reflect.Value, reflect.Type) {
@@ -306,8 +336,7 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 
 	if class, ok := type_.(*cffi.CFFIFieldTypeHolder_ClassType); ok {
 		name := class.ClassType.Name.Name
-		namespace := class.ClassType.Name.Namespace.Enum().String()
-		goType, ok := typeMap[namespace+"."+name]
+		goType, ok := typeMap.GetType(class.ClassType.Name)
 		if !ok {
 			// going to be a dynamic class
 			return reflect.TypeOf(DynamicClass{
@@ -320,7 +349,7 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 	if enum, ok := type_.(*cffi.CFFIFieldTypeHolder_EnumType); ok {
 		name := enum.EnumType.Name
 		namespace := cffi.CFFITypeNamespace_TYPES.String()
-		goType, ok := typeMap[namespace+"."+name]
+		goType, ok := typeMap.typeMap[namespace+"."+name]
 		if !ok {
 			// going to be a dynamic enum
 			return reflect.TypeOf(DynamicEnum{
@@ -334,30 +363,39 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 	if union, ok := type_.(*cffi.CFFIFieldTypeHolder_UnionVariantType); ok {
 		unionVariantType := union.UnionVariantType
 		unionVariantName := unionVariantType.Name.Name
-		unionVariantNamespace := unionVariantType.Name.Namespace.Enum().String()
-		goType, ok := typeMap[unionVariantNamespace+"."+unionVariantName]
+		goType, ok := typeMap.GetType(unionVariantType.Name)
 		if !ok {
 			// going to be a dynamic union
-			return reflect.TypeOf(DynamicUnion{
-				Variant: unionVariantName,
-				Value:   nil,
-			})
+			if typeMap.allowDynamicUnion {
+				return reflect.TypeOf(DynamicUnion{
+					Variant: unionVariantName,
+					Value:   nil,
+				})
+			} else {
+				return typeMap.typeMap["INTERNAL.nil"]
+			}
+		} else {
+			return goType
 		}
-		return goType
+
 	}
 
 	if optional, ok := type_.(*cffi.CFFIFieldTypeHolder_OptionalType); ok {
 		optionalType := optional.OptionalType
 		goType := convertFieldTypeToGoType(optionalType.Value, typeMap)
+		if goType == typeMap.typeMap["INTERNAL.nil"] {
+			// Pointer to nil / any is same as nil / any
+			return goType
+		}
 		return reflect.PointerTo(goType)
 	}
 
 	if checked, ok := type_.(*cffi.CFFIFieldTypeHolder_CheckedType); ok {
 		checkedType := checked.CheckedType
 		serializeType := typeToString(checkedType.Value)
-		goType, ok := typeMap["CHECKED_TYPES."+serializeType]
+		goType, ok := typeMap.typeMap["CHECKED_TYPES."+serializeType]
 		if !ok {
-			panic("error decoding type, checked type not found: " + serializeType)
+			panic("error decoding type, checked type not found: " + serializeType + ", typeMap=" + fmt.Sprintf("%+v", typeMap))
 		}
 		return goType
 	}
@@ -369,18 +407,27 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 
 	if list, ok := type_.(*cffi.CFFIFieldTypeHolder_ListType); ok {
 		listType := list.ListType
-		return reflect.SliceOf(convertFieldTypeToGoType(listType.ItemType, typeMap))
+		goElementType := convertFieldTypeToGoType(listType.ItemType, typeMap)
+		if goElementType == typeMap.typeMap["INTERNAL.nil"] {
+			return reflect.TypeOf([]any{})
+		}
+		return reflect.SliceOf(goElementType)
 	}
 
 	if map_, ok := type_.(*cffi.CFFIFieldTypeHolder_MapType); ok {
 		mapType := map_.MapType
-		return reflect.MapOf(convertFieldTypeToGoType(mapType.KeyType, typeMap), convertFieldTypeToGoType(mapType.ValueType, typeMap))
+		goKeyType := convertFieldTypeToGoType(mapType.KeyType, typeMap)
+		goValueType := convertFieldTypeToGoType(mapType.ValueType, typeMap)
+		if goValueType == typeMap.typeMap["INTERNAL.nil"] {
+			return reflect.TypeOf(map[string]any{})
+		}
+		return reflect.MapOf(goKeyType, goValueType)
 	}
 
 	if typeAlias, ok := type_.(*cffi.CFFIFieldTypeHolder_TypeAliasType); ok {
 		name := typeAlias.TypeAliasType.Name.Name
 		namespace := typeAlias.TypeAliasType.Name.Namespace.String()
-		goType, ok := typeMap[namespace+"."+name]
+		goType, ok := typeMap.typeMap[namespace+"."+name]
 		if !ok {
 			panic("error decoding value, type alias not found: " + namespace + "." + name)
 		}
@@ -389,7 +436,7 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder, typeMap TypeM
 
 	// any is weird in go, (alias for interface{})
 	if _, ok := type_.(*cffi.CFFIFieldTypeHolder_NullType); ok {
-		if _, ok := typeMap["INTERNAL.nil"]; ok {
+		if _, ok := typeMap.typeMap["INTERNAL.nil"]; ok {
 			return reflect.TypeOf((*interface{})(nil)).Elem()
 		}
 		return reflect.TypeOf((*interface{})(nil))
@@ -413,19 +460,40 @@ func typeToString(fieldType *cffi.CFFIFieldTypeHolder) string {
 		return "bool"
 	}
 	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_IntType); ok {
-		return "int64"
+		return "int"
 	}
 	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_FloatType); ok {
-		return "float64"
+		return "float"
 	}
-	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_LiteralType); ok {
-		return "literal"
+	if literalType, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_LiteralType); ok {
+		literalType := literalType.LiteralType
+		switch literalType.Literal.(type) {
+		case *cffi.CFFIFieldTypeLiteral_BoolLiteral:
+			literalValue := literalType.Literal.(*cffi.CFFIFieldTypeLiteral_BoolLiteral).BoolLiteral.Value
+			if literalValue {
+				return "bool_true"
+			} else {
+				return "bool_false"
+			}
+		case *cffi.CFFIFieldTypeLiteral_IntLiteral:
+			literalValue := literalType.Literal.(*cffi.CFFIFieldTypeLiteral_IntLiteral).IntLiteral.Value
+			return "int_literal:" + strconv.FormatInt(literalValue, 10)
+		case *cffi.CFFIFieldTypeLiteral_StringLiteral:
+			literalValue := literalType.Literal.(*cffi.CFFIFieldTypeLiteral_StringLiteral).StringLiteral.Value
+			// replace all non-alphanumeric characters with an underscore
+			safeLiteralValue := strings.ReplaceAll(literalValue, "[^a-zA-Z0-9]", "_")
+			return "string_" + safeLiteralValue
+		default:
+			panic("error decoding value, unknown literal type: " + fmt.Sprintf("%+v", literalType.Literal))
+		}
 	}
 	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_ClassType); ok {
 		return "class"
 	}
-	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_EnumType); ok {
-		return "enum"
+	if enumType, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_EnumType); ok {
+		enumType := enumType.EnumType
+		enumName := enumType.Name
+		return enumName
 	}
 	if _, ok := fieldType.Type.(*cffi.CFFIFieldTypeHolder_UnionVariantType); ok {
 		return "union"
@@ -463,7 +531,8 @@ func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) (reflect.Value, refle
 
 	switch value := value.(type) {
 	case *cffi.CFFIValueHolder_NullValue:
-		return reflect.ValueOf(nil), nil
+		goType := typeMap.typeMap["INTERNAL.nil"]
+		return reflect.ValueOf(nil), goType
 	case *cffi.CFFIValueHolder_StringValue:
 		val := reflect.ValueOf(value.StringValue)
 		return val, reflect.TypeOf("")

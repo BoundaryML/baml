@@ -3,8 +3,60 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-//! Generated enum builder wrappers.
-//!
-//! Full implementation coming in Phase 8.
+//! Generated enum builder wrappers for type-safe value access.
 
-// Enum builder placeholders will be generated here in Phase 8.
+/// Wrapper for the `Status` enum builder.
+///
+/// Provides type-safe method access to values defined in the schema.
+/// Access values via methods: `builder.ValueName()`
+
+pub struct StatusEnumBuilder {
+    inner: baml::EnumBuilder,
+}
+
+impl StatusEnumBuilder {
+    /// Create wrapper from runtime EnumBuilder.
+    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying EnumBuilder.
+    pub fn inner(&self) -> &baml::EnumBuilder {
+        &self.inner
+    }
+
+    /// Get the enum as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("enum Status type lookup failed")
+    }
+
+    // =========================================================================
+    // Value Accessors (1:1 with schema value names)
+    // =========================================================================
+
+    /// Access the `ACTIVE` value builder.
+    pub fn value_ACTIVE(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("ACTIVE")
+            .expect("value ACTIVE lookup failed")
+            .expect("value ACTIVE is defined in schema")
+    }
+
+    /// Access the `INACTIVE` value builder.
+    pub fn value_INACTIVE(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("INACTIVE")
+            .expect("value INACTIVE lookup failed")
+            .expect("value INACTIVE is defined in schema")
+    }
+
+    /// Access the `PENDING` value builder.
+    pub fn value_PENDING(&self) -> baml::EnumValueBuilder {
+        self.inner
+            .get_value("PENDING")
+            .expect("value PENDING lookup failed")
+            .expect("value PENDING is defined in schema")
+    }
+}

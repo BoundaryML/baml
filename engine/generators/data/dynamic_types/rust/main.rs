@@ -85,9 +85,9 @@ mod type_builder_tests {
         let tb = TypeBuilder::new();
 
         // Access schema-defined fields via methods
-        let name_field = tb.Person().name();
-        let age_field = tb.Person().age();
-        let street_field = tb.Address().street();
+        let name_field = tb.Person().property_name();
+        let age_field = tb.Person().property_age();
+        let street_field = tb.Address().property_street();
 
         // Verify we can get names
         assert_eq!(name_field.name().unwrap(), "name");
@@ -119,10 +119,10 @@ mod type_builder_tests {
         let tb = TypeBuilder::new();
 
         // Access schema-defined enum values via methods
-        let technology = tb.Category().Technology();
-        let science = tb.Category().Science();
-        let high = tb.Priority().High();
-        let active = tb.Status().Active();
+        let technology = tb.Category().value_Technology();
+        let science = tb.Category().value_Science();
+        let high = tb.Priority().value_High();
+        let active = tb.Status().value_Active();
 
         // Verify we can get names
         assert_eq!(technology.name().unwrap(), "Technology");
@@ -163,11 +163,11 @@ mod type_builder_tests {
 
         // Set description on a field
         tb.Person()
-            .name()
+            .property_name()
             .set_description("The person's full name")
             .expect("Should be able to set description");
 
-        let description = tb.Person().name().description().unwrap();
+        let description = tb.Person().property_name().description().unwrap();
         assert_eq!(description, Some("The person's full name".to_string()));
     }
 
@@ -177,11 +177,11 @@ mod type_builder_tests {
 
         // Set alias on an enum value
         tb.Category()
-            .Technology()
+            .value_Technology()
             .set_alias("TECH")
             .expect("Should be able to set alias");
 
-        let alias = tb.Category().Technology().alias().unwrap();
+        let alias = tb.Category().value_Technology().alias().unwrap();
         assert_eq!(alias, Some("TECH".to_string()));
     }
 
