@@ -65,7 +65,7 @@ impl baml_hir::Db for TestDatabase {
 }
 
 #[salsa::db]
-impl baml_thir::Db for TestDatabase {}
+impl baml_tir::Db for TestDatabase {}
 
 #[salsa::db]
 impl baml_mir::Db for TestDatabase {}

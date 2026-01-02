@@ -27,8 +27,8 @@ baml_lexer = { workspace = true }
 baml_syntax = { workspace = true }
 baml_parser = { workspace = true }
 baml_hir = { workspace = true }
-baml_thir = { workspace = true }
-baml_typed_ir = { workspace = true }
+baml_tir = { workspace = true }
+baml_vir = { workspace = true }
 baml_mir = { workspace = true }
 baml_codegen = { workspace = true }
 baml_diagnostics = { workspace = true }

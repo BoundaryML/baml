@@ -6,7 +6,7 @@
 //!
 //! The compilation pipeline is:
 //! ```text
-//! Source -> CST -> HIR -> THIR -> MIR -> Bytecode
+//! Source -> CST -> HIR -> TIR -> VIR -> MIR -> Bytecode
 //! ```
 //!
 //! This crate handles the final step: MIR -> Bytecode.
@@ -48,7 +48,7 @@ use std::collections::HashMap;
 
 use baml_base::{Name, SourceFile};
 use baml_hir::{self, ItemId, function_body, function_signature};
-pub use baml_typed_ir::LoweringError;
+pub use baml_vir::LoweringError;
 pub use baml_vm::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, Program, UnaryOp, Value,
@@ -57,7 +57,7 @@ pub use baml_vm::{
 /// Generate bytecode for all functions in a project.
 ///
 /// This is the main entry point for project-wide code generation.
-/// It collects all functions from HIR, type-checks them via THIR,
+/// It collects all functions from HIR, type-checks them via TIR,
 /// lowers to MIR, and compiles to bytecode.
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
@@ -108,7 +108,7 @@ pub fn compile_files(
     // Build classes map (class name -> field name -> field index) and add Class objects to program
     // Also build class_field_types for type inference (class name -> field name -> Ty)
     let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    let mut class_field_types: HashMap<Name, HashMap<Name, baml_thir::Ty>> = HashMap::new();
+    let mut class_field_types: HashMap<Name, HashMap<Name, baml_tir::Ty>> = HashMap::new();
     let mut class_object_indices: HashMap<String, usize> = HashMap::new();
 
     for file in files {
@@ -126,7 +126,7 @@ pub fn compile_files(
                     field_indices.insert(field.name.to_string(), idx);
                     field_names.push(field.name.to_string());
                     // Lower TypeRef to Ty for type inference
-                    let ty = baml_thir::lower_type_ref(db, &field.type_ref);
+                    let ty = baml_tir::lower_type_ref(db, &field.type_ref);
                     field_types.insert(field.name.clone(), ty);
                 }
 
@@ -249,8 +249,8 @@ pub fn compile_files(
                         // Note: type_aliases is not passed here, so exhaustiveness
                         // checking for type aliases won't work. This is acceptable
                         // since codegen is for runtime execution, and type errors
-                        // should be caught in the THIR phase.
-                        let inference = baml_thir::infer_function(
+                        // should be caught in the TIR phase.
+                        let inference = baml_tir::infer_function(
                             db,
                             &signature,
                             &body,
@@ -261,11 +261,10 @@ pub fn compile_files(
                             *func_loc,
                         );
 
-                        // Lower HIR → TypedIR → MIR
+                        // Lower HIR → VIR → MIR
                         // Returns early if there are Missing nodes (errors in source)
-                        let typed_ir = baml_typed_ir::lower_from_hir(db, &body, &inference)?;
-                        let mir =
-                            baml_mir::lower_from_typed_ir(&signature, &typed_ir, db, &classes);
+                        let vir = baml_vir::lower_from_hir(db, &body, &inference)?;
+                        let mir = baml_mir::lower(&signature, &vir, db, &classes);
 
                         // Compile MIR to bytecode
                         let ctx = MirCodegenContext {
@@ -303,7 +302,7 @@ pub fn compile_files(
 fn build_typing_context<'db>(
     db: &'db dyn baml_mir::Db,
     files: &[SourceFile],
-) -> HashMap<Name, baml_thir::Ty<'db>> {
+) -> HashMap<Name, baml_tir::Ty<'db>> {
     let mut context = HashMap::new();
 
     for file in files {
@@ -313,15 +312,15 @@ fn build_typing_context<'db>(
                 let signature = function_signature(db, *func_loc);
 
                 // Build the arrow type: (param_types) -> return_type
-                let param_types: Vec<baml_thir::Ty<'db>> = signature
+                let param_types: Vec<baml_tir::Ty<'db>> = signature
                     .params
                     .iter()
-                    .map(|p| baml_thir::lower_type_ref(db, &p.type_ref))
+                    .map(|p| baml_tir::lower_type_ref(db, &p.type_ref))
                     .collect();
 
-                let return_type = baml_thir::lower_type_ref(db, &signature.return_type);
+                let return_type = baml_tir::lower_type_ref(db, &signature.return_type);
 
-                let func_type = baml_thir::Ty::Function {
+                let func_type = baml_tir::Ty::Function {
                     params: param_types,
                     ret: Box::new(return_type),
                 };

@@ -27,7 +27,7 @@
 //! ```
 
 use baml_base::Name;
-use baml_thir::Ty;
+use baml_tir::Ty;
 use text_size::TextRange;
 
 use crate::{

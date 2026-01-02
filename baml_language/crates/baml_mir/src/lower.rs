@@ -1,7 +1,7 @@
-//! Lowering from `TypedIR` to MIR.
+//! Lowering from VIR to MIR.
 //!
-//! This module converts the expression-only `TypedIR` representation into
-//! the CFG-based MIR. Because `TypedIR` has no statements (everything is an
+//! This module converts the expression-only VIR representation into
+//! the CFG-based MIR. Because VIR has no statements (everything is an
 //! expression), this lowering is much simpler than HIR → MIR lowering.
 //!
 //! # Key Simplifications
@@ -18,18 +18,26 @@ use std::collections::HashMap;
 
 use baml_base::Name;
 use baml_hir::FunctionSignature;
-use baml_thir::Ty;
-use baml_typed_ir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
+use baml_tir::Ty;
+use baml_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
     Rvalue, UnaryOp as MirUnaryOp,
 };
 
-/// Lower a function from `TypedIR` to MIR.
+/// Source of a field value in spread expansion.
+enum FieldSource {
+    /// Field value comes from a named field assignment.
+    Named(ExprId),
+    /// Field value comes from a spread source (local containing spread value, field index).
+    Spread(Local, usize),
+}
+
+/// Lower a function from VIR to MIR.
 ///
-/// This is the main entry point for `TypedIR` → MIR lowering.
-pub fn lower_from_typed_ir<'db>(
+/// This is the main entry point for VIR → MIR lowering.
+pub fn lower<'db>(
     signature: &FunctionSignature,
     typed_body: &ExprBody,
     db: &'db dyn crate::Db,
@@ -40,7 +48,7 @@ pub fn lower_from_typed_ir<'db>(
     ctx.finish()
 }
 
-/// Context for lowering `TypedIR` to MIR.
+/// Context for lowering VIR to MIR.
 struct LoweringContext<'db, 'ctx> {
     #[allow(dead_code)]
     db: &'db dyn crate::Db,
@@ -87,13 +95,13 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
         // _0: return place
         // Use signature return type, not body root type (which may be Never for diverging bodies)
-        let ret_ty = baml_thir::lower_type_ref(self.db, &signature.return_type);
+        let ret_ty = baml_tir::lower_type_ref(self.db, &signature.return_type);
         let ret = self.builder.declare_local(None, ret_ty, None);
         assert_eq!(ret, Local(0));
 
         // _1..=_n: parameters
         for param in &signature.params {
-            let param_ty = baml_thir::lower_type_ref(self.db, &param.type_ref);
+            let param_ty = baml_tir::lower_type_ref(self.db, &param.type_ref);
             let local = self
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None);
@@ -407,30 +415,145 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 self.builder.assign(dest, Rvalue::Array(elem_operands));
             }
 
-            Expr::Object { type_name, fields } => {
-                let field_operands: Vec<Operand<'db>> = fields
-                    .iter()
-                    .map(|(_, value)| {
-                        let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
-                        let value_local = self.builder.temp(value_ty);
-                        self.lower_expr(*value, Place::local(value_local), body);
-                        Operand::copy_local(value_local)
-                    })
-                    .collect();
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+            } => {
+                // If there are no spreads, use the simple aggregate approach
+                if spreads.is_empty() {
+                    let field_operands: Vec<Operand<'db>> = fields
+                        .iter()
+                        .map(|(_, value)| {
+                            let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
+                            let value_local = self.builder.temp(value_ty);
+                            self.lower_expr(*value, Place::local(value_local), body);
+                            Operand::copy_local(value_local)
+                        })
+                        .collect();
 
-                let kind = if let Some(name) = type_name {
-                    AggregateKind::Class(name.to_string())
+                    let kind = if let Some(name) = type_name {
+                        AggregateKind::Class(name.to_string())
+                    } else {
+                        AggregateKind::Class("Anonymous".to_string())
+                    };
+
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Aggregate {
+                            kind,
+                            fields: field_operands,
+                        },
+                    );
                 } else {
-                    AggregateKind::Class("Anonymous".to_string())
-                };
+                    // With spreads, we need to determine the final value for each field
+                    // based on position-based override semantics (last assignment wins).
+                    //
+                    // Algorithm:
+                    // 1. Evaluate all spread sources into temp locals
+                    // 2. Get all class fields in definition order
+                    // 3. For each class field, determine source (named field or spread)
+                    //    based on which has the highest position
+                    // 4. Generate field operands accordingly
 
-                self.builder.assign(
-                    dest,
-                    Rvalue::Aggregate {
-                        kind,
-                        fields: field_operands,
-                    },
-                );
+                    let class_name = type_name
+                        .as_ref()
+                        .map(std::string::ToString::to_string)
+                        .unwrap_or_else(|| "Anonymous".to_string());
+
+                    // Get class fields and invert to get field_index -> field_name
+                    let class_field_map = self.class_fields.get(&class_name);
+                    let class_fields_ordered: Vec<(usize, String)> =
+                        if let Some(field_map) = class_field_map {
+                            let mut fields_vec: Vec<(usize, String)> = field_map
+                                .iter()
+                                .map(|(name, &idx)| (idx, name.clone()))
+                                .collect();
+                            fields_vec.sort_by_key(|(idx, _)| *idx);
+                            fields_vec
+                        } else {
+                            // Fallback: use named fields order if class not found
+                            fields
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, (name, _))| (idx, name.to_string()))
+                                .collect()
+                        };
+
+                    // Evaluate all spread sources into temp locals
+                    let spread_locals: Vec<(Local, usize)> = spreads
+                        .iter()
+                        .map(|spread| {
+                            let spread_ty = Self::lower_typed_ir_ty(body.ty(spread.expr));
+                            let spread_local = self.builder.temp(spread_ty);
+                            self.lower_expr(spread.expr, Place::local(spread_local), body);
+                            (spread_local, spread.position)
+                        })
+                        .collect();
+
+                    // Build a map of named field name -> (value_expr_id, position)
+                    // Position is the index in the fields vector
+                    let named_field_map: HashMap<String, (ExprId, usize)> = fields
+                        .iter()
+                        .enumerate()
+                        .map(|(pos, (name, value))| (name.to_string(), (*value, pos)))
+                        .collect();
+
+                    // For each class field, determine the source and generate operand
+                    let field_operands: Vec<Operand<'db>> = class_fields_ordered
+                        .iter()
+                        .map(|(field_idx, field_name)| {
+                            // Find the highest-positioned source for this field
+                            let mut best_source: Option<FieldSource> = None;
+                            let mut best_position: Option<usize> = None;
+
+                            // Check named fields
+                            if let Some(&(value_expr, pos)) = named_field_map.get(field_name) {
+                                best_source = Some(FieldSource::Named(value_expr));
+                                best_position = Some(pos);
+                            }
+
+                            // Check spreads (all spreads provide all fields of the class)
+                            for (spread_local, spread_pos) in &spread_locals {
+                                if best_position.is_none() || *spread_pos > best_position.unwrap() {
+                                    best_source =
+                                        Some(FieldSource::Spread(*spread_local, *field_idx));
+                                    best_position = Some(*spread_pos);
+                                }
+                            }
+
+                            // Generate the operand based on the source
+                            match best_source {
+                                Some(FieldSource::Named(value_expr)) => {
+                                    let value_ty = Self::lower_typed_ir_ty(body.ty(value_expr));
+                                    let value_local = self.builder.temp(value_ty);
+                                    self.lower_expr(value_expr, Place::local(value_local), body);
+                                    Operand::copy_local(value_local)
+                                }
+                                Some(FieldSource::Spread(spread_local, field_idx)) => {
+                                    // Load field from spread source
+                                    Operand::Copy(Place::field(
+                                        Place::local(spread_local),
+                                        field_idx,
+                                    ))
+                                }
+                                None => {
+                                    // This shouldn't happen if the class has fields
+                                    // Fall back to null
+                                    Operand::Constant(Constant::Null)
+                                }
+                            }
+                        })
+                        .collect();
+
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Aggregate {
+                            kind: AggregateKind::Class(class_name),
+                            fields: field_operands,
+                        },
+                    );
+                }
             }
 
             Expr::Map { entries } => {
@@ -461,7 +584,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
                 // Check if this is a method reference (result type is a function)
                 // vs an actual field access (result type is the field's type)
-                if matches!(result_ty, baml_typed_ir::Ty::Function { .. }) {
+                if matches!(result_ty, baml_vir::Ty::Function { .. }) {
                     // Method reference - emit as a function constant
                     // The method name is just the field name (methods are desugared to top-level functions)
                     self.builder.assign(
@@ -598,7 +721,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             }
             Pattern::TypedBinding { name, ty } => {
                 // TypedBinding checks if scrutinee is an instance of the given type
-                // Convert TypedIR type to THIR type for IsType check
+                // Convert VIR type to TIR type for IsType check
                 let pattern_ty = Self::lower_typed_ir_ty(ty);
 
                 // Emit instanceof check
@@ -711,6 +834,29 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         dest: Place,
         body: &ExprBody,
     ) {
+        // Special case: instanceof operator - RHS is a type name, not a value
+        if op == BinaryOp::Instanceof {
+            let lhs_ty = Self::lower_typed_ir_ty(body.ty(lhs));
+            let lhs_local = self.builder.temp(lhs_ty);
+            self.lower_expr(lhs, Place::local(lhs_local), body);
+
+            // Extract the type name from RHS (should be a Var or single-segment Path)
+            let type_name = match body.expr(rhs) {
+                Expr::Var(name) => name.clone(),
+                Expr::Path(segments) if segments.len() == 1 => segments[0].clone(),
+                _ => panic!("instanceof RHS must be a simple type name"),
+            };
+
+            self.builder.assign(
+                dest,
+                Rvalue::IsType {
+                    operand: Operand::copy_local(lhs_local),
+                    ty: Ty::Named(type_name),
+                },
+            );
+            return;
+        }
+
         let lhs_ty = Self::lower_typed_ir_ty(body.ty(lhs));
         let rhs_ty = Self::lower_typed_ir_ty(body.ty(rhs));
 
@@ -913,7 +1059,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         args: &[ExprId],
         dest: Place,
         body: &ExprBody,
-        _result_ty: &baml_typed_ir::Ty,
+        _result_ty: &baml_vir::Ty,
     ) {
         let callee_expr = body.expr(callee);
 
@@ -922,8 +1068,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             let base_ty = body.ty(*base);
             let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
 
-            if let Some((def, _)) =
-                baml_thir::builtins::lookup_method(&thir_base_ty, field.as_str())
+            if let Some((def, _)) = baml_tir::builtins::lookup_method(&thir_base_ty, field.as_str())
             {
                 // Found a builtin method
                 let receiver_local = self.builder.temp(thir_base_ty);
@@ -1131,40 +1276,36 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         }
     }
 
-    /// Convert a `TypedIR` type to a THIR type for MIR locals.
-    fn lower_typed_ir_ty(ty: &baml_typed_ir::Ty) -> Ty<'db> {
+    /// Convert a VIR type to a TIR type for MIR locals.
+    fn lower_typed_ir_ty(ty: &baml_vir::Ty) -> Ty<'db> {
         match ty {
-            baml_typed_ir::Ty::Int => Ty::Int,
-            baml_typed_ir::Ty::Float => Ty::Float,
-            baml_typed_ir::Ty::String => Ty::String,
-            baml_typed_ir::Ty::Bool => Ty::Bool,
-            baml_typed_ir::Ty::Null => Ty::Null,
-            baml_typed_ir::Ty::Image => Ty::Image,
-            baml_typed_ir::Ty::Audio => Ty::Audio,
-            baml_typed_ir::Ty::Video => Ty::Video,
-            baml_typed_ir::Ty::Pdf => Ty::Pdf,
-            baml_typed_ir::Ty::Class(name) | baml_typed_ir::Ty::Enum(name) => {
-                Ty::Named(name.clone())
-            }
-            baml_typed_ir::Ty::Optional(inner) => {
-                Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner)))
-            }
-            baml_typed_ir::Ty::List(inner) => Ty::List(Box::new(Self::lower_typed_ir_ty(inner))),
-            baml_typed_ir::Ty::Map { key, value } => Ty::Map {
+            baml_vir::Ty::Int => Ty::Int,
+            baml_vir::Ty::Float => Ty::Float,
+            baml_vir::Ty::String => Ty::String,
+            baml_vir::Ty::Bool => Ty::Bool,
+            baml_vir::Ty::Null => Ty::Null,
+            baml_vir::Ty::Image => Ty::Image,
+            baml_vir::Ty::Audio => Ty::Audio,
+            baml_vir::Ty::Video => Ty::Video,
+            baml_vir::Ty::Pdf => Ty::Pdf,
+            baml_vir::Ty::Class(name) | baml_vir::Ty::Enum(name) => Ty::Named(name.clone()),
+            baml_vir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner))),
+            baml_vir::Ty::List(inner) => Ty::List(Box::new(Self::lower_typed_ir_ty(inner))),
+            baml_vir::Ty::Map { key, value } => Ty::Map {
                 key: Box::new(Self::lower_typed_ir_ty(key)),
                 value: Box::new(Self::lower_typed_ir_ty(value)),
             },
-            baml_typed_ir::Ty::Union(types) => {
+            baml_vir::Ty::Union(types) => {
                 Ty::Union(types.iter().map(Self::lower_typed_ir_ty).collect())
             }
-            baml_typed_ir::Ty::Function { params, ret } => Ty::Function {
+            baml_vir::Ty::Function { params, ret } => Ty::Function {
                 params: params.iter().map(Self::lower_typed_ir_ty).collect(),
                 ret: Box::new(Self::lower_typed_ir_ty(ret)),
             },
-            baml_typed_ir::Ty::Unknown => Ty::Unknown,
-            baml_typed_ir::Ty::Error => Ty::Error,
-            baml_typed_ir::Ty::Unit => Ty::Void,
-            baml_typed_ir::Ty::Never => Ty::Void, // Never is used for diverging expressions
+            baml_vir::Ty::Unknown => Ty::Unknown,
+            baml_vir::Ty::Error => Ty::Error,
+            baml_vir::Ty::Unit => Ty::Void,
+            baml_vir::Ty::Never => Ty::Void, // Never is used for diverging expressions
         }
     }
 }

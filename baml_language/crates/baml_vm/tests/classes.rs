@@ -30,7 +30,6 @@ fn class_constructor() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "spread operator in constructors not yet implemented"]
 fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
@@ -64,7 +63,6 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "spread operator in constructors not yet implemented"]
 fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
@@ -102,7 +100,6 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "spread operator in constructors not yet implemented"]
 fn class_constructor_with_spread_operator_before_named_fields() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
@@ -136,7 +133,6 @@ fn class_constructor_with_spread_operator_before_named_fields() -> anyhow::Resul
 }
 
 #[test]
-#[ignore = "spread operator in constructors not yet implemented"]
 fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "

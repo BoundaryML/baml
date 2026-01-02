@@ -3,7 +3,6 @@
 use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
 
 #[test]
-#[ignore = "instanceof not yet implemented"]
 fn instance_of_returns_true() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -23,7 +22,6 @@ fn instance_of_returns_true() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "instanceof not yet implemented"]
 fn instance_of_returns_false() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -47,7 +45,6 @@ fn instance_of_returns_false() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "instanceof not yet implemented"]
 fn instanceof_narrowing_true_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -75,7 +72,6 @@ fn instanceof_narrowing_true_branch() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "instanceof not yet implemented"]
 fn instanceof_narrowing_false_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -103,7 +99,6 @@ fn instanceof_narrowing_false_branch() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "instanceof not yet implemented"]
 fn instanceof_chained_checks() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

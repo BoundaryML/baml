@@ -1,7 +1,7 @@
-//! Lower HIR `TypeRef` to THIR Ty.
+//! Lower HIR `TypeRef` to TIR Ty.
 //!
 //! This module converts syntactic type references (`TypeRef`) from HIR
-//! into semantic types (Ty) in THIR. This involves:
+//! into semantic types (Ty) in TIR. This involves:
 //! - Resolving named types to their definitions (classes, enums)
 //! - Converting type constructors (Optional, List, Union)
 //! - Handling primitive type names

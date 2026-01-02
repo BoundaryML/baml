@@ -68,7 +68,6 @@ fn class_constructor_return_directly() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "spread operator not yet in HIR"]
 fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -90,28 +89,31 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Spread is at position 2, overrides named fields at positions 0 and 1.
+            // All fields come from the spread (last assignment wins).
+            // Spread is stored to temp local, then accessed for each field.
             vec![
-                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadConst(Value::Null),
                 Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::StoreVar("_2".to_string()),
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(0),
                 Instruction::StoreField(0),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(1),
                 Instruction::StoreField(1),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(2),
                 Instruction::StoreField(2),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(3),
                 Instruction::StoreField(3),
-                Instruction::Pop(1),
-                Instruction::LoadVar("p".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -272,7 +274,6 @@ fn field_assignment_simple() -> anyhow::Result<()> {
 // ============================================================================
 
 #[test]
-#[ignore = "spread operator not yet in HIR"]
 fn class_constructor_with_spread_before_named_fields() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -294,26 +295,28 @@ fn class_constructor_with_spread_before_named_fields() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Spread is at position 0, named fields x,y at positions 1,2.
+            // x and y from named (override spread), z and w from spread.
             vec![
-                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadConst(Value::Null),
                 Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
-                Instruction::LoadField(2),
-                Instruction::StoreField(2),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
-                Instruction::LoadField(3),
-                Instruction::StoreField(3),
-                Instruction::Pop(1),
+                Instruction::StoreVar("_2".to_string()),
+                Instruction::AllocInstance(Value::class("Point")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreField(0),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreField(1),
-                Instruction::LoadVar("p".to_string()),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
+                Instruction::LoadField(2),
+                Instruction::StoreField(2),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
+                Instruction::LoadField(3),
+                Instruction::StoreField(3),
                 Instruction::Return,
             ],
         )],
@@ -321,7 +324,6 @@ fn class_constructor_with_spread_before_named_fields() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "spread operator not yet in HIR"]
 fn class_constructor_with_spread_after_named_fields() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -343,28 +345,30 @@ fn class_constructor_with_spread_after_named_fields() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Spread at position 2 overrides named fields at positions 0,1.
+            // All fields from spread.
             vec![
-                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadConst(Value::Null),
                 Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::StoreVar("_2".to_string()),
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(0),
                 Instruction::StoreField(0),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(1),
                 Instruction::StoreField(1),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(2),
                 Instruction::StoreField(2),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(3),
                 Instruction::StoreField(3),
-                Instruction::Pop(1),
-                Instruction::LoadVar("p".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -372,7 +376,6 @@ fn class_constructor_with_spread_after_named_fields() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "spread operator not yet in HIR"]
 fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -404,55 +407,65 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
         expected: vec![
             (
                 "xy_one_last",
+                // ...x_one() at pos 0, ...xy_one() at pos 1
+                // xy_one wins for all fields; x_one called but result popped (unused)
                 vec![
-                    Instruction::AllocInstance(Value::class("Point")),
+                    Instruction::LoadConst(Value::Null),
+                    Instruction::LoadGlobal(Value::function("x_one")),
+                    Instruction::Call(0),
+                    Instruction::Pop(1),
                     Instruction::LoadGlobal(Value::function("xy_one")),
                     Instruction::Call(0),
-                    Instruction::Copy(1),
-                    Instruction::Copy(1),
+                    Instruction::StoreVar("_4".to_string()),
+                    Instruction::AllocInstance(Value::class("Point")),
+                    Instruction::Copy(0),
+                    Instruction::LoadVar("_4".to_string()),
                     Instruction::LoadField(0),
                     Instruction::StoreField(0),
-                    Instruction::Copy(1),
-                    Instruction::Copy(1),
+                    Instruction::Copy(0),
+                    Instruction::LoadVar("_4".to_string()),
                     Instruction::LoadField(1),
                     Instruction::StoreField(1),
-                    Instruction::Copy(1),
-                    Instruction::Copy(1),
+                    Instruction::Copy(0),
+                    Instruction::LoadVar("_4".to_string()),
                     Instruction::LoadField(2),
                     Instruction::StoreField(2),
-                    Instruction::Copy(1),
-                    Instruction::Copy(1),
+                    Instruction::Copy(0),
+                    Instruction::LoadVar("_4".to_string()),
                     Instruction::LoadField(3),
                     Instruction::StoreField(3),
-                    Instruction::Pop(1),
-                    Instruction::LoadVar("p".to_string()),
                     Instruction::Return,
                 ],
             ),
             (
                 "x_one_last",
+                // ...xy_one() at pos 0, ...x_one() at pos 1
+                // x_one wins for all fields; xy_one called but result popped (unused)
                 vec![
-                    Instruction::AllocInstance(Value::class("Point")),
+                    Instruction::LoadConst(Value::Null),
+                    Instruction::LoadGlobal(Value::function("xy_one")),
+                    Instruction::Call(0),
+                    Instruction::Pop(1),
                     Instruction::LoadGlobal(Value::function("x_one")),
                     Instruction::Call(0),
-                    Instruction::Copy(1),
-                    Instruction::Copy(1),
+                    Instruction::StoreVar("_4".to_string()),
+                    Instruction::AllocInstance(Value::class("Point")),
+                    Instruction::Copy(0),
+                    Instruction::LoadVar("_4".to_string()),
                     Instruction::LoadField(0),
                     Instruction::StoreField(0),
-                    Instruction::Copy(1),
-                    Instruction::Copy(1),
+                    Instruction::Copy(0),
+                    Instruction::LoadVar("_4".to_string()),
                     Instruction::LoadField(1),
                     Instruction::StoreField(1),
-                    Instruction::Copy(1),
-                    Instruction::Copy(1),
+                    Instruction::Copy(0),
+                    Instruction::LoadVar("_4".to_string()),
                     Instruction::LoadField(2),
                     Instruction::StoreField(2),
-                    Instruction::Copy(1),
-                    Instruction::Copy(1),
+                    Instruction::Copy(0),
+                    Instruction::LoadVar("_4".to_string()),
                     Instruction::LoadField(3),
                     Instruction::StoreField(3),
-                    Instruction::Pop(1),
-                    Instruction::LoadVar("p".to_string()),
                     Instruction::Return,
                 ],
             ),
@@ -461,7 +474,6 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "spread operator not yet in HIR"]
 fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -484,29 +496,34 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
         "#,
         expected: vec![(
             "main",
+            // Spread at position 2 overrides named fields.
+            // 'p' is assigned but never used (dead store, but still generated).
+            // 'x' is a constant, inlined.
             vec![
-                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
                 Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::StoreVar("_2".to_string()),
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(0),
                 Instruction::StoreField(0),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(1),
                 Instruction::StoreField(1),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(2),
                 Instruction::StoreField(2),
-                Instruction::Copy(1),
-                Instruction::Copy(1),
+                Instruction::Copy(0),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::LoadField(3),
                 Instruction::StoreField(3),
-                Instruction::Pop(1),
+                Instruction::StoreVar("p".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::LoadVar("x".to_string()),
                 Instruction::Return,
             ],
         )],

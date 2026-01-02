@@ -1,10 +1,10 @@
-//! Typed High-level Intermediate Representation.
+//! Typed Intermediate Representation (TIR).
 //!
 //! Provides type checking and inference for BAML.
 //!
 //! # Architecture
 //!
-//! The THIR layer performs bidirectional type checking:
+//! The TIR layer performs bidirectional type checking:
 //! - **Inference (synthesize)**: Compute the type of an expression from its structure
 //! - **Checking**: Verify an expression has an expected type
 //!
@@ -78,9 +78,9 @@ pub enum ResolvedPath {
 // ──────────────────────────────────────────────────────────── DATABASE ─────
 //
 
-/// Database trait for THIR queries.
+/// Database trait for TIR queries.
 ///
-/// This trait extends `baml_hir::Db` and provides access to all THIR-related
+/// This trait extends `baml_hir::Db` and provides access to all TIR-related
 /// Salsa queries, including type inference and the initial typing context.
 #[salsa::db]
 pub trait Db: baml_hir::Db {}
@@ -99,7 +99,7 @@ pub struct EnumVariantsMap<'db> {
 }
 
 // ============================================================================
-// THIR Queries
+// TIR Queries
 // ============================================================================
 
 /// Query: Get enum variants for a project.
@@ -933,18 +933,37 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
             }
         }
 
-        Expr::Object { type_name, fields } => {
+        Expr::Object {
+            type_name,
+            fields,
+            spreads,
+        } => {
             // Infer field types
             for (_, value_expr) in fields {
                 infer_expr(ctx, *value_expr, body);
             }
-            // Return the named type if type_name is provided
-            if let Some(name) = type_name {
+
+            // Determine the expected object type
+            let obj_ty = if let Some(name) = type_name {
                 Ty::Named(name.clone())
             } else {
-                // Anonymous object - return Unknown for now
                 Ty::Unknown
+            };
+
+            // Type check spread expressions - they must be the same type as the object
+            for spread in spreads {
+                let spread_ty = infer_expr(ctx, spread.expr, body);
+                // If we have a named type, verify the spread is compatible
+                if !matches!(obj_ty, Ty::Unknown) && !spread_ty.is_subtype_of(&obj_ty) {
+                    ctx.push_error(TypeError::TypeMismatch {
+                        expected: obj_ty.clone(),
+                        found: spread_ty,
+                        span,
+                    });
+                }
             }
+
+            obj_ty
         }
 
         Expr::Map { entries } => {
@@ -1393,7 +1412,7 @@ fn infer_binary_op<'db>(
             }
         }
 
-        // instanceof always returns bool (type checking happens separately)
+        // Type checking operations
         Instanceof => Ty::Bool,
     }
 }

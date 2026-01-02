@@ -59,6 +59,7 @@ pub enum SyntaxKind {
     DOUBLE_COLON, // ::
     COMMA,        // ,
     SEMICOLON,    // ;
+    DOT_DOT_DOT,  // ...
     DOT,          // .
     DOLLAR,       // $
     ARROW,        // ->
@@ -230,6 +231,7 @@ pub enum SyntaxKind {
     GENERIC_ARGS,
     OBJECT_LITERAL,
     OBJECT_FIELD,
+    SPREAD_ELEMENT, // ...expr in object/array literals
     ARRAY_LITERAL,
     MAP_LITERAL,
 

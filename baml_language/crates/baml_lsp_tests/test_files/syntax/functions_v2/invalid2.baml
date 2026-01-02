@@ -162,30 +162,12 @@ function Foo6(arg: int) -> float {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '.', found '.'
+// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '...', found DotDotDot
 //     ╭─[ 0:23:12 ]
 //     │
 //  23 │   prompt #"..."#
-//     │            ┬  
-//     │            ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '.', found '.'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '.', found '.'
-//     ╭─[ 0:23:13 ]
-//     │
-//  23 │   prompt #"..."#
-//     │             ┬  
-//     │             ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '.', found '.'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '.', found '.'
-//     ╭─[ 0:23:14 ]
-//     │
-//  23 │   prompt #"..."#
-//     │              ┬  
-//     │              ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '.', found '.'
+//     │            ─┬─  
+//     │             ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found '...', found DotDotDot
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

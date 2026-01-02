@@ -321,8 +321,8 @@ dependencies = [
  "baml_hir",
  "baml_mir",
  "baml_tests",
- "baml_thir",
- "baml_typed_ir",
+ "baml_tir",
+ "baml_vir",
  "baml_vm",
  "baml_workspace",
  "insta",
@@ -342,8 +342,8 @@ dependencies = [
  "baml_mir",
  "baml_parser",
  "baml_syntax",
- "baml_thir",
- "baml_typed_ir",
+ "baml_tir",
+ "baml_vir",
  "baml_workspace",
  "rowan",
  "salsa",
@@ -441,7 +441,7 @@ dependencies = [
  "baml_db",
  "baml_diagnostics",
  "baml_hir",
- "baml_thir",
+ "baml_tir",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -469,8 +469,8 @@ version = "0.0.0"
 dependencies = [
  "baml_base",
  "baml_hir",
- "baml_thir",
- "baml_typed_ir",
+ "baml_tir",
+ "baml_vir",
  "baml_workspace",
  "la-arena",
  "rustc-hash 2.1.1",
@@ -494,8 +494,8 @@ dependencies = [
  "baml_lexer",
  "baml_mir",
  "baml_parser",
- "baml_thir",
- "baml_typed_ir",
+ "baml_tir",
+ "baml_vir",
  "baml_vm",
  "baml_workspace",
  "clap",
@@ -541,7 +541,7 @@ dependencies = [
  "baml_diagnostics",
  "baml_hir",
  "baml_mir",
- "baml_thir",
+ "baml_tir",
  "baml_vm",
  "baml_workspace",
  "codspeed-divan-compat",
@@ -556,7 +556,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_thir"
+name = "baml_tir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
@@ -570,13 +570,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_typed_ir"
+name = "baml_vir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
  "baml_diagnostics",
  "baml_hir",
- "baml_thir",
+ "baml_tir",
  "insta",
  "la-arena",
  "pretty_assertions",
