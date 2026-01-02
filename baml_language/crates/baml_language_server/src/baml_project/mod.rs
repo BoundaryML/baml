@@ -146,15 +146,6 @@ impl BamlProject {
             )
         })?;
 
-        // Print out the file paths and the current project root dir for diagnostics
-        tracing::info!(
-            "Loading files for project root: {}",
-            self.root_dir_name.display()
-        );
-        for file_path in &workspace_file_paths {
-            tracing::info!("Found file: {}", file_path.display());
-        }
-
         let workspace_files = workspace_file_paths
             .into_iter()
             .map(|file_path| {
