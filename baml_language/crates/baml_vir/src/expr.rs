@@ -1,11 +1,11 @@
-//! Expression-only typed IR.
+//! Expression-only Validated IR (VIR).
 //!
 //! All constructs are expressions that return values. This eliminates the
 //! statement/expression distinction and makes traversals uniform.
 //!
 //! # No Missing Nodes
 //!
-//! Unlike HIR which has `Missing` variants for LSP error recovery, `TypedIR`
+//! Unlike HIR which has `Missing` variants for LSP error recovery, VIR
 //! represents only **valid, complete programs**. If the HIR contains any
 //! `Missing` nodes, lowering will fail. This is the gate between
 //! "LSP-compatible IR" and "codegen-ready IR".
@@ -82,7 +82,7 @@ impl ExprBody {
 ///
 /// # No Error Recovery
 ///
-/// There is no `Missing` variant. `TypedIR` only represents valid programs.
+/// There is no `Missing` variant. VIR only represents valid programs.
 /// If the source has errors, lowering from HIR will fail.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
@@ -101,7 +101,7 @@ pub enum Expr {
     ///
     /// Resolution of what this path refers to (variable + field access,
     /// enum variant, module item) is tracked via metadata passed through
-    /// from THIR. See `enum_variant_exprs` for enum variant paths.
+    /// from TIR. See `enum_variant_exprs` for enum variant paths.
     Path(Vec<Name>),
 
     // ========== Binding & Sequencing ==========

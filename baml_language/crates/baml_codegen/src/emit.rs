@@ -10,7 +10,7 @@ use baml_mir::{
     AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand,
     Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
-use baml_thir::Ty;
+use baml_tir::Ty;
 use baml_vm::{
     BinOp as VmBinOp, Bytecode, CmpOp, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp, Value,

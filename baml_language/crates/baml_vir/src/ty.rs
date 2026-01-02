@@ -1,7 +1,7 @@
-//! Type system for `TypedIR`.
+//! Type system for VIR.
 //!
 //! Types are fully resolved - no unresolved references. Class and Enum IDs
-//! from THIR are resolved to their names during lowering.
+//! from TIR are resolved to their names during lowering.
 
 use std::fmt;
 
@@ -9,7 +9,7 @@ use baml_base::Name;
 
 /// A resolved type in BAML.
 ///
-/// Unlike `baml_thir::Ty` which may contain `ClassId` and `EnumId` references,
+/// Unlike `baml_tir::Ty` which may contain `ClassId` and `EnumId` references,
 /// this type is fully resolved with all names known.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Ty {

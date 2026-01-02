@@ -1,5 +1,5 @@
 [package]
-name = "baml_typed_ir"
+name = "baml_vir"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -20,7 +20,7 @@ workspace = true
 baml_base = { workspace = true }
 baml_diagnostics = { workspace = true }
 baml_hir = { workspace = true }
-baml_thir = { workspace = true }
+baml_tir = { workspace = true }
 
 la-arena = { workspace = true }
 rustc-hash = { workspace = true }

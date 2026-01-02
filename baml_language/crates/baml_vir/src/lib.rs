@@ -1,8 +1,25 @@
-//! Typed Intermediate Representation for BAML.
+//! Validated Intermediate Representation (VIR) for BAML.
 //!
-//! This crate provides a unified expression-based IR where **everything is an expression**.
-//! Unlike the HIR/THIR which distinguish between statements and expressions with awkward
-//! "tail expression" handling, this IR treats all constructs uniformly.
+//! # What "Validated" Means
+//!
+//! VIR represents **valid, complete programs** ready for code generation. Unlike
+//! earlier IRs (HIR, TIR) which preserve error nodes for LSP error recovery,
+//! VIR guarantees:
+//!
+//! - **No Missing nodes** - All syntax holes have been rejected
+//! - **No Unknown types** - All expressions have concrete, resolved types
+//! - **No unresolved references** - All names/paths are validated
+//!
+//! Lowering from HIR to VIR is **fallible**. Programs with errors cannot be
+//! represented in VIR - they fail at the lowering boundary.
+//!
+//! # Comparison with Other IRs
+//!
+//! | IR  | Error Nodes | Use Case |
+//! |-----|-------------|----------|
+//! | HIR | Yes (Missing variants) | LSP features, incremental parsing |
+//! | TIR | Yes (Unknown types) | Type inference, diagnostics |
+//! | VIR | **No** | Code generation, optimization |
 //!
 //! # Key Design Principles
 //!
@@ -11,15 +28,9 @@
 //! 3. **Explicit sequencing** - `Seq(first, second)` evaluates both, returns second
 //! 4. **Unit type for effects** - `while`, `assign`, `break` return `Unit`
 //!
-//! # No Missing Nodes
+//! # Example Transformation
 //!
-//! Unlike HIR which has `Missing` variants for LSP error recovery, `TypedIR`
-//! represents only **valid, complete programs**. Lowering from HIR is fallible
-//! and will return an error if any `Missing` nodes are encountered.
-//!
-//! # Comparison with HIR/THIR
-//!
-//! HIR/THIR has:
+//! HIR/TIR has:
 //! ```text
 //! Block { stmts: Vec<StmtId>, tail_expr: Option<ExprId> }
 //! Stmt::Let { pattern, initializer }
@@ -28,7 +39,7 @@
 //! Expr::Missing, Stmt::Missing  // For error recovery
 //! ```
 //!
-//! `TypedIR` has:
+//! VIR has:
 //! ```text
 //! Let { pattern, ty, value, body }  // Returns body's value
 //! Seq { first, second }             // Returns second's value
@@ -48,8 +59,8 @@ pub use lower::{LoweringError, lower_from_hir};
 pub use pretty::pretty_print;
 pub use ty::*;
 
-/// Database trait for `TypedIR` queries.
+/// Database trait for VIR queries.
 ///
-/// Extends THIR's database since we need `InferenceResult` during lowering.
+/// Extends TIR's database since we need `InferenceResult` during lowering.
 #[salsa::db]
-pub trait Db: baml_thir::Db {}
+pub trait Db: baml_tir::Db {}

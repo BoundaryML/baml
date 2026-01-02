@@ -1,7 +1,7 @@
-//! Lowering from `TypedIR` to MIR.
+//! Lowering from VIR to MIR.
 //!
-//! This module converts the expression-only `TypedIR` representation into
-//! the CFG-based MIR. Because `TypedIR` has no statements (everything is an
+//! This module converts the expression-only VIR representation into
+//! the CFG-based MIR. Because VIR has no statements (everything is an
 //! expression), this lowering is much simpler than HIR → MIR lowering.
 //!
 //! # Key Simplifications
@@ -18,18 +18,18 @@ use std::collections::HashMap;
 
 use baml_base::Name;
 use baml_hir::FunctionSignature;
-use baml_thir::Ty;
-use baml_typed_ir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
+use baml_tir::Ty;
+use baml_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
     Rvalue, UnaryOp as MirUnaryOp,
 };
 
-/// Lower a function from `TypedIR` to MIR.
+/// Lower a function from VIR to MIR.
 ///
-/// This is the main entry point for `TypedIR` → MIR lowering.
-pub fn lower_from_typed_ir<'db>(
+/// This is the main entry point for VIR → MIR lowering.
+pub fn lower<'db>(
     signature: &FunctionSignature,
     typed_body: &ExprBody,
     db: &'db dyn crate::Db,
@@ -40,7 +40,7 @@ pub fn lower_from_typed_ir<'db>(
     ctx.finish()
 }
 
-/// Context for lowering `TypedIR` to MIR.
+/// Context for lowering VIR to MIR.
 struct LoweringContext<'db, 'ctx> {
     #[allow(dead_code)]
     db: &'db dyn crate::Db,
@@ -87,13 +87,13 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
         // _0: return place
         // Use signature return type, not body root type (which may be Never for diverging bodies)
-        let ret_ty = baml_thir::lower_type_ref(self.db, &signature.return_type);
+        let ret_ty = baml_tir::lower_type_ref(self.db, &signature.return_type);
         let ret = self.builder.declare_local(None, ret_ty, None);
         assert_eq!(ret, Local(0));
 
         // _1..=_n: parameters
         for param in &signature.params {
-            let param_ty = baml_thir::lower_type_ref(self.db, &param.type_ref);
+            let param_ty = baml_tir::lower_type_ref(self.db, &param.type_ref);
             let local = self
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None);
@@ -461,7 +461,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
                 // Check if this is a method reference (result type is a function)
                 // vs an actual field access (result type is the field's type)
-                if matches!(result_ty, baml_typed_ir::Ty::Function { .. }) {
+                if matches!(result_ty, baml_vir::Ty::Function { .. }) {
                     // Method reference - emit as a function constant
                     // The method name is just the field name (methods are desugared to top-level functions)
                     self.builder.assign(
@@ -598,7 +598,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             }
             Pattern::TypedBinding { name, ty } => {
                 // TypedBinding checks if scrutinee is an instance of the given type
-                // Convert TypedIR type to THIR type for IsType check
+                // Convert VIR type to TIR type for IsType check
                 let pattern_ty = Self::lower_typed_ir_ty(ty);
 
                 // Emit instanceof check
@@ -913,7 +913,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         args: &[ExprId],
         dest: Place,
         body: &ExprBody,
-        _result_ty: &baml_typed_ir::Ty,
+        _result_ty: &baml_vir::Ty,
     ) {
         let callee_expr = body.expr(callee);
 
@@ -922,8 +922,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             let base_ty = body.ty(*base);
             let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
 
-            if let Some((def, _)) =
-                baml_thir::builtins::lookup_method(&thir_base_ty, field.as_str())
+            if let Some((def, _)) = baml_tir::builtins::lookup_method(&thir_base_ty, field.as_str())
             {
                 // Found a builtin method
                 let receiver_local = self.builder.temp(thir_base_ty);
@@ -1131,40 +1130,36 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         }
     }
 
-    /// Convert a `TypedIR` type to a THIR type for MIR locals.
-    fn lower_typed_ir_ty(ty: &baml_typed_ir::Ty) -> Ty<'db> {
+    /// Convert a VIR type to a TIR type for MIR locals.
+    fn lower_typed_ir_ty(ty: &baml_vir::Ty) -> Ty<'db> {
         match ty {
-            baml_typed_ir::Ty::Int => Ty::Int,
-            baml_typed_ir::Ty::Float => Ty::Float,
-            baml_typed_ir::Ty::String => Ty::String,
-            baml_typed_ir::Ty::Bool => Ty::Bool,
-            baml_typed_ir::Ty::Null => Ty::Null,
-            baml_typed_ir::Ty::Image => Ty::Image,
-            baml_typed_ir::Ty::Audio => Ty::Audio,
-            baml_typed_ir::Ty::Video => Ty::Video,
-            baml_typed_ir::Ty::Pdf => Ty::Pdf,
-            baml_typed_ir::Ty::Class(name) | baml_typed_ir::Ty::Enum(name) => {
-                Ty::Named(name.clone())
-            }
-            baml_typed_ir::Ty::Optional(inner) => {
-                Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner)))
-            }
-            baml_typed_ir::Ty::List(inner) => Ty::List(Box::new(Self::lower_typed_ir_ty(inner))),
-            baml_typed_ir::Ty::Map { key, value } => Ty::Map {
+            baml_vir::Ty::Int => Ty::Int,
+            baml_vir::Ty::Float => Ty::Float,
+            baml_vir::Ty::String => Ty::String,
+            baml_vir::Ty::Bool => Ty::Bool,
+            baml_vir::Ty::Null => Ty::Null,
+            baml_vir::Ty::Image => Ty::Image,
+            baml_vir::Ty::Audio => Ty::Audio,
+            baml_vir::Ty::Video => Ty::Video,
+            baml_vir::Ty::Pdf => Ty::Pdf,
+            baml_vir::Ty::Class(name) | baml_vir::Ty::Enum(name) => Ty::Named(name.clone()),
+            baml_vir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner))),
+            baml_vir::Ty::List(inner) => Ty::List(Box::new(Self::lower_typed_ir_ty(inner))),
+            baml_vir::Ty::Map { key, value } => Ty::Map {
                 key: Box::new(Self::lower_typed_ir_ty(key)),
                 value: Box::new(Self::lower_typed_ir_ty(value)),
             },
-            baml_typed_ir::Ty::Union(types) => {
+            baml_vir::Ty::Union(types) => {
                 Ty::Union(types.iter().map(Self::lower_typed_ir_ty).collect())
             }
-            baml_typed_ir::Ty::Function { params, ret } => Ty::Function {
+            baml_vir::Ty::Function { params, ret } => Ty::Function {
                 params: params.iter().map(Self::lower_typed_ir_ty).collect(),
                 ret: Box::new(Self::lower_typed_ir_ty(ret)),
             },
-            baml_typed_ir::Ty::Unknown => Ty::Unknown,
-            baml_typed_ir::Ty::Error => Ty::Error,
-            baml_typed_ir::Ty::Unit => Ty::Void,
-            baml_typed_ir::Ty::Never => Ty::Void, // Never is used for diverging expressions
+            baml_vir::Ty::Unknown => Ty::Unknown,
+            baml_vir::Ty::Error => Ty::Error,
+            baml_vir::Ty::Unit => Ty::Void,
+            baml_vir::Ty::Never => Ty::Void, // Never is used for diverging expressions
         }
     }
 }

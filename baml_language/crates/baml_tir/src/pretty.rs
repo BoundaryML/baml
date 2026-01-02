@@ -1,4 +1,4 @@
-//! Pretty printing for THIR (Typed HIR).
+//! Pretty printing for TIR (Typed IR).
 //!
 //! This module provides tree-based visualization of the typed intermediate
 //! representation, showing expression structure with inferred types.
@@ -14,7 +14,7 @@ use baml_hir::{
 use super::Ty;
 use crate::{InferenceResult, lower_type_ref};
 
-/// Renders a function's THIR as a tree showing expression structure with types.
+/// Renders a function's TIR as a tree showing expression structure with types.
 ///
 /// # Example output
 /// ```text
@@ -40,7 +40,7 @@ pub fn render_function_tree(
     output
 }
 
-/// Renders just a function body's THIR as a tree.
+/// Renders just a function body's TIR as a tree.
 pub fn render_body_tree(
     db: &dyn baml_hir::Db,
     body: &FunctionBody,

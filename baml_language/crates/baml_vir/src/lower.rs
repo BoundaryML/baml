@@ -1,13 +1,13 @@
-//! Lowering from HIR + THIR type information to `TypedIR`.
+//! Lowering from HIR + TIR type information to VIR.
 //!
-//! This module converts the HIR expression tree (with THIR type annotations)
+//! This module converts the HIR expression tree (with TIR type annotations)
 //! into our unified expression-based IR where everything is an expression.
 //!
 //! # Fallible Lowering
 //!
 //! Lowering is fallible - it returns `Result<ExprBody, LoweringError>`.
 //! Any `Missing` nodes in the HIR will cause lowering to fail. This is
-//! intentional: `TypedIR` represents only valid, complete programs suitable
+//! intentional: VIR represents only valid, complete programs suitable
 //! for code generation.
 //!
 //! # Weaving Strategy (inspired by xiaolong)
@@ -22,7 +22,7 @@
 //! 4. If block has no tail expression, the final result is `Unit`
 
 use baml_hir::{ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, StmtId as HirStmtId};
-use baml_thir::InferenceResult;
+use baml_tir::InferenceResult;
 use la_arena::Arena;
 use rustc_hash::FxHashMap;
 use text_size::TextRange;
@@ -31,7 +31,7 @@ use crate::{
     AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, MatchArm, PatId, Pattern, Ty, UnaryOp,
 };
 
-/// Error that occurs when lowering HIR to `TypedIR`.
+/// Error that occurs when lowering HIR to VIR.
 #[derive(Debug, Clone)]
 pub enum LoweringError {
     /// Encountered a Missing expression node.
@@ -69,15 +69,15 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
-/// Lower a function body from HIR to `TypedIR`.
+/// Lower a function body from HIR to VIR.
 ///
 /// Returns `Err` if the HIR contains any `Missing` nodes or is otherwise
 /// not suitable for code generation.
 ///
-/// Note: Takes `baml_thir::Db` instead of `baml_typed_ir::Db` for broader compatibility.
+/// Note: Takes `baml_tir::Db` instead of `baml_vir::Db` for broader compatibility.
 /// This allows callers with `baml_mir::Db` to use this function directly.
 pub fn lower_from_hir<'db>(
-    db: &'db dyn baml_thir::Db,
+    db: &'db dyn baml_tir::Db,
     body: &FunctionBody,
     inference: &InferenceResult<'db>,
 ) -> Result<ExprBody, LoweringError> {
@@ -159,15 +159,15 @@ impl ExprBodyBuilder {
     }
 }
 
-/// Context for lowering HIR to `TypedIR`.
+/// Context for lowering HIR to VIR.
 struct LoweringContext<'db> {
-    db: &'db dyn baml_thir::Db,
+    db: &'db dyn baml_tir::Db,
     inference: &'db InferenceResult<'db>,
     builder: ExprBodyBuilder,
 }
 
 impl<'db> LoweringContext<'db> {
-    fn new(db: &'db dyn baml_thir::Db, inference: &'db InferenceResult<'db>) -> Self {
+    fn new(db: &'db dyn baml_tir::Db, inference: &'db InferenceResult<'db>) -> Self {
         Self {
             db,
             inference,
@@ -182,7 +182,7 @@ impl<'db> LoweringContext<'db> {
         Ok(self.builder.finish(root))
     }
 
-    /// Lower an HIR expression to `TypedIR`.
+    /// Lower an HIR expression to VIR.
     fn lower_expr(
         &mut self,
         hir_id: HirExprId,
@@ -193,7 +193,7 @@ impl<'db> LoweringContext<'db> {
         let hir_expr = &hir_body.exprs[hir_id];
         let span = hir_body.get_expr_span(hir_id);
 
-        // Get type from THIR inference
+        // Get type from TIR inference
         let ty = self
             .inference
             .expr_types
@@ -547,7 +547,7 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Translate a statement to a `TypedIR` expression.
+    /// Translate a statement to a VIR expression.
     fn translate_stmt(
         &mut self,
         stmt_id: HirStmtId,
@@ -678,73 +678,73 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Lower a THIR type to `TypedIR` type, resolving all IDs.
-    fn lower_ty(&self, thir_ty: &baml_thir::Ty<'db>) -> Ty {
+    /// Lower a TIR type to VIR type, resolving all IDs.
+    fn lower_ty(&self, thir_ty: &baml_tir::Ty<'db>) -> Ty {
         match thir_ty {
-            baml_thir::Ty::Int => Ty::Int,
-            baml_thir::Ty::Float => Ty::Float,
-            baml_thir::Ty::String => Ty::String,
-            baml_thir::Ty::Bool => Ty::Bool,
-            baml_thir::Ty::Null => Ty::Null,
-            baml_thir::Ty::Image => Ty::Image,
-            baml_thir::Ty::Audio => Ty::Audio,
-            baml_thir::Ty::Video => Ty::Video,
-            baml_thir::Ty::Pdf => Ty::Pdf,
+            baml_tir::Ty::Int => Ty::Int,
+            baml_tir::Ty::Float => Ty::Float,
+            baml_tir::Ty::String => Ty::String,
+            baml_tir::Ty::Bool => Ty::Bool,
+            baml_tir::Ty::Null => Ty::Null,
+            baml_tir::Ty::Image => Ty::Image,
+            baml_tir::Ty::Audio => Ty::Audio,
+            baml_tir::Ty::Video => Ty::Video,
+            baml_tir::Ty::Pdf => Ty::Pdf,
 
-            baml_thir::Ty::Named(name) => Ty::Class(name.clone()),
+            baml_tir::Ty::Named(name) => Ty::Class(name.clone()),
 
-            baml_thir::Ty::Class(class_id) => {
+            baml_tir::Ty::Class(class_id) => {
                 let file = class_id.file(self.db);
                 let item_tree = baml_hir::file_item_tree(self.db, file);
                 let class_data = &item_tree[class_id.id(self.db)];
                 Ty::Class(class_data.name.clone())
             }
 
-            baml_thir::Ty::Enum(enum_id) => {
+            baml_tir::Ty::Enum(enum_id) => {
                 let file = enum_id.file(self.db);
                 let item_tree = baml_hir::file_item_tree(self.db, file);
                 let enum_data = &item_tree[enum_id.id(self.db)];
                 Ty::Enum(enum_data.name.clone())
             }
 
-            baml_thir::Ty::Optional(inner) => Ty::Optional(Box::new(self.lower_ty(inner))),
+            baml_tir::Ty::Optional(inner) => Ty::Optional(Box::new(self.lower_ty(inner))),
 
-            baml_thir::Ty::List(inner) => Ty::List(Box::new(self.lower_ty(inner))),
+            baml_tir::Ty::List(inner) => Ty::List(Box::new(self.lower_ty(inner))),
 
-            baml_thir::Ty::Map { key, value } => Ty::Map {
+            baml_tir::Ty::Map { key, value } => Ty::Map {
                 key: Box::new(self.lower_ty(key)),
                 value: Box::new(self.lower_ty(value)),
             },
 
-            baml_thir::Ty::Union(types) => {
+            baml_tir::Ty::Union(types) => {
                 Ty::Union(types.iter().map(|t| self.lower_ty(t)).collect())
             }
 
-            baml_thir::Ty::Function { params, ret } => Ty::Function {
+            baml_tir::Ty::Function { params, ret } => Ty::Function {
                 params: params.iter().map(|t| self.lower_ty(t)).collect(),
                 ret: Box::new(self.lower_ty(ret)),
             },
 
-            baml_thir::Ty::Unknown => Ty::Unknown,
-            baml_thir::Ty::Error => Ty::Error,
-            baml_thir::Ty::Void => Ty::Unit,
+            baml_tir::Ty::Unknown => Ty::Unknown,
+            baml_tir::Ty::Error => Ty::Error,
+            baml_tir::Ty::Void => Ty::Unit,
             // Map literal types to their underlying primitive types
-            baml_thir::Ty::Literal(lit) => match lit {
-                baml_thir::LiteralValue::Int(_) => Ty::Int,
-                baml_thir::LiteralValue::Float(_) => Ty::Float,
-                baml_thir::LiteralValue::String(_) => Ty::String,
-                baml_thir::LiteralValue::Bool(_) => Ty::Bool,
+            baml_tir::Ty::Literal(lit) => match lit {
+                baml_tir::LiteralValue::Int(_) => Ty::Int,
+                baml_tir::LiteralValue::Float(_) => Ty::Float,
+                baml_tir::LiteralValue::String(_) => Ty::String,
+                baml_tir::LiteralValue::Bool(_) => Ty::Bool,
             },
         }
     }
 
-    /// Lower an HIR `TypeRef` to `TypedIR` type.
+    /// Lower an HIR `TypeRef` to VIR type.
     fn lower_type_ref(&self, type_ref: &baml_hir::TypeRef) -> Ty {
-        let thir_ty = baml_thir::lower_type_ref(self.db, type_ref);
+        let thir_ty = baml_tir::lower_type_ref(self.db, type_ref);
         self.lower_ty(&thir_ty)
     }
 
-    /// Lower an HIR pattern to `TypedIR` pattern.
+    /// Lower an HIR pattern to VIR pattern.
     fn lower_pattern(
         &mut self,
         pat_id: baml_hir::PatId,

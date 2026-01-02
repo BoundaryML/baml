@@ -11,7 +11,7 @@ use baml_db::{
     FileId, SourceFile,
     baml_diagnostics::{NameError, ParseError, TypeError},
     baml_hir::{self, FunctionBody, ItemId},
-    baml_parser, baml_thir,
+    baml_parser, baml_tir,
 };
 use lsp_server::ErrorCode;
 use lsp_types::{
@@ -197,10 +197,10 @@ pub(super) fn project_diagnostics(
     }
 
     // 3. Gather type errors from function inference
-    let globals = baml_thir::typing_context(db, project_root);
-    let class_fields = baml_thir::class_field_types(db, project_root);
-    let type_aliases = baml_thir::type_aliases(db, project_root);
-    let enum_variants_map = baml_thir::enum_variants(db, project_root);
+    let globals = baml_tir::typing_context(db, project_root);
+    let class_fields = baml_tir::class_field_types(db, project_root);
+    let type_aliases = baml_tir::type_aliases(db, project_root);
+    let enum_variants_map = baml_tir::enum_variants(db, project_root);
     let enum_variants = enum_variants_map.enums(db).clone();
 
     for source_file in &source_files {
@@ -214,7 +214,7 @@ pub(super) fn project_diagnostics(
 
                 // Only infer types for expression functions (not LLM functions)
                 if matches!(*body, FunctionBody::Expr(_)) {
-                    let inference_result = baml_thir::infer_function(
+                    let inference_result = baml_tir::infer_function(
                         db,
                         &signature,
                         &body,

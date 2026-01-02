@@ -13,7 +13,7 @@ doctest = false
 baml_db = { workspace = true }
 baml_diagnostics = { workspace = true }
 baml_hir = { workspace = true }
-baml_thir = { workspace = true }
+baml_tir = { workspace = true }
 salsa = { workspace = true }
 
 [build-dependencies]

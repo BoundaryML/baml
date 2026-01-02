@@ -10,7 +10,7 @@ use std::{
 use anyhow::Result;
 use baml_db::{
     FileId, RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
-    baml_thir, baml_workspace,
+    baml_tir, baml_workspace,
 };
 use baml_diagnostics::compiler_error::{
     CompilerError, ParseError, TypeError, render_parse_error, render_type_error,
@@ -20,7 +20,7 @@ use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
-use baml_thir::{class_field_types, enum_variants, type_aliases, typing_context};
+use baml_tir::{class_field_types, enum_variants, type_aliases, typing_context};
 use regex::Regex;
 use rowan::{GreenNode, NodeCache, ast::AstNode};
 use salsa::{Event, EventKind, Setter};
@@ -802,7 +802,7 @@ impl CompilerRunner {
                     let body = function_body(&self.db, *func_id);
 
                     // Run type inference with global function types and type validation
-                    let inference_result = baml_thir::infer_function(
+                    let inference_result = baml_tir::infer_function(
                         &self.db,
                         &signature,
                         &body,
@@ -821,7 +821,7 @@ impl CompilerRunner {
                     }
 
                     // Use tree view for both modes - interactive mode parses this afterward
-                    let tree_output = baml_thir::render_function_tree(
+                    let tree_output = baml_tir::render_function_tree(
                         &self.db,
                         &func_name,
                         &signature,
@@ -863,7 +863,7 @@ impl CompilerRunner {
     }
 
     fn run_typed_ir(&mut self) {
-        use baml_typed_ir::{lower_from_hir, pretty_print};
+        use baml_vir::{lower_from_hir, pretty_print};
 
         let mut output = String::new();
         let mut output_annotated = Vec::new();
@@ -902,7 +902,7 @@ impl CompilerRunner {
                     };
 
                     // Run type inference
-                    let inference_result = baml_thir::infer_function(
+                    let inference_result = baml_tir::infer_function(
                         &self.db,
                         &signature,
                         &body,
@@ -1005,7 +1005,7 @@ impl CompilerRunner {
                     let body = function_body(&self.db, *func_id);
 
                     // Run type inference with global function types
-                    let inference_result = baml_thir::infer_function(
+                    let inference_result = baml_tir::infer_function(
                         &self.db,
                         &signature,
                         &body,
@@ -1016,13 +1016,11 @@ impl CompilerRunner {
                         *func_id,
                     );
 
-                    // Lower HIR → TypedIR → MIR
+                    // Lower HIR → VIR → MIR
                     let mir_output =
-                        match baml_typed_ir::lower_from_hir(&self.db, &body, &inference_result) {
-                            Ok(typed_ir) => {
-                                let mir = baml_mir::lower_from_typed_ir(
-                                    &signature, &typed_ir, &self.db, &classes,
-                                );
+                        match baml_vir::lower_from_hir(&self.db, &body, &inference_result) {
+                            Ok(vir) => {
+                                let mir = baml_mir::lower(&signature, &vir, &self.db, &classes);
                                 baml_mir::pretty::display_function(&mir)
                             }
                             Err(err) => {

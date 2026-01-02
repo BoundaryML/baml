@@ -54,7 +54,7 @@ pub use type_ref::*;
 ///
 /// This is the base trait for the BAML compiler's Db hierarchy.
 /// It provides access to the project being compiled and is extended by
-/// downstream crates (`baml_thir::Db`, `baml_mir::Db`, etc.) to add
+/// downstream crates (`baml_tir::Db`, `baml_mir::Db`, etc.) to add
 /// phase-specific queries.
 ///
 /// The Db trait hierarchy starts here because this is the first compiler

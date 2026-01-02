@@ -1,6 +1,6 @@
-//! Pretty printing for `TypedIR` expressions.
+//! Pretty printing for VIR expressions.
 //!
-//! This module provides human-readable output of the `TypedIR` tree,
+//! This module provides human-readable output of the VIR tree,
 //! useful for debugging and testing.
 
 use std::fmt::Write;
