@@ -20,16 +20,13 @@ Function Foo (arity: 1, kind: Exec):
      3   RETURN         
 
 Function GreetBaz (arity: 1, kind: Exec):
-     0   LOAD_CONST 0       (null)
+     0   LOAD_GLOBAL 19     (<fn Greeting>)
      1   ALLOC_INSTANCE 0   (<class Baz>)
      2   COPY 0             
      3   LOAD_VAR 1         (n)
      4   STORE_FIELD 0      
-     5   STORE_VAR 2        (_4)
-     6   LOAD_GLOBAL 19     (<fn Greeting>)
-     7   LOAD_VAR 2         (_4)
-     8   CALL 1             
-     9   RETURN             
+     5   CALL 1             
+     6   RETURN             
 
 Function Greeting (arity: 1, kind: Exec):
      0   LOAD_CONST 0   (Hello, )
@@ -41,16 +38,13 @@ Function Greeting (arity: 1, kind: Exec):
      6   RETURN         
 
 Function array_length (arity: 0, kind: Exec):
-     0   LOAD_CONST 0    (null)
-     1   LOAD_CONST 1    (1)
-     2   LOAD_CONST 2    (2)
-     3   LOAD_CONST 3    (3)
+     0   LOAD_GLOBAL 0   (<fn baml.Array.length>)
+     1   LOAD_CONST 0    (1)
+     2   LOAD_CONST 1    (2)
+     3   LOAD_CONST 2    (3)
      4   ALLOC_ARRAY 3   
-     5   STORE_VAR 1     (array)
-     6   LOAD_GLOBAL 0   (<fn baml.Array.length>)
-     7   LOAD_VAR 1      (array)
-     8   CALL 1          
-     9   RETURN          
+     5   CALL 1          
+     6   RETURN          
 
 Function param_in_if_statement (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (b)
