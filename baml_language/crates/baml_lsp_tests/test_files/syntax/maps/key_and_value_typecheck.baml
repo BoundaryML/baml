@@ -72,20 +72,7 @@ function UseMapTypecheck() -> int {
 //    │ 
 //    │ Note: Error code: E0007
 // ───╯
-<<<<<<< HEAD
-// Error: Type map<int, string> is not indexable
-//    ╭─[ 0:9:9 ]
-//    │
-//  9 │         map[1]
-//    │         ───┬──  
-//    │            ╰──── Type map<int, string> is not indexable
-//    │ 
-//    │ Note: Error code: E0008
-// ───╯
-// Error: Type map<int, string> is not indexable
-=======
 // Error: Expected int, found string
->>>>>>> origin/canary
 //     ╭─[ 0:18:5 ]
 //     │
 //  18 │     map["string"]
