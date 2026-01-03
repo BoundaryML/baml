@@ -173,7 +173,7 @@ pub fn file_lowering(db: &dyn Db, file: SourceFile) -> LoweringResult<'_> {
 /// Extract `ItemTree` from a file's syntax tree.
 ///
 /// This is a convenience wrapper around `file_lowering` for callers that
-/// only need the ItemTree. Not tracked separately since `file_lowering`
+/// only need the `ItemTree`. Not tracked separately since `file_lowering`
 /// already caches the result - this just clones the Arc (O(1)).
 pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     file_lowering(db, file).item_tree(db).clone()
@@ -1038,10 +1038,10 @@ const VALID_OUTPUT_TYPES: &[&str] = &[
     "boundary-cloud",
 ];
 
-/// Valid values for default_client_mode.
+/// Valid values for `default_client_mode`.
 const VALID_CLIENT_MODES: &[&str] = &["sync", "async"];
 
-/// Valid values for module_format.
+/// Valid values for `module_format`.
 const VALID_MODULE_FORMATS: &[&str] = &["cjs", "esm"];
 
 /// Extract generator definition from CST with validation.
@@ -1196,7 +1196,7 @@ fn lower_generator(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Gener
     if output_type.as_deref() == Some("boundary-cloud") && project.is_none() {
         ctx.diagnostics
             .push(HirDiagnostic::MissingGeneratorProperty {
-                generator_name: generator_name.clone(),
+                generator_name,
                 property_name: "project",
                 span: ctx.span(name_token.text_range()),
             });
