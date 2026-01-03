@@ -5,6 +5,8 @@ version.workspace = true
 authors.workspace = true
 description.workspace = true
 license-file.workspace = true
+# The links key helps Cargo with build ordering for cdylib crates
+links = "baml_cffi"
 
 [lib]
 # If you only wanted dynamic library, you'd use only "cdylib".

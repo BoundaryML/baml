@@ -134,7 +134,10 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 		}
 
 		raw_decoded_data, _ := serde.Decode(&content_holder, typeMap)
-		decoded_data := raw_decoded_data.Interface()
+		var decoded_data interface{}
+		if raw_decoded_data.IsValid() {
+			decoded_data = raw_decoded_data.Interface()
+		}
 
 		var res ResultCallback
 		if isDone == 1 {

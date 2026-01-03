@@ -181,6 +181,9 @@ func decodeObjectResponse(rt unsafe.Pointer, response *cffi.InvocationResponse) 
 			decodedValue, _ := serde.Decode(value, serde.TypeMap{
 				"INTERNAL.nil": reflect.TypeOf((*interface{})(nil)).Elem(),
 			})
+			if !decodedValue.IsValid() {
+				return nil, nil
+			}
 			return decodedValue.Interface(), nil
 		default:
 			panic("unexpected cffi.isCFFIObjectResponseSuccess_Result")
