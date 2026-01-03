@@ -260,9 +260,16 @@ jobs:
           # list the contents of the BAML_LIBRARY_PATH
           ls -la $BAML_LIBRARY_PATH
 
+          # Copy the dylib to a stable location to prevent cargo test from rebuilding it mid-test
+          # This fixes "file too short" errors caused by cargo truncating the file during rebuild
+          STABLE_DYLIB_PATH="${{ runner.temp }}/libbaml_cffi.so"
+          cp $BAML_LIBRARY_PATH "$STABLE_DYLIB_PATH"
+          echo "Copied dylib to stable location: $STABLE_DYLIB_PATH"
+          ls -la "$STABLE_DYLIB_PATH"
+
           # Run tests
-          echo "BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/debug/libbaml_cffi.so" >> $GITHUB_ENV
-          cargo test --features skip-integ-tests --verbose -- --nocapture
+          echo "BAML_LIBRARY_PATH=$STABLE_DYLIB_PATH" >> $GITHUB_ENV
+          BAML_LIBRARY_PATH="$STABLE_DYLIB_PATH" cargo test --features skip-integ-tests --verbose -- --nocapture
         working-directory: engine
 
       - name: Run Python integration tests
