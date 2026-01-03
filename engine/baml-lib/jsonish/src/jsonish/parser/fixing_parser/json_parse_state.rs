@@ -66,7 +66,11 @@ impl JsonParseState {
         } else {
             if token == '"' {
                 // A quote is "unescaped" if preceded by an even number of backslashes
-                if self.string_quote_tracking.trailing_backslashes % 2 == 0 {
+                if self
+                    .string_quote_tracking
+                    .trailing_backslashes
+                    .is_multiple_of(2)
+                {
                     self.string_quote_tracking.unescaped_quote_count += 1;
                 }
             }

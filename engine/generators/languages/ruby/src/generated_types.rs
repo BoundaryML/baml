@@ -415,16 +415,18 @@ pub(crate) fn render_rb_types<T: askama::Template>(
 ) -> Result<String, askama::Error> {
     use askama::Template;
 
-    RbTypes {
-        items,
-        name: match std::any::type_name::<T>() {
-            "generators_ruby::generated_types::class::ClassRb" => "classes",
-            "generators_ruby::generated_types::enums::EnumRb" => "enums",
-            "generators_ruby::generated_types::type_aliases::TypeAliasRb" => "type aliases",
-            other => panic!("Unknown type: {other}"),
-        },
-    }
-    .render()
+    let type_name = std::any::type_name::<T>();
+    let name = if type_name.contains("::ClassRb") {
+        "classes"
+    } else if type_name.contains("::EnumRb") {
+        "enums"
+    } else if type_name.contains("::TypeAliasRb") {
+        "type aliases"
+    } else {
+        panic!("Unknown type: {type_name}")
+    };
+
+    RbTypes { items, name }.render()
 }
 
 /// A list of types in Rb.
