@@ -44,9 +44,15 @@ fn wait_for_stable_file(path: &std::path::Path) -> Result<(), anyhow::Error> {
 
     let timeout = Duration::from_secs(120);
     let check_interval = Duration::from_millis(100);
-    let stability_duration = Duration::from_millis(500);
+    let stability_duration = Duration::from_millis(1000); // Wait 1 second of stability
 
     let start = Instant::now();
+
+    eprintln!(
+        "[test-harness] Waiting for dylib: {} (exists={})",
+        path.display(),
+        path.exists()
+    );
 
     // First, wait for the file to exist
     while !path.exists() {
@@ -56,28 +62,70 @@ fn wait_for_stable_file(path: &std::path::Path) -> Result<(), anyhow::Error> {
         std::thread::sleep(check_interval);
     }
 
+    let initial_size = std::fs::metadata(path)?.len();
+    eprintln!(
+        "[test-harness] File exists, initial size: {} bytes",
+        initial_size
+    );
+
     // Then wait for the file size to be stable (linker finished writing)
-    let mut last_size = std::fs::metadata(path)?.len();
+    let mut last_size = initial_size;
     let mut stable_since = Instant::now();
 
     loop {
         std::thread::sleep(check_interval);
 
-        let current_size = std::fs::metadata(path)?.len();
+        let current_size = match std::fs::metadata(path) {
+            Ok(m) => m.len(),
+            Err(e) => {
+                eprintln!("[test-harness] Error reading file metadata: {}", e);
+                stable_since = Instant::now();
+                continue;
+            }
+        };
 
         if current_size != last_size {
             // Size changed, linker is still writing
+            eprintln!(
+                "[test-harness] File size changed: {} -> {} bytes",
+                last_size, current_size
+            );
             last_size = current_size;
             stable_since = Instant::now();
         } else if stable_since.elapsed() >= stability_duration {
             // Size has been stable for long enough, file is complete
+            eprintln!(
+                "[test-harness] File stable at {} bytes for {:?}",
+                current_size, stability_duration
+            );
             break;
         }
 
         if start.elapsed() > timeout {
-            anyhow::bail!("Timeout waiting for dylib to stabilize: {}", path.display());
+            anyhow::bail!(
+                "Timeout waiting for dylib to stabilize: {} (last size: {} bytes)",
+                path.display(),
+                last_size
+            );
         }
     }
+
+    // Final verification - try to read the file header to ensure it's valid
+    let file_size = std::fs::metadata(path)?.len();
+    if file_size < 1024 {
+        anyhow::bail!(
+            "Dylib file is too small ({} bytes), likely corrupted: {}",
+            file_size,
+            path.display()
+        );
+    }
+
+    eprintln!(
+        "[test-harness] Dylib ready: {} ({} bytes, waited {:?})",
+        path.display(),
+        file_size,
+        start.elapsed()
+    );
 
     Ok(())
 }

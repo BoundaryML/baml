@@ -20,11 +20,6 @@ $ pnpm add @boundaryml/baml
 
 import { BamlStream } from "@boundaryml/baml"
 
-export interface BlockNotification {
-  block_label: string
-  notification_type: "enter" | "exit"
-}
-
 export interface VarNotification<T> {
   variable_name: string
   value: T
@@ -88,14 +83,12 @@ class NotificationStream<PartialT, FinalT> implements BamlStream<PartialT, Final
   }
 }
 
-type BlockHandler = (event: BlockNotification) => void
 type VarHandler<T> = (event: VarNotification<T>) => void
 type StreamHandler<PartialT, FinalT> = (event: VarNotification<BamlStream<PartialT, FinalT>>) => void
 type InternalStreamHandler = (event: InternalStreamEvent) => void
 
 export interface InternalEventBindings {
   functionName: string
-  block: BlockHandler[]
   vars: Record<string, VarHandler<any>[]>
   streams: Record<string, InternalStreamHandler[]>
   functions: Record<string, InternalEventBindings>

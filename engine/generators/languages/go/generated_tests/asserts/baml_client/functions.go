@@ -29,6 +29,14 @@ func PersonTest(ctx context.Context, opts ...CallOptionFunc) (types.Person, erro
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
 		Env:    getEnvVars(callOpts.env),
