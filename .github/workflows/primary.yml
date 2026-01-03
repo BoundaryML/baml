@@ -254,6 +254,12 @@ jobs:
           ls -la engine/target/debug/libbaml_cffi.* || true
           ls -la engine/target/debug/baml_cffi.* || true
           export BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/debug/libbaml_cffi.so
+
+          echo "Listing BAML_LIBRARY_PATH:"
+          echo $BAML_LIBRARY_PATH
+          # list the contents of the BAML_LIBRARY_PATH
+          ls -la $BAML_LIBRARY_PATH
+
           # Run tests
           echo "BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/debug/libbaml_cffi.so" >> $GITHUB_ENV
           cargo test --features skip-integ-tests --verbose -- --nocapture
